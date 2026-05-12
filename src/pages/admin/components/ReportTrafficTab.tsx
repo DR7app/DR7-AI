@@ -27,11 +27,19 @@ interface SeriesPoint { day: string; organico: number; ads: number; maps: number
 interface ChannelSlice { name: string; value: number }
 interface FunnelStage { stage: string; value: number }
 interface TopPage { page: string; sessions: number; pageviews: number }
+interface RealtimeBlock {
+  activeUsers: number
+  pageviews30m: number
+  events30m: number
+  conversions30m: number
+  topActivePages: { page: string; users: number }[]
+}
 interface ReportPayload {
   configured: boolean
   missing: string[]
   range: '7d' | '28d' | '90d' | '180d' | '365d'
   kpis: KpiBlock | null
+  realtime: RealtimeBlock | null
   traffic: SeriesPoint[]
   distribution: ChannelSlice[]
   funnel: FunnelStage[]
@@ -296,6 +304,32 @@ export default function ReportTrafficTab() {
           {data!.warnings.map((w, i) => (
             <div key={i} className="text-sm font-medium">• {w}</div>
           ))}
+        </div>
+      )}
+
+      {/* Realtime live block — bypassa il ritardo 24-48h del Reporting API.
+          Mostra ultimi 30 min direttamente dalla GA4 Realtime API. */}
+      {data?.realtime && data.dataSource === 'ga4' && (
+        <div className="bg-emerald-500/10 border border-emerald-500/40 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </span>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">In tempo reale (ultimi 30 min)</h3>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <KpiTile label="Utenti attivi ora" value={data.realtime.activeUsers} valueClass="text-emerald-400" />
+            <KpiTile label="Pagine viste (30m)" value={data.realtime.pageviews30m} valueClass="text-cyan-400" />
+            <KpiTile label="Eventi (30m)" value={data.realtime.events30m} valueClass="text-blue-400" />
+            <KpiTile label="Conversioni (30m)" value={data.realtime.conversions30m} valueClass="text-violet-400" />
+          </div>
+          {data.realtime.topActivePages.length > 0 && (
+            <div className="mt-3 text-xs text-theme-text-muted">
+              <span className="font-semibold">Pagine attive ora: </span>
+              {data.realtime.topActivePages.slice(0, 3).map(p => `${p.page} (${p.users})`).join(' · ')}
+            </div>
+          )}
         </div>
       )}
 

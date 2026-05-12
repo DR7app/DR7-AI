@@ -28,7 +28,8 @@ import LimitationOverrideModal from '../../../components/LimitationOverrideModal
 // ─── Whitelist ───────────────────────────────────────────────────────────────
 // Strict: only direzione (Valerio + Ilenia) + developer (Ophe) can open the
 // tab without OTP. Everyone else requires gestione_sito_access OTP.
-const SITO_DIREZIONE_EMAILS = ['valerio@dr7.app', 'ilenia@dr7.app', 'ophe@dr7.app']
+// Whitelist Sito CMS write bypass: chi ha `role:sito-direzione` in admins.permissions
+// (failsafe valerio/ilenia/ophe). Per editare i testi senza OTP.
 
 // ─── Sections ────────────────────────────────────────────────────────────────
 type SectionId =
@@ -2016,8 +2017,8 @@ function SitoSidebar({ section, onSelect }: { section: SectionId; onSelect: (id:
 
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function SitoTab() {
-    const { adminEmail, loading: roleLoading } = useAdminRole()
-    const isDirezione = !!adminEmail && SITO_DIREZIONE_EMAILS.includes(adminEmail.toLowerCase())
+    const { adminEmail, loading: roleLoading, hasRole } = useAdminRole()
+    const isDirezione = hasRole('sito-direzione')
     const override = useLimitationOverride()
 
     // ─── Access gate ─────────────────────────────────────────────────────────

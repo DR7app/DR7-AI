@@ -4,6 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import { buildFatturaContext } from '../../../utils/adminLogHelpers'
 import { authFetch } from '../../../utils/authFetch'
+import { useAdminRole } from '../../../hooks/useAdminRole'
 import IncomingInvoicesView from './IncomingInvoicesView'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell } from 'recharts'
 
@@ -50,8 +51,9 @@ interface InvoiceItem {
   total: number
 }
 
-// Solo questi due account possono cambiare lo stato di pagamento delle fatture
-const PAYMENT_MANAGERS = ['valerio@dr7.app', 'ilenia@dr7.app']
+// Chi può cambiare lo stato di pagamento delle fatture: il flag `role:payment-manager`
+// in admins.permissions, oppure il failsafe direzione (valerio/ilenia). Modifica
+// dalla direzione via OperatoriTab.
 
 function formatEur(n: number): string {
   if (!Number.isFinite(n)) return '€0,00'
@@ -461,7 +463,8 @@ export default function FatturaTab() {
   }, [invoices])
   const [creatingNdc, setCreatingNdc] = useState<string | null>(null)
   const [currentEmail, setCurrentEmail] = useState<string | null>(null)
-  const canManagePayments = !!currentEmail && PAYMENT_MANAGERS.includes(currentEmail.toLowerCase())
+  const { hasRole } = useAdminRole()
+  const canManagePayments = hasRole('payment-manager')
   const [updatingStato, setUpdatingStato] = useState<string | null>(null)
   const [refreshingAll, setRefreshingAll] = useState(false)
   const [reconciling, setReconciling] = useState(false)
@@ -576,7 +579,7 @@ export default function FatturaTab() {
 
   async function togglePagato(invoice: Invoice) {
     if (!canManagePayments) {
-      toast.error(`Solo ${PAYMENT_MANAGERS.join(' o ')} possono modificare lo stato pagamento.`)
+      toast.error('Solo la direzione (o chi ha il ruolo "payment-manager") può modificare lo stato pagamento.')
       return
     }
     const newStato = invoice.stato === 'paid' ? 'pending' : 'paid'

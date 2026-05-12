@@ -39,13 +39,11 @@ export default function ReportLavaggioTab() {
   const [washData, setWashData] = useState<WashReportData | null>(null)
 
   // Cost bar — Spesa merce/prodotti (fattura fornitori categoria 'lavaggio_prodotti')
-  // + Stipendio Lavaggista (editable solo dalla direzione: Valerio + Ilenia,
-  // stessa coppia che gate altri flussi sensibili — OperatoriTab, GestioneOtp,
-  // CarWashBookingsTab, PreventiviTab).
+  // + Stipendio Lavaggista. Editabile solo da chi ha il ruolo
+  // `role:stipendio-editor` in admins.permissions, oppure dal failsafe direzione.
   // Persisted per mese in centralina_pro_config.config.lavaggio.stipendi_mensili[YYYY-MM].
-  const STIPENDIO_EDITORS = ['valerio@dr7.app', 'ilenia@dr7.app']
-  const { adminEmail } = useAdminRole()
-  const canEditStipendio = STIPENDIO_EDITORS.includes((adminEmail || '').toLowerCase())
+  const { hasRole } = useAdminRole()
+  const canEditStipendio = hasRole('stipendio-editor')
   const [spesaMerce, setSpesaMerce] = useState<number>(0)
   const [costsLoading, setCostsLoading] = useState(false)
   const [stipendio, setStipendio] = useState<number>(0)

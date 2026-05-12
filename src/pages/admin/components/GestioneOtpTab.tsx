@@ -28,7 +28,9 @@ interface OtpRow {
     updated_at?: string | null
 }
 
-const DIREZIONE_EMAILS = ['valerio@dr7.app', 'ilenia@dr7.app', 'ophe@dr7.app']
+// Chi può bypassare l'OTP per la tab Gestione OTP: direzione (failsafe valerio/ilenia)
+// oppure developer (failsafe ophe). Gestito via `role:direzione` / `role:developer`
+// in admins.permissions.
 
 // Decorative-only data: the reminders panel is a visual shell so the
 // page matches the design mock; wire to a real source when the
@@ -61,9 +63,8 @@ function formatRelative(iso?: string | null): string {
 }
 
 export default function GestioneOtpTab() {
-    const { adminEmail, loading: roleLoading } = useAdminRole()
-    const isSuperadmin = !!adminEmail &&
-        DIREZIONE_EMAILS.includes(adminEmail.toLowerCase())
+    const { adminEmail, loading: roleLoading, hasRole } = useAdminRole()
+    const isSuperadmin = hasRole('direzione') || hasRole('developer')
     const override = useLimitationOverride()
 
     const [tabUnlocked, setTabUnlocked] = useState(false)

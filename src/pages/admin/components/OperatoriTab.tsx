@@ -5,6 +5,13 @@ import { formatAdminLog, formatEntityLabel } from '../../../utils/formatAdminLog
 import OperatoriReportDashboard from './OperatoriReportDashboard'
 import InviteOperatoreModal from './InviteOperatoreModal'
 import ContrattiOperatoreView from './ContrattiOperatoreView'
+import { useAdminRole } from '../../../hooks/useAdminRole'
+
+// Per-row display: which admin emails get the "Amministratore" label in the
+// roster. Email-only failsafe (matches useAdminRole.ROLE_FAILSAFE); when a
+// direzione member is added via permissions, the badge still falls back to
+// the row's `role` column.
+const FAILSAFE_DIREZIONE_EMAILS = new Set(['valerio@dr7.app', 'ilenia@dr7.app'])
 
 interface Admin {
   id: string
@@ -238,6 +245,13 @@ export default function OperatoriTab() {
 }
 
 function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
+  const { hasRole } = useAdminRole()
+  // Keep latest hasRole in a ref so the useCallback bodies below don't have to
+  // depend on it (they're memoized on date/filter only and re-creating them on
+  // every role-hook re-render would thrash useEffect downstream).
+  const hasRoleRef = useRef(hasRole)
+  useEffect(() => { hasRoleRef.current = hasRole }, [hasRole])
+
   const [admins, setAdmins] = useState<Admin[]>([])
   const [selectedAdmin, setSelectedAdmin] = useState<string | null>(null)
   const [logs, setLogs] = useState<LogEntry[]>([])           // paginated detail
@@ -299,9 +313,7 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
     // 2. Team comparison: counts per admin in same period.
     //    Solo direzione (Valerio/Ilenia): per gli altri non carichiamo nulla
     //    cosi' "Vs media team" resta a "—" (privacy report).
-    const { data: { user } } = await supabase.auth.getUser()
-    const isDirection = ['valerio@dr7.app', 'ilenia@dr7.app'].includes((user?.email || '').toLowerCase())
-    if (isDirection) {
+    if (hasRoleRef.current('direzione')) {
         const { data: teamData } = await supabase
           .from('admin_activity_log')
           .select('admin_id')
@@ -340,11 +352,12 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
   async function loadAdmins() {
     setLoading(true)
     const ADMIN_ORDER = ['Valerio', 'Ilenia', 'Salvatore', 'Ophélie', 'Davide']
-    // Privacy: ognuno vede SOLO il proprio report. Solo Valerio e Ilenia
-    // (direzione) vedono i report di tutti.
+    // Privacy: ognuno vede SOLO il proprio report. Solo la direzione
+    // (failsafe valerio/ilenia, oppure ruolo `role:direzione` in permissions)
+    // vede i report di tutti.
     const { data: { user } } = await supabase.auth.getUser()
     const myEmail = (user?.email || '').toLowerCase()
-    const isDirection = ['valerio@dr7.app', 'ilenia@dr7.app'].includes(myEmail)
+    const isDirection = hasRoleRef.current('direzione')
 
     const { data } = await supabase.from('admins').select('id, email, nome, role, sede, reparto, tipo_rapporto, stato, responsabile, contatto_interno')
     if (data) {
@@ -394,8 +407,7 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setCurrentEmail(data.user?.email || null))
   }, [])
-  const canEditOperators = !!currentEmail &&
-    ['valerio@dr7.app', 'ilenia@dr7.app'].includes(currentEmail.toLowerCase())
+  const canEditOperators = hasRole('direzione')
 
   // Save a single field on the selected admin row + update local state.
   const updateFieldLockRef = useRef(false)
@@ -518,7 +530,7 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
               <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${avatarColor(admin.id)}`}>{initials(admin.nome, admin.email)}</span>
               <span className="text-sm font-medium">{admin.nome || admin.email.split('@')[0]}</span>
               <span className="text-[10px] uppercase tracking-wider opacity-70">{
-                ['valerio@dr7.app','ilenia@dr7.app'].includes((admin.email || '').toLowerCase())
+                FAILSAFE_DIREZIONE_EMAILS.has((admin.email || '').toLowerCase())
                   ? 'Amministratore'
                   : admin.role
               }</span>
@@ -554,7 +566,7 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
                 <div className="flex-1">
                   <div className="text-2xl font-bold text-theme-text-primary">{selected.nome || selected.email.split('@')[0]}</div>
                   <div className="text-sm text-theme-text-secondary">{
-                    ['valerio@dr7.app','ilenia@dr7.app'].includes((selected.email || '').toLowerCase())
+                    FAILSAFE_DIREZIONE_EMAILS.has((selected.email || '').toLowerCase())
                       ? 'Amministratore'
                       : selected.role === 'superadmin' ? 'Superadmin' : 'Operatore'
                   }</div>

@@ -358,13 +358,16 @@ const STATUS_COLORS: Record<string, string> = {
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-const VALERIO_EMAIL = 'valerio@dr7.app'
+// WhatsApp di reportistica boss — usato per gli alert "preventivo creato".
+// Spostare in centralina_pro_config se serve cambiarlo senza dev.
 const BOSS_PHONE = '393472817258'
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking }: Props) {
-  const { adminEmail } = useAdminRole()
-  const isValerio = adminEmail?.toLowerCase() === VALERIO_EMAIL
+  const { adminEmail, hasRole } = useAdminRole()
+  // Storica: solo Valerio. Ora gestita tramite `role:preventivi-admin`
+  // (failsafe valerio/ilenia). Conserva la stessa semantica della whitelist.
+  const isValerio = hasRole('preventivi-admin')
   const [view, setView] = useState<'list' | 'form'>('list')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [preventivi, setPreventivi] = useState<Preventivo[]>([])

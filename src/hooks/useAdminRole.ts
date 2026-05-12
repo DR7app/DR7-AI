@@ -1,6 +1,28 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
 
+// Role tags stored in admins.permissions[] with the `role:` prefix. Replaces
+// the hardcoded `[valerio, ilenia, ophe]` email allowlists that used to sit
+// in ~10 admin files. Direzione manages these via OperatoriTab.
+//
+// ROLE_FAILSAFE is intentional: it guarantees valerio/ilenia can never be
+// locked out even if the DB permissions are empty or corrupted, and ophe
+// keeps developer access for gestione_otp_* maintenance. Updating these
+// requires a deploy on purpose — they are the recovery floor.
+export type AdminRoleTag =
+  | 'direzione'
+  | 'developer'
+  | 'payment-manager'
+  | 'stipendio-editor'
+  | 'sito-direzione'
+  | 'preventivi-admin'
+
+const ROLE_FAILSAFE: Record<string, ReadonlySet<AdminRoleTag>> = {
+  'valerio@dr7.app': new Set(['direzione', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
+  'ilenia@dr7.app':  new Set(['direzione', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
+  'ophe@dr7.app':    new Set(['developer', 'sito-direzione']),
+}
+
 export interface AdminRole {
   role: 'superadmin' | 'admin'
   canViewFinancials: boolean
@@ -12,6 +34,7 @@ export interface AdminRole {
   adminEmail: string | null
   permissions: string[]
   hasPermission: (tab: string) => boolean
+  hasRole: (role: AdminRoleTag) => boolean
 }
 
 export function useAdminRole(): AdminRole {
@@ -69,12 +92,19 @@ export function useAdminRole(): AdminRole {
   const canManageFleet = role === 'superadmin'
   const canManageAdmins = role === 'superadmin'
 
+  const lowerEmail = (adminEmail || '').toLowerCase()
+
+  const hasRole = useCallback(
+    (roleTag: AdminRoleTag): boolean => {
+      if (ROLE_FAILSAFE[lowerEmail]?.has(roleTag)) return true
+      return permissions.includes(`role:${roleTag}`)
+    },
+    [lowerEmail, permissions]
+  )
+
   // Direzione + superadmin always have full access regardless of `permissions`.
   // For everyone else we honor the array; '*' = wildcard full access.
-  const isDirezione = useMemo(
-    () => ['valerio@dr7.app', 'ilenia@dr7.app'].includes((adminEmail || '').toLowerCase()),
-    [adminEmail]
-  )
+  const isDirezione = useMemo(() => hasRole('direzione'), [hasRole])
 
   const hasPermission = useCallback(
     (tab: string): boolean => {
@@ -97,5 +127,6 @@ export function useAdminRole(): AdminRole {
     adminEmail,
     permissions,
     hasPermission,
+    hasRole,
   }
 }

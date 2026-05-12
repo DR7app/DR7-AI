@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
+import { useAdminRole } from '../../../hooks/useAdminRole'
 
 interface Operatore {
     id: string
@@ -375,11 +376,10 @@ function KpiCard({ label, value, sub, tone = 'emerald' }: { label: string; value
     )
 }
 
-// ─── Contratto: editabile inline, visibile SOLO a direzione ─────────────
-// Solo Valerio / Ilenia / ophe vedono compensi e flag dell'operatore.
+// ─── Contratto: editabile inline, visibile SOLO a direzione / developer ─
+// Compensi e flag dell'operatore visibili solo a chi ha `role:direzione`
+// o `role:developer` in admins.permissions (failsafe valerio/ilenia/ophe).
 // Gli altri admin che aprono il proprio profilo non vedono nulla qui.
-
-const DIREZIONE_EMAILS = new Set(['valerio@dr7.app', 'ilenia@dr7.app', 'ophe@dr7.app'])
 
 interface Contratto {
     id?: string
@@ -433,24 +433,14 @@ function emptyContratto(): Contratto {
 }
 
 function ContrattoSection({ operatoreId }: { operatoreId: string }) {
-    const [isDirezione, setIsDirezione] = useState(false)
+    const { hasRole } = useAdminRole()
+    const isDirezione = hasRole('direzione') || hasRole('developer')
     const [contratto, setContratto] = useState<Contratto | null>(null)
     const [draft, setDraft] = useState<Contratto | null>(null)
     const [editMode, setEditMode] = useState(false)
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [loadError, setLoadError] = useState<string | null>(null)
-
-    // Direzione gate
-    useEffect(() => {
-        let cancelled = false
-        supabase.auth.getUser().then(({ data }) => {
-            if (cancelled) return
-            const email = (data.user?.email || '').toLowerCase()
-            setIsDirezione(DIREZIONE_EMAILS.has(email))
-        })
-        return () => { cancelled = true }
-    }, [])
 
     // Load contract
     useEffect(() => {
