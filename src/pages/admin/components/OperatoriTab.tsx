@@ -402,11 +402,7 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
 
   // Only direzione (Valerio + Ilenia by email) can edit operator HR fields
   // — same allowlist as the OTP self-approval.
-  const [currentEmail, setCurrentEmail] = useState<string | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setCurrentEmail(data.user?.email || null))
-  }, [])
   const canEditOperators = hasRole('direzione')
 
   // Save a single field on the selected admin row + update local state.

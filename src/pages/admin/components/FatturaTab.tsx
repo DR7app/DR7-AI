@@ -462,19 +462,12 @@ export default function FatturaTab() {
     }
   }, [invoices])
   const [creatingNdc, setCreatingNdc] = useState<string | null>(null)
-  const [currentEmail, setCurrentEmail] = useState<string | null>(null)
   const { hasRole } = useAdminRole()
   const canManagePayments = hasRole('payment-manager')
   const [updatingStato, setUpdatingStato] = useState<string | null>(null)
   const [refreshingAll, setRefreshingAll] = useState(false)
   const [reconciling, setReconciling] = useState(false)
   const [lastSdiRefresh, setLastSdiRefresh] = useState<number | null>(null)
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setCurrentEmail(data.session?.user?.email || null)
-    })
-  }, [])
 
   // Refresh stati SDI per TUTTE le fatture in 'sending'/'sent' su Aruba e
   // ricarica la lista. Manuale (bottone) o automatico (mount + ogni 60s).

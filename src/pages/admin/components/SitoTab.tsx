@@ -2017,7 +2017,7 @@ function SitoSidebar({ section, onSelect }: { section: SectionId; onSelect: (id:
 
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function SitoTab() {
-    const { adminEmail, loading: roleLoading, hasRole } = useAdminRole()
+    const { loading: roleLoading, hasRole } = useAdminRole()
     const isDirezione = hasRole('sito-direzione')
     const override = useLimitationOverride()
 
