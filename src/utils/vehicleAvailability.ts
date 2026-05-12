@@ -286,14 +286,22 @@ export function getEarliestValidPickupTime(
 
         if (bookingEndDate.getTime() === pickupDateOnly.getTime()) {
             // Booking ends on the same day - add buffer
-            const timeWithBuffer = new Date(bookingEnd.getTime() + RENTAL_BUFFER_MINUTES * 60 * 1000)
+            // Tronca a precisione di minuto: il buffer e' definito in minuti,
+            // ms/secondi nel dropoff stored non devono spostare l'earliest.
+            const bufferMs = bookingEnd.getTime() + RENTAL_BUFFER_MINUTES * 60 * 1000
+            const truncatedMs = Math.floor(bufferMs / 60000) * 60000
+            const timeWithBuffer = new Date(truncatedMs)
 
             if (timeWithBuffer > earliestTime) {
                 earliestTime = timeWithBuffer
             }
         } else if (bookingEnd > earliestTime) {
             // Booking extends into or past the pickup date
-            const timeWithBuffer = new Date(bookingEnd.getTime() + RENTAL_BUFFER_MINUTES * 60 * 1000)
+            // Tronca a precisione di minuto: il buffer e' definito in minuti,
+            // ms/secondi nel dropoff stored non devono spostare l'earliest.
+            const bufferMs = bookingEnd.getTime() + RENTAL_BUFFER_MINUTES * 60 * 1000
+            const truncatedMs = Math.floor(bufferMs / 60000) * 60000
+            const timeWithBuffer = new Date(truncatedMs)
 
             if (timeWithBuffer > earliestTime) {
                 earliestTime = timeWithBuffer
@@ -442,8 +450,18 @@ export function isVehicleAvailable(
         // Add buffer to booking end time
         const bookingEndWithBuffer = new Date(bookingEnd.getTime() + RENTAL_BUFFER_MINUTES * 60 * 1000)
 
+        // Compara a precisione di MINUTO per evitare falsi conflitti quando
+        // la dropoff stored in DB ha secondi (es. 15:00:30) e l'utente
+        // sceglie un time slot a precisione minuto (16:30:00). La differenza
+        // di 30s non e' un conflitto reale: il buffer e' espresso in minuti.
+        const toMinute = (d: Date) => Math.floor(d.getTime() / 60000)
+        const reqStartMin = toMinute(requestStart)
+        const reqEndMin = toMinute(requestEnd)
+        const bufferEndMin = toMinute(bookingEndWithBuffer)
+        const bookingStartMin = toMinute(bookingStart)
+
         // Check for overlap: (requestStart < bookingEndWithBuffer) && (requestEnd > bookingStart)
-        if (requestStart < bookingEndWithBuffer && requestEnd > bookingStart) {
+        if (reqStartMin < bufferEndMin && reqEndMin > bookingStartMin) {
             const earliestTime = getEarliestValidPickupTime(vehicle, pickupDate, returnDate, existingBookings, excludeBookingId)
             // Conflicting booking — surface the customer + start/end so the
             // OTP recipient can verify the override without opening the calendar.
