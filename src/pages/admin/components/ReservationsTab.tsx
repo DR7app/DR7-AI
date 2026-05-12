@@ -5621,8 +5621,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             body: JSON.stringify({ bookingId: insertedBooking.id, includeIVA: true })
           })
           if (invoiceRes.ok) {
-            logger.log('[Auto-Gen] ✅ Fattura generated and sent to SDI')
-            toast.success('Fattura generata', { duration: 3000 })
+            // 200 OK puo' essere "fattura creata" OPPURE "fattura saltata"
+            // (skipped: true) — wallet/gift card, importo €0, gia' esistente.
+            // Niente toast quando saltata, altrimenti l'admin pensa che la
+            // fattura sia stata creata davvero.
+            const okJson = await invoiceRes.clone().json().catch(() => null) as { skipped?: boolean; message?: string; invoice?: { numero_fattura?: string } } | null
+            if (okJson?.skipped) {
+              logger.log('[Auto-Gen] Fattura saltata:', okJson.message || '(no message)')
+              // No toast — la booking e' stata salvata, basta la conferma di salvataggio
+            } else {
+              logger.log('[Auto-Gen] ✅ Fattura generated and sent to SDI')
+              const numero = okJson?.invoice?.numero_fattura
+              toast.success(numero ? `Fattura ${numero} generata` : 'Fattura generata', { duration: 3000 })
+            }
           } else {
             const errData = await invoiceRes.json()
             const errMsg = errData.message || errData.error || 'Errore sconosciuto'
