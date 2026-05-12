@@ -455,13 +455,38 @@ const INITIAL_PREVENTIVI: PreventiviConfig = {
 }
 
 // === Fiscale ===
+// `payment_methods`: lista dei metodi di pagamento accettati, con per
+// ognuno il flag `auto_invoice` (= se le prenotazioni segnate pagate con
+// questo metodo devono generare automaticamente una fattura). Letta dai
+// flussi "segna pagato" prima di chiamare generate-invoice-from-booking.
+//
+// Es: contante = auto_invoice ON, wallet credit = OFF (gia' fatturato a
+// monte alla ricarica).
+
+type FiscalPaymentMethod = {
+  key: string
+  label: string
+  auto_invoice: boolean
+}
 
 type FiscalConfig = {
   vat_rate: number | ''
+  payment_methods: FiscalPaymentMethod[]
 }
+
+const DEFAULT_PAYMENT_METHODS: FiscalPaymentMethod[] = [
+  { key: 'contanti',       label: 'Contanti',                 auto_invoice: true  },
+  { key: 'bancomat',       label: 'Bancomat / POS',           auto_invoice: true  },
+  { key: 'carta',          label: 'Carta di credito (Nexi)',  auto_invoice: true  },
+  { key: 'bonifico',       label: 'Bonifico bancario',        auto_invoice: true  },
+  { key: 'assegno',        label: 'Assegno',                  auto_invoice: true  },
+  { key: 'wallet',         label: 'DR7 Wallet (credito)',     auto_invoice: false },
+  { key: 'altro',          label: 'Altro',                    auto_invoice: true  },
+]
 
 const INITIAL_FISCAL: FiscalConfig = {
   vat_rate: 22,
+  payment_methods: DEFAULT_PAYMENT_METHODS,
 }
 
 // === Automazioni ===
@@ -5032,6 +5057,28 @@ function FiscaleSection({
   fiscal: FiscalConfig
   setFiscal: (next: FiscalConfig) => void
 }) {
+  // Self-heal: if a stored config has no payment_methods array, seed it.
+  const methods = Array.isArray(fiscal.payment_methods) && fiscal.payment_methods.length > 0
+    ? fiscal.payment_methods
+    : DEFAULT_PAYMENT_METHODS
+
+  function patchMethod(key: string, patch: Partial<FiscalPaymentMethod>) {
+    setFiscal({
+      ...fiscal,
+      payment_methods: methods.map(m => m.key === key ? { ...m, ...patch } : m),
+    })
+  }
+  function addMethod() {
+    const id = `metodo_${methods.length + 1}`
+    setFiscal({
+      ...fiscal,
+      payment_methods: [...methods, { key: id, label: 'Nuovo metodo', auto_invoice: true }],
+    })
+  }
+  function removeMethod(key: string) {
+    setFiscal({ ...fiscal, payment_methods: methods.filter(m => m.key !== key) })
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -5039,10 +5086,13 @@ function FiscaleSection({
           Fiscale
         </h2>
         <p className="text-[14px] text-theme-text-secondary mt-1">
-          Aliquota IVA applicata alle fatture generate dal sistema.
+          Aliquota IVA + metodi di pagamento accettati. Per ogni metodo decidi
+          se le prenotazioni segnate pagate con quel metodo devono generare
+          automaticamente una fattura.
         </p>
       </div>
 
+      {/* IVA */}
       <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm p-5">
         <label className="block max-w-xs">
           <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">
@@ -5064,6 +5114,69 @@ function FiscaleSection({
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">%</span>
           </div>
         </label>
+      </section>
+
+      {/* Metodi di pagamento + Fattura toggle */}
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm p-5 space-y-3">
+        <div>
+          <h3 className="text-[16px] font-semibold text-theme-text-primary mb-1">
+            Metodi di pagamento
+          </h3>
+          <p className="text-[13px] text-theme-text-secondary">
+            Spunta <strong>Fattura</strong> per i metodi che devono generare
+            fattura automatica quando l&apos;operatore segna pagato. Lascia
+            vuoto per metodi che <strong>non</strong> emettono fattura (es. il
+            DR7 Wallet, gia&apos; fatturato a monte alla ricarica).
+          </p>
+        </div>
+
+        <div className="rounded-xl overflow-hidden border border-theme-border bg-theme-bg-primary">
+          {/* Header */}
+          <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-theme-bg-tertiary text-[11px] font-medium uppercase tracking-wide text-theme-text-muted">
+            <div className="col-span-3">Codice (key)</div>
+            <div className="col-span-6">Etichetta visibile</div>
+            <div className="col-span-2 text-center">Fattura</div>
+            <div className="col-span-1"></div>
+          </div>
+          {methods.map((m, i) => (
+            <div
+              key={m.key}
+              className={`grid grid-cols-12 gap-2 px-4 py-2 items-center ${i < methods.length - 1 ? 'border-b border-theme-border' : ''}`}
+            >
+              <input
+                type="text"
+                value={m.key}
+                onChange={(e) => patchMethod(m.key, { key: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '_') })}
+                className="col-span-3 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[12px] font-mono text-theme-text-primary"
+              />
+              <input
+                type="text"
+                value={m.label}
+                onChange={(e) => patchMethod(m.key, { label: e.target.value })}
+                className="col-span-6 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary"
+              />
+              <label className="col-span-2 flex items-center justify-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={m.auto_invoice}
+                  onChange={(e) => patchMethod(m.key, { auto_invoice: e.target.checked })}
+                  className="w-4 h-4 accent-[#007aff]"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => removeMethod(m.key)}
+                className="col-span-1 text-red-500 hover:bg-red-500/10 rounded-md py-1.5 text-sm"
+                title="Rimuovi metodo"
+              >×</button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={addMethod}
+          className="w-full py-2 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-primary hover:border-[#007aff]/40 transition-colors"
+        >+ Aggiungi metodo di pagamento</button>
       </section>
     </div>
   )
