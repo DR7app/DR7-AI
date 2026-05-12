@@ -5,6 +5,7 @@ import { appendPreventivoEvent } from '../../../utils/preventivoEvents'
 import Button from './Button'
 import Select from './Select'
 import CustomerAutocomplete from './CustomerAutocomplete'
+import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 
 /** Convert EUR to integer cents using string parsing (no floating point) */
 function eurToCents(eur: number): number {
@@ -16,15 +17,6 @@ const LOCATIONS_MAP: Record<string, string> = {
   cagliari_airport: 'Aeroporto di Cagliari Elmas (+€50)',
 }
 
-const PAYMENT_METHODS = [
-  { value: 'Bonifico', label: 'Bonifico' },
-  { value: 'Contanti', label: 'Contanti' },
-  { value: 'Credit Wallet', label: 'Credit Wallet' },
-  { value: 'Carta di Credito / bancomat', label: 'Carta di Credito / bancomat' },
-  { value: 'Paypal', label: 'Paypal' },
-  { value: 'RIBA', label: 'RIBA' },
-]
-
 interface Props {
   isOpen: boolean
   preventivo: any
@@ -34,6 +26,8 @@ interface Props {
 }
 
 export default function ConvertPreventivoModal({ isOpen, preventivo, customers, onClose, onConverted }: Props) {
+  const adminMethods = usePaymentMethods()
+  const PAYMENT_METHODS = adminMethods.map(m => ({ value: m.label, label: m.label }))
   const [customerId, setCustomerId] = useState(preventivo.customer_id || '')
   const [paymentStatus, setPaymentStatus] = useState('pending')
   const [paymentMethod, setPaymentMethod] = useState('Contanti')

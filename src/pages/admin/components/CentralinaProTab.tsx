@@ -4,6 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import AddressAutocomplete from './AddressAutocomplete'
 import { kmFromDR7Office } from '../../../utils/dr7Distance'
+import { invalidatePaymentMethodsCache } from '../../../hooks/usePaymentMethods'
 
 type FleetVehicle = {
   id: string
@@ -1475,6 +1476,9 @@ export default function CentralinaProTab() {
     setSavedLavaggioHours(lavaggioHours)
     setSavedNoleggioHours(noleggioHours)
     savePersisted({ categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours })
+    // Bust the payment-method cache so every dropdown across admin picks up
+    // the new list on next mount, without page reload.
+    invalidatePaymentMethodsCache()
     setJustSaved(true)
     setTimeout(() => setJustSaved(false), 2000)
 

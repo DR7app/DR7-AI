@@ -4,6 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import { buildBookingContext } from '../../../utils/adminLogHelpers'
 import { authFetch } from '../../../utils/authFetch'
+import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 
 interface PenaltyModalProps {
     isOpen: boolean
@@ -48,6 +49,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
     const [note, setNote] = useState('')
     const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid' | 'nexi_pay_by_link'>('pending')
     const [paymentMethod, setPaymentMethod] = useState('Contanti')
+    const paymentMethods = usePaymentMethods()
     const [isGenerating, setIsGenerating] = useState(false)
     const [error, setError] = useState('')
     // Final desired price — when set & < subtotal, the difference becomes a
@@ -775,31 +777,12 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                                 disabled={isGenerating}
                                 className="flex-1 px-3 py-2 bg-white/[0.06] border border-white/[0.08] rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
                             >
-                                <option value="Nexi Pay by Link">Nexi - Pay by Link</option>
-                                <option value="Bonifico">Bonifico</option>
-                                <option value="Contanti">Contanti</option>
-                                <option value="Credit Wallet">Credit Wallet</option>
-                                <option value="Carta di Credito / bancomat">Carta di Credito / bancomat</option>
-                                <option value="Paypal">Paypal</option>
-                                <option value="RIBA">RIBA</option>
-                                <option value="RID">RID</option>
-                                <option value="Bollettino postale">Bollettino postale</option>
-                                <option value="Assegno">Assegno</option>
-                                <option value="Assegno circolare">Assegno circolare</option>
-                                <option value="PagoPA">PagoPA</option>
-                                <option value="RID utenze">RID utenze</option>
-                                <option value="RIB veloce">RIB veloce</option>
-                                <option value="SEPA Direct Debit">SEPA Direct Debit</option>
-                                <option value="SEPA Direct Debit CORE">SEPA Direct Debit CORE</option>
-                                <option value="SEPA Direct Debit B2B">SEPA Direct Debit B2B</option>
-                                <option value="Domiciliazione bancaria">Domiciliazione bancaria</option>
-                                <option value="Domiciliazione postale">Domiciliazione postale</option>
-                                <option value="Trattenuta su somme già riscosse">Trattenuta su somme già riscosse</option>
-                                <option value="Bollettino bancario">Bollettino bancario</option>
-                                <option value="Contanti presso tesoreria">Contanti presso tesoreria</option>
-                                <option value="Vaglia cambiario">Vaglia cambiario</option>
-                                <option value="Quietanza erario">Quietanza erario</option>
-                                <option value="Giroconto su conti di contabilità">Giroconto su conti di contabilità</option>
+                                {paymentMethods.map(pm => (
+                                    <option key={pm.key} value={pm.label}>{pm.label}</option>
+                                ))}
+                                {paymentMethod && !paymentMethods.some(pm => pm.label === paymentMethod) && (
+                                    <option value={paymentMethod}>{paymentMethod}</option>
+                                )}
                             </select>
                         </div>
                     )}

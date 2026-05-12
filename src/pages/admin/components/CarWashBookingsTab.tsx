@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom'
 import { supabase } from '../../../supabaseClient'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
+import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
@@ -90,6 +91,7 @@ interface CarWashBookingsTabProps {
 }
 
 export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarWashBookingsTabProps = {}) {
+  const paymentMethods = usePaymentMethods()
   const [bookings, setBookings] = useState<CarWashBooking[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [carWashServices, setCarWashServices] = useState<CarWashService[]>([])
@@ -3213,13 +3215,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                       >
                         <option value="">-- Seleziona metodo --</option>
-                        <option value="Nexi Pay by Link">Nexi - Pay by Link</option>
-                        <option value="Contanti">Contanti</option>
-                        <option value="Carta di Credito / bancomat">Carta di Credito / bancomat</option>
-                        <option value="Bonifico">Bonifico</option>
-                        <option value="Credit Wallet">Credit Wallet</option>
-                        <option value="Carta Punti">Carta Punti (richiede OTP)</option>
-                        <option value="Paypal">Paypal</option>
+                        {paymentMethods.map(pm => (
+                          <option key={pm.key} value={pm.label}>{pm.label}</option>
+                        ))}
                       </select>
                     </>
                   )}
@@ -3869,13 +3867,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             className="w-full appearance-none px-3 py-2 pr-8 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-sm focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                           >
                             <option value="">-- Seleziona --</option>
-                            <option value="Contanti">Contanti</option>
-                            <option value="POS">POS</option>
-                            <option value="Carta di credito">Carta di credito</option>
-                            <option value="Carta di debito">Carta di debito</option>
-                            <option value="Bonifico">Bonifico</option>
-                            <option value="Wallet">Wallet</option>
-                            <option value="Gift Card">Gift Card</option>
+                            {paymentMethods.map(pm => (
+                              <option key={pm.key} value={pm.label}>{pm.label}</option>
+                            ))}
                           </select>
                         </div>
                         <div>
@@ -3886,14 +3880,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             className="w-full appearance-none px-3 py-2 pr-8 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-sm focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                           >
                             <option value="">-- Seleziona --</option>
-                            <option value="Contanti">Contanti</option>
-                            <option value="POS">POS</option>
-                            <option value="Carta di credito">Carta di credito</option>
-                            <option value="Carta di debito">Carta di debito</option>
-                            <option value="Bonifico">Bonifico</option>
-                            <option value="Nexi Pay by Link">Nexi Pay by Link</option>
-                            <option value="Wallet">Wallet</option>
-                            <option value="Gift Card">Gift Card</option>
+                            {paymentMethods.map(pm => (
+                              <option key={pm.key} value={pm.label}>{pm.label}</option>
+                            ))}
                           </select>
                         </div>
                       </div>
@@ -3907,14 +3896,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         className="w-full appearance-none px-3 py-2 pr-8 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-sm focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                       >
                         <option value="">-- Seleziona metodo --</option>
-                        <option value="Contanti">Contanti</option>
-                        <option value="POS">POS</option>
-                        <option value="Carta di credito">Carta di credito</option>
-                        <option value="Carta di debito">Carta di debito</option>
-                        <option value="Bonifico">Bonifico</option>
-                        <option value="Nexi Pay by Link">Nexi Pay by Link</option>
-                        <option value="Wallet">Wallet</option>
-                        <option value="Gift Card">Gift Card</option>
+                        {paymentMethods.map(pm => (
+                          <option key={pm.key} value={pm.label}>{pm.label}</option>
+                        ))}
+                        {editingBooking.payment_method && !paymentMethods.some(pm => pm.label === editingBooking.payment_method) && (
+                          <option value={editingBooking.payment_method}>{editingBooking.payment_method}</option>
+                        )}
                       </select>
                     </div>
                   </div>

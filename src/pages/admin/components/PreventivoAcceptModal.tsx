@@ -1,6 +1,7 @@
 import { useState, useEffect, memo } from 'react'
 import { createPortal } from 'react-dom'
 import CustomerAutocomplete from './CustomerAutocomplete'
+import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 
 /**
  * Modal "Accetta preventivo" — same UX pattern as PreventivoRejectModal:
@@ -42,17 +43,10 @@ interface Props {
     customers: any[]
 }
 
-const PAYMENT_METHODS: { value: string; label: string }[] = [
-    { value: 'Bonifico', label: 'Bonifico' },
-    { value: 'Contanti', label: 'Contanti' },
-    { value: 'Credit Wallet', label: 'Credit Wallet' },
-    { value: 'Carta di Credito / bancomat', label: 'Carta di Credito / bancomat' },
-    { value: 'Paypal', label: 'Paypal' },
-    { value: 'RIBA', label: 'RIBA' },
-    { value: 'Pay by Link Nexi', label: 'Pay by Link (Nexi)' },
-]
 
 function PreventivoAcceptModal({ onConfirm, customers }: Props) {
+    const adminMethods = usePaymentMethods()
+    const PAYMENT_METHODS = adminMethods.map(m => ({ value: m.label, label: m.label }))
     const [preventivo, setPreventivo] = useState<AcceptModalPreventivo | null>(null)
     const [customerId, setCustomerId] = useState('')
     const [paymentMethod, setPaymentMethod] = useState('Contanti')

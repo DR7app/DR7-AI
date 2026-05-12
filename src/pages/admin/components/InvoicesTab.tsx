@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import toast from 'react-hot-toast'
+import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 
 interface Invoice {
   id: string
@@ -32,6 +33,7 @@ interface InvoiceItem {
 }
 
 export default function InvoicesTab() {
+  const paymentMethods = usePaymentMethods()
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -461,10 +463,12 @@ export default function InvoicesTab() {
                 onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
                 className="w-full bg-theme-bg-tertiary border-theme-border rounded-full px-3 py-2 text-theme-text-primary"
               >
-                <option value="Carta di credito / bancomat">Carta di credito / bancomat</option>
-                <option value="Bonifico bancario">Bonifico bancario</option>
-                <option value="Contanti">Contanti</option>
-                <option value="Assegno">Assegno</option>
+                {paymentMethods.map(pm => (
+                  <option key={pm.key} value={pm.label}>{pm.label}</option>
+                ))}
+                {formData.payment_method && !paymentMethods.some(pm => pm.label === formData.payment_method) && (
+                  <option value={formData.payment_method}>{formData.payment_method}</option>
+                )}
               </select>
             </div>
             <div>
