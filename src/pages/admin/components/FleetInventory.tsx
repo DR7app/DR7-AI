@@ -306,7 +306,9 @@ export default function FleetInventory() {
                     if (!plateSearch.trim()) return true
                     const q = plateSearch.trim().toLowerCase().replace(/\s/g, '')
                     const plate = (v.plate || '').toLowerCase().replace(/\s/g, '')
-                    const name = v.display_name.toLowerCase()
+                    // Guard display_name: a null value threw TypeError and made
+                    // the whole list disappear when typing in the search box.
+                    const name = (v.display_name || '').toLowerCase()
                     return plate.includes(q) || name.includes(q)
                 }).map(vehicle => {
                     const inv = vehicle.inventory

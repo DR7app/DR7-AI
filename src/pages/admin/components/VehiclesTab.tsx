@@ -720,7 +720,10 @@ export default function VehiclesTab() {
     if (!plateSearch.trim()) return true
     const q = plateSearch.trim().toLowerCase().replace(/\s/g, '')
     const plate = (v.plate || '').toLowerCase().replace(/\s/g, '')
-    const name = v.display_name.toLowerCase()
+    // Guard display_name: any vehicle with a null/undefined display_name was
+    // throwing TypeError here, which propagated up and made the whole filter
+    // function appear broken (empty list, "search doesn't find anything").
+    const name = (v.display_name || '').toLowerCase()
     return plate.includes(q) || name.includes(q)
   }
 
