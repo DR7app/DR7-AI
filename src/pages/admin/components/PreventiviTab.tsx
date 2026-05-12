@@ -1729,8 +1729,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
               ? `Km illimitati = ${formatEur(p.unlimited_km_total)}`
               : `Km illimitati = Incluso`
           }
+          // Niente checkbox = niente riga "Km Illimitati / Incluso", anche
+          // se la categoria del veicolo ha default 'unlimited'. L'utente
+          // vuole che la riga compaia SOLO se ha esplicitamente spuntato.
           const kmInc = resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig)
-          return `Km inclusi: ${kmInc === 'unlimited' ? 'Illimitati' : `${kmInc} Km`}`
+          if (kmInc === 'unlimited') return ''
+          return `Km inclusi: ${kmInc} Km`
         })()
         const lineSecondDriver = p.second_driver_total > 0
           ? `Secondo guidatore = ${formatEur(p.second_driver_total)}` : ''
@@ -1880,22 +1884,23 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             : '',
           km_info: pickedUnlimitedKm ? 'Illimitati' : (() => {
             const km = resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig)
-            return km === 'unlimited' ? 'Illimitati' : `${km} Km`
+            // Box non spuntato: non bluffare "Illimitati" anche se la
+            // categoria di default lo prevede. Riportiamo il numero o ''.
+            if (km === 'unlimited') return ''
+            return `${km} Km`
           })(),
           // {km_illimitati} -> "Km Illimitati = X,XX" (stesso formato delle
           // altre voci: "Lavaggio Finale = 9,90", "No cauzione = 49,00").
-          // Vuoto se km limitati (line-strip rimuove la riga, anche il bullet
-          // "•" davanti). "Km Illimitati = Incluso" se illimitato gia' nel
-          // pacchetto base senza sovrapprezzo.
+          // Mostrata SOLO se l'utente ha esplicitamente spuntato Km
+          // Illimitati (pickedUnlimitedKm). Niente checkbox = niente riga,
+          // anche se la categoria del veicolo ha default 'unlimited'.
           km_illimitati: (() => {
-              const hasUnlim = pickedUnlimitedKm || resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig) === 'unlimited'
-              if (!hasUnlim) return ''
+              if (!pickedUnlimitedKm) return ''
               const cost = Number(p.unlimited_km_total || 0)
               return cost > 0 ? `Km Illimitati = ${formatEur(cost)}` : 'Km Illimitati = Incluso'
           })(),
           unlimited_km: (() => {
-              const hasUnlim = pickedUnlimitedKm || resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig) === 'unlimited'
-              if (!hasUnlim) return ''
+              if (!pickedUnlimitedKm) return ''
               const cost = Number(p.unlimited_km_total || 0)
               return cost > 0 ? `Km Illimitati = ${formatEur(cost)}` : 'Km Illimitati = Incluso'
           })(),
