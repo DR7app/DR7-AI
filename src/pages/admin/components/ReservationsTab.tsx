@@ -2723,6 +2723,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // Pre-auth function removed — Nexi Pay by Link doesn't support capture via API
 
   async function handleDeleteBooking(bookingId: string, bookingType: 'booking' | 'reservation') {
+    // OTP gate (configurabile da Gestione OTP > action 'booking.delete').
+    // Se la regola e' disattivata in Gestione OTP, isOtpRequired ritorna false
+    // e requestOverride auto-approva senza popup. Direzione approva
+    // l'OTP -> richiamare manualmente Cancella di nuovo per procedere.
+    if (!hasOverride('booking.delete')) {
+      requestOverride('booking.delete', 'Eliminare una prenotazione richiede autorizzazione direzionale.')
+      if (!hasOverride('booking.delete')) return // OTP modal aperto, esci
+    }
     try {
       // Get booking details before deleting
       let customerName = ''

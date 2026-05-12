@@ -17,6 +17,7 @@ import { reloadOtpConfig } from '../../../utils/otpConfigCache'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
+import { OTP_ACTION_CATALOG, type OtpAction } from '../../../utils/otpActionCatalog'
 
 interface OtpRow {
     id: string
@@ -388,9 +389,10 @@ export default function GestioneOtpTab() {
                 />
             </div>
 
-            {/* New rule form (slide down) — simplified, only 3 fields. ID is
-                auto-derived from the title (slugified). Advanced controls hidden
-                behind a toggle. */}
+            {/* New rule form — pick from catalog di azioni note. Cosi' la
+                regola creata e' SEMPRE collegata a un'azione cablata nel
+                codice, niente metadata orfana. Le entry con `wired: false`
+                sono ancora visibili ma chiaramente marcate "da cablare". */}
             {showCreate && (
                 <div className="rounded-2xl border border-dr7-gold/40 bg-dr7-gold/5 p-5 space-y-3 shadow-sm">
                     <div className="flex items-center justify-between gap-3">
@@ -400,67 +402,95 @@ export default function GestioneOtpTab() {
 
                     <div className="space-y-3">
                         <label className="block text-xs text-theme-text-muted">
-                            Titolo della regola
-                            <input
-                                type="text"
-                                value={newRow.label}
-                                onChange={e => setNewRow(r => ({ ...r, label: e.target.value }))}
-                                placeholder="es. Modifica dopo pagamento"
-                                className="mt-1 w-full px-2.5 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20"
-                            />
-                            <span className="block mt-1 text-[10px] text-theme-text-muted">
-                                Lo vedrai sul popup OTP che chiede l&apos;autorizzazione.
-                            </span>
-                        </label>
-
-                        <label className="block text-xs text-theme-text-muted">
-                            Dove si attiva
-                            <input
-                                type="text"
-                                value={newRow.used_in}
-                                onChange={e => setNewRow(r => ({ ...r, used_in: e.target.value }))}
-                                placeholder="es. Tab Prenotazioni > tasto Modifica"
-                                className="mt-1 w-full px-2.5 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20"
-                            />
-                            <span className="block mt-1 text-[10px] text-theme-text-muted">
-                                Solo un promemoria — dove dovrebbe scattare questa regola.
-                            </span>
-                        </label>
-
-                        <label className="block text-xs text-theme-text-muted">
-                            Perché serve l&apos;OTP
-                            <textarea
-                                rows={2}
-                                value={newRow.reason}
-                                onChange={e => setNewRow(r => ({ ...r, reason: e.target.value }))}
-                                placeholder="es. Modificare un noleggio dopo l'incasso richiede approvazione direzionale."
-                                className="mt-1 w-full px-2.5 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-secondary text-sm focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20"
-                            />
-                            <span className="block mt-1 text-[10px] text-theme-text-muted">
-                                Spiegazione mostrata all&apos;operatore quando deve chiedere l&apos;OTP.
-                            </span>
-                        </label>
-
-                        {/* Advanced: custom ID (otherwise auto-slugified from Titolo). */}
-                        <details className="text-xs text-theme-text-muted">
-                            <summary className="cursor-pointer select-none hover:text-theme-text-primary">Avanzato — ID tecnico (di solito non serve)</summary>
-                            <input
-                                type="text"
+                            Azione da proteggere
+                            <select
                                 value={newRow.id}
-                                onChange={e => setNewRow(r => ({ ...r, id: e.target.value }))}
-                                placeholder={newRow.label ? `auto: ${slugifyId(newRow.label)}` : 'auto-generato dal titolo'}
-                                className="mt-2 w-full px-2.5 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20"
-                            />
+                                onChange={e => {
+                                    const id = e.target.value
+                                    const action = OTP_ACTION_CATALOG.find(a => a.id === id)
+                                    if (action) {
+                                        setNewRow({
+                                            id: action.id,
+                                            label: action.label,
+                                            used_in: action.used_in,
+                                            reason: action.reason,
+                                        })
+                                    } else {
+                                        setNewRow({ id: '', label: '', used_in: '', reason: '' })
+                                    }
+                                }}
+                                className="mt-1 w-full px-2.5 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20"
+                            >
+                                <option value="">Seleziona un'azione...</option>
+                                {(['Noleggio', 'Lavaggio', 'Fattura', 'Cliente', 'Sistema', 'Patente / Documenti'] as OtpAction['group'][]).map(group => {
+                                    const groupActions = OTP_ACTION_CATALOG.filter(a => a.group === group && !rows.find(r => r.id === a.id))
+                                    if (groupActions.length === 0) return null
+                                    return (
+                                        <optgroup key={group} label={group}>
+                                            {groupActions.map(a => (
+                                                <option key={a.id} value={a.id}>
+                                                    {a.label}{!a.wired ? ' — da cablare' : ''}
+                                                </option>
+                                            ))}
+                                        </optgroup>
+                                    )
+                                })}
+                            </select>
                             <span className="block mt-1 text-[10px] text-theme-text-muted">
-                                Lasciare vuoto: il sistema lo crea dal titolo. Compilarlo solo se uno sviluppatore te lo chiede.
+                                Scegli l&apos;azione tra quelle gia censite. Le voci marcate &quot;da cablare&quot; salvano la regola ma serve ancora cablarle nel codice (te lo segnaliamo poi).
                             </span>
-                        </details>
+                        </label>
 
-                        <div className="rounded-md bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-[11px] text-amber-300">
-                            <strong>Nota:</strong> creare la regola la registra nel sistema, ma serve uno sviluppatore per
-                            collegarla al pulsante o all&apos;azione corrispondente nell&apos;admin. Senza quel passaggio
-                            l&apos;OTP non scatterà.
-                        </div>
+                        {newRow.id && (
+                            <>
+                                <label className="block text-xs text-theme-text-muted">
+                                    Titolo della regola
+                                    <input
+                                        type="text"
+                                        value={newRow.label}
+                                        onChange={e => setNewRow(r => ({ ...r, label: e.target.value }))}
+                                        className="mt-1 w-full px-2.5 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20"
+                                    />
+                                </label>
+
+                                <label className="block text-xs text-theme-text-muted">
+                                    Dove si attiva (promemoria)
+                                    <input
+                                        type="text"
+                                        value={newRow.used_in}
+                                        onChange={e => setNewRow(r => ({ ...r, used_in: e.target.value }))}
+                                        className="mt-1 w-full px-2.5 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20"
+                                    />
+                                </label>
+
+                                <label className="block text-xs text-theme-text-muted">
+                                    Motivazione mostrata nel popup OTP
+                                    <textarea
+                                        rows={2}
+                                        value={newRow.reason}
+                                        onChange={e => setNewRow(r => ({ ...r, reason: e.target.value }))}
+                                        className="mt-1 w-full px-2.5 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-secondary text-sm focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20"
+                                    />
+                                </label>
+
+                                {(() => {
+                                    const action = OTP_ACTION_CATALOG.find(a => a.id === newRow.id)
+                                    if (!action) return null
+                                    if (action.wired) {
+                                        return (
+                                            <div className="rounded-md bg-emerald-500/10 border border-emerald-500/30 px-3 py-2 text-[11px] text-emerald-300">
+                                                ✓ Questa azione e gia cablata: la regola funzionera al primo click sul pulsante dopo il salvataggio.
+                                            </div>
+                                        )
+                                    }
+                                    return (
+                                        <div className="rounded-md bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-[11px] text-amber-300">
+                                            <strong>Da cablare:</strong> la regola e registrata ma serve uno sviluppatore per collegare l&apos;OTP al pulsante &quot;{action.used_in}&quot;. Senza quel passaggio l&apos;OTP non scattera.
+                                        </div>
+                                    )
+                                })()}
+                            </>
+                        )}
                     </div>
 
                     <div className="flex justify-end gap-2 pt-1">
