@@ -24,7 +24,20 @@ interface Admin {
   stato?: string | null
   responsabile?: string | null
   contatto_interno?: string | null
+  permissions?: string[] | null
 }
+
+// Role tags mirror useAdminRole.AdminRoleTag. Direzione can grant these
+// to existing operators via the Permessi & Ruoli editor below; failsafe
+// in useAdminRole.ROLE_FAILSAFE still covers valerio/ilenia/ophe.
+const ROLE_TAG_OPTIONS: { tag: string; label: string; hint: string }[] = [
+  { tag: 'role:direzione',         label: 'Direzione',          hint: 'Superuser, sblocca tutto' },
+  { tag: 'role:developer',         label: 'Developer',          hint: 'Bypass OTP Gestione OTP' },
+  { tag: 'role:payment-manager',   label: 'Payment Manager',    hint: 'Segna fatture pagate' },
+  { tag: 'role:stipendio-editor',  label: 'Stipendio Editor',   hint: 'Modifica stipendi Lavaggio' },
+  { tag: 'role:sito-direzione',    label: 'Sito CMS',           hint: 'Modifica testi senza OTP' },
+  { tag: 'role:preventivi-admin',  label: 'Preventivi Admin',   hint: 'Flussi speciali preventivi' },
+]
 
 interface LogEntry {
   id: string
@@ -359,7 +372,7 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
     const myEmail = (user?.email || '').toLowerCase()
     const isDirection = hasRoleRef.current('direzione')
 
-    const { data } = await supabase.from('admins').select('id, email, nome, role, sede, reparto, tipo_rapporto, stato, responsabile, contatto_interno')
+    const { data } = await supabase.from('admins').select('id, email, nome, role, sede, reparto, tipo_rapporto, stato, responsabile, contatto_interno, permissions')
     if (data) {
       const filtered = isDirection
         ? data
@@ -424,6 +437,28 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
     } finally {
       updateFieldLockRef.current = false
     }
+  }
+
+  // Toggle a single role tag on an existing admin. Writes admins.permissions
+  // and refreshes local state so the gates that read hasRole() update on
+  // next render. Reserved to direzione.
+  async function toggleAdminRole(admin: Admin, tag: string) {
+    if (!canEditOperators) {
+      toast.error('Solo la direzione può modificare i ruoli.')
+      return
+    }
+    const current = Array.isArray(admin.permissions) ? admin.permissions : []
+    const next = current.includes(tag) ? current.filter(t => t !== tag) : [...current, tag]
+    const { error } = await supabase
+      .from('admins')
+      .update({ permissions: next })
+      .eq('id', admin.id)
+    if (error) {
+      toast.error(`Salvataggio fallito: ${error.message}`)
+      return
+    }
+    setAdmins(prev => prev.map(a => a.id === admin.id ? { ...a, permissions: next } : a))
+    toast.success(current.includes(tag) ? `Rimosso ${tag.replace('role:', '')}` : `Assegnato ${tag.replace('role:', '')}`)
   }
 
   // ─── Aggregations ────────────────────────────────────────────────────
@@ -584,6 +619,38 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
                 <ProfileField label="Foto profilo" value="Iniziali" />
                 <ProfileField label="ID interno" value={selected.id.slice(0, 8)} />
               </div>
+
+              {/* Permessi & Ruoli — editabile solo dalla direzione */}
+              {canEditOperators && (
+                <div className="mt-6 border-t border-theme-border pt-5">
+                  <h4 className="text-sm font-semibold text-theme-text-primary mb-1">Permessi & Ruoli</h4>
+                  <p className="text-[12px] text-theme-text-muted mb-3">
+                    Assegna i ruoli speciali a questo operatore. I gate nel resto dell&apos;admin
+                    (Fatture, Stipendi, Sito CMS, OTP, ecc.) usano <code className="text-[11px] bg-theme-bg-tertiary px-1 rounded">hasRole()</code>.
+                    Il failsafe per valerio/ilenia/ophe resta nel codice — non puoi escluderli da qui.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {ROLE_TAG_OPTIONS.map(opt => {
+                      const currentPerms = Array.isArray(selected.permissions) ? selected.permissions : []
+                      const checked = currentPerms.includes(opt.tag)
+                      return (
+                        <label key={opt.tag} className="flex items-start gap-2 px-3 py-2 rounded-md border border-theme-border bg-theme-bg-primary cursor-pointer hover:border-dr7-gold/40 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleAdminRole(selected, opt.tag)}
+                            className="mt-0.5"
+                          />
+                          <div className="min-w-0">
+                            <div className="text-[13px] font-medium text-theme-text-primary">{opt.label}</div>
+                            <div className="text-[11px] text-theme-text-muted">{opt.hint}</div>
+                          </div>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </Section>
 
             {/* SECTION 2 — KPI PRINCIPALI */}
