@@ -903,34 +903,41 @@ export const handler: Handler = async (event) => {
       // reflects what was ACTUALLY PAID (data_pagamento), not just invoiced. The
       // headline KPI cards (Costi, Margine, Utile Netto) use these figures.
       safe('fornitoriCashFlow', async () => {
-        const todayISO = new Date().toISOString().slice(0, 10)
-        const [paidCurrRes, paidPrevRes, outstandingRes, overdueRes, alertsRes, fornitoriRes] = await Promise.all([
-          // 1. Paid this month — cash-flow figure
+        // BUG FIX: prima Da pagare, Scaduto e Alert aperti non rispettavano
+        // il range di date scelto dall'admin — erano sempre lo "snapshot
+        // attuale", quindi cambiare data nel filtro non cambiava i numeri.
+        // Adesso usiamo monthEndISO come "as of date": tutti i tre valori
+        // riflettono lo stato AL TERMINE del periodo selezionato (coerente
+        // con come Pagato fornitori usa data_pagamento ∈ [from, to]).
+        const periodEndISO = monthEndISO + 'T23:59:59'
+        const [paidCurrRes, paidPrevRes, outstandingRes, alertsRes, fornitoriRes] = await Promise.all([
+          // 1. Paid this period — cash-flow figure
           supabase.from('fornitore_documents')
             .select('id, importo_totale, fornitore_id, data_pagamento')
             .gte('data_pagamento', monthStartISO)
-            .lte('data_pagamento', monthEndISO + 'T23:59:59'),
-          // 2. Paid previous month — for MoM
+            .lte('data_pagamento', periodEndISO),
+          // 2. Paid previous period — for MoM
           supabase.from('fornitore_documents')
             .select('id, importo_totale')
             .gte('data_pagamento', prevMonthStartISO)
             .lte('data_pagamento', prevMonthEndISO + 'T23:59:59'),
-          // 3. Outstanding (not paid yet, regardless of period)
+          // 3. Documents that existed by end-of-period — filtreremo in JS
+          //    quelli non ancora pagati a quella data (data_pagamento IS NULL
+          //    OR > periodEndISO). Da qui derivano sia Da pagare sia Scaduto.
           supabase.from('fornitore_documents')
-            .select('id, importo_totale, data_scadenza, fornitore_id, stato')
-            .not('stato', 'in', '(pagato,archiviato,bloccato)')
-            .in('tipo', ['fattura']),
-          // 4. Overdue (scadenza past + not paid)
-          supabase.from('fornitore_documents')
-            .select('id, importo_totale, data_scadenza, fornitore_id')
-            .not('stato', 'in', '(pagato,archiviato,bloccato)')
-            .lt('data_scadenza', todayISO)
-            .in('tipo', ['fattura']),
-          // 5. Open alerts
+            .select('id, importo_totale, data_scadenza, fornitore_id, stato, data_pagamento, created_at, data_documento')
+            .not('stato', 'in', '(archiviato,bloccato)')
+            .in('tipo', ['fattura'])
+            .or(`data_documento.lte.${monthEndISO},and(data_documento.is.null,created_at.lte.${periodEndISO})`),
+          // 4. Open alerts AS OF end-of-period: filtriamo per created_at
+          //    ≤ periodEndISO. Il "status='open' adesso" è un limite (no
+          //    audit log dello stato passato) ma riduce comunque rumore
+          //    rispetto al count globale e cambia col filtro date.
           supabase.from('fornitore_alerts')
             .select('id, severity', { count: 'exact', head: false })
-            .eq('status', 'open'),
-          // 6. Active fornitori (for nome / categoria lookup)
+            .eq('status', 'open')
+            .lte('created_at', periodEndISO),
+          // 5. Active fornitori (for nome / categoria lookup)
           supabase.from('fornitori')
             .select('id, nome, categoria_merce')
             .eq('attivo', true),
@@ -941,9 +948,18 @@ export const handler: Handler = async (event) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const paidPrev: any[] = paidPrevRes.data || []
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const outstanding: any[] = outstandingRes.data || []
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const overdue: any[] = overdueRes.data || []
+        const docsExisting: any[] = outstandingRes.data || []
+        // Outstanding AT periodEnd = doc not paid by periodEnd
+        // (data_pagamento è null OR posteriore al periodEnd).
+        const outstanding = docsExisting.filter(d => {
+          if (!d.data_pagamento) return true
+          return new Date(d.data_pagamento).getTime() > new Date(periodEndISO).getTime()
+        })
+        // Overdue AT periodEnd = outstanding + scadenza ≤ periodEnd
+        const overdue = outstanding.filter(d => {
+          if (!d.data_scadenza) return false
+          return new Date(d.data_scadenza).getTime() <= new Date(monthEndISO + 'T23:59:59').getTime()
+        })
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const fornitori: any[] = fornitoriRes.data || []
 
