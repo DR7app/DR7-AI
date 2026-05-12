@@ -160,7 +160,7 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
     used_in: 'Prime Wash > tasto Elimina sulla riga',
     reason: 'Eliminare un lavaggio richiede autorizzazione direzionale.',
     group: 'Lavaggio',
-    wired: false,
+    wired: true,
   },
   {
     id: 'wash.mark_paid',

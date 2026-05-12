@@ -858,6 +858,16 @@ export default function FatturaTab() {
 
   return (
     <div className="space-y-6">
+      <LimitationOverrideModal
+        isOpen={override.limitationState.isOpen}
+        limitationCode={override.limitationState.limitationCode}
+        limitationMessage={override.limitationState.limitationMessage}
+        actionContext={override.limitationState.actionContext}
+        draftSessionId={override.draftSessionId}
+        flowType={override.flowType}
+        onCancel={override.cancelLimitation}
+        onOverrideApproved={override.handleOverrideApproved}
+      />
       {/* Header */}
       <div className="flex justify-between items-start flex-wrap gap-3">
         <div className="flex flex-col gap-1">
