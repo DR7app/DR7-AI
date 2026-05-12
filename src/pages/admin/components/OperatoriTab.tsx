@@ -374,7 +374,23 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
 
   async function loadAdmins() {
     setLoading(true)
-    const ADMIN_ORDER = ['Valerio', 'Ilenia', 'Salvatore', 'Ophélie', 'Davide']
+    // Roster sort order: read from centralina_pro_config.config.operatori.roster_order
+    // (array of first-names, ordered). Names not in the list go to the end,
+    // sorted alphabetically. Falls back to the historical hardcoded order.
+    const fallbackOrder = ['Valerio', 'Ilenia', 'Salvatore', 'Ophélie', 'Davide']
+    let rosterOrder = fallbackOrder
+    try {
+      const { data: cfgRow } = await supabase
+        .from('centralina_pro_config')
+        .select('config')
+        .eq('id', 'main')
+        .maybeSingle()
+      const cfg = (cfgRow?.config || {}) as Record<string, unknown>
+      const op = (cfg.operatori || {}) as Record<string, unknown>
+      const arr = op.roster_order
+      if (Array.isArray(arr) && arr.length > 0) rosterOrder = arr.map(String)
+    } catch { /* keep fallback */ }
+
     // Privacy: ognuno vede SOLO il proprio report. Solo la direzione
     // (failsafe valerio/ilenia, oppure ruolo `role:direzione` in permissions)
     // vede i report di tutti.
@@ -388,9 +404,13 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
         ? data
         : data.filter(a => (a.email || '').toLowerCase() === myEmail)
       filtered.sort((a, b) => {
-        const ai = ADMIN_ORDER.indexOf(a.nome || '')
-        const bi = ADMIN_ORDER.indexOf(b.nome || '')
-        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+        const ai = rosterOrder.indexOf(a.nome || '')
+        const bi = rosterOrder.indexOf(b.nome || '')
+        const aPos = ai === -1 ? 999 : ai
+        const bPos = bi === -1 ? 999 : bi
+        if (aPos !== bPos) return aPos - bPos
+        // Same priority → alphabetical
+        return (a.nome || a.email).localeCompare(b.nome || b.email)
       })
       setAdmins(filtered)
       if (!selectedAdmin && filtered.length > 0) setSelectedAdmin(filtered[0].id)

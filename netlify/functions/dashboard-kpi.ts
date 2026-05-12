@@ -1028,15 +1028,37 @@ export const handler: Handler = async (event) => {
     // Built from existing fields only (no event tracking yet).
     // ============================================================
     const preventiviSummary = await safe('preventivi', async () => {
-      // Exclude preventivi created by ophe@dr7.app — those are
-      // operator/test entries, not real customer demand.
-      const EXCLUDE_OPERATORS = ['ophe@dr7.app']
+      // Exclude preventivi created by test/dev accounts (operator entries,
+      // not real customer demand). List is admin-editable via
+      // centralina_pro_config.config.kpi.excluded_operator_emails; default
+      // matches the historical hardcoded list.
+      const EXCLUDE_OPERATORS = await (async () => {
+        try {
+          const { data } = await supabase
+            .from('centralina_pro_config')
+            .select('config')
+            .eq('id', 'main')
+            .maybeSingle()
+          const cfg = (data?.config || {}) as Record<string, unknown>
+          const kpi = (cfg.kpi || {}) as Record<string, unknown>
+          const arr = kpi.excluded_operator_emails
+          if (Array.isArray(arr) && arr.length > 0) {
+            return arr.map(String).map(s => s.toLowerCase()).filter(Boolean)
+          }
+        } catch (e) {
+          console.warn('[dashboard-kpi] excluded operators lookup failed, using fallback', e)
+        }
+        return ['ophe@dr7.app']
+      })()
+      const excludeFilter = EXCLUDE_OPERATORS.length > 0
+        ? `(${EXCLUDE_OPERATORS.map(e => `"${e}"`).join(',')})`
+        : '("__none__")'
       const { data: prevs } = await supabase
         .from('preventivi')
         .select('id, status, total_final, total_amount, motivo_rifiuto, motivo_rifiuto_note, created_at, created_by, vehicle_name, vehicle_category, vehicle_plate, pickup_date, dropoff_date, rental_days, booking_id')
         .gte('created_at', monthStartISO + 'T00:00:00')
         .lte('created_at', monthEndISO + 'T23:59:59')
-        .not('created_by', 'in', `(${EXCLUDE_OPERATORS.map(e => `"${e}"`).join(',')})`)
+        .not('created_by', 'in', excludeFilter)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const list: any[] = prevs || []
       const total = list.length
