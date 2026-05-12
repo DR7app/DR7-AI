@@ -359,8 +359,23 @@ const STATUS_COLORS: Record<string, string> = {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 // WhatsApp di reportistica boss — usato per gli alert "preventivo creato".
-// Spostare in centralina_pro_config se serve cambiarlo senza dev.
-const BOSS_PHONE = '393472817258'
+// Sorgente: centralina_pro_config.config.notifications.boss_whatsapp_phone
+// (modificabile da Gestione OTP). Fallback hardcoded per recovery.
+const BOSS_PHONE_FALLBACK = '393472817258'
+async function getBossPhone(): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('centralina_pro_config')
+      .select('config')
+      .eq('id', 'main')
+      .maybeSingle()
+    const cfg = (data?.config || {}) as Record<string, unknown>
+    const notif = (cfg.notifications || {}) as Record<string, unknown>
+    const v = notif.boss_whatsapp_phone
+    if (typeof v === 'string' && v.trim().length > 0) return v.trim().replace(/[\s+-]/g, '')
+  } catch { /* fallback */ }
+  return BOSS_PHONE_FALLBACK
+}
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking }: Props) {
@@ -2073,11 +2088,14 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       + `*Totale:* €${(preventivo.total_final || 0).toFixed(2)}\n\n`
       + `Approva o rifiuta dal pannello admin > Preventivi.`
 
-    fetch('/.netlify/functions/send-whatsapp-notification', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customPhone: BOSS_PHONE, customMessage: msg }),
-    }).catch(() => {})
+    // Fire-and-forget: look up the admin-configured boss phone, then send.
+    getBossPhone().then(bossPhone => {
+      fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customPhone: bossPhone, customMessage: msg }),
+      }).catch(() => {})
+    })
 
     toast.success('Richiesta approvazione inviata a Valerio')
     return true

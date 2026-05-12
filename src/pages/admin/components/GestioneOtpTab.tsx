@@ -738,13 +738,18 @@ function KpiCard(props: {
 }
 
 // ─── OTP Recipient Field ─────────────────────────────────────────────────
-// Manages centralina_pro_config.config.notifications.otp_recipient — the
-// email where direzione receives OTP codes for limitation overrides and
-// wallet OTPs. Read by limitation-override-otp.ts and send-wallet-otp.ts
-// netlify functions (3-level fallback: DB → env var → hardcoded).
+// Manages two `centralina_pro_config.config.notifications` keys:
+//   - otp_recipient        → email per i codici OTP direzione (server-side
+//                            in limitation-override-otp + send-wallet-otp)
+//   - boss_whatsapp_phone  → numero WhatsApp per gli alert "preventivo
+//                            creato in attesa" (PreventiviTab fallback)
+// Entrambi: 3-level fallback (DB → env var/hardcoded). Lasciare vuoto
+// per usare il default.
 function OtpRecipientField() {
-    const [value, setValue] = useState('')
-    const [saved, setSaved] = useState('')
+    const [email, setEmail] = useState('')
+    const [savedEmail, setSavedEmail] = useState('')
+    const [phone, setPhone] = useState('')
+    const [savedPhone, setSavedPhone] = useState('')
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
 
@@ -759,19 +764,25 @@ function OtpRecipientField() {
             if (cancelled) return
             const cfg = (data?.config || {}) as Record<string, unknown>
             const notif = (cfg.notifications || {}) as Record<string, unknown>
-            const v = typeof notif.otp_recipient === 'string' ? notif.otp_recipient : ''
-            setValue(v)
-            setSaved(v)
+            const e = typeof notif.otp_recipient === 'string' ? notif.otp_recipient : ''
+            const p = typeof notif.boss_whatsapp_phone === 'string' ? notif.boss_whatsapp_phone : ''
+            setEmail(e); setSavedEmail(e)
+            setPhone(p); setSavedPhone(p)
             setLoading(false)
         })()
         return () => { cancelled = true }
     }, [])
 
-    const dirty = value.trim() !== saved
-    const isValid = !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
+    const dirtyEmail = email.trim() !== savedEmail
+    const dirtyPhone = phone.trim().replace(/[\s+-]/g, '') !== savedPhone
+    const dirty = dirtyEmail || dirtyPhone
+    const isValidEmail = !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+    // Accept 9-15 digits after stripping common separators.
+    const isValidPhone = !phone || /^\d{9,15}$/.test(phone.trim().replace(/[\s+-]/g, ''))
+    const canSave = dirty && isValidEmail && isValidPhone
 
     const handleSave = async () => {
-        if (!isValid || !dirty || saving) return
+        if (!canSave || saving) return
         setSaving(true)
         try {
             const { data: existing } = await supabase
@@ -781,14 +792,19 @@ function OtpRecipientField() {
                 .maybeSingle()
             const cfg = (existing?.config || {}) as Record<string, unknown>
             const notif = (cfg.notifications || {}) as Record<string, unknown>
-            const nextNotif = { ...notif, otp_recipient: value.trim() }
+            const nextNotif = {
+                ...notif,
+                otp_recipient: email.trim(),
+                boss_whatsapp_phone: phone.trim().replace(/[\s+-]/g, ''),
+            }
             const nextCfg = { ...cfg, notifications: nextNotif }
             const { error } = await supabase
                 .from('centralina_pro_config')
                 .upsert({ id: 'main', config: nextCfg }, { onConflict: 'id' })
             if (error) throw error
-            setSaved(value.trim())
-            toast.success('Email OTP salvata')
+            setSavedEmail(email.trim())
+            setSavedPhone(phone.trim().replace(/[\s+-]/g, ''))
+            toast.success('Canali di notifica salvati')
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Errore sconosciuto'
             toast.error(`Errore salvataggio: ${msg}`)
@@ -798,8 +814,8 @@ function OtpRecipientField() {
     }
 
     return (
-        <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm">
-            <div className="flex items-center gap-3 mb-3">
+        <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm space-y-4">
+            <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-500 flex items-center justify-center shrink-0">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="2" y="4" width="20" height="16" rx="2"/>
@@ -807,35 +823,57 @@ function OtpRecipientField() {
                     </svg>
                 </div>
                 <div className="min-w-0">
-                    <h3 className="text-sm font-semibold text-theme-text-primary">Email di ricezione OTP</h3>
-                    <p className="text-[12px] text-theme-text-muted">Casella che riceve i codici OTP per le autorizzazioni della direzione e i prelievi wallet.</p>
+                    <h3 className="text-sm font-semibold text-theme-text-primary">Canali di notifica direzione</h3>
+                    <p className="text-[12px] text-theme-text-muted">Dove arrivano OTP e alert. Lasciare vuoto = usa il default.</p>
                 </div>
             </div>
-            <div className="flex flex-col sm:flex-row gap-2">
+
+            <div>
+                <label className="block text-[12px] font-medium text-theme-text-secondary mb-1">Email di ricezione OTP</label>
                 <input
                     type="email"
-                    value={value}
-                    onChange={e => setValue(e.target.value)}
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
                     placeholder={loading ? 'Caricamento…' : 'es. direzione@dr7.app'}
                     disabled={loading}
-                    className={`flex-1 bg-theme-bg-primary border rounded-md px-3 py-2 text-[13px] ${!isValid && value ? 'border-red-500' : 'border-theme-border'}`}
+                    className={`w-full bg-theme-bg-primary border rounded-md px-3 py-2 text-[13px] ${!isValidEmail && email ? 'border-red-500' : 'border-theme-border'}`}
                 />
+                {!isValidEmail && email && (
+                    <p className="text-[11px] text-red-500 mt-1">Formato email non valido.</p>
+                )}
+                <p className="text-[11px] text-theme-text-muted mt-1">
+                    Codici OTP per autorizzazioni direzionali e prelievi wallet.
+                </p>
+            </div>
+
+            <div>
+                <label className="block text-[12px] font-medium text-theme-text-secondary mb-1">WhatsApp direzione (alert preventivi)</label>
+                <input
+                    type="tel"
+                    value={phone}
+                    onChange={e => setPhone(e.target.value)}
+                    placeholder={loading ? 'Caricamento…' : 'es. 393472817258 (formato internazionale, no +)'}
+                    disabled={loading}
+                    className={`w-full bg-theme-bg-primary border rounded-md px-3 py-2 text-[13px] font-mono ${!isValidPhone && phone ? 'border-red-500' : 'border-theme-border'}`}
+                />
+                {!isValidPhone && phone && (
+                    <p className="text-[11px] text-red-500 mt-1">Solo cifre (9-15). Esempio: 393472817258.</p>
+                )}
+                <p className="text-[11px] text-theme-text-muted mt-1">
+                    Riceve la richiesta "preventivo senza cauzione in attesa". Cambio = immediato, nessun deploy.
+                </p>
+            </div>
+
+            <div className="flex justify-end">
                 <button
                     type="button"
                     onClick={handleSave}
-                    disabled={!dirty || !isValid || saving || loading}
+                    disabled={!canSave || saving || loading}
                     className="px-4 py-2 rounded-md bg-dr7-gold text-white text-[13px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                    {saving ? 'Salvataggio…' : 'Salva'}
+                    {saving ? 'Salvataggio…' : 'Salva canali'}
                 </button>
             </div>
-            {!isValid && value && (
-                <p className="text-[11px] text-red-500 mt-1">Formato email non valido.</p>
-            )}
-            <p className="text-[11px] text-theme-text-muted mt-2">
-                Lasciare vuoto per usare il fallback (variabile ambiente <code>OTP_RECIPIENT</code> o l&apos;indirizzo
-                storico nel codice). Le modifiche hanno effetto immediato — nessun deploy richiesto.
-            </p>
         </div>
     )
 }
