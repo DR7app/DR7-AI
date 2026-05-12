@@ -86,7 +86,8 @@ export const handler: Handler = async (event) => {
         vehicle_plate?: string | null
         status?: string | null
         payment_status?: string | null
-        booking_details?: { danni?: DanniItem[]; penali?: PenaliItem[] } | null
+        // NB: la chiave JSON usata da DR7 e\' `penalties` (inglese), non `penali`.
+        booking_details?: { danni?: DanniItem[]; penalties?: PenaliItem[] } | null
     }
 
     // bookings non ha una colonna CF: l'unica colonna di linkage e\'
@@ -166,7 +167,7 @@ export const handler: Handler = async (event) => {
                 note: d.note,
             })
         }
-        const penali = b.booking_details?.penali || []
+        const penali = b.booking_details?.penalties || []
         for (const p of penali) {
             const total = Number(p.total ?? (Number(p.amount || 0) * Number(p.quantity || 1)))
             const paid = String(p.paymentStatus || '').toLowerCase() === 'paid'
@@ -187,7 +188,7 @@ export const handler: Handler = async (event) => {
     const totalRentals = bookings.length
     const regularRentals = bookings.filter(b => {
         const danni = b.booking_details?.danni || []
-        const penali = b.booking_details?.penali || []
+        const penali = b.booking_details?.penalties || []
         return danni.length === 0 && penali.length === 0
     }).length
 

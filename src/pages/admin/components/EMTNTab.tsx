@@ -18,7 +18,7 @@ import EMTNEventReportModal from './emtn/EMTNEventReportModal'
 import { authFetch } from '../../../utils/authFetch'
 
 interface ClientWithDamages {
-    codice_fiscale: string
+    codice_fiscale: string | null
     customer_name: string | null
     customer_email: string | null
     customer_phone: string | null
@@ -1247,16 +1247,26 @@ function ClientiConDanniCard({ clients, loading, error, onSelect }: {
                                 </tr>
                             </thead>
                             <tbody>
-                                {clients.map(c => {
+                                {clients.map((c, idx) => {
                                     const unpaid = c.unpaid_damage_total + c.unpaid_penalty_total
+                                    const cf = c.codice_fiscale
+                                    const rowKey = cf || c.customer_email || c.customer_name || `row-${idx}`
+                                    const canOpen = !!cf
                                     return (
                                         <tr
-                                            key={c.codice_fiscale}
-                                            className="border-t border-theme-border hover:bg-theme-bg-tertiary cursor-pointer transition-colors"
-                                            onClick={() => onSelect(c.codice_fiscale)}
+                                            key={rowKey}
+                                            className={
+                                                'border-t border-theme-border transition-colors ' +
+                                                (canOpen
+                                                    ? 'hover:bg-theme-bg-tertiary cursor-pointer'
+                                                    : 'opacity-70')
+                                            }
+                                            onClick={() => { if (canOpen && cf) onSelect(cf) }}
                                         >
-                                            <td className="px-2 py-2 text-theme-text-primary font-medium">{c.customer_name || '—'}</td>
-                                            <td className="px-2 py-2 font-mono text-theme-text-muted">{c.codice_fiscale}</td>
+                                            <td className="px-2 py-2 text-theme-text-primary font-medium">{c.customer_name || c.customer_email || '—'}</td>
+                                            <td className="px-2 py-2 font-mono text-theme-text-muted">
+                                                {cf || <span className="italic text-amber-500">CF mancante</span>}
+                                            </td>
                                             <td className="px-2 py-2 text-right text-theme-text-primary tabular-nums">{c.damages_count}</td>
                                             <td className="px-2 py-2 text-right text-theme-text-primary tabular-nums">{c.penalties_count}</td>
                                             <td className={'px-2 py-2 text-right font-semibold tabular-nums ' + (unpaid > 0 ? 'text-red-400' : 'text-emerald-500')}>
@@ -1269,8 +1279,15 @@ function ClientiConDanniCard({ clients, loading, error, onSelect }: {
                                             <td className="px-2 py-2 text-right">
                                                 <button
                                                     type="button"
-                                                    onClick={(e) => { e.stopPropagation(); onSelect(c.codice_fiscale) }}
-                                                    className="inline-flex items-center gap-1 px-2 py-1 rounded border border-theme-border text-[10px] font-semibold text-theme-text-primary hover:bg-theme-bg-hover"
+                                                    disabled={!canOpen}
+                                                    onClick={(e) => { e.stopPropagation(); if (canOpen && cf) onSelect(cf) }}
+                                                    title={canOpen ? 'Apri nella rete EMTN' : 'CF mancante: aggiungilo a customers_extended per aprire la lookup EMTN'}
+                                                    className={
+                                                        'inline-flex items-center gap-1 px-2 py-1 rounded border border-theme-border text-[10px] font-semibold ' +
+                                                        (canOpen
+                                                            ? 'text-theme-text-primary hover:bg-theme-bg-hover'
+                                                            : 'text-theme-text-muted cursor-not-allowed')
+                                                    }
                                                 >
                                                     Apri
                                                     <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>

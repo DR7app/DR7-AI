@@ -2,21 +2,24 @@
  * EMTN — GET /emtn-clients-with-damages
  *
  * Restituisce l'elenco aggregato di tutti i clienti DR7 che hanno
- * almeno un danno o una penale registrata in `bookings.booking_details`
- * (arrays danni / penali). Serve come lista d'ingresso nella EMTN tab:
- * l'operatore vede subito i clienti a rischio senza dover cercare a
- * mano CF per CF.
+ * almeno un danno o una penale registrata in `bookings.booking_details`.
  *
- * Schema relazione: bookings non contiene il CF direttamente, lo
- * cerchiamo in customers_extended via bookings.user_id (fallback su
- * customers_extended.id quando user_id e\' nullo) come fa
- * auto-verify-document.ts. Bookings senza nessun match e senza CF nel
- * booking_details vengono saltate: senza CF non possiamo aprire la
- * lookup EMTN.
+ * Hard-learned:
+ *   - La chiave dell'array penali nel JSON e\' `penalties` (inglese),
+ *     NON `penali`. GestioneDanniTab usa `['penalties', 'danni']`.
+ *   - bookings non ha ne\' customer_codice_fiscale ne\' customer_id;
+ *     l'unico link al cliente e\' user_id (verso auth.users) e i
+ *     campi denormalizzati customer_email / customer_name.
  *
- * Per cliente aggreghiamo: nome, CF, totali pagati/non pagati danni e
- * penali, conteggio eventi, data ultimo evento, veicolo. Ordinamento
- * per data desc, tiebreak su totale non pagato desc.
+ * Strategia di aggregazione:
+ *   1. Tira tutte le bookings con booking_details non null.
+ *   2. Filtra a quelle con danni[] o penalties[] non vuoti.
+ *   3. Aggrega per "groupKey" = CF se risolto, altrimenti email,
+ *      altrimenti name. Cosi\' nessun cliente con danni viene perso.
+ *   4. Risolve il CF in parallelo via customers_extended.user_id e
+ *      customers_extended.email + JSON booking_details. Quando il CF
+ *      non si trova lo lasciamo null e l'UI disabilita il pulsante
+ *      "Apri" per quella riga (l'operatore deve cercarlo a mano).
  */
 import { Handler } from '@netlify/functions'
 import { requireAuth } from './require-auth'
@@ -24,8 +27,10 @@ import { getServiceSupabase, jsonResponse } from './utils/emtn'
 
 type DanniItem = {
     label?: string
+    description?: string
     total?: number
     amount?: number
+    amountPaid?: number
     quantity?: number
     paymentStatus?: string
     date?: string
@@ -44,7 +49,7 @@ interface BookingRow {
     vehicle_plate: string | null
     booking_details: {
         danni?: DanniItem[]
-        penali?: DanniItem[]
+        penalties?: DanniItem[]
         codice_fiscale?: string
         codiceFiscale?: string
         customer?: { codice_fiscale?: string; codiceFiscale?: string }
@@ -52,15 +57,15 @@ interface BookingRow {
 }
 
 interface CustomerProfile {
-    id: string
     user_id: string | null
+    email: string | null
     codice_fiscale: string | null
     nome: string | null
     cognome: string | null
 }
 
 interface Aggregated {
-    codice_fiscale: string
+    codice_fiscale: string | null
     customer_name: string | null
     customer_email: string | null
     customer_phone: string | null
@@ -84,12 +89,26 @@ function itemTotal(it: DanniItem): number {
     return num(it.amount) * (num(it.quantity) || 1)
 }
 function isPaid(it: DanniItem): boolean {
-    return String(it.paymentStatus || '').toLowerCase() === 'paid'
+    const ps = String(it.paymentStatus || '').toLowerCase()
+    if (ps === 'paid') return true
+    const total = itemTotal(it)
+    const ap = num(it.amountPaid)
+    return ap > 0 && ap >= total
 }
 function normCF(value: string | null | undefined): string | null {
     if (!value) return null
     const v = String(value).trim().toUpperCase()
     return v.length === 16 ? v : null
+}
+function normEmail(value: string | null | undefined): string | null {
+    if (!value) return null
+    const v = String(value).trim().toLowerCase()
+    return v || null
+}
+function normName(value: string | null | undefined): string | null {
+    if (!value) return null
+    const v = String(value).trim().toLowerCase().replace(/\s+/g, ' ')
+    return v || null
 }
 
 export const handler: Handler = async (event) => {
@@ -104,9 +123,6 @@ export const handler: Handler = async (event) => {
 
     const sb = getServiceSupabase()
 
-    // Step 1 — pull bookings con booking_details non null (lato JS poi
-    // filtriamo per danni/penali non vuoti). L'unica colonna che lega
-    // bookings al cliente e\' user_id; il CF vive su customers_extended.
     const { data, error } = await sb
         .from('bookings')
         .select('id, pickup_date, appointment_date, user_id, customer_name, customer_email, customer_phone, vehicle_name, vehicle_plate, booking_details')
@@ -119,53 +135,74 @@ export const handler: Handler = async (event) => {
     const rows = (data || []) as BookingRow[]
     const interesting = rows.filter(b => {
         const d = b.booking_details?.danni || []
-        const p = b.booking_details?.penali || []
+        const p = b.booking_details?.penalties || []
         return d.length > 0 || p.length > 0
     })
 
-    // Step 2 — batch fetch dei profili customers_extended via user_id
-    // per risolvere il CF.
+    // Batch resolution: per ogni booking interessante prepara una serie
+    // di chiavi che possono aiutare a trovare il CF e i dati cliente.
     const userIds = Array.from(new Set(interesting.map(b => b.user_id).filter(Boolean) as string[]))
-    const cfByUserId = new Map<string, CustomerProfile>()
+    const emails = Array.from(new Set(interesting.map(b => normEmail(b.customer_email)).filter(Boolean) as string[]))
+
+    const profByUserId = new Map<string, CustomerProfile>()
+    const profByEmail = new Map<string, CustomerProfile>()
 
     if (userIds.length > 0) {
-        const { data: profsByUid } = await sb
+        const { data: profs } = await sb
             .from('customers_extended')
-            .select('id, user_id, codice_fiscale, nome, cognome')
+            .select('user_id, email, codice_fiscale, nome, cognome')
             .in('user_id', userIds)
-        for (const p of (profsByUid || []) as CustomerProfile[]) {
-            if (p.user_id) cfByUserId.set(p.user_id, p)
+        for (const p of (profs || []) as CustomerProfile[]) {
+            if (p.user_id) profByUserId.set(p.user_id, p)
+            const e = normEmail(p.email)
+            if (e && !profByEmail.has(e)) profByEmail.set(e, p)
+        }
+    }
+    if (emails.length > 0) {
+        const missing = emails.filter(e => !profByEmail.has(e))
+        if (missing.length > 0) {
+            const { data: profs } = await sb
+                .from('customers_extended')
+                .select('user_id, email, codice_fiscale, nome, cognome')
+                .in('email', missing)
+            for (const p of (profs || []) as CustomerProfile[]) {
+                const e = normEmail(p.email)
+                if (e) profByEmail.set(e, p)
+                if (p.user_id && !profByUserId.has(p.user_id)) profByUserId.set(p.user_id, p)
+            }
         }
     }
 
-    const byCf = new Map<string, Aggregated>()
+    const byGroup = new Map<string, Aggregated>()
 
     for (const b of interesting) {
-        // Risoluzione CF, in ordine di affidabilita\':
-        //  1. customers_extended.codice_fiscale via user_id
-        //  2. booking_details.codice_fiscale / codiceFiscale (inserito a mano
-        //     da admin prima che il cliente avesse un account)
-        //  3. booking_details.customer.codice_fiscale
-        const profile = (b.user_id && cfByUserId.get(b.user_id)) || null
+        const danni = b.booking_details?.danni || []
+        const penalties = b.booking_details?.penalties || []
+        if (danni.length === 0 && penalties.length === 0) continue
+        const ref = b.pickup_date || b.appointment_date || null
+
+        const email = normEmail(b.customer_email)
+        const profile =
+            (b.user_id && profByUserId.get(b.user_id)) ||
+            (email && profByEmail.get(email)) ||
+            null
         const cf =
             normCF(profile?.codice_fiscale) ||
             normCF(b.booking_details?.codice_fiscale) ||
             normCF(b.booking_details?.codiceFiscale) ||
             normCF(b.booking_details?.customer?.codice_fiscale) ||
             normCF(b.booking_details?.customer?.codiceFiscale)
-        if (!cf) continue
-
-        const danni = b.booking_details?.danni || []
-        const penali = b.booking_details?.penali || []
-        const ref = b.pickup_date || b.appointment_date || null
-
-        const existing = byCf.get(cf)
         const fullName = profile && (profile.nome || profile.cognome)
             ? [profile.nome, profile.cognome].filter(Boolean).join(' ')
-            : b.customer_name
+            : (b.customer_name || null)
+
+        // Group key: CF se risolto, altrimenti email, altrimenti name.
+        const groupKey = cf || email || normName(fullName) || `__booking_${b.id}`
+
+        const existing = byGroup.get(groupKey)
         const agg: Aggregated = existing || {
             codice_fiscale: cf,
-            customer_name: fullName || null,
+            customer_name: fullName,
             customer_email: b.customer_email,
             customer_phone: b.customer_phone,
             damages_count: 0,
@@ -179,8 +216,9 @@ export const handler: Handler = async (event) => {
             bookings_with_events: 0,
         }
         if (!existing) {
-            byCf.set(cf, agg)
+            byGroup.set(groupKey, agg)
         } else {
+            if (!agg.codice_fiscale && cf) agg.codice_fiscale = cf
             if (!agg.customer_name && fullName) agg.customer_name = fullName
             if (!agg.customer_email && b.customer_email) agg.customer_email = b.customer_email
             if (!agg.customer_phone && b.customer_phone) agg.customer_phone = b.customer_phone
@@ -198,7 +236,7 @@ export const handler: Handler = async (event) => {
                 agg.last_vehicle = b.vehicle_name || b.vehicle_plate
             }
         }
-        for (const p of penali) {
+        for (const p of penalties) {
             agg.penalties_count += 1
             const t = itemTotal(p)
             if (isPaid(p)) agg.paid_penalty_total += t
@@ -211,7 +249,7 @@ export const handler: Handler = async (event) => {
         }
     }
 
-    const clients = Array.from(byCf.values()).sort((a, b) => {
+    const clients = Array.from(byGroup.values()).sort((a, b) => {
         if (a.last_event_date && b.last_event_date) {
             if (a.last_event_date < b.last_event_date) return 1
             if (a.last_event_date > b.last_event_date) return -1
