@@ -231,21 +231,27 @@ export function generateFatturaXML(invoice: InvoiceData): string {
     throw new Error('XML generation failed: customer has no CodiceFiscale or PartitaIVA')
   }
 
-  // Only include P.IVA for B2B customers (those with a real SDI code, not 0000000)
-  // to avoid SDI error 00324 (P.IVA/CF mismatch) for individuals.
-  // Aziende e PA: solo IdFiscaleIVA. Privati: solo CodiceFiscale. Il C.F.
-  // del rappresentante non va in fattura per le aziende.
+  // Identificazione cliente per FatturaPA — regola semplice e corretta:
+  //   - Se il cliente ha P.IVA (societa' o professionista) -> usa solo P.IVA
+  //   - Se ha solo CF (privato consumer)                    -> usa solo CF
+  //
+  // Niente dipendenza dal codice destinatario SDI: la presenza della P.IVA
+  // determina lo status fiscale del cliente, non il fatto che abbiamo il
+  // suo SDI code in DB. (Bug precedente: quando SDI = '0000000' e il
+  // cliente aveva entrambi CF e P.IVA, l'XML usciva con DatiAnagrafici
+  // VUOTO -> SDI rifiutava la fattura).
+  //
+  // Errore 00324 (CF/P.IVA mismatch) NON si scatena per la presenza della
+  // P.IVA, ma solo se inseriamo ENTRAMBI nello stesso record e non
+  // corrispondono. Quindi includiamo solo una delle due.
   let customerIdSection = ''
-  const isB2B = codiceDestinatario !== '0000000'
-  if (customerVAT && (isB2B || !customerFiscalCode)) {
+  if (customerVAT) {
     customerIdSection += `
           <IdFiscaleIVA>
             <IdPaese>IT</IdPaese>
             <IdCodice>${customerVAT}</IdCodice>
           </IdFiscaleIVA>`
-  }
-  // CodiceFiscale solo per privati (no P.IVA presente).
-  if (customerFiscalCode && !customerVAT) {
+  } else if (customerFiscalCode) {
     customerIdSection += `
           <CodiceFiscale>${customerFiscalCode}</CodiceFiscale>`
   }

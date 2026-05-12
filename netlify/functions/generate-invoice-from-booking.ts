@@ -697,7 +697,17 @@ export const handler: Handler = async (event) => {
             stato: includePenalties ? 'paid' :
                 (booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded') ? 'paid' :
                 booking.payment_status === 'pending' ? 'pending' : 'unpaid',
-            customer_name: booking.customer_name || booking.booking_details?.customer?.fullName || customerData?.ragione_sociale || customerData?.denominazione || customerData?.fullName || bookingCustomer.fullName || (customerData?.nome ? `${customerData.nome} ${customerData.cognome || ''}`.trim() : null) || 'Cliente',
+            // Customer name: per aziende/PA usa SEMPRE ragione sociale (non
+            // il nome del driver che ha fatto la prenotazione). Per persone
+            // fisiche usa nome+cognome / fullName / booking.customer_name.
+            // Bug storico: la fattura usciva intestata al DRIVER invece che
+            // all'AZIENDA quando una srl prenotava con un dipendente come
+            // driver.
+            customer_name: (
+                (customerData?.tipo_cliente === 'azienda' || customerData?.tipo_cliente === 'pubblica_amministrazione')
+                    ? (customerData?.ragione_sociale || customerData?.denominazione || booking.customer_name || 'Cliente')
+                    : (booking.customer_name || booking.booking_details?.customer?.fullName || customerData?.fullName || bookingCustomer.fullName || (customerData?.nome ? `${customerData.nome} ${customerData.cognome || ''}`.trim() : null) || customerData?.ragione_sociale || customerData?.denominazione || 'Cliente')
+            ),
             customer_address: fullAddress || '',
             customer_phone: customerData?.telefono || customerData?.phone || bookingCustomer.phone || resolvedPhone || '',
             customer_email: customerData?.email || bookingCustomer.email || resolvedEmail || '',
@@ -999,9 +1009,14 @@ async function handleWalletPurchaseFattura(
         ].filter(Boolean)
         const fullAddress = addressParts.join(' ')
 
-        const customerName = customerData?.nome
-            ? `${customerData.nome} ${customerData.cognome || ''}`.trim()
-            : (customerData?.ragione_sociale || customerData?.denominazione || customerData?.fullName || 'Cliente')
+        // Per aziende/PA: usa ragione sociale, NON nome del rappresentante.
+        // Per persone fisiche: nome + cognome.
+        const isAziendaCustomer = customerData?.tipo_cliente === 'azienda' || customerData?.tipo_cliente === 'pubblica_amministrazione'
+        const customerName = isAziendaCustomer
+            ? (customerData?.ragione_sociale || customerData?.denominazione || customerData?.fullName || 'Cliente')
+            : (customerData?.nome
+                ? `${customerData.nome} ${customerData.cognome || ''}`.trim()
+                : (customerData?.ragione_sociale || customerData?.denominazione || customerData?.fullName || 'Cliente'))
 
         const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
         const invoiceData: Record<string, any> = {
