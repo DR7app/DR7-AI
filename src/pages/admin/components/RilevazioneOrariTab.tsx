@@ -404,11 +404,11 @@ export default function RilevazioneOrariTab() {
             {me ? (
                 <div
                     onClick={() => setEditMyDay(true)}
-                    className="bg-theme-bg-secondary rounded-xl border border-dr7-gold/40 p-5 cursor-pointer hover:shadow-md transition"
+                    className="bg-theme-bg-secondary rounded-xl border border-theme-border p-5 cursor-pointer hover:shadow-md transition"
                     title="Clicca per inserire i tuoi orari"
                 >
                     <div className="flex items-center gap-4">
-                        <div className="flex-shrink-0 w-14 h-14 rounded-full bg-dr7-gold text-black flex items-center justify-center text-xl font-bold">
+                        <div className="flex-shrink-0 w-14 h-14 rounded-full bg-theme-bg-tertiary text-theme-text-primary flex items-center justify-center text-xl font-bold border border-theme-border">
                             {(me.nome[0] || '?').toUpperCase()}{(me.cognome?.[0] || '').toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -423,7 +423,7 @@ export default function RilevazioneOrariTab() {
                         </div>
                         <div className="text-right flex flex-col items-end gap-2">
                             <StatoLabel s={myStato} large />
-                            <span className="text-xs text-dr7-gold underline">Inserisci orari →</span>
+                            <span className="text-xs text-theme-text-primary underline">Inserisci orari →</span>
                         </div>
                     </div>
                 </div>
@@ -438,7 +438,7 @@ export default function RilevazioneOrariTab() {
                 <div className="flex gap-1 bg-theme-bg-tertiary rounded p-1">
                     {(['giornaliera', 'settimanale', 'mensile'] as ViewMode[]).map(v => (
                         <button key={v} onClick={() => setView(v)}
-                            className={`text-sm px-3 py-1 rounded ${view === v ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}>
+                            className={`text-sm px-3 py-1 rounded ${view === v ? 'bg-theme-text-primary text-theme-bg-primary font-semibold' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}>
                             {v[0].toUpperCase() + v.slice(1)}
                         </button>
                     ))}
@@ -488,7 +488,7 @@ export default function RilevazioneOrariTab() {
                                 key={r.operatore.id}
                                 type="button"
                                 onClick={() => setProfileOp(r.operatore)}
-                                className={`w-full text-left rounded-xl border border-theme-border bg-theme-bg-secondary p-3 active:scale-[0.99] transition-transform ${isMine ? 'ring-1 ring-dr7-gold/50' : ''}`}
+                                className={`w-full text-left rounded-xl border border-theme-border bg-theme-bg-secondary p-3 active:scale-[0.99] transition-transform ${isMine ? 'ring-1 ring-theme-text-primary/30' : ''}`}
                             >
                                 <div className="flex items-center gap-3">
                                     <OperatoreAvatar op={r.operatore} size={40} />
@@ -497,7 +497,7 @@ export default function RilevazioneOrariTab() {
                                             <span className="text-sm font-semibold text-theme-text-primary truncate">
                                                 {r.operatore.nome} {r.operatore.cognome || ''}
                                             </span>
-                                            {isMine && <span className="text-[9px] px-1.5 py-0.5 rounded bg-dr7-gold text-black">tu</span>}
+                                            {isMine && <span className="text-[9px] px-1.5 py-0.5 rounded bg-theme-text-primary text-theme-bg-primary">tu</span>}
                                         </div>
                                         <div className="text-[11px] text-theme-text-muted truncate">{r.operatore.ruolo || '—'}</div>
                                     </div>
@@ -528,7 +528,7 @@ export default function RilevazioneOrariTab() {
                                             <div className="text-sm font-semibold text-sky-400 tabular-nums">{fmtMin(straord)}</div>
                                         </div>
                                     )}
-                                    <span className="text-[10px] px-2 py-1 rounded-full bg-dr7-gold text-black font-semibold">
+                                    <span className="text-[10px] px-2 py-1 rounded-full bg-theme-text-primary text-theme-bg-primary font-semibold">
                                         Vedi report →
                                     </span>
                                 </div>
@@ -576,7 +576,7 @@ export default function RilevazioneOrariTab() {
                                 })
                                 return (
                                     <React.Fragment key={r.operatore.id}>
-                                    <tr className={`${isMine ? 'bg-dr7-gold/10' : ''} ${isExpanded ? 'bg-theme-bg-tertiary/40' : ''} cursor-pointer hover:bg-theme-bg-tertiary/30`}
+                                    <tr className={`${isMine ? 'bg-theme-bg-tertiary/60' : ''} ${isExpanded ? 'bg-theme-bg-tertiary/40' : ''} cursor-pointer hover:bg-theme-bg-tertiary/30`}
                                         onClick={() => setProfileOp(r.operatore)}
                                         title="Apri il report completo dell'operatore (come lo vede lui)">
                                         <td className="px-3 py-2 text-theme-text-primary font-semibold">
@@ -590,13 +590,13 @@ export default function RilevazioneOrariTab() {
                                                 <OperatoreAvatar op={r.operatore} size={32} />
                                                 <div>
                                                     {r.operatore.nome} {r.operatore.cognome || ''}
-                                                    {isMine && <span className="ml-2 text-xs px-2 py-0.5 rounded bg-dr7-gold text-black">tu</span>}
+                                                    {isMine && <span className="ml-2 text-xs px-2 py-0.5 rounded bg-theme-text-primary text-theme-bg-primary">tu</span>}
                                                     <div className="text-xs text-theme-text-muted">{r.operatore.ruolo || '—'}</div>
                                                 </div>
                                                 <button
                                                     type="button"
                                                     onClick={(e) => { e.stopPropagation(); setProfileOp(r.operatore) }}
-                                                    className="ml-auto text-[11px] px-2 py-1 rounded bg-dr7-gold text-black hover:opacity-90 font-semibold whitespace-nowrap"
+                                                    className="ml-auto text-[11px] px-2 py-1 rounded bg-theme-text-primary text-theme-bg-primary hover:opacity-90 font-semibold whitespace-nowrap"
                                                     title={`Apri il report di ${r.operatore.nome} con grafico e KPI`}
                                                 >Vedi report</button>
                                             </div>
@@ -621,7 +621,7 @@ export default function RilevazioneOrariTab() {
                                         </td>
                                     </tr>
                                     {isExpanded && (
-                                        <tr className="bg-theme-bg-tertiary/20 border-b-2 border-dr7-gold/30">
+                                        <tr className="bg-theme-bg-tertiary/20 border-b-2 border-theme-border">
                                             <td colSpan={10} className="px-4 py-4">
                                                 <DailyOperatorDetail
                                                     row={r}
@@ -719,10 +719,10 @@ export default function RilevazioneOrariTab() {
                                 const saldo = total - targetTotal
                                 const isMine = r.operatore.id === me?.id
                                 return (
-                                    <tr key={r.operatore.id} className={isMine ? 'bg-dr7-gold/10' : ''}>
+                                    <tr key={r.operatore.id} className={isMine ? 'bg-theme-bg-tertiary/60' : ''}>
                                         <td className="px-3 py-2 text-theme-text-primary font-semibold sticky left-0 bg-theme-bg-secondary">
                                             {r.operatore.nome} {r.operatore.cognome || ''}
-                                            {isMine && <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-dr7-gold text-black">tu</span>}
+                                            {isMine && <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-theme-text-primary text-theme-bg-primary">tu</span>}
                                         </td>
                                         {periodRange.days.map(d => (
                                             <td key={d} className="px-2 py-2 text-center font-mono text-xs">
@@ -830,7 +830,7 @@ function DailyOperatorDetail({
             <div className="flex items-start gap-4">
                 <div className="relative flex-shrink-0">
                     <OperatoreAvatar op={op} size={72} />
-                    <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-dr7-gold text-black flex items-center justify-center cursor-pointer hover:opacity-90 shadow-md" title="Cambia foto">
+                    <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-theme-text-primary text-theme-bg-primary flex items-center justify-center cursor-pointer hover:opacity-90 shadow-md" title="Cambia foto">
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth={2} strokeLinecap="round" d="M3 9a2 2 0 012-2h2.5L9 5h6l1.5 2H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13" r="3" strokeWidth={2}/></svg>
                         <input
                             type="file"
@@ -871,7 +871,7 @@ function DailyOperatorDetail({
                     <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onOpenProfile() }}
-                        className="text-xs px-3 py-1.5 rounded-full bg-dr7-gold text-black font-semibold hover:opacity-90 whitespace-nowrap"
+                        className="text-xs px-3 py-1.5 rounded-full bg-theme-text-primary text-theme-bg-primary font-semibold hover:opacity-90 whitespace-nowrap"
                     >
                         Profilo completo
                     </button>
@@ -1056,7 +1056,7 @@ function TopBarsChart({ data }: { data: { nome: string; minutes: number }[] }) {
                             <span className="text-theme-text-muted whitespace-nowrap">{fmtMin(d.minutes)} <span className="opacity-60">· {d.minutes} min</span></span>
                         </div>
                         <div className="h-2 bg-theme-bg-tertiary rounded-full overflow-hidden">
-                            <div className="h-full bg-dr7-gold transition-all" style={{ width: `${pct}%` }} />
+                            <div className="h-full bg-theme-text-primary transition-all" style={{ width: `${pct}%` }} />
                         </div>
                     </div>
                 )
@@ -1236,7 +1236,7 @@ function AddOperatoreModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                         )}
                     </div>
                     <div className="flex flex-col gap-1">
-                        <label className="px-3 py-1.5 rounded-full bg-dr7-gold text-black text-xs font-semibold cursor-pointer hover:opacity-90 inline-block w-fit">
+                        <label className="px-3 py-1.5 rounded-full bg-theme-text-primary text-theme-bg-primary text-xs font-semibold cursor-pointer hover:opacity-90 inline-block w-fit">
                             {avatarFile ? 'Cambia foto' : 'Carica foto'}
                             <input
                                 type="file"
