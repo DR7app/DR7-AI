@@ -613,6 +613,189 @@ export default function ContrattoTab() {
         </div>
       </div>
 
+      {/* Legenda campi PDF — elenco esatto dei nomi accettati da
+          generate-contract.ts/dataMap. Quando rinomini un AcroForm nel PDF
+          master, usa uno di questi nomi (o un alias italiano) per essere
+          riconosciuto automaticamente. Senza match il campo resta vuoto. */}
+      <details className="bg-theme-bg-secondary rounded-lg border border-theme-border">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-theme-text-primary select-none">
+          Legenda campi PDF — nomi accettati dal generatore
+        </summary>
+        <div className="px-4 pb-4 pt-1 text-xs text-theme-text-secondary space-y-4">
+          <p className="text-theme-text-muted">
+            Ogni campo del PDF (AcroForm) viene riempito se il suo nome
+            coincide con uno dei seguenti. Le coppie EN/IT sono sinonimi:
+            puoi usarne uno qualsiasi. Campi non presenti in elenco vengono
+            ignorati silenziosamente.
+          </p>
+
+          {([
+            {
+              title: 'Contratto',
+              rows: [
+                ['Numero contratto', 'ContractNumber', 'NumeroContratto'],
+                ['Data', 'Date', 'Data'],
+                ['Luogo stipula', 'PlaceOfIssue', 'LuogoStipula'],
+                ['Orario stipula', 'TimeOfIssue', 'OrarioStipula'],
+              ],
+            },
+            {
+              title: 'Cliente — anagrafica',
+              rows: [
+                ['Nome e cognome', 'CustomerName', 'NomeCognome'],
+                ['Codice fiscale / P.IVA', 'CustomerVAT / CodiceFiscale', 'PartitaIVA'],
+                ['Telefono', 'CustomerPhone', 'Telefono'],
+                ['Email', 'CustomerEmail', 'Email'],
+                ['Indirizzo residenza', 'CustomerAddress', 'Indirizzo'],
+                ['Città residenza', 'CustomerCity', 'Citta'],
+                ['Provincia residenza', 'CustomerProvince', 'Provincia'],
+                ['CAP', 'CustomerZipCode / DriverZipCode', 'CAP'],
+                ['Data di nascita', 'CustomerBirthDate', 'DataNascita'],
+                ['Luogo di nascita', 'CustomerBirthPlace', 'LuogoNascita / CittaNascita'],
+                ['Provincia di nascita', 'CustomerBirthProvince', 'ProvinciaNascita'],
+                ['Sesso', 'CustomerSex / DriverSex', 'Sesso'],
+              ],
+            },
+            {
+              title: 'Patente guidatore',
+              rows: [
+                ['Numero patente', 'DriverLicense', 'NumeroPatente'],
+                ['Tipo patente', 'DriverLicenseType', 'TipoPatente'],
+                ['Emessa da', 'DriverLicenseIssuedBy', 'PatenteEmessaDa / EmessaDa'],
+                ['Data rilascio', 'DriverLicenseIssueDate', 'DataRilascioPatente / DataRilascio'],
+                ['Data scadenza', 'DriverLicenseExpiryDate', 'DataScadenzaPatente / ScadenzaPatente / Scadenza'],
+              ],
+            },
+            {
+              title: 'Veicolo',
+              rows: [
+                ['Marca', 'VehicleBrand', 'Marca'],
+                ['Modello', 'VehicleModel', 'Modello'],
+                ['Targa', 'VehiclePlate', 'Targa'],
+                ['Colore', 'VehicleColor', 'Colore'],
+                ['Alimentazione', 'VehicleFuel', 'Alimentazione'],
+                ['Posti', 'VehicleSeats', 'Posti'],
+                ['Livello carburante', 'VehicleFuelLevel', 'LivelloCarburante'],
+                ['Range KM', 'VehicleKMRange', 'KMRange'],
+                ['Sforo per KM', 'KMOverageFee', 'SforoPerKM'],
+              ],
+            },
+            {
+              title: 'Noleggio — periodo e luoghi',
+              rows: [
+                ['Sede ritiro', 'PickupLocation', 'SedeRitiro'],
+                ['Sede riconsegna', 'DropoffLocation', 'SedeRiconsegna'],
+                ['Data inizio', 'PickupDate', 'DataInizio'],
+                ['Ora inizio', 'PickupTime', 'OraInizio'],
+                ['Data fine', 'DropoffDate', 'DataFine'],
+                ['Ora fine', 'DropoffTime', 'OraFine'],
+                ['Giorni totali', 'TotalDays', 'Giorni'],
+                ['Ore totali', 'TotalHours', 'Ore'],
+              ],
+            },
+            {
+              title: 'Importi e clausole',
+              rows: [
+                ['Assicurazione', 'Insurance', 'Assicurazione'],
+                ['Cauzione', 'Deposit', 'Cauzione'],
+                ['KM inclusi nel noleggio', 'TotalKM', 'KMTotaliNoleggio'],
+                ['Clausola penale (auto-generata)', 'PenaltyClause', '—'],
+                ['Termini aggiuntivi (auto-generati)', 'AdditionalTerms', '—'],
+              ],
+            },
+            {
+              title: 'Secondo guidatore (opzionale)',
+              rows: [
+                ['Nome e cognome', 'SecondDriverName', 'SecondoGuidatore'],
+                ['Codice fiscale', 'SecondDriverTaxCode / SecondDriverStatsCode / SecondDriverVAT', 'CodiceFiscaleSecondoGuidatore'],
+                ['Indirizzo', 'SecondDriverAddress', 'IndirizzoSecondoGuidatore'],
+                ['Città', 'SecondDriverCity', 'CittaSecondoGuidatore'],
+                ['Provincia', 'SecondDriverProvince', 'ProvinciaSecondoGuidatore'],
+                ['CAP', 'SecondDriverZipCode', 'CapSecondoGuidatore'],
+                ['Data nascita', 'SecondDriverBirthDate', 'DataNascitaSecondoGuidatore'],
+                ['Luogo nascita', 'SecondDriverBirthPlace / SecondDriverPlaceOfBirth', 'LuogoNascitaSecondoGuidatore'],
+                ['Provincia nascita', 'SecondDriverBirthProvince', '—'],
+                ['Sesso', 'SecondDriverSex / SecondDriverGender', 'SessoSecondoGuidatore'],
+                ['Numero patente', 'SecondDriverLicenseNumber', 'PatenteSecondoGuidatore'],
+                ['Tipo patente', 'SecondDriverLicenseType', '—'],
+                ['Emessa da', 'SecondDriverLicenseIssuedBy', '—'],
+                ['Data rilascio patente', 'SecondDriverLicenseIssueDate', '—'],
+                ['Data scadenza patente', 'SecondDriverLicenseExpiryDate', 'ScadenzaPatenteSecondoGuidatore'],
+                ['Telefono', 'SecondDriverPhone', 'TelefonoSecondoGuidatore'],
+                ['Email', 'SecondDriverEmail', 'EmailSecondoGuidatore'],
+              ],
+            },
+            {
+              title: 'Cliente azienda (solo se P.IVA)',
+              rows: [
+                ['Ragione sociale', 'CompanyName', 'Denominazione / RagioneSociale'],
+                ['Email azienda', 'CompanyEmail', 'EmailAzienda'],
+                ['Telefono azienda', 'CompanyPhone', 'TelefonoAzienda'],
+                ['Sede legale', 'CompanyAddress', 'IndirizzoAzienda / SedeLegale'],
+                ['Città azienda', 'CompanyCity', 'CittaAzienda'],
+                ['Provincia azienda', 'CompanyProvince', 'ProvinciaAzienda'],
+                ['CAP azienda', 'CompanyZipCode', 'CAPAzienda'],
+                ['Partita IVA azienda', 'CompanyVAT', 'PartitaIVAAzienda'],
+                ['Codice fiscale azienda', 'CompanyFiscalCode', 'CodiceFiscaleAzienda'],
+                ['PEC', 'CompanyPEC', 'PECAzienda'],
+                ['Codice SDI', 'CompanySDI', 'CodiceSDI'],
+                ['Rappresentante legale (nome)', 'CompanyRepresentativeName', 'RappresentanteLegale'],
+                ['Documento rappresentante (tipo)', 'CompanyRepresentativeID', 'TipoDocumentoRappresentante'],
+                ['Documento rappresentante (numero)', 'CompanyRepresentativeIDNumber', 'NumeroDocumentoRappresentante'],
+                ['Documento rappresentante (data rilascio)', 'CompanyRepresentativeIDIssueDate', 'DataRilascioDocumentoRappresentante'],
+                ['Documento rappresentante (luogo rilascio)', 'CompanyRepresentativeIDIssuePlace', 'LuogoRilascioDocumentoRappresentante'],
+                ['Documento rappresentante (data scadenza)', 'CompanyRepresentativeIDExpiryDate', 'DataScadenzaDocumentoRappresentante'],
+                ['Documento rappresentante (combo)', 'CompanyRepresentativeDocCombined', 'DocumentoRappresentante'],
+                ['Rilascio documento (combo)', 'CompanyRepresentativeIssueCombined', 'RilascioDocumentoRappresentante'],
+              ],
+            },
+            {
+              title: 'Garante / proprietario veicolo cauzione (solo se cauzione su altra auto)',
+              rows: [
+                ['Nome e cognome', '—', 'GaranteNomeCognome'],
+                ['Codice fiscale', '—', 'GaranteCodiceFiscale'],
+                ['Sesso', '—', 'GaranteSesso'],
+                ['Indirizzo', '—', 'GaranteIndirizzo'],
+                ['Città', '—', 'GaranteCitta'],
+                ['Provincia', '—', 'GaranteProvincia'],
+                ['CAP', '—', 'GaranteCAP'],
+                ['Data nascita', '—', 'GaranteDataNascita'],
+                ['Luogo nascita', '—', 'GaranteLuogoNascita'],
+                ['Provincia nascita', '—', 'GaranteProvinciaNascita'],
+                ['Telefono', '—', 'GaranteTelefono'],
+                ['Email', '—', 'GaranteEmail'],
+                ['Veicolo cauzione (combo)', '—', 'CauzioneVeicolo'],
+                ['Targa cauzione', '—', 'TargaCauzione'],
+              ],
+            },
+          ] as { title: string; rows: [string, string, string][] }[]).map(section => (
+            <div key={section.title}>
+              <h4 className="text-[11px] uppercase tracking-wider font-bold text-theme-text-primary mb-1.5">{section.title}</h4>
+              <div className="overflow-x-auto rounded border border-theme-border">
+                <table className="w-full text-[11px]">
+                  <thead className="bg-theme-bg-tertiary">
+                    <tr>
+                      <th className="text-left px-2 py-1.5 font-semibold text-theme-text-secondary">Descrizione</th>
+                      <th className="text-left px-2 py-1.5 font-semibold text-theme-text-secondary">Nome inglese</th>
+                      <th className="text-left px-2 py-1.5 font-semibold text-theme-text-secondary">Alias italiano</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {section.rows.map((r, i) => (
+                      <tr key={i} className="border-t border-theme-border">
+                        <td className="px-2 py-1 text-theme-text-secondary">{r[0]}</td>
+                        <td className="px-2 py-1 font-mono text-theme-text-primary">{r[1]}</td>
+                        <td className="px-2 py-1 font-mono text-theme-text-primary">{r[2]}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+        </div>
+      </details>
+
       {/* Search Bar */}
       <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
         <input
