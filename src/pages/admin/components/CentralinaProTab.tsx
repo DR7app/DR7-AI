@@ -5126,18 +5126,21 @@ function FiscaleSection({
   function removeMethod(index: number) {
     setFiscal({ ...fiscal, payment_methods: methods.filter((_, i) => i !== index) })
   }
-  // Append any default method whose key is missing from the saved list.
-  // Used when the direzione had a short saved list and wants the full
-  // historical set back without retyping each row.
-  function addMissingDefaults() {
+
+  // Auto-merge: appena la sezione Fiscale si apre, se mancano metodi
+  // di default li accoda alla lista salvata. La save-bar segnala la
+  // modifica e la direzione decide se salvare o annullare.
+  // Guard con useRef cosi' non rifire ad ogni re-render.
+  const autoMergeDoneRef = useRef(false)
+  useEffect(() => {
+    if (autoMergeDoneRef.current) return
     const existingKeys = new Set(methods.map(m => m.key))
     const missing = DEFAULT_PAYMENT_METHODS.filter(d => !existingKeys.has(d.key))
     if (missing.length === 0) return
+    autoMergeDoneRef.current = true
     setFiscal({ ...fiscal, payment_methods: [...methods, ...missing] })
-  }
-  const missingDefaultsCount = DEFAULT_PAYMENT_METHODS.filter(
-    d => !methods.some(m => m.key === d.key)
-  ).length
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -5232,21 +5235,11 @@ function FiscaleSection({
             </div>
           ))}
         </div>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <button
-            type="button"
-            onClick={addMethod}
-            className="flex-1 py-2 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-primary hover:border-[#007aff]/40 transition-colors"
-          >+ Aggiungi metodo di pagamento</button>
-          {missingDefaultsCount > 0 && (
-            <button
-              type="button"
-              onClick={addMissingDefaults}
-              className="flex-1 py-2 rounded-xl border-2 border-dashed border-[#007aff]/40 text-[12px] font-medium text-[#007aff] hover:bg-[#007aff]/5 transition-colors"
-              title="Aggiunge tutti i metodi storici (SDI, RID, SEPA, PagoPA, ecc.) che oggi mancano dalla lista"
-            >+ Aggiungi {missingDefaultsCount} metod{missingDefaultsCount === 1 ? 'o' : 'i'} mancant{missingDefaultsCount === 1 ? 'e' : 'i'} (SDI, RID, SEPA, …)</button>
-          )}
-        </div>
+        <button
+          type="button"
+          onClick={addMethod}
+          className="w-full py-2 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-primary hover:border-[#007aff]/40 transition-colors"
+        >+ Aggiungi metodo di pagamento</button>
       </section>
     </div>
   )
