@@ -1133,7 +1133,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // customerTier incluso nei deps: cambiando cliente (Fascia A ↔ B) il totale
     // deve ricalcolarsi perché i prezzi di km-illimitati, secondo guidatore e
     // dr7 flex dipendono dalla fascia.
-  }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, customerTier, noCauzioneResolvedDaily])
+    // rentalConfig incluso nei deps: quando l'admin modifica Km / Sforo in
+    // Centralina Pro la realtime sub di useRentalConfig aggiorna il valore;
+    // senza qui dentro, il form continuava a usare il vecchio kmIncluded /
+    // sforo finché l'operatore non cambiava manualmente veicolo o data.
+  }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, customerTier, noCauzioneResolvedDaily, rentalConfig])
 
   // Recalculate total when insurance, delivery fees, or payment method change.
   // Runs in any engine mode — the dynamic coefficient + clamp must always
@@ -1199,7 +1203,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       setFormData(prev => ({ ...prev, ...updates }))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, formData.deposit_option_id, formData.has_second_driver, formData.experience_services, formData.dr7_flex, customerTier, noCauzioneResolvedDaily, selectedDepositSurchargePerDay])
+  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, formData.deposit_option_id, formData.has_second_driver, formData.experience_services, formData.dr7_flex, customerTier, noCauzioneResolvedDaily, selectedDepositSurchargePerDay, rentalConfig])
 
   // Auto-populate second driver fields when customer is selected
   useEffect(() => {
