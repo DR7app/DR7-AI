@@ -79,12 +79,16 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
     const [danniFromCfg, setDanniFromCfg] = useState<Record<string, PenaltyPreset[]> | null>(null)
     // Vehicle category resolved at open time. Bookings often don't carry the
     // category in booking_details, so we look it up via vehicle_id when missing.
+    // `categoryLoading` keeps the "categoria sconosciuta" empty-state from
+    // flashing for the few hundred ms while the async resolver is running.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [resolvedCategory, setResolvedCategory] = useState<string>('')
+    const [categoryLoading, setCategoryLoading] = useState<boolean>(true)
 
     useEffect(() => {
         if (!isOpen) return
         let cancelled = false
+        setCategoryLoading(true)
         ;(async () => {
             // 1. Centralina Pro penali + danni
             try {
@@ -193,7 +197,10 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                     }
                 }
             }
-            if (!cancelled) setResolvedCategory(cat)
+            if (!cancelled) {
+                setResolvedCategory(cat)
+                setCategoryLoading(false)
+            }
         })()
         return () => { cancelled = true }
     }, [isOpen, booking])
@@ -758,7 +765,12 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                         <>
                             {/* Preset danni from Centralina Pro — iOS Settings
                                 style list, same shape as the Penali tab. */}
-                            {danniPresetList.length === 0 && (
+                            {categoryLoading && danniPresetList.length === 0 && (
+                                <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4 mb-3 text-[13px] text-theme-text-muted">
+                                    Risoluzione categoria veicolo in corso…
+                                </div>
+                            )}
+                            {!categoryLoading && danniPresetList.length === 0 && (
                                 <div className="rounded-2xl bg-amber-500/[0.08] border border-amber-500/30 p-4 mb-3 text-[13px] text-amber-300">
                                     Nessun danno configurato per la categoria <strong>{vehicleCategory || 'sconosciuta'}</strong>.
                                     Apri <strong>Centralina Pro → Danni &amp; Penali → Danni → tab {vehicleCategory || 'corretto'}</strong> e aggiungi le voci.
@@ -889,7 +901,12 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                         <>
                             {/* Preset penalties — empty state when nothing
                                 configured for this vehicle's category. */}
-                            {penaltyList.length === 0 && (
+                            {categoryLoading && penaltyList.length === 0 && (
+                                <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4 mb-3 text-[13px] text-theme-text-muted">
+                                    Risoluzione categoria veicolo in corso…
+                                </div>
+                            )}
+                            {!categoryLoading && penaltyList.length === 0 && (
                                 <div className="rounded-2xl bg-amber-500/[0.08] border border-amber-500/30 p-4 mb-3 text-[13px] text-amber-300">
                                     Nessuna penale configurata per la categoria <strong>{vehicleCategory || 'sconosciuta'}</strong>.
                                     Apri <strong>Centralina Pro → Danni &amp; Penali → Penali → tab {vehicleCategory || 'corretto'}</strong> e aggiungi le voci.
