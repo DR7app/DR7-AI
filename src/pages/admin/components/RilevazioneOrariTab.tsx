@@ -514,9 +514,38 @@ export default function RilevazioneOrariTab() {
                                     </div>
                                     <div>
                                         <div className="text-[9px] uppercase text-theme-text-muted">Pause</div>
-                                        <div className="font-mono text-theme-text-primary">{r.pausa_inizi.length}</div>
+                                        <div className="font-mono text-theme-text-primary">{r.pausa_inizi.length} · {fmtMin(r.minuti_pausa)}</div>
                                     </div>
                                 </div>
+                                {/* Dettaglio pause: lista finestra per finestra cosi'
+                                    su mobile direzione vede TUTTI gli orari, non solo il
+                                    conteggio totale. */}
+                                {r.pausa_inizi.length > 0 && (
+                                    <div className="mt-3 rounded-lg bg-theme-bg-primary/40 px-3 py-2">
+                                        <div className="text-[9px] uppercase text-theme-text-muted mb-1">Finestre pausa</div>
+                                        <div className="flex flex-col gap-1">
+                                            {r.pausa_inizi.map((start, i) => {
+                                                const end = r.pausa_fini[i] || null
+                                                const durMin = end
+                                                    ? Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60000))
+                                                    : (r.stato === 'pausa' ? Math.max(0, Math.round((Date.now() - new Date(start).getTime()) / 60000)) : 0)
+                                                return (
+                                                    <div key={i} className="flex items-center gap-2 text-[11px] font-mono">
+                                                        <span className="text-[9px] text-theme-text-muted">#{i + 1}</span>
+                                                        <span className="text-theme-text-primary">{fmtTime(start)}</span>
+                                                        <span className="text-theme-text-muted">→</span>
+                                                        {end ? (
+                                                            <span className="text-theme-text-primary">{fmtTime(end)}</span>
+                                                        ) : (
+                                                            <span className="text-amber-400">in corso</span>
+                                                        )}
+                                                        <span className="ml-auto text-[10px] text-theme-text-muted">{durMin}m</span>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                                 <div className="mt-3 flex items-center justify-between rounded-lg bg-theme-bg-primary/40 px-3 py-2">
                                     <div>
                                         <div className="text-[9px] uppercase text-theme-text-muted">Ore Lav.</div>
