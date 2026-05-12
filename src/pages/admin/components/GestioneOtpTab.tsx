@@ -18,6 +18,7 @@ import { useAdminRole } from '../../../hooks/useAdminRole'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import { OTP_ACTION_CATALOG, type OtpAction } from '../../../utils/otpActionCatalog'
+import { OTP_CONTEXT_FIELDS, OTP_OPERATORS, type OtpCondition, type OtpOperator, type ContextFieldDef } from '../../../utils/otpConditionEngine'
 
 interface OtpRow {
     id: string
@@ -26,6 +27,7 @@ interface OtpRow {
     used_in: string
     is_required: boolean
     sort_order: number
+    conditions: OtpCondition[]
     updated_at?: string | null
 }
 
@@ -118,6 +120,14 @@ export default function GestioneOtpTab() {
         id: '', label: '', used_in: '', reason: '',
     })
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const normalizeRows = (data: any[]): OtpRow[] => {
+        return data.map(r => ({
+            ...r,
+            conditions: Array.isArray(r.conditions) ? r.conditions : [],
+        })) as OtpRow[]
+    }
+
     useEffect(() => {
         let cancelled = false
         ;(async () => {
@@ -129,7 +139,7 @@ export default function GestioneOtpTab() {
             if (error) {
                 toast.error('Errore caricamento OTP: ' + error.message)
             } else {
-                setRows((data || []) as OtpRow[])
+                setRows(normalizeRows(data || []))
             }
             setLoading(false)
         })()
@@ -140,7 +150,7 @@ export default function GestioneOtpTab() {
                     .from('system_otp_overrides')
                     .select('*')
                     .order('sort_order', { ascending: true })
-                if (!cancelled) setRows((data || []) as OtpRow[])
+                if (!cancelled) setRows(normalizeRows(data || []))
             })
             .subscribe()
         return () => { cancelled = true; supabase.removeChannel(channel) }
@@ -644,6 +654,13 @@ export default function GestioneOtpTab() {
                                             />
                                         </div>
 
+                                        {/* CONDITIONS BUILDER — scatta OTP solo se tutte le condizioni matchano */}
+                                        <ConditionsBuilder
+                                            limitationCode={row.id}
+                                            conditions={(valueOf(row, 'conditions') as OtpCondition[]) || []}
+                                            onChange={(newConds) => setField(row.id, 'conditions', newConds as unknown as OtpRow[keyof OtpRow])}
+                                        />
+
                                         <div className="mt-4 flex items-center justify-between gap-2">
                                             <button
                                                 onClick={() => removeRow(row)}
@@ -934,6 +951,189 @@ function OtpRecipientField() {
                     {saving ? 'Salvataggio…' : 'Salva canali'}
                 </button>
             </div>
+        </div>
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// ConditionsBuilder — builder visuale AND-only per le condizioni OTP.
+// L'admin sceglie field + operatore + valore. Le condizioni si valutano
+// a runtime contro il context passato da requestOverride.
+// ─────────────────────────────────────────────────────────────────────────
+function ConditionsBuilder({
+    limitationCode,
+    conditions,
+    onChange,
+}: {
+    limitationCode: string
+    conditions: OtpCondition[]
+    onChange: (next: OtpCondition[]) => void
+}) {
+    const [expanded, setExpanded] = useState(conditions.length > 0)
+    const fields = OTP_CONTEXT_FIELDS[limitationCode] || []
+    const hasFieldCatalog = fields.length > 0
+
+    const addCondition = () => {
+        const defaultField = fields[0]?.key || ''
+        onChange([...conditions, { field: defaultField, op: 'eq', value: '' }])
+        setExpanded(true)
+    }
+
+    const updateCondition = (idx: number, patch: Partial<OtpCondition>) => {
+        const next = [...conditions]
+        next[idx] = { ...next[idx], ...patch }
+        onChange(next)
+    }
+
+    const removeCondition = (idx: number) => {
+        onChange(conditions.filter((_, i) => i !== idx))
+    }
+
+    return (
+        <div className="mt-3 pt-3 border-t border-theme-border/50">
+            <div className="flex items-center justify-between mb-2">
+                <button
+                    type="button"
+                    onClick={() => setExpanded(v => !v)}
+                    className="flex items-center gap-2 text-xs font-semibold text-theme-text-primary hover:text-dr7-gold"
+                >
+                    <span className={`inline-block transition-transform ${expanded ? 'rotate-90' : ''}`}>▶</span>
+                    Condizioni ({conditions.length})
+                    {conditions.length === 0 && (
+                        <span className="text-[11px] font-normal text-theme-text-muted">OTP sempre attivo se acceso</span>
+                    )}
+                    {conditions.length > 0 && (
+                        <span className="text-[11px] font-normal text-emerald-400">scatta solo se TUTTE matchano</span>
+                    )}
+                </button>
+                {expanded && (
+                    <button
+                        type="button"
+                        onClick={addCondition}
+                        className="px-2.5 py-1 rounded text-[11px] font-semibold bg-dr7-gold/10 text-dr7-gold border border-dr7-gold/30 hover:bg-dr7-gold/20"
+                    >
+                        + Condizione
+                    </button>
+                )}
+            </div>
+
+            {expanded && conditions.length === 0 && (
+                <div className="text-center py-4 text-[11px] text-theme-text-muted rounded-lg bg-theme-bg-tertiary border border-dashed border-theme-border">
+                    Nessuna condizione. L'OTP scatta sempre (se attivo).<br/>
+                    Aggiungi una condizione per restringere quando l'OTP richiede approvazione.
+                </div>
+            )}
+
+            {expanded && conditions.length > 0 && (
+                <ul className="space-y-1.5">
+                    {conditions.map((c, idx) => {
+                        const fieldDef: ContextFieldDef | undefined = fields.find(f => f.key === c.field)
+                        const applicableOps = OTP_OPERATORS.filter(o =>
+                            !fieldDef || o.appliesTo.includes(fieldDef.type)
+                        )
+                        const showValueInput = c.op !== 'is_empty' && c.op !== 'is_not_empty'
+                        return (
+                            <li key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-1.5 items-center p-2 rounded-lg bg-theme-bg-tertiary border border-theme-border">
+                                {/* Field */}
+                                <div className="md:col-span-4">
+                                    {hasFieldCatalog ? (
+                                        <select
+                                            value={c.field}
+                                            onChange={e => updateCondition(idx, { field: e.target.value })}
+                                            className="w-full px-2 py-1.5 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary text-xs font-mono"
+                                        >
+                                            {fields.map(f => (
+                                                <option key={f.key} value={f.key}>{f.label}</option>
+                                            ))}
+                                            {!fields.some(f => f.key === c.field) && c.field && (
+                                                <option value={c.field}>{c.field} (custom)</option>
+                                            )}
+                                            <option value="__custom__">+ Custom field…</option>
+                                        </select>
+                                    ) : (
+                                        <input
+                                            type="text"
+                                            value={c.field}
+                                            onChange={e => updateCondition(idx, { field: e.target.value })}
+                                            placeholder="field key (es. amount)"
+                                            className="w-full px-2 py-1.5 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary text-xs font-mono"
+                                        />
+                                    )}
+                                </div>
+                                {/* Operator */}
+                                <div className="md:col-span-2">
+                                    <select
+                                        value={c.op}
+                                        onChange={e => updateCondition(idx, { op: e.target.value as OtpOperator })}
+                                        className="w-full px-2 py-1.5 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary text-xs"
+                                    >
+                                        {applicableOps.map(o => (
+                                            <option key={o.op} value={o.op}>{o.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {/* Value */}
+                                <div className="md:col-span-5">
+                                    {showValueInput && fieldDef?.type === 'boolean' ? (
+                                        <select
+                                            value={c.value}
+                                            onChange={e => updateCondition(idx, { value: e.target.value })}
+                                            className="w-full px-2 py-1.5 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary text-xs"
+                                        >
+                                            <option value="">— scegli —</option>
+                                            <option value="true">Sì / Vero</option>
+                                            <option value="false">No / Falso</option>
+                                        </select>
+                                    ) : showValueInput && fieldDef?.type === 'enum' && fieldDef.options ? (
+                                        <select
+                                            value={c.value}
+                                            onChange={e => updateCondition(idx, { value: e.target.value })}
+                                            className="w-full px-2 py-1.5 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary text-xs"
+                                        >
+                                            <option value="">— scegli —</option>
+                                            {fieldDef.options.map(opt => (
+                                                <option key={opt} value={opt}>{opt}</option>
+                                            ))}
+                                        </select>
+                                    ) : showValueInput ? (
+                                        <input
+                                            type={fieldDef?.type === 'number' ? 'number' : 'text'}
+                                            value={c.value}
+                                            onChange={e => updateCondition(idx, { value: e.target.value })}
+                                            placeholder={c.op === 'in' || c.op === 'not_in' ? 'valore1,valore2,...' : (fieldDef?.hint || 'valore')}
+                                            className="w-full px-2 py-1.5 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary text-xs"
+                                        />
+                                    ) : (
+                                        <span className="text-[11px] text-theme-text-muted italic px-2">(nessun valore richiesto)</span>
+                                    )}
+                                </div>
+                                {/* Remove */}
+                                <div className="md:col-span-1 flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => removeCondition(idx)}
+                                        className="px-2 py-1 rounded text-[11px] bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20"
+                                        title="Rimuovi condizione"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            </li>
+                        )
+                    })}
+                </ul>
+            )}
+
+            {expanded && hasFieldCatalog && (
+                <p className="text-[10px] text-theme-text-muted mt-2">
+                    Campi disponibili per <code className="bg-theme-bg-tertiary px-1 rounded font-mono">{limitationCode}</code>: {fields.map(f => f.key).join(', ')}
+                </p>
+            )}
+            {expanded && !hasFieldCatalog && (
+                <p className="text-[10px] text-amber-400 mt-2">
+                    Catalogo field non definito per questo limitation_code. Digita manualmente la chiave del campo runtime.
+                </p>
+            )}
         </div>
     )
 }

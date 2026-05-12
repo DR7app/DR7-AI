@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { authFetch } from '../utils/authFetch'
 import { logAdminAction } from '../utils/logAdminAction'
-import { ensureOtpConfigLoaded, isOtpRequired } from '../utils/otpConfigCache'
+import { ensureOtpConfigLoaded, isOtpRequired, shouldRequireOtp } from '../utils/otpConfigCache'
+import type { OtpContext } from '../utils/otpConditionEngine'
 
 interface LimitationState {
   isOpen: boolean
@@ -76,11 +77,24 @@ export function useLimitationOverride() {
   // Pre-warm OTP config cache once when this hook mounts.
   useEffect(() => { ensureOtpConfigLoaded() }, [])
 
-  const requestOverride = useCallback((code: string, message: string, context?: string) => {
-    // If this OTP gate has been disabled in Gestione OTP, auto-approve
-    // synthetically without opening the modal. Audit log still records
-    // the bypass with a `_bypass` overrideId so the action is traceable.
-    if (!isOtpRequired(code)) {
+  const requestOverride = useCallback((
+    code: string,
+    message: string,
+    contextOrOptions?: string | { audit?: string; context?: OtpContext }
+  ) => {
+    // Normalize il 3o parametro: stringa = solo audit, oggetto = { audit, context }
+    const auditCtx = typeof contextOrOptions === 'string'
+      ? contextOrOptions
+      : contextOrOptions?.audit
+    const runtimeCtx = typeof contextOrOptions === 'object' && contextOrOptions
+      ? contextOrOptions.context
+      : undefined
+
+    // Gate completo: is_required AND conditions. Se l'OTP e' disabilitato
+    // OPPURE le condizioni configurate non matchano il context runtime,
+    // bypass silenzioso + audit log.
+    if (!shouldRequireOtp(code, runtimeCtx)) {
+      const isDisabled = !isOtpRequired(code)
       const bypassId = `bypass_${code}_${Date.now()}`
       overrideMap.current.set(code, {
         overrideId: bypassId,
@@ -92,10 +106,13 @@ export function useLimitationOverride() {
       logAdminAction('limitation_override_bypassed', 'limitation', bypassId, {
         limitation_code: code,
         limitation_message: message,
-        action_context: context || `${code}_${Date.now()}`,
+        action_context: auditCtx || `${code}_${Date.now()}`,
         draft_session_id: draftSessionIdRef.current,
         flow_type: flowTypeRef.current,
-        reason: 'is_required=false in system_otp_overrides',
+        reason: isDisabled
+          ? 'is_required=false in system_otp_overrides'
+          : 'conditions_not_matched',
+        ...(runtimeCtx ? { runtime_context: runtimeCtx as Record<string, unknown> } : {}),
       })
       return
     }
@@ -103,7 +120,7 @@ export function useLimitationOverride() {
       isOpen: true,
       limitationCode: code,
       limitationMessage: message,
-      actionContext: context || `${code}_${Date.now()}`,
+      actionContext: auditCtx || `${code}_${Date.now()}`,
     })
   }, [])
 
