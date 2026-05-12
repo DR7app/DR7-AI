@@ -7,6 +7,27 @@ import CampaignCalendarView, { type ScheduledCampaign, type RecurrenceType } fro
 
 const ROME_TZ = 'Europe/Rome'
 
+/**
+ * Extract a human-readable message from any thrown value. Necessary because
+ * Supabase returns plain objects (`{ code, message, details, hint }`) that
+ * aren't Error instances — the old `err instanceof Error ? err.message :
+ * String(err)` fallback rendered them as "[object Object]" and hid the real
+ * cause from the admin.
+ */
+function errMsg(err: unknown): string {
+    if (err instanceof Error) return err.message
+    if (err && typeof err === 'object') {
+        const e = err as Record<string, unknown>
+        if (typeof e.message === 'string' && e.message) return e.message
+        if (typeof e.error === 'string' && e.error) return e.error
+        if (typeof e.error_description === 'string' && e.error_description) return e.error_description
+        if (typeof e.details === 'string' && e.details) return e.details
+        if (typeof e.hint === 'string' && e.hint) return e.hint
+        try { return JSON.stringify(err) } catch { /* fall through */ }
+    }
+    return String(err)
+}
+
 // Social Links è stato spostato in un tab top-level dedicato in
 // admin → Marketing → Social Links (componente: SocialLinksTab.tsx)
 // — non vive più come sub-tab di Campagna Marketing.
@@ -393,8 +414,8 @@ export default function CampagnaMarketingTab() {
                 loadCampaigns()
             } catch (err: unknown) {
                 toast.dismiss('upload')
-                const msg = err instanceof Error ? err.message : String(err)
-                toast.error(`Errore: ${msg}`)
+                console.error('[Campagna] schedule error:', err)
+                toast.error(`Errore: ${errMsg(err)}`)
             } finally {
                 setSending(false)
             }
@@ -472,8 +493,8 @@ export default function CampagnaMarketingTab() {
         } catch (err: unknown) {
             toast.dismiss('upload')
             toast.dismiss('send')
-            const msg = err instanceof Error ? err.message : String(err)
-            toast.error(`Errore: ${msg}`)
+            console.error('[Campagna] send error:', err)
+            toast.error(`Errore: ${errMsg(err)}`)
         } finally {
             setSending(false)
         }
@@ -524,8 +545,8 @@ export default function CampagnaMarketingTab() {
             setEditing(null)
             loadScheduledCampaigns()
         } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err)
-            toast.error(`Errore: ${msg}`)
+            console.error('[Campagna] error:', err)
+            toast.error(`Errore: ${errMsg(err)}`)
         } finally {
             setSavingEdit(false)
             saveEditLockRef.current = false
@@ -549,8 +570,8 @@ export default function CampagnaMarketingTab() {
             setEditing(null)
             loadScheduledCampaigns()
         } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err)
-            toast.error(`Errore: ${msg}`)
+            console.error('[Campagna] error:', err)
+            toast.error(`Errore: ${errMsg(err)}`)
         } finally {
             setSavingEdit(false)
         }
