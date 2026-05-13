@@ -156,8 +156,8 @@ export const handler: Handler = async (event) => {
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 
       const detailRows: Array<{ label: string; value: string }> = []
-      const sections: { customer: Record<string, string>; operation: Record<string, string>; meta: Record<string, string>; diff: Array<{ field: string; before: string; after: string }> } = {
-        customer: {}, operation: {}, meta: {}, diff: []
+      const sections: { customer: Record<string, string>; operation: Record<string, string>; gate: Record<string, string>; meta: Record<string, string>; diff: Array<{ field: string; before: string; after: string }> } = {
+        customer: {}, operation: {}, gate: {}, meta: {}, diff: []
       }
       let structured = false
       if (Array.isArray(details)) {
@@ -168,10 +168,11 @@ export const handler: Handler = async (event) => {
         }
       } else if (details && typeof details === 'object') {
         const d = details as Record<string, unknown>
-        // Detect structured form: at least one of customer/operation/diff/meta present
+        // Detect structured form: at least one of customer/operation/diff/gate/meta present
         const hasStructured =
           (d.customer && typeof d.customer === 'object') ||
           (d.operation && typeof d.operation === 'object') ||
+          (d.gate && typeof d.gate === 'object') ||
           (d.meta && typeof d.meta === 'object') ||
           Array.isArray(d.diff)
         if (hasStructured) {
@@ -186,6 +187,7 @@ export const handler: Handler = async (event) => {
           }
           copy(d.customer, sections.customer)
           copy(d.operation, sections.operation)
+          copy(d.gate, sections.gate)
           copy(d.meta, sections.meta)
           if (Array.isArray(d.diff)) {
             for (const row of d.diff as unknown[]) {
@@ -206,6 +208,42 @@ export const handler: Handler = async (event) => {
             detailRows.push({ label: k, value: String(v) })
           }
         }
+      }
+
+      // AUTO-SECTION TRANSFORM — every legacy flat-dict / array payload gets
+      // classified into customer/operation/gate/meta by label pattern. So 54
+      // existing callers immediately get the new sectioned look without any
+      // caller-side change. Direzione sees the same structured email everywhere.
+      //
+      // Rules (case-insensitive substring match on the LABEL):
+      //   - Customer: cliente, nome, cognome, email, telefono, patente, fascia,
+      //     codice fiscale, indirizzo, citta', CAP
+      //   - Gate (the WHY direzione is being asked — highest priority): motivo,
+      //     motivazione, scadenza, conflitto, dettaglio conflitto
+      //   - Meta (audit trail): operatore, data richiesta, sessione, contesto
+      //   - Operation: anything else (booking ref, vehicle, dates, amounts, …)
+      if (!structured && detailRows.length > 0) {
+        const classify = (label: string): 'customer' | 'gate' | 'meta' | 'operation' => {
+          const l = label.toLowerCase().trim()
+          if (/^(cliente|nome|cognome|email|email cliente|telefono|telefono cliente|patente|fascia|fascia cliente|codice fiscale|cf|indirizzo|citt[aà]|cap|provincia|residenza)\b/.test(l)) {
+            return 'customer'
+          }
+          if (/^(motivo|motivazione|condizion|dettaglio conflitto|conflitto|patente scaduta|scadenza patente|targa estera|categoria veicolo|anni patente|numero patente|data rilascio|anno veicolo|motivo otp|reason)\b/.test(l)) {
+            return 'gate'
+          }
+          if (/^(operatore|richiesto da|data richiesta|sessione|contesto|flow|tipo flusso|timestamp)\b/.test(l)) {
+            return 'meta'
+          }
+          return 'operation'
+        }
+        for (const r of detailRows) {
+          const bucket = classify(r.label)
+          if (bucket === 'customer') sections.customer[r.label] = r.value
+          else if (bucket === 'gate') sections.gate[r.label] = r.value
+          else if (bucket === 'meta') sections.meta[r.label] = r.value
+          else sections.operation[r.label] = r.value
+        }
+        structured = true
       }
 
       // Estrai un nome leggibile dall'email dell'operatore.
@@ -289,25 +327,31 @@ export const handler: Handler = async (event) => {
              </tr>`).join('')}
          </table>`
 
-      // Build the final details HTML — either sectioned (new) or flat (legacy)
+      // Build the final details HTML. Section ordering by importance:
+      //   1. Gate (Motivo/condizione che ha attivato l'OTP) — direzione legge questa per prima
+      //   2. Customer (chi e' coinvolto)
+      //   3. Diff (cosa cambia, solo modifiche)
+      //   4. Operation (dati prenotazione / azione)
+      //   5. Meta (operatore, timestamp, contesto tecnico)
       const detailsTableHtml = structured
         ? [
+            Object.keys(sections.gate).length > 0
+              ? sectionCard('Motivo della richiesta OTP', kvTable(Object.entries(sections.gate).map(([label, value]) => ({ label, value }))), '#cf1322')
+              : '',
             Object.keys(sections.customer).length > 0
               ? sectionCard('Cliente', kvTable(Object.entries(sections.customer).map(([label, value]) => ({ label, value }))), '#1890ff')
               : '',
-            Object.keys(sections.operation).length > 0
-              ? sectionCard('Operazione', kvTable(Object.entries(sections.operation).map(([label, value]) => ({ label, value }))), cat.accent)
-              : '',
             sections.diff.length > 0
               ? sectionCard('Modifiche richieste (Prima → Dopo)', diffTable(sections.diff), '#a37e00')
+              : '',
+            Object.keys(sections.operation).length > 0
+              ? sectionCard('Dati operazione', kvTable(Object.entries(sections.operation).map(([label, value]) => ({ label, value }))), cat.accent)
               : '',
             Object.keys(sections.meta).length > 0
               ? sectionCard('Contesto', kvTable(Object.entries(sections.meta).map(([label, value]) => ({ label, value }))), '#6c757d')
               : '',
           ].filter(Boolean).join('')
-        : (detailRows.length > 0
-            ? sectionCard('Dettaglio operativo', kvTable(detailRows), cat.accent)
-            : '<p style="margin:8px 0 0;color:#6c757d;font-style:italic;font-size:13px;">Nessun dettaglio aggiuntivo fornito dall\'operatore.</p>')
+        : '<p style="margin:8px 0 0;color:#6c757d;font-style:italic;font-size:13px;">Nessun dettaglio aggiuntivo fornito dall\'operatore.</p>'
 
       const notesHtml = trimmedNotes
         ? `<div style="background:#fff8e1;border:1px solid #d4af37;border-radius:10px;padding:16px;margin:24px 0;">
