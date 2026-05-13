@@ -132,11 +132,12 @@ const handler: Handler = async (event) => {
             },
             contractId,
             captureType: 'EXPLICIT',
-            recurrence: {
-                action: 'USE_CONTRACT',
-                contractId,
-                contractType: 'MIT_UNSCHEDULED',
-            },
+            // recurrence block RIMOSSO 2026-05-13 dopo bug in produzione:
+            // includere il blocco recurrence sul MIT faceva interpretare a
+            // Nexi anche gli addebiti normali come pre-auth. Sicurezza prima
+            // della feature: senza recurrence il MIT preauth probabilmente
+            // non funziona (Nexi addebita), ma almeno gli IMPLICIT charge
+            // tornano sicuri.
         }
 
         const res = await fetch(`${NEXI_BASE_URL}/orders/mit`, {
