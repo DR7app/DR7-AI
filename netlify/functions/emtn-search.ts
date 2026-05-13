@@ -65,8 +65,12 @@ export const handler: Handler = async (event) => {
             .select('id, codice_fiscale, nome, cognome, data_nascita, created_at')
             .single()
         if (insErr) {
-            await audit(sb, { operatorId, operatorEmail, action: 'SEARCH', success: false, ip, userAgent: ua, metadata: { reason: 'insert_failed', error: insErr.message } })
-            return jsonResponse(500, { error: 'Inserimento cliente fallito' }, origin)
+            await audit(sb, { operatorId, operatorEmail, action: 'SEARCH', success: false, ip, userAgent: ua, metadata: { reason: 'insert_failed', error: insErr.message, details: insErr.details, hint: insErr.hint, code: insErr.code } })
+            // Espone il vero motivo (RLS, CHECK constraint, NOT NULL, ecc.)
+            // cosi\' chi riceve l'errore puo\' agire invece di vedere un
+            // generico "Inserimento cliente fallito".
+            const parts = [insErr.message, insErr.details, insErr.hint ? `hint: ${insErr.hint}` : '', insErr.code ? `(${insErr.code})` : ''].filter(Boolean)
+            return jsonResponse(500, { error: `Inserimento cliente fallito: ${parts.join(' — ')}` }, origin)
         }
         client = created
     }
