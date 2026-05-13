@@ -1029,7 +1029,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customPhone: custPhone,
-            templateKey: 'pro_richiesta_pagamento',
+            // BUG FIX 2026-05-13: era hardcoded 'pro_richiesta_pagamento' →
+            // bypassava il routing handled_events e i template Prime Wash
+            // custom (es. "Link pagamento lavaggi") venivano ignorati. Adesso
+            // usiamo la legacy event key e passiamo il booking così il
+            // resolver sceglie via service_type ranking.
+            templateKey: 'payment_link_customer',
+            booking: { service_type: booking?.service_type || 'car_wash' },
             templateVars: (() => {
               const amtStr = String(totalEur)
               const firstName = (custName || '').split(' ')[0] || 'Cliente'
@@ -1056,7 +1062,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         })
         const waResult = await waResp.json().catch(() => ({}))
         if (!waResp.ok || waResult?.skipped) {
-          toast.error('Template mancante in Messaggi di Sistema Pro: pro_richiesta_pagamento', { id: toastId })
+          toast.error('Template mancante in Messaggi di Sistema Pro per payment_link_customer (car wash)', { id: toastId })
         } else {
           toast.success('Nuovo link generato e inviato via WhatsApp!', { id: toastId })
         }

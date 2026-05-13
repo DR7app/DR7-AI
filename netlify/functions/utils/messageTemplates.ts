@@ -119,7 +119,54 @@ export async function resolveKeyForContext(key: string, _context?: RenderContext
   const templates = await loadAllTemplates()
 
   if (key.startsWith('pro_')) {
-    // Allow label-based fallback for predefined pro_* slots that are empty.
+    // BUG FIX 2026-05-13: i caller (CarWashBookingsTab, ReservationsTab,
+    // PreventiviTab, ecc.) passano spesso direttamente il canonical
+    // `pro_richiesta_pagamento`. Senza questo blocco il resolver tornava
+    // il canonical fisso, bypassando completamente i handled_events
+    // configurati dall'admin sui template custom (es. il custom
+    // "Link pagamento lavaggi" per car_wash non veniva mai usato).
+    //
+    // Risolto facendo un REVERSE LOOKUP sul OLD_TO_PRO: dato il pro_key
+    // ricevuto, troviamo tutti i legacy events che lo mappano e cerchiamo
+    // template con handled_events che claimano uno di quei legacy. Il
+    // service_type ranking poi sceglie il match migliore.
+    const reverseLegacy: string[] = []
+    for (const [legacy, pro] of Object.entries(OLD_TO_PRO)) {
+      if (pro === key) reverseLegacy.push(legacy)
+    }
+    if (reverseLegacy.length > 0) {
+      const eventBased = templates.filter(t =>
+        Array.isArray(t.handled_events)
+        && t.handled_events.some(ev => reverseLegacy.includes(ev))
+        && t.is_enabled
+        && !!t.message_body
+      )
+      if (eventBased.length > 0) {
+        const ctxSvc = (_context?.serviceType || '').toLowerCase()
+        const normalisedSvc = ctxSvc === 'mechanical_service' ? 'mechanical'
+          : ctxSvc === 'car_wash' ? 'car_wash'
+          : ctxSvc === 'mechanical' ? 'mechanical'
+          : ctxSvc === 'rental' ? 'rental'
+          : ''
+        const score = (tplSvc: string | null | undefined): number => {
+          const s = String(tplSvc || 'all').toLowerCase()
+          if (s === 'all' || s === '') return 1
+          if (!normalisedSvc) return s === 'all' ? 1 : 0
+          if (s === normalisedSvc) return 3
+          if (s === 'prime_wash' && (normalisedSvc === 'car_wash' || normalisedSvc === 'mechanical')) return 2
+          return 0
+        }
+        const ranked = eventBased
+          .map(t => ({ t, r: score(t.target_service_type) }))
+          .filter(x => x.r > 0)
+          .sort((a, b) => b.r - a.r)
+        if (ranked.length > 0) return ranked[0].t.message_key
+        // Tutti i candidati incompatibili → cade nel label-fallback sotto
+        // (che alla peggio torna il canonical originale).
+      }
+    }
+    // Fallback storico: label-based per predefined pro_* slots che hanno
+    // body proprio, o ricerca per pattern label se il canonical è vuoto.
     return await resolveWithLabelFallback(key, templates)
   }
 
