@@ -413,8 +413,22 @@ export default function FleetInventory() {
             {/* Two-column grid: main vehicle list (2/3) + right sidebar (1/3) */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-                {/* Left: vehicle list */}
-                <div className="lg:col-span-2 space-y-4">
+                {/* Left: vehicle table (mockup-style horizontal rows) */}
+                <div className="lg:col-span-2 rounded-2xl border border-theme-border bg-theme-bg-secondary overflow-hidden">
+                  {/* Header row */}
+                  <div className="hidden lg:grid grid-cols-[1.8fr_1fr_repeat(5,1fr)_0.8fr_0.8fr_0.5fr] gap-2 px-3 py-2 bg-theme-bg-tertiary/40 text-[10px] uppercase tracking-wider font-semibold text-theme-text-muted">
+                    <div>Veicolo</div>
+                    <div>Stato generale</div>
+                    <div className="text-center">Olio Motore</div>
+                    <div className="text-center">Past. Ant.</div>
+                    <div className="text-center">Past. Post.</div>
+                    <div className="text-center">Sens. Ant.</div>
+                    <div className="text-center">Sens. Post.</div>
+                    <div className="text-right">Interventi</div>
+                    <div className="text-right">Scadenza</div>
+                    <div className="text-right">Azioni</div>
+                  </div>
+                  <div className="divide-y divide-theme-border">
                     {vehicles.filter(v => {
                         // status filter
                         if (statusFilter !== 'all' && vehicleStatus(v) !== statusFilter) return false
@@ -434,65 +448,80 @@ export default function FleetInventory() {
                     const needsAttention = oilQty === 0 || pastiglieAntQty === 0 || pastigliePostQty === 0 || sensoriAntQty === 0 || sensoriPostQty === 0
 
                     return (
-                        <div
-                            key={vehicle.id}
-                            className={`rounded-lg border p-4 ${needsAttention ? 'border-red-500/50 bg-red-900/10' : 'border-theme-border/30 bg-theme-bg-card'}`}
-                        >
-                            {/* Vehicle Header — photo + name/plate + status overview */}
-                            <div className="flex items-center justify-between mb-4 gap-3">
-                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div key={vehicle.id} className="px-3 py-3">
+                            {/* Compact horizontal row — desktop only; on mobile shows as card */}
+                            <div className="grid grid-cols-1 lg:grid-cols-[1.8fr_1fr_repeat(5,1fr)_0.8fr_0.8fr_0.5fr] gap-2 items-center">
+                                {/* Veicolo cell */}
+                                <div className="flex items-center gap-2 min-w-0">
                                     {(() => {
                                         const img = vehicleImageUrl(vehicle)
-                                        if (img) {
-                                            return (
-                                                <img
-                                                    src={img}
-                                                    alt={vehicle.display_name}
-                                                    className="w-16 h-12 sm:w-20 sm:h-14 rounded-lg object-cover flex-shrink-0 border border-theme-border"
-                                                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                                                />
-                                            )
-                                        }
-                                        return (
-                                            <div className={`w-16 h-12 sm:w-20 sm:h-14 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0 ${
-                                                vehicle.category === 'exotic' ? 'bg-purple-900 text-purple-200' :
-                                                vehicle.category === 'urban' ? 'bg-cyan-900 text-cyan-200' :
-                                                'bg-green-900 text-green-200'
-                                            }`}>
-                                                {vehicle.display_name.substring(0, 2).toUpperCase()}
-                                            </div>
-                                        )
+                                        if (img) return <img src={img} alt={vehicle.display_name} className="w-14 h-10 rounded object-cover flex-shrink-0 border border-theme-border" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                                        return <div className="w-14 h-10 rounded bg-theme-bg-tertiary flex items-center justify-center text-[10px] font-bold flex-shrink-0">{vehicle.display_name.substring(0, 2).toUpperCase()}</div>
                                     })()}
-                                    <div className="min-w-0 flex-1">
-                                        <h3 className="text-lg font-semibold text-theme-text-primary truncate">{vehicle.display_name}</h3>
-                                        <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                                            <p className="text-sm text-theme-text-muted font-mono">{vehicle.plate || 'No targa'}</p>
-                                            {(() => {
-                                                const status = vehicleStatus(vehicle)
-                                                const pill = status === 'critico'
-                                                    ? 'bg-red-500/15 text-red-400 border-red-500/30'
-                                                    : status === 'sotto_soglia'
-                                                        ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-                                                        : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                                                const label = status === 'critico' ? 'CRITICITA' : status === 'sotto_soglia' ? 'ATTENZIONE' : 'OK'
-                                                return (
-                                                    <span className={`inline-block px-1.5 py-0.5 rounded-full text-[9px] font-bold border ${pill}`}>{label}</span>
-                                                )
-                                            })()}
-                                        </div>
+                                    <div className="min-w-0">
+                                        <div className="text-xs font-semibold text-theme-text-primary truncate">{vehicle.display_name}</div>
+                                        <div className="text-[10px] text-theme-text-muted font-mono truncate">{vehicle.plate || '—'}</div>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={() => startEditing(vehicle)}
-                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex-shrink-0"
-                                >
-                                    {editingVehicle === vehicle.id ? 'Chiudi' : 'Modifica'}
-                                </button>
+                                {/* Stato Generale cell */}
+                                {(() => {
+                                    const s = vehicleStatus(vehicle)
+                                    const color = s === 'critico' ? '#f87171' : s === 'sotto_soglia' ? '#fbbf24' : '#34d399'
+                                    const label = s === 'critico' ? 'CRITICITA' : s === 'sotto_soglia' ? 'ATTENZIONE' : 'OK'
+                                    const pct = s === 'critico' ? 30 : s === 'sotto_soglia' ? 60 : 95
+                                    return (
+                                        <div>
+                                            <div className="text-[9px] font-bold uppercase tracking-wider" style={{ color }}>{label}</div>
+                                            <div className="w-full h-1.5 rounded-full bg-theme-bg-tertiary overflow-hidden mt-1">
+                                                <div className="h-full" style={{ width: `${pct}%`, background: color }} />
+                                            </div>
+                                            <div className="text-[10px] text-theme-text-muted mt-0.5">{pct}%</div>
+                                        </div>
+                                    )
+                                })()}
+                                {/* 5 component cells */}
+                                {([
+                                    { qty: oilQty, model: inv?.oil_type || '—', type: 'oil' as const, unit: 'L' },
+                                    { qty: pastiglieAntQty, model: inv?.pastiglie_ant_model || '—', type: 'pastiglie_ant' as const, unit: 'pz' },
+                                    { qty: pastigliePostQty, model: inv?.pastiglie_post_model || '—', type: 'pastiglie_post' as const, unit: 'pz' },
+                                    { qty: sensoriAntQty, model: inv?.sensori_ant_model || '—', type: 'sensori_ant' as const, unit: 'pz' },
+                                    { qty: sensoriPostQty, model: inv?.sensori_post_model || '—', type: 'sensori_post' as const, unit: 'pz' },
+                                ]).map((c, i) => {
+                                    const cs = c.qty === 0 ? 'critico' : c.qty <= 2 ? 'basso' : 'ok'
+                                    const color = cs === 'critico' ? '#f87171' : cs === 'basso' ? '#fbbf24' : '#34d399'
+                                    const cLabel = cs === 'critico' ? 'Esaurito' : cs === 'basso' ? 'Basso' : 'OK'
+                                    const cPct = cs === 'critico' ? 5 : cs === 'basso' ? 40 : 90
+                                    return (
+                                        <div key={i} className="px-1">
+                                            <div className="text-[10px] truncate text-theme-text-secondary" title={c.model}>{c.model}</div>
+                                            <div className="flex items-center justify-between mt-0.5">
+                                                <span className="text-[9px] font-medium" style={{ color }}>{cLabel}</span>
+                                                <span className="text-[9px] text-theme-text-muted font-mono tabular-nums">{c.qty} {c.unit}</span>
+                                            </div>
+                                            <div className="w-full h-1 rounded-full bg-theme-bg-tertiary overflow-hidden mt-0.5">
+                                                <div className="h-full" style={{ width: `${cPct}%`, background: color }} />
+                                            </div>
+                                            {c.qty === 0 && (
+                                                <button onClick={() => sendWhatsAppOrder(vehicle, c.type)} className="mt-1 w-full px-1 py-0.5 rounded text-[9px] font-medium bg-red-600 hover:bg-red-700 text-white">Ordina</button>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                                {/* Interventi cell — placeholder */}
+                                <div className="text-right text-theme-text-muted text-xs">—</div>
+                                {/* Scadenza cell — placeholder */}
+                                <div className="text-right text-theme-text-muted text-xs">—</div>
+                                {/* Azioni cell */}
+                                <div className="text-right">
+                                    <button onClick={() => startEditing(vehicle)} className="px-2 py-1 rounded-full text-[10px] font-semibold bg-blue-600 hover:bg-blue-700 text-white">
+                                        {editingVehicle === vehicle.id ? 'Chiudi' : 'Modifica'}
+                                    </button>
+                                </div>
                             </div>
 
-                            {/* Editing Form */}
-                            {editingVehicle === vehicle.id ? (
-                                <div className="bg-theme-bg-secondary rounded-lg p-4 space-y-4">
+                            {/* Editing Form (expands below the row) */}
+                            {editingVehicle === vehicle.id && (
+                                <div className="bg-theme-bg-secondary rounded-lg p-4 space-y-4 mt-3">
                                     {/* Oil Section */}
                                     <div className="border-b border-theme-border pb-4">
                                         <h4 className="font-semibold text-theme-text-primary mb-3">Olio Motore</h4>
@@ -745,18 +774,6 @@ export default function FleetInventory() {
                                         </button>
                                     </div>
                                 </div>
-                            ) : (
-                                /* Display Mode — compact table-style row matching the May 2026 mockup */
-                                <CompactRow
-                                    vehicle={vehicle}
-                                    oilQty={oilQty}
-                                    pastiglieAntQty={pastiglieAntQty}
-                                    pastigliePostQty={pastigliePostQty}
-                                    sensoriAntQty={sensoriAntQty}
-                                    sensoriPostQty={sensoriPostQty}
-                                    onOrder={(type) => sendWhatsAppOrder(vehicle, type)}
-                                    onEdit={() => startEditing(vehicle)}
-                                />
                             )}
                             {/* legacy big grid kept off-screen, hidden until cleaned up */}
                             <div className="hidden">
@@ -880,6 +897,7 @@ export default function FleetInventory() {
                         </div>
                     )
                 })}
+                  </div>
                 </div>
 
                 {/* Right sidebar */}
