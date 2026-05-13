@@ -158,20 +158,28 @@ const DAY_LABELS_IT = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab']
 // Grouping for the "Eventi gestiti" UI panel — raggruppa le legacy keys
 // per categoria così l'admin trova subito l'evento giusto invece di
 // scorrere una lista piatta di 30+ pillole indistinguibili.
-const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[] }> = [
+// Tag opzionale `service` su ogni gruppo: indica a quale target_service_type
+// è LEGATO il gruppo. Quando il template ha un target_service_type specifico
+// (rental / car_wash / mechanical / prime_wash), i gruppi incompatibili
+// vengono nascosti e i loro eventi rimossi automaticamente dai handled_events
+// (vedi logica in handleUpdateAutomation gate per service-type change).
+const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; service?: 'rental' | 'car_wash' | 'mechanical' }> = [
   {
     label: 'Noleggio',
     color: 'blue',
+    service: 'rental',
     keys: ['rental_new_customer', 'rental_new', 'rental_new_admin', 'rental_modified', 'rental_da_saldare_customer'],
   },
   {
     label: 'Lavaggio / Prime Wash',
     color: 'cyan',
+    service: 'car_wash',
     keys: ['carwash_new_customer', 'carwash_new', 'carwash_new_admin', 'carwash_modified'],
   },
   {
     label: 'Meccanica',
     color: 'teal',
+    service: 'mechanical',
     keys: ['mechanical_new_customer', 'mechanical_new', 'mechanical_new_admin', 'mechanical_modified'],
   },
   {
@@ -200,6 +208,42 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[] }> = [
     keys: ['review_request_whatsapp', 'birthday_message', 'wallet_bonus_credit', 'fidelity_voucher_whatsapp'],
   },
 ]
+
+/**
+ * Filtra EVENT_GROUPS in base al target_service_type del template.
+ *   - 'all' / vuoto    → tutti i gruppi
+ *   - 'rental'         → nasconde Lavaggio + Meccanica
+ *   - 'car_wash'       → nasconde Noleggio + Meccanica
+ *   - 'mechanical'     → nasconde Noleggio + Lavaggio
+ *   - 'prime_wash'     → nasconde Noleggio (mostra Lavaggio + Meccanica)
+ * I gruppi non legati a un singolo servizio (Firma, Pagamento, Cauzione,
+ * Admin Alerts, Marketing) sono sempre visibili.
+ */
+function eventGroupsForServiceType(svc: string | null | undefined): typeof EVENT_GROUPS {
+  const s = (svc || 'all').toLowerCase()
+  if (s === 'all') return EVENT_GROUPS
+  return EVENT_GROUPS.filter(g => {
+    if (!g.service) return true
+    if (s === 'prime_wash') return g.service === 'car_wash' || g.service === 'mechanical'
+    return g.service === s
+  })
+}
+
+/** Dato un service_type, restituisce il set di event keys incompatibili
+    (cioè da rimuovere automaticamente dagli handled_events del template). */
+function incompatibleEventsForServiceType(svc: string | null | undefined): Set<string> {
+  const allowed = new Set<string>()
+  for (const g of eventGroupsForServiceType(svc)) {
+    for (const k of g.keys) allowed.add(k)
+  }
+  const incompat = new Set<string>()
+  for (const g of EVENT_GROUPS) {
+    for (const k of g.keys) {
+      if (!allowed.has(k)) incompat.add(k)
+    }
+  }
+  return incompat
+}
 
 /**
  * Restituisce una lista di righe in italiano descrivendo TUTTI i
@@ -3180,7 +3224,12 @@ export default function MessaggiSistemaProTab() {
                                                         <button
                                                             type="button"
                                                             onClick={() => {
-                                                                const suggested = suggestEventsForTemplate(template)
+                                                                const raw = suggestEventsForTemplate(template)
+                                                                // Filtra suggestions per restare coerenti con il
+                                                                // target_service_type del template — niente eventi
+                                                                // noleggio su un template Solo Lavaggio.
+                                                                const incompat = incompatibleEventsForServiceType(template.target_service_type)
+                                                                const suggested = raw.filter(ev => !incompat.has(ev))
                                                                 if (suggested.length === 0) {
                                                                     toast('Nessun evento rilevato dal nome/contenuto del template. Aggiungi parole più descrittive nella label o nel corpo, o assegna gli eventi manualmente qui sotto.', { icon: 'ℹ️', duration: 6000 })
                                                                     return
@@ -3220,7 +3269,7 @@ export default function MessaggiSistemaProTab() {
                                                         )}
                                                     </div>
                                                     <div className="space-y-2.5">
-                                                        {EVENT_GROUPS.map(group => {
+                                                        {eventGroupsForServiceType(template.target_service_type).map(group => {
                                                             const colorMap: Record<string, { dot: string; pillOn: string; pillTxt: string }> = {
                                                                 blue:    { dot: 'bg-blue-400',    pillOn: 'bg-blue-500/25 border-blue-400/70',       pillTxt: 'text-blue-100' },
                                                                 cyan:    { dot: 'bg-cyan-400',    pillOn: 'bg-cyan-500/25 border-cyan-400/70',       pillTxt: 'text-cyan-100' },
@@ -3371,7 +3420,20 @@ export default function MessaggiSistemaProTab() {
                                                                     <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1">Tipo servizio</label>
                                                                     <select
                                                                         value={template.target_service_type || 'all'}
-                                                                        onChange={e => handleUpdateAutomation(template.id, 'target_service_type', e.target.value)}
+                                                                        onChange={e => {
+                                                                            const newSvc = e.target.value
+                                                                            // Quando cambia il tipo servizio, rimuovi automaticamente
+                                                                            // gli eventi handled_events incompatibili così la UI
+                                                                            // resta coerente (no eventi noleggio su un template lavaggio).
+                                                                            const incompat = incompatibleEventsForServiceType(newSvc)
+                                                                            const cleaned = (template.handled_events || []).filter(k => !incompat.has(k))
+                                                                            handleUpdateAutomation(template.id, 'target_service_type', newSvc)
+                                                                            if (cleaned.length !== (template.handled_events?.length ?? 0)) {
+                                                                                handleUpdateAutomation(template.id, 'handled_events', cleaned)
+                                                                                const removed = (template.handled_events?.length ?? 0) - cleaned.length
+                                                                                toast(`${removed} event${removed === 1 ? 'o' : 'i'} incompatibili rimossi automaticamente.`, { icon: '🧹' })
+                                                                            }
+                                                                        }}
                                                                         className="w-full px-2 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
                                                                     >
                                                                         <option value="all">Tutti i servizi</option>
