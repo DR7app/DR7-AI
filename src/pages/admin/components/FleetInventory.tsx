@@ -41,6 +41,49 @@ interface VehicleWithInventory extends Vehicle {
     inventory?: VehicleInventory
 }
 
+// Vehicle photo: legge metadata.image (upload da admin) e fallback su un
+// name-map di asset statici pubblicati su dr7empire.com, allineato con
+// VehiclesTab cosi' i veicoli senza upload mostrano comunque la foto giusta.
+const WEBSITE_BASE = 'https://dr7empire.com'
+function nameBasedVehicleImage(name: string): string | undefined {
+    const n = (name || '').toLowerCase()
+    if (!n) return undefined
+    const u = (p: string) => `${WEBSITE_BASE}${p}`
+    if (n.includes('rs3')) return u('/rs3.jpeg')
+    if (n.includes('m340')) return u('/bmw-m340i.jpeg')
+    if (n.includes('m3')) return u('/bmw-m3.jpeg')
+    if (n.includes('m4')) return u('/bmw-m4.jpeg')
+    if (n.includes('911') || n.includes('carrera')) return u('/porsche-911.jpeg')
+    if (n.includes('c63')) return u('/c63.jpeg')
+    if (n.includes('a45')) return u('/mercedes_amg.jpeg')
+    if (n.includes('cayenne')) return u('/cayenne.jpeg')
+    if (n.includes('macan')) return u('/macan.jpeg')
+    if (n.includes('gle')) return u('/mercedes-gle.jpeg')
+    if (n.includes('ducato')) return u('/ducato.jpeg')
+    if (n.includes('vito') || n.includes('v class') || n.includes('v-class')) return u('/vito.jpeg')
+    if (n.includes('208')) return u('/208.jpeg')
+    if (n.includes('clio') && (n.includes('arancio') || n.includes('orange'))) return u('/clio4a.jpeg')
+    if (n.includes('clio') && (n.includes('blu') || n.includes('blue'))) return u('/clio4b.jpeg')
+    if (n.includes('c3') && (n.includes('red') || n.includes('rosso'))) return u('/c3r.jpeg')
+    if (n.includes('c3') && (n.includes('white') || n.includes('bianca'))) return u('/cr3w.jpeg')
+    if (n.includes('c3')) return u('/c3.jpeg')
+    if (n.includes('captur')) return u('/captur.jpeg')
+    if (n.includes('panda') && (n.includes('bianca') || n.includes('white'))) return u('/panda2.jpeg')
+    if (n.includes('panda') && (n.includes('aranci') || n.includes('orange'))) return u('/panda3.jpeg')
+    if (n.includes('panda')) return u('/panda1.jpeg')
+    return undefined
+}
+
+function vehicleImageUrl(v: VehicleWithInventory): string | undefined {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const m = (v.metadata as any) || {}
+    const candidates = [m.image, m.image_url, m.hero_image, m.photo, m.picture]
+    for (const c of candidates) {
+        if (typeof c === 'string' && c.trim()) return c
+    }
+    return nameBasedVehicleImage(v.display_name)
+}
+
 type StatusFilter = 'all' | 'critico' | 'sotto_soglia' | 'ok'
 
 export default function FleetInventory() {
@@ -395,26 +438,55 @@ export default function FleetInventory() {
                             key={vehicle.id}
                             className={`rounded-lg border p-4 ${needsAttention ? 'border-red-500/50 bg-red-900/10' : 'border-theme-border/30 bg-theme-bg-card'}`}
                         >
-                            {/* Vehicle Header */}
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold ${
-                                        vehicle.category === 'exotic' ? 'bg-purple-900 text-purple-200' :
-                                        vehicle.category === 'urban' ? 'bg-cyan-900 text-cyan-200' :
-                                        'bg-green-900 text-green-200'
-                                    }`}>
-                                        {vehicle.display_name.substring(0, 2).toUpperCase()}
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-theme-text-primary">{vehicle.display_name}</h3>
-                                        <p className="text-sm text-theme-text-muted">{vehicle.plate || 'No targa'}</p>
+                            {/* Vehicle Header — photo + name/plate + status overview */}
+                            <div className="flex items-center justify-between mb-4 gap-3">
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                    {(() => {
+                                        const img = vehicleImageUrl(vehicle)
+                                        if (img) {
+                                            return (
+                                                <img
+                                                    src={img}
+                                                    alt={vehicle.display_name}
+                                                    className="w-16 h-12 sm:w-20 sm:h-14 rounded-lg object-cover flex-shrink-0 border border-theme-border"
+                                                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                                                />
+                                            )
+                                        }
+                                        return (
+                                            <div className={`w-16 h-12 sm:w-20 sm:h-14 rounded-lg flex items-center justify-center text-sm font-bold flex-shrink-0 ${
+                                                vehicle.category === 'exotic' ? 'bg-purple-900 text-purple-200' :
+                                                vehicle.category === 'urban' ? 'bg-cyan-900 text-cyan-200' :
+                                                'bg-green-900 text-green-200'
+                                            }`}>
+                                                {vehicle.display_name.substring(0, 2).toUpperCase()}
+                                            </div>
+                                        )
+                                    })()}
+                                    <div className="min-w-0 flex-1">
+                                        <h3 className="text-lg font-semibold text-theme-text-primary truncate">{vehicle.display_name}</h3>
+                                        <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                                            <p className="text-sm text-theme-text-muted font-mono">{vehicle.plate || 'No targa'}</p>
+                                            {(() => {
+                                                const status = vehicleStatus(vehicle)
+                                                const pill = status === 'critico'
+                                                    ? 'bg-red-500/15 text-red-400 border-red-500/30'
+                                                    : status === 'sotto_soglia'
+                                                        ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                                                        : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                                const label = status === 'critico' ? 'CRITICITA' : status === 'sotto_soglia' ? 'ATTENZIONE' : 'OK'
+                                                return (
+                                                    <span className={`inline-block px-1.5 py-0.5 rounded-full text-[9px] font-bold border ${pill}`}>{label}</span>
+                                                )
+                                            })()}
+                                        </div>
                                     </div>
                                 </div>
                                 <button
                                     onClick={() => startEditing(vehicle)}
-                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex-shrink-0"
                                 >
-                                    Modifica
+                                    {editingVehicle === vehicle.id ? 'Chiudi' : 'Modifica'}
                                 </button>
                             </div>
 
