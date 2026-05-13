@@ -3466,6 +3466,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         console.error('[handleConfirmExtend] ⚠️ Cauzione sync failed:', cauzioneError)
       }
 
+      // DR7 Privilege — fire on extension paid. Gated STRICTLY on
+      // extension_payment_status === 'paid' (NEVER on confirmed alone).
+      // Backend idempotente via dr7_privilege_sent_at, niente doppio invio
+      // se il privilege era gia' partito alla prenotazione iniziale.
+      if (extendData.extension_payment_status === 'paid' && extendingBooking?.id) {
+        authFetch('/.netlify/functions/trigger-dr7-privilege', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId: extendingBooking.id, kind: 'noleggio' }),
+        }).catch(() => { /* non-blocking */ })
+      }
+
       // Auto-generate fattura for extension when paid
       if (extendData.extension_payment_status === 'paid' && additionalAmount > 0) {
         try {

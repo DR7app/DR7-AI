@@ -4179,6 +4179,22 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         }
                       }
 
+                      // DR7 Privilege — fire on paid (edit-modal path). Gated
+                      // STRICTLY on payment_status in paid/completed/succeeded;
+                      // a booking that's only "confirmed" but not paid must NOT
+                      // receive the discount code. Idempotente via
+                      // dr7_privilege_sent_at, niente doppio invio.
+                      const editIsPaid = editingBooking.payment_status === 'paid'
+                        || editingBooking.payment_status === 'completed'
+                        || editingBooking.payment_status === 'succeeded'
+                      if (editIsPaid && editingBooking.id) {
+                        authFetch('/.netlify/functions/trigger-dr7-privilege', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ bookingId: editingBooking.id, kind: 'lavaggio' }),
+                        }).catch(() => { /* non-blocking */ })
+                      }
+
                       // Send WhatsApp modification notification AL CLIENTE (non all'admin).
                       // Senza customPhone il sender cadeva su NOTIFICATION_PHONE env (admin).
                       // Skip se il cliente non ha un telefono registrato.

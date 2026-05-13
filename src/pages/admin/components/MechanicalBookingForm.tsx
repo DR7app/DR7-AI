@@ -257,6 +257,21 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                     // Don't fail the whole booking if invoice generation fails
                 }
 
+                // DR7 Privilege — fire on paid. Mechanical uses kind='lavaggio'
+                // (Prime Wash family). Gated STRICTLY on payment_status paid/
+                // completed/succeeded — never on status=confirmed alone.
+                // Idempotente via dr7_privilege_sent_at.
+                const meccIsPaid = formData.payment_status === 'paid'
+                  || formData.payment_status === 'completed'
+                  || formData.payment_status === 'succeeded'
+                if (meccIsPaid && insertedBooking?.id) {
+                    authFetch('/.netlify/functions/trigger-dr7-privilege', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ bookingId: insertedBooking.id, kind: 'lavaggio' }),
+                    }).catch(() => { /* non-blocking */ })
+                }
+
                 // Create Google Calendar event
                 try {
                     const [hours, minutes] = formData.appointment_time.split(':').map(Number)
