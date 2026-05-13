@@ -331,7 +331,16 @@ const handler: Handler = async (event) => {
     // Caller has selected a specific Pro template (es. cron / trigger inline
     // dei Messaggi di Sistema Pro). Bypass derivazione da service_type.
     messageKey = explicitMessageKey;
-  } else if (booking) {
+  } else if (booking && !message) {
+    // BUG FIX 2026-05-13: solo se Branch 1 (templateKey) NON ha gia' prodotto
+    // un messaggio. Prima questa derivazione veniva SEMPRE eseguita quando
+    // booking era truthy — anche dopo che il caller aveva passato un
+    // templateKey esplicito risolto correttamente. Il risultato era che il
+    // codice rieseguiva la risoluzione su una chiave derivata (es.
+    // 'carwash_new_customer') e poi il guard target_service_type a riga 433
+    // (strict equality, NO umbrella prime_wash → car_wash come Branch 1)
+    // rigettava l'invio del template Prime Wash custom con
+    // skipped: service_type_mismatch, anche se Branch 1 lo aveva accettato.
     const serviceType = booking.service_type;
     const isEdit = booking.isEdit;
     if (serviceType === 'car_wash') {
@@ -423,6 +432,9 @@ const handler: Handler = async (event) => {
       // target_service_type guard (vedi nota nel primo path templateKey
       // sopra): blocca l'invio se il template è configurato per un solo
       // tipo di servizio e il booking è di tipo diverso.
+      // BUG FIX 2026-05-13: prima usava `tplSvc !== normalised` (strict),
+      // quindi un template prime_wash veniva rigettato per booking car_wash.
+      // Ora usa la stessa umbrella logic di Branch 1 (riga 168-173).
       if (tpl && (tpl as { target_service_type?: string }).target_service_type && (tpl as { target_service_type?: string }).target_service_type !== 'all') {
         const tplSvc = String((tpl as { target_service_type?: string }).target_service_type).toLowerCase();
         const bookingSvc = String(booking?.service_type || 'rental').toLowerCase();
@@ -430,7 +442,10 @@ const handler: Handler = async (event) => {
           : bookingSvc === 'car_wash' ? 'car_wash'
           : bookingSvc === 'mechanical' ? 'mechanical'
           : 'rental';
-        if (tplSvc !== normalised) {
+        const matches =
+          tplSvc === normalised
+          || (tplSvc === 'prime_wash' && (normalised === 'car_wash' || normalised === 'mechanical'));
+        if (!matches) {
           console.log(`[send-whatsapp] Template "${messageKey}" target_service_type=${tplSvc} but booking is ${normalised} — skipping send`);
           return {
             statusCode: 200,
