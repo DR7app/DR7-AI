@@ -746,7 +746,20 @@ export default function FleetInventory() {
                                     </div>
                                 </div>
                             ) : (
-                                /* Display Mode */
+                                /* Display Mode — compact table-style row matching the May 2026 mockup */
+                                <CompactRow
+                                    vehicle={vehicle}
+                                    oilQty={oilQty}
+                                    pastiglieAntQty={pastiglieAntQty}
+                                    pastigliePostQty={pastigliePostQty}
+                                    sensoriAntQty={sensoriAntQty}
+                                    sensoriPostQty={sensoriPostQty}
+                                    onOrder={(type) => sendWhatsAppOrder(vehicle, type)}
+                                    onEdit={() => startEditing(vehicle)}
+                                />
+                            )}
+                            {/* legacy big grid kept off-screen, hidden until cleaned up */}
+                            <div className="hidden">
                                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                                     {/* Oil */}
                                     <div className={`rounded-lg p-3 border ${getStatusColor(oilQty)}`}>
@@ -863,7 +876,7 @@ export default function FleetInventory() {
                                         </button>
                                     </div>
                                 </div>
-                            )}
+                            </div>
                         </div>
                     )
                 })}
@@ -1023,6 +1036,64 @@ function BottomKpi({ label, value, hint }: { label: string; value: string; hint?
             <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">{label}</div>
             <div className="text-xl font-bold text-theme-text-primary mt-1 tabular-nums">{value}</div>
             {hint && <div className="text-[10px] text-theme-text-muted mt-0.5">{hint}</div>}
+        </div>
+    )
+}
+
+// Compact row matching the May 2026 Magazzino mockup: 5 inline component
+// cells, each with a brand label, status pill, qty, mini progress bar.
+// Header sits above and contains photo + name + plate (already rendered
+// by the parent card); this component renders just the components grid.
+type CompKind = 'oil' | 'pastiglie_ant' | 'pastiglie_post' | 'sensori_ant' | 'sensori_post'
+
+function CompactRow({
+    oilQty, pastiglieAntQty, pastigliePostQty, sensoriAntQty, sensoriPostQty,
+    onOrder,
+}: {
+    vehicle: VehicleWithInventory
+    oilQty: number
+    pastiglieAntQty: number
+    pastigliePostQty: number
+    sensoriAntQty: number
+    sensoriPostQty: number
+    onOrder: (kind: CompKind) => void
+    onEdit: () => void
+}) {
+    const cells: { name: string; qty: number; unit: string; type: CompKind }[] = [
+        { name: 'Olio Motore', qty: oilQty, unit: 'L', type: 'oil' },
+        { name: 'Pastiglie Ant.', qty: pastiglieAntQty, unit: 'pz', type: 'pastiglie_ant' },
+        { name: 'Pastiglie Post.', qty: pastigliePostQty, unit: 'pz', type: 'pastiglie_post' },
+        { name: 'Sensori Ant.', qty: sensoriAntQty, unit: 'pz', type: 'sensori_ant' },
+        { name: 'Sensori Post.', qty: sensoriPostQty, unit: 'pz', type: 'sensori_post' },
+    ]
+    return (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+            {cells.map(c => {
+                const s = c.qty === 0 ? 'critico' : c.qty <= 2 ? 'basso' : 'ok'
+                const color = s === 'critico' ? '#f87171' : s === 'basso' ? '#fbbf24' : '#34d399'
+                const label = s === 'critico' ? 'Esaurito' : s === 'basso' ? 'Basso' : 'OK'
+                const pct = s === 'critico' ? 5 : s === 'basso' ? 40 : 90
+                return (
+                    <div key={c.type} className="rounded-lg p-2 border border-theme-border/40 bg-theme-bg-secondary/40">
+                        <div className="text-[10px] font-semibold text-theme-text-primary truncate">{c.name}</div>
+                        <div className="flex items-center justify-between mt-1">
+                            <span className="text-[10px] font-medium" style={{ color }}>{label}</span>
+                            <span className="text-[10px] text-theme-text-muted font-mono tabular-nums">{c.qty} {c.unit}</span>
+                        </div>
+                        <div className="w-full h-1 rounded-full bg-theme-bg-tertiary overflow-hidden mt-1">
+                            <div className="h-full" style={{ width: `${pct}%`, background: color }} />
+                        </div>
+                        {c.qty === 0 && (
+                            <button
+                                onClick={() => onOrder(c.type)}
+                                className="mt-1.5 w-full px-1 py-1 rounded text-[10px] font-medium bg-red-600 hover:bg-red-700 text-white"
+                            >
+                                Ordina
+                            </button>
+                        )}
+                    </div>
+                )
+            })}
         </div>
     )
 }
