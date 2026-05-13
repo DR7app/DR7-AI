@@ -307,7 +307,14 @@ export default function NexiTab() {
                 // gia\' tentato lato backend. Avvisa con stato chiaro.
                 toast.error(data.error || 'Pre-autorizzazione fallita: addebito invece di blocco')
             } else {
-                toast.error(data.error || 'Pre-autorizzazione fallita')
+                // Logga TUTTA la risposta Nexi in console cosi\' possiamo
+                // diagnosticare perche\' la preauth e\' stata rifiutata.
+                if (data.rawResponse) {
+                    console.error('[Preauth declined] Full Nexi response:', data.rawResponse)
+                }
+                const detailed = data.error || 'Pre-autorizzazione fallita'
+                // Toast piu\' lungo se ha dettagli (per leggerli).
+                toast.error(detailed, { duration: 12000 })
             }
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)

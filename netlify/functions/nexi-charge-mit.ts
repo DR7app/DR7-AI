@@ -300,12 +300,39 @@ const handler: Handler = async (event) => {
         }
 
         if (!isSuccess) {
+            // Surface the FULL Nexi decline reason to admin per diagnosi.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const op = (responseData as any).operation || {};
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const ad = (op.additionalData || {}) as any;
+            const resultCode = ad.resultCode || responseData.resultCode || op.resultCode;
+            const resultMessage = ad.resultMessage || ad.responseMessage || responseData.resultDescription || op.resultMessage;
+            const declineReason = ad.declineReason || ad.declinedReason || ad.reason || op.declineReason;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const errs = ((responseData as any).errors || []) as Record<string, unknown>[];
+            const errDescr = errs.map(e => `[${e.code}] ${e.description}`).join('; ') || null;
+
+            const detailedError = [
+                `${isPreauth ? 'Pre-autorizzazione' : 'Addebito'} rifiutato`,
+                `Result: ${operationResult || 'DECLINED'}`,
+                resultCode ? `Code: ${resultCode}` : null,
+                resultMessage ? `Msg: ${resultMessage}` : null,
+                declineReason ? `Motivo: ${declineReason}` : null,
+                errDescr ? `Errors: ${errDescr}` : null,
+            ].filter(Boolean).join(' · ');
+
+            console.error('[nexi-charge-mit] DECLINED full response:', JSON.stringify(responseData, null, 2));
+
             return {
                 statusCode: 400,
                 headers,
                 body: JSON.stringify({
-                    error: `${isPreauth ? 'Pre-autorizzazione' : 'Addebito'} rifiutato: ${operationResult || 'DECLINED'}`,
-                    operationResult
+                    error: detailedError,
+                    operationResult,
+                    resultCode,
+                    resultMessage,
+                    declineReason,
+                    rawResponse: responseData,
                 })
             };
         }
