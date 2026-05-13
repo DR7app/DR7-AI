@@ -547,11 +547,16 @@ export default function AdminDashboard() {
                   // Prefer the explicit titleLabel (e.g. Noleggio's bookings
                   // sub-view shows "Noleggio" in the bar but "Prenotazioni"
                   // in the title), then fall back to the bar label. Avoid
-                  // "Noleggio Noleggio" by collapsing to the section name
-                  // alone when the chosen label equals it.
+                  // "Noleggio Noleggio" / "Gestione Flotta Flotta" by NOT
+                  // appending the section name when the title already
+                  // contains it (or vice versa).
                   const titleSub = subTab.titleLabel || subTab.label
-                  if (titleSub.toLowerCase() === sectionForActiveTab.name.toLowerCase()) {
-                    return sectionForActiveTab.name
+                  const titleLower = titleSub.toLowerCase()
+                  const sectionLower = sectionForActiveTab.name.toLowerCase()
+                  if (titleLower === sectionLower
+                      || titleLower.includes(sectionLower)
+                      || sectionLower.includes(titleLower)) {
+                    return titleSub
                   }
                   return `${titleSub} ${sectionForActiveTab.name}`
                 }
