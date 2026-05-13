@@ -2626,28 +2626,32 @@ export default function MessaggiSistemaProTab() {
                                                 />
                                                 <p className="text-[11px] text-theme-text-muted mt-1">Es. 5 = solo clienti con almeno 5 prenotazioni precedenti.</p>
                                             </div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Durata noleggio (giorni)</label>
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        value={newTargetRentalDurationMin}
-                                                        onChange={e => setNewTargetRentalDurationMin(e.target.value)}
-                                                        placeholder="min"
-                                                        className="w-1/2 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
-                                                    />
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        value={newTargetRentalDurationMax}
-                                                        onChange={e => setNewTargetRentalDurationMax(e.target.value)}
-                                                        placeholder="max"
-                                                        className="w-1/2 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
-                                                    />
+                                            {/* Durata noleggio (giorni): rental only. Lavaggio /
+                                                meccanica non hanno una "durata in giorni". */}
+                                            {!['prime_wash', 'car_wash', 'mechanical'].includes(newTargetServiceType) && (
+                                                <div>
+                                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Durata noleggio (giorni)</label>
+                                                    <div className="flex gap-2">
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            value={newTargetRentalDurationMin}
+                                                            onChange={e => setNewTargetRentalDurationMin(e.target.value)}
+                                                            placeholder="min"
+                                                            className="w-1/2 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
+                                                        />
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            value={newTargetRentalDurationMax}
+                                                            onChange={e => setNewTargetRentalDurationMax(e.target.value)}
+                                                            placeholder="max"
+                                                            className="w-1/2 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm"
+                                                        />
+                                                    </div>
+                                                    <p className="text-[11px] text-theme-text-muted mt-1">Es. 7-30 = solo noleggi settimanali/mensili.</p>
                                                 </div>
-                                                <p className="text-[11px] text-theme-text-muted mt-1">Es. 7-30 = solo noleggi settimanali/mensili.</p>
-                                            </div>
+                                            )}
                                             <div className="md:col-span-2">
                                                 <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Tag cliente (CSV)</label>
                                                 <input
@@ -2743,15 +2747,19 @@ export default function MessaggiSistemaProTab() {
                                                         <option value="no">Solo chi non ha mai usato</option>
                                                     </select>
                                                 </div>
-                                                <div className="md:col-span-2">
-                                                    <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Numero proroghe storiche</label>
-                                                    <div className="flex gap-2">
-                                                        <input type="number" min="0" value={newTargetExtensionCountMin} onChange={e => setNewTargetExtensionCountMin(e.target.value)}
-                                                            placeholder="min" className="w-1/2 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
-                                                        <input type="number" min="0" value={newTargetExtensionCountMax} onChange={e => setNewTargetExtensionCountMax(e.target.value)}
-                                                            placeholder="max" className="w-1/2 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
+                                                {/* Proroghe: rental only. Lavaggio / meccanica non si
+                                                    estendono. */}
+                                                {!['prime_wash', 'car_wash', 'mechanical'].includes(newTargetServiceType) && (
+                                                    <div className="md:col-span-2">
+                                                        <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Numero proroghe storiche</label>
+                                                        <div className="flex gap-2">
+                                                            <input type="number" min="0" value={newTargetExtensionCountMin} onChange={e => setNewTargetExtensionCountMin(e.target.value)}
+                                                                placeholder="min" className="w-1/2 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
+                                                            <input type="number" min="0" value={newTargetExtensionCountMax} onChange={e => setNewTargetExtensionCountMax(e.target.value)}
+                                                                placeholder="max" className="w-1/2 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
+                                                        </div>
                                                     </div>
-                                                </div>
+                                                )}
                                             </div>
                                         </div>
 
