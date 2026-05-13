@@ -224,6 +224,19 @@ export default function EMTNTab() {
                         )}
                         {data && (
                             <>
+                                <div className="flex items-center justify-between">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setData(null); setError(null); setCfInput('') }}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-theme-border text-xs font-semibold text-theme-text-primary hover:bg-theme-bg-hover"
+                                    >
+                                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/>
+                                        </svg>
+                                        Torna alla lista
+                                    </button>
+                                    <span className="text-[11px] text-theme-text-muted font-mono">{data.client.codice_fiscale}</span>
+                                </div>
                                 <ClienteHeaderCard client={data.client} riskBand={data.riskBand} />
                                 <ActionCards
                                     reportUnlocked={data.reportUnlocked}
