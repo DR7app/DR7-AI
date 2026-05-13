@@ -101,10 +101,12 @@
 [functions."nexi-preauth-refresh-cron"]
   schedule = "30 3 * * *"
 
-# Marketing campaigns — every 5 min, materialise scheduled/recurring campaigns
+# Marketing campaigns — every 2 min, materialise scheduled/recurring campaigns
 # whose scheduled_at has passed and pump the chunked send loop server-side.
+# 25s working budget per tick (out of the 30s scheduled-function timeout) so
+# each tick sends ~3 messages under the 7s anti-spam throttle (~90 msg/hour).
 [functions."process-scheduled-campaigns-cron"]
-  schedule = "*/5 * * * *"
+  schedule = "*/2 * * * *"
 
 # Messaggi di Sistema Pro — DISABILITATO 2026-05-13 dopo incident del
 # mattino (mille messaggi randomici alla direzione). Il fix lato sender

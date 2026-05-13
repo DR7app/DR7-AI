@@ -331,9 +331,12 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
         if (result) materialised++
     }
 
-    // Reserve ~2s for tear-down. The Netlify scheduled-function timeout is
-    // 10s — give the chunk pump everything left.
-    const deadline = start + 8000
+    // Reserve ~5s for tear-down. Netlify scheduled functions have a 30s
+    // timeout — use 25s of it so each tick can send ~3 messages (with the
+    // 7s per-recipient throttle baked into send-whatsapp-campaign-chunk),
+    // instead of ~1. Combined with the */2 cron schedule, this gives
+    // ~90 messages/hour via cron when the browser tab is closed.
+    const deadline = start + 25000
     await pumpChunkLoop(deadline)
 
     return {
@@ -342,4 +345,4 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
     }
 }
 
-export const handler = schedule('*/5 * * * *', cronHandler)
+export const handler = schedule('*/2 * * * *', cronHandler)
