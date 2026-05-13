@@ -155,15 +155,19 @@ const handler: Handler = async (event) => {
       if (tpl && tpl.target_service_type && tpl.target_service_type !== 'all') {
         const tplSvc = String(tpl.target_service_type).toLowerCase();
         const bookingSvc = String(booking?.service_type || 'rental').toLowerCase();
-        // 'rental' è il default per i booking senza service_type esplicito
+        // 'rental' è il default per i booking senza service_type esplicito.
+        // 'prime_wash' è l'umbrella che racchiude car_wash + mechanical —
+        // stesso semantic della cron filter in triggerSystemMessageEvent.ts.
         const normalised = bookingSvc === 'mechanical_service' ? 'mechanical'
           : bookingSvc === 'car_wash' ? 'car_wash'
           : bookingSvc === 'mechanical' ? 'mechanical'
           : 'rental';
-        const matches = tplSvc === normalised
+        const matches =
+          tplSvc === normalised
           || (tplSvc === 'car_wash' && normalised === 'car_wash')
           || (tplSvc === 'mechanical' && normalised === 'mechanical')
-          || (tplSvc === 'rental' && normalised === 'rental');
+          || (tplSvc === 'rental' && normalised === 'rental')
+          || (tplSvc === 'prime_wash' && (normalised === 'car_wash' || normalised === 'mechanical'));
         if (!matches) {
           console.log(`[send-whatsapp] Template "${resolvedKey}" target_service_type=${tplSvc} but booking is ${normalised} — skipping send`);
           return {

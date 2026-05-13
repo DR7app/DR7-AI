@@ -2453,7 +2453,9 @@ export default function MessaggiSistemaProTab() {
                                                 className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
                                                 <option value="all">Tutti i servizi</option>
                                                 <option value="rental">Noleggio</option>
-                                                <option value="prime_wash">Prime Wash</option>
+                                                <option value="prime_wash">Prime Wash (Lavaggio + Meccanica)</option>
+                                                <option value="car_wash">Solo Lavaggio</option>
+                                                <option value="mechanical">Solo Meccanica</option>
                                             </select>
                                         </div>
                                         <div>
@@ -3316,6 +3318,7 @@ export default function MessaggiSistemaProTab() {
                                                                     >
                                                                         <option value="all">Tutti i servizi</option>
                                                                         <option value="rental">Solo Noleggio</option>
+                                                                        <option value="prime_wash">Solo Prime Wash (Lavaggio + Meccanica)</option>
                                                                         <option value="car_wash">Solo Lavaggio</option>
                                                                         <option value="mechanical">Solo Meccanica</option>
                                                                     </select>
