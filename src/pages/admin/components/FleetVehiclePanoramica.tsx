@@ -82,9 +82,48 @@ function bookingDays(b: BookingRow): Set<string> {
     return out
 }
 
+interface ReportStats {
+    fatturato: number     // rentalRevenue (escluso penali/danni)
+    giorniNoleggio: number
+    giorniFermo: number
+    utilizzoPct: number    // 0..100
+}
+
 export default function FleetVehiclePanoramica({ vehicle, alerts }: FleetVehiclePanoramicaProps) {
     const [bookings, setBookings] = useState<BookingRow[]>([])
     const [loading, setLoading] = useState(true)
+    const [reportStats, setReportStats] = useState<ReportStats | null>(null)
+
+    // Pull authoritative KPI numbers from the same monthly-report endpoint that
+    // feeds Report Noleggio + VehiclesTab. Single source of truth: fatturato,
+    // giorni noleggio, giorni fermo, utilizzo % all match what the operator
+    // sees in the Report.
+    useEffect(() => {
+        if (!vehicle.id) return
+        let cancelled = false
+        ;(async () => {
+            try {
+                const t = new Date()
+                const month = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}`
+                const res = await fetch(`/.netlify/functions/monthly-report?type=vehicles&month=${month}`)
+                if (!res.ok) return
+                const data = await res.json() as { vehicles?: { vehicleId: string; rentalRevenue: number; rentedDays: number; idleDays: number; utilizationRate: number }[] }
+                if (cancelled) return
+                const row = (data.vehicles || []).find(v => v.vehicleId === vehicle.id)
+                if (row) {
+                    setReportStats({
+                        fatturato: row.rentalRevenue || 0,
+                        giorniNoleggio: row.rentedDays || 0,
+                        giorniFermo: row.idleDays || 0,
+                        utilizzoPct: Math.round((row.utilizationRate || 0) * 100),
+                    })
+                }
+            } catch (e) {
+                console.error('[FleetVehiclePanoramica] monthly-report fetch failed', e)
+            }
+        })()
+        return () => { cancelled = true }
+    }, [vehicle.id])
 
     // Pull last ~60 days of bookings for this vehicle so we can fill KPI
     // strip, performance sparkline, calendar, recent rentals from real data.
@@ -128,19 +167,26 @@ export default function FleetVehiclePanoramica({ vehicle, alerts }: FleetVehicle
             return d >= sixtyAgo && d < thirtyAgo
         })
 
-        const ricavi = last30
-            .filter(b => PAID_STATES.has((b.payment_status || '').toLowerCase()))
-            .reduce((sum, b) => sum + (b.total_amount || 0), 0)
+        // Headline KPIs preferiscono i numeri del monthly-report (stessi del
+        // Report Noleggio). Fallback ai calcoli sui bookings solo se il
+        // report non ha ancora risposto.
+        const ricavi = reportStats?.fatturato
+            ?? last30
+                .filter(b => PAID_STATES.has((b.payment_status || '').toLowerCase()))
+                .reduce((sum, b) => sum + (b.total_amount || 0), 0)
         const ricaviPrev = prev30
             .filter(b => PAID_STATES.has((b.payment_status || '').toLowerCase()))
             .reduce((sum, b) => sum + (b.total_amount || 0), 0)
         const ricaviDelta = ricaviPrev > 0 ? ((ricavi - ricaviPrev) / ricaviPrev) * 100 : 0
 
-        // Days occupied in last 30 (for utilizzo %)
+        // Days occupied: dal report quando disponibile, altrimenti dai bookings.
         const occupiedDays = new Set<string>()
         last30.forEach(b => bookingDays(b).forEach(d => occupiedDays.add(d)))
-        const utilizzo = Math.min(100, Math.round((occupiedDays.size / 30) * 100))
-        const giorniFermi = Math.max(0, 30 - occupiedDays.size)
+        const utilizzo = reportStats?.utilizzoPct
+            ?? Math.min(100, Math.round((occupiedDays.size / 30) * 100))
+        const giorniFermi = reportStats?.giorniFermo
+            ?? Math.max(0, 30 - occupiedDays.size)
+        const giorniNoleggio = reportStats?.giorniNoleggio ?? occupiedDays.size
 
         // Daily revenue series (last 30d, oldest → newest)
         const series: number[] = []
@@ -174,12 +220,12 @@ export default function FleetVehiclePanoramica({ vehicle, alerts }: FleetVehicle
 
         return {
             ricavi, ricaviDelta,
-            utilizzo, giorniFermi,
+            utilizzo, giorniFermi, giorniNoleggio,
             mediaGiornaliera, numNoleggi, tariffaMedia,
             margine, marginePct, roi,
             series,
         }
-    }, [bookings])
+    }, [bookings, reportStats])
 
     const recentBookings = bookings.slice(0, 4)
 
