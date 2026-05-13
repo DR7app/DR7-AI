@@ -190,7 +190,7 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; servic
   {
     label: 'Pagamento',
     color: 'emerald',
-    keys: ['payment_link_customer', 'payment_received_extension', 'payment_received_extension_admin', 'payment_received_damages', 'payment_received_damages_admin'],
+    keys: ['payment_link_customer', 'payment_received_extension', 'payment_received_extension_admin', 'payment_received_damages', 'payment_received_damages_admin', 'booking_confirmed_da_saldare'],
   },
   {
     label: 'Cauzione & Annullamento',
