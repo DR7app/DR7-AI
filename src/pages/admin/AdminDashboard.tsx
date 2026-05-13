@@ -239,7 +239,6 @@ export default function AdminDashboard() {
     ] },
     { name: 'Flotta', tabs: [
       { tab: 'vehicles', label: 'Veicoli' },
-      { tab: 'fleet', label: 'Gestione Flotta' },
       { tab: 'magazzino', label: 'Magazzino' },
       { tab: 'gps-keyless', label: 'GPS Flotta' },
     ] },

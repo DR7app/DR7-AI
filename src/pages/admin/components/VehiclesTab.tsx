@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import Input from './Input'
 import Select from './Select'
 import Button from './Button'
+import FleetVehicleDetail from './FleetVehicleDetail'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import { logger } from '../../../utils/logger'
 import { ORPHAN_PALETTE, getPaletteForCategory } from '../../../utils/categoryPalettes'
@@ -110,6 +111,10 @@ export default function VehiclesTab() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  // Quando l'admin clicca "Apri Scheda" su una riga, mostriamo
+  // FleetVehicleDetail full-screen al posto della tabella. Il pulsante
+  // "Indietro" in cima alla scheda fa setSchedaVehicleId(null).
+  const [schedaVehicleId, setSchedaVehicleId] = useState<string | null>(null)
   // const [selectedCategory, setSelectedCategory] = useState<'all' | 'exotic' | 'urban'>('all')
   // const [selectedVehicle, setSelectedVehicle] = useState<string>('all')
   const [adjustmentPercentage, setAdjustmentPercentage] = useState<string>('10')
@@ -781,6 +786,12 @@ export default function VehiclesTab() {
     return <div className="text-center py-8 text-theme-text-muted">Caricamento...</div>
   }
 
+  // Scheda Veicolo full-screen: l'utente ha cliccato "Apri Scheda" su una riga.
+  // Bypassiamo l'intera dashboard e renderizziamo solo FleetVehicleDetail.
+  if (schedaVehicleId) {
+    return <FleetVehicleDetail vehicleId={schedaVehicleId} onBack={() => setSchedaVehicleId(null)} />
+  }
+
   return (
     <div>
       {/* KPI strip — 6 metriche flotta, dati reali da vehicles + bookings 30g.
@@ -1370,6 +1381,7 @@ export default function VehiclesTab() {
                             <span className="text-theme-text-muted">ROI <span className="text-theme-text-primary font-semibold">{String(roi).replace('.', ',')}%</span></span>
                           </div>
                           <div className="flex items-center gap-2 mt-2">
+                            <button onClick={() => setSchedaVehicleId(vehicle.id)} className="text-xs px-3 py-1.5 rounded-full bg-dr7-gold hover:bg-dr7-gold/90 text-black font-semibold">Apri Scheda</button>
                             <button onClick={() => handleEdit(vehicle)} className="text-xs px-3 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white">Modifica</button>
                             <button onClick={() => handleDelete(vehicle.id)} className="text-xs px-3 py-1.5 rounded-full bg-red-700 hover:bg-red-600 text-white">Elimina</button>
                           </div>
@@ -1473,6 +1485,7 @@ export default function VehiclesTab() {
                           </td>
                           <td className="px-1.5 py-2">
                             <div className="flex justify-center gap-1">
+                              <button onClick={() => setSchedaVehicleId(vehicle.id)} className="px-2 py-0.5 text-[10px] rounded-md bg-dr7-gold hover:bg-dr7-gold/90 text-black font-semibold">Scheda</button>
                               <button onClick={() => handleEdit(vehicle)} className="px-2 py-0.5 text-[10px] rounded-md bg-blue-600/15 hover:bg-blue-600/25 text-blue-400 border border-blue-500/30">Mod.</button>
                               <button onClick={() => handleDelete(vehicle.id)} className="px-1.5 py-0.5 text-[10px] rounded-md bg-red-600/15 hover:bg-red-600/25 text-red-400 border border-red-500/30">×</button>
                             </div>
