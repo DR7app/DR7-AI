@@ -52,6 +52,11 @@ export const OLD_TO_PRO: Record<string, string> = {
   payment_received_damages: 'pro_conferma_pagamento',
   payment_received_damages_admin: 'pro_conferma_pagamento',
 
+  // Conferma "Da Saldare" — admin spunta Conferma Prenotazione mentre
+  // payment_status resta pending. NON e' una conferma di pagamento, e' una
+  // conferma che la prenotazione e' bloccata pur restando da saldare.
+  booking_confirmed_da_saldare: 'pro_conferma_pagamento',
+
   // Preventivi admin alert
   admin_new_website_quote: 'pro_richiesta_otp',
   admin_no_cauzione_request: 'pro_richiesta_otp',
@@ -119,6 +124,7 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
   payment_received_extension_admin: 'Conferma pagamento estensione (admin)',
   payment_received_damages: 'Conferma pagamento danni/penali (al cliente)',
   payment_received_damages_admin: 'Conferma pagamento danni/penali (admin)',
+  booking_confirmed_da_saldare: 'Prenotazione confermata ma ancora Da Saldare (admin spunta Conferma Prenotazione su booking pending)',
 
   // Preventivi admin
   admin_new_website_quote: 'Alert admin: nuovo preventivo dal sito',
@@ -194,6 +200,9 @@ export const LABEL_FALLBACKS: Record<string, string[][]> = {
     ['pagamento', 'confermato'],
     ['payment', 'received'],
     ['payment', 'confirmed'],
+    ['saldare', 'conferm'],
+    ['conferm', 'saldare'],
+    ['prenotazione', 'saldare', 'conferm'],
   ],
   pro_conferma_contratto_firmato: [
     ['conferma', 'contratto', 'firmat'],
