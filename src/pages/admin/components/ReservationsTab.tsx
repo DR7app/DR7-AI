@@ -199,7 +199,7 @@ function getSforoForCategory(
   rentalConfig: import('../../../types/rentalConfig').RentalConfig | null,
 ): string {
   if (!rentalConfig?.sforo_km) return ''
-  const cat = vehicle?.category
+  const cat = vehicle?.category as string | undefined
   if (cat) {
     const aliases = cat === 'supercars' ? ['supercars', 'exotic']
                   : cat === 'exotic' ? ['exotic', 'supercars']
@@ -7928,10 +7928,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   // BUG FIX 2026-05-13: skip se 0 / '0' (oltre a falsy/empty).
                   // Prima '0' passava il check truthy e mostrava "€0/km".
                   if (!cfgSforo || Number(cfgSforo) <= 0) return null
-                  const catLabel = (sv?.category === 'exotic' || sv?.category === 'supercars') ? 'Supercar'
-                    : sv?.category === 'urban' ? 'Urban'
-                    : sv?.category === 'aziendali' ? 'Aziendali'
-                    : sv?.category || ''
+                  const _svCat = sv?.category as string | undefined
+                  const catLabel = (_svCat === 'exotic' || _svCat === 'supercars') ? 'Supercar'
+                    : _svCat === 'urban' ? 'Urban'
+                    : _svCat === 'aziendali' ? 'Aziendali'
+                    : _svCat || ''
                   return (
                     <p className="text-xs text-amber-400 mt-1">Default Centralina ({catLabel}): €{cfgSforo}/km</p>
                   )

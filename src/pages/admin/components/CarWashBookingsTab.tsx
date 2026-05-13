@@ -22,6 +22,48 @@ import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoic
 import { isCartaPunti, isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
 import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
 
+const ROME_TZ = 'Europe/Rome'
+
+/**
+ * Combina YYYY-MM-DD + HH:MM in un ISO timestamp interpretando l'orario
+ * come Europe/Rome (CET/CEST), indipendentemente dal fuso del browser.
+ *
+ * BUG: `new Date(y, m, d, hh, mm)` usa il timezone LOCAL del browser
+ * dell'admin. Se l'admin e\' su un dispositivo con TZ diversa da Rome
+ * (mobile in viaggio, browser settato UTC, DST boundary), l'ora salvata
+ * sul DB e\' sfalsata di N ore. Risultato: la prenotazione delle 10:00
+ * compariva alle 12:00 dopo il save.
+ *
+ * Fix: calcolo l'offset Rome→UTC esattamente per quel istante e
+ * applico inverso. Stesso pattern di MyDayEditorModal.hhmmToISO.
+ */
+function combineRomeDateTimeToISO(dateStr: string, timeStr: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null
+  if (!/^\d{1,2}:\d{2}/.test(timeStr)) return null
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const [h, m] = timeStr.split(':').map(Number)
+  // Costruisco un istante UTC con quei numeri.
+  const utcGuess = new Date(Date.UTC(year, month - 1, day, h, m, 0))
+  // Chiedo a Intl come si "leggerebbe" quell'istante in Europe/Rome.
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: ROME_TZ,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  }).formatToParts(utcGuess).map(p => [p.type, p.value]))
+  const romeHour = parts.hour === '24' ? 0 : parseInt(parts.hour, 10)
+  const romeAsUTC = Date.UTC(
+    parseInt(parts.year, 10),
+    parseInt(parts.month, 10) - 1,
+    parseInt(parts.day, 10),
+    romeHour,
+    parseInt(parts.minute, 10),
+    parseInt(parts.second, 10),
+  )
+  const offsetMs = romeAsUTC - utcGuess.getTime()
+  return new Date(utcGuess.getTime() - offsetMs).toISOString()
+}
+
 interface Customer {
   id: string
   full_name: string
@@ -1341,17 +1383,19 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const customerEmail = customer.email || ''
     const customerPhone = customer.phone || ''
 
-    // Create appointment datetime in Europe/Rome timezone
-    const [year, month, day] = formData.appointment_date.split('-').map(Number)
-    const [hours, minutes] = formData.appointment_time.split(':').map(Number)
-    const appointmentDate = new Date(year, month - 1, day, hours, minutes, 0)
-
-    // Validate appointment is not in the past
+    // Combina date+time in ISO interpretando come Europe/Rome (vedi
+    // combineRomeDateTimeToISO sopra). Senza questo, l'ora si sfalsava
+    // di N ore quando il browser admin non era in Rome TZ.
+    const appointmentDateTime = combineRomeDateTimeToISO(formData.appointment_date, formData.appointment_time)
+    if (!appointmentDateTime) {
+      toast.error('Data o ora dell\'appuntamento non valide.')
+      return
+    }
+    const appointmentDate = new Date(appointmentDateTime)
     if (appointmentDate < new Date()) {
       toast.error('La data e ora dell\'appuntamento non può essere nel passato.')
       return
     }
-    const appointmentDateTime = appointmentDate.toISOString()
 
     // Total price: manual override or wizard selections
     const totalPrice = getFinalPrice()
@@ -1818,11 +1862,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       }).catch(() => { /* non-blocking */ })
     }
 
-    // Add to Google Calendar
+    // Add to Google Calendar — derivo year/month/day/hours/minutes
+    // dall'appointmentDateTime ISO (gia\' in Rome TZ).
     try {
       const durationMinutes = getTotalDuration()
-      const endDate = new Date(year, month - 1, day, hours, minutes + durationMinutes, 0)
-      const endDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+      const _ad = new Date(appointmentDateTime)
+      const _y = _ad.getFullYear()
+      const _mo = _ad.getMonth() + 1
+      const _d = _ad.getDate()
+      const _h = _ad.getHours()
+      const _mi = _ad.getMinutes()
+      const endDate = new Date(_y, _mo - 1, _d, _h, _mi + durationMinutes, 0)
+      const endDateStr = `${_y}-${String(_mo).padStart(2, '0')}-${String(_d).padStart(2, '0')}`
       const endTimeStr = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`
 
       await fetch('/.netlify/functions/create-calendar-event', {
@@ -4297,13 +4348,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       }
                       if (!_timeStr) _timeStr = '00:00'
 
-                      let _apptIso: string | null = null
-                      if (_dateStr) {
-                        const [_y, _m, _d] = _dateStr.split('-').map(Number)
-                        const [_hh, _mm] = _timeStr.split(':').map(Number)
-                        const _combined = new Date(_y, (_m || 1) - 1, _d || 1, _hh || 0, _mm || 0, 0)
-                        if (!isNaN(_combined.getTime())) _apptIso = _combined.toISOString()
-                      }
+                      // Stessa correzione del create-path: interpreta date+time
+                      // come Europe/Rome esplicitamente. Senza, il save sfalsava
+                      // l'ora di N ore quando il browser admin non era in Rome TZ.
+                      const _apptIso = _dateStr ? combineRomeDateTimeToISO(_dateStr, _timeStr) : null
 
                       const { error } = await supabase
                         .from('bookings')
