@@ -471,9 +471,16 @@ export default function FatturaTab() {
   // enabled the rule in Gestione OTP. Auto-bypasses silently when disabled.
   const override = useLimitationOverride()
   const pendingOtp = useRef<null | { code: string; run: () => Promise<void> | void }>(null)
+  // Details payload shown to direzione in the OTP email — populated per call
+  // (numero fattura, cliente, importo, sdi status) so the email is rich
+  // instead of just "Eliminare la fattura X-Y".
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [otpDetails, setOtpDetails] = useState<any>(undefined)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  function gatedAction(code: string, message: string, run: () => Promise<void> | void) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function gatedAction(code: string, message: string, run: () => Promise<void> | void, details?: any) {
     pendingOtp.current = { code, run }
+    setOtpDetails(details)
     override.requestOverride(code, message)
   }
   void gatedAction
@@ -662,7 +669,9 @@ export default function FatturaTab() {
 
     if (!requireOtpConfirm(`Eliminare fattura ${invoice.numero_fattura} — ${invoice.customer_name}?`)) return
 
-    // OTP gate (auto-bypass if rule disabled in Gestione OTP).
+    // OTP gate (auto-bypass if rule disabled in Gestione OTP). Pass rich
+    // fattura context so the OTP email shows numero, cliente, importo, IVA,
+    // metodo pagamento, stato SDI invece di un generico "Eliminare fattura".
     gatedAction(
       'fattura.delete',
       `Eliminare la fattura ${invoice.numero_fattura} — ${invoice.customer_name}: azione irreversibile.`,
@@ -676,7 +685,39 @@ export default function FatturaTab() {
           console.error('Error deleting invoice:', error)
           alert('Errore durante l\'eliminazione')
         }
-      }
+      },
+      {
+        gate: {
+          'Motivo OTP': 'Eliminazione fattura — azione irreversibile, blocca solo se non ancora inviata a SDI.',
+        },
+        customer: {
+          Cliente: invoice.customer_name || null,
+          'Codice fiscale': (invoice as { customer_cf?: string }).customer_cf || null,
+          'Partita IVA': (invoice as { customer_piva?: string }).customer_piva || null,
+        },
+        operation: {
+          'Numero fattura': invoice.numero_fattura || null,
+          'Tipo documento': (invoice as { tipo_documento?: string }).tipo_documento || 'Fattura',
+          'Data emissione': invoice.data_emissione
+            ? new Date(invoice.data_emissione).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })
+            : null,
+          'Importo totale': typeof invoice.importo_totale === 'number'
+            ? `€${invoice.importo_totale.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : null,
+          'Imponibile': typeof (invoice as { imponibile?: number }).imponibile === 'number'
+            ? `€${((invoice as { imponibile?: number }).imponibile as number).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : null,
+          'IVA': typeof (invoice as { iva?: number }).iva === 'number'
+            ? `€${((invoice as { iva?: number }).iva as number).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : null,
+          'Metodo pagamento': (invoice as { metodo_pagamento?: string }).metodo_pagamento || null,
+          'Stato pagamento': (invoice as { stato_pagamento?: string }).stato_pagamento || null,
+          'Stato SDI': invoice.sdi_status || 'non inviato',
+        },
+        meta: {
+          'Data richiesta': new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        },
+      },
     )
   }
 
@@ -814,6 +855,29 @@ export default function FatturaTab() {
 
     // OTP gate (auto-bypass if rule disabled). SDI send is definitive,
     // so this is the right spot to optionally require direzione approval.
+    const sdiDetails = {
+      gate: {
+        'Motivo OTP': 'Invio al Sistema di Interscambio (SDI) — operazione definitiva, non annullabile.',
+      },
+      customer: {
+        Cliente: invoice.customer_name || null,
+        'Codice fiscale': invoice.customer_tax_code || null,
+      },
+      operation: {
+        'Numero fattura': invoice.numero_fattura || null,
+        'Data emissione': invoice.data_emissione
+          ? new Date(invoice.data_emissione).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })
+          : null,
+        'Importo totale': typeof invoice.importo_totale === 'number'
+          ? `€${invoice.importo_totale.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          : null,
+        'Stato SDI attuale': invoice.sdi_status || 'non inviato',
+        'Stato pagamento': (invoice as { stato_pagamento?: string }).stato_pagamento || null,
+      },
+      meta: {
+        'Data richiesta': new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      },
+    }
     gatedAction(
       'fattura.send_sdi',
       `Inviare al SDI la fattura ${invoice.numero_fattura} — ${invoice.customer_name}: l'invio è definitivo.`,
@@ -843,7 +907,8 @@ export default function FatturaTab() {
           console.error('Error sending to SDI:', error)
           loadInvoices()
         }
-      }
+      },
+      sdiDetails,
     )
   }
 
@@ -865,6 +930,7 @@ export default function FatturaTab() {
         actionContext={override.limitationState.actionContext}
         draftSessionId={override.draftSessionId}
         flowType={override.flowType}
+        details={otpDetails}
         onCancel={override.cancelLimitation}
         onOverrideApproved={override.handleOverrideApproved}
       />
