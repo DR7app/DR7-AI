@@ -19,18 +19,7 @@ import { authFetch } from '../../../utils/authFetch'
 import { generateLavaggioSlotsForDate, getAllowedTimeRangesForDate } from '../../../utils/lavaggioHours'
 import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
-
-// Match the "Carta Punti" payment method robustly. The admin can rename
-// the label in Centralina Pro > Fiscale (e.g. "Carta Punti DR7", "carta
-// punti", "Carta Punti (richiede OTP)") and the OTP gate must still
-// trigger. We accept any payment_method whose normalized text contains
-// both "carta" and "punt", or whose canonical key is "carta_punti".
-function isCartaPunti(paymentMethod: string | null | undefined): boolean {
-  const s = (paymentMethod || '').toString().trim().toLowerCase()
-  if (!s) return false
-  if (s === 'carta_punti' || s === 'cartapunti') return true
-  return s.includes('carta') && (s.includes('punti') || s.includes('punt'))
-}
+import { isCartaPunti, isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
 
 interface Customer {
   id: string
@@ -1040,19 +1029,24 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             customPhone: custPhone,
             templateKey: 'pro_richiesta_pagamento',
             templateVars: (() => {
-              // Keys WITH braces + tutti gli alias — come pro_richiesta_pagamento
-              // può usare {amount}|{total}|{importo} e {link}|{payment_link}
-              // nel corpo, passiamo ogni variante. totalEur is already the
-              // pre-formatted "€X.XX" string (see declaration above).
               const amtStr = String(totalEur)
+              const firstName = (custName || '').split(' ')[0] || 'Cliente'
+              const bookingRef = (booking.id || '').substring(0, 8).toUpperCase() || 'N/A'
+              // Pass firstName as both customer_name AND nome so the alias loop
+              // in send-whatsapp-notification doesn't overwrite {nome} with
+              // the full name (incident 2026-05-13). Include booking_id so
+              // the template's "DR7-{booking_id}" placeholder resolves.
               return {
-                '{customer_name}': custName,
-                '{nome}': (custName || '').split(' ')[0] || 'Cliente',
+                '{customer_name}': firstName,
+                '{nome}': firstName,
+                '{booking_id}': bookingRef,
+                '{booking_ref}': bookingRef,
                 '{amount}': amtStr,
                 '{total}': amtStr,
                 '{importo}': amtStr,
                 '{link}': linkData.paymentUrl,
                 '{payment_link}': linkData.paymentUrl,
+                '{expiry}': '1 ora',
               }
             })(),
             skipHeader: true,
@@ -1422,8 +1416,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       price_total: Math.round(totalPrice * 100),
       currency: 'EUR',
       // Pay by Link: pending status + Nexi method so cron auto-cancels after 1h
-      status: (formData.payment_status === 'pending' && formData.payment_method === 'Nexi Pay by Link') ? 'pending' : (formData.payment_status === 'paid' ? 'confirmed' : 'confirmed'),
-      payment_status: (formData.payment_status === 'pending' && formData.payment_method === 'Nexi Pay by Link') ? 'pending' : formData.payment_status,
+      status: (formData.payment_status === 'pending' && isNexiPayByLink(formData.payment_method)) ? 'pending' : (formData.payment_status === 'paid' ? 'confirmed' : 'confirmed'),
+      payment_status: (formData.payment_status === 'pending' && isNexiPayByLink(formData.payment_method)) ? 'pending' : formData.payment_status,
       payment_method: formData.payment_method || null,
       booking_details: bookingDetails
     }
@@ -1565,7 +1559,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
 
     // Handle Nexi Pay by Link
-    const isNexiPayByLink = formData.payment_status === 'pending' && formData.payment_method === 'Nexi Pay by Link'
+    const isNexiPayByLink = formData.payment_status === 'pending' && isNexiPayByLink(formData.payment_method)
     if (isNexiPayByLink && data) {
       try {
         const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
@@ -1606,7 +1600,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 // Alias every placeholder the Pro template might use so
                 // nothing leaks as raw "{...}" text to the customer.
                 templateVars: {
-                  customer_name: customerName || firstName,
+                  // Both customer_name and nome get firstName so the alias
+                  // propagation in send-whatsapp doesn't overwrite {nome}
+                  // with the full name (incident 2026-05-13).
+                  customer_name: firstName,
                   nome: firstName,
                   amount: amountStr,
                   total: amountStr,
@@ -3252,7 +3249,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         onChange={(e) => {
                           const method = e.target.value
                           const updates: Record<string, string> = { payment_method: method }
-                          if (method === 'Nexi Pay by Link') {
+                          if (isNexiPayByLink(method)) {
                             updates.payment_status = 'pending'
                             updates.amount_paid = '0'
                           }
@@ -3467,7 +3464,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         {booking.payment_method && (
                           <div className="text-[10px] text-theme-text-muted mt-1">
                             {booking.payment_method === 'credit_wallet' ? 'Credit Wallet'
-                              : booking.payment_method === 'Nexi Pay by Link' ? 'Nexi'
+                              : isNexiPayByLink(booking.payment_method) ? 'Nexi'
                               : booking.payment_method === 'online' ? 'Online'
                               : booking.payment_method}
                             {(booking as any).booking_source === 'website' || !(booking as any).booking_source ? '' : ` · ${(booking as any).booking_source}`}
@@ -4030,7 +4027,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
                       // If payment method changed away from Nexi Pay by Link, confirm the booking
                       // so the auto-cancel cron doesn't cancel it
-                      const finalStatus = editingBooking.payment_method !== 'Nexi Pay by Link' && editingBooking.status === 'pending'
+                      const finalStatus = !isNexiPayByLink(editingBooking.payment_method) && editingBooking.status === 'pending'
                         ? 'confirmed'
                         : editingBooking.status
 

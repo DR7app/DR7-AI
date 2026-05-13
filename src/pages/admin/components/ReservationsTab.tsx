@@ -4,6 +4,7 @@ import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/special
 import { isWithinOfficeHoursForDate, getOfficeMinuteRangesForDate } from '../../../utils/noleggioHours'
 import { supabase } from '../../../supabaseClient'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
+import { isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
 
 /**
  * Convert EUR string to integer cents using string parsing (no floating point).
@@ -4880,9 +4881,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         currency: formData.currency.toUpperCase(),
         // Pay by Link bookings start as pending_payment/unpaid;
         // other payment methods start as confirmed/paid
-        status: (!editingId && formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid')
+        status: (!editingId && isNexiPayByLink(formData.payment_method) && formData.payment_status !== 'paid')
           ? 'pending' : formData.status === 'pending_payment' ? 'pending' : (formData.status || 'confirmed'),
-        payment_status: (!editingId && formData.payment_method === 'Nexi Pay by Link' && formData.payment_status !== 'paid')
+        payment_status: (!editingId && isNexiPayByLink(formData.payment_method) && formData.payment_status !== 'paid')
           ? 'unpaid' : formData.payment_status,
         payment_method: formData.payment_method,
         customer_name: customerInfo?.full_name || 'N/A',
@@ -5139,7 +5140,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // the customer will pay in person — sending a payment URL is wrong and
       // confusing.
       const isPendingForLink = formData.payment_status === 'pending' || formData.payment_status === 'unpaid' || formData.payment_status === 'partial'
-      const isPayByLinkMethod = formData.payment_method === 'Nexi Pay by Link'
+      const isPayByLinkMethod = isNexiPayByLink(formData.payment_method)
       if (!editingId && isPendingForLink && isPayByLinkMethod && insertedBooking) {
         try {
           // Use cents-based addition to avoid float drift, then convert to EUR
@@ -7567,7 +7568,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     amount_paid: newAmountPaid,
                     // Map payment status to booking status consistently
                     status: newStatus === 'paid' ? 'confirmed'
-                      : (formData.payment_method === 'Nexi Pay by Link' ? 'pending' : 'confirmed'),
+                      : (isNexiPayByLink(formData.payment_method) ? 'pending' : 'confirmed'),
                     payment_method: newStatus === 'unpaid' ? '' : formData.payment_method
                   })
                 }}
