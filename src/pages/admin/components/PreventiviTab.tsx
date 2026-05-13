@@ -312,6 +312,7 @@ function calculateExperienceCost(
   kmQuotes: KmQuoteMap = {},
 ): number {
   let total = 0
+  // Standard services (per_day / per_hour / per_item / flat) — keyed by qty.
   for (const [id, qty] of Object.entries(services)) {
     if (qty <= 0) continue
     const svc = allServices.find(s => s.id === id)
@@ -320,10 +321,13 @@ function calculateExperienceCost(
     else if (svc.unit === 'per_hour') total += svc.price * qty
     else if (svc.unit === 'per_item') total += svc.price * qty
     else if (svc.unit === 'flat') total += svc.price * qty
-    else if (svc.unit === 'per_km') {
-      const q = kmQuotes[id]
-      if (q && q.km > 0 && q.pricePerKm > 0) total += q.km * q.pricePerKm
-    }
+  }
+  // Per-km services — keyed in a separate map by { km, pricePerKm }.
+  for (const [id, q] of Object.entries(kmQuotes)) {
+    if (!q || q.km <= 0 || q.pricePerKm <= 0) continue
+    const svc = allServices.find(s => s.id === id)
+    if (!svc || svc.unit !== 'per_km') continue
+    total += q.km * q.pricePerKm
   }
   return Math.round(total * 100) / 100
 }
