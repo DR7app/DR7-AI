@@ -257,7 +257,16 @@ export default function FleetVehiclePanoramica({ vehicle, alerts }: FleetVehicle
         }
     }, [bookings, reportStats])
 
-    const recentBookings = bookings.slice(0, 4)
+    // "Ultimi Noleggi" = solo quelli passati (pickup_date <= oggi). Le date
+    // future restano nel calendario e nelle KPI, ma la lista in basso a destra
+    // riepiloga il PASSATO recente. Ordina per pickup_date desc cosi' il piu'
+    // recente compare in cima.
+    const recentBookings = useMemo(() => {
+        const now = Date.now()
+        return bookings
+            .filter(b => b.pickup_date && new Date(b.pickup_date).getTime() <= now)
+            .slice(0, 4)
+    }, [bookings])
 
     // Calendar grid for current month, with utilizzo highlight
     const calendarData = useMemo(() => {
