@@ -720,47 +720,68 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
   }, [initialData, onDataConsumed])
 
-  // Populate edit service/extras when editing a booking
+  // Populate edit service/extras when editing a booking.
+  //
+  // BUG-FIX: gate the populate logic on the booking's ID changing — not on
+  // the editingBooking object itself. The form fields call
+  // `setEditingBooking({...editingBooking, customer_name: e.target.value})`
+  // which creates a NEW object reference on every keystroke. Without the ID
+  // gate this effect re-ran on every keystroke and re-hydrated
+  // editService/editExtras/editExtraPriceOptions/editExtraQuantities from
+  // the original cartItems — so any selection change the operator made
+  // (added/removed extra, changed quantity, etc.) was overwritten the next
+  // time they typed into ANY field. The visible symptom was "modify booking
+  // resets everything I just changed".
+  //
+  // Solution: track the last initialized booking ID in a ref. We only
+  // re-run the populate logic when the ID changes (operator opens a
+  // different booking) or when the catalog finishes loading for the first
+  // time. Subsequent re-renders triggered by typing leave the edit state
+  // alone.
+  const lastInitializedBookingIdRef = useRef<string | null>(null)
   useEffect(() => {
-    if (editingBooking && carWashServices.length > 0) {
-      const cartItems = editingBooking.booking_details?.cartItems || []
-      if (cartItems.length > 0) {
-        const mainItem = cartItems[0]
-        const found = carWashServices.find((s: CarWashService) => s.id === mainItem.serviceId) || null
-        setEditService(found)
-        const extras: CarWashService[] = []
-        const priceOpts: Record<string, { label: string; price: number }> = {}
-        const qtys: Record<string, number> = {}
-        for (let i = 1; i < cartItems.length; i++) {
-          const item = cartItems[i]
-          const foundExtra = carWashServices.find((s: CarWashService) => s.id === item.serviceId)
-          if (foundExtra) {
-            extras.push(foundExtra)
-            // Restore price option if it was a variant
-            if (item.option && item.price !== foundExtra.price) {
-              priceOpts[foundExtra.id] = { label: item.option, price: item.price }
-            }
-            // Restore quantity
-            if (item.quantity && item.quantity > 1) {
-              qtys[foundExtra.id] = item.quantity
-            }
-          }
-        }
-        setEditExtras(extras)
-        setEditExtraPriceOptions(priceOpts)
-        setEditExtraQuantities(qtys)
-      } else {
-        setEditService(null)
-        setEditExtras([])
-        setEditExtraPriceOptions({})
-        setEditExtraQuantities({})
-      }
-    } else if (!editingBooking) {
+    if (!editingBooking) {
+      lastInitializedBookingIdRef.current = null
       setEditService(null)
       setEditExtras([])
       setEditExtraPriceOptions({})
       setEditExtraQuantities({})
+      return
     }
+    if (carWashServices.length === 0) return
+    if (lastInitializedBookingIdRef.current === editingBooking.id) return
+    lastInitializedBookingIdRef.current = editingBooking.id
+
+    const cartItems = editingBooking.booking_details?.cartItems || []
+    if (cartItems.length === 0) {
+      setEditService(null)
+      setEditExtras([])
+      setEditExtraPriceOptions({})
+      setEditExtraQuantities({})
+      return
+    }
+    const mainItem = cartItems[0]
+    const found = carWashServices.find((s: CarWashService) => s.id === mainItem.serviceId) || null
+    setEditService(found)
+    const extras: CarWashService[] = []
+    const priceOpts: Record<string, { label: string; price: number }> = {}
+    const qtys: Record<string, number> = {}
+    for (let i = 1; i < cartItems.length; i++) {
+      const item = cartItems[i]
+      const foundExtra = carWashServices.find((s: CarWashService) => s.id === item.serviceId)
+      if (foundExtra) {
+        extras.push(foundExtra)
+        if (item.option && item.price !== foundExtra.price) {
+          priceOpts[foundExtra.id] = { label: item.option, price: item.price }
+        }
+        if (item.quantity && item.quantity > 1) {
+          qtys[foundExtra.id] = item.quantity
+        }
+      }
+    }
+    setEditExtras(extras)
+    setEditExtraPriceOptions(priceOpts)
+    setEditExtraQuantities(qtys)
   }, [editingBooking, carWashServices])
 
   async function loadData() {
