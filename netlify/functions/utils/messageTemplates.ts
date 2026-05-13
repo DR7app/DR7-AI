@@ -210,14 +210,17 @@ export async function resolveKeyForContext(key: string, _context?: RenderContext
       .sort((a, b) => b.r - a.r)
     if (ranked.length > 0) return ranked[0].t.message_key
     // Tutti i candidati hanno target_service_type incompatibile col
-    // booking → non rispondere (resolver torna null così il caller logga
-    // "no template matched" invece di mandare il messaggio sbagliato).
-    return null
+    // booking corrente. FIX 2026-05-13: invece di tornare null (che
+    // causava silent-drop quando il caller dimenticava di passare
+    // serviceType nel context), cadiamo sulla mappa OLD_TO_PRO storica.
+    // Garantisce che un messaggio parta sempre — al peggio si usa il
+    // canonical originale invece del custom service-specific.
   }
 
-  // 2. Fallback alla mappa hardcoded (compat). Quando l'admin non ha
-  // ancora assegnato handled_events a nessun template, il sistema
-  // continua a usare il routing storico.
+  // 2. Fallback alla mappa hardcoded (compat). Si raggiunge in tre casi:
+  //   (a) nessun template claima questo evento via handled_events
+  //   (b) tutti i candidati hanno target_service_type incompatibile
+  //   (c) handled_events column non esiste ancora (migrazione non applicata)
   const proKey = OLD_TO_PRO[key]
   if (!proKey) return null
   return await resolveWithLabelFallback(proKey, templates)

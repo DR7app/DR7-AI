@@ -1108,7 +1108,13 @@ export default function UnpaidBookingsTab() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customPhone: phone,
-          templateKey: 'pro_richiesta_pagamento',
+          // BUG FIX 2026-05-13: era hardcoded 'pro_richiesta_pagamento' →
+          // bypassava handled_events. Adesso legacy key + booking
+          // service_type così il resolver sceglie il template Prime Wash
+          // custom se presente (es. "Link pagamento lavaggi"), o cade
+          // sul canonical rental se rental.
+          templateKey: 'payment_link_customer',
+          booking: { service_type: (booking as { service_type?: string })?.service_type || 'rental' },
           // Pass every alias the Pro template might use so nothing leaks as
           // raw `{...}` in the outbound message.
           templateVars: {
@@ -1127,7 +1133,7 @@ export default function UnpaidBookingsTab() {
       })
       const sendJson = await sendRes.json().catch(() => ({}))
       if (sendJson?.skipped && sendJson?.reason === 'pro_template_unavailable') {
-        toast.error('Template "pro_richiesta_pagamento" mancante in Messaggi di Sistema Pro')
+        toast.error('Template per "payment_link_customer" mancante in Messaggi di Sistema Pro')
       } else if (!sendRes.ok) {
         toast.error(`Invio WhatsApp fallito: ${sendJson?.message || 'errore sconosciuto'}`)
       } else {

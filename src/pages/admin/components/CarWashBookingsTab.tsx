@@ -1698,12 +1698,23 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             ? 'Da saldare'
             : (paymentStatus || '—')
 
+        // service_type del booking corrente (può essere car_wash o mechanical).
+        // Serve al resolver per scegliere il template Prime Wash custom giusto.
+        const confSvc = (data as unknown as { service_type?: string })?.service_type || 'car_wash'
         const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customPhone: customerPhone,
-            templateKey: 'pro_conferma_lavaggio',
+            // BUG FIX 2026-05-13: era hardcoded 'pro_conferma_lavaggio' →
+            // bypassava handled_events. Adesso legacy event key derivata
+            // dal service_type, così il resolver instrada via
+            // handled_events + service-type ranking. Custom Prime Wash
+            // templates vincono sul canonical.
+            templateKey: confSvc === 'mechanical' || confSvc === 'mechanical_service'
+              ? 'mechanical_new_customer'
+              : 'carwash_new_customer',
+            booking: { service_type: confSvc },
             // Alias every placeholder name the Pro template might use —
             // English (service_name, appointment_date, ...), Italian
             // (servizio, data, ora, targa, pagamento), and short aliases

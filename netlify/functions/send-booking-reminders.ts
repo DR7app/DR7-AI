@@ -1,5 +1,6 @@
 import { Handler, schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { renderTemplate } from './utils/messageTemplates';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -503,27 +504,23 @@ export const reminderHandler: Handler = async () => {
             || firstName;
           const vehicleName = getVehicleDisplayName(booking);
 
-          // SOLO Messaggi di Sistema Pro. La chiave `pro_richiesta_iban`
-          // è il template "Richiesta IBAN" editato dall'admin. Nessun
-          // fallback sul legacy `deposit_return_iban` hardcoded nel seed.
-          const { data: ibanTpl } = await supabase
-            .from('system_messages')
-            .select('message_body, is_enabled')
-            .eq('message_key', 'pro_richiesta_iban')
-            .maybeSingle();
-          if (!ibanTpl || ibanTpl.is_enabled === false || !ibanTpl.message_body?.trim()) {
-            console.log(`[IBAN Deposit] Skipping ${booking.id} — pro_richiesta_iban template vuoto o disattivato`);
-            continue;
-          }
+          // Routing via resolver: passiamo l'evento legacy `deposit_return_iban`
+          // e il service_type del booking — il resolver sceglie il template
+          // che ha questo evento in handled_events (o cade su pro_richiesta_iban
+          // via OLD_TO_PRO se nessun custom lo claima).
           const vars: Record<string, string> = {
             'nome cliente': fullName,
             nome: firstName,
             customer_name: fullName,
             vehicle_name: vehicleName,
           };
-          let message = ibanTpl.message_body as string;
-          for (const [k, v] of Object.entries(vars)) {
-            message = message.replace(new RegExp(`\\{${k}\\}`, 'g'), v || '');
+          const bookingSvc = (booking as { service_type?: string })?.service_type || 'rental';
+          const message = await renderTemplate('deposit_return_iban', vars, undefined, {
+            booking: { service_type: bookingSvc },
+          });
+          if (!message) {
+            console.log(`[IBAN Deposit] Skipping ${booking.id} — nessun template per deposit_return_iban (service_type=${bookingSvc})`);
+            continue;
           }
 
           const success = await sendWhatsApp(GREEN_API_INSTANCE_ID, GREEN_API_TOKEN, phone, message);
