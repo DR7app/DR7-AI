@@ -1942,6 +1942,23 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           km_illimitati_importo: (pickedUnlimitedKm && Number(p.unlimited_km_total || 0) > 0)
               ? formatEur(Number(p.unlimited_km_total || 0))
               : '',
+          // {km_package} -> riepilogo del/i servizio/i Servizi Extra con unit
+          // "al km (quota manuale)" che l'operatore ha quotato in questo
+          // preventivo. Una riga per servizio nel formato "<km> Km (<importo>)";
+          // vuoto se nessun servizio al-km e' stato configurato.
+          km_package: (() => {
+            const quotes = (extras?.experience_km_quotes || {}) as Record<string, { km?: number; pricePerKm?: number }>
+            const lines: string[] = []
+            for (const [id, q] of Object.entries(quotes)) {
+              const km = Number(q?.km || 0)
+              const ppk = Number(q?.pricePerKm || 0)
+              if (km <= 0 || ppk <= 0) continue
+              const total = Math.round(km * ppk * 100) / 100
+              lines.push(`${km} Km (${formatEur(total)})`)
+              void id
+            }
+            return lines.join('\n')
+          })(),
           // Luogo di ritiro/riconsegna — se "domicilio" usa l'indirizzo custom,
           // altrimenti usa la label dell'ufficio/aeroporto.
           // pickup_location  → dove il cliente ritira (consegna a casa = delivery_address)
