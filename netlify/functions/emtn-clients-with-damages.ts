@@ -64,6 +64,19 @@ interface CustomerProfile {
     cognome: string | null
 }
 
+interface EventDetail {
+    kind: 'danno' | 'penale'
+    bookingId: string
+    label: string
+    vehicle: string | null
+    date: string | null
+    amount: number
+    amountPaid: number
+    remaining: number
+    paymentStatus: 'paid' | 'partial' | 'pending'
+    note: string | null
+}
+
 interface Aggregated {
     codice_fiscale: string | null
     customer_name: string | null
@@ -78,6 +91,7 @@ interface Aggregated {
     last_event_date: string | null
     last_vehicle: string | null
     bookings_with_events: number
+    events: EventDetail[]
 }
 
 function num(v: unknown): number {
@@ -94,6 +108,16 @@ function isPaid(it: DanniItem): boolean {
     const total = itemTotal(it)
     const ap = num(it.amountPaid)
     return ap > 0 && ap >= total
+}
+function classifyStatus(it: DanniItem): 'paid' | 'partial' | 'pending' {
+    const ps = String(it.paymentStatus || '').toLowerCase()
+    if (ps === 'paid') return 'paid'
+    if (ps === 'partial') return 'partial'
+    const total = itemTotal(it)
+    const ap = num(it.amountPaid)
+    if (ap > 0 && ap >= total) return 'paid'
+    if (ap > 0 && ap < total) return 'partial'
+    return 'pending'
 }
 function normCF(value: string | null | undefined): string | null {
     if (!value) return null
@@ -214,6 +238,7 @@ export const handler: Handler = async (event) => {
             last_event_date: null,
             last_vehicle: null,
             bookings_with_events: 0,
+            events: [],
         }
         if (!existing) {
             byGroup.set(groupKey, agg)
@@ -225,28 +250,76 @@ export const handler: Handler = async (event) => {
         }
 
         agg.bookings_with_events += 1
+        const veh = b.vehicle_name || b.vehicle_plate || null
         for (const d of danni) {
             agg.damages_count += 1
             const t = itemTotal(d)
-            if (isPaid(d)) agg.paid_damage_total += t
-            else agg.unpaid_damage_total += t
+            const ap = Math.min(num(d.amountPaid), t)
+            const status = classifyStatus(d)
+            if (status === 'paid') agg.paid_damage_total += t
+            else {
+                agg.paid_damage_total += ap
+                agg.unpaid_damage_total += t - ap
+            }
             const dDate = d.date || ref
             if (dDate && (!agg.last_event_date || dDate > agg.last_event_date)) {
                 agg.last_event_date = dDate
-                agg.last_vehicle = b.vehicle_name || b.vehicle_plate
+                agg.last_vehicle = veh
             }
+            agg.events.push({
+                kind: 'danno',
+                bookingId: b.id,
+                label: String(d.label || d.description || 'Danno'),
+                vehicle: veh,
+                date: dDate || null,
+                amount: t,
+                amountPaid: ap,
+                remaining: Math.max(0, t - ap),
+                paymentStatus: status,
+                note: d.note || null,
+            })
         }
         for (const p of penalties) {
             agg.penalties_count += 1
             const t = itemTotal(p)
-            if (isPaid(p)) agg.paid_penalty_total += t
-            else agg.unpaid_penalty_total += t
+            const ap = Math.min(num(p.amountPaid), t)
+            const status = classifyStatus(p)
+            if (status === 'paid') agg.paid_penalty_total += t
+            else {
+                agg.paid_penalty_total += ap
+                agg.unpaid_penalty_total += t - ap
+            }
             const pDate = p.date || ref
             if (pDate && (!agg.last_event_date || pDate > agg.last_event_date)) {
                 agg.last_event_date = pDate
-                agg.last_vehicle = b.vehicle_name || b.vehicle_plate
+                agg.last_vehicle = veh
             }
+            agg.events.push({
+                kind: 'penale',
+                bookingId: b.id,
+                label: String(p.label || p.description || 'Penale'),
+                vehicle: veh,
+                date: pDate || null,
+                amount: t,
+                amountPaid: ap,
+                remaining: Math.max(0, t - ap),
+                paymentStatus: status,
+                note: p.note || null,
+            })
         }
+    }
+
+    // Sort eventi per data desc dentro ogni cliente, cosi\' la lista
+    // espansa mostra prima i fatti piu\' recenti.
+    for (const agg of byGroup.values()) {
+        agg.events.sort((a, b) => {
+            if (a.date && b.date) {
+                if (a.date < b.date) return 1
+                if (a.date > b.date) return -1
+            } else if (a.date) return -1
+            else if (b.date) return 1
+            return 0
+        })
     }
 
     const clients = Array.from(byGroup.values()).sort((a, b) => {

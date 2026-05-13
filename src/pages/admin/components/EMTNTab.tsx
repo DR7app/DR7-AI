@@ -17,6 +17,19 @@ import EMTNAuthorizationModal from './emtn/EMTNAuthorizationModal'
 import EMTNEventReportModal from './emtn/EMTNEventReportModal'
 import { authFetch } from '../../../utils/authFetch'
 
+interface DamageEvent {
+    kind: 'danno' | 'penale'
+    bookingId: string
+    label: string
+    vehicle: string | null
+    date: string | null
+    amount: number
+    amountPaid: number
+    remaining: number
+    paymentStatus: 'paid' | 'partial' | 'pending'
+    note: string | null
+}
+
 interface ClientWithDamages {
     codice_fiscale: string | null
     customer_name: string | null
@@ -31,6 +44,7 @@ interface ClientWithDamages {
     last_event_date: string | null
     last_vehicle: string | null
     bookings_with_events: number
+    events: DamageEvent[]
 }
 
 const CF_REGEX = /^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$/
@@ -1189,12 +1203,96 @@ function ConformitaFooter() {
 
 /* ---------- Clienti con danni (lista DR7 sotto la barra di ricerca) ---------- */
 
+function EventiCliente({ events, totals }: {
+    events: DamageEvent[]
+    totals: { paidDamage: number; unpaidDamage: number; paidPenalty: number; unpaidPenalty: number }
+}) {
+    if (events.length === 0) {
+        return <p className="text-[11px] text-theme-text-muted italic">Nessun dettaglio disponibile.</p>
+    }
+    const fmt = (n: number) => `€${n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    return (
+        <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-3 text-[10px] uppercase tracking-wider">
+                <span className="text-theme-text-muted">Riepilogo</span>
+                <span className="text-theme-text-primary">Danni pagati: <span className="text-emerald-500 font-semibold tabular-nums">{fmt(totals.paidDamage)}</span></span>
+                <span className="text-theme-text-primary">Danni non pagati: <span className="text-red-400 font-semibold tabular-nums">{fmt(totals.unpaidDamage)}</span></span>
+                <span className="text-theme-text-primary">Penali pagate: <span className="text-emerald-500 font-semibold tabular-nums">{fmt(totals.paidPenalty)}</span></span>
+                <span className="text-theme-text-primary">Penali non pagate: <span className="text-red-400 font-semibold tabular-nums">{fmt(totals.unpaidPenalty)}</span></span>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full text-left text-[11px]">
+                    <thead>
+                        <tr className="text-theme-text-muted uppercase tracking-wider text-[10px]">
+                            <th className="px-2 py-1 font-semibold">Tipo</th>
+                            <th className="px-2 py-1 font-semibold">Etichetta</th>
+                            <th className="px-2 py-1 font-semibold">Veicolo</th>
+                            <th className="px-2 py-1 font-semibold">Data</th>
+                            <th className="px-2 py-1 font-semibold text-right">Importo</th>
+                            <th className="px-2 py-1 font-semibold text-right">Pagato</th>
+                            <th className="px-2 py-1 font-semibold text-right">Residuo</th>
+                            <th className="px-2 py-1 font-semibold">Stato</th>
+                            <th className="px-2 py-1 font-semibold">Booking</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {events.map((ev, i) => {
+                            const tone =
+                                ev.paymentStatus === 'paid' ? 'border-emerald-500/40 text-emerald-500 bg-emerald-500/10'
+                                : ev.paymentStatus === 'partial' ? 'border-amber-500/40 text-amber-500 bg-amber-500/10'
+                                : 'border-red-500/40 text-red-400 bg-red-500/10'
+                            const statusLabel =
+                                ev.paymentStatus === 'paid' ? 'Pagato'
+                                : ev.paymentStatus === 'partial' ? 'Parziale'
+                                : 'Da pagare'
+                            const kindTone = ev.kind === 'danno'
+                                ? 'border-red-500/40 text-red-400 bg-red-500/10'
+                                : 'border-orange-500/40 text-orange-400 bg-orange-500/10'
+                            return (
+                                <tr key={ev.bookingId + '-' + i} className="border-t border-theme-border">
+                                    <td className="px-2 py-1">
+                                        <span className={'px-2 py-0.5 rounded-full border text-[10px] uppercase tracking-wider ' + kindTone}>
+                                            {ev.kind === 'danno' ? 'Danno' : 'Penale'}
+                                        </span>
+                                    </td>
+                                    <td className="px-2 py-1 text-theme-text-primary">
+                                        <div className="truncate max-w-[260px]" title={ev.label}>{ev.label}</div>
+                                        {ev.note && <div className="text-[10px] text-theme-text-muted truncate max-w-[260px]" title={ev.note}>{ev.note}</div>}
+                                    </td>
+                                    <td className="px-2 py-1 text-theme-text-muted truncate max-w-[140px]">{ev.vehicle || '—'}</td>
+                                    <td className="px-2 py-1 text-theme-text-muted">{formatDate(ev.date) || '—'}</td>
+                                    <td className="px-2 py-1 text-right text-theme-text-primary font-semibold tabular-nums">{fmt(ev.amount)}</td>
+                                    <td className="px-2 py-1 text-right text-emerald-500 tabular-nums">{fmt(ev.amountPaid)}</td>
+                                    <td className={'px-2 py-1 text-right font-semibold tabular-nums ' + (ev.remaining > 0 ? 'text-red-400' : 'text-emerald-500')}>{fmt(ev.remaining)}</td>
+                                    <td className="px-2 py-1">
+                                        <span className={'px-2 py-0.5 rounded-full border text-[10px] uppercase tracking-wider ' + tone}>{statusLabel}</span>
+                                    </td>
+                                    <td className="px-2 py-1 font-mono text-[10px] text-theme-text-muted">{ev.bookingId.slice(0, 8)}…</td>
+                                </tr>
+                            )
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    )
+}
+
 function ClientiConDanniCard({ clients, loading, error, onSelect }: {
     clients: ClientWithDamages[]
     loading: boolean
     error: string | null
     onSelect: (cf: string) => void
 }) {
+    const [expanded, setExpanded] = useState<Set<string>>(new Set())
+    function toggle(key: string) {
+        setExpanded(prev => {
+            const next = new Set(prev)
+            if (next.has(key)) next.delete(key)
+            else next.add(key)
+            return next
+        })
+    }
     const totalUnpaid = clients.reduce((s, c) => s + c.unpaid_damage_total + c.unpaid_penalty_total, 0)
     return (
         <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary overflow-hidden">
@@ -1236,6 +1334,7 @@ function ClientiConDanniCard({ clients, loading, error, onSelect }: {
                         <table className="w-full text-left text-[11px]">
                             <thead>
                                 <tr className="text-theme-text-muted uppercase tracking-wider text-[10px]">
+                                    <th className="px-2 py-2 font-semibold w-6"></th>
                                     <th className="px-2 py-2 font-semibold">Cliente</th>
                                     <th className="px-2 py-2 font-semibold">Codice Fiscale</th>
                                     <th className="px-2 py-2 font-semibold text-right">Danni</th>
@@ -1252,50 +1351,76 @@ function ClientiConDanniCard({ clients, loading, error, onSelect }: {
                                     const cf = c.codice_fiscale
                                     const rowKey = cf || c.customer_email || c.customer_name || `row-${idx}`
                                     const canOpen = !!cf
+                                    const isOpen = expanded.has(rowKey)
                                     return (
-                                        <tr
-                                            key={rowKey}
-                                            className={
-                                                'border-t border-theme-border transition-colors ' +
-                                                (canOpen
-                                                    ? 'hover:bg-theme-bg-tertiary cursor-pointer'
-                                                    : 'opacity-70')
-                                            }
-                                            onClick={() => { if (canOpen && cf) onSelect(cf) }}
-                                        >
-                                            <td className="px-2 py-2 text-theme-text-primary font-medium">{c.customer_name || c.customer_email || '—'}</td>
-                                            <td className="px-2 py-2 font-mono text-theme-text-muted">
-                                                {cf || <span className="italic text-amber-500">CF mancante</span>}
-                                            </td>
-                                            <td className="px-2 py-2 text-right text-theme-text-primary tabular-nums">{c.damages_count}</td>
-                                            <td className="px-2 py-2 text-right text-theme-text-primary tabular-nums">{c.penalties_count}</td>
-                                            <td className={'px-2 py-2 text-right font-semibold tabular-nums ' + (unpaid > 0 ? 'text-red-400' : 'text-emerald-500')}>
-                                                {unpaid > 0
-                                                    ? `€${unpaid.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                                                    : 'Saldato'}
-                                            </td>
-                                            <td className="px-2 py-2 text-theme-text-muted">{formatDate(c.last_event_date) || '—'}</td>
-                                            <td className="px-2 py-2 text-theme-text-muted truncate max-w-[160px]">{c.last_vehicle || '—'}</td>
-                                            <td className="px-2 py-2 text-right">
-                                                <button
-                                                    type="button"
-                                                    disabled={!canOpen}
-                                                    onClick={(e) => { e.stopPropagation(); if (canOpen && cf) onSelect(cf) }}
-                                                    title={canOpen ? 'Apri nella rete EMTN' : 'CF mancante: aggiungilo a customers_extended per aprire la lookup EMTN'}
-                                                    className={
-                                                        'inline-flex items-center gap-1 px-2 py-1 rounded border border-theme-border text-[10px] font-semibold ' +
-                                                        (canOpen
-                                                            ? 'text-theme-text-primary hover:bg-theme-bg-hover'
-                                                            : 'text-theme-text-muted cursor-not-allowed')
-                                                    }
-                                                >
-                                                    Apri
-                                                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
-                                                    </svg>
-                                                </button>
-                                            </td>
-                                        </tr>
+                                        <>
+                                            <tr
+                                                key={rowKey}
+                                                className={
+                                                    'border-t border-theme-border transition-colors ' +
+                                                    (isOpen ? 'bg-theme-bg-tertiary' : 'hover:bg-theme-bg-tertiary')
+                                                }
+                                            >
+                                                <td className="px-2 py-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggle(rowKey)}
+                                                        aria-label={isOpen ? 'Comprimi dettagli' : 'Espandi dettagli'}
+                                                        className="w-5 h-5 grid place-items-center rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover"
+                                                    >
+                                                        <svg className={'w-3 h-3 transition-transform ' + (isOpen ? 'rotate-90' : '')} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+                                                        </svg>
+                                                    </button>
+                                                </td>
+                                                <td className="px-2 py-2 text-theme-text-primary font-medium cursor-pointer" onClick={() => toggle(rowKey)}>
+                                                    {c.customer_name || c.customer_email || '—'}
+                                                </td>
+                                                <td className="px-2 py-2 font-mono text-theme-text-muted">
+                                                    {cf || <span className="italic text-amber-500">CF mancante</span>}
+                                                </td>
+                                                <td className="px-2 py-2 text-right text-theme-text-primary tabular-nums">{c.damages_count}</td>
+                                                <td className="px-2 py-2 text-right text-theme-text-primary tabular-nums">{c.penalties_count}</td>
+                                                <td className={'px-2 py-2 text-right font-semibold tabular-nums ' + (unpaid > 0 ? 'text-red-400' : 'text-emerald-500')}>
+                                                    {unpaid > 0
+                                                        ? `€${unpaid.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                                        : 'Saldato'}
+                                                </td>
+                                                <td className="px-2 py-2 text-theme-text-muted">{formatDate(c.last_event_date) || '—'}</td>
+                                                <td className="px-2 py-2 text-theme-text-muted truncate max-w-[160px]">{c.last_vehicle || '—'}</td>
+                                                <td className="px-2 py-2 text-right">
+                                                    <button
+                                                        type="button"
+                                                        disabled={!canOpen}
+                                                        onClick={(e) => { e.stopPropagation(); if (canOpen && cf) onSelect(cf) }}
+                                                        title={canOpen ? 'Apri nella rete EMTN' : 'CF mancante: aggiungilo a customers_extended per aprire la lookup EMTN'}
+                                                        className={
+                                                            'inline-flex items-center gap-1 px-2 py-1 rounded border border-theme-border text-[10px] font-semibold ' +
+                                                            (canOpen
+                                                                ? 'text-theme-text-primary hover:bg-theme-bg-hover'
+                                                                : 'text-theme-text-muted cursor-not-allowed')
+                                                        }
+                                                    >
+                                                        Apri
+                                                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+                                                        </svg>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            {isOpen && (
+                                                <tr key={rowKey + '-events'} className="bg-theme-bg-tertiary/40">
+                                                    <td colSpan={9} className="px-3 py-3">
+                                                        <EventiCliente events={c.events} totals={{
+                                                            paidDamage: c.paid_damage_total,
+                                                            unpaidDamage: c.unpaid_damage_total,
+                                                            paidPenalty: c.paid_penalty_total,
+                                                            unpaidPenalty: c.unpaid_penalty_total,
+                                                        }} />
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </>
                                     )
                                 })}
                             </tbody>
