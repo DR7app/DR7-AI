@@ -39,7 +39,9 @@ const handler: Handler = async (event) => {
             customerId,
             customerEmail,
             customerName,
-            captureType
+            captureType,
+            expectedCaptureBy,
+            durationDays
         } = JSON.parse(event.body || '{}');
 
         if (!contractId) {
@@ -132,22 +134,32 @@ const handler: Handler = async (event) => {
 
         const operationResult = responseData.operation?.operationResult || responseData.operationResult;
         const isSuccess = operationResult === 'AUTHORIZED' || operationResult === 'EXECUTED';
+        const isPreauth = (captureType || 'IMPLICIT') === 'EXPLICIT';
 
-        // Store transaction in DB
+        // Store transaction in DB. Distinguo preauth (mit_preauth) da addebito
+        // (mit_charge) cosi\' Storico e report filtrano correttamente.
         await supabase.from('nexi_transactions').insert({
             order_id: orderId,
             booking_id: bookingId || null,
             amount_cents: amountCents,
-            status: isSuccess ? 'completed' : 'failed',
-            description: description || 'Addebito MIT',
+            status: isSuccess ? (isPreauth ? 'preauth_held' : 'completed') : 'failed',
+            description: description || (isPreauth ? 'Pre-autorizzazione MIT' : 'Addebito MIT'),
             customer_email: customerEmail || null,
             metadata: {
-                type: 'mit_charge',
+                type: isPreauth ? 'mit_preauth' : 'mit_charge',
                 contract_id: contractId,
                 customer_id: customerId,
                 customer_name: customerName,
                 correlation_id: correlationId,
                 operation_result: operationResult,
+                capture_type: captureType || 'IMPLICIT',
+                // Solo per preauth: deadline interna admin per catturare i fondi.
+                // L'auth Nexi/circuito carte rimane comunque governata dalle regole
+                // dell'emittente (tipicamente 7-30gg). Qui registriamo l'intento.
+                ...(isPreauth ? {
+                    expected_capture_by: expectedCaptureBy || null,
+                    duration_days: durationDays || null,
+                } : {}),
                 nexi_response: responseData
             },
             created_at: new Date().toISOString()
@@ -158,7 +170,7 @@ const handler: Handler = async (event) => {
                 statusCode: 400,
                 headers,
                 body: JSON.stringify({
-                    error: `Addebito rifiutato: ${operationResult || 'DECLINED'}`,
+                    error: `${isPreauth ? 'Pre-autorizzazione' : 'Addebito'} rifiutato: ${operationResult || 'DECLINED'}`,
                     operationResult
                 })
             };
@@ -172,7 +184,9 @@ const handler: Handler = async (event) => {
                 orderId,
                 operationResult,
                 amount,
-                message: `Addebito di €${amount.toFixed(2)} effettuato con successo`
+                message: isPreauth
+                    ? `Pre-autorizzazione di €${amount.toFixed(2)} creata (fondi bloccati, da catturare entro 7gg)`
+                    : `Addebito di €${amount.toFixed(2)} effettuato con successo`
             })
         };
 

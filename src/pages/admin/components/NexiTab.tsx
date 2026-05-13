@@ -183,6 +183,66 @@ export default function NexiTab() {
     const [addebitoPhotos, setAddebitoPhotos] = useState<File[]>([])
     const [photoPreviewUrls, setPhotoPreviewUrls] = useState<string[]>([])
 
+    // Pre-autorizzazione su carta tokenizzata (MIT con captureType=EXPLICIT).
+    // Blocca i fondi sulla carta del cliente ma NON li addebita finche\' non
+    // viene catturata (entro 7gg) o annullata.
+    const [showPreauthModal, setShowPreauthModal] = useState(false)
+    const [preauthCard, setPreauthCard] = useState<TokenizedCard | null>(null)
+    const [preauthAmount, setPreauthAmount] = useState('')
+    const [preauthDescription, setPreauthDescription] = useState('')
+    const [preauthDurationDays, setPreauthDurationDays] = useState('7')
+    const [preauthSending, setPreauthSending] = useState(false)
+
+    function openPreauthModal(card: TokenizedCard) {
+        setPreauthCard(card)
+        setPreauthAmount('')
+        setPreauthDescription('')
+        setPreauthDurationDays('7')
+        setShowPreauthModal(true)
+    }
+
+    async function handleCreatePreauth() {
+        if (!preauthCard) return
+        const amt = parseFloat(preauthAmount)
+        if (!amt || amt <= 0) {
+            toast.error('Inserisci un importo valido')
+            return
+        }
+        setPreauthSending(true)
+        try {
+            const days = Math.max(1, Math.min(30, parseInt(preauthDurationDays) || 7))
+            const captureBy = new Date(Date.now() + days * 86400000).toISOString()
+            const res = await authFetch('/.netlify/functions/nexi-charge-mit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contractId: preauthCard.contract_id,
+                    amount: amt,
+                    description: preauthDescription || `Pre-autorizzazione - ${preauthCard.full_name || preauthCard.email}`,
+                    customerEmail: preauthCard.email || null,
+                    customerName: preauthCard.full_name || null,
+                    captureType: 'EXPLICIT',
+                    expectedCaptureBy: captureBy,
+                    durationDays: days,
+                }),
+            })
+            const data = await res.json()
+            if (res.ok && data.success) {
+                toast.success(data.message || `Pre-autorizzazione di €${amt.toFixed(2)} creata`)
+                setShowPreauthModal(false)
+                await fetchTransactions()
+                await fetchTokenizedCards()
+            } else {
+                toast.error(data.error || 'Pre-autorizzazione fallita')
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + msg)
+        } finally {
+            setPreauthSending(false)
+        }
+    }
+
     // All pending addebiti
     const [allAddebiti, setAllAddebiti] = useState<PendingAddebito[]>([])
     const filteredAddebiti = allAddebiti.filter(a => filterMatches(
@@ -622,6 +682,15 @@ export default function NexiTab() {
                                                     </svg>
                                                 </button>
                                             )}
+                                            {card.contract_id && (
+                                                <button
+                                                    onClick={() => openPreauthModal(card)}
+                                                    className="text-[11px] px-2 py-1 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 whitespace-nowrap"
+                                                    title="Crea pre-autorizzazione (blocca fondi senza addebitare)"
+                                                >
+                                                    Pre-autorizza
+                                                </button>
+                                            )}
                                             {!card.masked_pan && card.contract_id && (
                                                 <button
                                                     onClick={() => diagnoseCard(card)}
@@ -943,6 +1012,121 @@ export default function NexiTab() {
                             {addebitoSending ? 'Invio...' : 'Invia Email e Programma Addebito'}
                         </button>
                     </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Pre-autorizzazione modal — usa la carta tokenizzata esistente
+                (MIT con captureType=EXPLICIT). Blocca i fondi sulla carta del
+                cliente ma non li addebita finche\' non viene catturata o
+                annullata (entro 7gg lato Nexi).                              */}
+            {showPreauthModal && preauthCard && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => !preauthSending && setShowPreauthModal(false)}>
+                    <div
+                        className="bg-theme-bg-secondary w-full sm:max-w-md rounded-t-2xl sm:rounded-xl border border-theme-border flex flex-col max-h-full sm:max-h-[90vh] overflow-hidden"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 sm:p-6 space-y-4">
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <h3 className="text-lg font-bold text-theme-text-primary">Pre-autorizzazione</h3>
+                                    <p className="text-xs text-theme-text-muted mt-0.5">Blocca i fondi senza addebitarli. Cattura entro 7 giorni o annulla.</p>
+                                </div>
+                                <button
+                                    onClick={() => setShowPreauthModal(false)}
+                                    disabled={preauthSending}
+                                    className="text-theme-text-muted hover:text-theme-text-primary text-xl leading-none"
+                                    title="Chiudi"
+                                >×</button>
+                            </div>
+
+                            <div className="text-sm text-theme-text-secondary space-y-1 bg-theme-bg-tertiary rounded-lg p-3">
+                                <p><strong>Cliente:</strong> {preauthCard.full_name || preauthCard.email}</p>
+                                <p><strong>Email:</strong> {preauthCard.email || '—'}</p>
+                                {preauthCard.masked_pan && (
+                                    <p><strong>Carta:</strong> <span className="font-mono">{preauthCard.masked_pan}</span></p>
+                                )}
+                                <p className="text-xs text-theme-text-muted"><strong>Contract ID:</strong> <span className="font-mono">{preauthCard.contract_id}</span></p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Importo (€) *</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0.01"
+                                    value={preauthAmount}
+                                    onChange={(e) => setPreauthAmount(e.target.value)}
+                                    placeholder="es. 500.00"
+                                    disabled={preauthSending}
+                                    className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                    autoFocus
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Causale (opzionale)</label>
+                                <input
+                                    type="text"
+                                    value={preauthDescription}
+                                    onChange={(e) => setPreauthDescription(e.target.value)}
+                                    placeholder="es. Cauzione noleggio Audi RS3"
+                                    disabled={preauthSending}
+                                    className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Durata blocco fondi (giorni)</label>
+                                <div className="flex gap-2 items-center">
+                                    {[1, 3, 7, 14, 30].map(d => (
+                                        <button
+                                            key={d}
+                                            type="button"
+                                            onClick={() => setPreauthDurationDays(String(d))}
+                                            disabled={preauthSending}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${preauthDurationDays === String(d) ? 'bg-blue-600 text-white border-blue-600' : 'bg-theme-bg-tertiary text-theme-text-secondary border-theme-border hover:border-blue-500/50'}`}
+                                        >{d}g</button>
+                                    ))}
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="30"
+                                        value={preauthDurationDays}
+                                        onChange={(e) => setPreauthDurationDays(e.target.value)}
+                                        disabled={preauthSending}
+                                        className="w-20 px-2 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                    />
+                                </div>
+                                {preauthAmount && parseFloat(preauthAmount) > 0 && (
+                                    <p className="text-[11px] text-theme-text-muted mt-1.5">
+                                        Cattura entro il <span className="text-theme-text-primary font-semibold">{new Date(Date.now() + (Math.max(1, Math.min(30, parseInt(preauthDurationDays) || 7))) * 86400000).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="text-[11px] text-theme-text-muted bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 leading-relaxed">
+                                <strong className="text-amber-400">Importante:</strong> Nexi/circuiti carte garantiscono l'auth-hold tipicamente per 7-30 giorni a seconda dell'emittente. La data qui sopra e\' la <em>tua</em> deadline interna per catturare i fondi — se passa, devi catturare o annullare prima che la banca rilasci il blocco automaticamente.
+                            </div>
+                        </div>
+
+                        <div
+                            className="px-5 sm:px-6 py-3 sm:py-4 border-t border-theme-border bg-theme-bg-secondary flex gap-2 justify-end flex-shrink-0"
+                            style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+                        >
+                            <button
+                                onClick={() => setShowPreauthModal(false)}
+                                disabled={preauthSending}
+                                className="px-4 py-2 rounded-lg text-sm bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover"
+                            >Annulla</button>
+                            <button
+                                onClick={handleCreatePreauth}
+                                disabled={preauthSending || !preauthAmount}
+                                className="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {preauthSending ? 'Creazione...' : 'Crea Pre-autorizzazione'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

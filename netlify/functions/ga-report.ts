@@ -22,11 +22,20 @@ interface KpiBlock {
   delta_users: number
 }
 
+interface RealtimeBlock {
+  activeUsers: number       // utenti negli ultimi 30 min
+  pageviews30m: number      // pageviews ultimi 30 min
+  events30m: number         // eventi ultimi 30 min
+  conversions30m: number    // conversioni (booking/phone) ultimi 30 min
+  topActivePages: { page: string; users: number }[]
+}
+
 interface ReportPayload {
   configured: boolean
   missing: string[]
   range: '7d' | '28d' | '90d' | '180d' | '365d'
   kpis: KpiBlock | null
+  realtime: RealtimeBlock | null
   traffic: SeriesPoint[]
   distribution: ChannelSlice[]
   funnel: FunnelStage[]
@@ -241,6 +250,7 @@ const handler: Handler = async (event) => {
     missing,
     range,
     kpis: null,
+    realtime: null,
     traffic: [],
     distribution: [],
     funnel: [],
@@ -338,8 +348,10 @@ const handler: Handler = async (event) => {
     const dates = rangeToDates(range)
     const property = `properties/${propertyId}`
 
-    // Run all queries in parallel
-    const [kpiCurr, kpiPrev, byDay, byChannel, byPage, conversions] = await Promise.all([
+    // Run all queries in parallel — includes runRealtimeReport so the UI
+    // gets up-to-the-minute data without waiting 24-48h for the standard
+    // Reporting API to ingest events. Realtime API has no latency.
+    const [kpiCurr, kpiPrev, byDay, byChannel, byPage, conversions, realtimeKpi, realtimeEvents, realtimePages] = await Promise.all([
       analytics.properties.runReport({
         property,
         requestBody: {
@@ -389,6 +401,31 @@ const handler: Handler = async (event) => {
           dateRanges: [{ startDate: dates.startDate, endDate: dates.endDate }],
           dimensions: [{ name: 'eventName' }],
           metrics: [{ name: 'eventCount' }, { name: 'totalRevenue' }],
+        },
+      }),
+      // Realtime: utenti attivi + pageviews ultimi 30 min
+      analytics.properties.runRealtimeReport({
+        property,
+        requestBody: {
+          metrics: [{ name: 'activeUsers' }, { name: 'screenPageViews' }, { name: 'eventCount' }],
+        },
+      }),
+      // Realtime: eventi conversione ultimi 30 min
+      analytics.properties.runRealtimeReport({
+        property,
+        requestBody: {
+          dimensions: [{ name: 'eventName' }],
+          metrics: [{ name: 'eventCount' }],
+        },
+      }),
+      // Realtime: top pagine attive ora
+      analytics.properties.runRealtimeReport({
+        property,
+        requestBody: {
+          dimensions: [{ name: 'unifiedScreenName' }],
+          metrics: [{ name: 'activeUsers' }],
+          orderBys: [{ metric: { metricName: 'activeUsers' }, desc: true }],
+          limit: '5',
         },
       }),
     ])
@@ -467,9 +504,29 @@ const handler: Handler = async (event) => {
       { stage: 'Prenotazioni',    value: bookings },
     ]
 
+    // Realtime block — ultimi 30 min, nessun ritardo dell'API
+    const rtRow = realtimeKpi.data.rows?.[0]?.metricValues || []
+    const activeUsers = Number(rtRow[0]?.value || 0)
+    const pageviews30m = Number(rtRow[1]?.value || 0)
+    const events30m = Number(rtRow[2]?.value || 0)
+    let conversions30m = 0
+    for (const row of realtimeEvents.data.rows || []) {
+      const name = row.dimensionValues?.[0]?.value || ''
+      const count = Number(row.metricValues?.[0]?.value || 0)
+      if (name === 'booking_completed' || name === 'purchase' || name === 'phone_call' || name === 'click_to_call') {
+        conversions30m += count
+      }
+    }
+    const topActivePages = (realtimePages.data.rows || []).map(r => ({
+      page: r.dimensionValues?.[0]?.value || '/',
+      users: Number(r.metricValues?.[0]?.value || 0),
+    }))
+    const realtime: RealtimeBlock = { activeUsers, pageviews30m, events30m, conversions30m, topActivePages }
+
     const warnings: string[] = []
-    if (sessions === 0) warnings.push('Nessuna visita registrata nel periodo selezionato — verifica che lo snippet GA4 sia attivo su dr7empire.com.')
-    if (bookings === 0 && calls === 0) warnings.push('Nessun evento di conversione (booking_completed, phone_call) tracciato in GA4. Aggiungi gtag("event", "booking_completed", {value:...}) sui form di prenotazione per vederli qui.')
+    if (sessions === 0 && activeUsers === 0) warnings.push('Nessuna visita registrata nel periodo selezionato — verifica che lo snippet GA4 sia attivo su dr7empire.com.')
+    if (bookings === 0 && calls === 0 && conversions30m === 0) warnings.push('Nessun evento di conversione (booking_completed, phone_call) tracciato in GA4. Aggiungi gtag("event", "booking_completed", {value:...}) sui form di prenotazione per vederli qui.')
+    if (sessions === 0 && activeUsers > 0) warnings.push(`Tracking attivo: ${activeUsers} utenti in tempo reale. I dati storici (28 giorni) appariranno entro 24-48h, il tempo standard di ingestione di GA4.`)
 
     // Se GA4 risponde ma con TUTTO a zero (sessions, pageviews, users e
     // conversioni) significa che il tracking non e' arrivato o non c'e'
@@ -487,6 +544,7 @@ const handler: Handler = async (event) => {
       missing: [],
       range,
       kpis,
+      realtime,
       traffic,
       distribution,
       funnel,

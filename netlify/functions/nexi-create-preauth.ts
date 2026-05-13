@@ -34,17 +34,21 @@ const handler: Handler = async (event) => {
     try {
         const { cauzioneId, amount, customerEmail, customerName, description, expirationHours } = JSON.parse(event.body || '{}');
 
-        if (!cauzioneId || !amount) {
+        if (!amount) {
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({ error: 'cauzioneId and amount are required' })
+                body: JSON.stringify({ error: 'amount is required' })
             };
         }
 
-        // Generate unique order ID (max 18 chars for Nexi)
+        // Generate unique order ID (max 18 chars for Nexi).
+        // - Con cauzioneId: prefisso C + slug cauzione (flusso classico)
+        // - Senza cauzioneId: prefisso PA (preauth standalone dal tab Nexi)
         const ts = Date.now().toString(36)
-        const orderId = `C${cauzioneId.slice(0, 8)}${ts}`.slice(0, 18);
+        const orderId = cauzioneId
+            ? `C${cauzioneId.slice(0, 8)}${ts}`.slice(0, 18)
+            : `PA${ts}${Math.random().toString(36).slice(2, 6)}`.slice(0, 18);
 
         // Convert amount to cents
         const amountCents = Math.round(amount * 100);
