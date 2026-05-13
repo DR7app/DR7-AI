@@ -1646,6 +1646,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          // Opt-in: resolves to centralina_pro_config admin_whatsapp_phone
+          // server-side. Without this flag the sender skips (no recipient).
+          notifyAdmin: true,
           booking: {
             id: data.id || '',
             service_type: 'car_wash',

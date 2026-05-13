@@ -73,20 +73,23 @@ const handler: Handler = async (event) => {
   }
 
   let message = '';
-  // STRICT recipient resolution. The caller MUST pass `customPhone`. We do
-  // NOT fall back to:
-  //   - the admin number (caused the 2026-05-13 08:52 spam incident: cron
-  //     ran without customPhone → every send routed to admin)
-  //   - booking.customer_phone (an earlier attempt at a fix: caused the
-  //     2026-05-13 10:17 incident, admin-notification calls that intentionally
-  //     omitted customPhone started reaching the CUSTOMER because the booking
-  //     had a customer_phone field set, producing duplicated booking-confirm
-  //     messages on the customer's phone).
-  // If you want admin to receive a notification, pass `customPhone: adminPhone`
-  // EXPLICITLY (helpers like getAdminNotificationPhone() exist for this).
-  const resolvedPhone = (customPhone || '').toString().trim();
+  // STRICT recipient resolution. Exactly ONE of:
+  //   - `customPhone`        → explicit phone (customer alerts, manual sends)
+  //   - `notifyAdmin: true`  → opt-in admin notification (resolves to
+  //                             centralina_pro_config.notifications.admin_whatsapp_phone
+  //                             via getAdminNotificationPhone())
+  // No silent fallback to admin (caused 2026-05-13 08:52 spam) and no fallback
+  // to booking.customer_phone (caused 2026-05-13 10:17 duplicate-confirm
+  // incident — admin notifications ended up on the customer's phone). Callers
+  // that want admin MUST pass `notifyAdmin: true` so the intent is explicit.
+  const wantsAdmin = body?.notifyAdmin === true;
+  let resolvedPhone = (customPhone || '').toString().trim();
+  if (!resolvedPhone && wantsAdmin) {
+    const { getAdminNotificationPhone } = await import('./utils/notificationPhone');
+    resolvedPhone = (await getAdminNotificationPhone()).toString().trim();
+  }
   if (!resolvedPhone) {
-    console.warn('[send-whatsapp] No recipient phone (customPhone missing) — skipping send. templateKey=', templateKey, 'messageKey=', explicitMessageKey);
+    console.warn('[send-whatsapp] No recipient phone (no customPhone, no notifyAdmin) — skipping send. templateKey=', templateKey, 'messageKey=', explicitMessageKey);
     return {
       statusCode: 200,
       body: JSON.stringify({

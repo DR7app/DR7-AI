@@ -5321,6 +5321,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            // Admin booking-created notification. Opt-in resolves to
+            // centralina_pro_config admin_whatsapp_phone server-side.
+            notifyAdmin: true,
             booking: {
               id: insertedBooking?.id || '',
               service_type: 'car_rental',
