@@ -188,19 +188,29 @@ function calculateExperienceCost(services: Record<string, number>, rentalDays: n
 // Nessun fallback hardcoded: se Centralina non ha un valore per la
 // categoria del veicolo, ritorna '' e l'admin vede il campo vuoto →
 // invito a configurare Centralina invece di usare un numero inventato.
+// BUG FIX 2026-05-13: alias supercars <-> exotic (la config puo' usare
+// una delle due chiavi a seconda di quando e' stata creata). Senza alias
+// il lookup falliva e cadeva su _global, mostrando "€0/km" nel form.
+// Inoltre i valori 0 / '0' vengono trattati come "non configurato" → ''
+// per evitare di pubblicare "Default Centralina: €0/km" quando in realta'
+// l'admin non ha settato uno sforo per quella categoria.
 function getSforoForCategory(
   vehicle: Vehicle | undefined,
   rentalConfig: import('../../../types/rentalConfig').RentalConfig | null,
 ): string {
   if (!rentalConfig?.sforo_km) return ''
-  // 1) categoria del veicolo (exotic/urban/aziendali)
-  if (vehicle?.category) {
-    const catSforo = rentalConfig.sforo_km.category?.[vehicle.category]
-    if (catSforo != null) return String(catSforo)
+  const cat = vehicle?.category
+  if (cat) {
+    const aliases = cat === 'supercars' ? ['supercars', 'exotic']
+                  : cat === 'exotic' ? ['exotic', 'supercars']
+                  : [cat]
+    for (const key of aliases) {
+      const catSforo = rentalConfig.sforo_km.category?.[key]
+      if (catSforo != null && Number(catSforo) > 0) return String(catSforo)
+    }
   }
-  // 2) global (_global) da Centralina
   const g = rentalConfig.sforo_km._global
-  if (g != null) return String(g)
+  if (g != null && Number(g) > 0) return String(g)
   return ''
 }
 
@@ -7915,8 +7925,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   // Mostra il default da Centralina Pro per la categoria del veicolo.
                   const sv = vehicles.find(v => v.id === formData.vehicle_id)
                   const cfgSforo = getSforoForCategory(sv, rentalConfig)
-                  if (!cfgSforo) return null
-                  const catLabel = sv?.category === 'exotic' ? 'Supercar' : sv?.category === 'urban' ? 'Urban' : sv?.category === 'aziendali' ? 'Aziendali' : sv?.category || ''
+                  // BUG FIX 2026-05-13: skip se 0 / '0' (oltre a falsy/empty).
+                  // Prima '0' passava il check truthy e mostrava "€0/km".
+                  if (!cfgSforo || Number(cfgSforo) <= 0) return null
+                  const catLabel = (sv?.category === 'exotic' || sv?.category === 'supercars') ? 'Supercar'
+                    : sv?.category === 'urban' ? 'Urban'
+                    : sv?.category === 'aziendali' ? 'Aziendali'
+                    : sv?.category || ''
                   return (
                     <p className="text-xs text-amber-400 mt-1">Default Centralina ({catLabel}): €{cfgSforo}/km</p>
                   )
