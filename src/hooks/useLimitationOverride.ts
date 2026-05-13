@@ -80,20 +80,26 @@ export function useLimitationOverride() {
   const requestOverride = useCallback((
     code: string,
     message: string,
-    contextOrOptions?: string | { audit?: string; context?: OtpContext }
+    contextOrOptions?: string | { audit?: string; context?: OtpContext; bypass?: boolean }
   ) => {
-    // Normalize il 3o parametro: stringa = solo audit, oggetto = { audit, context }
+    // Normalize il 3o parametro: stringa = solo audit, oggetto = { audit, context, bypass }
     const auditCtx = typeof contextOrOptions === 'string'
       ? contextOrOptions
       : contextOrOptions?.audit
     const runtimeCtx = typeof contextOrOptions === 'object' && contextOrOptions
       ? contextOrOptions.context
       : undefined
+    // bypass=true: il caller dichiara che questa istanza NON deve mai chiedere
+    // OTP (es. veicolo TEST). Equivalente a is_required=false ma deciso al
+    // call-site con dati runtime (vehicle_plate, ecc.). Audit log marcato
+    // come 'caller_bypass' per tracciabilita'.
+    const callerBypass = typeof contextOrOptions === 'object' && contextOrOptions?.bypass === true
 
     // Gate completo: is_required AND conditions. Se l'OTP e' disabilitato
     // OPPURE le condizioni configurate non matchano il context runtime,
+    // OPPURE il caller ha richiesto un bypass esplicito (test vehicle),
     // bypass silenzioso + audit log.
-    if (!shouldRequireOtp(code, runtimeCtx)) {
+    if (callerBypass || !shouldRequireOtp(code, runtimeCtx)) {
       const isDisabled = !isOtpRequired(code)
       const bypassId = `bypass_${code}_${Date.now()}`
       overrideMap.current.set(code, {
@@ -109,9 +115,11 @@ export function useLimitationOverride() {
         action_context: auditCtx || `${code}_${Date.now()}`,
         draft_session_id: draftSessionIdRef.current,
         flow_type: flowTypeRef.current,
-        reason: isDisabled
-          ? 'is_required=false in system_otp_overrides'
-          : 'conditions_not_matched',
+        reason: callerBypass
+          ? 'caller_bypass (es. veicolo TEST)'
+          : isDisabled
+            ? 'is_required=false in system_otp_overrides'
+            : 'conditions_not_matched',
         ...(runtimeCtx ? { runtime_context: runtimeCtx as Record<string, unknown> } : {}),
       })
       return

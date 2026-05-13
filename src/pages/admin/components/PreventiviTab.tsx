@@ -1956,8 +1956,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
               : '',
           // {km_package} -> riepilogo del/i servizio/i Servizi Extra con unit
           // "al km (quota manuale)" che l'operatore ha quotato in questo
-          // preventivo. Una riga per servizio nel formato "<km> Km (<importo>)";
-          // vuoto se nessun servizio al-km e' stato configurato.
+          // preventivo. Formato coerente con le altre voci della legenda
+          // ("Lavaggio Finale = 9,90", "Km Illimitati = 500,00", ecc.):
+          // "<NomeServizio> <km> Km = <importo>".
+          // Vuoto se nessun servizio al-km e' stato configurato — la riga
+          // collassa automaticamente come per le altre voci opzionali.
           km_package: (() => {
             const quotes = (extras?.experience_km_quotes || {}) as Record<string, { km?: number; pricePerKm?: number }>
             const lines: string[] = []
@@ -1966,8 +1969,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
               const ppk = Number(q?.pricePerKm || 0)
               if (km <= 0 || ppk <= 0) continue
               const total = Math.round(km * ppk * 100) / 100
-              lines.push(`${km} Km (${formatEur(total)})`)
-              void id
+              const svc = (configOverlay.experienceServices || []).find(s => s.id === id)
+              const label = svc?.name || 'Pacchetto KM'
+              lines.push(`${label} ${km} Km = ${formatEur(total)}`)
             }
             return lines.join('\n')
           })(),

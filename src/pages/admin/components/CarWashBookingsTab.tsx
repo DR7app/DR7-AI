@@ -20,6 +20,7 @@ import { generateLavaggioSlotsForDate, getAllowedTimeRangesForDate } from '../..
 import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
 import { isCartaPunti, isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
+import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
 
 interface Customer {
   id: string
@@ -130,6 +131,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [extraQuantities, setExtraQuantities] = useState<Record<string, number>>({})
   const [customPrice, setCustomPrice] = useState('')
   const [showNewClientModal, setShowNewClientModal] = useState(false)
+  // Conferma Prenotazione: same UX as ReservationsTab — when payment_status
+  // is "Da Saldare", admin can tick this to force-send the WhatsApp confirma
+  // template (carwash_new_customer / mechanical_new_customer) anyway. The
+  // template's {payment_status} placeholder shows "Da saldare" in that case.
+  // Untickato + pending => nessun messaggio (silenzioso finché non si segna pagato).
+  const [confirmBooking, setConfirmBooking] = useState(false)
 
   // Vehicle classification state (Step 0)
   const [vehiclePlate, setVehiclePlate] = useState('')
@@ -177,8 +184,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
   // Centralized "Modifica" handler — gates paid/confirmed bookings behind OTP
   // (Valerio + Ilenia bypass server-side automatically).
+  // Test bookings (vehicle plate starts with TEST / vehicle_name='test')
+  // ALWAYS bypass — operatori QA non devono ricevere OTP per i test interni.
   function openEditBooking(booking: CarWashBooking, opts?: { skipOtpGate?: boolean }) {
-    if (!opts?.skipOtpGate) {
+    if (!opts?.skipOtpGate && !isTestBooking(booking)) {
       const PAID = ['paid', 'completed', 'succeeded']
       const CONFIRMED = ['confirmed', 'confermata', 'active', 'in_corso']
       const isPaid = PAID.includes((booking.payment_status || '').toLowerCase())
@@ -384,6 +393,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     setClassificationSource(null)
     setLookingUpTarga(false)
     setTargaVehicleInfo(null)
+    setConfirmBooking(false)
     setFormData({
       customer_id: '',
       service_name: '',
@@ -929,7 +939,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // OTP gate (configurabile da Gestione OTP > 'wash.delete'). Se la
     // regola e' disattivata, isOtpRequired ritorna false e
     // requestOverride auto-approva senza popup.
-    if (!override.hasOverride('wash.delete')) {
+    // Test bookings bypassano sempre l'OTP (vehicle TEST*).
+    const bookingToDelete = bookings.find(b => b.id === bookingId)
+    if (!isTestBooking(bookingToDelete) && !override.hasOverride('wash.delete')) {
       override.requestOverride('wash.delete', `Eliminare il lavaggio di ${customerName}: azione irreversibile.`)
       if (!override.hasOverride('wash.delete')) return
     }
@@ -1257,12 +1269,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       return
     }
 
+    // Test bookings (vehicle TEST*) bypassano TUTTI gli OTP: l'operatore QA
+    // non deve ricevere conferme direzionali per i test interni.
+    const currentVehicleIsTest = isTestVehicle(vehicleMakeModel, vehiclePlate)
+
     // ===== OTP GATE: Conferma Prenotazione Lavaggio (toggle Gestione OTP) =====
     // La prenotazione carwash entra di default in stato 'confirmed'. Se l'OTP
     // per quest'azione e' attivo (system_otp_overrides.is_required=true)
     // chiediamo OTP. useLimitationOverride bypassa server-side se il toggle e'
     // OFF, quindi quando off questa chiamata non blocca nulla.
-    if (!override.hasOverride('prenotazione_lavaggio_conferma')) {
+    if (!currentVehicleIsTest && !override.hasOverride('prenotazione_lavaggio_conferma')) {
       pendingCreateBookingRef.current = { force: forceBooking }
       createBookingLockRef.current = false
       override.requestOverride('prenotazione_lavaggio_conferma', 'Conferma prenotazione lavaggio richiede autorizzazione direzionale')
@@ -1275,9 +1291,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // Differenza con `prenotazione_lavaggio_conferma`: qui consumiamo
     // l'override DOPO il salvataggio (più in basso), così la prossima
     // prenotazione Carta Punti chiede di nuovo l'OTP — niente caching
-    // di sessione.
+    // di sessione. Test bookings bypassano comunque.
     if (
-      isCartaPunti(formData.payment_method)
+      !currentVehicleIsTest
+      && isCartaPunti(formData.payment_method)
       && !override.hasOverride('carta_punti_lavaggio')
     ) {
       pendingCreateBookingRef.current = { force: forceBooking }
@@ -1382,6 +1399,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       customer: { customerId: formData.customer_id },
       prime_flex: primeFlex,
       prime_flex_price: primeFlex ? PRIME_FLEX_PRICE : 0,
+      // "Conferma Prenotazione" anche se Da Saldare — il calendario / lista
+      // lo usano per non mostrare la riga in stato "in attesa pagamento".
+      manual_confirmation: confirmBooking,
       ...(vehicleCategory && { vehicleCategory }),
       ...(vehicleMakeModel && { vehicleMakeModel }),
       ...(classificationSource && { classificationSource }),
@@ -1682,8 +1702,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         })
       })
 
-      // Send customer confirmation message (skip for Nexi — link message sent separately)
-      if (customerPhone && !isNexiPending) {
+      // Send customer confirmation message (skip for Nexi — link message sent
+      // separately). Stesso pattern di ReservationsTab: se la prenotazione e'
+      // "Da Saldare" e l'admin NON ha spuntato "Conferma Prenotazione",
+      // salta il messaggio (lo manderemo quando segnera' pagato). Se invece
+      // la spunta e' attiva, manda comunque il template — il body usa
+      // {payment_status} per mostrare "Da saldare" al cliente.
+      const isPendingNotConfirmed =
+        !confirmBooking
+        && formData.payment_status !== 'paid'
+        && formData.payment_status !== 'completed'
+        && formData.payment_status !== 'succeeded'
+      if (customerPhone && !isNexiPending && !isPendingNotConfirmed) {
         const custFirstName = customerName?.split(' ')[0] || 'Cliente'
         const apptDt = new Date(appointmentDateTime)
         // Short date — the Pro "Conferma Lavaggio" body uses "24/04/2026"
@@ -3440,6 +3470,28 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </div>
               </div>
 
+              {/* Conferma Prenotazione — quando lo stato e' "Da Saldare",
+                  ticca per inviare comunque il template di conferma al cliente
+                  (carwash_new_customer / mechanical_new_customer) con
+                  {payment_status} = "Da saldare". Untickato + da-saldare =>
+                  nessun messaggio finche' non si segna pagato. Stesso UX
+                  di ReservationsTab > Conferma Prenotazione. */}
+              {formData.payment_status !== 'paid' && formData.payment_status !== 'completed' && formData.payment_status !== 'succeeded' && (
+                <div className={`flex items-start gap-2 p-3 rounded-lg border ${confirmBooking ? 'border-red-500 bg-red-900/10' : 'border-theme-border'}`}>
+                  <input
+                    type="checkbox"
+                    id="carwash_confirm_booking"
+                    checked={confirmBooking}
+                    onChange={(e) => setConfirmBooking(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 text-red-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-red-500"
+                  />
+                  <label htmlFor="carwash_confirm_booking" className="text-sm text-theme-text-secondary cursor-pointer">
+                    <span className="font-semibold text-red-400">Conferma Prenotazione</span>
+                    <span className="block text-xs text-theme-text-muted mt-0.5">Invia subito il messaggio di conferma al cliente anche se &quot;Da Saldare&quot;. Untickato = nessun WhatsApp finch&eacute; non segni come pagato.</span>
+                  </label>
+                </div>
+              )}
+
               {/* Navigation + Confirm */}
               <div className="flex justify-between items-center pt-4 border-t border-theme-border">
                 <button
@@ -4141,7 +4193,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       const CONFIRMED = ['confirmed', 'confermata', 'active', 'in_corso']
                       const isPaid = PAID.includes((editingBooking?.payment_status || '').toLowerCase())
                       const isConfirmed = CONFIRMED.includes((editingBooking?.status || '').toLowerCase())
-                      if ((isPaid || isConfirmed) && !override.hasOverride('paid_wash_modify')) {
+                      // Bypass per i veicoli TEST: l'operatore QA non deve
+                      // ricevere OTP per modifiche di prenotazioni di test.
+                      const isTest = isTestBooking(editingBooking)
+                      if (!isTest && (isPaid || isConfirmed) && !override.hasOverride('paid_wash_modify')) {
                         override.requestOverride(
                           'paid_wash_modify',
                           'Modifica o spostamento di un lavaggio/meccanica pagato o confermato: serve OTP della direzione.',
