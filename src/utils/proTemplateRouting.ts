@@ -57,6 +57,18 @@ export const OLD_TO_PRO: Record<string, string> = {
   // conferma che la prenotazione e' bloccata pur restando da saldare.
   booking_confirmed_da_saldare: 'pro_conferma_da_saldare',
 
+  // Pagamento ricevuto al booking — per metodo di pagamento. Admin sceglie
+  // payment_method=Contanti/Bancomat/Bonifico/... + payment_status=paid +
+  // Conferma Prenotazione. Eventi separati cosi' l'admin puo' avere un
+  // template diverso per ogni metodo ("Pagato Contanti", "Pagato Carta",
+  // "Pagato Bonifico", ecc.). Nessun fallback canonico: il send parte
+  // SOLO se un template claima l'evento via handled_events.
+  booking_paid_cash:          'pro_conferma_da_saldare',
+  booking_paid_card:          'pro_conferma_da_saldare',
+  booking_paid_bank_transfer: 'pro_conferma_da_saldare',
+  booking_paid_paypal:        'pro_conferma_da_saldare',
+  booking_paid_wallet:        'pro_conferma_da_saldare',
+
   // Preventivi admin alert
   admin_new_website_quote: 'pro_richiesta_otp',
   admin_no_cauzione_request: 'pro_richiesta_otp',
@@ -125,6 +137,11 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
   payment_received_damages: 'Conferma pagamento danni/penali (al cliente)',
   payment_received_damages_admin: 'Conferma pagamento danni/penali (admin)',
   booking_confirmed_da_saldare: 'Prenotazione confermata ma ancora Da Saldare (admin spunta Conferma Prenotazione su booking pending)',
+  booking_paid_cash:          'Pagamento ricevuto in CONTANTI (admin crea booking con payment_method=Contanti + Conferma Prenotazione)',
+  booking_paid_card:          'Pagamento ricevuto via CARTA / BANCOMAT (admin crea booking con payment_method=Bancomat/POS + Conferma Prenotazione)',
+  booking_paid_bank_transfer: 'Pagamento ricevuto via BONIFICO (admin crea booking con payment_method=Bonifico + Conferma Prenotazione)',
+  booking_paid_paypal:        'Pagamento ricevuto via PAYPAL (admin crea booking con payment_method=Paypal + Conferma Prenotazione)',
+  booking_paid_wallet:        'Pagamento usando il WALLET / Credit Wallet (admin crea booking con payment_method=Credit Wallet + Conferma Prenotazione)',
 
   // Preventivi admin
   admin_new_website_quote: 'Alert admin: nuovo preventivo dal sito',

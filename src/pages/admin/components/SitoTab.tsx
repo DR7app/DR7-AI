@@ -2608,6 +2608,18 @@ export default function SitoTab() {
 // ─── Changes detection ───────────────────────────────────────────────────────
 function computeChanges(current: CurrentState, saved: CurrentState): string[] {
     const out: string[] = []
+    // Flotta — diff sulle categorie visibili. Senza questo, le checkbox
+    // dell'editor "Flotta (categorie visibili)" non rendevano il form dirty
+    // e il bottone Salva restava disabilitato (bug "non riesco a salvare").
+    {
+        const cur = current.flotta?.visible_category_ids || []
+        const sav = saved.flotta?.visible_category_ids || []
+        const curSorted = [...cur].sort().join(',')
+        const savSorted = [...sav].sort().join(',')
+        if (curSorted !== savSorted) {
+            out.push('Flotta: categorie visibili modificate')
+        }
+    }
     // FAQ — chrome (title/eyebrow/subtitle) + entries
     {
         const ce = current.faq.entries
