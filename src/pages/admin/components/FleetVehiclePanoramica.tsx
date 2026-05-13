@@ -20,6 +20,7 @@
  *     and margine % use real numbers)
  */
 import { useEffect, useMemo, useState } from 'react'
+import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import type { Vehicle } from '../../../types'
 
@@ -447,12 +448,54 @@ export default function FleetVehiclePanoramica({ vehicle, alerts }: FleetVehicle
                     <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5">
                         <h3 className="text-sm font-semibold text-theme-text-primary mb-3">Azioni Rapide</h3>
                         <div className="grid grid-cols-2 gap-2">
-                            <QuickAction icon="edit" label="Modifica Veicolo" />
-                            <QuickAction icon="megaphone" label="Invia Promozione" />
-                            <QuickAction icon="wrench" label="Manutenzione" />
-                            <QuickAction icon="clock" label="Storico Noleggi" />
-                            <QuickAction icon="copy" label="Duplica Veicolo" />
-                            <QuickAction icon="power" label="Disattiva Veicolo" tone="danger" />
+                            <QuickAction icon="edit" label="Modifica Veicolo" onClick={() => {
+                                // Switch to the "Dettagli" sub-tab inside FleetVehicleDetail
+                                // (parent listens for this event).
+                                window.dispatchEvent(new CustomEvent('fleet:open-subtab', { detail: { tab: 'details' } }))
+                            }} />
+                            <QuickAction icon="megaphone" label="Invia Promozione" onClick={() => {
+                                window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: 'campagna-marketing' } }))
+                            }} />
+                            <QuickAction icon="wrench" label="Manutenzione" onClick={() => {
+                                window.dispatchEvent(new CustomEvent('fleet:open-subtab', { detail: { tab: 'maintenance' } }))
+                            }} />
+                            <QuickAction icon="clock" label="Storico Noleggi" onClick={() => {
+                                window.dispatchEvent(new CustomEvent('fleet:open-subtab', { detail: { tab: 'history' } }))
+                            }} />
+                            <QuickAction icon="copy" label="Duplica Veicolo" onClick={async () => {
+                                if (!confirm(`Duplicare il veicolo "${vehicle.display_name}"? Verra' creata una copia con stato 'unavailable' che dovrai poi modificare (targa, foto, ecc.).`)) return
+                                try {
+                                    const copy: Record<string, unknown> = { ...vehicle }
+                                    delete copy.id
+                                    delete copy.created_at
+                                    delete copy.updated_at
+                                    copy.display_name = `${vehicle.display_name} (copia)`
+                                    copy.plate = null
+                                    copy.status = 'unavailable'
+                                    const { error } = await supabase.from('vehicles').insert(copy)
+                                    if (error) throw error
+                                    toast.success('Veicolo duplicato. Modifica i dati per renderlo disponibile.')
+                                } catch (e) {
+                                    const msg = e instanceof Error ? e.message : String(e)
+                                    toast.error(`Duplicazione fallita: ${msg}`)
+                                }
+                            }} />
+                            <QuickAction icon="power" label={vehicle.status === 'retired' ? 'Riattiva Veicolo' : 'Disattiva Veicolo'} tone="danger" onClick={async () => {
+                                const willDisable = vehicle.status !== 'retired'
+                                const verb = willDisable ? 'disattivare' : 'riattivare'
+                                if (!confirm(`Confermi di voler ${verb} "${vehicle.display_name}"?`)) return
+                                try {
+                                    const { error } = await supabase
+                                        .from('vehicles')
+                                        .update({ status: willDisable ? 'retired' : 'available' })
+                                        .eq('id', vehicle.id)
+                                    if (error) throw error
+                                    toast.success(`Veicolo ${willDisable ? 'disattivato' : 'riattivato'}.`)
+                                } catch (e) {
+                                    const msg = e instanceof Error ? e.message : String(e)
+                                    toast.error(`Operazione fallita: ${msg}`)
+                                }
+                            }} />
                         </div>
                     </div>
 
@@ -539,6 +582,9 @@ export default function FleetVehiclePanoramica({ vehicle, alerts }: FleetVehicle
                         </p>
                         <button
                             type="button"
+                            onClick={() => {
+                                window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: 'campagna-marketing' } }))
+                            }}
                             className="mt-3 w-full px-3 py-2 rounded-full text-xs font-semibold bg-purple-500 text-white hover:bg-purple-600 transition-colors"
                         >
                             Crea Promozione Mirata
@@ -681,7 +727,7 @@ function ComponentRow({ label, status, pct }: { label: string; status: 'OK' | 's
     )
 }
 
-function QuickAction({ icon, label, tone }: { icon: string; label: string; tone?: 'danger' }) {
+function QuickAction({ icon, label, tone, onClick, disabled }: { icon: string; label: string; tone?: 'danger'; onClick?: () => void; disabled?: boolean }) {
     const iconMap: Record<string, React.ReactElement> = {
         edit: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
         megaphone: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>,
@@ -694,7 +740,9 @@ function QuickAction({ icon, label, tone }: { icon: string; label: string; tone?
     return (
         <button
             type="button"
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-colors ${
+            onClick={onClick}
+            disabled={disabled}
+            className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 danger
                     ? 'border-red-500/30 bg-red-500/5 text-red-400 hover:bg-red-500/10'
                     : 'border-theme-border bg-theme-bg-primary text-theme-text-secondary hover:border-dr7-gold/40 hover:text-theme-text-primary'

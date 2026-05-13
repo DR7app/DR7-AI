@@ -33,6 +33,20 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [vehicleId])
 
+    // Le QuickAction nella Panoramica (Modifica / Manutenzione / Storico)
+    // chiedono di switchare sub-tab via CustomEvent invece di prop-drilling.
+    useEffect(() => {
+        const handler = (e: Event) => {
+            const ce = e as CustomEvent<{ tab?: SubTab }>
+            const tab = ce.detail?.tab
+            if (tab === 'details' || tab === 'maintenance' || tab === 'history' || tab === 'panoramica' || tab === 'dashboard') {
+                setActiveTab(tab)
+            }
+        }
+        window.addEventListener('fleet:open-subtab', handler as EventListener)
+        return () => window.removeEventListener('fleet:open-subtab', handler as EventListener)
+    }, [])
+
     async function loadVehicle() {
         try {
             setLoading(true)
