@@ -14,9 +14,12 @@ export type AdminRoleTag =
 // Same map as src/hooks/useAdminRole.ts ROLE_FAILSAFE — keep in sync when
 // either side changes. Recovery floor: edit requires a deploy.
 const ROLE_FAILSAFE: Record<string, ReadonlySet<AdminRoleTag>> = {
-  'valerio@dr7.app': new Set(['direzione', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
-  'ilenia@dr7.app':  new Set(['direzione', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
-  'ophe@dr7.app':    new Set(['developer', 'sito-direzione']),
+  'valerio@dr7.app':   new Set(['direzione', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
+  'ilenia@dr7.app':    new Set(['direzione', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
+  'ophe@dr7.app':      new Set(['developer', 'sito-direzione']),
+  // Salvatore: solo sito-direzione (bypass Sito CMS OTPs). Aggiunto su
+  // richiesta direzione 2026-05-13. KEEP IN SYNC con src/hooks/useAdminRole.ts.
+  'salvatore@dr7.app': new Set(['sito-direzione']),
 }
 
 let cachedClient: ReturnType<typeof createClient> | null = null

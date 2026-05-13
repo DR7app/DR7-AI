@@ -18,9 +18,13 @@ export type AdminRoleTag =
   | 'preventivi-admin'
 
 const ROLE_FAILSAFE: Record<string, ReadonlySet<AdminRoleTag>> = {
-  'valerio@dr7.app': new Set(['direzione', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
-  'ilenia@dr7.app':  new Set(['direzione', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
-  'ophe@dr7.app':    new Set(['developer', 'sito-direzione']),
+  'valerio@dr7.app':   new Set(['direzione', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
+  'ilenia@dr7.app':    new Set(['direzione', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
+  'ophe@dr7.app':      new Set(['developer', 'sito-direzione']),
+  // Salvatore gestisce il Sito CMS senza OTP — entry diretta in failsafe
+  // su richiesta direzione 2026-05-13. Solo `sito-direzione`: bypassa
+  // gestione_sito_access + gestione_sito_write; ogni altro OTP resta attivo.
+  'salvatore@dr7.app': new Set(['sito-direzione']),
 }
 
 export interface AdminRole {
