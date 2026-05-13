@@ -1254,7 +1254,7 @@ export default function NexiTab() {
                                     const captureBy = new Date(Date.now() + days * 86400000)
                                     return (
                                         <p className="text-[11px] text-theme-text-muted mt-1.5">
-                                            Scadenza cauzione: <span className="text-theme-text-primary font-semibold">{captureBy.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                            Scadenza pre-autorizzazione: <span className="text-theme-text-primary font-semibold">{captureBy.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: 'short', year: 'numeric' })}</span>
                                             {days > 7 && <span className="text-blue-400"> · auto-rinnovo ogni 7g</span>}
                                         </p>
                                     )
@@ -1262,7 +1262,7 @@ export default function NexiTab() {
                             </div>
 
                             <div className="text-[11px] text-theme-text-muted bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 leading-relaxed">
-                                <strong className="text-blue-400">Come funziona:</strong> i circuiti carte garantiscono il blocco fondi per max 7-30g a seconda dell'emittente. Per durate {'>'} 7 giorni il sistema rinnova automaticamente la pre-autorizzazione ogni 7 giorni (cron giornaliero), cosi\' la cauzione resta attiva fino alla data scelta. Puoi catturare o annullare in qualsiasi momento.
+                                <strong className="text-blue-400">Come funziona:</strong> i circuiti carte garantiscono il blocco fondi per max 7-30g a seconda dell'emittente. Per durate {'>'} 7 giorni il sistema rinnova automaticamente la pre-autorizzazione ogni 7 giorni (cron giornaliero), cosi\' il blocco resta attivo fino alla data scelta. Puoi catturare o annullare in qualsiasi momento.
                             </div>
                         </div>
 
