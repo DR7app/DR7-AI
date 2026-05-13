@@ -187,14 +187,6 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
     wired: true,
   },
   {
-    id: 'fattura.send_sdi',
-    label: 'Invia fattura a SDI',
-    used_in: 'Fattura > tasto Invia SDI',
-    reason: "L'invio al SDI e definitivo: richiede approvazione direzionale.",
-    group: 'Fattura',
-    wired: true,
-  },
-  {
     id: 'customer.delete',
     label: 'Elimina cliente',
     used_in: 'Clienti > tasto Elimina sulla riga',

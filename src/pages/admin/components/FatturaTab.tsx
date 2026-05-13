@@ -853,63 +853,34 @@ export default function FatturaTab() {
       return
     }
 
-    // OTP gate (auto-bypass if rule disabled). SDI send is definitive,
-    // so this is the right spot to optionally require direzione approval.
-    const sdiDetails = {
-      gate: {
-        'Motivo OTP': 'Invio al Sistema di Interscambio (SDI) — operazione definitiva, non annullabile.',
-      },
-      customer: {
-        Cliente: invoice.customer_name || null,
-        'Codice fiscale': invoice.customer_tax_code || null,
-      },
-      operation: {
-        'Numero fattura': invoice.numero_fattura || null,
-        'Data emissione': invoice.data_emissione
-          ? new Date(invoice.data_emissione).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })
-          : null,
-        'Importo totale': typeof invoice.importo_totale === 'number'
-          ? `€${invoice.importo_totale.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-          : null,
-        'Stato SDI attuale': invoice.sdi_status || 'non inviato',
-        'Stato pagamento': (invoice as { stato_pagamento?: string }).stato_pagamento || null,
-      },
-      meta: {
-        'Data richiesta': new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      },
+    // OTP gate RIMOSSO 2026-05-13 su richiesta direzione: l'invio al SDI
+    // non richiede piu' autorizzazione direzionale. Resta l'eliminazione
+    // fattura (fattura.delete) come unica azione gated nel tab.
+    try {
+      const updatedInvoices = invoices.map(i =>
+        i.id === invoice.id ? { ...i, sdi_status: 'sending' as const } : i
+      )
+      setInvoices(updatedInvoices)
+
+      const response = await fetch('/.netlify/functions/send-invoice-to-sdi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId: invoice.id })
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        console.error('SDI send failed:', result.error, result.details)
+      } else {
+        logAdminAction('send_sdi', 'fattura', invoice.id, buildFatturaContext(invoice))
+      }
+
+      loadInvoices()
+    } catch (error) {
+      console.error('Error sending to SDI:', error)
+      loadInvoices()
     }
-    gatedAction(
-      'fattura.send_sdi',
-      `Inviare al SDI la fattura ${invoice.numero_fattura} — ${invoice.customer_name}: l'invio è definitivo.`,
-      async () => {
-        try {
-          const updatedInvoices = invoices.map(i =>
-            i.id === invoice.id ? { ...i, sdi_status: 'sending' as const } : i
-          )
-          setInvoices(updatedInvoices)
-
-          const response = await fetch('/.netlify/functions/send-invoice-to-sdi', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ invoiceId: invoice.id })
-          })
-
-          const result = await response.json()
-
-          if (!response.ok) {
-            console.error('SDI send failed:', result.error, result.details)
-          } else {
-            logAdminAction('send_sdi', 'fattura', invoice.id, buildFatturaContext(invoice))
-          }
-
-          loadInvoices()
-        } catch (error) {
-          console.error('Error sending to SDI:', error)
-          loadInvoices()
-        }
-      },
-      sdiDetails,
-    )
   }
 
   if (loading) {
