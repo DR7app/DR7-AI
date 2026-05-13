@@ -6,6 +6,23 @@ import { buildBookingContext } from '../../../utils/adminLogHelpers'
 import { authFetch } from '../../../utils/authFetch'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 
+/**
+ * Normalizza un input monetario: accetta sia "." che "," come separatore
+ * decimale. Risolve il bug "non riesco a digitare il punto" su browser
+ * in locale italiano (type=number rifiutava il punto).
+ */
+function sanitizeMoney(raw: string): string {
+    if (!raw) return ''
+    let s = String(raw).trim().replace(/,/g, '.')
+    s = s.replace(/[^0-9.\-]/g, '')
+    s = s.replace(/(?!^)-/g, '')
+    const firstDot = s.indexOf('.')
+    if (firstDot !== -1) {
+        s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, '')
+    }
+    return s
+}
+
 interface PenaltyModalProps {
     isOpen: boolean
     booking: {
@@ -579,11 +596,10 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                             <div className="relative w-20">
                                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-theme-text-muted text-[13px]">&euro;</span>
                                 <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
+                                    type="text"
+                                    inputMode="decimal"
                                     value={customAmount}
-                                    onChange={e => setCustomAmount(e.target.value)}
+                                    onChange={e => setCustomAmount(sanitizeMoney(e.target.value))}
                                     placeholder="0"
                                     className="w-full pl-7 pr-2 py-2 bg-white/[0.06] border border-white/[0.08] rounded-xl text-theme-text-primary text-[13px] text-right placeholder-theme-text-muted/50 focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
                                 />
@@ -627,11 +643,13 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                                         <div className="relative w-16 shrink-0">
                                             <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-theme-text-muted text-[11px]">&euro;</span>
                                             <input
-                                                type="number"
-                                                step="0.01"
-                                                min="0"
-                                                value=""
-                                                onChange={e => updateCartPrice(item.penaltyId, parseFloat(e.target.value) || 0)}
+                                                type="text"
+                                                inputMode="decimal"
+                                                onChange={e => {
+                                                    const v = sanitizeMoney(e.target.value)
+                                                    e.target.value = v
+                                                    updateCartPrice(item.penaltyId, parseFloat(v.replace(',', '.')) || 0)
+                                                }}
                                                 placeholder="0"
                                                 className="w-full pl-5 pr-1 py-0.5 bg-white/[0.06] border border-dr7-gold/30 rounded-lg text-theme-text-primary text-[11px] text-right focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
                                             />
@@ -665,11 +683,10 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                             <div className="relative flex-1">
                                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-theme-text-muted text-[12px]">&euro;</span>
                                 <input
-                                    type="number"
-                                    step="0.01"
-                                    min={0}
+                                    type="text"
+                                    inputMode="decimal"
                                     value={finalPriceInput}
-                                    onChange={e => setFinalPriceInput(e.target.value)}
+                                    onChange={e => setFinalPriceInput(sanitizeMoney(e.target.value))}
                                     placeholder={`Lascia vuoto per ${cartSubtotal.toFixed(2)}`}
                                     disabled={isGenerating}
                                     className="w-full pl-6 pr-2 py-1.5 bg-white/[0.06] border border-white/[0.08] rounded-lg text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
