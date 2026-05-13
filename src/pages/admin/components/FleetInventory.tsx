@@ -41,6 +41,8 @@ interface VehicleWithInventory extends Vehicle {
     inventory?: VehicleInventory
 }
 
+type StatusFilter = 'all' | 'critico' | 'sotto_soglia' | 'ok'
+
 export default function FleetInventory() {
     const [vehicles, setVehicles] = useState<VehicleWithInventory[]>([])
     const [loading, setLoading] = useState(true)
@@ -48,6 +50,7 @@ export default function FleetInventory() {
     const [editForm, setEditForm] = useState<Partial<VehicleInventory>>({})
     const [plateSearch, setPlateSearch] = useState('')
     const [saving, setSaving] = useState(false)
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 
     useEffect(() => {
         loadVehiclesWithInventory()
@@ -234,13 +237,6 @@ export default function FleetInventory() {
         return 'text-green-400'
     }
 
-    // Count vehicles needing attention (legacy 5-card summary, kept for now)
-    const vehiclesNeedingOil = vehicles.filter(v => (v.inventory?.oil_quantity || 0) === 0).length
-    const vehiclesNeedingPastiglieAnt = vehicles.filter(v => (v.inventory?.pastiglie_ant_quantity || 0) === 0).length
-    const vehiclesNeedingPastigliePost = vehicles.filter(v => (v.inventory?.pastiglie_post_quantity || 0) === 0).length
-    const vehiclesNeedingSensoriAnt = vehicles.filter(v => (v.inventory?.sensori_ant_quantity || 0) === 0).length
-    const vehiclesNeedingSensoriPost = vehicles.filter(v => (v.inventory?.sensori_post_quantity || 0) === 0).length
-
     // ── Dashboard KPI calculations (matches mockup) ──────────────────────
     function vehicleStatus(v: VehicleWithInventory): 'critico' | 'sotto_soglia' | 'ok' {
         const inv = v.inventory
@@ -289,7 +285,7 @@ export default function FleetInventory() {
                     <div className="relative w-full sm:w-64">
                         <input
                             type="text"
-                            placeholder="Ricerca auto per targa..."
+                            placeholder="Ricerca per targa, modello..."
                             value={plateSearch}
                             onChange={(e) => setPlateSearch(e.target.value)}
                             className="w-full px-4 py-2 pl-10 bg-theme-bg-tertiary border border-theme-border-light rounded-full text-theme-text-primary text-sm placeholder-theme-text-muted"
@@ -300,55 +296,92 @@ export default function FleetInventory() {
                     </div>
                 </div>
                 <p className="text-sm text-theme-text-muted mt-1">
-                    Gestione scorte olio, pastiglie e sensori per ogni veicolo
+                    Stato componenti e ricambi per ogni veicolo della flotta.
                 </p>
             </div>
 
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-                <div className={`rounded-lg p-4 border ${vehiclesNeedingOil > 0 ? 'bg-red-900/20 border-red-500/50' : 'bg-green-900/20 border-green-500/50'}`}>
-                    <div className={`text-3xl font-bold mb-1 ${vehiclesNeedingOil > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                        {vehiclesNeedingOil}
-                    </div>
-                    <div className="text-sm text-theme-text-muted">Veicoli senza olio</div>
-                </div>
-                <div className={`rounded-lg p-4 border ${vehiclesNeedingPastiglieAnt > 0 ? 'bg-red-900/20 border-red-500/50' : 'bg-green-900/20 border-green-500/50'}`}>
-                    <div className={`text-3xl font-bold mb-1 ${vehiclesNeedingPastiglieAnt > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                        {vehiclesNeedingPastiglieAnt}
-                    </div>
-                    <div className="text-sm text-theme-text-muted">Veicoli senza pastiglie ant.</div>
-                </div>
-                <div className={`rounded-lg p-4 border ${vehiclesNeedingPastigliePost > 0 ? 'bg-red-900/20 border-red-500/50' : 'bg-green-900/20 border-green-500/50'}`}>
-                    <div className={`text-3xl font-bold mb-1 ${vehiclesNeedingPastigliePost > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                        {vehiclesNeedingPastigliePost}
-                    </div>
-                    <div className="text-sm text-theme-text-muted">Veicoli senza pastiglie post.</div>
-                </div>
-                <div className={`rounded-lg p-4 border ${vehiclesNeedingSensoriAnt > 0 ? 'bg-red-900/20 border-red-500/50' : 'bg-green-900/20 border-green-500/50'}`}>
-                    <div className={`text-3xl font-bold mb-1 ${vehiclesNeedingSensoriAnt > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                        {vehiclesNeedingSensoriAnt}
-                    </div>
-                    <div className="text-sm text-theme-text-muted">Veicoli senza sensori ant.</div>
-                </div>
-                <div className={`rounded-lg p-4 border ${vehiclesNeedingSensoriPost > 0 ? 'bg-red-900/20 border-red-500/50' : 'bg-green-900/20 border-green-500/50'}`}>
-                    <div className={`text-3xl font-bold mb-1 ${vehiclesNeedingSensoriPost > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                        {vehiclesNeedingSensoriPost}
-                    </div>
-                    <div className="text-sm text-theme-text-muted">Veicoli senza sensori post.</div>
-                </div>
+            {/* Top KPI strip — 6 cards from mockup */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
+                <KpiCard
+                    icon="alert"
+                    label="Veicoli con criticita"
+                    value={veicoliCriticita}
+                    sub={vehicles.length > 0 ? `${Math.round(veicoliCriticita / vehicles.length * 100)}% della flotta` : ''}
+                    tone={veicoliCriticita > 0 ? 'rose' : 'emerald'}
+                />
+                <KpiCard
+                    icon="package"
+                    label="Componenti sotto soglia"
+                    value={componentiSottoSoglia}
+                    sub="Da riordinare"
+                    tone={componentiSottoSoglia > 0 ? 'amber' : 'emerald'}
+                />
+                <KpiCard
+                    icon="euro"
+                    label="Costo stimato interventi"
+                    value="—"
+                    sub="Prossimi 30 giorni"
+                    tone="sky"
+                />
+                <KpiCard
+                    icon="wrench"
+                    label="Interventi programmati"
+                    value="—"
+                    sub="Prossimi 30 giorni"
+                    tone="sky"
+                />
+                <KpiCard
+                    icon="shield"
+                    label="Stato Flotta"
+                    value={`${statoFlottaPct}%`}
+                    sub="Veicoli in ottime condizioni"
+                    tone={statoFlottaPct >= 80 ? 'emerald' : statoFlottaPct >= 50 ? 'amber' : 'rose'}
+                />
+                <KpiCard
+                    icon="road"
+                    label="KM totali Flotta"
+                    value={kmTotaliFlotta.toLocaleString('it-IT')}
+                    sub={vehicles.length > 0 ? `Media ${Math.round(kmTotaliFlotta / vehicles.length).toLocaleString('it-IT')} km/veicolo` : ''}
+                    tone="muted"
+                />
             </div>
 
-            {/* Vehicle Inventory List */}
-            <div className="space-y-4">
-                {vehicles.filter(v => {
-                    if (!plateSearch.trim()) return true
-                    const q = plateSearch.trim().toLowerCase().replace(/\s/g, '')
-                    const plate = (v.plate || '').toLowerCase().replace(/\s/g, '')
-                    // Guard display_name: a null value threw TypeError and made
-                    // the whole list disappear when typing in the search box.
-                    const name = (v.display_name || '').toLowerCase()
-                    return plate.includes(q) || name.includes(q)
-                }).map(vehicle => {
+            {/* Filter tabs + sort + export */}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+                <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-secondary p-0.5 text-xs">
+                    {([
+                        { k: 'all' as const,           l: `Tutti (${vehicles.length})` },
+                        { k: 'critico' as const,       l: `Criticita (${veicoliCriticita})` },
+                        { k: 'sotto_soglia' as const,  l: `Sotto soglia (${veicoliSottoSoglia})` },
+                        { k: 'ok' as const,            l: `OK (${veicoliOk})` },
+                    ]).map(f => (
+                        <button
+                            key={f.k}
+                            onClick={() => setStatusFilter(f.k)}
+                            className={`px-3 py-1.5 rounded-full font-semibold transition-colors ${statusFilter === f.k ? 'bg-dr7-gold text-black' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}
+                        >
+                            {f.l}
+                        </button>
+                    ))}
+                </div>
+                <span className="text-xs text-theme-text-muted ml-auto">Cassetti bloccati: 0</span>
+            </div>
+
+            {/* Two-column grid: main vehicle list (2/3) + right sidebar (1/3) */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+                {/* Left: vehicle list */}
+                <div className="lg:col-span-2 space-y-4">
+                    {vehicles.filter(v => {
+                        // status filter
+                        if (statusFilter !== 'all' && vehicleStatus(v) !== statusFilter) return false
+                        // text search
+                        if (!plateSearch.trim()) return true
+                        const q = plateSearch.trim().toLowerCase().replace(/\s/g, '')
+                        const plate = (v.plate || '').toLowerCase().replace(/\s/g, '')
+                        const name = (v.display_name || '').toLowerCase()
+                        return plate.includes(q) || name.includes(q)
+                    }).map(vehicle => {
                     const inv = vehicle.inventory
                     const oilQty = inv?.oil_quantity || 0
                     const pastiglieAntQty = inv?.pastiglie_ant_quantity || 0
@@ -762,7 +795,162 @@ export default function FleetInventory() {
                         </div>
                     )
                 })}
+                </div>
+
+                {/* Right sidebar */}
+                <aside className="space-y-4">
+                    {/* Allarmi & Avvisi — top criticità */}
+                    <SidebarPanel title="Allarmi & Avvisi" emptyText="Nessun allarme attivo">
+                        {vehicles.filter(v => vehicleStatus(v) === 'critico').slice(0, 4).map(v => {
+                            const inv = v.inventory
+                            const missing: string[] = []
+                            if ((inv?.oil_quantity || 0) === 0) missing.push('Olio')
+                            if ((inv?.pastiglie_ant_quantity || 0) === 0) missing.push('Pastiglie ant.')
+                            if ((inv?.pastiglie_post_quantity || 0) === 0) missing.push('Pastiglie post.')
+                            if ((inv?.sensori_ant_quantity || 0) === 0) missing.push('Sensori ant.')
+                            if ((inv?.sensori_post_quantity || 0) === 0) missing.push('Sensori post.')
+                            return (
+                                <div key={v.id} className="flex items-start gap-2 text-xs py-2 border-b border-theme-border last:border-0">
+                                    <span className="inline-block w-2 h-2 rounded-full bg-red-500 mt-1.5 flex-shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="font-semibold text-theme-text-primary truncate">{v.display_name || v.plate}</div>
+                                        <div className="text-theme-text-muted">Esaurito: {missing.slice(0, 2).join(', ')}{missing.length > 2 ? `, +${missing.length - 2}` : ''}</div>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </SidebarPanel>
+
+                    {/* Azioni rapide */}
+                    <SidebarPanel title="Azioni Rapide">
+                        <div className="grid grid-cols-2 gap-2">
+                            {[
+                                { label: 'Nuovo Intervento', icon: '+' },
+                                { label: 'Ordina Ricambi', icon: '🛒' },
+                                { label: 'Storia Report', icon: '📊' },
+                                { label: 'Stato Magazzino', icon: '📦' },
+                            ].map(a => (
+                                <button
+                                    key={a.label}
+                                    type="button"
+                                    onClick={() => toast('Funzione in arrivo', { icon: 'ℹ️' })}
+                                    className="text-xs px-2 py-2 rounded border border-theme-border bg-theme-bg-primary hover:bg-theme-bg-hover text-theme-text-secondary hover:text-theme-text-primary"
+                                >
+                                    <span className="block">{a.icon}</span>
+                                    <span className="block mt-0.5">{a.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </SidebarPanel>
+
+                    {/* Prossimi interventi — placeholder; needs intervento schema */}
+                    <SidebarPanel title="Prossimi Interventi" emptyText="Nessun intervento programmato">
+                        <div className="text-xs text-theme-text-muted italic py-2">
+                            La pianificazione interventi richiede l'attivazione del modulo Manutenzione.
+                        </div>
+                    </SidebarPanel>
+
+                    {/* Fornitori principali */}
+                    <SidebarPanel title="Fornitori Principali" emptyText="Nessun fornitore configurato">
+                        {(() => {
+                            const counter = new Map<string, number>()
+                            vehicles.forEach(v => {
+                                const inv = v.inventory
+                                ;[inv?.oil_supplier_phone, inv?.pastiglie_ant_supplier_phone, inv?.pastiglie_post_supplier_phone, inv?.sensori_ant_supplier_phone, inv?.sensori_post_supplier_phone].forEach(p => {
+                                    if (p) counter.set(p, (counter.get(p) || 0) + 1)
+                                })
+                            })
+                            const top = Array.from(counter.entries()).sort((a, b) => b[1] - a[1]).slice(0, 4)
+                            if (top.length === 0) return null
+                            return top.map(([phone, count]) => (
+                                <div key={phone} className="flex items-center justify-between text-xs py-1.5">
+                                    <span className="text-theme-text-primary font-mono">{phone}</span>
+                                    <span className="text-theme-text-muted">{count} ricambi</span>
+                                </div>
+                            ))
+                        })()}
+                    </SidebarPanel>
+
+                    {/* Suggerimenti Smart */}
+                    <SidebarPanel title="Suggerimenti Smart">
+                        {veicoliCriticita > 0 ? (
+                            <>
+                                <p className="text-xs text-theme-text-secondary mb-3">
+                                    {veicoliCriticita} veicol{veicoliCriticita === 1 ? 'o ha' : 'i hanno'} componenti esauriti. Ordina ora per evitare fermi forzati.
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => toast('Apri lista fornitori dai veicoli con criticita', { icon: 'ℹ️' })}
+                                    className="w-full px-3 py-2 rounded-lg bg-dr7-gold text-black text-xs font-semibold hover:opacity-90"
+                                >
+                                    Genera Ordine Ricambi
+                                </button>
+                            </>
+                        ) : (
+                            <p className="text-xs text-theme-text-muted italic">Tutto sotto controllo. Nessuna azione urgente richiesta.</p>
+                        )}
+                    </SidebarPanel>
+                </aside>
             </div>
+
+            {/* Bottom KPI strip */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
+                <BottomKpi label="Costo manutenzione mese" value="—" hint="In arrivo con il modulo Manutenzione" />
+                <BottomKpi label="Costo medio per veicolo" value="—" hint="In arrivo con il modulo Manutenzione" />
+                <BottomKpi label="Veicoli fermi per manutenzione" value="0" hint={`Su ${vehicles.length} totali`} />
+                <BottomKpi label="Scadenze in arrivo" value={String(veicoliCriticita + veicoliSottoSoglia)} hint="Componenti sotto soglia o esauriti" />
+            </div>
+        </div>
+    )
+}
+
+// ─── Sub-components ────────────────────────────────────────────────────
+
+type KpiTone = 'emerald' | 'sky' | 'amber' | 'rose' | 'muted'
+const KPI_TONES: Record<KpiTone, string> = {
+    emerald: 'border-emerald-500/30 text-emerald-400',
+    sky: 'border-sky-500/30 text-sky-400',
+    amber: 'border-amber-500/30 text-amber-400',
+    rose: 'border-rose-500/30 text-rose-400',
+    muted: 'border-theme-border text-theme-text-muted',
+}
+function KpiCard({ label, value, sub, tone = 'emerald' }: {
+    icon?: string
+    label: string
+    value: string | number
+    sub?: string
+    tone?: KpiTone
+}) {
+    const cls = KPI_TONES[tone]
+    return (
+        <div className={`rounded-xl border bg-theme-bg-secondary/60 p-3 ${cls}`}>
+            <div className="text-[10px] uppercase tracking-wider text-theme-text-muted truncate">{label}</div>
+            <div className="text-xl font-bold mt-1 tabular-nums">{value}</div>
+            {sub && <div className="text-[10px] text-theme-text-muted mt-0.5 truncate">{sub}</div>}
+        </div>
+    )
+}
+
+function SidebarPanel({ title, children, emptyText }: { title: string; children?: React.ReactNode; emptyText?: string }) {
+    const isEmpty = !children || (Array.isArray(children) && children.every(c => !c))
+    return (
+        <div className="rounded-xl border border-theme-border bg-theme-bg-secondary/40 p-3">
+            <h3 className="text-xs uppercase tracking-wider font-semibold text-theme-text-muted mb-2">{title}</h3>
+            {isEmpty && emptyText ? (
+                <p className="text-xs text-theme-text-muted italic">{emptyText}</p>
+            ) : (
+                <div>{children}</div>
+            )}
+        </div>
+    )
+}
+
+function BottomKpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
+    return (
+        <div className="rounded-xl border border-theme-border bg-theme-bg-secondary/40 p-3">
+            <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">{label}</div>
+            <div className="text-xl font-bold text-theme-text-primary mt-1 tabular-nums">{value}</div>
+            {hint && <div className="text-[10px] text-theme-text-muted mt-0.5">{hint}</div>}
         </div>
     )
 }
