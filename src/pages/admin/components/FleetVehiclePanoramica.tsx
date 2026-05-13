@@ -94,10 +94,15 @@ export default function FleetVehiclePanoramica({ vehicle, alerts }: FleetVehicle
             setLoading(true)
             const sixtyDaysAgo = new Date()
             sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
+            // bookings table uses `vehicle_plate` (not `plate`) — the original
+            // `,plate.eq.X` filter matched nothing, so any booking inserted
+            // with vehicle_plate but null vehicle_id (admin-created, legacy
+            // imports, etc.) was invisible here. KPIs read €0 / 0 days /
+            // 0% utilizzo even when the car had been rented.
             const { data } = await supabase
                 .from('bookings')
-                .select('id, customer_name, pickup_date, dropoff_date, total_amount, status, payment_status, vehicle_id, plate')
-                .or(`vehicle_id.eq.${vehicle.id}${vehicle.plate ? `,plate.eq.${vehicle.plate}` : ''}`)
+                .select('id, customer_name, pickup_date, dropoff_date, total_amount, status, payment_status, vehicle_id, vehicle_plate')
+                .or(`vehicle_id.eq.${vehicle.id}${vehicle.plate ? `,vehicle_plate.eq.${vehicle.plate}` : ''}`)
                 .gte('pickup_date', sixtyDaysAgo.toISOString())
                 .order('pickup_date', { ascending: false })
                 .limit(200)
@@ -205,9 +210,46 @@ export default function FleetVehiclePanoramica({ vehicle, alerts }: FleetVehicle
     const year = (vehicle.metadata as { model_year?: number } | null)?.model_year
     const acceleration = (vehicle.metadata as { acceleration_0_100?: number } | null)?.acceleration_0_100
 
-    const photoUrl = (vehicle as { image_url?: string | null }).image_url
-        || (vehicle.metadata as { image_url?: string | null } | null)?.image_url
-        || null
+    // VehiclesTab uploads to metadata.image (no _url suffix), so the original
+    // check on image_url alone always missed. Mirror the candidate-key sweep
+    // used in FleetInventory, then fall back to the name-based static asset
+    // map on dr7empire.com so cars without an upload still show their photo.
+    const photoUrl = (() => {
+        const m = (vehicle.metadata as Record<string, unknown> | null) || {}
+        const candidates = [
+            (vehicle as { image_url?: string | null }).image_url,
+            m.image_url, m.image, m.hero_image, m.photo, m.picture,
+        ]
+        for (const c of candidates) {
+            if (typeof c === 'string' && c.trim()) return c
+        }
+        // Name-based fallback (kept in sync with FleetInventory.nameBasedVehicleImage)
+        const n = (vehicle.display_name || '').toLowerCase()
+        const base = 'https://dr7empire.com'
+        if (n.includes('rs3')) return `${base}/rs3.jpeg`
+        if (n.includes('m340')) return `${base}/bmw-m340i.jpeg`
+        if (n.includes('m3')) return `${base}/bmw-m3.jpeg`
+        if (n.includes('m4')) return `${base}/bmw-m4.jpeg`
+        if (n.includes('911') || n.includes('carrera')) return `${base}/porsche-911.jpeg`
+        if (n.includes('c63')) return `${base}/c63.jpeg`
+        if (n.includes('a45')) return `${base}/mercedes_amg.jpeg`
+        if (n.includes('cayenne')) return `${base}/cayenne.jpeg`
+        if (n.includes('macan')) return `${base}/macan.jpeg`
+        if (n.includes('gle')) return `${base}/mercedes-gle.jpeg`
+        if (n.includes('ducato')) return `${base}/ducato.jpeg`
+        if (n.includes('vito') || n.includes('v class') || n.includes('v-class')) return `${base}/vito.jpeg`
+        if (n.includes('208')) return `${base}/208.jpeg`
+        if (n.includes('clio') && (n.includes('arancio') || n.includes('orange'))) return `${base}/clio4a.jpeg`
+        if (n.includes('clio') && (n.includes('blu') || n.includes('blue'))) return `${base}/clio4b.jpeg`
+        if (n.includes('c3') && (n.includes('red') || n.includes('rosso'))) return `${base}/c3r.jpeg`
+        if (n.includes('c3') && (n.includes('white') || n.includes('bianca'))) return `${base}/cr3w.jpeg`
+        if (n.includes('c3')) return `${base}/c3.jpeg`
+        if (n.includes('captur')) return `${base}/captur.jpeg`
+        if (n.includes('panda') && (n.includes('bianca') || n.includes('white'))) return `${base}/panda2.jpeg`
+        if (n.includes('panda') && (n.includes('aranci') || n.includes('orange'))) return `${base}/panda3.jpeg`
+        if (n.includes('panda')) return `${base}/panda1.jpeg`
+        return null
+    })()
 
     const statusLabel = ((): string => {
         switch ((vehicle.status || '').toLowerCase()) {
