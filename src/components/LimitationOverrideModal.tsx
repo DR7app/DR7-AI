@@ -16,7 +16,22 @@ interface LimitationOverrideModalProps {
    * 'BMW X5 (BMW001)', 'Importo': '€450', 'Note': 'Modifica data ritiro' }.
    * Vengono renderizzati come tabella nella mail.
    */
-  details?: Record<string, string | number | null | undefined> | Array<{ label: string; value: string }>
+  // Accepts three forms:
+  //  1. Legacy flat dict — { Cliente: 'Mario', Email: 'm@x.it', ... }
+  //  2. Legacy array     — [{ label, value }, ...]
+  //  3. Structured       — { customer?: {...}, operation?: {...}, diff?: [...], meta?: {...} }
+  // The structured form drives sectioned + colored rendering in the email
+  // and a flat row-list here in the modal. Server-side, limitation-override-otp.ts
+  // detects which form was sent and renders accordingly.
+  details?:
+    | Record<string, string | number | null | undefined>
+    | Array<{ label: string; value: string }>
+    | {
+        customer?: Record<string, string | null | undefined>
+        operation?: Record<string, string | null | undefined>
+        diff?: Array<{ field: string; before?: string; after?: string }>
+        meta?: Record<string, string | null | undefined>
+      }
   /**
    * Quando true, mostra un campo "Note operatore" opzionale. Il testo
    * viene incluso nell'email alla direzione e salvato nel log attività
@@ -250,9 +265,43 @@ export default function LimitationOverrideModal({
                 }
               }
             } else if (details && typeof details === 'object') {
-              for (const [k, v] of Object.entries(details as Record<string, unknown>)) {
-                if (v == null || v === '') continue
-                rows.push({ label: k, value: String(v) })
+              const d = details as Record<string, unknown>
+              const isStructured =
+                (d.customer && typeof d.customer === 'object') ||
+                (d.operation && typeof d.operation === 'object') ||
+                (d.meta && typeof d.meta === 'object') ||
+                Array.isArray(d.diff)
+              if (isStructured) {
+                // Flatten structured form into rows for the in-modal preview.
+                // The email renders sections/colors separately.
+                const pushObj = (src: unknown) => {
+                  if (src && typeof src === 'object') {
+                    for (const [k, v] of Object.entries(src as Record<string, unknown>)) {
+                      if (v == null || v === '') continue
+                      rows.push({ label: k, value: String(v) })
+                    }
+                  }
+                }
+                pushObj(d.customer)
+                pushObj(d.operation)
+                if (Array.isArray(d.diff)) {
+                  for (const row of d.diff as unknown[]) {
+                    if (row && typeof row === 'object') {
+                      const r = row as Record<string, unknown>
+                      const field = String(r.field ?? r.label ?? '').trim()
+                      const before = String(r.before ?? r.prima ?? '').trim()
+                      const after = String(r.after ?? r.dopo ?? '').trim()
+                      if (!field || before === after) continue
+                      rows.push({ label: field, value: `${before || '(vuoto)'} → ${after || '(vuoto)'}` })
+                    }
+                  }
+                }
+                pushObj(d.meta)
+              } else {
+                for (const [k, v] of Object.entries(d)) {
+                  if (v == null || v === '') continue
+                  rows.push({ label: k, value: String(v) })
+                }
               }
             }
             if (rows.length === 0) return null

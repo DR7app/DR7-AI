@@ -2013,7 +2013,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   // Snapshot inviato alla direzione con la richiesta OTP: la modal mostra
   // direttamente cliente/servizio/veicolo/data/totale così l'operatore vede
   // ESATTAMENTE cosa sta autorizzando senza dover aprire l'email.
-  const otpDetails = useMemo<Record<string, string | null | undefined>>(() => {
+  // Returns either a flat legacy dict OR the new structured shape
+  // ({ customer, operation, diff, meta }). The modal + email both accept both.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const otpDetails = useMemo<any>(() => {
     const code = override.limitationState.limitationCode
     const fmtDateIt = (d: string) => {
       if (!d) return null
@@ -2022,20 +2025,52 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
     const fmtEur = (n: number) => `€ ${n.toFixed(2)}`
 
-    // Modifica di una prenotazione gia' esistente (paid/confirmed) — usiamo
-    // i dati della prenotazione in editing.
-    if (code === 'paid_wash_modify' && pendingEditBookingRef.current) {
-      const b = pendingEditBookingRef.current
-      return {
-        Operazione: 'Modifica prenotazione lavaggio',
-        Cliente: b.customer_name || null,
-        Email: b.customer_email || null,
-        Telefono: b.customer_phone || null,
-        Servizio: b.service_name || null,
-        Veicolo: b.vehicle_name || null,
-        'Data appuntamento': fmtDateIt(b.appointment_date || ''),
-        Ora: b.appointment_time || null,
-        'Importo totale': typeof b.price_total === 'number' ? fmtEur(b.price_total / 100) : null,
+    // Modifica di una prenotazione gia' esistente (paid/confirmed).
+    // Fallback chain: pendingEditBookingRef (set right before requestOverride)
+    // → editingBooking (modal open) → null. Senza questo fallback, se il
+    // gate ri-fa fire dopo che il ref e' stato pulito (line ~201), la modal
+    // OTP mostrava solo "Modifica prenotazione lavaggio" + "Data appuntamento"
+    // perche' cadeva sul default formData/cust path con campi vuoti.
+    if (code === 'paid_wash_modify') {
+      const b = pendingEditBookingRef.current || editingBooking
+      if (b) {
+        const operatorEmail = typeof window !== 'undefined'
+          ? (sessionStorage.getItem('admin-email') || null)
+          : null
+        const bookingRef = (b.id || '').substring(0, 8).toUpperCase() || null
+        const apptDateStr = b.appointment_date
+          ? fmtDateIt(String(b.appointment_date).split('T')[0])
+          : null
+        const totalEur = typeof b.price_total === 'number' ? fmtEur(b.price_total / 100) : null
+        const amountPaid = typeof b.booking_details?.amountPaid === 'number'
+          ? fmtEur(b.booking_details.amountPaid / 100)
+          : null
+        return {
+          // Structured payload — il template email rende sezioni colorate
+          customer: {
+            Nome: b.customer_name || null,
+            Email: b.customer_email || null,
+            Telefono: b.customer_phone || null,
+          },
+          operation: {
+            'Tipo operazione': 'Modifica prenotazione lavaggio (gia\' pagata o confermata)',
+            'Riferimento': bookingRef ? `DR7-${bookingRef}` : null,
+            Servizio: b.service_name || null,
+            Veicolo: b.vehicle_name || null,
+            Targa: b.vehicle_plate || null,
+            'Data appuntamento': apptDateStr,
+            Ora: b.appointment_time || null,
+            'Importo totale': totalEur,
+            'Acconto incassato': amountPaid,
+            'Metodo pagamento': b.payment_method || null,
+            'Stato pagamento': b.payment_status || null,
+            'Stato prenotazione': b.status || null,
+          },
+          meta: {
+            Operatore: operatorEmail,
+            'Data richiesta': new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          },
+        } as unknown as Record<string, string | null | undefined>
       }
     }
 

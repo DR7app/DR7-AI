@@ -142,21 +142,69 @@ export const handler: Handler = async (event) => {
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'RESEND_API_KEY not configured' }) }
       }
 
-      // Normalizza `details` in array di righe label/value
+      // Normalizza `details`. Supportiamo tre forme:
+      //   1. Legacy flat dict:    { Cliente: 'Mario', Email: 'm@x.it', ... }
+      //   2. Legacy array:        [{ label: 'Cliente', value: 'Mario' }, ...]
+      //   3. Strutturato (nuovo): { customer: {...}, operation: {...}, diff: [...], meta: {...} }
+      //
+      // Forma strutturata = email con sezioni colorate e tabella diff
+      // dedicata. Forma legacy = tabella unica come prima. Backward compat
+      // totale: ogni caller che passa il vecchio formato continua a
+      // funzionare senza modifiche.
       const escapeHtml = (s: unknown) => String(s ?? '')
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+
       const detailRows: Array<{ label: string; value: string }> = []
+      const sections: { customer: Record<string, string>; operation: Record<string, string>; meta: Record<string, string>; diff: Array<{ field: string; before: string; after: string }> } = {
+        customer: {}, operation: {}, meta: {}, diff: []
+      }
+      let structured = false
       if (Array.isArray(details)) {
         for (const d of details) {
-          if (d && typeof d === 'object' && d.label) {
-            detailRows.push({ label: String(d.label), value: String(d.value ?? '') })
+          if (d && typeof d === 'object' && (d as any).label) {
+            detailRows.push({ label: String((d as any).label), value: String((d as any).value ?? '') })
           }
         }
       } else if (details && typeof details === 'object') {
-        for (const [k, v] of Object.entries(details as Record<string, unknown>)) {
-          if (v == null || v === '') continue
-          detailRows.push({ label: k, value: String(v) })
+        const d = details as Record<string, unknown>
+        // Detect structured form: at least one of customer/operation/diff/meta present
+        const hasStructured =
+          (d.customer && typeof d.customer === 'object') ||
+          (d.operation && typeof d.operation === 'object') ||
+          (d.meta && typeof d.meta === 'object') ||
+          Array.isArray(d.diff)
+        if (hasStructured) {
+          structured = true
+          const copy = (src: unknown, dst: Record<string, string>) => {
+            if (src && typeof src === 'object') {
+              for (const [k, v] of Object.entries(src as Record<string, unknown>)) {
+                if (v == null || v === '') continue
+                dst[k] = String(v)
+              }
+            }
+          }
+          copy(d.customer, sections.customer)
+          copy(d.operation, sections.operation)
+          copy(d.meta, sections.meta)
+          if (Array.isArray(d.diff)) {
+            for (const row of d.diff as unknown[]) {
+              if (row && typeof row === 'object') {
+                const r = row as Record<string, unknown>
+                const field = String(r.field ?? r.label ?? '').trim()
+                if (!field) continue
+                const before = String(r.before ?? r.prima ?? '').trim()
+                const after = String(r.after ?? r.dopo ?? '').trim()
+                if (before === after) continue
+                sections.diff.push({ field, before, after })
+              }
+            }
+          }
+        } else {
+          for (const [k, v] of Object.entries(d)) {
+            if (v == null || v === '') continue
+            detailRows.push({ label: k, value: String(v) })
+          }
         }
       }
 
@@ -191,15 +239,75 @@ export const handler: Handler = async (event) => {
       }
       const operazioneUmana = codeToLabel[limitationCode] || limitationMessage.split('.')[0]
 
-      const detailsTableHtml = detailRows.length > 0
-        ? `<table style="width:100%;font-size:14px;color:#212529;border-collapse:collapse;margin-top:8px;">
-               ${detailRows.map(r => `
-                 <tr>
-                   <td style="padding:8px 12px 8px 0;font-weight:600;color:#495057;width:42%;vertical-align:top;border-bottom:1px solid #e9ecef;">${escapeHtml(r.label)}</td>
-                   <td style="padding:8px 0;color:#111;border-bottom:1px solid #e9ecef;font-weight:500;">${escapeHtml(r.value)}</td>
-                 </tr>`).join('')}
-             </table>`
-        : '<p style="margin:8px 0 0;color:#6c757d;font-style:italic;font-size:13px;">Nessun dettaglio aggiuntivo fornito dall\'operatore.</p>'
+      // Categoria operazione → palette colori dell'operation card.
+      // Permette alla direzione di capire al volo la gravità senza leggere.
+      const categoryFor = (c: string): { name: string; bg: string; border: string; text: string; accent: string } => {
+        if (/\.delete$|^wash\.delete|^booking\.delete|^customer\.delete|^vehicle\.delete|^fattura\.delete/.test(c)) {
+          return { name: 'Eliminazione', bg: '#fff1f0', border: '#ff4d4f', text: '#a8071a', accent: '#cf1322' }
+        }
+        if (/modify|conferma|extension|edit/i.test(c)) {
+          return { name: 'Modifica', bg: '#fff8e1', border: '#d4af37', text: '#7a5f00', accent: '#a37e00' }
+        }
+        if (/mark_paid|carta_punti|sdi/i.test(c)) {
+          return { name: 'Pagamento / Fattura', bg: '#e6f7ee', border: '#2fbe6f', text: '#0f5132', accent: '#0a7c3e' }
+        }
+        if (/^gestione_otp_|^centralina\./i.test(c)) {
+          return { name: 'Sistema', bg: '#f0f0ff', border: '#7c7cf2', text: '#2a2a8c', accent: '#3a3aa6' }
+        }
+        return { name: 'Autorizzazione', bg: '#fff8e1', border: '#d4af37', text: '#7a5f00', accent: '#a37e00' }
+      }
+      const cat = categoryFor(limitationCode)
+
+      // Render helpers
+      const kvTable = (rows: Array<{ label: string; value: string }>) =>
+        `<table style="width:100%;font-size:14px;color:#212529;border-collapse:collapse;">
+           ${rows.map(r => `
+             <tr>
+               <td style="padding:7px 12px 7px 0;font-weight:600;color:#495057;width:42%;vertical-align:top;border-bottom:1px solid #eef0f2;">${escapeHtml(r.label)}</td>
+               <td style="padding:7px 0;color:#111;border-bottom:1px solid #eef0f2;font-weight:500;">${escapeHtml(r.value)}</td>
+             </tr>`).join('')}
+         </table>`
+
+      const sectionCard = (title: string, body: string, accent: string) =>
+        `<div style="border:1px solid #e9ecef;border-left:4px solid ${accent};border-radius:8px;padding:14px 16px;margin:0 0 14px;background:#fafbfc;">
+           <p style="margin:0 0 8px;font-size:11px;color:#495057;text-transform:uppercase;letter-spacing:0.6px;font-weight:700;">${escapeHtml(title)}</p>
+           ${body}
+         </div>`
+
+      const diffTable = (rows: Array<{ field: string; before: string; after: string }>) =>
+        `<table style="width:100%;font-size:13px;color:#212529;border-collapse:collapse;">
+           <tr>
+             <th style="text-align:left;padding:6px 8px;font-size:11px;color:#6c757d;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #dee2e6;">Campo</th>
+             <th style="text-align:left;padding:6px 8px;font-size:11px;color:#a8071a;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #dee2e6;background:#fff1f0;">Prima</th>
+             <th style="text-align:left;padding:6px 8px;font-size:11px;color:#0a7c3e;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #dee2e6;background:#e6f7ee;">Dopo</th>
+           </tr>
+           ${rows.map(r => `
+             <tr>
+               <td style="padding:8px;font-weight:600;color:#495057;border-bottom:1px solid #eef0f2;vertical-align:top;">${escapeHtml(r.field)}</td>
+               <td style="padding:8px;color:#a8071a;background:#fff7f6;border-bottom:1px solid #eef0f2;vertical-align:top;text-decoration:line-through;">${escapeHtml(r.before) || '<span style="color:#999;font-style:italic;">(vuoto)</span>'}</td>
+               <td style="padding:8px;color:#0a7c3e;background:#f3fbf6;border-bottom:1px solid #eef0f2;vertical-align:top;font-weight:600;">${escapeHtml(r.after) || '<span style="color:#999;font-style:italic;">(vuoto)</span>'}</td>
+             </tr>`).join('')}
+         </table>`
+
+      // Build the final details HTML — either sectioned (new) or flat (legacy)
+      const detailsTableHtml = structured
+        ? [
+            Object.keys(sections.customer).length > 0
+              ? sectionCard('Cliente', kvTable(Object.entries(sections.customer).map(([label, value]) => ({ label, value }))), '#1890ff')
+              : '',
+            Object.keys(sections.operation).length > 0
+              ? sectionCard('Operazione', kvTable(Object.entries(sections.operation).map(([label, value]) => ({ label, value }))), cat.accent)
+              : '',
+            sections.diff.length > 0
+              ? sectionCard('Modifiche richieste (Prima → Dopo)', diffTable(sections.diff), '#a37e00')
+              : '',
+            Object.keys(sections.meta).length > 0
+              ? sectionCard('Contesto', kvTable(Object.entries(sections.meta).map(([label, value]) => ({ label, value }))), '#6c757d')
+              : '',
+          ].filter(Boolean).join('')
+        : (detailRows.length > 0
+            ? sectionCard('Dettaglio operativo', kvTable(detailRows), cat.accent)
+            : '<p style="margin:8px 0 0;color:#6c757d;font-style:italic;font-size:13px;">Nessun dettaglio aggiuntivo fornito dall\'operatore.</p>')
 
       const notesHtml = trimmedNotes
         ? `<div style="background:#fff8e1;border:1px solid #d4af37;border-radius:10px;padding:16px;margin:24px 0;">
@@ -237,16 +345,15 @@ export const handler: Handler = async (event) => {
               Richiesta ricevuta: <strong>${requestedAtIt}</strong> (Europe/Rome)
             </p>
 
-            <!-- Operation card -->
-            <div style="background: linear-gradient(180deg,#fff8e1 0%, #fff3cd 100%); border: 1px solid #d4af37; border-radius: 12px; padding: 18px 20px; margin: 16px 0 24px;">
-              <p style="margin: 0 0 4px; font-size: 11px; color: #7a5f00; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700;">Operazione richiesta</p>
-              <p style="margin: 0; font-size: 18px; color: #4a3a00; font-weight: 700; line-height: 1.35;">${escapeHtml(operazioneUmana)}</p>
-              <p style="margin: 10px 0 0; font-size: 13px; color: #5a4a10; line-height: 1.5;">${escapeHtml(limitationMessage)}</p>
+            <!-- Operation card — colored per category (delete=red, modify=amber, paid=green, system=indigo) -->
+            <div style="background: ${cat.bg}; border: 1px solid ${cat.border}; border-radius: 12px; padding: 18px 20px; margin: 16px 0 24px;">
+              <p style="margin: 0 0 4px; font-size: 11px; color: ${cat.text}; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700;">${escapeHtml(cat.name)}</p>
+              <p style="margin: 0; font-size: 18px; color: ${cat.accent}; font-weight: 700; line-height: 1.35;">${escapeHtml(operazioneUmana)}</p>
+              <p style="margin: 10px 0 0; font-size: 13px; color: ${cat.text}; line-height: 1.5;">${escapeHtml(limitationMessage)}</p>
             </div>
 
-            <!-- Details -->
+            <!-- Details (sectioned if structured payload, single card if legacy) -->
             <div style="margin: 24px 0;">
-              <p style="margin: 0 0 4px; font-size: 11px; color: #495057; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700;">Dettaglio operativo</p>
               ${detailsTableHtml}
             </div>
 
