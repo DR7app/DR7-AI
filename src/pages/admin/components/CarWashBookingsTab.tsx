@@ -1035,7 +1035,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             // usiamo la legacy event key e passiamo il booking così il
             // resolver sceglie via service_type ranking.
             templateKey: 'payment_link_customer',
-            booking: { service_type: booking?.service_type || 'car_wash' },
+            booking: { service_type: (booking as unknown as { service_type?: string })?.service_type || 'car_wash' },
             templateVars: (() => {
               const amtStr = String(totalEur)
               const firstName = (custName || '').split(' ')[0] || 'Cliente'
