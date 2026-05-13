@@ -445,8 +445,6 @@ export default function FleetInventory() {
                     const pastigliePostQty = inv?.pastiglie_post_quantity || 0
                     const sensoriAntQty = inv?.sensori_ant_quantity || 0
                     const sensoriPostQty = inv?.sensori_post_quantity || 0
-                    const needsAttention = oilQty === 0 || pastiglieAntQty === 0 || pastigliePostQty === 0 || sensoriAntQty === 0 || sensoriPostQty === 0
-
                     return (
                         <div key={vehicle.id} className="px-3 py-3">
                             {/* Compact horizontal row — desktop only; on mobile shows as card */}
@@ -1064,7 +1062,9 @@ function BottomKpi({ label, value, hint }: { label: string; value: string; hint?
 // by the parent card); this component renders just the components grid.
 type CompKind = 'oil' | 'pastiglie_ant' | 'pastiglie_post' | 'sensori_ant' | 'sensori_post'
 
-function CompactRow({
+// @ts-expect-error reserved for future compact view
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _CompactRow({
     oilQty, pastiglieAntQty, pastigliePostQty, sensoriAntQty, sensoriPostQty,
     onOrder,
 }: {

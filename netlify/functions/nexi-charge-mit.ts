@@ -230,8 +230,8 @@ const handler: Handler = async (event) => {
         // si raggiunge expected_capture_by. Il cron `nexi-preauth-refresh-cron`
         // legge next_refresh_due e processa le righe scadute.
         const nowIso = new Date().toISOString()
-        const nextRefreshDue = isPreauth && durationDays && Number(durationDays) > 7
-            ? new Date(Date.now() + 7 * 86400000).toISOString()
+        const nextRefreshDue = isPreauth && durationDays && Number(durationDays) > 6
+            ? new Date(Date.now() + 6 * 86400000).toISOString()
             : null
 
         await supabase.from('nexi_transactions').insert({

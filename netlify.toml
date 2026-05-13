@@ -89,13 +89,17 @@
 [functions."rental-extension-supercar-cron"]
   schedule = "0 16,17 * * *"
 
-# Nexi preauth auto-refresh — DISABILITATO 2026-05-13.
-# Il cron usa /v1/orders/mit con captureType=EXPLICIT, ma questo
-# endpoint NON onora EXPLICIT (Nexi addebita invece di bloccare).
-# Schedule commentato fino a quando troviamo l'endpoint corretto
-# per refresh silenzioso. La funzione resta deployata per test manuale.
-# [functions."nexi-preauth-refresh-cron"]
-#   schedule = "30 3 * * *"
+# Nexi preauth auto-refresh — riattivato 2026-05-13.
+# Cron giornaliero che rinnova le pre-autorizzazioni a lungo termine
+# (durata > 7 giorni) ogni 6 giorni. Strategia void-first:
+#   1) VOID dell'auth attiva (libera il blocco sulla carta)
+#   2) Crea NUOVO link paybylink USE_CONTRACT EXPLICIT
+#   3) Riga passa a 'preauth_pending_refresh_confirm', il cliente deve
+#      cliccare il link entro 48h per confermare
+# Cosi\' non si accumulano hold multipli sulla stessa carta. Se void
+# fallisce, NON si crea la nuova auth (retry domani).
+[functions."nexi-preauth-refresh-cron"]
+  schedule = "30 3 * * *"
 
 # Marketing campaigns — every 5 min, materialise scheduled/recurring campaigns
 # whose scheduled_at has passed and pump the chunked send loop server-side.

@@ -28,7 +28,7 @@ interface NexiTransaction {
     created_at: string
     order_id: string
     amount_cents: number
-    status: 'pending' | 'completed' | 'failed' | 'cancelled' | 'preauth_held' | 'preauth_captured' | 'preauth_voided'
+    status: 'pending' | 'completed' | 'failed' | 'cancelled' | 'preauth_held' | 'preauth_captured' | 'preauth_voided' | 'preauth_pending_link' | 'preauth_pending_refresh_confirm' | 'preauth_refresh_failed' | 'preauth_wrongly_charged' | 'preauth_wrongly_charged_refunded' | 'orphan_removed'
     description: string
     customer_email: string
     contract_id?: string
@@ -636,6 +636,12 @@ export default function NexiTab() {
             preauth_held: 'bg-blue-900/50 text-blue-300 border-blue-700/50',
             preauth_captured: 'bg-green-900/50 text-green-300 border-green-700/50',
             preauth_voided: 'bg-theme-bg-tertiary/50 text-theme-text-secondary border-theme-border/50',
+            preauth_pending_link: 'bg-amber-900/50 text-amber-300 border-amber-700/50',
+            preauth_pending_refresh_confirm: 'bg-amber-900/50 text-amber-300 border-amber-700/50',
+            preauth_refresh_failed: 'bg-red-900/50 text-red-300 border-red-700/50',
+            preauth_wrongly_charged: 'bg-red-900/50 text-red-300 border-red-700/50',
+            preauth_wrongly_charged_refunded: 'bg-orange-900/50 text-orange-300 border-orange-700/50',
+            orphan_removed: 'bg-theme-bg-tertiary/30 text-theme-text-muted border-theme-border/30',
         }
         const labels: Record<string, string> = {
             completed: 'Completato',
@@ -645,6 +651,12 @@ export default function NexiTab() {
             preauth_held: 'Pre-autorizzato',
             preauth_captured: 'Catturato',
             preauth_voided: 'Sbloccato',
+            preauth_pending_link: 'In attesa conferma cliente',
+            preauth_pending_refresh_confirm: 'Rinnovo - cliente deve confermare',
+            preauth_refresh_failed: 'Rinnovo fallito',
+            preauth_wrongly_charged: 'ERRORE - Addebitato (no refund)',
+            preauth_wrongly_charged_refunded: 'Refund effettuato (era addebito)',
+            orphan_removed: 'Riferimento rimosso',
         }
         const style = styles[status] || styles.pending
         const label = labels[status] || status

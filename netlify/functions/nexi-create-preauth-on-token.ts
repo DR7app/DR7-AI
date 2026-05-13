@@ -139,8 +139,8 @@ const handler: Handler = async (event) => {
         // Insert nexi_transactions in stato pending. Il callback aggiornera\'
         // a preauth_held quando il cliente conferma.
         const nowIso = new Date().toISOString()
-        const nextRefreshDue = durationDays && Number(durationDays) > 7
-            ? new Date(Date.now() + 7 * 86400000).toISOString()
+        const nextRefreshDue = durationDays && Number(durationDays) > 6
+            ? new Date(Date.now() + 6 * 86400000).toISOString()
             : null
 
         await supabase.from('nexi_transactions').insert({
