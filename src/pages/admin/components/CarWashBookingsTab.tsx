@@ -2411,20 +2411,30 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   </button>
 
                   {showExistingPlatesList && (() => {
-                    // Costruisco la lista unica di targhe dai bookings esistenti,
-                    // con cliente + auto info come label. Ordino per piu\' recente.
+                    // Costruisco la lista unica di targhe dai bookings esistenti.
+                    // I plates sono salvati in 4+ posti diversi: top-level
+                    // vehicle_plate + booking_details.{vehicle_plate, targa,
+                    // plate, vehicle.plate}. Controllo tutti per evitare buchi.
                     const seen = new Set<string>()
                     const uniqueByPlate = bookings
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       .map((b: any) => {
-                        const plate = (b.vehicle_plate || b.booking_details?.vehicle?.plate || '').toUpperCase().trim()
+                        const bd = b.booking_details || {}
+                        const rawPlate = b.vehicle_plate
+                            || bd.vehicle_plate
+                            || bd.targa
+                            || bd.plate
+                            || bd.vehicle?.plate
+                            || bd.vehicle?.targa
+                            || ''
+                        const plate = String(rawPlate).toUpperCase().replace(/\s+/g, '').trim()
                         if (!plate || seen.has(plate)) return null
                         seen.add(plate)
                         return {
-                          plate,
-                          customerName: b.customer_name || b.booking_details?.customer?.fullName || '',
-                          makeModel: b.booking_details?.vehicleMakeModel || b.booking_details?.vehicle?.makeModel || b.vehicle_name || '',
-                          lastDate: b.created_at || b.appointment_date || '',
+                            plate,
+                            customerName: b.customer_name || bd.customer?.fullName || '',
+                            makeModel: bd.vehicleMakeModel || bd.vehicle?.makeModel || bd.vehicle?.brand || b.vehicle_name || '',
+                            lastDate: b.created_at || b.appointment_date || '',
                         }
                       })
                       .filter(Boolean) as { plate: string; customerName: string; makeModel: string; lastDate: string }[]
