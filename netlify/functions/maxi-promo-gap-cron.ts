@@ -350,7 +350,10 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            templateKey: 'pro_maxi_promo_gap_1gg',
+            // BUG FIX 2026-05-13: era hardcoded 'pro_maxi_promo_gap_1gg'.
+            // Adesso legacy event key — resolver via handled_events.
+            templateKey: 'maxi_promo_gap_whatsapp',
+            booking: { service_type: 'rental' },
             templateVars,
             customPhone: phone,
           }),

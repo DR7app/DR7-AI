@@ -500,7 +500,11 @@ export default function CauzioniTab() {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             customPhone: phone,
-                            templateKey: 'pro_richiesta_cauzione',
+                            // BUG FIX 2026-05-13: era 'pro_richiesta_cauzione' hardcoded.
+                            // Adesso legacy event key — il resolver sceglie il template
+                            // via handled_events (custom > canonical).
+                            templateKey: 'deposit_request_customer',
+                            booking: { service_type: 'rental' },
                             templateVars: (() => {
                                 const customerName = cauzione.cliente_nome || 'Cliente'
                                 const amountStr = Number(cauzione.importo).toFixed(2)
@@ -583,7 +587,9 @@ export default function CauzioniTab() {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             customPhone: phone,
-                            templateKey: 'pro_richiesta_cauzione',
+                            // BUG FIX 2026-05-13: era 'pro_richiesta_cauzione' hardcoded.
+                            templateKey: 'deposit_request_customer',
+                            booking: { service_type: 'rental' },
                             templateVars: (() => {
                                 const customerName = cauzione.cliente_nome || 'Cliente'
                                 const amountStr = Number(cauzione.importo).toFixed(2)

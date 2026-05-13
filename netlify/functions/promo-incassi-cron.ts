@@ -261,7 +261,9 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        templateKey: 'pro_promo_incassi',
+                        // BUG FIX 2026-05-13: era hardcoded 'pro_promo_incassi'.
+                        templateKey: 'promo_incassi_whatsapp',
+                        booking: { service_type: 'rental' },
                         templateVars,
                         customPhone: phone,
                     }),

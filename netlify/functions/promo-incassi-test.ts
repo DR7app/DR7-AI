@@ -191,7 +191,8 @@ export const handler: Handler = async (event) => {
             const res = await fetch(`${siteUrl}/.netlify/functions/send-whatsapp-notification`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ templateKey: 'pro_promo_incassi', templateVars, customPhone: recipient }),
+                // BUG FIX 2026-05-13: era hardcoded 'pro_promo_incassi'.
+            body: JSON.stringify({ templateKey: 'promo_incassi_whatsapp', booking: { service_type: 'rental' }, templateVars, customPhone: recipient }),
             })
             const json = await res.json().catch(() => ({}))
             if (!res.ok || json.skipped) {

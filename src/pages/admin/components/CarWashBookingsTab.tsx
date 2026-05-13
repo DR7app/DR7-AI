@@ -1062,7 +1062,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         })
         const waResult = await waResp.json().catch(() => ({}))
         if (!waResp.ok || waResult?.skipped) {
-          toast.error('Template mancante in Messaggi di Sistema Pro per payment_link_customer (car wash)', { id: toastId })
+          toast.error('Nessun template configurato in Messaggi di Sistema Pro per "Invio link pagamento" (Prime Wash). Apri il tuo template "Link pagamento lavaggi", verifica che sia ATTIVO, abbia un testo, abbia "Quando si invia il link di pagamento al cliente" tra gli eventi gestiti, e Tipo servizio = Prime Wash.', { id: toastId, duration: 12000 })
         } else {
           toast.success('Nuovo link generato e inviato via WhatsApp!', { id: toastId })
         }
@@ -1636,7 +1636,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             })
             const waResult = await waResp.json().catch(() => ({}))
             if (!waResp.ok || waResult?.skipped) {
-              toast.error('Template mancante in Messaggi di Sistema Pro per payment_link_customer (Prime Wash)')
+              toast.error('Nessun template configurato in Messaggi di Sistema Pro per "Invio link pagamento" (Prime Wash). Verifica il template "Link pagamento lavaggi": ATTIVO, body non vuoto, evento "Quando si invia il link di pagamento al cliente" spuntato, Tipo servizio = Prime Wash.', { duration: 12000 })
             }
           }
           toast.success('Pay by Link generato e inviato al cliente!')

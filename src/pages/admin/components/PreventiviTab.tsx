@@ -1121,7 +1121,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customPhone: custPhone,
-            templateKey: 'pro_no_cauzione_approvato',
+            // BUG FIX 2026-05-13: legacy key + service_type → resolver via handled_events.
+            templateKey: 'no_cauzione_approved',
+            booking: { service_type: 'rental' },
             templateVars: {
               '{customer_name}': custName.split(' ')[0],
               '{vehicle_name}': booking.vehicle_name || 'Veicolo',
@@ -1133,7 +1135,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         })
         const respJson = await resp.json().catch(() => ({}))
         if (respJson?.skipped) {
-          toast.error('Template "pro_no_cauzione_approvato" non configurato in Messaggi di Sistema Pro')
+          toast.error('Template per "no_cauzione_approved" non configurato in Messaggi di Sistema Pro')
         }
       }
       toast.success('Approvata! Link di pagamento inviato.')
@@ -1175,7 +1177,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customPhone: custPhone,
-            templateKey: 'pro_no_cauzione_rifiutato',
+            // BUG FIX 2026-05-13: legacy key + service_type → resolver via handled_events.
+            templateKey: 'no_cauzione_rejected',
+            booking: { service_type: 'rental' },
             templateVars: {
               '{customer_name}': custName.split(' ')[0],
               '{vehicle_name}': booking.vehicle_name || 'Veicolo',
@@ -1185,7 +1189,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         })
         const respJson = await resp.json().catch(() => ({}))
         if (respJson?.skipped) {
-          toast.error('Template "pro_no_cauzione_rifiutato" non configurato in Messaggi di Sistema Pro')
+          toast.error('Template per "no_cauzione_rejected" non configurato in Messaggi di Sistema Pro')
         }
       }
       toast.success(`Rifiutata. Codice sconto ${code} inviato.`)
@@ -2233,7 +2237,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customPhone: preventivo.customer_phone,
-          templateKey: 'pro_sconto_concesso',
+          // BUG FIX 2026-05-13: legacy key + service_type → resolver via handled_events.
+          templateKey: 'quote_discount_offered',
+          booking: { service_type: 'rental' },
           templateVars: {
             '{customer_name}': firstName,
             '{vehicle_name}': preventivo.vehicle_name || 'Veicolo',
@@ -2247,7 +2253,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         .then(r => r.json().catch(() => ({})))
         .then((respJson: any) => {
           if (respJson?.skipped) {
-            toast.error('Template "pro_sconto_concesso" non configurato in Messaggi di Sistema Pro')
+            toast.error('Template per "quote_discount_offered" non configurato in Messaggi di Sistema Pro')
           }
         })
         .catch(() => {})

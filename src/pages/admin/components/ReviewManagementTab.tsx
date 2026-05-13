@@ -515,7 +515,10 @@ export default function ReviewManagementTab() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          templateKey: 'pro_marketing_codice_sconto',
+          // BUG FIX 2026-05-13: era 'pro_marketing_codice_sconto' hardcoded.
+          // Adesso legacy key + service_type='all' (marketing cross-servizio).
+          templateKey: 'review_discount_code',
+          booking: { service_type: 'all' },
           templateVars,
           customPhone: candidate.customer_phone,
         }),
@@ -524,7 +527,7 @@ export default function ReviewManagementTab() {
 
       toast.dismiss(toastId)
       if (sendData.skipped) {
-        toast.error(`Codici creati (${gen.rentalCode} / ${gen.carwashCode}) ma template Pro "pro_marketing_codice_sconto" non configurato in Messaggi di Sistema Pro.`, { duration: 8000 })
+        toast.error(`Codici creati (${gen.rentalCode} / ${gen.carwashCode}) ma template per "review_discount_code" non configurato in Messaggi di Sistema Pro.`, { duration: 8000 })
       } else if (!sendRes.ok) {
         toast.error(`Codici creati ma WhatsApp fallito: ${sendData.message || sendRes.statusText}`)
       } else {

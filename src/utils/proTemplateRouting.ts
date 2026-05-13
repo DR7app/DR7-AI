@@ -60,6 +60,17 @@ export const OLD_TO_PRO: Record<string, string> = {
   review_request_whatsapp: 'pro_marketing_recensione',
   birthday_message: 'pro_marketing_compleanno',
   wallet_bonus_credit: 'pro_wallet_bonus_cliente',
+  review_discount_code: 'pro_marketing_codice_sconto',
+  promo_incassi_whatsapp: 'pro_promo_incassi',
+  maxi_promo_gap_whatsapp: 'pro_maxi_promo_gap_1gg',
+
+  // Cauzione
+  deposit_request_customer: 'pro_richiesta_cauzione',
+
+  // No Cauzione / Sconti preventivi
+  no_cauzione_approved: 'pro_no_cauzione_approvato',
+  no_cauzione_rejected: 'pro_no_cauzione_rifiutato',
+  quote_discount_offered: 'pro_sconto_concesso',
 
   // Fidelity Card — voucher fired at 250 punti
   fidelity_voucher_whatsapp: 'pro_fidelity_voucher',
@@ -120,6 +131,19 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
 
   // Fidelity
   fidelity_voucher_whatsapp: 'Voucher fidelity raggiunti i 250 punti',
+
+  // Marketing aggiuntivo
+  review_discount_code: 'Invio codice sconto post-recensione (Review Management)',
+  promo_incassi_whatsapp: 'Promo incassi: invio WhatsApp al cliente quando un veicolo è sotto soglia (cron mensile)',
+  maxi_promo_gap_whatsapp: 'Maxi Promo Gap: invio quando un veicolo ha 1 giorno libero tra prenotazioni (cron giornaliero)',
+
+  // Cauzione
+  deposit_request_customer: 'Invio link pagamento cauzione al cliente (admin Cauzioni)',
+
+  // No Cauzione / Sconti preventivi
+  no_cauzione_approved: 'Approvazione "No Cauzione": invio link pagamento al cliente',
+  no_cauzione_rejected: 'Rifiuto "No Cauzione": invio codice sconto 5% al cliente',
+  quote_discount_offered: 'Preventivo rifiutato con sconto: invio codice sconto al cliente',
 
   // Website
   website_booking_cancelled_customer: 'Annullamento prenotazione effettuato dal cliente sul sito',
@@ -201,6 +225,31 @@ export const LABEL_FALLBACKS: Record<string, string[][]> = {
     ['iban', 'rimborso'],
     ['rimborso', 'iban'],
     ['iban'],
+  ],
+  pro_richiesta_cauzione: [
+    ['richiesta', 'cauzione'],
+    ['link', 'cauzione'],
+    ['pagamento', 'cauzione'],
+    ['cauzione', 'pagamento'],
+    ['deposit', 'request'],
+  ],
+  pro_no_cauzione_approvato: [
+    ['no', 'cauzione', 'approv'],
+    ['approv', 'no', 'cauzione'],
+    ['senza', 'cauzione', 'approv'],
+    ['no', 'cauzione', 'ok'],
+  ],
+  pro_no_cauzione_rifiutato: [
+    ['no', 'cauzione', 'rifiut'],
+    ['rifiut', 'no', 'cauzione'],
+    ['senza', 'cauzione', 'rifiut'],
+    ['no', 'cauzione', 'ko'],
+  ],
+  pro_sconto_concesso: [
+    ['sconto', 'concesso'],
+    ['concesso', 'sconto'],
+    ['preventivo', 'sconto'],
+    ['sconto', 'preventivo'],
   ],
 
   // ── Pagamenti / Pay-by-link (già presenti nel server, ricopiate qui) ─

@@ -282,7 +282,9 @@ export const handler: Handler = async (event) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          templateKey: 'pro_maxi_promo_gap_1gg',
+          // BUG FIX 2026-05-13: era hardcoded 'pro_maxi_promo_gap_1gg'.
+          templateKey: 'maxi_promo_gap_whatsapp',
+          booking: { service_type: 'rental' },
           templateVars: {
             vehicle_specs: v.display_name,
             vehicle: v.display_name,
