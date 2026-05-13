@@ -1338,15 +1338,15 @@ export default function NexiTab() {
                                     return (
                                         <p className="text-[11px] text-theme-text-muted mt-1.5">
                                             Scadenza pre-autorizzazione: <span className="text-theme-text-primary font-semibold">{captureBy.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                                            {days > 7 && <span className="text-blue-400"> · auto-rinnovo ogni 7g</span>}
+                                            {days > 30 && <span className="text-amber-400"> · oltre 30g richiede rinnovo manuale</span>}
                                         </p>
                                     )
                                 })()}
                             </div>
 
                             <div className="text-[11px] text-theme-text-muted bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 leading-relaxed space-y-1.5">
-                                <p><strong className="text-blue-400">Come funziona:</strong> Nexi genera un link di conferma. Il cliente lo apre, vede la sua carta salvata (no reinserimento dati), conferma con 1 tap. I fondi vengono <em>bloccati</em>, NON addebitati.</p>
-                                <p>Per durate {'>'} 7 giorni il sistema rinnova automaticamente il blocco ogni 7g (cron giornaliero), cosi\' resta attivo fino alla data scelta. Catturi o annulli in qualsiasi momento.</p>
+                                <p><strong className="text-blue-400">Come funziona:</strong> Nexi genera un link di conferma. Il cliente lo apre, vede la sua carta salvata (no reinserimento dati), conferma con 1 tap (SCA se richiesto). I fondi vengono <em>bloccati</em>, NON addebitati.</p>
+                                <p>Il blocco dura tipicamente 7-30 giorni a seconda dell'emittente carta. Catturi o annulli in qualsiasi momento entro quella finestra.</p>
                             </div>
                         </div>
 

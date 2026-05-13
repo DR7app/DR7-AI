@@ -125,7 +125,37 @@ const handler: Handler = async (event) => {
         const opResult = ((data as Record<string, Record<string, unknown>>).operation?.operationResult || data.operationResult) as string | undefined
         const newOpId = (((data as Record<string, Record<string, unknown>>).operation?.operationId) || data.operationId) as string | null
 
-        if (!res.ok || !(opResult === 'AUTHORIZED' || opResult === 'EXECUTED')) {
+        // CRITICO: se Nexi ritorna EXECUTED su EXPLICIT, ha ADDEBITATO
+        // il cliente. Refund immediato e segnala l'errore.
+        if (opResult === 'EXECUTED' && newOpId) {
+            console.error('[nexi-preauth-refresh-cron] WRONG CHARGE during refresh — auto-refunding')
+            try {
+                await fetch(`${NEXI_BASE_URL}/operations/${newOpId}/refunds`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Api-Key': NEXI_API_KEY,
+                        'Correlation-Id': correlationId.replace(/.$/, '2'),
+                        'Idempotency-Key': correlationId.replace(/.$/, '3'),
+                    },
+                    body: JSON.stringify({
+                        amount: String(row.amount_cents),
+                        currency: 'EUR',
+                        description: 'Auto-refund cron: EXECUTED instead of AUTHORIZED',
+                    }),
+                })
+            } catch (e) {
+                console.error('[nexi-preauth-refresh-cron] Refund failed:', e)
+            }
+            await supabase.from('nexi_transactions').update({
+                status: 'preauth_refresh_wrong_charged',
+                metadata: { ...meta, refresh_wrong_charged_at: nowIso, refresh_wrong_charged_op: newOpId }
+            }).eq('id', row.id)
+            results.push({ id: row.id, status: 'failed', reason: 'wrong_charge_refunded' })
+            continue
+        }
+
+        if (!res.ok || opResult !== 'AUTHORIZED') {
             console.error('[nexi-preauth-refresh-cron] Refresh failed for', row.id, opResult, text.substring(0, 200))
             await supabase.from('nexi_transactions').update({
                 status: 'preauth_refresh_failed',
