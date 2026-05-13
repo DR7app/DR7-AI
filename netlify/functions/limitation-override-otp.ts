@@ -159,58 +159,130 @@ export const handler: Handler = async (event) => {
           detailRows.push({ label: k, value: String(v) })
         }
       }
+
+      // Estrai un nome leggibile dall'email dell'operatore.
+      // ophe@dr7.app → "Ophe", mario.rossi@dr7.app → "Mario Rossi"
+      const operatorEmail = authUser!.email || 'Operatore sconosciuto'
+      const operatorName = (() => {
+        const local = operatorEmail.split('@')[0]
+        if (!local) return operatorEmail
+        return local.split(/[._-]/)
+          .map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+          .join(' ')
+      })()
+
+      // Operazione "umana": cerca un'etichetta amichevole nel codice tecnico.
+      // Fallback al messaggio della limitazione (già in italiano nei chiamanti).
+      const codeToLabel: Record<string, string> = {
+        slot_unavailable: 'Forzatura slot non disponibile',
+        paid_wash_modify: 'Modifica prenotazione lavaggio pagata',
+        prenotazione_lavaggio_conferma: 'Conferma prenotazione lavaggio',
+        prenotazione_noleggio_conferma: 'Conferma prenotazione noleggio',
+        carta_punti_lavaggio: 'Pagamento con Carta Punti',
+        manual_category_carwash: 'Categoria veicolo manuale',
+        foreign_plate_carwash: 'Targa estera lavaggio',
+        gestione_otp_access: 'Accesso alla tab Gestione OTP',
+        gestione_otp_write: 'Modifica regola OTP',
+        gestione_otp_toggle: 'Toggle regola OTP',
+        gestione_otp_create: 'Creazione regola OTP',
+        gestione_otp_delete: 'Eliminazione regola OTP',
+        deposit_return_iban: 'Restituzione cauzione su IBAN',
+        license_too_recent: 'Patente con meno di 2 anni',
+      }
+      const operazioneUmana = codeToLabel[limitationCode] || limitationMessage.split('.')[0]
+
       const detailsTableHtml = detailRows.length > 0
-        ? `<div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:16px;margin:20px 0;">
-             <p style="margin:0 0 10px;color:#495057;font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:0.5px;">Dettaglio richiesta</p>
-             <table style="width:100%;font-size:14px;color:#212529;border-collapse:collapse;">
+        ? `<table style="width:100%;font-size:14px;color:#212529;border-collapse:collapse;margin-top:8px;">
                ${detailRows.map(r => `
                  <tr>
-                   <td style="padding:6px 8px 6px 0;font-weight:600;color:#495057;width:40%;vertical-align:top;border-bottom:1px solid #e9ecef;">${escapeHtml(r.label)}:</td>
-                   <td style="padding:6px 0;color:#212529;border-bottom:1px solid #e9ecef;">${escapeHtml(r.value)}</td>
+                   <td style="padding:8px 12px 8px 0;font-weight:600;color:#495057;width:42%;vertical-align:top;border-bottom:1px solid #e9ecef;">${escapeHtml(r.label)}</td>
+                   <td style="padding:8px 0;color:#111;border-bottom:1px solid #e9ecef;font-weight:500;">${escapeHtml(r.value)}</td>
                  </tr>`).join('')}
-             </table>
-           </div>`
-        : ''
+             </table>`
+        : '<p style="margin:8px 0 0;color:#6c757d;font-style:italic;font-size:13px;">Nessun dettaglio aggiuntivo fornito dall\'operatore.</p>'
 
       const notesHtml = trimmedNotes
-        ? `<div style="background:#fff8e1;border:1px solid #d4af37;border-radius:8px;padding:16px;margin:20px 0;">
-             <p style="margin:0 0 8px;color:#7a5f00;font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:0.5px;">Note operatore</p>
+        ? `<div style="background:#fff8e1;border:1px solid #d4af37;border-radius:10px;padding:16px;margin:24px 0;">
+             <p style="margin:0 0 8px;color:#7a5f00;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:0.6px;">Note dell'operatore</p>
              <p style="margin:0;color:#212529;font-size:14px;line-height:1.5;white-space:pre-wrap;">${escapeHtml(trimmedNotes)}</p>
            </div>`
         : ''
+
+      const requestedAtIt = new Date().toLocaleString('it-IT', {
+        timeZone: 'Europe/Rome',
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      })
 
       const resend = new Resend(apiKey)
       const { error: emailError } = await resend.emails.send({
         from: 'DR7 Empire <info@dr7.app>',
         to: await getOtpRecipient(),
-        subject: `Autorizzazione Direzionale - ${limitationCode}`,
+        subject: `[Autorizzazione] ${operatorName} chiede: ${operazioneUmana} — OTP ${code}`,
         html: `
-          <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: #000; border-radius: 12px; padding: 24px 16px; text-align: center; margin-bottom: 30px;">
-              <img src="https://dr7empire.com/DR7logo1.png" alt="DR7" style="height: 60px; display: block; margin: 0 auto;" />
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; max-width: 640px; margin: 0 auto; padding: 24px; background: #fff;">
+            <!-- Header brand -->
+            <div style="background: #000; border-radius: 12px; padding: 28px 16px; text-align: center; margin-bottom: 24px;">
+              <img src="https://dr7empire.com/DR7logo1.png" alt="DR7" style="height: 56px; display: block; margin: 0 auto;" />
             </div>
-            <h2 style="color: #111; text-align: center;">Autorizzazione Direzionale</h2>
-            <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 16px; margin: 20px 0;">
-              <p style="margin: 0; color: #856404; font-weight: 600;">Limitazione:</p>
-              <p style="margin: 8px 0 0; color: #856404;">${escapeHtml(limitationMessage)}</p>
+
+            <!-- Subject line -->
+            <p style="margin: 0 0 6px; font-size: 12px; color: #6c757d; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700;">Richiesta di autorizzazione</p>
+            <h1 style="margin: 0 0 8px; font-size: 22px; color: #111; line-height: 1.3;">
+              ${escapeHtml(operatorName)} sta chiedendo la tua autorizzazione.
+            </h1>
+            <p style="margin: 0 0 24px; font-size: 14px; color: #495057; line-height: 1.5;">
+              Operatore: <strong>${escapeHtml(operatorName)}</strong> &middot;
+              <span style="color: #6c757d;">${escapeHtml(operatorEmail)}</span><br>
+              Richiesta ricevuta: <strong>${requestedAtIt}</strong> (Europe/Rome)
+            </p>
+
+            <!-- Operation card -->
+            <div style="background: linear-gradient(180deg,#fff8e1 0%, #fff3cd 100%); border: 1px solid #d4af37; border-radius: 12px; padding: 18px 20px; margin: 16px 0 24px;">
+              <p style="margin: 0 0 4px; font-size: 11px; color: #7a5f00; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700;">Operazione richiesta</p>
+              <p style="margin: 0; font-size: 18px; color: #4a3a00; font-weight: 700; line-height: 1.35;">${escapeHtml(operazioneUmana)}</p>
+              <p style="margin: 10px 0 0; font-size: 13px; color: #5a4a10; line-height: 1.5;">${escapeHtml(limitationMessage)}</p>
             </div>
-            ${detailsTableHtml}
+
+            <!-- Details -->
+            <div style="margin: 24px 0;">
+              <p style="margin: 0 0 4px; font-size: 11px; color: #495057; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700;">Dettaglio operativo</p>
+              ${detailsTableHtml}
+            </div>
+
             ${notesHtml}
-            <table style="width: 100%; margin: 20px 0; font-size: 13px; color: #6c757d;">
-              <tr><td style="padding: 4px 0; font-weight: 600;">Codice tecnico:</td><td style="font-family:monospace;">${escapeHtml(limitationCode)}</td></tr>
-              <tr><td style="padding: 4px 0; font-weight: 600;">Richiesto da:</td><td>${escapeHtml(authUser!.email || 'Operatore')}</td></tr>
-              ${actionContext ? `<tr><td style="padding: 4px 0; font-weight: 600;">Contesto:</td><td style="font-family:monospace;font-size:12px;">${escapeHtml(actionContext)}</td></tr>` : ''}
-              <tr><td style="padding: 4px 0; font-weight: 600;">Sessione:</td><td style="font-family:monospace;font-size:12px;">${escapeHtml(draftSessionId.substring(0, 8))}</td></tr>
-              <tr><td style="padding: 4px 0; font-weight: 600;">Scadenza OTP:</td><td>${OTP_TTL_MINUTES} minuti</td></tr>
-            </table>
-            <div style="text-align: center; margin: 30px 0;">
-              <div style="display: inline-block; background: #f5f5f5; padding: 20px 40px; border-radius: 12px; letter-spacing: 8px; font-size: 32px; font-weight: 700; color: #111; border: 2px solid #d4af37;">
+
+            <!-- OTP block -->
+            <div style="background: #f8f9fa; border: 2px solid #111; border-radius: 14px; padding: 22px; margin: 28px 0; text-align: center;">
+              <p style="margin: 0 0 6px; font-size: 12px; color: #495057; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700;">Codice OTP</p>
+              <div style="display: inline-block; background: #fff; padding: 16px 32px; border-radius: 10px; letter-spacing: 10px; font-size: 36px; font-weight: 800; color: #111; border: 2px solid #d4af37; margin: 6px 0;">
                 ${code}
               </div>
+              <p style="margin: 12px 0 0; font-size: 13px; color: #495057; line-height: 1.45;">
+                Valido per <strong>${OTP_TTL_MINUTES} minuti</strong>.
+              </p>
             </div>
-            <p style="text-align: center; color: #666; font-size: 13px;">Comunica questo codice all'operatore SOLO se autorizzi l'azione descritta sopra.</p>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
-            <p style="color: #999; font-size: 11px; text-align: center;">Dubai rent 7.0 S.p.A. - www.dr7empire.com</p>
+
+            <!-- Decision instructions -->
+            <div style="background: #f0f7ff; border-left: 4px solid #007aff; padding: 14px 16px; border-radius: 6px; margin: 24px 0;">
+              <p style="margin: 0 0 6px; font-size: 14px; color: #0a3d8c; font-weight: 700;">Come autorizzare</p>
+              <p style="margin: 0; font-size: 13px; color: #1a4f9c; line-height: 1.55;">
+                Se autorizzi questa operazione, <strong>comunica il codice OTP all'operatore</strong> (WhatsApp / telefono).<br>
+                Se NON autorizzi, ignora questa email: il codice scade da solo dopo ${OTP_TTL_MINUTES} minuti e l'operazione resta bloccata.
+              </p>
+            </div>
+
+            <!-- Audit footer -->
+            <hr style="border: none; border-top: 1px solid #e9ecef; margin: 28px 0 16px;" />
+            <table style="width: 100%; font-size: 11px; color: #868e96; font-family: 'SF Mono', Menlo, Consolas, monospace;">
+              <tr><td style="padding: 2px 0; width: 32%;">codice tecnico</td><td style="padding: 2px 0;">${escapeHtml(limitationCode)}</td></tr>
+              ${actionContext ? `<tr><td style="padding: 2px 0;">contesto azione</td><td style="padding: 2px 0;">${escapeHtml(actionContext)}</td></tr>` : ''}
+              <tr><td style="padding: 2px 0;">sessione</td><td style="padding: 2px 0;">${escapeHtml(draftSessionId.substring(0, 8))}</td></tr>
+              <tr><td style="padding: 2px 0;">tipo flusso</td><td style="padding: 2px 0;">${escapeHtml(flowType || '—')}</td></tr>
+            </table>
+            <p style="margin: 16px 0 0; font-size: 11px; color: #adb5bd; text-align: center;">
+              Dubai Rent 7.0 S.p.A. &middot; www.dr7empire.com
+            </p>
           </div>
         `
       })
