@@ -55,7 +55,11 @@ export const OLD_TO_PRO: Record<string, string> = {
   // Conferma "Da Saldare" — admin spunta Conferma Prenotazione mentre
   // payment_status resta pending. NON e' una conferma di pagamento, e' una
   // conferma che la prenotazione e' bloccata pur restando da saldare.
-  booking_confirmed_da_saldare: 'pro_conferma_pagamento',
+  // Slot DEDICATO `pro_conferma_da_saldare` (separato da pro_conferma_pagamento
+  // che invece serve i pagamenti effettivamente ricevuti — estensioni, danni,
+  // top-up). Con questo split admin scrive due body indipendenti senza che
+  // il messaggio "Da saldare" finisca pure ai clienti che hanno appena pagato.
+  booking_confirmed_da_saldare: 'pro_conferma_da_saldare',
 
   // Preventivi admin alert
   admin_new_website_quote: 'pro_richiesta_otp',
@@ -200,9 +204,18 @@ export const LABEL_FALLBACKS: Record<string, string[][]> = {
     ['pagamento', 'confermato'],
     ['payment', 'received'],
     ['payment', 'confirmed'],
-    ['saldare', 'conferm'],
-    ['conferm', 'saldare'],
+  ],
+  // Slot dedicato "Conferma Prenotazione Da Saldare" — staccato da
+  // pro_conferma_pagamento perche' i due messaggi servono casi diversi:
+  //   - pro_conferma_pagamento: il cliente ha PAGATO (estensione, danni, top-up)
+  //   - pro_conferma_da_saldare: l'admin ha confermato la prenotazione ma il
+  //     cliente DEVE ANCORA pagare. Servono body diversi.
+  pro_conferma_da_saldare: [
     ['prenotazione', 'saldare', 'conferm'],
+    ['conferm', 'saldare'],
+    ['saldare', 'conferm'],
+    ['da', 'saldare', 'conferm'],
+    ['confermata', 'saldare'],
   ],
   pro_conferma_contratto_firmato: [
     ['conferma', 'contratto', 'firmat'],
