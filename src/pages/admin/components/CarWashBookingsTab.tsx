@@ -3495,7 +3495,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   />
                   <label htmlFor="carwash_confirm_booking" className="text-sm text-theme-text-secondary cursor-pointer">
                     <span className="font-semibold text-red-400">Conferma Prenotazione</span>
-                    <span className="block text-xs text-theme-text-muted mt-0.5">Invia subito il messaggio di conferma al cliente anche se &quot;Da Saldare&quot;. Untickato = nessun WhatsApp finch&eacute; non segni come pagato.</span>
+                    <span className="block text-xs text-theme-text-muted mt-0.5">La prenotazione NON scadr&agrave; dopo 1h. In calendario apparir&agrave; in rosso con il nome del cliente invece di &quot;Da Saldare&quot;.</span>
                   </label>
                 </div>
               )}
