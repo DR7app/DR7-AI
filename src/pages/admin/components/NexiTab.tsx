@@ -412,6 +412,61 @@ export default function NexiTab() {
         }
     }
 
+    // Bulk: verifica tutte le carte contro Nexi e pulisce gli orfani.
+    const [bulkCleanupRunning, setBulkCleanupRunning] = useState(false)
+    async function runBulkOrphanCleanup() {
+        // Step 1: dry-run per mostrare quante saranno rimosse
+        setBulkCleanupRunning(true)
+        const toastId = toast.loading('Verifica carte contro Nexi (1-2 min)...')
+        try {
+            const dryRes = await authFetch('/.netlify/functions/nexi-bulk-cleanup-orphans', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dryRun: true }),
+            })
+            const dryData = await dryRes.json()
+            toast.dismiss(toastId)
+            if (!dryRes.ok) {
+                toast.error(dryData.error || 'Verifica fallita')
+                return
+            }
+            const { checked, alive, orphansCount } = dryData
+            if (orphansCount === 0) {
+                toast.success(`Tutte ${alive}/${checked} carte sono attive su Nexi. Nessuna pulizia necessaria.`)
+                return
+            }
+            const ok = window.confirm(
+                `Verifica completata:\n\n` +
+                `• Verificate: ${checked}\n` +
+                `• Attive su Nexi: ${alive}\n` +
+                `• Non riconosciute (orfane): ${orphansCount}\n\n` +
+                `Procedere con la pulizia? I riferimenti orfani verranno rimossi dai clienti e marcati come "orphan_removed" nello storico.`
+            )
+            if (!ok) return
+
+            const toastId2 = toast.loading('Pulizia in corso...')
+            const realRes = await authFetch('/.netlify/functions/nexi-bulk-cleanup-orphans', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dryRun: false }),
+            })
+            const realData = await realRes.json()
+            toast.dismiss(toastId2)
+            if (realRes.ok) {
+                toast.success(`Pulite ${realData.cleaned} carte orfane`)
+                await fetchTokenizedCards()
+            } else {
+                toast.error(realData.error || 'Pulizia fallita')
+            }
+        } catch (err) {
+            toast.dismiss(toastId)
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + msg)
+        } finally {
+            setBulkCleanupRunning(false)
+        }
+    }
+
     // Rimuove il riferimento nexi_contract_id dal cliente quando Nexi non
     // riconosce piu\' l'ordine (orphan). Pulisce sia customers_extended.
     // metadata.nexi_contract_id sia le righe nexi_transactions con quel
@@ -739,6 +794,14 @@ export default function NexiTab() {
                             title="Recupera dati carta da Nexi per le transazioni passate il cui callback non ha attaccato il contractId al cliente"
                         >
                             {backfillRunning ? 'Recupero...' : '↻ Recupera carte mancanti'}
+                        </button>
+                        <button
+                            onClick={runBulkOrphanCleanup}
+                            disabled={bulkCleanupRunning}
+                            className="text-xs px-3 py-1 rounded-full bg-red-500/15 text-red-400 hover:bg-red-500/25 disabled:opacity-50"
+                            title="Verifica TUTTE le carte contro Nexi e rimuove i riferimenti che non esistono piu' (es. orfani di vecchio merchant)"
+                        >
+                            {bulkCleanupRunning ? 'Verifica...' : '🧹 Pulisci carte non riconosciute'}
                         </button>
                         <button onClick={fetchTokenizedCards} className="text-xs text-theme-text-muted hover:text-dr7-gold">Aggiorna</button>
                     </div>
