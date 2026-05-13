@@ -125,30 +125,60 @@ export default function FleetVehiclePanoramica({ vehicle, alerts }: FleetVehicle
         return () => { cancelled = true }
     }, [vehicle.id])
 
-    // Pull last ~60 days of bookings for this vehicle so we can fill KPI
-    // strip, performance sparkline, calendar, recent rentals from real data.
+    // Pull the booking history for this vehicle. The window covers the last
+    // ~90 days AND any future booking (e.g. confirmed ahead) — the calendar
+    // shows current month and "Ultimi Noleggi" wants every recent activity
+    // regardless of payment_status, so we don't filter by status here.
+    //
+    // Split into TWO simple eq queries (by vehicle_id, by vehicle_plate)
+    // then merge unique by id. Avoids PostgREST .or() quirks that were
+    // returning empty results even for vehicles with active bookings.
     useEffect(() => {
         let cancelled = false
         ;(async () => {
             setLoading(true)
-            const sixtyDaysAgo = new Date()
-            sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
-            // bookings table uses `vehicle_plate` (not `plate`) — the original
-            // `,plate.eq.X` filter matched nothing, so any booking inserted
-            // with vehicle_plate but null vehicle_id (admin-created, legacy
-            // imports, etc.) was invisible here. KPIs read €0 / 0 days /
-            // 0% utilizzo even when the car had been rented.
-            const { data } = await supabase
-                .from('bookings')
-                .select('id, customer_name, pickup_date, dropoff_date, total_amount, status, payment_status, vehicle_id, vehicle_plate')
-                .or(`vehicle_id.eq.${vehicle.id}${vehicle.plate ? `,vehicle_plate.eq.${vehicle.plate}` : ''}`)
-                .gte('pickup_date', sixtyDaysAgo.toISOString())
-                .order('pickup_date', { ascending: false })
-                .limit(200)
+            const ninetyDaysAgo = new Date()
+            ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+            const SELECT = 'id, customer_name, pickup_date, dropoff_date, total_amount, status, payment_status, vehicle_id, vehicle_plate'
+
+            const merged = new Map<string, BookingRow>()
+            try {
+                if (vehicle.id) {
+                    const { data, error } = await supabase
+                        .from('bookings')
+                        .select(SELECT)
+                        .eq('vehicle_id', vehicle.id)
+                        .gte('pickup_date', ninetyDaysAgo.toISOString())
+                        .order('pickup_date', { ascending: false })
+                        .limit(200)
+                    if (error) console.error('[FleetVehiclePanoramica] vehicle_id query error:', error)
+                    for (const r of (data || []) as BookingRow[]) merged.set(r.id, r)
+                }
+                if (vehicle.plate) {
+                    const { data, error } = await supabase
+                        .from('bookings')
+                        .select(SELECT)
+                        .eq('vehicle_plate', vehicle.plate)
+                        .gte('pickup_date', ninetyDaysAgo.toISOString())
+                        .order('pickup_date', { ascending: false })
+                        .limit(200)
+                    if (error) console.error('[FleetVehiclePanoramica] vehicle_plate query error:', error)
+                    for (const r of (data || []) as BookingRow[]) {
+                        if (!merged.has(r.id)) merged.set(r.id, r)
+                    }
+                }
+            } catch (e) {
+                console.error('[FleetVehiclePanoramica] bookings fetch failed:', e)
+            }
+
             if (cancelled) return
-            const rows = (data || []).filter((b: { status: string | null }) =>
-                !['cancelled', 'annullata'].includes((b.status || '').toLowerCase())
-            ) as BookingRow[]
+            const rows = Array.from(merged.values())
+                .filter(b => !['cancelled', 'annullata'].includes((b.status || '').toLowerCase()))
+                .sort((a, b) => {
+                    const ad = a.pickup_date ? new Date(a.pickup_date).getTime() : 0
+                    const bd = b.pickup_date ? new Date(b.pickup_date).getTime() : 0
+                    return bd - ad
+                })
             setBookings(rows)
             setLoading(false)
         })()
