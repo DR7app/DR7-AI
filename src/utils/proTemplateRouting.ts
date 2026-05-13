@@ -47,18 +47,14 @@ export const OLD_TO_PRO: Record<string, string> = {
   booking_cancelled_whatsapp: 'pro_custom_prenotazione_annullata_da_sito_1776503923221',
 
   // Pagamento ricevuto
-  payment_received_extension: 'pro_conferma_pagamento',
-  payment_received_extension_admin: 'pro_conferma_pagamento',
-  payment_received_damages: 'pro_conferma_pagamento',
-  payment_received_damages_admin: 'pro_conferma_pagamento',
+  payment_received_extension: 'pro_conferma_da_saldare',
+  payment_received_extension_admin: 'pro_conferma_da_saldare',
+  payment_received_damages: 'pro_conferma_da_saldare',
+  payment_received_damages_admin: 'pro_conferma_da_saldare',
 
   // Conferma "Da Saldare" — admin spunta Conferma Prenotazione mentre
   // payment_status resta pending. NON e' una conferma di pagamento, e' una
   // conferma che la prenotazione e' bloccata pur restando da saldare.
-  // Slot DEDICATO `pro_conferma_da_saldare` (separato da pro_conferma_pagamento
-  // che invece serve i pagamenti effettivamente ricevuti — estensioni, danni,
-  // top-up). Con questo split admin scrive due body indipendenti senza che
-  // il messaggio "Da saldare" finisca pure ai clienti che hanno appena pagato.
   booking_confirmed_da_saldare: 'pro_conferma_da_saldare',
 
   // Preventivi admin alert
@@ -198,24 +194,15 @@ export const LABEL_FALLBACKS: Record<string, string[][]> = {
     ['nuova', 'prenotazione', 'meccanica'],
     ['conferma', 'mechanical'],
   ],
-  pro_conferma_pagamento: [
+  pro_conferma_da_saldare: [
     ['conferma', 'pagamento'],
     ['pagamento', 'ricevuto'],
     ['pagamento', 'confermato'],
     ['payment', 'received'],
     ['payment', 'confirmed'],
-  ],
-  // Slot dedicato "Conferma Prenotazione Da Saldare" — staccato da
-  // pro_conferma_pagamento perche' i due messaggi servono casi diversi:
-  //   - pro_conferma_pagamento: il cliente ha PAGATO (estensione, danni, top-up)
-  //   - pro_conferma_da_saldare: l'admin ha confermato la prenotazione ma il
-  //     cliente DEVE ANCORA pagare. Servono body diversi.
-  pro_conferma_da_saldare: [
-    ['prenotazione', 'saldare', 'conferm'],
-    ['conferm', 'saldare'],
     ['saldare', 'conferm'],
-    ['da', 'saldare', 'conferm'],
-    ['confermata', 'saldare'],
+    ['conferm', 'saldare'],
+    ['prenotazione', 'saldare', 'conferm'],
   ],
   pro_conferma_contratto_firmato: [
     ['conferma', 'contratto', 'firmat'],
