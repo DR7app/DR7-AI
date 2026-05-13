@@ -109,8 +109,11 @@ const handler: Handler = async (event) => {
     try {
       const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
 
-      // Route legacy key → Pro key (Messaggi di Sistema Pro is the only source)
-      const resolvedKey = await resolveKeyForContext(templateKey);
+      // Route legacy key → Pro key (Messaggi di Sistema Pro is the only source).
+      // Passa serviceType nel context così il resolver, in caso di conflitto
+      // (più template che claimano lo stesso evento), preferisce quello con
+      // target_service_type matchante il booking corrente.
+      const resolvedKey = await resolveKeyForContext(templateKey, { serviceType: booking?.service_type ?? undefined });
       if (resolvedKey === null) {
         console.log(`[send-whatsapp] No Pro template mapped for "${templateKey}" — skipping send`);
         return {
@@ -359,7 +362,7 @@ const handler: Handler = async (event) => {
       // Route every legacy key to its Pro equivalent. If the Pro template is
       // missing/disabled/empty, the resolver returns null → we skip the send
       // entirely rather than fall back to any hardcoded text.
-      const resolved = await resolveKeyForContext(messageKey);
+      const resolved = await resolveKeyForContext(messageKey, { serviceType: booking?.service_type ?? undefined });
       if (resolved === null) {
         console.log(`[send-whatsapp] no Pro template mapped for "${messageKey}" — skipping send`);
         return {

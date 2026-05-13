@@ -26,6 +26,12 @@ interface MessageTemplate {
   // fallback alla mappa hardcoded (compatibilità con installazioni che
   // non hanno ancora applicato la migrazione `handled_events`).
   handled_events?: string[] | null
+  // Service-type filter del template. Quando più template claimano lo
+  // stesso evento, il resolver preferisce quello il cui
+  // target_service_type matcha il booking corrente (passato via
+  // RenderContext.serviceType) prima di ricadere sull'ordine di
+  // inserimento. Vedi resolveKeyForContext sotto.
+  target_service_type?: string | null
 }
 
 /**
@@ -67,6 +73,11 @@ const OLD_TO_PRO: Record<string, string> = SHARED_OLD_TO_PRO
 
 export interface RenderContext {
   vehiclePlate?: string | null
+  /** Service type del booking corrente — usato dal resolver per dare
+      precedenza, in caso di conflitto, ai template con target_service_type
+      che matcha il booking (es. car_wash su un booking lavaggio batte un
+      canonical con target_service_type=null/'all'). */
+  serviceType?: string | null
 }
 
 /**
@@ -112,17 +123,50 @@ export async function resolveKeyForContext(key: string, _context?: RenderContext
     return await resolveWithLabelFallback(key, templates)
   }
 
-  // 1. DB-driven event routing (admin-editable). Cerca il primo template
-  // enabled+non-vuoto che dichiara di gestire questa chiave evento via
+  // 1. DB-driven event routing (admin-editable). Cerca i template
+  // enabled+non-vuoto che dichiarano di gestire questa chiave evento via
   // handled_events. Vince sulla mappa hardcoded OLD_TO_PRO così l'admin
   // può riassegnare gli eventi senza intervento dev.
-  const dbRouted = templates.find(t =>
+  //
+  // Quando PIÙ template claimano lo stesso evento (es. canonical
+  // pro_richiesta_pagamento + custom pro_custom_link_pagamento_lavaggi),
+  // diamo precedenza al template il cui target_service_type matcha il
+  // serviceType del booking passato in _context. Senza questa logica il
+  // primo trovato vinceva e i template custom service-specific venivano
+  // mascherati dai canonical seedati.
+  const candidates = templates.filter(t =>
     Array.isArray(t.handled_events)
     && t.handled_events.includes(key)
     && t.is_enabled
     && !!t.message_body
   )
-  if (dbRouted) return dbRouted.message_key
+  if (candidates.length > 0) {
+    const ctxSvc = (_context?.serviceType || '').toLowerCase()
+    const normalisedSvc = ctxSvc === 'mechanical_service' ? 'mechanical'
+      : ctxSvc === 'car_wash' ? 'car_wash'
+      : ctxSvc === 'mechanical' ? 'mechanical'
+      : ctxSvc === 'rental' ? 'rental'
+      : ''
+    // Rank: 3 = service-type match esatto, 2 = match via prime_wash umbrella,
+    // 1 = target_service_type 'all'/null (generic), 0 = mismatch esplicito.
+    const score = (tplSvc: string | null | undefined): number => {
+      const s = String(tplSvc || 'all').toLowerCase()
+      if (s === 'all' || s === '') return 1
+      if (!normalisedSvc) return s === 'all' ? 1 : 0
+      if (s === normalisedSvc) return 3
+      if (s === 'prime_wash' && (normalisedSvc === 'car_wash' || normalisedSvc === 'mechanical')) return 2
+      return 0
+    }
+    const ranked = candidates
+      .map(t => ({ t, r: score(t.target_service_type) }))
+      .filter(x => x.r > 0)
+      .sort((a, b) => b.r - a.r)
+    if (ranked.length > 0) return ranked[0].t.message_key
+    // Tutti i candidati hanno target_service_type incompatibile col
+    // booking → non rispondere (resolver torna null così il caller logga
+    // "no template matched" invece di mandare il messaggio sbagliato).
+    return null
+  }
 
   // 2. Fallback alla mappa hardcoded (compat). Quando l'admin non ha
   // ancora assegnato handled_events a nessun template, il sistema
@@ -145,7 +189,7 @@ async function loadAllTemplates(): Promise<MessageTemplate[]> {
     // resolver continua a funzionare via OLD_TO_PRO fallback.
     let { data, error } = await supabase
       .from('system_messages')
-      .select('message_key, message_body, is_enabled, include_header, label, handled_events')
+      .select('message_key, message_body, is_enabled, include_header, label, handled_events, target_service_type')
     if (error && /column .* does not exist|handled_events/i.test(error.message || '')) {
       const fallback = await supabase
         .from('system_messages')
