@@ -137,6 +137,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [vehicleCategory, setVehicleCategory] = useState<VehicleCategory | null>(null)
   const [classificationSource, setClassificationSource] = useState<'local' | 'api' | 'manual' | null>(null)
   const [lookingUpTarga, setLookingUpTarga] = useState(false)
+  const [showExistingPlatesList, setShowExistingPlatesList] = useState(false)
+  const [existingPlatesSearch, setExistingPlatesSearch] = useState('')
   const [targaVehicleInfo, setTargaVehicleInfo] = useState<{ brand?: string; model?: string; year?: string; fuel?: string; powerCV?: string } | null>(null)
   const [targaNotFound, setTargaNotFound] = useState(false)
   // OTP override for manual category selection
@@ -2204,16 +2206,19 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         </div>
       )}
 
-      {/* Search Bar */}
-      <div className="mb-4">
-        <input
-          type="text"
-          placeholder="Cerca per codice, nome, email, telefono, targa o veicolo..."
-          value={bookingSearchQuery}
-          onChange={(e) => setBookingSearchQuery(e.target.value)}
-          className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold"
-        />
-      </div>
+      {/* Search Bar — nascosta durante la creazione di una nuova prenotazione
+          (serve solo per cercare nello storico delle prenotazioni esistenti). */}
+      {!showForm && (
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="Cerca per codice, nome, email, telefono, targa o veicolo..."
+            value={bookingSearchQuery}
+            onChange={(e) => setBookingSearchQuery(e.target.value)}
+            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold"
+          />
+        </div>
+      )}
 
       {/* Quick Edit Customer Modal */}
       <NewClientModal
@@ -2369,6 +2374,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     </div>
                     <button
                       type="button"
+                      data-targa-lookup
                       disabled={vehiclePlate.length < 5 || lookingUpTarga}
                       onClick={handleTargaLookup}
                       className={`px-6 py-3.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${
@@ -2389,21 +2395,108 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   <div className="flex-1 h-px bg-theme-border" />
                 </div>
 
-                {/* Seleziona dalla lista — focuses the search input above the form */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const el = document.querySelector<HTMLInputElement>('input[placeholder*="Cerca per codice"]')
-                    if (el) {
-                      el.focus()
-                      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                    }
-                  }}
-                  className="w-full px-4 py-3 rounded-xl border border-theme-border bg-theme-bg-primary text-theme-text-secondary font-medium text-sm hover:border-theme-text-secondary hover:text-theme-text-primary transition-colors flex items-center justify-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
-                  Seleziona veicolo dalla lista
-                </button>
+                {/* Seleziona dalla lista — mostra dropdown delle targhe gia\'
+                    presenti nei bookings di Prime Wash. Auto-fill al click. */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowExistingPlatesList(v => !v)}
+                    className="w-full px-4 py-3 rounded-xl border border-theme-border bg-theme-bg-primary text-theme-text-secondary font-medium text-sm hover:border-theme-text-secondary hover:text-theme-text-primary transition-colors flex items-center justify-between gap-2"
+                  >
+                    <span className="flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
+                      Seleziona veicolo dalla lista
+                    </span>
+                    <svg className={`w-4 h-4 transition-transform ${showExistingPlatesList ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+
+                  {showExistingPlatesList && (() => {
+                    // Costruisco la lista unica di targhe dai bookings esistenti,
+                    // con cliente + auto info come label. Ordino per piu\' recente.
+                    const seen = new Set<string>()
+                    const uniqueByPlate = bookings
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      .map((b: any) => {
+                        const plate = (b.vehicle_plate || b.booking_details?.vehicle?.plate || '').toUpperCase().trim()
+                        if (!plate || seen.has(plate)) return null
+                        seen.add(plate)
+                        return {
+                          plate,
+                          customerName: b.customer_name || b.booking_details?.customer?.fullName || '',
+                          makeModel: b.booking_details?.vehicleMakeModel || b.booking_details?.vehicle?.makeModel || b.vehicle_name || '',
+                          lastDate: b.created_at || b.appointment_date || '',
+                        }
+                      })
+                      .filter(Boolean) as { plate: string; customerName: string; makeModel: string; lastDate: string }[]
+
+                    const q = existingPlatesSearch.toLowerCase().trim()
+                    const filtered = q
+                      ? uniqueByPlate.filter(v =>
+                          v.plate.toLowerCase().includes(q) ||
+                          v.customerName.toLowerCase().includes(q) ||
+                          v.makeModel.toLowerCase().includes(q)
+                        )
+                      : uniqueByPlate
+
+                    return (
+                      <div className="absolute left-0 right-0 mt-1 z-20 bg-theme-bg-secondary border border-theme-border rounded-xl shadow-lg max-h-72 overflow-hidden flex flex-col">
+                        <div className="p-2 border-b border-theme-border">
+                          <input
+                            type="text"
+                            placeholder="Cerca per targa, cliente, modello..."
+                            value={existingPlatesSearch}
+                            onChange={(e) => setExistingPlatesSearch(e.target.value)}
+                            autoFocus
+                            className="w-full px-3 py-2 text-sm bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:border-dr7-gold"
+                          />
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                          {filtered.length === 0 ? (
+                            <div className="px-4 py-6 text-center text-xs text-theme-text-muted">
+                              {q ? 'Nessuna corrispondenza.' : 'Nessuna targa nello storico Prime Wash.'}
+                            </div>
+                          ) : (
+                            filtered.slice(0, 100).map((v, i) => (
+                              <button
+                                key={`${v.plate}-${i}`}
+                                type="button"
+                                onClick={() => {
+                                  setVehiclePlate(v.plate)
+                                  if (v.makeModel && !vehicleMakeModel) setVehicleMakeModel(v.makeModel)
+                                  setShowExistingPlatesList(false)
+                                  setExistingPlatesSearch('')
+                                  // Riconoscimento automatico subito dopo selezione
+                                  setTimeout(() => {
+                                    const btn = document.querySelector<HTMLButtonElement>('button[data-targa-lookup]')
+                                    if (btn) btn.click()
+                                  }, 50)
+                                }}
+                                className="w-full px-3 py-2 text-left hover:bg-theme-bg-tertiary border-b border-theme-border/30 last:border-b-0 flex items-center justify-between gap-2"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono font-bold text-dr7-gold text-sm">{v.plate}</span>
+                                    {v.makeModel && (
+                                      <span className="text-xs text-theme-text-secondary truncate">{v.makeModel}</span>
+                                    )}
+                                  </div>
+                                  {v.customerName && (
+                                    <div className="text-[11px] text-theme-text-muted truncate">{v.customerName}</div>
+                                  )}
+                                </div>
+                                <svg className="w-3.5 h-3.5 text-theme-text-muted flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                        <div className="px-3 py-1.5 text-[10px] text-theme-text-muted border-t border-theme-border flex justify-between">
+                          <span>{filtered.length} targh{filtered.length === 1 ? 'a' : 'e'} {q ? 'filtrate' : 'totali'}</span>
+                          <button type="button" onClick={() => setShowExistingPlatesList(false)} className="hover:text-theme-text-primary">Chiudi</button>
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </div>
               </div>
 
               {/* Targa lookup result card */}

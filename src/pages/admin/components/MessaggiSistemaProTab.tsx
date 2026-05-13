@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
-import { getProKeyEventTriggers } from '../../../utils/proTemplateRouting'
+import { getProKeyEventTriggers, EVENT_DESCRIPTIONS as EVENT_LABELS_IT } from '../../../utils/proTemplateRouting'
 import toast from 'react-hot-toast'
 
 interface SystemMessage {
@@ -18,6 +18,12 @@ interface SystemMessage {
     send_hour: number | null
     target_category: string
     target_status: string
+    /** DB-driven event routing. Quale evento di codice (legacy key
+        come 'rental_new_customer', 'wallet_bonus_credit') instrada qui.
+        Vince sulla mappa hardcoded OLD_TO_PRO. Vuoto/null → fallback
+        alla mappa storica. Editabile dall'admin nel pannello "Eventi
+        gestiti". */
+    handled_events?: string[] | null
     /** Se true, dopo il WhatsApp invia anche email (stesso body). */
     send_email?: boolean
     /** Oggetto email; se vuoto, fallback al label del template. */
@@ -3085,6 +3091,53 @@ export default function MessaggiSistemaProTab() {
                                                         </div>
                                                     </div>
                                                 )}
+
+                                                {/* Eventi gestiti dal codice — DB-driven routing.
+                                                    L'admin sceglie quali eventi legacy (rental_new_customer,
+                                                    carwash_new_customer, payment callbacks, ecc.) sono
+                                                    serviti da QUESTO template. Sostituisce la mappa
+                                                    hardcoded OLD_TO_PRO: salvato in
+                                                    `system_messages.handled_events` (text[]) e il resolver
+                                                    server lo consulta PRIMA del fallback storico. Cambiare
+                                                    chi gestisce un evento adesso non richiede dev. */}
+                                                <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 space-y-2">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className="text-[11px] uppercase tracking-wider text-blue-300/90 font-semibold">
+                                                            Eventi gestiti da questo template
+                                                        </span>
+                                                        <span className="text-[10px] text-theme-text-muted">
+                                                            {(template.handled_events?.length ?? 0)} assegnati
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-[10px] text-theme-text-muted leading-snug">
+                                                        Spunta gli eventi che vuoi instradare a questo template. Una spunta sposta l'evento qui sopra anche se prima era gestito altrove. Lascia tutto vuoto per usare il routing storico (mappa OLD_TO_PRO).
+                                                    </p>
+                                                    <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
+                                                        {Object.entries(EVENT_LABELS_IT).map(([eventKey, desc]) => {
+                                                            const assigned = (template.handled_events || []).includes(eventKey)
+                                                            return (
+                                                                <button
+                                                                    type="button"
+                                                                    key={eventKey}
+                                                                    onClick={() => {
+                                                                        const current = new Set(template.handled_events || [])
+                                                                        if (current.has(eventKey)) current.delete(eventKey)
+                                                                        else current.add(eventKey)
+                                                                        handleUpdateAutomation(template.id, 'handled_events', Array.from(current))
+                                                                    }}
+                                                                    title={`${desc}\n\nLegacy key: ${eventKey}`}
+                                                                    className={`px-2 py-0.5 rounded-full text-[11px] border transition-colors text-left ${
+                                                                        assigned
+                                                                            ? 'bg-blue-500/20 border-blue-400/60 text-blue-200'
+                                                                            : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:border-theme-text-muted'
+                                                                    }`}
+                                                                >
+                                                                    {desc}
+                                                                </button>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                </div>
 
                                                 {/* Filtri avanzati per-template — pannello collapsible.
                                                     Espone TUTTI i filtri che il cron applica oltre a

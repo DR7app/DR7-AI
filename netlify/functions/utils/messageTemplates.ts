@@ -20,6 +20,12 @@ interface MessageTemplate {
   is_enabled: boolean
   include_header: boolean
   label?: string
+  // DB-driven event routing (admin-editable). Quando un template
+  // dichiara di gestire una chiave evento legacy (es. 'rental_new_customer'),
+  // questa lista vince sulla mappa hardcoded OLD_TO_PRO. Vuota o null →
+  // fallback alla mappa hardcoded (compatibilità con installazioni che
+  // non hanno ancora applicato la migrazione `handled_events`).
+  handled_events?: string[] | null
 }
 
 /**
@@ -106,6 +112,21 @@ export async function resolveKeyForContext(key: string, _context?: RenderContext
     return await resolveWithLabelFallback(key, templates)
   }
 
+  // 1. DB-driven event routing (admin-editable). Cerca il primo template
+  // enabled+non-vuoto che dichiara di gestire questa chiave evento via
+  // handled_events. Vince sulla mappa hardcoded OLD_TO_PRO così l'admin
+  // può riassegnare gli eventi senza intervento dev.
+  const dbRouted = templates.find(t =>
+    Array.isArray(t.handled_events)
+    && t.handled_events.includes(key)
+    && t.is_enabled
+    && !!t.message_body
+  )
+  if (dbRouted) return dbRouted.message_key
+
+  // 2. Fallback alla mappa hardcoded (compat). Quando l'admin non ha
+  // ancora assegnato handled_events a nessun template, il sistema
+  // continua a usare il routing storico.
   const proKey = OLD_TO_PRO[key]
   if (!proKey) return null
   return await resolveWithLabelFallback(proKey, templates)
@@ -119,11 +140,21 @@ async function loadAllTemplates(): Promise<MessageTemplate[]> {
   try {
     if (!supabaseUrl || !supabaseKey) return []
     const supabase = createClient(supabaseUrl, supabaseKey)
-    const { data, error } = await supabase
+    // Tentiamo SELECT con handled_events; se la colonna non esiste ancora
+    // (migrazione non applicata) ricadiamo allo schema vecchio così il
+    // resolver continua a funzionare via OLD_TO_PRO fallback.
+    let { data, error } = await supabase
       .from('system_messages')
-      .select('message_key, message_body, is_enabled, include_header, label')
+      .select('message_key, message_body, is_enabled, include_header, label, handled_events')
+    if (error && /column .* does not exist|handled_events/i.test(error.message || '')) {
+      const fallback = await supabase
+        .from('system_messages')
+        .select('message_key, message_body, is_enabled, include_header, label')
+      data = fallback.data
+      error = fallback.error
+    }
     if (error) throw error
-    return data || []
+    return (data || []) as MessageTemplate[]
   } catch {
     return []
   }
