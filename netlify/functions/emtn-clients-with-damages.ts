@@ -192,35 +192,56 @@ export const handler: Handler = async (event) => {
     })
 
     // Batch resolution: per ogni booking interessante prepara una serie
-    // di chiavi che possono aiutare a trovare il CF e i dati cliente.
+    // Risoluzione CF aggressiva: il match per email su .in() e\' case-sensitive
+    // su Postgres, quindi un cliente salvato come "Mario.Rossi@email.com" in
+    // customers_extended non veniva mai matchato con la booking che ha
+    // "mario.rossi@email.com". Stessa cosa con i nomi: a volte le bookings
+    // hanno "Lorenzo Vladi" in customer_name ma customers_extended ha
+    // nome="Lorenzo" cognome="Vladi" su una riga senza email/user_id.
+    //
+    // Per non perdere clienti, tiriamo TUTTE le righe customers_extended che
+    // hanno un codice_fiscale popolato (singola query, ~poche centinaia di
+    // KB), e indicizziamo per user_id, email-lowercase, nome-cognome-lowercase
+    // e telefono normalizzato.
     const userIds = Array.from(new Set(interesting.map(b => b.user_id).filter(Boolean) as string[]))
-    const emails = Array.from(new Set(interesting.map(b => normEmail(b.customer_email)).filter(Boolean) as string[]))
 
     const profByUserId = new Map<string, CustomerProfile>()
     const profByEmail = new Map<string, CustomerProfile>()
+    const profByName = new Map<string, CustomerProfile>()
+    const profByPhone = new Map<string, CustomerProfile>()
 
-    if (userIds.length > 0) {
-        const { data: profs } = await sb
-            .from('customers_extended')
-            .select('user_id, email, codice_fiscale, nome, cognome')
-            .in('user_id', userIds)
-        for (const p of (profs || []) as CustomerProfile[]) {
-            if (p.user_id) profByUserId.set(p.user_id, p)
-            const e = normEmail(p.email)
-            if (e && !profByEmail.has(e)) profByEmail.set(e, p)
-        }
+    type ExtRow = CustomerProfile & { id?: string | null; telefono?: string | null }
+    const normPhone = (v: string | null | undefined): string | null => {
+        if (!v) return null
+        const digits = String(v).replace(/\D+/g, '')
+        return digits.length >= 7 ? digits.slice(-9) : null // ultimi 9 digit per gestire prefisso paese
     }
-    if (emails.length > 0) {
-        const missing = emails.filter(e => !profByEmail.has(e))
-        if (missing.length > 0) {
+
+    const { data: allWithCf } = await sb
+        .from('customers_extended')
+        .select('user_id, id, email, codice_fiscale, nome, cognome, telefono')
+        .not('codice_fiscale', 'is', null)
+    for (const p of (allWithCf || []) as ExtRow[]) {
+        if (!p.codice_fiscale) continue
+        if (p.user_id && !profByUserId.has(p.user_id)) profByUserId.set(p.user_id, p)
+        const e = normEmail(p.email)
+        if (e && !profByEmail.has(e)) profByEmail.set(e, p)
+        const fullName = normName([p.nome, p.cognome].filter(Boolean).join(' '))
+        if (fullName && !profByName.has(fullName)) profByName.set(fullName, p)
+        const ph = normPhone(p.telefono)
+        if (ph && !profByPhone.has(ph)) profByPhone.set(ph, p)
+    }
+    // Per user_id mancanti dal primo fetch (clienti senza CF salvato) tira la
+    // riga comunque, cosi\' almeno abbiamo nome/cognome per il display.
+    if (userIds.length > 0) {
+        const missingUids = userIds.filter(u => !profByUserId.has(u))
+        if (missingUids.length > 0) {
             const { data: profs } = await sb
                 .from('customers_extended')
-                .select('user_id, email, codice_fiscale, nome, cognome')
-                .in('email', missing)
-            for (const p of (profs || []) as CustomerProfile[]) {
-                const e = normEmail(p.email)
-                if (e) profByEmail.set(e, p)
-                if (p.user_id && !profByUserId.has(p.user_id)) profByUserId.set(p.user_id, p)
+                .select('user_id, id, email, codice_fiscale, nome, cognome, telefono')
+                .in('user_id', missingUids)
+            for (const p of (profs || []) as ExtRow[]) {
+                if (p.user_id) profByUserId.set(p.user_id, p)
             }
         }
     }
@@ -277,9 +298,13 @@ export const handler: Handler = async (event) => {
         const ref = b.pickup_date || b.appointment_date || null
 
         const email = normEmail(b.customer_email)
+        const nameKey = normName(b.customer_name)
+        const phoneKey = normPhone(b.customer_phone)
         const profile =
             (b.user_id && profByUserId.get(b.user_id)) ||
             (email && profByEmail.get(email)) ||
+            (nameKey && profByName.get(nameKey)) ||
+            (phoneKey && profByPhone.get(phoneKey)) ||
             null
         const cf =
             normCF(profile?.codice_fiscale) ||
