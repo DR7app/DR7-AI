@@ -155,6 +155,52 @@ function statusCsvLabel(csv: string | null | undefined): string {
 // Italian day-of-week labels (0=Domenica per JS Date)
 const DAY_LABELS_IT = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab']
 
+// Grouping for the "Eventi gestiti" UI panel — raggruppa le legacy keys
+// per categoria così l'admin trova subito l'evento giusto invece di
+// scorrere una lista piatta di 30+ pillole indistinguibili.
+const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[] }> = [
+  {
+    label: 'Noleggio',
+    color: 'blue',
+    keys: ['rental_new_customer', 'rental_new', 'rental_new_admin', 'rental_modified', 'rental_da_saldare_customer'],
+  },
+  {
+    label: 'Lavaggio / Prime Wash',
+    color: 'cyan',
+    keys: ['carwash_new_customer', 'carwash_new', 'carwash_new_admin', 'carwash_modified'],
+  },
+  {
+    label: 'Meccanica',
+    color: 'teal',
+    keys: ['mechanical_new_customer', 'mechanical_new', 'mechanical_new_admin', 'mechanical_modified'],
+  },
+  {
+    label: 'Firma & Contratto',
+    color: 'violet',
+    keys: ['signature_request_link', 'document_signature_link', 'signature_reminder_whatsapp', 'signature_otp_whatsapp'],
+  },
+  {
+    label: 'Pagamento',
+    color: 'emerald',
+    keys: ['payment_link_customer', 'payment_received_extension', 'payment_received_extension_admin', 'payment_received_damages', 'payment_received_damages_admin'],
+  },
+  {
+    label: 'Cauzione & Annullamento',
+    color: 'amber',
+    keys: ['deposit_return_iban', 'booking_cancelled_whatsapp', 'website_booking_cancelled_customer'],
+  },
+  {
+    label: 'Admin Alerts',
+    color: 'rose',
+    keys: ['admin_new_website_quote', 'admin_no_cauzione_request'],
+  },
+  {
+    label: 'Marketing / Wallet / Fidelity',
+    color: 'pink',
+    keys: ['review_request_whatsapp', 'birthday_message', 'wallet_bonus_credit', 'fidelity_voucher_whatsapp'],
+  },
+]
+
 /**
  * Restituisce una lista di righe in italiano descrivendo TUTTI i
  * filtri "advanced" attivi sul template. Solo i filtri esplicitamente
@@ -3101,7 +3147,7 @@ export default function MessaggiSistemaProTab() {
                                                     `system_messages.handled_events` (text[]) e il resolver
                                                     server lo consulta PRIMA del fallback storico. Cambiare
                                                     chi gestisce un evento adesso non richiede dev. */}
-                                                <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 space-y-2">
+                                                <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 space-y-3">
                                                     <div className="flex items-center justify-between mb-1">
                                                         <span className="text-[11px] uppercase tracking-wider text-blue-300/90 font-semibold">
                                                             Eventi gestiti da questo template
@@ -3111,30 +3157,71 @@ export default function MessaggiSistemaProTab() {
                                                         </span>
                                                     </div>
                                                     <p className="text-[10px] text-theme-text-muted leading-snug">
-                                                        Spunta gli eventi che vuoi instradare a questo template. Una spunta sposta l'evento qui sopra anche se prima era gestito altrove. Lascia tutto vuoto per usare il routing storico (mappa OLD_TO_PRO).
+                                                        Spunta gli eventi che vuoi instradare a questo template. Una spunta sposta l'evento qui sopra anche se prima era gestito altrove. Lascia tutto vuoto per usare il routing storico.
                                                     </p>
-                                                    <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
-                                                        {Object.entries(EVENT_LABELS_IT).map(([eventKey, desc]) => {
-                                                            const assigned = (template.handled_events || []).includes(eventKey)
+                                                    <div className="space-y-2.5">
+                                                        {EVENT_GROUPS.map(group => {
+                                                            const colorMap: Record<string, { dot: string; pillOn: string; pillTxt: string }> = {
+                                                                blue:    { dot: 'bg-blue-400',    pillOn: 'bg-blue-500/25 border-blue-400/70',       pillTxt: 'text-blue-100' },
+                                                                cyan:    { dot: 'bg-cyan-400',    pillOn: 'bg-cyan-500/25 border-cyan-400/70',       pillTxt: 'text-cyan-100' },
+                                                                teal:    { dot: 'bg-teal-400',    pillOn: 'bg-teal-500/25 border-teal-400/70',       pillTxt: 'text-teal-100' },
+                                                                violet:  { dot: 'bg-violet-400',  pillOn: 'bg-violet-500/25 border-violet-400/70',   pillTxt: 'text-violet-100' },
+                                                                emerald: { dot: 'bg-emerald-400', pillOn: 'bg-emerald-500/25 border-emerald-400/70', pillTxt: 'text-emerald-100' },
+                                                                amber:   { dot: 'bg-amber-400',   pillOn: 'bg-amber-500/25 border-amber-400/70',     pillTxt: 'text-amber-100' },
+                                                                rose:    { dot: 'bg-rose-400',    pillOn: 'bg-rose-500/25 border-rose-400/70',       pillTxt: 'text-rose-100' },
+                                                                pink:    { dot: 'bg-pink-400',    pillOn: 'bg-pink-500/25 border-pink-400/70',       pillTxt: 'text-pink-100' },
+                                                            }
+                                                            const colors = colorMap[group.color] || colorMap.blue
+                                                            const knownKeys = group.keys.filter(k => EVENT_LABELS_IT[k as keyof typeof EVENT_LABELS_IT])
+                                                            if (knownKeys.length === 0) return null
+                                                            const assignedInGroup = knownKeys.filter(k => (template.handled_events || []).includes(k)).length
                                                             return (
-                                                                <button
-                                                                    type="button"
-                                                                    key={eventKey}
-                                                                    onClick={() => {
-                                                                        const current = new Set(template.handled_events || [])
-                                                                        if (current.has(eventKey)) current.delete(eventKey)
-                                                                        else current.add(eventKey)
-                                                                        handleUpdateAutomation(template.id, 'handled_events', Array.from(current))
-                                                                    }}
-                                                                    title={`${desc}\n\nLegacy key: ${eventKey}`}
-                                                                    className={`px-2 py-0.5 rounded-full text-[11px] border transition-colors text-left ${
-                                                                        assigned
-                                                                            ? 'bg-blue-500/20 border-blue-400/60 text-blue-200'
-                                                                            : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:border-theme-text-muted'
-                                                                    }`}
-                                                                >
-                                                                    {desc}
-                                                                </button>
+                                                                <div key={group.label} className="space-y-1.5">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className={`w-2 h-2 rounded-full ${colors.dot}`} />
+                                                                        <span className="text-[10px] uppercase tracking-wider font-bold text-theme-text-muted">
+                                                                            {group.label}
+                                                                        </span>
+                                                                        {assignedInGroup > 0 && (
+                                                                            <span className="text-[9px] text-theme-text-muted/70">
+                                                                                ({assignedInGroup}/{knownKeys.length})
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex flex-col gap-1 pl-3.5">
+                                                                        {knownKeys.map(eventKey => {
+                                                                            const desc = EVENT_LABELS_IT[eventKey as keyof typeof EVENT_LABELS_IT] || eventKey
+                                                                            const assigned = (template.handled_events || []).includes(eventKey)
+                                                                            return (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    key={eventKey}
+                                                                                    onClick={() => {
+                                                                                        const current = new Set(template.handled_events || [])
+                                                                                        if (current.has(eventKey)) current.delete(eventKey)
+                                                                                        else current.add(eventKey)
+                                                                                        handleUpdateAutomation(template.id, 'handled_events', Array.from(current))
+                                                                                    }}
+                                                                                    title={`Legacy key: ${eventKey}`}
+                                                                                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left border transition-colors ${
+                                                                                        assigned
+                                                                                            ? `${colors.pillOn} ${colors.pillTxt}`
+                                                                                            : 'bg-theme-bg-tertiary/50 border-theme-border/60 text-theme-text-muted hover:bg-theme-bg-hover hover:border-theme-text-muted'
+                                                                                    }`}
+                                                                                >
+                                                                                    <span className={`w-3.5 h-3.5 rounded border shrink-0 flex items-center justify-center ${assigned ? 'bg-current border-current' : 'border-theme-border'}`}>
+                                                                                        {assigned && (
+                                                                                            <svg className="w-2.5 h-2.5 text-theme-bg-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                                                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                                                            </svg>
+                                                                                        )}
+                                                                                    </span>
+                                                                                    <span className="text-xs leading-snug">{desc}</span>
+                                                                                </button>
+                                                                            )
+                                                                        })}
+                                                                    </div>
+                                                                </div>
                                                             )
                                                         })}
                                                     </div>
