@@ -2983,14 +2983,23 @@ export default function MessaggiSistemaProTab() {
                                                 })()}
 
                                                 {/* Cron config (trigger_event/offset/send_hour/target_*)
-                                                    visibile SOLO quando il template non è event-driven.
+                                                    sempre visibile per i template non event-driven, anche
+                                                    quando Automatico è OFF — così l'admin può configurare
+                                                    la programmazione PRIMA di attivarla, e verificarla
+                                                    dopo. Una nota gialla compare quando Automatico è OFF
+                                                    per chiarire che le modifiche sono salvate ma il cron
+                                                    non le sta ancora usando.
                                                     Per i template event-driven (Conferma Noleggio,
-                                                    Wallet Bonus, Firma, ecc.) il cron viene saltato
-                                                    a monte dal cron stesso (vedi
-                                                    process-scheduled-system-messages-cron.ts) — questi
-                                                    campi sarebbero inerti e mostrarli confondeva. */}
-                                                {template.is_automatic && getProKeyEventTriggers(template.message_key, template.label).length === 0 && (
+                                                    Wallet Bonus, Firma, ecc.) il cron viene saltato a
+                                                    monte e il blocco resta nascosto: l'admin vede solo
+                                                    le righe "Evento ·" nel preview Programmazione. */}
+                                                {getProKeyEventTriggers(template.message_key, template.label).length === 0 && (
                                                     <div className="rounded-lg bg-theme-bg-primary border border-theme-border/50 p-3 space-y-2">
+                                                        {!template.is_automatic && (
+                                                            <div className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-md px-2 py-1.5">
+                                                                <span className="font-semibold">Automatico è OFF</span> — le impostazioni qui sotto sono salvate ma il cron non le userà finché non clicchi il badge "Manuale" in alto per metterlo a "Automatico".
+                                                            </div>
+                                                        )}
                                                         <div className="flex flex-wrap items-center gap-3">
                                                             <div className="flex items-center gap-2">
                                                                 <div className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
