@@ -1,7 +1,6 @@
 import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 import { getMessageTemplate, resolveKeyForContext } from './utils/messageTemplates';
-import { getAdminNotificationPhone } from './utils/notificationPhone';
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
@@ -74,7 +73,27 @@ const handler: Handler = async (event) => {
   }
 
   let message = '';
-  let targetPhone = customPhone || (await getAdminNotificationPhone());
+  // Strict recipient resolution. Order of precedence:
+  //   1. `customPhone` explicitly set by the caller (admin alerts, manual sends)
+  //   2. The booking's own customer_phone (cron sends per booking)
+  //   3. SKIP — never silently fall back to the admin number, otherwise a
+  //      cron that processes 500 phone-less bookings will spam the admin
+  //      with hundreds of "customer" messages (incident May 13 2026 at 8:52).
+  const bookingPhone = (body?.booking && (body.booking.customer_phone || body.booking?.booking_details?.customer?.phone)) || '';
+  const resolvedPhone = (customPhone || bookingPhone || '').toString().trim();
+  if (!resolvedPhone) {
+    console.warn('[send-whatsapp] No recipient phone (no customPhone, no booking.customer_phone) — skipping send. templateKey=', templateKey, 'messageKey=', explicitMessageKey);
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        message: 'No recipient phone — notification skipped',
+        success: true,
+        skipped: true,
+        reason: 'no_recipient_phone',
+      }),
+    };
+  }
+  let targetPhone = resolvedPhone;
   // Track the resolved Pro key so we can look up the email toggle after WhatsApp send.
   let usedTemplateKey: string | null = null;
 
