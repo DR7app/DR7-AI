@@ -1785,6 +1785,42 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           : (confSvc === 'mechanical' || confSvc === 'mechanical_service'
               ? 'mechanical_new_customer'
               : 'carwash_new_customer')
+        // Extract templateVars once so the per-method block below can reuse them.
+        const waTemplateVars = {
+          // Customer
+          customer_name: custFirstName,
+          nome: custFirstName,
+          // Service
+          service_name: serviceNames,
+          servizio: serviceNames,
+          // Date/time (short + long + aliases)
+          appointment_date: fmtDateShort,
+          appointment_time: fmtTime,
+          date: fmtDateShort,
+          time: fmtTime,
+          data: fmtDateShort,
+          ora: fmtTime,
+          data_lunga: fmtDateLong,
+          // Totals
+          total: totalEur,
+          totale: totalEur,
+          amount: totalEur,
+          importo: totalEur,
+          // Vehicle
+          vehicle_plate: vehiclePlate || '',
+          targa: vehiclePlate || '',
+          plate: vehiclePlate || '',
+          // Payment status label
+          payment_info: paymentInfoLabel,
+          payment_status: paymentInfoLabel,
+          pagamento: paymentInfoLabel,
+          // Booking id
+          booking_id: (data?.id || '').substring(0, 8).toUpperCase(),
+          booking_ref: (data?.id || '').substring(0, 8).toUpperCase(),
+          // Notes
+          notes: formData.notes || '',
+          note: formData.notes || '',
+        }
         const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1797,46 +1833,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             // templates vincono sul canonical.
             templateKey: eventKey,
             booking: { service_type: confSvc },
-            // Alias every placeholder name the Pro template might use —
-            // English (service_name, appointment_date, ...), Italian
-            // (servizio, data, ora, targa, pagamento), and short aliases
-            // (date, time). Any of these the body references will resolve;
-            // the ones it doesn't reference are simply ignored by the renderer.
-            templateVars: {
-              // Customer
-              customer_name: custFirstName,
-              nome: custFirstName,
-              // Service
-              service_name: serviceNames,
-              servizio: serviceNames,
-              // Date/time (short + long + aliases)
-              appointment_date: fmtDateShort,
-              appointment_time: fmtTime,
-              date: fmtDateShort,
-              time: fmtTime,
-              data: fmtDateShort,
-              ora: fmtTime,
-              data_lunga: fmtDateLong,
-              // Totals
-              total: totalEur,
-              totale: totalEur,
-              amount: totalEur,
-              importo: totalEur,
-              // Vehicle
-              vehicle_plate: vehiclePlate || '',
-              targa: vehiclePlate || '',
-              plate: vehiclePlate || '',
-              // Payment status label
-              payment_info: paymentInfoLabel,
-              payment_status: paymentInfoLabel,
-              pagamento: paymentInfoLabel,
-              // Booking id
-              booking_id: (data?.id || '').substring(0, 8).toUpperCase(),
-              booking_ref: (data?.id || '').substring(0, 8).toUpperCase(),
-              // Notes
-              notes: formData.notes || '',
-              note: formData.notes || '',
-            },
+            templateVars: waTemplateVars,
             skipHeader: true,
           })
         })
@@ -1845,6 +1842,36 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           toast.error('Template mancante in Messaggi di Sistema Pro: pro_conferma_lavaggio')
         } else {
           logger.log('✅ WhatsApp customer confirmation sent to', customerPhone)
+        }
+
+        // Per-payment-method receipt event — fires IN ADDITION to the
+        // conferma above when admin saves a paid lavaggio with Conferma
+        // Prenotazione ticked. Admin can have a dedicated template per
+        // method by ticking the matching event in handled_events.
+        if (confirmBooking && !isPendingPayment) {
+          const pm = String(formData.payment_method || '').toLowerCase().trim()
+          let methodEvent: string | null = null
+          if (pm.includes('contanti') || pm === 'cash' || pm === 'prepagata') methodEvent = 'booking_paid_cash'
+          else if (pm.includes('carta') || pm.includes('bancomat') || pm === 'pos') methodEvent = 'booking_paid_card'
+          else if (pm.includes('bonifico') || pm.includes('sepa')) methodEvent = 'booking_paid_bank_transfer'
+          else if (pm === 'paypal') methodEvent = 'booking_paid_paypal'
+          else if (pm.includes('wallet') || pm === 'credit wallet') methodEvent = 'booking_paid_wallet'
+
+          if (methodEvent) {
+            const finalMethodEvent = methodEvent
+            fetch('/.netlify/functions/send-whatsapp-notification', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                customPhone: customerPhone,
+                templateKey: finalMethodEvent,
+                booking: { service_type: confSvc },
+                templateVars: waTemplateVars,
+                skipHeader: true,
+              })
+            }).then(() => logger.log(`✅ Per-method WhatsApp sent (${finalMethodEvent}) to`, customerPhone))
+              .catch(err => console.error(`⚠️ Per-method WhatsApp (${finalMethodEvent}) failed:`, err))
+          }
         }
       }
     } catch (whatsappError) {

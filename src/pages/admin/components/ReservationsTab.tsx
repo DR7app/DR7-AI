@@ -5561,6 +5561,36 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             }).then(() => logger.log(`✅ Customer WhatsApp sent (${finalTemplateKey}) to`, custPhone))
               .catch(err => console.error('⚠️ Customer WhatsApp failed:', err))
           }
+
+          // Per-payment-method receipt event — fires IN ADDITION to the
+          // conferma above when admin saves a paid booking with Conferma
+          // Prenotazione ticked. Admin can have a dedicated template per
+          // method (Pagato Contanti, Pagato Carta, ...) by ticking the
+          // matching event in the template's handled_events. If no template
+          // claims the event, the send silently skips (no fallback).
+          if (confirmBooking && !isPending) {
+            const pm = String(formData.payment_method || '').toLowerCase().trim()
+            let methodEvent: string | null = null
+            if (pm.includes('contanti') || pm === 'cash' || pm === 'prepagata') methodEvent = 'booking_paid_cash'
+            else if (pm.includes('carta') || pm.includes('bancomat') || pm === 'pos') methodEvent = 'booking_paid_card'
+            else if (pm.includes('bonifico') || pm.includes('sepa')) methodEvent = 'booking_paid_bank_transfer'
+            else if (pm === 'paypal') methodEvent = 'booking_paid_paypal'
+            else if (pm.includes('wallet') || pm === 'credit wallet') methodEvent = 'booking_paid_wallet'
+
+            if (methodEvent) {
+              const finalMethodEvent = methodEvent
+              fetch('/.netlify/functions/send-whatsapp-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  customPhone: custPhone,
+                  templateKey: finalMethodEvent,
+                  templateVars,
+                })
+              }).then(() => logger.log(`✅ Per-method WhatsApp sent (${finalMethodEvent}) to`, custPhone))
+                .catch(err => console.error(`⚠️ Per-method WhatsApp (${finalMethodEvent}) failed:`, err))
+            }
+          }
         }
       } catch (whatsappError) {
         console.error('⚠️ Failed to send WhatsApp notification:', whatsappError)

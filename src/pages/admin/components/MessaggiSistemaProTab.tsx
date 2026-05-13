@@ -190,7 +190,16 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; servic
   {
     label: 'Pagamento',
     color: 'emerald',
-    keys: ['payment_link_customer', 'payment_received_extension', 'payment_received_extension_admin', 'payment_received_damages', 'payment_received_damages_admin', 'booking_confirmed_da_saldare'],
+    keys: [
+      'payment_link_customer',
+      'payment_received_extension', 'payment_received_extension_admin',
+      'payment_received_damages', 'payment_received_damages_admin',
+      'booking_confirmed_da_saldare',
+      // Per-payment-method receipt events (fired in addition to conferma when
+      // admin saves a paid booking + Conferma Prenotazione).
+      'booking_paid_cash', 'booking_paid_card', 'booking_paid_bank_transfer',
+      'booking_paid_paypal', 'booking_paid_wallet',
+    ],
   },
   {
     label: 'Cauzione & Annullamento',
