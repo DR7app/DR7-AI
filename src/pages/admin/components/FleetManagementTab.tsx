@@ -1,20 +1,26 @@
+import { useState } from 'react'
 import FleetList from './FleetList'
+import FleetVehicleDetail from './FleetVehicleDetail'
 
 /**
- * Gestione Flotta — dashboard KPI + tabella veicoli con foto/utilizzo/
- * fatturato. Il Magazzino ricambi (olio, pastiglie, sensori) ora vive su
- * una sua sub-tab dedicata 'Magazzino', non piu' dentro un toggle.
+ * Gestione Flotta — KPI dashboard + tabella veicoli con foto/utilizzo/
+ * fatturato. Cliccare su una riga apre la Scheda Veicolo (FleetVehicleDetail)
+ * direttamente qui, senza saltare alla tab Veicoli. La Scheda mostra tutti
+ * i dettagli: gomme, freni, tagliando, assicurazione, performance, ecc.
  *
- * onOpenDetail nav-igate alla tab Veicoli con l'id del veicolo
- * selezionato (la tab Veicoli ascolta admin:open-vehicle).
+ * Il Magazzino ricambi vive ora su una sub-tab dedicata 'Magazzino'.
  */
 export default function FleetManagementTab() {
-    const handleOpenDetail = (vehicleId: string) => {
-        try {
-            window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: 'vehicles' } }))
-            window.dispatchEvent(new CustomEvent('admin:open-vehicle', { detail: { vehicleId } }))
-        } catch { /* ignore */ }
+    const [openVehicleId, setOpenVehicleId] = useState<string | null>(null)
+
+    if (openVehicleId) {
+        return (
+            <FleetVehicleDetail
+                vehicleId={openVehicleId}
+                onBack={() => setOpenVehicleId(null)}
+            />
+        )
     }
 
-    return <FleetList onOpenDetail={handleOpenDetail}/>
+    return <FleetList onOpenDetail={setOpenVehicleId} />
 }
