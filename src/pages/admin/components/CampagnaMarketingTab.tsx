@@ -68,6 +68,13 @@ interface AudienceFilters {
     excludeElite: boolean
     excludeNewEntry: boolean
     excludeDr7Club: boolean
+    // Inclusion-mode flags (mutually exclusive). Quando uno è true
+    // l'audience si restringe ai SOLI clienti di quella categoria.
+    // Aggiunti per risolvere il bug "Solo DR7 Club mostrava 0".
+    onlyDr7Club?: boolean
+    onlyMember?: boolean
+    onlyElite?: boolean
+    onlyNewEntry?: boolean
     selectedCustomerIds: string[] | null
 }
 
@@ -145,6 +152,14 @@ export default function CampagnaMarketingTab() {
     const [excludeMember, setExcludeMember] = useState(false)
     const [excludeElite, setExcludeElite] = useState(false)
     const [excludeNewEntry, setExcludeNewEntry] = useState(false)
+    // Inclusion-mode toggles: quando uno di questi è ON, l'audience
+    // si riduce ai SOLI clienti con quel tier/flag, ignorando tutti i
+    // filtri di esclusione qui sopra. Mutualmente esclusivi: attivarne
+    // uno spegne gli altri (vedi setOnly* helpers nella UI).
+    const [onlyDr7Club, setOnlyDr7Club] = useState(false)
+    const [onlyMember, setOnlyMember] = useState(false)
+    const [onlyElite, setOnlyElite] = useState(false)
+    const [onlyNewEntry, setOnlyNewEntry] = useState(false)
     const [excludeDr7Club, setExcludeDr7Club] = useState(false)
 
     // Scheduling state — programmatic invio
@@ -209,6 +224,10 @@ export default function CampagnaMarketingTab() {
             excludeElite,
             excludeNewEntry,
             excludeDr7Club,
+            onlyDr7Club,
+            onlyMember,
+            onlyElite,
+            onlyNewEntry,
             selectedCustomerIds: null,
         }
     }
@@ -656,10 +675,18 @@ export default function CampagnaMarketingTab() {
         }
     }
 
-    // Apply tier / DR7 Club exclusions BEFORE search + pagination so the
+    // Apply tier / DR7 Club filters BEFORE search + pagination so the
     // counts shown ("Seleziona tutti", "Selezionati") reflect what will
     // actually be sent.
+    //
+    // Due modalità mutuamente esclusive:
+    //   1. INCLUSION (onlyX = true) → tieni SOLO i clienti che matchano
+    //      la categoria scelta; ignora tutti gli exclude*. Risolve il
+    //      caso "voglio mandare SOLO ai DR7 Club".
+    //   2. EXCLUSION (tutti gli only* a false) → rimuovi le categorie
+    //      ticchettate, tieni tutto il resto. Modalità storica.
     const eligible = useMemo(() => {
+        const anyInclusionMode = onlyDr7Club || onlyMember || onlyElite || onlyNewEntry
         return customers.filter(c => {
             const status = clientStatus.lookup({
                 customerId: c.id,
@@ -668,6 +695,15 @@ export default function CampagnaMarketingTab() {
             })
             const tier = status?.tier ?? 'new'
             const isDr7 = status?.dr7Club ?? false
+            if (anyInclusionMode) {
+                if (onlyDr7Club && !isDr7) return false
+                if (onlyMember && tier !== 'member') return false
+                if (onlyElite && tier !== 'elite') return false
+                if (onlyNewEntry && tier !== 'new') return false
+                // Anche in inclusion mode rispetta la blacklist esplicita
+                if (excludeBlacklist && tier === 'blacklist') return false
+                return true
+            }
             if (excludeBlacklist && tier === 'blacklist') return false
             if (excludeMember && tier === 'member') return false
             if (excludeElite && tier === 'elite') return false
@@ -675,7 +711,7 @@ export default function CampagnaMarketingTab() {
             if (excludeDr7Club && isDr7) return false
             return true
         })
-    }, [customers, clientStatus, excludeBlacklist, excludeMember, excludeElite, excludeNewEntry, excludeDr7Club])
+    }, [customers, clientStatus, excludeBlacklist, excludeMember, excludeElite, excludeNewEntry, excludeDr7Club, onlyDr7Club, onlyMember, onlyElite, onlyNewEntry])
 
     const excludedCount = customers.length - eligible.length
 
@@ -958,7 +994,75 @@ export default function CampagnaMarketingTab() {
                         </div>
                     </div>
 
-                    {/* Exclusion filters */}
+                    {/* Inclusion filters — quando ON, riducono l'audience SOLO
+                        a quella categoria, ignorando "Escludi". Risolve il
+                        caso "voglio mandare SOLO ai DR7 Club" prima
+                        implementato in modo confuso (toggle DR7 Club nelle
+                        esclusioni faceva il contrario di quel che sembrava). */}
+                    <div className="bg-theme-bg-secondary/50 border border-theme-border rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-semibold text-theme-text-secondary uppercase">
+                                Includi solo
+                            </span>
+                            <span className="text-[10px] text-theme-text-muted italic">
+                                Se acceso, "Escludi" qui sotto è ignorato (eccetto Blacklist).
+                            </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-xs">
+                            <label className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full cursor-pointer transition-colors ${onlyDr7Club ? 'bg-[#D4B896]/20 border border-[#D4B896]/60' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>
+                                <input
+                                    type="checkbox"
+                                    checked={onlyDr7Club}
+                                    onChange={(e) => {
+                                        const v = e.target.checked
+                                        setOnlyDr7Club(v)
+                                        if (v) { setOnlyMember(false); setOnlyElite(false); setOnlyNewEntry(false) }
+                                    }}
+                                />
+                                <span className="text-[#D4B896]">Solo DR7 Club</span>
+                            </label>
+                            <label className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full cursor-pointer transition-colors ${onlyMember ? 'bg-blue-400/20 border border-blue-400/60' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>
+                                <input
+                                    type="checkbox"
+                                    checked={onlyMember}
+                                    onChange={(e) => {
+                                        const v = e.target.checked
+                                        setOnlyMember(v)
+                                        if (v) { setOnlyDr7Club(false); setOnlyElite(false); setOnlyNewEntry(false) }
+                                    }}
+                                />
+                                <span className="text-blue-400">Solo Member</span>
+                            </label>
+                            <label className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full cursor-pointer transition-colors ${onlyElite ? 'bg-amber-400/20 border border-amber-400/60' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>
+                                <input
+                                    type="checkbox"
+                                    checked={onlyElite}
+                                    onChange={(e) => {
+                                        const v = e.target.checked
+                                        setOnlyElite(v)
+                                        if (v) { setOnlyDr7Club(false); setOnlyMember(false); setOnlyNewEntry(false) }
+                                    }}
+                                />
+                                <span className="text-amber-400">Solo Elite</span>
+                            </label>
+                            <label className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full cursor-pointer transition-colors ${onlyNewEntry ? 'bg-emerald-400/20 border border-emerald-400/60' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>
+                                <input
+                                    type="checkbox"
+                                    checked={onlyNewEntry}
+                                    onChange={(e) => {
+                                        const v = e.target.checked
+                                        setOnlyNewEntry(v)
+                                        if (v) { setOnlyDr7Club(false); setOnlyMember(false); setOnlyElite(false) }
+                                    }}
+                                />
+                                <span className="text-emerald-400">Solo New entry</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    {/* Exclusion filters — etichette esplicite "Escludi X" per
+                        non lasciare ambiguità (prima dicevano solo "DR7 Club"
+                        e si poteva pensare fosse un filtro di inclusione). */}
                     <div className="bg-theme-bg-secondary/50 border border-theme-border rounded-lg p-3">
                         <div className="flex items-center justify-between mb-2">
                             <span className="text-xs font-semibold text-theme-text-secondary uppercase">
@@ -977,7 +1081,7 @@ export default function CampagnaMarketingTab() {
                                     checked={excludeBlacklist}
                                     onChange={(e) => setExcludeBlacklist(e.target.checked)}
                                 />
-                                <span className="text-red-400">Blacklist</span>
+                                <span className="text-red-400">Escludi Blacklist</span>
                             </label>
                             <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-theme-bg-tertiary cursor-pointer hover:bg-theme-bg-hover">
                                 <input
@@ -985,7 +1089,7 @@ export default function CampagnaMarketingTab() {
                                     checked={excludeMember}
                                     onChange={(e) => setExcludeMember(e.target.checked)}
                                 />
-                                <span className="text-blue-400">Member</span>
+                                <span className="text-blue-400">Escludi Member</span>
                             </label>
                             <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-theme-bg-tertiary cursor-pointer hover:bg-theme-bg-hover">
                                 <input
@@ -993,7 +1097,7 @@ export default function CampagnaMarketingTab() {
                                     checked={excludeElite}
                                     onChange={(e) => setExcludeElite(e.target.checked)}
                                 />
-                                <span className="text-amber-400">Elite</span>
+                                <span className="text-amber-400">Escludi Elite</span>
                             </label>
                             <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-theme-bg-tertiary cursor-pointer hover:bg-theme-bg-hover">
                                 <input
@@ -1001,7 +1105,7 @@ export default function CampagnaMarketingTab() {
                                     checked={excludeNewEntry}
                                     onChange={(e) => setExcludeNewEntry(e.target.checked)}
                                 />
-                                <span className="text-emerald-400">New entry</span>
+                                <span className="text-emerald-400">Escludi New entry</span>
                             </label>
                             <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-theme-bg-tertiary cursor-pointer hover:bg-theme-bg-hover">
                                 <input
@@ -1009,7 +1113,7 @@ export default function CampagnaMarketingTab() {
                                     checked={excludeDr7Club}
                                     onChange={(e) => setExcludeDr7Club(e.target.checked)}
                                 />
-                                <span className="text-[#D4B896]">DR7 Club</span>
+                                <span className="text-[#D4B896]">Escludi DR7 Club</span>
                             </label>
                         </div>
                     </div>

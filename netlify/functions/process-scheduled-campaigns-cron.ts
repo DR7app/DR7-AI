@@ -35,6 +35,12 @@ interface AudienceFilters {
     excludeElite?: boolean
     excludeNewEntry?: boolean
     excludeDr7Club?: boolean
+    // Inclusion-mode flags (mutually exclusive). Quando uno è true,
+    // l'audience del cron si restringe ai SOLI clienti di quella categoria.
+    onlyDr7Club?: boolean
+    onlyMember?: boolean
+    onlyElite?: boolean
+    onlyNewEntry?: boolean
     selectedCustomerIds?: string[] | null
 }
 
@@ -123,12 +129,24 @@ async function computeAudience(
     const all = await loadAllCustomers(sb)
     const dr7 = await loadDr7ClubKeys()
 
+    const anyInclusionMode = !!(filters.onlyDr7Club || filters.onlyMember || filters.onlyElite || filters.onlyNewEntry)
     const eligible = all.filter(c => {
         const phone = normalisePhone(c.telefono)
         if (!phone) return false
         const tier = tierOf(c)
         const isDr7 = !!((c.user_id && dr7.userIds.has(c.user_id))
             || (c.email && dr7.emails.has(c.email.toLowerCase())))
+        // Inclusion mode: include ONLY the chosen category, ignore other
+        // exclude* flags (mirror del client side in CampagnaMarketingTab).
+        // Blacklist resta rispettata anche in inclusion mode per safety.
+        if (anyInclusionMode) {
+            if (filters.onlyDr7Club && !isDr7) return false
+            if (filters.onlyMember && tier !== 'member') return false
+            if (filters.onlyElite && tier !== 'elite') return false
+            if (filters.onlyNewEntry && tier !== 'new') return false
+            if (filters.excludeBlacklist !== false && tier === 'blacklist') return false
+            return true
+        }
         if (filters.excludeBlacklist !== false && tier === 'blacklist') return false
         if (filters.excludeMember && tier === 'member') return false
         if (filters.excludeElite && tier === 'elite') return false
