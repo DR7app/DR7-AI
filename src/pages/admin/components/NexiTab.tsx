@@ -279,11 +279,10 @@ export default function NexiTab() {
         try {
             const days = Math.max(1, Math.min(365, parseInt(preauthDurationDays) || 7))
             const captureBy = new Date(Date.now() + days * 86400000).toISOString()
-            // Endpoint paybylink + USE_CONTRACT: l'unico che onora EXPLICIT
-            // (il vecchio /orders/mit ignorava EXPLICIT e addebitava).
-            // Cliente riceve un link, vede la carta salvata mascherata,
-            // conferma con 1 click (SCA se richiesto), fondi bloccati.
-            const res = await authFetch('/.netlify/functions/nexi-create-preauth-on-token', {
+            // Silent MIT preauth: chiamata diretta su carta tokenizzata, no link.
+            // Il backend ora include recurrence.action=USE_CONTRACT nel payload,
+            // condizione richiesta da Nexi per onorare captureType=EXPLICIT.
+            const res = await authFetch('/.netlify/functions/nexi-charge-mit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -292,33 +291,21 @@ export default function NexiTab() {
                     description: preauthDescription || `Pre-autorizzazione - ${preauthCard.full_name || preauthCard.email}`,
                     customerEmail: preauthCard.email || null,
                     customerName: preauthCard.full_name || null,
+                    captureType: 'EXPLICIT',
                     expectedCaptureBy: captureBy,
                     durationDays: days,
-                    expirationHours: 24,
                 }),
             })
             const data = await res.json()
             if (res.ok && data.success) {
-                // Mostra il link al admin + copy + WhatsApp share
-                const link = data.paymentUrl
-                if (link) {
-                    try { await navigator.clipboard.writeText(link) } catch { /* ignore */ }
-                    const goWhats = window.confirm(
-                        `Link pre-autorizzazione creato (copiato negli appunti):\n\n${link}\n\n` +
-                        `Aprire WhatsApp per inviarlo al cliente?`
-                    )
-                    if (goWhats && preauthCard.phone) {
-                        const text = encodeURIComponent(
-                            `Ciao ${preauthCard.full_name || ''}, conferma la pre-autorizzazione di €${amt.toFixed(2)} a questo link (scade in 24h): ${link}`
-                        )
-                        const phone = preauthCard.phone.replace(/\D/g, '')
-                        window.open(`https://wa.me/${phone}?text=${text}`, '_blank')
-                    }
-                }
-                toast.success(data.message || `Pre-autorizzazione €${amt.toFixed(2)} pronta`)
+                toast.success(data.message || `Pre-autorizzazione di €${amt.toFixed(2)} creata`)
                 setShowPreauthModal(false)
                 await fetchTransactions()
                 await fetchTokenizedCards()
+            } else if (data.wronglyCharged) {
+                // Safety: Nexi ha addebitato invece di bloccare. Auto-refund
+                // gia\' tentato lato backend. Avvisa con stato chiaro.
+                toast.error(data.error || 'Pre-autorizzazione fallita: addebito invece di blocco')
             } else {
                 toast.error(data.error || 'Pre-autorizzazione fallita')
             }
@@ -1268,7 +1255,7 @@ export default function NexiTab() {
                             <div className="flex items-start justify-between gap-3">
                                 <div>
                                     <h3 className="text-lg font-bold text-theme-text-primary">Pre-autorizzazione</h3>
-                                    <p className="text-xs text-theme-text-muted mt-0.5">Genera link per il cliente: vede la carta salvata, conferma con 1 click, fondi bloccati. Cattura o annulla entro {Math.max(1, Math.min(365, parseInt(preauthDurationDays) || 7))} {Math.max(1, Math.min(365, parseInt(preauthDurationDays) || 7)) === 1 ? 'giorno' : 'giorni'}.</p>
+                                    <p className="text-xs text-theme-text-muted mt-0.5">Blocca i fondi senza addebitarli. Cattura entro {Math.max(1, Math.min(365, parseInt(preauthDurationDays) || 7))} {Math.max(1, Math.min(365, parseInt(preauthDurationDays) || 7)) === 1 ? 'giorno' : 'giorni'} o annulla.</p>
                                 </div>
                                 <button
                                     onClick={() => setShowPreauthModal(false)}
@@ -1350,15 +1337,14 @@ export default function NexiTab() {
                                     return (
                                         <p className="text-[11px] text-theme-text-muted mt-1.5">
                                             Scadenza pre-autorizzazione: <span className="text-theme-text-primary font-semibold">{captureBy.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                                            {days > 30 && <span className="text-amber-400"> · oltre 30g richiede rinnovo manuale</span>}
+                                            {days > 6 && <span className="text-blue-400"> · auto-rinnovo ogni 6g</span>}
                                         </p>
                                     )
                                 })()}
                             </div>
 
-                            <div className="text-[11px] text-theme-text-muted bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 leading-relaxed space-y-1.5">
-                                <p><strong className="text-blue-400">Come funziona:</strong> Nexi genera un link di conferma. Il cliente lo apre, vede la sua carta salvata (no reinserimento dati), conferma con 1 tap (SCA se richiesto). I fondi vengono <em>bloccati</em>, NON addebitati.</p>
-                                <p>Il blocco dura tipicamente 7-30 giorni a seconda dell'emittente carta. Catturi o annulli in qualsiasi momento entro quella finestra.</p>
+                            <div className="text-[11px] text-theme-text-muted bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 leading-relaxed">
+                                <strong className="text-blue-400">Come funziona:</strong> blocco fondi silenzioso sulla carta tokenizzata del cliente. Per durate {'>'} 6 giorni il sistema rinnova automaticamente il blocco ogni 6g (cron giornaliero). Catturi o annulli in qualsiasi momento.
                             </div>
                         </div>
 
@@ -1376,7 +1362,7 @@ export default function NexiTab() {
                                 disabled={preauthSending || !preauthAmount}
                                 className="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {preauthSending ? 'Creazione...' : 'Genera Link Pre-autorizzazione'}
+                                {preauthSending ? 'Creazione...' : 'Crea Pre-autorizzazione'}
                             </button>
                         </div>
                     </div>

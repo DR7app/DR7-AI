@@ -11,30 +11,27 @@ const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1'
 const REFRESH_INTERVAL_DAYS = 6
 
 /**
- * Cron giornaliero per le pre-autorizzazioni a lungo termine (cauzioni
- * con durata > 7 giorni). I circuiti carte rilasciano l'auth-hold dopo
- * 7-30g a seconda dell'emittente: senza un refresh il blocco scade.
+ * Cron giornaliero (03:30 UTC) per le pre-autorizzazioni a lungo termine.
+ * I circuiti carte rilasciano l'auth-hold dopo 7-30g a seconda dell'emittente,
+ * quindi rinnoviamo silenziosamente ogni 6g via MIT EXPLICIT.
  *
- * Strategia (evita doppio blocco fondi):
- * 1) Per ogni riga preauth_held con next_refresh_due <= NOW e
- *    expected_capture_by > NOW:
- * 2) PRIMA si fa il VOID dell'auth attiva (current_operation_id). Cosi\'
- *    sulla carta del cliente resta 0 hold attivi.
- * 3) Se il void riesce, si crea un NUOVO link preauth via paybylink
- *    USE_CONTRACT (l'unico endpoint Nexi che onora EXPLICIT). Il link
- *    viene salvato in metadata e va inviato al cliente (notification
- *    separata: WhatsApp/email).
- * 4) La riga passa in stato 'preauth_pending_refresh_confirm' finche\'
- *    il cliente non conferma cliccando il link (callback aggiorna a
- *    'preauth_held').
- * 5) Se il void fallisce: skip refresh oggi, retry domani. NESSUN
- *    accumulo di auth holds.
+ * Strategia VOID-FIRST: nessun doppio blocco sulla carta del cliente.
  *
- * /v1/orders/mit con EXPLICIT NON funziona (confermato bug Nexi:
- * addebita invece di bloccare). Per questo non si usa qui.
+ * Per ogni nexi_transactions con:
+ *   status = 'preauth_held'
+ *   metadata.type = 'mit_preauth'
+ *   metadata.expected_capture_by > NOW
+ *   metadata.next_refresh_due <= NOW
+ *
+ * 1) VOID dell'auth attiva (current_operation_id). Carta -> 0 hold.
+ *    Se fallisce: skip, retry domani (NO doppio blocco).
+ * 2) Crea nuova MIT preauth (recurrence.action=USE_CONTRACT,
+ *    captureType=EXPLICIT). Aggiorna current_operation_id, history,
+ *    next_refresh_due = NOW + 6g.
+ * 3) Se Nexi ritorna EXECUTED (charge invece di hold): auto-refund +
+ *    status='preauth_refresh_wrong_charged' per intervento manuale.
  */
 const handler: Handler = async (event) => {
-    // Permetti POST diretto per testing manuale (con auth Bearer service key)
     const isManualTest = event.httpMethod === 'POST'
     if (isManualTest) {
         const auth = event.headers.authorization || event.headers.Authorization
@@ -47,13 +44,12 @@ const handler: Handler = async (event) => {
     console.log('[nexi-preauth-refresh-cron] Started at', startedAt, 'interval', REFRESH_INTERVAL_DAYS, 'days')
 
     const nowIso = new Date().toISOString()
-    const siteUrl = process.env.URL || 'https://admin.dr7empire.com'
 
-    // Solo preauth_held (l'unica situazione che ha senso rinnovare).
     const { data: rows, error: queryErr } = await supabase
         .from('nexi_transactions')
         .select('id, order_id, amount_cents, customer_email, description, metadata')
         .eq('status', 'preauth_held')
+        .filter('metadata->>type', 'eq', 'mit_preauth')
         .filter('metadata->>next_refresh_due', 'lte', nowIso)
 
     if (queryErr) {
@@ -61,7 +57,7 @@ const handler: Handler = async (event) => {
         return { statusCode: 500, body: JSON.stringify({ error: queryErr.message }) }
     }
 
-    const results: { id: string; status: 'refreshed' | 'expired' | 'failed' | 'skipped'; reason?: string }[] = []
+    const results: { id: string; status: 'refreshed' | 'expired' | 'failed' | 'skipped' | 'wrong_charged'; reason?: string }[] = []
 
     for (const row of (rows || [])) {
         const meta = (row.metadata || {}) as Record<string, unknown>
@@ -76,7 +72,6 @@ const handler: Handler = async (event) => {
             continue
         }
 
-        // Se la deadline admin e\' passata, ferma il rinnovo.
         if (expectedCaptureBy && new Date(expectedCaptureBy) <= new Date()) {
             await supabase.from('nexi_transactions').update({
                 metadata: { ...meta, next_refresh_due: null, expired_at: nowIso }
@@ -90,8 +85,7 @@ const handler: Handler = async (event) => {
             return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
         })
 
-        // STEP 1: VOID della vecchia auth PRIMA di creare la nuova.
-        // Evita di avere 2 holds attivi contemporaneamente sulla carta.
+        // STEP 1: void OLD prima di creare la nuova auth.
         if (currentOperationId) {
             try {
                 const voidRes = await fetch(`${NEXI_BASE_URL}/operations/${currentOperationId}/cancels`, {
@@ -104,10 +98,8 @@ const handler: Handler = async (event) => {
                     body: JSON.stringify({ description: 'Auto-refresh: void prima del rinnovo' }),
                 })
                 if (!voidRes.ok) {
-                    // Il void e\' fallito. NON creo una nuova auth — eviterei un
-                    // doppio blocco. Lascio la riga com'e\' e riprovo domani.
                     const txt = await voidRes.text()
-                    console.warn('[nexi-preauth-refresh-cron] Void OLD failed, skipping refresh today:', row.id, voidRes.status, txt.substring(0, 200))
+                    console.warn('[nexi-preauth-refresh-cron] Void OLD failed, skipping refresh:', row.id, voidRes.status, txt.substring(0, 200))
                     await supabase.from('nexi_transactions').update({
                         metadata: {
                             ...meta,
@@ -125,44 +117,29 @@ const handler: Handler = async (event) => {
             }
         }
 
-        // STEP 2: crea il NUOVO link preauth via paybylink USE_CONTRACT.
-        // Endpoint provato (lo stesso usato per le cauzioni con EXPLICIT).
+        // STEP 2: silent MIT preauth con recurrence block (USE_CONTRACT)
         const newOrderId = `R${row.order_id.slice(-7)}${Date.now().toString(36).slice(-4)}`.slice(0, 18)
-        const linkExpiration = new Date(Date.now() + 48 * 60 * 60 * 1000) // 48h per cliccare
-
         const payload = {
             order: {
                 orderId: newOrderId,
                 amount: String(row.amount_cents),
                 currency: 'EUR',
-                description: row.description || `Rinnovo pre-autorizzazione ${row.order_id}`,
-                customField: `refresh_${row.id}`,
-                customerInfo: {
+                description: row.description || `Auto-refresh preauth ${row.order_id}`,
+                customerInfo: customerName || row.customer_email ? {
                     cardHolderEmail: row.customer_email || '',
-                    cardHolderName: customerName || '',
-                },
+                    cardHolderName: customerName || ''
+                } : undefined,
             },
-            paymentSession: {
-                actionType: 'PAY',
-                captureType: 'EXPLICIT',
-                amount: String(row.amount_cents),
-                language: 'ita',
-                expirationDate: linkExpiration.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' }),
-                expirationTime: linkExpiration.toISOString(),
-                resultUrl: `${siteUrl}/admin?refresh=${newOrderId}&status=success`,
-                cancelUrl: `${siteUrl}/admin?refresh=${newOrderId}&status=cancelled`,
-                notificationUrl: `${siteUrl}/.netlify/functions/nexi-preauth-callback`,
-                recurrence: {
-                    action: 'USE_CONTRACT',
-                    contractId,
-                    contractType: 'MIT_UNSCHEDULED',
-                },
+            contractId,
+            captureType: 'EXPLICIT',
+            recurrence: {
+                action: 'USE_CONTRACT',
+                contractId,
+                contractType: 'MIT_UNSCHEDULED',
             },
-            expirationDate: linkExpiration.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' }),
         }
 
-        const pblUrl = NEXI_BASE_URL.replace('/v1', '/v2') + '/orders/paybylink'
-        const newRes = await fetch(pblUrl, {
+        const res = await fetch(`${NEXI_BASE_URL}/orders/mit`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -173,29 +150,58 @@ const handler: Handler = async (event) => {
             body: JSON.stringify(payload),
         })
 
-        const newText = await newRes.text()
-        let newData: Record<string, unknown> = {}
-        try { newData = JSON.parse(newText) } catch { /* keep raw */ }
+        const text = await res.text()
+        let data: Record<string, unknown> = {}
+        try { data = JSON.parse(text) } catch { /* keep raw */ }
 
-        const paymentUrl = ((newData as Record<string, Record<string, unknown>>).paymentLink?.link as string) || null
+        const opResult = ((data as Record<string, Record<string, unknown>>).operation?.operationResult || data.operationResult) as string | undefined
+        const newOpId = (((data as Record<string, Record<string, unknown>>).operation?.operationId) || data.operationId) as string | null
 
-        if (!newRes.ok || !paymentUrl) {
-            console.error('[nexi-preauth-refresh-cron] Create NEW preauth failed:', row.id, newRes.status, newText.substring(0, 200))
+        // Safety: se Nexi ha addebitato invece di bloccare, refund immediato
+        if (opResult === 'EXECUTED' && newOpId) {
+            console.error('[nexi-preauth-refresh-cron] WRONG CHARGE during refresh — auto-refunding op', newOpId)
+            try {
+                await fetch(`${NEXI_BASE_URL}/operations/${newOpId}/refunds`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Api-Key': NEXI_API_KEY,
+                        'Correlation-Id': correlationBase.replace(/.$/, '3'),
+                        'Idempotency-Key': correlationBase.replace(/.$/, '4'),
+                    },
+                    body: JSON.stringify({
+                        amount: String(row.amount_cents),
+                        currency: 'EUR',
+                        description: 'Auto-refund cron: EXECUTED instead of AUTHORIZED',
+                    }),
+                })
+            } catch (e) {
+                console.error('[nexi-preauth-refresh-cron] Refund failed:', e)
+            }
+            await supabase.from('nexi_transactions').update({
+                status: 'preauth_refresh_wrong_charged',
+                metadata: { ...meta, refresh_wrong_charged_at: nowIso, refresh_wrong_charged_op: newOpId }
+            }).eq('id', row.id)
+            results.push({ id: row.id, status: 'wrong_charged' })
+            continue
+        }
+
+        if (!res.ok || opResult !== 'AUTHORIZED') {
+            console.error('[nexi-preauth-refresh-cron] Refresh failed:', row.id, opResult, text.substring(0, 200))
             await supabase.from('nexi_transactions').update({
                 status: 'preauth_refresh_failed',
                 metadata: {
                     ...meta,
                     refresh_failed_at: nowIso,
-                    refresh_failure_reason: `create new failed: HTTP ${newRes.status}`,
-                    refresh_failure_response: newData,
+                    refresh_failure_reason: opResult || `HTTP ${res.status}`,
+                    refresh_failure_response: data,
                 }
             }).eq('id', row.id)
-            results.push({ id: row.id, status: 'failed', reason: `create_new_failed_${newRes.status}` })
+            results.push({ id: row.id, status: 'failed', reason: opResult || `HTTP ${res.status}` })
             continue
         }
 
-        // STEP 3: aggiorna la riga in attesa che il cliente confermi il link.
-        // Quando clicca, il callback nexi-preauth-callback aggiornera\' a preauth_held.
+        // STEP 3: success — aggiorna riga con nuovo operationId attivo
         const nextDue = new Date(Date.now() + REFRESH_INTERVAL_DAYS * 86400000).toISOString()
         const newHistory = [
             ...refreshHistory.map((h: Record<string, unknown>, i: number) =>
@@ -203,35 +209,26 @@ const handler: Handler = async (event) => {
             ),
             {
                 order_id: newOrderId,
-                operation_id: null, // verra\' impostato dal callback quando cliente conferma
+                operation_id: newOpId,
                 created_at: nowIso,
                 voided_at: null,
                 auto: true,
-                payment_link: paymentUrl,
-                link_expires_at: linkExpiration.toISOString(),
             }
         ]
 
         await supabase.from('nexi_transactions').update({
-            status: 'preauth_pending_refresh_confirm',
             metadata: {
                 ...meta,
-                current_operation_id: null, // void della vecchia gia\' fatto
+                current_operation_id: newOpId,
                 current_order_id: newOrderId,
-                pending_refresh_link: paymentUrl,
-                pending_refresh_expires_at: linkExpiration.toISOString(),
                 next_refresh_due: nextDue,
                 last_refreshed_at: nowIso,
                 refresh_history: newHistory.slice(-20),
             }
         }).eq('id', row.id)
 
-        // TODO (futuro): notifica al cliente con il link via WhatsApp/email.
-        // Per ora il link e\' salvato in metadata.pending_refresh_link e
-        // l'admin lo puo\' rinviare manualmente dal tab Nexi.
-
         results.push({ id: row.id, status: 'refreshed' })
-        console.log(`[nexi-preauth-refresh-cron] Refreshed ${row.id} -> ${newOrderId} (link pending customer confirm)`)
+        console.log(`[nexi-preauth-refresh-cron] Refreshed ${row.id} -> ${newOrderId} / ${newOpId}`)
     }
 
     const summary = {
@@ -242,6 +239,7 @@ const handler: Handler = async (event) => {
         refreshed: results.filter(r => r.status === 'refreshed').length,
         expired: results.filter(r => r.status === 'expired').length,
         failed: results.filter(r => r.status === 'failed').length,
+        wrongCharged: results.filter(r => r.status === 'wrong_charged').length,
         skipped: results.filter(r => r.status === 'skipped').length,
     }
     console.log('[nexi-preauth-refresh-cron] Done', summary)

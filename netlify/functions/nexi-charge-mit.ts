@@ -85,7 +85,15 @@ const handler: Handler = async (event) => {
                 description: description || 'Addebito DR7 Empire'
             },
             contractId,
-            captureType: captureType || 'IMPLICIT' // IMPLICIT = charge now, EXPLICIT = pre-auth hold
+            captureType: captureType || 'IMPLICIT', // IMPLICIT = charge now, EXPLICIT = pre-auth hold
+            // recurrence block: necessario perche\' Nexi onori captureType
+            // sui contratti MIT_UNSCHEDULED. Senza, il payload veniva
+            // interpretato come addebito IMPLICIT anche con EXPLICIT richiesto.
+            recurrence: {
+                action: 'USE_CONTRACT',
+                contractId,
+                contractType: 'MIT_UNSCHEDULED'
+            }
         };
 
         if (customerEmail || customerName) {
