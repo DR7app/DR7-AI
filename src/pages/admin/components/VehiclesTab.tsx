@@ -255,6 +255,32 @@ export default function VehiclesTab() {
   }
   useEffect(() => { loadBookingStats() }, [vehicles.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Listen for cross-tab open-vehicle events so the Fleet dashboard (and any
+  // future entry point) can deep-link to the edit form for a specific vehicle.
+  // FleetManagementTab dispatches `admin:open-vehicle` with { detail: { vehicleId } }
+  // right after navigating to this tab — we wait for vehicles to be loaded
+  // then open the edit modal.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent<{ vehicleId?: string }>
+      const id = ce.detail?.vehicleId
+      if (!id) return
+      const target = vehicles.find(v => v.id === id)
+      if (target) {
+        handleEdit(target)
+      } else {
+        // Vehicles list may not have loaded yet — retry once after a tick
+        setTimeout(() => {
+          const retry = vehicles.find(v => v.id === id)
+          if (retry) handleEdit(retry)
+        }, 300)
+      }
+    }
+    window.addEventListener('admin:open-vehicle', handler as EventListener)
+    return () => window.removeEventListener('admin:open-vehicle', handler as EventListener)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vehicles])
+
   // Giorni trascorsi nel mese corrente (1..today). Usato per ROI/utilizzo.
   const daysElapsedThisMonth = useMemo(() => {
     const t = new Date(); t.setHours(0, 0, 0, 0)
