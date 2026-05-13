@@ -12,7 +12,10 @@ import FleetList from './FleetList'
  * (la tab Veicoli ascolta admin:open-vehicle).
  */
 export default function FleetManagementTab() {
-    const [view, setView] = useState<'dashboard' | 'magazzino'>('dashboard')
+    // Default vista = magazzino (com'era prima del redesign dashboard).
+    // La direzione apriva "Gestione Flotta" aspettandosi il magazzino,
+    // il dashboard veicoli e' un di piu' a portata di toggle.
+    const [view, setView] = useState<'dashboard' | 'magazzino'>('magazzino')
 
     const handleOpenDetail = (vehicleId: string) => {
         try {
@@ -39,9 +42,9 @@ export default function FleetManagementTab() {
                     ) : (
                         <>
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h18v18H3zM9 3v18M3 9h18"/>
                             </svg>
-                            Torna al Dashboard
+                            Vai al Dashboard
                         </>
                     )}
                 </button>
