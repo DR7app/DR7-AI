@@ -260,6 +260,16 @@ const handler: Handler = async (event) => {
             replaceFor(cleanKey, value);
             for (const alias of ALIASES[cleanKey] || []) replaceFor(alias, value);
           }
+          // Safety net: qualunque placeholder {var} / {{var}} ancora presente
+          // non era ne' costruito ne' definito in system_message_variables.
+          // Rimuovi la riga se sta da sola, altrimenti sostituisci inline con
+          // stringa vuota. Cosi' una variabile aggiunta alla legenda ma non
+          // ancora popolata non finisce mai a video come "{nuova_var}" letterale.
+          // Niente parens-cleanup qui: e' un alias opzionale e troppi testi
+          // legittimi sono "(parola)" da preservare.
+          rendered = rendered
+            .replace(/^[ \t]*[•\-\*]?[ \t]*\*?\{\{?\s*[a-zA-Z0-9_]+\s*\}?\}\*?[ \t]*\n?/gm, '')
+            .replace(/\{\{?\s*[a-zA-Z0-9_]+\s*\}?\}/g, '');
           // Cleanup finale: collapse 3+ newlines into 2 (preserva paragraph
           // breaks legittimi, rimuove gli extra introdotti da vars vuote)
           rendered = rendered.replace(/\n{3,}/g, '\n\n').trim();

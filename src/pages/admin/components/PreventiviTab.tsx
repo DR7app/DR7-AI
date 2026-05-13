@@ -1725,6 +1725,14 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         )
         const extras = p.extras_detail as Record<string, unknown> | null
         const pickedUnlimitedKm = !!extras?.include_unlimited_km || p.unlimited_km_total > 0
+        // Resolve full customer record (email + phone) by customer_id when present.
+        // Falls back to whatever is denormalized on the preventivo row.
+        const pCustomer = p.customer_id
+          ? customers.find((c) => c.id === p.customer_id)
+          : null
+        const customerEmail = (pCustomer?.email as string) || ''
+        const customerPhone = (pCustomer?.phone as string) || p.customer_phone || ''
+        const customerFirstName = (p.customer_name || '').trim().split(/\s+/)[0] || ''
 
         // Vehicle specs fallback: preventivi creati senza compilare i campi
         // (cv / 0-100 / anno) hanno NULL su quelle colonne. Cadiamo allora
@@ -1973,6 +1981,45 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             if (loc === 'domicilio') return String(extras?.pickup_address || 'Domicilio')
             return LOCATIONS.find(l => l.value === loc)?.label || loc
           })(),
+          // Cliente — variabili "common" del catalogo Messaggi di Sistema Pro.
+          nome: customerFirstName,
+          cliente: p.customer_name || '',
+          customer_email: customerEmail,
+          customer_phone: customerPhone,
+          // Veicolo & Servizio — alias documentati nella legenda common.
+          plate: p.vehicle_plate || '',
+          targa: p.vehicle_plate || '',
+          // Preventivi noleggio non hanno un service_name (riservato a lavaggio/meccanica).
+          service_name: '',
+          servizio: '',
+          // Booking ref — preventivi usano l'id breve (8 char) come prefisso DR7.
+          booking_id: p.id ? `DR7-${String(p.id).substring(0, 8).toUpperCase()}` : '',
+          booking_ref: p.id ? `DR7-${String(p.id).substring(0, 8).toUpperCase()}` : '',
+          bookingRef: p.id ? `DR7-${String(p.id).substring(0, 8).toUpperCase()}` : '',
+          // Date (calendar style) — preventivi noleggio non hanno un singolo
+          // appuntamento; lasciamo le date/orario di ritiro come default
+          // sensato per i template che usano {date}/{time}.
+          date: p.pickup_date
+            ? new Date(p.pickup_date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' })
+            : '',
+          time: p.pickup_date
+            ? new Date(p.pickup_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
+            : '',
+          // Assicurazione — nome leggibile (es. "Kasko Black"). La riga formattata
+          // resta {insurance_line}.
+          insurance: resolveInsLabel(),
+          // Preventivi noleggio non hanno notes operative — vuoto per default
+          // (admin puo' sovrascrivere via system_message_variables se serve).
+          notes: '',
+          note: '',
+          nota: '',
+          // Stato pagamento / cauzione — non applicabili a un preventivo
+          // (nessun pagamento ricevuto ancora), si lasciano vuoti cosi'
+          // la riga collassa se presente nel template.
+          payment_status: '',
+          pagamento: '',
+          payment_info: '',
+          deposit: '',
         }
 
         // CUSTOM VARIABLES — pre-load enabled rows da system_message_variables
@@ -2016,6 +2063,15 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           // Substitution standard per gli altri pattern (inline o leftover).
           msg = msg.replace(new RegExp(`\\{${k}\\}`, 'g'), value)
         }
+        // Safety net: any placeholder still in the message wasn't built and
+        // wasn't defined in system_message_variables. Strip the entire line
+        // when it stands alone (same logic as the per-var empty-line cleanup),
+        // otherwise replace the leftover `{key}` inline with an empty string.
+        // Prevents future legenda additions from rendering as literal "{key}".
+        msg = msg
+          .replace(/^[ \t]*[•\-\*]?[ \t]*\*?\{[a-zA-Z0-9_]+\}\*?[ \t]*\n?/gm, '')
+          .replace(/\{[a-zA-Z0-9_]+\}/g, '')
+
         // Clean up: collapse 3+ newlines into 2 (preserva paragraph breaks)
         msg = msg.replace(/\n{3,}/g, '\n\n').trim()
 
