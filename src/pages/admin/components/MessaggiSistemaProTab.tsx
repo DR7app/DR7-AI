@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
-import { getProKeyEventTriggers, EVENT_DESCRIPTIONS as EVENT_LABELS_IT } from '../../../utils/proTemplateRouting'
+import { getProKeyEventTriggers, EVENT_DESCRIPTIONS } from '../../../utils/proTemplateRouting'
+const EVENT_LABELS_IT = EVENT_DESCRIPTIONS
 import toast from 'react-hot-toast'
 
 interface SystemMessage {
