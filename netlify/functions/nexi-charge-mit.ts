@@ -185,7 +185,7 @@ const handler: Handler = async (event) => {
                 operationResult,
                 amount,
                 message: isPreauth
-                    ? `Pre-autorizzazione di €${amount.toFixed(2)} creata (fondi bloccati, da catturare entro 7gg)`
+                    ? `Pre-autorizzazione di €${amount.toFixed(2)} creata (fondi bloccati${durationDays ? `, da catturare entro ${durationDays}gg` : ''})`
                     : `Addebito di €${amount.toFixed(2)} effettuato con successo`
             })
         };

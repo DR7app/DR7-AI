@@ -28,7 +28,7 @@ interface NexiTransaction {
     created_at: string
     order_id: string
     amount_cents: number
-    status: 'pending' | 'completed' | 'failed' | 'cancelled'
+    status: 'pending' | 'completed' | 'failed' | 'cancelled' | 'preauth_held' | 'preauth_captured' | 'preauth_voided'
     description: string
     customer_email: string
     contract_id?: string
@@ -199,6 +199,73 @@ export default function NexiTab() {
         setPreauthDescription('')
         setPreauthDurationDays('7')
         setShowPreauthModal(true)
+    }
+
+    async function handleCapturePreauth(tx: NexiTransaction) {
+        const eur = (tx.amount_cents || 0) / 100
+        const input = window.prompt(
+            `Cattura €${eur.toFixed(2)} dalla pre-autorizzazione?\n\n` +
+            `Lascia vuoto per catturare l'intero importo, oppure inserisci un importo minore (es. ${(eur * 0.8).toFixed(2)}).`,
+            eur.toFixed(2)
+        )
+        if (input === null) return
+        const amt = parseFloat(input)
+        if (!amt || amt <= 0 || amt > eur) {
+            toast.error('Importo non valido (max ' + eur.toFixed(2) + ')')
+            return
+        }
+        const toastId = toast.loading('Catturo i fondi...')
+        try {
+            const res = await authFetch('/.netlify/functions/nexi-capture-preauth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    orderId: tx.order_id,
+                    transactionId: tx.id,
+                    amount: amt,
+                }),
+            })
+            const data = await res.json()
+            toast.dismiss(toastId)
+            if (res.ok && data.success) {
+                toast.success(data.message || `Catturato €${amt.toFixed(2)}`)
+                await fetchTransactions()
+            } else {
+                toast.error(data.error || 'Cattura fallita')
+            }
+        } catch (err) {
+            toast.dismiss(toastId)
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + msg)
+        }
+    }
+
+    async function handleVoidPreauth(tx: NexiTransaction) {
+        const eur = (tx.amount_cents || 0) / 100
+        if (!window.confirm(`Sbloccare la pre-autorizzazione di €${eur.toFixed(2)}? I fondi torneranno disponibili sulla carta del cliente.`)) return
+        const toastId = toast.loading('Sblocco i fondi...')
+        try {
+            const res = await authFetch('/.netlify/functions/nexi-void-preauth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    orderId: tx.order_id,
+                    transactionId: tx.id,
+                }),
+            })
+            const data = await res.json()
+            toast.dismiss(toastId)
+            if (res.ok && data.success) {
+                toast.success(data.message || 'Pre-autorizzazione sbloccata')
+                await fetchTransactions()
+            } else {
+                toast.error(data.error || 'Sblocco fallito')
+            }
+        } catch (err) {
+            toast.dismiss(toastId)
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + msg)
+        }
     }
 
     async function handleCreatePreauth() {
@@ -442,17 +509,30 @@ export default function NexiTab() {
     }
 
     function getStatusBadge(status: string) {
-        const styles = {
+        const styles: Record<string, string> = {
             completed: 'bg-green-900/50 text-green-300 border-green-700/50',
             pending: 'bg-yellow-900/50 text-yellow-300 border-yellow-700/50',
             failed: 'bg-red-900/50 text-red-300 border-red-700/50',
-            cancelled: 'bg-theme-bg-tertiary/50 text-theme-text-secondary border-theme-border/50'
+            cancelled: 'bg-theme-bg-tertiary/50 text-theme-text-secondary border-theme-border/50',
+            preauth_held: 'bg-blue-900/50 text-blue-300 border-blue-700/50',
+            preauth_captured: 'bg-green-900/50 text-green-300 border-green-700/50',
+            preauth_voided: 'bg-theme-bg-tertiary/50 text-theme-text-secondary border-theme-border/50',
         }
-        const style = styles[status as keyof typeof styles] || styles.pending
+        const labels: Record<string, string> = {
+            completed: 'Completato',
+            pending: 'In attesa',
+            failed: 'Fallito',
+            cancelled: 'Annullato',
+            preauth_held: 'Pre-autorizzato',
+            preauth_captured: 'Catturato',
+            preauth_voided: 'Sbloccato',
+        }
+        const style = styles[status] || styles.pending
+        const label = labels[status] || status
 
         return (
-            <span className={`px-2 py-1 rounded text-xs font-bold border ${style} uppercase tracking-wider`}>
-                {status}
+            <span className={`px-2 py-1 rounded text-xs font-bold border ${style} uppercase tracking-wider whitespace-nowrap`}>
+                {label}
             </span>
         )
     }
@@ -881,12 +961,31 @@ export default function NexiTab() {
                                             <div className="text-xs text-theme-text-muted">{tx.customer_email}</div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <button
-                                                onClick={() => openAddebitoModal(tx)}
-                                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-700/50 transition-colors"
-                                            >
-                                                Nuovo Addebito
-                                            </button>
+                                            {tx.status === 'preauth_held' ? (
+                                                <div className="flex flex-col sm:flex-row gap-1.5">
+                                                    <button
+                                                        onClick={() => handleCapturePreauth(tx)}
+                                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 border border-emerald-700/50 whitespace-nowrap"
+                                                        title="Cattura i fondi bloccati"
+                                                    >
+                                                        Cattura
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleVoidPreauth(tx)}
+                                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover border border-theme-border whitespace-nowrap"
+                                                        title="Sblocca i fondi senza addebitare"
+                                                    >
+                                                        Annulla
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    onClick={() => openAddebitoModal(tx)}
+                                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-700/50 transition-colors"
+                                                >
+                                                    Nuovo Addebito
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}

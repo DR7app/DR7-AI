@@ -31,13 +31,13 @@ const handler: Handler = async (event) => {
     if (authErr) return authErr
 
     try {
-        const { cauzioneId, operationId, orderId } = JSON.parse(event.body || '{}');
+        const { cauzioneId, operationId, orderId, transactionId } = JSON.parse(event.body || '{}');
 
-        if (!cauzioneId || !operationId) {
+        if (!operationId && !orderId) {
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({ error: 'cauzioneId and operationId are required' })
+                body: JSON.stringify({ error: 'operationId or orderId required' })
             };
         }
 
@@ -114,13 +114,15 @@ const handler: Handler = async (event) => {
         if (!response.ok) {
             console.error('[nexi-void-preauth] ERROR:', responseData);
 
-            await supabase
-                .from('cauzioni')
-                .update({
-                    note: `Errore sblocco: ${responseData.errors?.[0]?.description || response.statusText}`,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', cauzioneId);
+            if (cauzioneId) {
+                await supabase
+                    .from('cauzioni')
+                    .update({
+                        note: `Errore sblocco: ${responseData.errors?.[0]?.description || response.statusText}`,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', cauzioneId);
+            }
 
             return {
                 statusCode: response.status,
@@ -131,28 +133,36 @@ const handler: Handler = async (event) => {
 
         const voidOpId = responseData.operationId || operationId;
 
-        // Update cauzione status
-        const { error: updateError } = await supabase
-            .from('cauzioni')
-            .update({
-                stato: 'Sbloccata',
-                data_sblocco: new Date().toISOString(),
-                note: `Preautorizzazione sbloccata - Nexi Op: ${voidOpId}`,
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', cauzioneId);
+        // Update cauzione status (solo se la preauth era legata a una cauzione)
+        if (cauzioneId) {
+            const { error: updateError } = await supabase
+                .from('cauzioni')
+                .update({
+                    stato: 'Sbloccata',
+                    data_sblocco: new Date().toISOString(),
+                    note: `Preautorizzazione sbloccata - Nexi Op: ${voidOpId}`,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', cauzioneId);
 
-        if (updateError) throw updateError;
+            if (updateError) throw updateError;
+        }
 
-        // Update nexi_transactions
-        if (orderId) {
-            await supabase
+        // Update nexi_transactions (sia per cauzioni che per preauth standalone
+        // create dal tab Nexi). Match per transactionId se presente, altrimenti
+        // per orderId.
+        if (transactionId || orderId) {
+            const q = supabase
                 .from('nexi_transactions')
                 .update({
-                    status: 'voided',
+                    status: 'preauth_voided',
                     metadata: { void_operation_id: voidOpId, void_response: responseData }
                 })
-                .eq('order_id', orderId);
+            if (transactionId) {
+                await q.eq('id', transactionId)
+            } else if (orderId) {
+                await q.eq('order_id', orderId)
+            }
         }
 
         console.log('[nexi-void-preauth] SUCCESS: Pre-auth voided');

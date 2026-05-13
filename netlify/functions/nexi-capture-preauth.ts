@@ -31,7 +31,7 @@ const handler: Handler = async (event) => {
     if (authErr) return authErr
 
     try {
-        const { cauzioneId, operationId: inputOperationId, amount, orderId } = JSON.parse(event.body || '{}');
+        const { cauzioneId, operationId: inputOperationId, amount, orderId, transactionId } = JSON.parse(event.body || '{}');
 
         if (!amount || (!inputOperationId && !orderId)) {
             return {
@@ -117,13 +117,15 @@ const handler: Handler = async (event) => {
         if (!response.ok) {
             console.error('[nexi-capture-preauth] ERROR:', responseData);
 
-            await supabase
-                .from('cauzioni')
-                .update({
-                    note: `Errore incasso: ${responseData.errors?.[0]?.description || response.statusText}`,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', cauzioneId);
+            if (cauzioneId) {
+                await supabase
+                    .from('cauzioni')
+                    .update({
+                        note: `Errore incasso: ${responseData.errors?.[0]?.description || response.statusText}`,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', cauzioneId);
+            }
 
             return {
                 statusCode: response.status,
@@ -134,28 +136,36 @@ const handler: Handler = async (event) => {
 
         const captureOpId = responseData.operationId || realOperationId;
 
-        // Update cauzione status
-        const { error: updateError } = await supabase
-            .from('cauzioni')
-            .update({
-                stato: 'Incassata',
-                data_incasso: new Date().toISOString(),
-                note: `Incassato €${amount.toFixed(2)} - Nexi Op: ${captureOpId}`,
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', cauzioneId);
+        // Update cauzione status (solo se la preauth era legata a una cauzione)
+        if (cauzioneId) {
+            const { error: updateError } = await supabase
+                .from('cauzioni')
+                .update({
+                    stato: 'Incassata',
+                    data_incasso: new Date().toISOString(),
+                    note: `Incassato €${amount.toFixed(2)} - Nexi Op: ${captureOpId}`,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', cauzioneId);
 
-        if (updateError) throw updateError;
+            if (updateError) throw updateError;
+        }
 
-        // Update nexi_transactions
-        if (orderId) {
-            await supabase
+        // Update nexi_transactions row. Match per id (transactionId) se passato,
+        // altrimenti per order_id. Stato finale 'preauth_captured' per
+        // distinguere da un IMPLICIT charge.
+        if (transactionId || orderId) {
+            const q = supabase
                 .from('nexi_transactions')
                 .update({
-                    status: 'captured',
-                    metadata: { capture_operation_id: captureOpId, capture_response: responseData }
+                    status: 'preauth_captured',
+                    metadata: { capture_operation_id: captureOpId, capture_response: responseData, capture_amount_cents: amountCents }
                 })
-                .eq('order_id', orderId);
+            if (transactionId) {
+                await q.eq('id', transactionId)
+            } else if (orderId) {
+                await q.eq('order_id', orderId)
+            }
         }
 
         console.log('[nexi-capture-preauth] SUCCESS: Captured €' + amount.toFixed(2));
