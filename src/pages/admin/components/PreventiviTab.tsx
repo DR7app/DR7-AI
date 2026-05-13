@@ -487,6 +487,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     model_year: '',
     cv: '',
     acceleration_0_100: '',
+    // KM package overrides (admin can override the computed defaults).
+    // Empty string = use computed default from Centralina Pro / config.
+    km_override: '',
+    sforo_override: '',
   })
 
   // Computed values
@@ -968,8 +972,22 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       subtotal,
       sconto,
       totalFinal,
-      kmIncluded: resolveKmIncluded(selectedVehicle?.category, rentalDays, proKm, rentalConfig),
-      sforo: (configOverlay as any).sforoKm ?? (configOverlay as any).sforo_km ?? 0,
+      kmIncluded: (() => {
+        const override = String(form.km_override || '').trim()
+        if (override !== '') {
+          const n = Number(override)
+          if (Number.isFinite(n) && n > 0) return n
+        }
+        return resolveKmIncluded(selectedVehicle?.category, rentalDays, proKm, rentalConfig)
+      })(),
+      sforo: (() => {
+        const override = String(form.sforo_override || '').trim()
+        if (override !== '') {
+          const n = Number(override)
+          if (Number.isFinite(n) && n >= 0) return n
+        }
+        return (configOverlay as any).sforoKm ?? (configOverlay as any).sforo_km ?? 0
+      })(),
     }
   }, [form, rentalDays, revenueData, selectedVehicle, insuranceOptions, configOverlay, rentalConfig, noCauzioneResolvedDaily, proLavaggioFee, proSecondDriverDaily, proDr7FlexDaily, proUnlimitedKmDaily, proKm])
 
@@ -1445,6 +1463,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           pickup_address: form.pickup_address,
           experience_services: form.experience_services,
           experience_cost: pricing.experienceCost,
+          km_override: form.km_override || null,
+          sforo_override: form.sforo_override || null,
+          km_included_effective: pricing.kmIncluded,
+          sforo_effective: pricing.sforo,
         },
         status: 'bozza',
         created_by: adminEmail || (await supabase.auth.getUser()).data.user?.email || null,
@@ -1564,6 +1586,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       model_year: p.vehicle_model_year ? String(p.vehicle_model_year) : '',
       cv: p.vehicle_cv ? String(p.vehicle_cv) : '',
       acceleration_0_100: p.vehicle_0_100 ? String(p.vehicle_0_100) : '',
+      km_override: extras.km_override ? String(extras.km_override) : '',
+      sforo_override: extras.sforo_override ? String(extras.sforo_override) : '',
     })
     setEditingId(p.id)
     setView('form')
@@ -1598,6 +1622,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       model_year: '',
       cv: '',
       acceleration_0_100: '',
+      km_override: '',
+      sforo_override: '',
     })
     setRevenueData(null)
     // Reset No-Cauzione approval when form is reset
@@ -3303,6 +3329,45 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           </label>
         </div>
       </div>
+
+      {/* Pacchetto KM — override pacchetto km inclusi e prezzo sforo */}
+      {!form.include_unlimited_km && (() => {
+        const defaultKm = resolveKmIncluded(selectedVehicle?.category, rentalDays, proKm, rentalConfig)
+        const defaultSforo = (configOverlay as any).sforoKm ?? (configOverlay as any).sforo_km ?? 0
+        return (
+          <div className="space-y-3">
+            <p className="text-sm font-semibold text-theme-text-primary">Pacchetto KM</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Input
+                  label="KM Inclusi"
+                  type="number"
+                  step="1"
+                  value={form.km_override}
+                  onChange={(e) => setForm(prev => ({ ...prev, km_override: e.target.value }))}
+                  placeholder={defaultKm === 'unlimited' ? 'Illimitati (default)' : `${defaultKm} (default ${rentalDays}gg)`}
+                />
+                <p className="text-xs text-theme-text-muted mt-1">
+                  Lascia vuoto per usare il default di Centralina Pro.
+                </p>
+              </div>
+              <div>
+                <Input
+                  label="Sforo per KM (€)"
+                  type="number"
+                  step="0.01"
+                  value={form.sforo_override}
+                  onChange={(e) => setForm(prev => ({ ...prev, sforo_override: e.target.value }))}
+                  placeholder={`${Number(defaultSforo).toFixed(2)} (default)`}
+                />
+                <p className="text-xs text-theme-text-muted mt-1">
+                  Prezzo addebitato per ogni km oltre il pacchetto.
+                </p>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Experience Services */}
       {availableExperienceServices.length > 0 && (

@@ -2458,16 +2458,21 @@ export default function MessaggiSistemaProTab() {
                                                 <option value="mechanical">Solo Meccanica</option>
                                             </select>
                                         </div>
-                                        <div>
-                                            <label className="block text-xs font-medium text-theme-text-muted mb-1">Cauzione</label>
-                                            <select value={newTargetWithDeposit} onChange={e => setNewTargetWithDeposit(e.target.value)}
-                                                className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
-                                                <option value="all">Tutte le prenotazioni</option>
-                                                <option value="yes">Con cauzione</option>
-                                                <option value="no">Senza cauzione</option>
-                                                <option value="vehicle">Veicoli come cauzione</option>
-                                            </select>
-                                        </div>
+                                        {/* Cauzione: irrilevante per Prime Wash (lavaggio/meccanica
+                                            non hanno cauzione). Nascosto quando l'admin seleziona
+                                            Prime Wash, Solo Lavaggio o Solo Meccanica come Tipo servizio. */}
+                                        {!['prime_wash', 'car_wash', 'mechanical'].includes(newTargetServiceType) && (
+                                            <div>
+                                                <label className="block text-xs font-medium text-theme-text-muted mb-1">Cauzione</label>
+                                                <select value={newTargetWithDeposit} onChange={e => setNewTargetWithDeposit(e.target.value)}
+                                                    className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
+                                                    <option value="all">Tutte le prenotazioni</option>
+                                                    <option value="yes">Con cauzione</option>
+                                                    <option value="no">Senza cauzione</option>
+                                                    <option value="vehicle">Veicoli come cauzione</option>
+                                                </select>
+                                            </div>
+                                        )}
                                         <div>
                                             <label className="block text-xs font-medium text-theme-text-muted mb-1">Metodo pagamento</label>
                                             <select value={newTargetPaymentMethod} onChange={e => setNewTargetPaymentMethod(e.target.value)}
@@ -3373,20 +3378,32 @@ export default function MessaggiSistemaProTab() {
                                                                         <option value="mechanical">Solo Meccanica</option>
                                                                     </select>
                                                                 </div>
-                                                                <div>
-                                                                    <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1">Cauzione</label>
-                                                                    <select
-                                                                        value={template.target_with_deposit || 'all'}
-                                                                        onChange={e => handleUpdateAutomation(template.id, 'target_with_deposit', e.target.value)}
-                                                                        className="w-full px-2 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
-                                                                    >
-                                                                        <option value="all">Qualsiasi</option>
-                                                                        <option value="yes">Solo con cauzione</option>
-                                                                        <option value="no">Solo senza cauzione</option>
-                                                                        <option value="vehicle">Solo cauzione veicolo</option>
-                                                                        <option value="standard">Solo cauzione standard (denaro)</option>
-                                                                    </select>
-                                                                </div>
+                                                                {/* Cauzione: solo rental — Prime Wash (lavaggio/
+                                                                    meccanica) non ha cauzione. Nascosto quando il
+                                                                    template è esplicitamente Prime Wash / Lavaggio /
+                                                                    Meccanica per non confondere l'admin con un filtro
+                                                                    irrilevante. */}
+                                                                {(() => {
+                                                                    const svc = (template.target_service_type || 'all').toLowerCase()
+                                                                    const isPrimeWashOnly = svc === 'prime_wash' || svc === 'car_wash' || svc === 'mechanical'
+                                                                    if (isPrimeWashOnly) return null
+                                                                    return (
+                                                                        <div>
+                                                                            <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1">Cauzione</label>
+                                                                            <select
+                                                                                value={template.target_with_deposit || 'all'}
+                                                                                onChange={e => handleUpdateAutomation(template.id, 'target_with_deposit', e.target.value)}
+                                                                                className="w-full px-2 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
+                                                                            >
+                                                                                <option value="all">Qualsiasi</option>
+                                                                                <option value="yes">Solo con cauzione</option>
+                                                                                <option value="no">Solo senza cauzione</option>
+                                                                                <option value="vehicle">Solo cauzione veicolo</option>
+                                                                                <option value="standard">Solo cauzione standard (denaro)</option>
+                                                                            </select>
+                                                                        </div>
+                                                                    )
+                                                                })()}
                                                                 <div>
                                                                     <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1">Metodo pagamento</label>
                                                                     <select
