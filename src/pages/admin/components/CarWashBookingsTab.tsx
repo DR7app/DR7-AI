@@ -1599,12 +1599,20 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             const amountStr = totalPrice.toFixed(2)
             const bookingRef = (data?.id || '').substring(0, 8).toUpperCase() || 'N/A'
             const firstName = customerName?.split(' ')[0] || 'Cliente'
+            // Cerca il service_type del booking appena creato così il
+            // resolver può scegliere il template Prime Wash giusto.
+            const newBookingSvc = (data as { service_type?: string } | null)?.service_type || 'car_wash'
             const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 customPhone: customerPhone,
-                templateKey: 'pro_richiesta_pagamento',
+                // BUG FIX 2026-05-13: era hardcoded 'pro_richiesta_pagamento' →
+                // bypassava handled_events. Adesso legacy key + booking
+                // service_type così il resolver sceglie il custom Prime
+                // Wash via service-type ranking.
+                templateKey: 'payment_link_customer',
+                booking: { service_type: newBookingSvc },
                 // Alias every placeholder the Pro template might use so
                 // nothing leaks as raw "{...}" text to the customer.
                 templateVars: {
@@ -1628,7 +1636,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             })
             const waResult = await waResp.json().catch(() => ({}))
             if (!waResp.ok || waResult?.skipped) {
-              toast.error('Template mancante in Messaggi di Sistema Pro: pro_richiesta_pagamento')
+              toast.error('Template mancante in Messaggi di Sistema Pro per payment_link_customer (Prime Wash)')
             }
           }
           toast.success('Pay by Link generato e inviato al cliente!')
