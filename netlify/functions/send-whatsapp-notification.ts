@@ -73,16 +73,20 @@ const handler: Handler = async (event) => {
   }
 
   let message = '';
-  // Strict recipient resolution. Order of precedence:
-  //   1. `customPhone` explicitly set by the caller (admin alerts, manual sends)
-  //   2. The booking's own customer_phone (cron sends per booking)
-  //   3. SKIP — never silently fall back to the admin number, otherwise a
-  //      cron that processes 500 phone-less bookings will spam the admin
-  //      with hundreds of "customer" messages (incident May 13 2026 at 8:52).
-  const bookingPhone = (body?.booking && (body.booking.customer_phone || body.booking?.booking_details?.customer?.phone)) || '';
-  const resolvedPhone = (customPhone || bookingPhone || '').toString().trim();
+  // STRICT recipient resolution. The caller MUST pass `customPhone`. We do
+  // NOT fall back to:
+  //   - the admin number (caused the 2026-05-13 08:52 spam incident: cron
+  //     ran without customPhone → every send routed to admin)
+  //   - booking.customer_phone (an earlier attempt at a fix: caused the
+  //     2026-05-13 10:17 incident, admin-notification calls that intentionally
+  //     omitted customPhone started reaching the CUSTOMER because the booking
+  //     had a customer_phone field set, producing duplicated booking-confirm
+  //     messages on the customer's phone).
+  // If you want admin to receive a notification, pass `customPhone: adminPhone`
+  // EXPLICITLY (helpers like getAdminNotificationPhone() exist for this).
+  const resolvedPhone = (customPhone || '').toString().trim();
   if (!resolvedPhone) {
-    console.warn('[send-whatsapp] No recipient phone (no customPhone, no booking.customer_phone) — skipping send. templateKey=', templateKey, 'messageKey=', explicitMessageKey);
+    console.warn('[send-whatsapp] No recipient phone (customPhone missing) — skipping send. templateKey=', templateKey, 'messageKey=', explicitMessageKey);
     return {
       statusCode: 200,
       body: JSON.stringify({
