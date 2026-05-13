@@ -31,13 +31,33 @@ const handler: Handler = async (event) => {
     if (authErr) return authErr
 
     try {
-        const { cauzioneId, operationId, orderId, transactionId } = JSON.parse(event.body || '{}');
+        const { cauzioneId, operationId: inputOperationId, orderId, transactionId } = JSON.parse(event.body || '{}');
+
+        // Risolvi operationId attivo (le preauth auto-rinnovate hanno il
+        // current_operation_id nel metadata della riga nexi_transactions).
+        let operationId = inputOperationId as string | null
+        if (!operationId && transactionId) {
+            const { data: tx } = await supabase
+                .from('nexi_transactions')
+                .select('metadata')
+                .eq('id', transactionId)
+                .maybeSingle()
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            operationId = ((tx?.metadata as any)?.current_operation_id) || null
+        }
 
         if (!operationId && !orderId) {
             return {
                 statusCode: 400,
                 headers,
                 body: JSON.stringify({ error: 'operationId or orderId required' })
+            };
+        }
+        if (!operationId) {
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: 'operationId mancante (passa transactionId o operationId esplicito)' })
             };
         }
 

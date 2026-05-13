@@ -89,6 +89,14 @@
 [functions."rental-extension-supercar-cron"]
   schedule = "0 16,17 * * *"
 
+# Nexi preauth auto-refresh — daily at 03:30 UTC (04:30/05:30 Rome).
+# Rinnova le pre-autorizzazioni MIT EXPLICIT a lungo termine (cauzioni
+# noleggio mensili/annuali). Senza questo cron il blocco fondi scadrebbe
+# dopo 7-30g a seconda dell'emittente. La funzione processa solo righe
+# con metadata.next_refresh_due <= NOW e expected_capture_by > NOW.
+[functions."nexi-preauth-refresh-cron"]
+  schedule = "30 3 * * *"
+
 # Marketing campaigns — every 5 min, materialise scheduled/recurring campaigns
 # whose scheduled_at has passed and pump the chunked send loop server-side.
 [functions."process-scheduled-campaigns-cron"]

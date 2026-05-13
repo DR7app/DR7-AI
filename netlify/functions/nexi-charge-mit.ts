@@ -135,9 +135,65 @@ const handler: Handler = async (event) => {
         const operationResult = responseData.operation?.operationResult || responseData.operationResult;
         const isSuccess = operationResult === 'AUTHORIZED' || operationResult === 'EXECUTED';
         const isPreauth = (captureType || 'IMPLICIT') === 'EXPLICIT';
+        const nexiOperationId = responseData.operation?.operationId || responseData.operationId || null;
 
-        // Store transaction in DB. Distinguo preauth (mit_preauth) da addebito
-        // (mit_charge) cosi\' Storico e report filtrano correttamente.
+        // Safety: verifica che il contractId tokenizzato sia rimasto valido.
+        // Se Nexi restituisce un contractId diverso nella response (raro ma
+        // possibile su token refresh), aggiorno il customer cosi\' future
+        // MIT/preauth puntano al nuovo. Se non lo restituisce ma l'op e\'
+        // andata, assumo il token rimane lo stesso.
+        const responseContractId = responseData.operation?.additionalData?.contractId
+            || responseData.additionalData?.contractId
+            || responseData.contractId
+            || null
+        if (isSuccess && responseContractId && responseContractId !== contractId) {
+            console.warn('[nexi-charge-mit] Nexi returned NEW contractId', { input: contractId, returned: responseContractId })
+            try {
+                if (customerId) {
+                    const { data: cust } = await supabase.from('customers_extended').select('metadata').eq('id', customerId).maybeSingle()
+                    if (cust) {
+                        await supabase.from('customers_extended').update({
+                            metadata: { ...(cust.metadata || {}), nexi_contract_id: responseContractId, nexi_contract_updated: new Date().toISOString() },
+                            updated_at: new Date().toISOString(),
+                        }).eq('id', customerId)
+                    }
+                } else if (customerEmail) {
+                    const { data: cust } = await supabase.from('customers_extended').select('id, metadata').eq('email', String(customerEmail).toLowerCase().trim()).maybeSingle()
+                    if (cust) {
+                        await supabase.from('customers_extended').update({
+                            metadata: { ...(cust.metadata || {}), nexi_contract_id: responseContractId, nexi_contract_updated: new Date().toISOString() },
+                            updated_at: new Date().toISOString(),
+                        }).eq('id', cust.id)
+                    }
+                }
+            } catch (e) {
+                console.warn('[nexi-charge-mit] Failed updating contract refresh:', e)
+            }
+        } else if (isSuccess) {
+            // Tocco solo nexi_contract_updated per tracciare che il token e\' vivo
+            try {
+                if (customerId) {
+                    const { data: cust } = await supabase.from('customers_extended').select('metadata').eq('id', customerId).maybeSingle()
+                    if (cust && (cust.metadata as Record<string, unknown> | null)?.nexi_contract_id === contractId) {
+                        await supabase.from('customers_extended').update({
+                            metadata: { ...(cust.metadata || {}), nexi_contract_updated: new Date().toISOString() },
+                            updated_at: new Date().toISOString(),
+                        }).eq('id', customerId)
+                    }
+                }
+            } catch { /* non-fatal */ }
+        }
+
+        // Per preauth con durata > 7g: schedula auto-rinnovo settimanale.
+        // I circuiti carte rilasciano il blocco dopo 7-30g a seconda
+        // dell'emittente, quindi rifacciamo MIT EXPLICIT ogni 7g finche\' non
+        // si raggiunge expected_capture_by. Il cron `nexi-preauth-refresh-cron`
+        // legge next_refresh_due e processa le righe scadute.
+        const nowIso = new Date().toISOString()
+        const nextRefreshDue = isPreauth && durationDays && Number(durationDays) > 7
+            ? new Date(Date.now() + 7 * 86400000).toISOString()
+            : null
+
         await supabase.from('nexi_transactions').insert({
             order_id: orderId,
             booking_id: bookingId || null,
@@ -153,16 +209,27 @@ const handler: Handler = async (event) => {
                 correlation_id: correlationId,
                 operation_result: operationResult,
                 capture_type: captureType || 'IMPLICIT',
-                // Solo per preauth: deadline interna admin per catturare i fondi.
-                // L'auth Nexi/circuito carte rimane comunque governata dalle regole
-                // dell'emittente (tipicamente 7-30gg). Qui registriamo l'intento.
                 ...(isPreauth ? {
                     expected_capture_by: expectedCaptureBy || null,
                     duration_days: durationDays || null,
+                    // Operation id attiva (la usano capture/void per chiamare Nexi).
+                    // Cambia ad ogni auto-refresh.
+                    current_operation_id: nexiOperationId,
+                    current_order_id: orderId,
+                    // Schedulazione cron: NULL se durata <= 7g (nessun refresh).
+                    next_refresh_due: nextRefreshDue,
+                    // Storico dei rinnovi. Entry 0 = creazione, entry N = refresh #N.
+                    refresh_history: [{
+                        order_id: orderId,
+                        operation_id: nexiOperationId,
+                        created_at: nowIso,
+                        voided_at: null,
+                        auto: false,
+                    }],
                 } : {}),
                 nexi_response: responseData
             },
-            created_at: new Date().toISOString()
+            created_at: nowIso
         });
 
         if (!isSuccess) {

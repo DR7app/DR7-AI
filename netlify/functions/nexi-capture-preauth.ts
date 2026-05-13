@@ -33,6 +33,21 @@ const handler: Handler = async (event) => {
     try {
         const { cauzioneId, operationId: inputOperationId, amount, orderId, transactionId } = JSON.parse(event.body || '{}');
 
+        // Per le preauth auto-rinnovate, l'operationId attivo si trova in
+        // nexi_transactions.metadata.current_operation_id (il vecchio
+        // viene voided dal cron). Provo questa scorciatoia prima del
+        // fallback lookup su /operations.
+        let metaOperationId: string | null = null
+        if (!inputOperationId && transactionId) {
+            const { data: tx } = await supabase
+                .from('nexi_transactions')
+                .select('metadata, order_id')
+                .eq('id', transactionId)
+                .maybeSingle()
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            metaOperationId = ((tx?.metadata as any)?.current_operation_id) || null
+        }
+
         if (!amount || (!inputOperationId && !orderId)) {
             return {
                 statusCode: 400,
@@ -56,8 +71,8 @@ const handler: Handler = async (event) => {
         }
 
         // Step 1: Find the real operationId by looking up operations for this orderId
-        let realOperationId = inputOperationId
-        if (orderId) {
+        let realOperationId = inputOperationId || metaOperationId
+        if (!realOperationId && orderId) {
             console.log('[nexi-capture-preauth] Looking up operations for orderId:', orderId);
             const fromTime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
             const toTime = new Date().toISOString()

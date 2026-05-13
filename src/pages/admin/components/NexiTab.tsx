@@ -277,7 +277,7 @@ export default function NexiTab() {
         }
         setPreauthSending(true)
         try {
-            const days = Math.max(1, Math.min(30, parseInt(preauthDurationDays) || 7))
+            const days = Math.max(1, Math.min(365, parseInt(preauthDurationDays) || 7))
             const captureBy = new Date(Date.now() + days * 86400000).toISOString()
             const res = await authFetch('/.netlify/functions/nexi-charge-mit', {
                 method: 'POST',
@@ -1220,36 +1220,49 @@ export default function NexiTab() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Durata blocco fondi (giorni)</label>
-                                <div className="flex gap-2 items-center">
-                                    {[1, 3, 7, 14, 30].map(d => (
+                                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Durata blocco fondi</label>
+                                <div className="flex gap-1.5 flex-wrap items-center">
+                                    {[
+                                        { d: 1, l: '1g' },
+                                        { d: 7, l: '7g' },
+                                        { d: 30, l: '1 mese' },
+                                        { d: 90, l: '3 mesi' },
+                                        { d: 180, l: '6 mesi' },
+                                        { d: 365, l: '1 anno' },
+                                    ].map(({ d, l }) => (
                                         <button
                                             key={d}
                                             type="button"
                                             onClick={() => setPreauthDurationDays(String(d))}
                                             disabled={preauthSending}
                                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${preauthDurationDays === String(d) ? 'bg-blue-600 text-white border-blue-600' : 'bg-theme-bg-tertiary text-theme-text-secondary border-theme-border hover:border-blue-500/50'}`}
-                                        >{d}g</button>
+                                        >{l}</button>
                                     ))}
                                     <input
                                         type="number"
                                         min="1"
-                                        max="30"
+                                        max="365"
                                         value={preauthDurationDays}
                                         onChange={(e) => setPreauthDurationDays(e.target.value)}
                                         disabled={preauthSending}
-                                        className="w-20 px-2 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                        className="w-24 px-2 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                        placeholder="giorni"
                                     />
                                 </div>
-                                {preauthAmount && parseFloat(preauthAmount) > 0 && (
-                                    <p className="text-[11px] text-theme-text-muted mt-1.5">
-                                        Cattura entro il <span className="text-theme-text-primary font-semibold">{new Date(Date.now() + (Math.max(1, Math.min(30, parseInt(preauthDurationDays) || 7))) * 86400000).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                                    </p>
-                                )}
+                                {preauthAmount && parseFloat(preauthAmount) > 0 && (() => {
+                                    const days = Math.max(1, Math.min(365, parseInt(preauthDurationDays) || 7))
+                                    const captureBy = new Date(Date.now() + days * 86400000)
+                                    return (
+                                        <p className="text-[11px] text-theme-text-muted mt-1.5">
+                                            Scadenza cauzione: <span className="text-theme-text-primary font-semibold">{captureBy.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                            {days > 7 && <span className="text-blue-400"> · auto-rinnovo ogni 7g</span>}
+                                        </p>
+                                    )
+                                })()}
                             </div>
 
-                            <div className="text-[11px] text-theme-text-muted bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 leading-relaxed">
-                                <strong className="text-amber-400">Importante:</strong> Nexi/circuiti carte garantiscono l'auth-hold tipicamente per 7-30 giorni a seconda dell'emittente. La data qui sopra e\' la <em>tua</em> deadline interna per catturare i fondi — se passa, devi catturare o annullare prima che la banca rilasci il blocco automaticamente.
+                            <div className="text-[11px] text-theme-text-muted bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 leading-relaxed">
+                                <strong className="text-blue-400">Come funziona:</strong> i circuiti carte garantiscono il blocco fondi per max 7-30g a seconda dell'emittente. Per durate {'>'} 7 giorni il sistema rinnova automaticamente la pre-autorizzazione ogni 7 giorni (cron giornaliero), cosi\' la cauzione resta attiva fino alla data scelta. Puoi catturare o annullare in qualsiasi momento.
                             </div>
                         </div>
 
