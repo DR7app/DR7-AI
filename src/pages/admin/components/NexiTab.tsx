@@ -387,11 +387,55 @@ export default function NexiTab() {
                 verdict,
             ].join('\n')
             console.log('[diagnoseCard] Full Nexi response:', json)
-            alert(summary)
+
+            // Se l'ordine non esiste su Nexi (orphan: customer non ha mai
+            // completato il pagamento o pulizia retention), offro di
+            // rimuovere il riferimento dal cliente cosi\' la carta non
+            // appare piu\' nella lista "Carte Tokenizzate".
+            const isOrphan = ops.length === 0 && !opMaskedPan && !orderMaskedPan
+            if (isOrphan) {
+                const shouldDelete = window.confirm(
+                    summary + '\n\n— — —\n\n' +
+                    'Vuoi rimuovere il riferimento di questa carta dal cliente?\n' +
+                    'La carta non apparira\' piu\' nella lista. (Operazione reversibile solo manualmente da Supabase.)'
+                )
+                if (shouldDelete) {
+                    await forgetOrphanCard(card)
+                }
+            } else {
+                alert(summary)
+            }
         } catch (err: unknown) {
             toast.dismiss(toastId)
             const msg = err instanceof Error ? err.message : String(err)
             toast.error(`Errore diagnostica: ${msg}`)
+        }
+    }
+
+    // Rimuove il riferimento nexi_contract_id dal cliente quando Nexi non
+    // riconosce piu\' l'ordine (orphan). Pulisce sia customers_extended.
+    // metadata.nexi_contract_id sia le righe nexi_transactions con quel
+    // contract_id (status finale 'orphan_removed' cosi\' resta tracciato).
+    async function forgetOrphanCard(card: TokenizedCard) {
+        const toastId = toast.loading('Rimozione riferimento...')
+        try {
+            const res = await authFetch('/.netlify/functions/nexi-forget-card', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contractId: card.contract_id })
+            })
+            const data = await res.json()
+            toast.dismiss(toastId)
+            if (res.ok && data.success) {
+                toast.success(`Riferimento rimosso (${data.affected || 0} record)`)
+                await fetchTokenizedCards()
+            } else {
+                toast.error(data.error || 'Rimozione fallita')
+            }
+        } catch (err) {
+            toast.dismiss(toastId)
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + msg)
         }
     }
 
@@ -1129,7 +1173,7 @@ export default function NexiTab() {
                             <div className="flex items-start justify-between gap-3">
                                 <div>
                                     <h3 className="text-lg font-bold text-theme-text-primary">Pre-autorizzazione</h3>
-                                    <p className="text-xs text-theme-text-muted mt-0.5">Blocca i fondi senza addebitarli. Cattura entro 7 giorni o annulla.</p>
+                                    <p className="text-xs text-theme-text-muted mt-0.5">Blocca i fondi senza addebitarli. Cattura entro {Math.max(1, Math.min(30, parseInt(preauthDurationDays) || 7))} {Math.max(1, Math.min(30, parseInt(preauthDurationDays) || 7)) === 1 ? 'giorno' : 'giorni'} o annulla.</p>
                                 </div>
                                 <button
                                     onClick={() => setShowPreauthModal(false)}
