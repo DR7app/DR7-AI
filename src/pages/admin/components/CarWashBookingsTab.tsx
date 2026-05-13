@@ -1559,8 +1559,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
 
     // Handle Nexi Pay by Link
-    const isNexiPayByLink = formData.payment_status === 'pending' && isNexiPayByLink(formData.payment_method)
-    if (isNexiPayByLink && data) {
+    const isNexiPending = formData.payment_status === 'pending' && isNexiPayByLink(formData.payment_method)
+    if (isNexiPending && data) {
       try {
         const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
           method: 'POST',
@@ -1635,7 +1635,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
     // Send WhatsApp notification
     try {
-      const paymentStatus = isNexiPayByLink ? 'unpaid' : (formData.payment_status || 'unpaid')
+      const paymentStatus = isNexiPending ? 'unpaid' : (formData.payment_status || 'unpaid')
       const amountPaid = paymentStatus === 'paid' ? totalPrice * 100 : 0
 
       // Send admin notification (detailed internal format)
@@ -1667,7 +1667,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       })
 
       // Send customer confirmation message (skip for Nexi — link message sent separately)
-      if (customerPhone && !isNexiPayByLink) {
+      if (customerPhone && !isNexiPending) {
         const custFirstName = customerName?.split(' ')[0] || 'Cliente'
         const apptDt = new Date(appointmentDateTime)
         // Short date — the Pro "Conferma Lavaggio" body uses "24/04/2026"
