@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
-import { getProKeyEventTriggers, EVENT_DESCRIPTIONS } from '../../../utils/proTemplateRouting'
+import { getProKeyEventTriggers, EVENT_DESCRIPTIONS, suggestEventsForTemplate } from '../../../utils/proTemplateRouting'
 const EVENT_LABELS_IT = EVENT_DESCRIPTIONS
 import toast from 'react-hot-toast'
 
@@ -3161,6 +3161,56 @@ export default function MessaggiSistemaProTab() {
                                                     <p className="text-[10px] text-theme-text-muted leading-snug">
                                                         Spunta gli eventi che vuoi instradare a questo template. Una spunta sposta l'evento qui sopra anche se prima era gestito altrove. Lascia tutto vuoto per usare il routing storico.
                                                     </p>
+
+                                                    {/* Auto-rileva: word-overlap tra label/body del template e
+                                                        le descrizioni degli eventi. Aggiunge solo eventi che
+                                                        NON sono già selezionati, così se l'admin clicca per
+                                                        sbaglio non perde la sua configurazione. Nessuna mappa
+                                                        di pattern hardcoded — usa solo le descrizioni italiane
+                                                        già presenti nei metadati degli eventi. */}
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const suggested = suggestEventsForTemplate(template)
+                                                                if (suggested.length === 0) {
+                                                                    toast('Nessun evento rilevato dal nome/contenuto del template. Aggiungi parole più descrittive nella label o nel corpo, o assegna gli eventi manualmente qui sotto.', { icon: 'ℹ️', duration: 6000 })
+                                                                    return
+                                                                }
+                                                                const current = new Set(template.handled_events || [])
+                                                                let added = 0
+                                                                for (const ev of suggested) {
+                                                                    if (!current.has(ev)) { current.add(ev); added++ }
+                                                                }
+                                                                if (added === 0) {
+                                                                    toast('Eventi suggeriti già tutti assegnati a questo template.', { icon: '👍' })
+                                                                    return
+                                                                }
+                                                                handleUpdateAutomation(template.id, 'handled_events', Array.from(current))
+                                                                toast.success(`${added} event${added === 1 ? 'o' : 'i'} aggiunti automaticamente.`)
+                                                            }}
+                                                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs bg-blue-500/20 hover:bg-blue-500/30 border border-blue-400/50 text-blue-100 font-medium transition-colors"
+                                                            title="Analizza il nome e il testo di questo template e tick automaticamente gli eventi correlati."
+                                                        >
+                                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}>
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1M3 12h1M20 12h1M5.6 5.6l.7.7M18.4 5.6l-.7.7M12 18a6 6 0 100-12 6 6 0 000 12z" />
+                                                            </svg>
+                                                            Auto-rileva eventi dal nome del template
+                                                        </button>
+                                                        {(template.handled_events?.length ?? 0) > 0 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    if (!confirm('Rimuovere TUTTI gli eventi assegnati a questo template?')) return
+                                                                    handleUpdateAutomation(template.id, 'handled_events', [])
+                                                                    toast.success('Eventi rimossi.')
+                                                                }}
+                                                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs bg-theme-bg-tertiary hover:bg-theme-bg-hover border border-theme-border text-theme-text-muted font-medium transition-colors"
+                                                            >
+                                                                Svuota tutti
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                     <div className="space-y-2.5">
                                                         {EVENT_GROUPS.map(group => {
                                                             const colorMap: Record<string, { dot: string; pillOn: string; pillTxt: string }> = {

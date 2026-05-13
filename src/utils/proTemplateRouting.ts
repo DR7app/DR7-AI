@@ -312,6 +312,76 @@ function labelMatchesProKey(label: string | null | undefined, proKey: string): b
   return groups.some(group => group.every(frag => lbl.includes(frag.toLowerCase())))
 }
 
+/** Tokenizza una stringa in parole "significative" (≥3 char,
+    lowercased, deaccented). Usata per word-overlap match. */
+function tokenize(s: string): string[] {
+  return s.toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length >= 3)
+}
+
+const STOPWORDS = new Set([
+  'alla', 'allo', 'agli', 'alle', 'del', 'dello', 'dei', 'delle', 'della',
+  'sul', 'sulla', 'sui', 'sulle', 'sullo', 'nel', 'nella', 'nei', 'negli',
+  'per', 'con', 'tra', 'fra', 'che', 'cui', 'una', 'uno', 'gli', 'lui',
+  'lei', 'voi', 'noi', 'ecco', 'questo', 'questa', 'quello', 'quella',
+  'tutto', 'tutta', 'tutti', 'tutte', 'come', 'quando', 'dove', 'perche',
+  'cosa', 'molto', 'poco', 'piu', 'meno', 'sopra', 'sotto', 'dopo',
+  'prima', 'durante', 'mentre', 'inoltre', 'invece', 'comunque', 'sempre',
+  'quasi', 'subito', 'ancora', 'gia', 'mai', 'solo', 'soltanto', 'anche',
+  'oppure', 'oltre', 'sia', 'piu', 'tante', 'tanti', 'tanto', 'tanta',
+  // English stopwords for mixed-language labels
+  'the', 'and', 'for', 'with', 'from', 'this', 'that', 'these', 'those',
+])
+
+/**
+ * Auto-detect: dato un template (label + opzionalmente body), suggerisce
+ * la lista di eventi di codice (legacy keys) che PROBABILMENTE dovrebbe
+ * gestire. Logica: word-overlap tra le parole della label/body del
+ * template e le descrizioni italiane degli eventi in EVENT_DESCRIPTIONS.
+ *
+ * Esempio: template label "Conferma Noleggio" → tokens {conferma, noleggio}.
+ * Evento 'rental_new_customer' descrizione "Alla creazione della
+ * prenotazione noleggio (al cliente)" → tokens {creazione, prenotazione,
+ * noleggio, cliente}. Overlap = {noleggio} → match → suggerito.
+ *
+ * Nessuna mappa di pattern hardcoded — usa solo le descrizioni in italiano
+ * già presenti in EVENT_DESCRIPTIONS, così aggiungere un nuovo evento
+ * (con la sua descrizione) è automaticamente coperto.
+ */
+export function suggestEventsForTemplate(
+  template: { message_key?: string | null; label?: string | null; message_body?: string | null },
+): string[] {
+  const tplTokens = new Set(
+    [
+      ...tokenize(template.label || ''),
+      ...tokenize((template.message_body || '').slice(0, 500)),
+    ].filter(w => !STOPWORDS.has(w))
+  )
+  if (tplTokens.size === 0) return []
+
+  const scored: Array<{ eventKey: string; score: number }> = []
+  for (const [eventKey, desc] of Object.entries(EVENT_DESCRIPTIONS)) {
+    const descTokens = tokenize(desc).filter(w => !STOPWORDS.has(w))
+    if (descTokens.length === 0) continue
+    let overlap = 0
+    for (const w of descTokens) if (tplTokens.has(w)) overlap++
+    if (overlap >= 1) {
+      // Score = % di parole della descrizione presenti nel template.
+      // Eventi con descrizioni corte e match alto vincono.
+      const score = overlap / descTokens.length
+      scored.push({ eventKey, score })
+    }
+  }
+  scored.sort((a, b) => b.score - a.score)
+  // Manteniamo solo i top match con score >= 0.25 per evitare suggerimenti
+  // troppo larghi (es. una sola parola comune come "prenotazione").
+  return scored.filter(s => s.score >= 0.25).slice(0, 6).map(s => s.eventKey)
+}
+
 /**
  * Per un dato template (message_key + label), restituisce la lista di
  * descrizioni italiane di TUTTI gli eventi di codice che lo fanno
