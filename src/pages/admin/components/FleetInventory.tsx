@@ -234,12 +234,50 @@ export default function FleetInventory() {
         return 'text-green-400'
     }
 
-    // Count vehicles needing attention
+    // Count vehicles needing attention (legacy 5-card summary, kept for now)
     const vehiclesNeedingOil = vehicles.filter(v => (v.inventory?.oil_quantity || 0) === 0).length
     const vehiclesNeedingPastiglieAnt = vehicles.filter(v => (v.inventory?.pastiglie_ant_quantity || 0) === 0).length
     const vehiclesNeedingPastigliePost = vehicles.filter(v => (v.inventory?.pastiglie_post_quantity || 0) === 0).length
     const vehiclesNeedingSensoriAnt = vehicles.filter(v => (v.inventory?.sensori_ant_quantity || 0) === 0).length
     const vehiclesNeedingSensoriPost = vehicles.filter(v => (v.inventory?.sensori_post_quantity || 0) === 0).length
+
+    // ── Dashboard KPI calculations (matches mockup) ──────────────────────
+    function vehicleStatus(v: VehicleWithInventory): 'critico' | 'sotto_soglia' | 'ok' {
+        const inv = v.inventory
+        const qtys = [
+            inv?.oil_quantity || 0,
+            inv?.pastiglie_ant_quantity || 0,
+            inv?.pastiglie_post_quantity || 0,
+            inv?.sensori_ant_quantity || 0,
+            inv?.sensori_post_quantity || 0,
+        ]
+        if (qtys.some(q => q === 0)) return 'critico'
+        if (qtys.some(q => q <= 2)) return 'sotto_soglia'
+        return 'ok'
+    }
+    const veicoliCriticita = vehicles.filter(v => vehicleStatus(v) === 'critico').length
+    const componentiSottoSoglia = vehicles.reduce((s, v) => {
+        const inv = v.inventory
+        const qtys = [
+            inv?.oil_quantity || 0,
+            inv?.pastiglie_ant_quantity || 0,
+            inv?.pastiglie_post_quantity || 0,
+            inv?.sensori_ant_quantity || 0,
+            inv?.sensori_post_quantity || 0,
+        ]
+        return s + qtys.filter(q => q <= 2).length
+    }, 0)
+    const veicoliOk = vehicles.filter(v => vehicleStatus(v) === 'ok').length
+    const veicoliSottoSoglia = vehicles.filter(v => vehicleStatus(v) === 'sotto_soglia').length
+    const statoFlottaPct = vehicles.length > 0
+        ? Math.round((veicoliOk / vehicles.length) * 100)
+        : 0
+    const kmTotaliFlotta = vehicles.reduce((sum, v) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const meta = (v.metadata || {}) as any
+        const km = Number(meta.current_km ?? meta.mileage ?? 0)
+        return sum + (Number.isFinite(km) ? km : 0)
+    }, 0)
 
     if (loading) return <div className="text-theme-text-muted">Caricamento magazzino...</div>
 

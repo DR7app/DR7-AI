@@ -1,22 +1,14 @@
-import { useState } from 'react'
-import FleetInventory from './FleetInventory'
 import FleetList from './FleetList'
 
 /**
- * Gestione Flotta — vista a due modalita' commutabile:
- *  - 'dashboard' (default): KPI + tabella veicoli con foto/utilizzo/fatturato
- *  - 'magazzino': inventario ricambi (olio, pastiglie, sensori) per veicolo
+ * Gestione Flotta — dashboard KPI + tabella veicoli con foto/utilizzo/
+ * fatturato. Il Magazzino ricambi (olio, pastiglie, sensori) ora vive su
+ * una sua sub-tab dedicata 'Magazzino', non piu' dentro un toggle.
  *
- * Il toggle e' un bottone "Vai al Magazzino" / "Torna al Dashboard" in alto.
- * onOpenDetail nav-igate alla tab Veicoli con l'id del veicolo selezionato
- * (la tab Veicoli ascolta admin:open-vehicle).
+ * onOpenDetail nav-igate alla tab Veicoli con l'id del veicolo
+ * selezionato (la tab Veicoli ascolta admin:open-vehicle).
  */
 export default function FleetManagementTab() {
-    // Default vista = magazzino (com'era prima del redesign dashboard).
-    // La direzione apriva "Gestione Flotta" aspettandosi il magazzino,
-    // il dashboard veicoli e' un di piu' a portata di toggle.
-    const [view, setView] = useState<'dashboard' | 'magazzino'>('magazzino')
-
     const handleOpenDetail = (vehicleId: string) => {
         try {
             window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: 'vehicles' } }))
@@ -24,32 +16,5 @@ export default function FleetManagementTab() {
         } catch { /* ignore */ }
     }
 
-    return (
-        <div className="space-y-3">
-            <div className="flex justify-end">
-                <button
-                    type="button"
-                    onClick={() => setView(v => v === 'dashboard' ? 'magazzino' : 'dashboard')}
-                    className="inline-flex items-center gap-2 rounded-full border border-zinc-300 bg-white px-4 py-1.5 text-xs font-semibold text-black hover:bg-black hover:text-white dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:hover:bg-white dark:hover:text-black transition-colors"
-                >
-                    {view === 'dashboard' ? (
-                        <>
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
-                            </svg>
-                            Vai al Magazzino
-                        </>
-                    ) : (
-                        <>
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h18v18H3zM9 3v18M3 9h18"/>
-                            </svg>
-                            Vai al Dashboard
-                        </>
-                    )}
-                </button>
-            </div>
-            {view === 'dashboard' ? <FleetList onOpenDetail={handleOpenDetail}/> : <FleetInventory/>}
-        </div>
-    )
+    return <FleetList onOpenDetail={handleOpenDetail}/>
 }
