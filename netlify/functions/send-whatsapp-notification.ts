@@ -126,7 +126,7 @@ const handler: Handler = async (event) => {
 
       const { data: tpl } = await sb
         .from('system_messages')
-        .select('message_body, include_header, is_enabled')
+        .select('message_body, include_header, is_enabled, target_service_type')
         .eq('message_key', resolvedKey)
         .maybeSingle();
 
@@ -143,6 +143,39 @@ const handler: Handler = async (event) => {
             reason: 'template_disabled'
           }),
         };
+      }
+
+      // target_service_type guard: BUG FIX 2026-05. Prima questo filtro
+      // era applicato SOLO dal cron `process-scheduled-system-messages-cron`.
+      // I template fired da event-callback (rental_new_customer,
+      // carwash_new_customer, ecc.) lo ignoravano completamente, quindi
+      // impostare "Solo Noleggio" su un template non impediva l'invio per
+      // bookings lavaggio/meccanica. Adesso lo controlliamo qui per
+      // qualunque path d'invio basato su template_key.
+      if (tpl && tpl.target_service_type && tpl.target_service_type !== 'all') {
+        const tplSvc = String(tpl.target_service_type).toLowerCase();
+        const bookingSvc = String(booking?.service_type || 'rental').toLowerCase();
+        // 'rental' è il default per i booking senza service_type esplicito
+        const normalised = bookingSvc === 'mechanical_service' ? 'mechanical'
+          : bookingSvc === 'car_wash' ? 'car_wash'
+          : bookingSvc === 'mechanical' ? 'mechanical'
+          : 'rental';
+        const matches = tplSvc === normalised
+          || (tplSvc === 'car_wash' && normalised === 'car_wash')
+          || (tplSvc === 'mechanical' && normalised === 'mechanical')
+          || (tplSvc === 'rental' && normalised === 'rental');
+        if (!matches) {
+          console.log(`[send-whatsapp] Template "${resolvedKey}" target_service_type=${tplSvc} but booking is ${normalised} — skipping send`);
+          return {
+            statusCode: 200,
+            body: JSON.stringify({
+              message: `Template "${resolvedKey}" target_service_type=${tplSvc} doesn't match booking service ${normalised} — notification skipped`,
+              success: true,
+              skipped: true,
+              reason: 'service_type_mismatch'
+            }),
+          };
+        }
       }
 
       if (tpl?.message_body) {
@@ -341,7 +374,7 @@ const handler: Handler = async (event) => {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
       let { data: tpl } = await supabase
         .from('system_messages')
-        .select('message_body, include_header, is_enabled')
+        .select('message_body, include_header, is_enabled, target_service_type')
         .eq('message_key', messageKey)
         .maybeSingle();
 
@@ -350,7 +383,7 @@ const handler: Handler = async (event) => {
         const baseKey = messageKey.replace('_customer', '');
         const { data: baseTpl } = await supabase
           .from('system_messages')
-          .select('message_body, include_header, is_enabled')
+          .select('message_body, include_header, is_enabled, target_service_type')
           .eq('message_key', baseKey)
           .maybeSingle();
         tpl = baseTpl;
@@ -368,6 +401,30 @@ const handler: Handler = async (event) => {
             reason: 'template_disabled'
           }),
         };
+      }
+
+      // target_service_type guard (vedi nota nel primo path templateKey
+      // sopra): blocca l'invio se il template è configurato per un solo
+      // tipo di servizio e il booking è di tipo diverso.
+      if (tpl && (tpl as { target_service_type?: string }).target_service_type && (tpl as { target_service_type?: string }).target_service_type !== 'all') {
+        const tplSvc = String((tpl as { target_service_type?: string }).target_service_type).toLowerCase();
+        const bookingSvc = String(booking?.service_type || 'rental').toLowerCase();
+        const normalised = bookingSvc === 'mechanical_service' ? 'mechanical'
+          : bookingSvc === 'car_wash' ? 'car_wash'
+          : bookingSvc === 'mechanical' ? 'mechanical'
+          : 'rental';
+        if (tplSvc !== normalised) {
+          console.log(`[send-whatsapp] Template "${messageKey}" target_service_type=${tplSvc} but booking is ${normalised} — skipping send`);
+          return {
+            statusCode: 200,
+            body: JSON.stringify({
+              message: `Template "${messageKey}" target_service_type=${tplSvc} doesn't match booking service ${normalised} — notification skipped`,
+              success: true,
+              skipped: true,
+              reason: 'service_type_mismatch'
+            }),
+          };
+        }
       }
 
       if (tpl && tpl.message_body) {
