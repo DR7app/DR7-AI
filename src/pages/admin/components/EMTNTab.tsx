@@ -22,11 +22,14 @@ interface DamageEvent {
     bookingId: string
     label: string
     vehicle: string | null
-    date: string | null
+    eventDate: string | null
+    paidAt: string | null
+    daysToPay: number | null
     amount: number
     amountPaid: number
     remaining: number
     paymentStatus: 'paid' | 'partial' | 'pending'
+    fatturaNumero: string | null
     note: string | null
 }
 
@@ -1227,11 +1230,14 @@ function EventiCliente({ events, totals }: {
                             <th className="px-2 py-1 font-semibold">Tipo</th>
                             <th className="px-2 py-1 font-semibold">Etichetta</th>
                             <th className="px-2 py-1 font-semibold">Veicolo</th>
-                            <th className="px-2 py-1 font-semibold">Data</th>
+                            <th className="px-2 py-1 font-semibold">Data evento</th>
+                            <th className="px-2 py-1 font-semibold">Pagato il</th>
+                            <th className="px-2 py-1 font-semibold text-right">Giorni</th>
                             <th className="px-2 py-1 font-semibold text-right">Importo</th>
                             <th className="px-2 py-1 font-semibold text-right">Pagato</th>
                             <th className="px-2 py-1 font-semibold text-right">Residuo</th>
                             <th className="px-2 py-1 font-semibold">Stato</th>
+                            <th className="px-2 py-1 font-semibold">Fattura</th>
                             <th className="px-2 py-1 font-semibold">Booking</th>
                         </tr>
                     </thead>
@@ -1248,6 +1254,11 @@ function EventiCliente({ events, totals }: {
                             const kindTone = ev.kind === 'danno'
                                 ? 'border-red-500/40 text-red-400 bg-red-500/10'
                                 : 'border-orange-500/40 text-orange-400 bg-orange-500/10'
+                            const daysTone =
+                                ev.daysToPay == null ? 'text-theme-text-muted'
+                                : ev.daysToPay <= 7 ? 'text-emerald-500'
+                                : ev.daysToPay <= 30 ? 'text-amber-500'
+                                : 'text-red-400'
                             return (
                                 <tr key={ev.bookingId + '-' + i} className="border-t border-theme-border">
                                     <td className="px-2 py-1">
@@ -1260,13 +1271,25 @@ function EventiCliente({ events, totals }: {
                                         {ev.note && <div className="text-[10px] text-theme-text-muted truncate max-w-[260px]" title={ev.note}>{ev.note}</div>}
                                     </td>
                                     <td className="px-2 py-1 text-theme-text-muted truncate max-w-[140px]">{ev.vehicle || '—'}</td>
-                                    <td className="px-2 py-1 text-theme-text-muted">{formatDate(ev.date) || '—'}</td>
+                                    <td className="px-2 py-1 text-theme-text-muted">{formatDate(ev.eventDate) || '—'}</td>
+                                    <td className="px-2 py-1 text-theme-text-muted">
+                                        {ev.paidAt
+                                            ? formatDate(ev.paidAt)
+                                            : (ev.paymentStatus === 'pending'
+                                                ? <span className="italic text-red-400">Non pagato</span>
+                                                : <span className="italic">—</span>)}
+                                    </td>
+                                    <td className={'px-2 py-1 text-right tabular-nums ' + daysTone}
+                                        title={ev.daysToPay != null ? `Giorni intercorsi tra evento e saldo` : 'Data pagamento non disponibile'}>
+                                        {ev.daysToPay != null ? `${ev.daysToPay}g` : '—'}
+                                    </td>
                                     <td className="px-2 py-1 text-right text-theme-text-primary font-semibold tabular-nums">{fmt(ev.amount)}</td>
                                     <td className="px-2 py-1 text-right text-emerald-500 tabular-nums">{fmt(ev.amountPaid)}</td>
                                     <td className={'px-2 py-1 text-right font-semibold tabular-nums ' + (ev.remaining > 0 ? 'text-red-400' : 'text-emerald-500')}>{fmt(ev.remaining)}</td>
                                     <td className="px-2 py-1">
                                         <span className={'px-2 py-0.5 rounded-full border text-[10px] uppercase tracking-wider ' + tone}>{statusLabel}</span>
                                     </td>
+                                    <td className="px-2 py-1 font-mono text-[10px] text-theme-text-muted">{ev.fatturaNumero || '—'}</td>
                                     <td className="px-2 py-1 font-mono text-[10px] text-theme-text-muted">{ev.bookingId.slice(0, 8)}…</td>
                                 </tr>
                             )

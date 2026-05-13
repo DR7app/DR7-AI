@@ -35,6 +35,31 @@ type DanniItem = {
     paymentStatus?: string
     date?: string
     note?: string
+    // Forward-compat: questi campi non sono ancora scritti da
+    // GestioneDanniTab ma se l'operatore registra il pagamento li
+    // popoliamo li\' (TODO migration). Per ora derivati da fatture.
+    paidAt?: string | null
+    paidVia?: string | null
+}
+
+type FatturaItem = {
+    description?: string
+    label?: string
+    unit_price?: number
+    quantity?: number
+    total?: number
+    amount?: number
+    amountPaid?: number
+    paymentStatus?: string
+    type?: string
+}
+type FatturaRow = {
+    id: string
+    booking_id: string | null
+    stato: string | null
+    data_emissione: string | null
+    created_at: string | null
+    items: FatturaItem[] | null
 }
 
 interface BookingRow {
@@ -69,11 +94,14 @@ interface EventDetail {
     bookingId: string
     label: string
     vehicle: string | null
-    date: string | null
+    eventDate: string | null   // quando e\' avvenuto il danno/la penale
+    paidAt: string | null      // quando e\' stato saldato (da fattura.data_emissione o item.paidAt)
+    daysToPay: number | null   // giorni tra eventDate e paidAt
     amount: number
     amountPaid: number
     remaining: number
     paymentStatus: 'paid' | 'partial' | 'pending'
+    fatturaNumero: string | null
     note: string | null
 }
 
@@ -197,6 +225,49 @@ export const handler: Handler = async (event) => {
         }
     }
 
+    // Pull fatture relative alle bookings interessanti per derivare il
+    // "paidAt": quando il danno e\' marcato pagato, generate-penalty-invoice
+    // crea una fattura con stato='paid' e data_emissione=today. Quella e\'
+    // la migliore proxy della data pagamento finche\' non aggiungiamo
+    // booking_details.danni[].paidAt esplicito.
+    const bookingIds = Array.from(new Set(interesting.map(b => b.id)))
+    const fatturaByBookingItem = new Map<string, { paidAt: string; numero: string }>()
+    if (bookingIds.length > 0) {
+        const { data: fatture } = await sb
+            .from('fatture')
+            .select('id, booking_id, stato, data_emissione, created_at, items, numero_fattura')
+            .in('booking_id', bookingIds)
+        for (const f of (fatture || []) as (FatturaRow & { numero_fattura?: string })[]) {
+            if (!f.booking_id) continue
+            // Solo fatture saldate hanno una data pagamento utile.
+            const isPaid = String(f.stato || '').toLowerCase() === 'paid'
+            if (!isPaid) continue
+            const paidAt = f.data_emissione || f.created_at || ''
+            const numero = f.numero_fattura || ''
+            const items = Array.isArray(f.items) ? f.items : []
+            for (const it of items) {
+                const labelKey = (it.description || it.label || '').trim().toLowerCase()
+                if (!labelKey) continue
+                const key = `${f.booking_id}::${labelKey}`
+                if (!fatturaByBookingItem.has(key)) {
+                    fatturaByBookingItem.set(key, { paidAt, numero })
+                }
+            }
+        }
+    }
+
+    function lookupFattura(bookingId: string, label: string): { paidAt: string; numero: string } | null {
+        const key = `${bookingId}::${label.trim().toLowerCase()}`
+        return fatturaByBookingItem.get(key) || null
+    }
+    function daysBetween(a: string | null, b: string | null): number | null {
+        if (!a || !b) return null
+        const da = new Date(a).getTime()
+        const db = new Date(b).getTime()
+        if (!Number.isFinite(da) || !Number.isFinite(db)) return null
+        return Math.max(0, Math.round((db - da) / 86_400_000))
+    }
+
     const byGroup = new Map<string, Aggregated>()
 
     for (const b of interesting) {
@@ -251,61 +322,62 @@ export const handler: Handler = async (event) => {
 
         agg.bookings_with_events += 1
         const veh = b.vehicle_name || b.vehicle_plate || null
-        for (const d of danni) {
-            agg.damages_count += 1
-            const t = itemTotal(d)
-            const ap = Math.min(num(d.amountPaid), t)
-            const status = classifyStatus(d)
-            if (status === 'paid') agg.paid_damage_total += t
-            else {
-                agg.paid_damage_total += ap
-                agg.unpaid_damage_total += t - ap
-            }
-            const dDate = d.date || ref
-            if (dDate && (!agg.last_event_date || dDate > agg.last_event_date)) {
-                agg.last_event_date = dDate
-                agg.last_vehicle = veh
-            }
-            agg.events.push({
-                kind: 'danno',
+        function buildEvent(kind: 'danno' | 'penale', it: DanniItem): EventDetail {
+            const t = itemTotal(it)
+            const ap = Math.min(num(it.amountPaid), t)
+            const status = classifyStatus(it)
+            const label = String(it.label || it.description || (kind === 'danno' ? 'Danno' : 'Penale'))
+            const eventDate = it.date || ref || null
+            // Data pagamento: forward-compat (item.paidAt scritto a mano in
+            // futuro), poi lookup nella fattura saldata collegata.
+            const fatt = lookupFattura(b.id, label)
+            const paidAt = (status === 'paid' || status === 'partial')
+                ? (it.paidAt || fatt?.paidAt || null)
+                : null
+            return {
+                kind,
                 bookingId: b.id,
-                label: String(d.label || d.description || 'Danno'),
+                label,
                 vehicle: veh,
-                date: dDate || null,
+                eventDate,
+                paidAt,
+                daysToPay: daysBetween(eventDate, paidAt),
                 amount: t,
                 amountPaid: ap,
                 remaining: Math.max(0, t - ap),
                 paymentStatus: status,
-                note: d.note || null,
-            })
+                fatturaNumero: fatt?.numero || null,
+                note: it.note || null,
+            }
+        }
+
+        for (const d of danni) {
+            agg.damages_count += 1
+            const ev = buildEvent('danno', d)
+            if (ev.paymentStatus === 'paid') agg.paid_damage_total += ev.amount
+            else {
+                agg.paid_damage_total += ev.amountPaid
+                agg.unpaid_damage_total += ev.remaining
+            }
+            if (ev.eventDate && (!agg.last_event_date || ev.eventDate > agg.last_event_date)) {
+                agg.last_event_date = ev.eventDate
+                agg.last_vehicle = veh
+            }
+            agg.events.push(ev)
         }
         for (const p of penalties) {
             agg.penalties_count += 1
-            const t = itemTotal(p)
-            const ap = Math.min(num(p.amountPaid), t)
-            const status = classifyStatus(p)
-            if (status === 'paid') agg.paid_penalty_total += t
+            const ev = buildEvent('penale', p)
+            if (ev.paymentStatus === 'paid') agg.paid_penalty_total += ev.amount
             else {
-                agg.paid_penalty_total += ap
-                agg.unpaid_penalty_total += t - ap
+                agg.paid_penalty_total += ev.amountPaid
+                agg.unpaid_penalty_total += ev.remaining
             }
-            const pDate = p.date || ref
-            if (pDate && (!agg.last_event_date || pDate > agg.last_event_date)) {
-                agg.last_event_date = pDate
+            if (ev.eventDate && (!agg.last_event_date || ev.eventDate > agg.last_event_date)) {
+                agg.last_event_date = ev.eventDate
                 agg.last_vehicle = veh
             }
-            agg.events.push({
-                kind: 'penale',
-                bookingId: b.id,
-                label: String(p.label || p.description || 'Penale'),
-                vehicle: veh,
-                date: pDate || null,
-                amount: t,
-                amountPaid: ap,
-                remaining: Math.max(0, t - ap),
-                paymentStatus: status,
-                note: p.note || null,
-            })
+            agg.events.push(ev)
         }
     }
 
@@ -313,11 +385,11 @@ export const handler: Handler = async (event) => {
     // espansa mostra prima i fatti piu\' recenti.
     for (const agg of byGroup.values()) {
         agg.events.sort((a, b) => {
-            if (a.date && b.date) {
-                if (a.date < b.date) return 1
-                if (a.date > b.date) return -1
-            } else if (a.date) return -1
-            else if (b.date) return 1
+            if (a.eventDate && b.eventDate) {
+                if (a.eventDate < b.eventDate) return 1
+                if (a.eventDate > b.eventDate) return -1
+            } else if (a.eventDate) return -1
+            else if (b.eventDate) return 1
             return 0
         })
     }
