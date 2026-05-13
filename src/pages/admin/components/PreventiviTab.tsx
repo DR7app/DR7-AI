@@ -300,7 +300,17 @@ function resolveKmIncluded(
   return 0
 }
 
-function calculateExperienceCost(services: Record<string, number>, rentalDays: number, allServices: { id: string; name: string; price: number; unit: string }[]): number {
+// km-quote map: { [serviceId]: { km: number; pricePerKm: number } } — used
+// only for services whose unit is 'per_km' (operator types both values at
+// quote time). Cost = km × pricePerKm.
+type KmQuoteMap = Record<string, { km: number; pricePerKm: number }>
+
+function calculateExperienceCost(
+  services: Record<string, number>,
+  rentalDays: number,
+  allServices: { id: string; name: string; price: number; unit: string }[],
+  kmQuotes: KmQuoteMap = {},
+): number {
   let total = 0
   for (const [id, qty] of Object.entries(services)) {
     if (qty <= 0) continue
@@ -310,6 +320,10 @@ function calculateExperienceCost(services: Record<string, number>, rentalDays: n
     else if (svc.unit === 'per_hour') total += svc.price * qty
     else if (svc.unit === 'per_item') total += svc.price * qty
     else if (svc.unit === 'flat') total += svc.price * qty
+    else if (svc.unit === 'per_km') {
+      const q = kmQuotes[id]
+      if (q && q.km > 0 && q.pricePerKm > 0) total += q.km * q.pricePerKm
+    }
   }
   return Math.round(total * 100) / 100
 }
@@ -319,6 +333,7 @@ const UNIT_LABELS: Record<string, string> = {
   per_hour: '/ora',
   per_item: '/unita',
   flat: 'fisso',
+  per_km: '/km',
 }
 
 function renderWhatsAppHtml(text: string): string {
@@ -480,6 +495,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     pickup_address: '',
     // Experience services: id → quantity
     experience_services: {} as Record<string, number>,
+    // Per-km services: id → { km, pricePerKm } typed by the operator at quote time
+    experience_km_quotes: {} as KmQuoteMap,
     // Discount
     sconto: '',
     sconto_note: 'valido solo 24h',
@@ -863,7 +880,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     const deliveryFee = parseFloat(form.delivery_fee) || 0
     const pickupFee = parseFloat(form.pickup_fee) || 0
 
-    const experienceCost = calculateExperienceCost(form.experience_services, rentalDays, configOverlay.experienceServices)
+    const experienceCost = calculateExperienceCost(form.experience_services, rentalDays, configOverlay.experienceServices, form.experience_km_quotes)
 
     // Product of revenue coefficients.
     const revenueCoeff = revenueData?.enabled
@@ -1444,6 +1461,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           delivery_address: form.delivery_address,
           pickup_address: form.pickup_address,
           experience_services: form.experience_services,
+          experience_km_quotes: form.experience_km_quotes,
           experience_cost: pricing.experienceCost,
         },
         status: 'bozza',
@@ -1559,6 +1577,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       delivery_address: extras.delivery_address || '',
       pickup_address: extras.pickup_address || '',
       experience_services: extras.experience_services || {},
+      experience_km_quotes: (extras.experience_km_quotes || {}) as KmQuoteMap,
       sconto: p.sconto > 0 ? String(p.total_final) : '',
       sconto_note: p.sconto_note || 'valido solo 24h',
       model_year: p.vehicle_model_year ? String(p.vehicle_model_year) : '',
@@ -1593,6 +1612,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       delivery_address: '',
       pickup_address: '',
       experience_services: {},
+      experience_km_quotes: {},
       sconto: '',
       sconto_note: 'valido solo 24h',
       model_year: '',
@@ -3312,6 +3332,71 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             {availableExperienceServices.map(svc => {
               const qty = form.experience_services[svc.id] || 0
               const isQuantity = svc.unit === 'per_item' || svc.unit === 'per_hour'
+              const isPerKm = svc.unit === 'per_km'
+
+              // Per-km service: two free-text inputs (km + €/km), no qty stepper.
+              if (isPerKm) {
+                const quote = form.experience_km_quotes[svc.id] || { km: 0, pricePerKm: 0 }
+                const isActive = quote.km > 0 && quote.pricePerKm > 0
+                const total = Math.round(quote.km * quote.pricePerKm * 100) / 100
+                return (
+                  <div
+                    key={svc.id}
+                    className={`p-3 rounded-lg border transition-colors col-span-1 md:col-span-2 ${
+                      isActive ? 'border-dr7-gold/50 bg-dr7-gold/5' : 'border-theme-border/50 hover:bg-theme-bg-tertiary/30'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2 gap-3">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-theme-text-primary">{svc.name}</span>
+                        <span className="text-xs text-theme-text-muted ml-2">(prezzo al km manuale)</span>
+                      </div>
+                      {isActive && (
+                        <span className="text-sm text-dr7-gold font-semibold whitespace-nowrap">
+                          {quote.km} km × {formatEur(quote.pricePerKm)} = {formatEur(total)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <Input
+                        label="Numero KM"
+                        type="number"
+                        step="1"
+                        min="0"
+                        value={quote.km > 0 ? String(quote.km) : ''}
+                        onChange={(e) => {
+                          const km = Math.max(0, Number(e.target.value) || 0)
+                          setForm(prev => {
+                            const next = { ...prev.experience_km_quotes }
+                            if (km > 0) next[svc.id] = { ...(next[svc.id] || { pricePerKm: 0 }), km }
+                            else delete next[svc.id]
+                            return { ...prev, experience_km_quotes: next }
+                          })
+                        }}
+                        placeholder="es. 200"
+                      />
+                      <Input
+                        label="Prezzo per KM (€)"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={quote.pricePerKm > 0 ? String(quote.pricePerKm) : ''}
+                        onChange={(e) => {
+                          const pricePerKm = Math.max(0, Number(e.target.value) || 0)
+                          setForm(prev => {
+                            const next = { ...prev.experience_km_quotes }
+                            if (pricePerKm > 0) next[svc.id] = { ...(next[svc.id] || { km: 0 }), pricePerKm }
+                            else delete next[svc.id]
+                            return { ...prev, experience_km_quotes: next }
+                          })
+                        }}
+                        placeholder="es. 0.50"
+                      />
+                    </div>
+                  </div>
+                )
+              }
+
               return (
                 <div
                   key={svc.id}

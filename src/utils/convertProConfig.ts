@@ -28,7 +28,7 @@ interface ProKmConfig {
 }
 interface ProDepositOption { id: string; label: string; amount: number | ''; surcharge_per_day: number | '' }
 interface ProDepositFasciaConfig { residente: ProDepositOption[]; non_residente: ProDepositOption[] }
-interface ProExperienceService { id: string; name: string; price: number | ''; unit: 'per_day' | 'per_hour' | 'per_item' | 'flat'; is_active: boolean; tier_only: string }
+interface ProExperienceService { id: string; name: string; price: number | ''; unit: 'per_day' | 'per_hour' | 'per_item' | 'flat' | 'per_km'; is_active: boolean; tier_only: string }
 interface ProPickupLocation { id: string; label: string; km: number | ''; is_active: boolean }
 interface ProServiziConfig {
   experience: ProExperienceService[]

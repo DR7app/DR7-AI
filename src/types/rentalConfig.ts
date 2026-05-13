@@ -50,7 +50,7 @@ export interface ExperienceService {
   id: string
   name: string
   price: number
-  unit: 'per_day' | 'per_hour' | 'per_item' | 'flat'
+  unit: 'per_day' | 'per_hour' | 'per_item' | 'flat' | 'per_km'
   is_active: boolean
   tier_only: string | null
   description?: string

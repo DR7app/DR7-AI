@@ -83,13 +83,14 @@ const INITIAL_CATEGORIES: Category[] = [
   { id: 'aziendali', label: 'Aziendali' },
 ]
 
-type ServiceUnit = 'per_day' | 'per_hour' | 'per_item' | 'flat'
+type ServiceUnit = 'per_day' | 'per_hour' | 'per_item' | 'flat' | 'per_km'
 
 const UNIT_LABELS: Record<ServiceUnit, string> = {
   per_day: 'al giorno',
   per_hour: 'all\u2019ora',
   per_item: 'cad.',
   flat: 'una tantum',
+  per_km: 'al km (quota manuale)',
 }
 
 type ExperienceService = {
