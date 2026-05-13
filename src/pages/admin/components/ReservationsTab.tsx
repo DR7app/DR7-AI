@@ -5,6 +5,7 @@ import { isWithinOfficeHoursForDate, getOfficeMinuteRangesForDate } from '../../
 import { supabase } from '../../../supabaseClient'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import { isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
+import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
 
 /**
  * Convert EUR string to integer cents using string parsing (no floating point).
@@ -2740,7 +2741,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // Se la regola e' disattivata in Gestione OTP, isOtpRequired ritorna false
     // e requestOverride auto-approva senza popup. Direzione approva
     // l'OTP -> richiamare manualmente Cancella di nuovo per procedere.
-    if (!hasOverride('booking.delete')) {
+    // Test bookings (veicolo TEST*) bypassano sempre l'OTP.
+    const bookingToDelete = bookings.find(b => b.id === bookingId)
+    if (!isTestBooking(bookingToDelete) && !hasOverride('booking.delete')) {
       requestOverride('booking.delete', 'Eliminare una prenotazione richiede autorizzazione direzionale.')
       if (!hasOverride('booking.delete')) return // OTP modal aperto, esci
     }
@@ -3833,7 +3836,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           : `${trips.length} condizioni richiedono autorizzazione`
 
         pendingSubmitRef.current = { skipValidation, overrideCustomerId }
-        requestOverride(primary.code, limitationMessage, primary.code === 'paid_rental_modify' ? `booking_edit_${editingId}` : undefined)
+        // Test bookings bypassano sempre l'OTP — operatori QA non devono
+        // ricevere autorizzazioni direzionali per i veicoli di test.
+        const selectedVeh = vehicles.find(v => v.id === formData.vehicle_id)
+        const isTestRental = isTestVehicle(selectedVeh?.display_name || null, selectedVeh?.plate || null)
+        requestOverride(
+          primary.code,
+          limitationMessage,
+          {
+            audit: primary.code === 'paid_rental_modify' ? `booking_edit_${editingId}` : undefined,
+            bypass: isTestRental,
+          },
+        )
         submitLockRef.current = false
         return
       }
@@ -4802,7 +4816,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // azione e' attivo (system_otp_overrides.is_required=true) chiediamo
       // OTP della direzione. useLimitationOverride bypassa server-side se
       // il toggle e' OFF, quindi quando off questa chiamata non blocca nulla.
-      if (confirmBooking && !hasOverride('prenotazione_noleggio_conferma')) {
+      // Test bookings (veicolo TEST*) bypassano sempre.
+      const selectedVeh = vehicles.find(v => v.id === formData.vehicle_id)
+      const isTestRental = isTestVehicle(selectedVeh?.display_name || null, selectedVeh?.plate || null)
+      if (confirmBooking && !isTestRental && !hasOverride('prenotazione_noleggio_conferma')) {
         setOverrideDetails(buildOverrideDetailsBase([
           { label: 'Motivo richiesta', value: 'Conferma prenotazione noleggio richiede autorizzazione direzionale' },
         ]))
@@ -5504,7 +5521,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // - Pending (da-saldare) without conferma → null (silent until
           //   admin records the payment or explicitly ticks Conferma)
           let templateKey: string | null
-          if (confirmBooking) {
+          if (confirmBooking && isPending) {
+            // Admin ha spuntato "Conferma Prenotazione" mentre payment_status
+            // resta pending → questa NON e' una conferma di pagamento, e' una
+            // conferma "Da Saldare". Routing dedicato cosi' l'admin puo'
+            // assegnare un template diverso da "Conferma Noleggio".
+            templateKey = 'booking_confirmed_da_saldare'
+          } else if (confirmBooking) {
             templateKey = 'rental_new_customer'
           } else if (isPending) {
             logger.log('[Save] Booking pending (da saldare) — skipping conferma-noleggio (Conferma Prenotazione checkbox not ticked)')
