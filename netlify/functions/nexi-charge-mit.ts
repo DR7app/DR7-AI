@@ -133,9 +133,49 @@ const handler: Handler = async (event) => {
         }
 
         const operationResult = responseData.operation?.operationResult || responseData.operationResult;
-        const isSuccess = operationResult === 'AUTHORIZED' || operationResult === 'EXECUTED';
         const isPreauth = (captureType || 'IMPLICIT') === 'EXPLICIT';
         const nexiOperationId = responseData.operation?.operationId || responseData.operationId || null;
+
+        // CRITICO: se chiediamo preauth (EXPLICIT) ma Nexi torna EXECUTED,
+        // significa che i fondi sono stati ADDEBITATI invece che bloccati.
+        // Questo e\' il bug noto del /v1/orders/mit: ignora EXPLICIT e fa charge.
+        // Marchiamo come errore e tentiamo refund automatico.
+        const wronglyCharged = isPreauth && operationResult === 'EXECUTED';
+
+        // Per preauth: success solo se AUTHORIZED. EXECUTED = errore.
+        // Per charge normale: success se AUTHORIZED o EXECUTED.
+        const isSuccess = isPreauth
+            ? operationResult === 'AUTHORIZED'
+            : (operationResult === 'AUTHORIZED' || operationResult === 'EXECUTED');
+
+        // Refund automatico se Nexi ha addebitato per errore su preauth
+        let autoRefunded = false
+        let refundResult: unknown = null
+        if (wronglyCharged && nexiOperationId) {
+            try {
+                console.warn('[nexi-charge-mit] WRONG CHARGE on preauth — auto-refunding op', nexiOperationId, 'amount', amountCents);
+                const refundRes = await fetch(`${NEXI_BASE_URL}/operations/${nexiOperationId}/refunds`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Api-Key': NEXI_API_KEY,
+                        'Correlation-Id': uuidv4(),
+                        'Idempotency-Key': uuidv4(),
+                    },
+                    body: JSON.stringify({
+                        amount: String(amountCents),
+                        currency: 'EUR',
+                        description: `Auto-refund: preauth EXECUTED instead of AUTHORIZED (bug /v1/orders/mit)`,
+                    }),
+                })
+                const refundText = await refundRes.text()
+                try { refundResult = JSON.parse(refundText) } catch { refundResult = { raw: refundText } }
+                autoRefunded = refundRes.ok
+                console.warn('[nexi-charge-mit] Auto-refund result:', refundRes.status, autoRefunded ? 'OK' : 'FAILED')
+            } catch (e) {
+                console.error('[nexi-charge-mit] Auto-refund EXCEPTION:', e)
+            }
+        }
 
         // Safety: verifica che il contractId tokenizzato sia rimasto valido.
         // Se Nexi restituisce un contractId diverso nella response (raro ma
@@ -198,7 +238,9 @@ const handler: Handler = async (event) => {
             order_id: orderId,
             booking_id: bookingId || null,
             amount_cents: amountCents,
-            status: isSuccess ? (isPreauth ? 'preauth_held' : 'completed') : 'failed',
+            status: wronglyCharged
+                ? (autoRefunded ? 'preauth_wrongly_charged_refunded' : 'preauth_wrongly_charged')
+                : (isSuccess ? (isPreauth ? 'preauth_held' : 'completed') : 'failed'),
             description: description || (isPreauth ? 'Pre-autorizzazione MIT' : 'Addebito MIT'),
             customer_email: customerEmail || null,
             metadata: {
@@ -209,16 +251,17 @@ const handler: Handler = async (event) => {
                 correlation_id: correlationId,
                 operation_result: operationResult,
                 capture_type: captureType || 'IMPLICIT',
-                ...(isPreauth ? {
+                ...(wronglyCharged ? {
+                    wrongly_charged: true,
+                    auto_refunded: autoRefunded,
+                    refund_response: refundResult,
+                } : {}),
+                ...(isPreauth && !wronglyCharged ? {
                     expected_capture_by: expectedCaptureBy || null,
                     duration_days: durationDays || null,
-                    // Operation id attiva (la usano capture/void per chiamare Nexi).
-                    // Cambia ad ogni auto-refresh.
                     current_operation_id: nexiOperationId,
                     current_order_id: orderId,
-                    // Schedulazione cron: NULL se durata <= 7g (nessun refresh).
                     next_refresh_due: nextRefreshDue,
-                    // Storico dei rinnovi. Entry 0 = creazione, entry N = refresh #N.
                     refresh_history: [{
                         order_id: orderId,
                         operation_id: nexiOperationId,
@@ -231,6 +274,22 @@ const handler: Handler = async (event) => {
             },
             created_at: nowIso
         });
+
+        if (wronglyCharged) {
+            return {
+                statusCode: 422,
+                headers,
+                body: JSON.stringify({
+                    error: autoRefunded
+                        ? `BUG NEXI: la pre-autorizzazione e\' stata ADDEBITATA invece che bloccata. Refund automatico OK — i fondi sono tornati al cliente.`
+                        : `BUG NEXI: la pre-autorizzazione e\' stata ADDEBITATA invece che bloccata. REFUND AUTOMATICO FALLITO — vai su Nexi e fai refund manuale di €${amount.toFixed(2)} (Op: ${nexiOperationId}).`,
+                    wronglyCharged: true,
+                    autoRefunded,
+                    operationId: nexiOperationId,
+                    operationResult,
+                })
+            };
+        }
 
         if (!isSuccess) {
             return {
