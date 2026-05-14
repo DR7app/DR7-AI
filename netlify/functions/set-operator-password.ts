@@ -105,6 +105,57 @@ const handler: Handler = async (event) => {
     console.warn('[set-operator-password] linking operatori_persone failed (non-blocking)', e)
   }
 
+  // Garantisco che esista una riga in admins per questo utente, altrimenti
+  // l'app admin rifiuta il login (gli endpoint front-end query admins via
+  // .single() e tornano 406 senza riga → utente bloccato sul login).
+  // Permission di default minimal: rilevazione-orari. La direzione puo'
+  // ampliare i permessi dall'UI Operatori.
+  let adminsRowCreated = false
+  try {
+    const { data: existingAdmin } = await supabase
+      .from('admins')
+      .select('id')
+      .or(`user_id.eq.${userId},email.ilike.${email}`)
+      .maybeSingle()
+    if (!existingAdmin) {
+      // Prendo nome dall'eventuale riga operatori_persone, fallback alla email.
+      const { data: opRow } = await supabase
+        .from('operatori_persone')
+        .select('nome, cognome')
+        .ilike('email', email)
+        .maybeSingle()
+      const fullName = opRow
+        ? `${opRow.nome || ''} ${opRow.cognome || ''}`.trim() || email.split('@')[0]
+        : email.split('@')[0]
+      const { error: insErr } = await supabase
+        .from('admins')
+        .insert({
+          user_id: userId,
+          email,
+          nome: fullName,
+          role: 'admin',
+          permissions: ['rilevazione-orari'],
+          can_view_financials: false,
+          stato: 'attivo',
+        })
+      if (insErr) {
+        console.warn('[set-operator-password] admins insert failed (non-blocking)', insErr)
+      } else {
+        adminsRowCreated = true
+      }
+    } else if (!(existingAdmin as { id: string }).id) {
+      // riga rotta — niente da fare
+    } else {
+      // Riga gia' presente: aggiorno user_id se mancante.
+      await supabase
+        .from('admins')
+        .update({ user_id: userId, stato: 'attivo' })
+        .eq('id', (existingAdmin as { id: string }).id)
+    }
+  } catch (e) {
+    console.warn('[set-operator-password] admins upsert failed (non-blocking)', e)
+  }
+
   // Verifica esplicita: rileggi l'utente per confermare che email_confirmed_at
   // sia stato impostato. Alcuni progetti Supabase con "Confirm email" attivo
   // ignorano il flag email_confirm via updateUserById se l'utente era stato
@@ -128,7 +179,7 @@ const handler: Handler = async (event) => {
   return {
     statusCode: 200,
     headers,
-    body: JSON.stringify({ success: true, userId, created, emailConfirmed }),
+    body: JSON.stringify({ success: true, userId, created, emailConfirmed, adminsRowCreated }),
   }
 }
 
