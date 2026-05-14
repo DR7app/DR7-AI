@@ -896,11 +896,38 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const isResidenteSardegna = customerProvincia ? SARDEGNA_PROVINCES.has(customerProvincia) : true
 
   const [proDeposits, setProDeposits] = useState<Record<string, unknown> | null>(null)
-  // Toggle da Centralina Pro > Automazioni > Inclusione Coefficiente.
-  // OFF (default) = il prezzo "Km Illimitati" e' venduto a listino e NON
-  // viene moltiplicato dal coefficiente dinamico. ON = entra nel subtotale
-  // coefficient-eligible come prima.
-  const [coefficientUnlimitedKm, setCoefficientUnlimitedKm] = useState<boolean>(false)
+  // Flags da Centralina Pro > Automazioni > Inclusione Coefficiente.
+  // Per ogni extra: ON = entra nel subtotale clamp-eligible (× coefficiente),
+  // OFF = venduto a listino e sommato dopo (come experience / location fees).
+  // Default: KM Illimitati escluso, tutti gli altri inclusi (storico).
+  type ProAutomations = {
+    coefficient_unlimited_km?: boolean
+    coefficient_insurance?: boolean
+    coefficient_lavaggio?: boolean
+    coefficient_no_cauzione?: boolean
+    coefficient_second_driver?: boolean
+    coefficient_dr7_flex?: boolean
+    coefficient_cauzione_veicoli?: boolean
+  }
+  type CoeffFlags = {
+    unlimited_km: boolean
+    insurance: boolean
+    lavaggio: boolean
+    no_cauzione: boolean
+    second_driver: boolean
+    dr7_flex: boolean
+    cauzione_veicoli: boolean
+  }
+  const buildCoeffFlags = (a: ProAutomations | undefined): CoeffFlags => ({
+    unlimited_km:     !!a?.coefficient_unlimited_km,
+    insurance:        a?.coefficient_insurance !== false,
+    lavaggio:         a?.coefficient_lavaggio !== false,
+    no_cauzione:      a?.coefficient_no_cauzione !== false,
+    second_driver:    a?.coefficient_second_driver !== false,
+    dr7_flex:         a?.coefficient_dr7_flex !== false,
+    cauzione_veicoli: a?.coefficient_cauzione_veicoli !== false,
+  })
+  const [coeffFlags, setCoeffFlags] = useState<CoeffFlags>(buildCoeffFlags(undefined))
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -910,17 +937,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         .eq('id', 'main')
         .maybeSingle()
       if (cancelled) return
-      const cfg = (data?.config as { deposits?: Record<string, unknown>; automations?: { coefficient_unlimited_km?: boolean } } | undefined) || {}
+      const cfg = (data?.config as { deposits?: Record<string, unknown>; automations?: ProAutomations } | undefined) || {}
       setProDeposits(cfg.deposits || null)
-      setCoefficientUnlimitedKm(!!cfg.automations?.coefficient_unlimited_km)
+      setCoeffFlags(buildCoeffFlags(cfg.automations))
     })()
     const channel = supabase
       .channel('reservations-deposits')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config', filter: 'id=eq.main' }, (payload) => {
-        const cfg = (payload.new as { config?: { deposits?: Record<string, unknown>; automations?: { coefficient_unlimited_km?: boolean } } } | undefined)?.config
+        const cfg = (payload.new as { config?: { deposits?: Record<string, unknown>; automations?: ProAutomations } } | undefined)?.config
         if (cfg && typeof cfg === 'object') {
           setProDeposits(cfg.deposits || null)
-          setCoefficientUnlimitedKm(!!cfg.automations?.coefficient_unlimited_km)
+          setCoeffFlags(buildCoeffFlags(cfg.automations))
         }
       })
       .subscribe()
@@ -1110,13 +1137,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               // Location fees (consegna + ritiro) are EXCLUDED from the
               // coefficient — same treatment as Experience. They cover
               // transport/km that doesn't scale with demand.
-              // Quando Automazioni > Inclusione Coefficiente > KM Illimitati e' OFF,
-              // l'importo "Km Illimitati" esce dal subtotale coefficient-eligible
-              // e viene aggiunto AT LIST PRICE dopo (come experience / location fees).
-              const unlimitedKmInCoeff = coefficientUnlimitedKm ? unlimitedKmSurcharge : 0
-              const unlimitedKmAtList = coefficientUnlimitedKm ? 0 : unlimitedKmSurcharge
-              const extrasNoExp = insuranceTotal + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmInCoeff + secondDriverFee + flexCost
-              const listSubtotalNoExp = listRentalTotal + extrasNoExp
+              // Per ogni extra, Automazioni > Inclusione Coefficiente decide se
+              // entra nel subtotale clamp-eligible (× coefficiente) o se viene
+              // sommato a listino dopo (come experience / location fees).
+              const splitX = (amt: number, on: boolean) => on ? { inC: amt, at: 0 } : { inC: 0, at: amt }
+              const sIns = splitX(insuranceTotal,         coeffFlags.insurance)
+              const sLav = splitX(CFG_LAVAGGIO_FEE,       coeffFlags.lavaggio)
+              const sNoC = splitX(noCauzioneSurcharge,    coeffFlags.no_cauzione)
+              const sKm  = splitX(unlimitedKmSurcharge,   coeffFlags.unlimited_km)
+              const sSec = splitX(secondDriverFee,        coeffFlags.second_driver)
+              const sFlx = splitX(flexCost,               coeffFlags.dr7_flex)
+              const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC
+              const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at
+              const listSubtotalNoExp = listRentalTotal + extrasInCoeff
               // Combined coefficient from revenue engine
               const combinedCoeff = (data.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
               // Clamp the clamp-eligible portion (rental + standard extras)
@@ -1128,8 +1161,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
               if (maxTotal != null && afterRevenueNoExp > maxTotal) afterRevenueNoExp = maxTotal
               if (minTotal != null && afterRevenueNoExp < minTotal) afterRevenueNoExp = minTotal
-              // Experience + location fees + km-illimitati-at-list stay at LIST PRICE — no coefficient, no clamp.
-              const subtotal = Math.round((afterRevenueNoExp + experienceCost + deliveryFees + unlimitedKmAtList) * 100) / 100
+              // Experience + location fees + extras-at-list stay at LIST PRICE — no coefficient, no clamp.
+              const subtotal = Math.round((afterRevenueNoExp + experienceCost + deliveryFees + extrasAtList) * 100) / 100
               const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
               // Auto-calculate KM limit from rental days (only if not unlimited)
               const updates: Record<string, string> = { total_amount: total.toFixed(2) }
@@ -1203,10 +1236,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const listRentalTotal = listDailyRate * revenueSuggestion.rentalDays
       // Location fees (consegna + ritiro) excluded from the coefficient —
       // same rationale as Experience.
-      const unlimitedKmInCoeff = coefficientUnlimitedKm ? unlimitedKmSurcharge : 0
-      const unlimitedKmAtList = coefficientUnlimitedKm ? 0 : unlimitedKmSurcharge
-      const extrasNoExp = insuranceTotal + CFG_LAVAGGIO_FEE + noCauzioneSurcharge + unlimitedKmInCoeff + secondDriverFee + flexCost
-      const listSubtotalNoExp = listRentalTotal + extrasNoExp
+      const splitX = (amt: number, on: boolean) => on ? { inC: amt, at: 0 } : { inC: 0, at: amt }
+      const sIns = splitX(insuranceTotal,         coeffFlags.insurance)
+      const sLav = splitX(CFG_LAVAGGIO_FEE,       coeffFlags.lavaggio)
+      const sNoC = splitX(noCauzioneSurcharge,    coeffFlags.no_cauzione)
+      const sKm  = splitX(unlimitedKmSurcharge,   coeffFlags.unlimited_km)
+      const sSec = splitX(secondDriverFee,        coeffFlags.second_driver)
+      const sFlx = splitX(flexCost,               coeffFlags.dr7_flex)
+      const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC
+      const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at
+      const listSubtotalNoExp = listRentalTotal + extrasInCoeff
       const combinedCoeff = (revenueSuggestion.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
       const minDaily = typeof revenueSuggestion.minPrice === 'number' ? revenueSuggestion.minPrice : null
       const maxDaily = typeof revenueSuggestion.maxPrice === 'number' ? revenueSuggestion.maxPrice : null
@@ -1215,8 +1254,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
       if (maxTotal != null && afterRevenueNoExp > maxTotal) afterRevenueNoExp = maxTotal
       if (minTotal != null && afterRevenueNoExp < minTotal) afterRevenueNoExp = minTotal
-      // Experience + location fees + km-illimitati-at-list stay at LIST PRICE — no coefficient, no clamp.
-      const subtotal = Math.round((afterRevenueNoExp + experienceCost + deliveryFees + unlimitedKmAtList) * 100) / 100
+      // Experience + location fees + extras-at-list stay at LIST PRICE — no coefficient, no clamp.
+      const subtotal = Math.round((afterRevenueNoExp + experienceCost + deliveryFees + extrasAtList) * 100) / 100
       const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
       const updates: Record<string, string> = { total_amount: newTotal.toFixed(2) }
       // Auto-calculate KM limit from rental days

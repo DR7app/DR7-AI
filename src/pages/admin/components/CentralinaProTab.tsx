@@ -99,6 +99,10 @@ type ExperienceService = {
   price: number | ''
   unit: ServiceUnit
   is_active: boolean
+  /** Quando true il servizio compare SOLO in admin (utile per voci che
+   *  l'operatore aggiunge a mano alle prenotazioni e che non devono
+   *  essere selezionabili nel wizard del sito — es. Pacchetto KM Extra). */
+  admin_only?: boolean
   tier_only: string // '' = all fasce, otherwise fascia.id
 }
 
@@ -537,6 +541,12 @@ type AutomationsConfig = {
    *  false = sold a prezzo di listino (coefficiente saltato per quell'extra).
    *  Direzione puo' switchare da Automazioni > Inclusione Coefficiente. */
   coefficient_unlimited_km?: boolean
+  coefficient_insurance?: boolean
+  coefficient_lavaggio?: boolean
+  coefficient_no_cauzione?: boolean
+  coefficient_second_driver?: boolean
+  coefficient_dr7_flex?: boolean
+  coefficient_cauzione_veicoli?: boolean
 }
 
 type CancellationAppliesTo = 'all' | 'rental' | 'carwash'
@@ -576,7 +586,15 @@ const INITIAL_AUTOMATIONS: AutomationsConfig = {
     { id: 'elite',      label: 'Elite Member',            applies_to: 'all',     requires_service: 'elite',      min_days_notice: 0, refund_pct: 90, refund_method: 'wallet', is_active: true },
   ],
   // Default: KM Illimitati ESCLUSO dal coefficiente (venduto a listino).
+  // Tutti gli altri extras restano dentro al coefficiente (comportamento
+  // storico) finche' direzione non li switcha da Automazioni.
   coefficient_unlimited_km: false,
+  coefficient_insurance: true,
+  coefficient_lavaggio: true,
+  coefficient_no_cauzione: true,
+  coefficient_second_driver: true,
+  coefficient_dr7_flex: true,
+  coefficient_cauzione_veicoli: true,
 }
 
 // === Orari Lavaggio ===
@@ -3344,6 +3362,15 @@ function ServiziSection({
                     <option key={f.id} value={f.id}>Solo {f.label}</option>
                   ))}
                 </select>
+                <label className="inline-flex items-center gap-1.5 cursor-pointer text-[12px] text-theme-text-secondary" title="Visibile SOLO in admin, nascosto dal wizard del sito.">
+                  <input
+                    type="checkbox"
+                    checked={!!s.admin_only}
+                    onChange={(e) => patchExp(s.id, { admin_only: e.target.checked })}
+                    className="w-4 h-4 accent-[#007aff]"
+                  />
+                  Solo admin
+                </label>
                 <button
                   onClick={() => removeExp(s.id)}
                   className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center w-8 h-8 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"
@@ -5838,25 +5865,38 @@ function AutomazioniSection({
             Per ogni extra decidi se va incluso nel calcolo del coefficiente Centralina Pro (ON = prezzo moltiplicato dal coefficiente) oppure escluso (OFF = sempre a prezzo di listino).
           </p>
         </header>
-        <div className="p-5">
-          <label className="flex items-center justify-between gap-3 cursor-pointer">
-            <div>
-              <div className="text-[14px] font-semibold text-theme-text-primary">KM Illimitati</div>
-              <div className="text-[11px] text-theme-text-secondary mt-0.5">
-                {automations.coefficient_unlimited_km
-                  ? 'Incluso nel coefficiente — il prezzo segue la domanda dinamica.'
-                  : 'Escluso — venduto sempre al prezzo di listino della Centralina Pro.'}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => update({ coefficient_unlimited_km: !automations.coefficient_unlimited_km })}
-              className={`relative inline-flex flex-shrink-0 items-center w-12 h-6 rounded-full transition-colors ${automations.coefficient_unlimited_km ? 'bg-emerald-500' : 'bg-theme-bg-hover border border-theme-border'}`}
-              aria-pressed={!!automations.coefficient_unlimited_km}
-            >
-              <span className={`inline-block w-5 h-5 rounded-full bg-white shadow transform transition-transform ${automations.coefficient_unlimited_km ? 'translate-x-6' : 'translate-x-0.5'}`} />
-            </button>
-          </label>
+        <div className="p-5 space-y-4">
+          {([
+            { key: 'coefficient_unlimited_km',     label: 'KM Illimitati' },
+            { key: 'coefficient_insurance',         label: 'Assicurazione (Kasko)' },
+            { key: 'coefficient_lavaggio',          label: 'Lavaggio finale' },
+            { key: 'coefficient_no_cauzione',       label: 'No Cauzione / Cauzione ridotta' },
+            { key: 'coefficient_second_driver',     label: 'Secondo Guidatore' },
+            { key: 'coefficient_dr7_flex',          label: 'DR7 FLEX' },
+            { key: 'coefficient_cauzione_veicoli',  label: 'Cauzione Veicoli' },
+          ] as const).map(({ key, label }) => {
+            const on = !!automations[key]
+            return (
+              <label key={key} className="flex items-center justify-between gap-3 cursor-pointer">
+                <div>
+                  <div className="text-[14px] font-semibold text-theme-text-primary">{label}</div>
+                  <div className="text-[11px] text-theme-text-secondary mt-0.5">
+                    {on
+                      ? 'Incluso nel coefficiente — il prezzo segue la domanda dinamica.'
+                      : 'Escluso — venduto sempre al prezzo di listino della Centralina Pro.'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => update({ [key]: !on } as Partial<AutomationsConfig>)}
+                  className={`relative inline-flex flex-shrink-0 items-center w-12 h-6 rounded-full transition-colors ${on ? 'bg-emerald-500' : 'bg-theme-bg-hover border border-theme-border'}`}
+                  aria-pressed={on}
+                >
+                  <span className={`inline-block w-5 h-5 rounded-full bg-white shadow transform transition-transform ${on ? 'translate-x-6' : 'translate-x-0.5'}`} />
+                </button>
+              </label>
+            )
+          })}
         </div>
       </section>
     </div>
