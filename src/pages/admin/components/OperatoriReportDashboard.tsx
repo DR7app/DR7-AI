@@ -111,7 +111,7 @@ type Range = 'oggi' | '7gg' | '30gg' | 'mese' | 'custom'
  * admin vedono SOLO i propri dati e i grafici/Top sono nascosti.
  */
 export default function OperatoriReportDashboard() {
-    const { adminName, adminEmail, hasRole } = useAdminRole()
+    const { hasRole } = useAdminRole()
     // Direzione (Valerio, Ilenia) + developer (ophe — manutentrice)
     // hanno accesso completo al report di TUTTI gli operatori, ai KPI
     // di fatturato, e ai dettagli per operatore. Usiamo hasRole invece
