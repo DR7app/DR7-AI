@@ -111,11 +111,14 @@ type Range = 'oggi' | '7gg' | '30gg' | 'mese' | 'custom'
  * admin vedono SOLO i propri dati e i grafici/Top sono nascosti.
  */
 export default function OperatoriReportDashboard() {
-    const { adminName, adminEmail } = useAdminRole()
-    // Direzione (Valerio, Ilenia) + ophe (developer/manutentrice) hanno
-    // accesso completo al report di TUTTI gli operatori, ai KPI di
-    // fatturato, e ai dettagli per operatore.
-    const isDirezione = ((adminName || '') + ' ' + (adminEmail || '')).toLowerCase().match(/valerio|ilenia|ophe@dr7\.app|ophelie/) != null
+    const { adminName, adminEmail, hasRole } = useAdminRole()
+    // Direzione (Valerio, Ilenia) + developer (ophe — manutentrice)
+    // hanno accesso completo al report di TUTTI gli operatori, ai KPI
+    // di fatturato, e ai dettagli per operatore. Usiamo hasRole invece
+    // della vecchia regex su adminEmail: hasRole consulta direttamente
+    // ROLE_FAILSAFE + permissions[], piu' affidabile (no race condition
+    // sull'arrivo di adminEmail dalla query admins).
+    const isDirezione = hasRole('direzione') || hasRole('developer')
 
     const [range, setRange] = useState<Range>('mese')
     const [today] = useState(toRomeDate(new Date()))
