@@ -632,6 +632,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     unlimitedMode?: 'all_tiers' | 'per_fascia'
     unlimitedByFascia?: Record<string, number | string>
   }> | null>(null)
+  // Toggle Automazioni: KM Illimitati incluso nel coefficiente dinamico?
+  // Default false (escluso, va a listino) — direzione lo flippa da
+  // Centralina Pro > Automazioni > Inclusione coefficiente.
+  const [coefficientUnlimitedKm, setCoefficientUnlimitedKm] = useState<boolean>(false)
   useEffect(() => {
     let cancelled = false
     const applyConfig = (cfg: Record<string, unknown> | undefined) => {
@@ -639,10 +643,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         deposits?: Record<string, unknown>
         servizi?: typeof proServizi
         km?: typeof proKm
+        automations?: { coefficient_unlimited_km?: boolean }
       }
       setProDeposits(c.deposits || null)
       setProServizi(c.servizi || null)
       setProKm(c.km || null)
+      setCoefficientUnlimitedKm(!!c.automations?.coefficient_unlimited_km)
     }
     ;(async () => {
       const { data } = await supabase
@@ -898,9 +904,14 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     // costs that don't scale with demand. The Max €/g from Centralina applies
     // only to the rental + standard extras.
     const locationFees = Math.round((deliveryFee + pickupFee) * 100) / 100
-    const extrasListTotalNoExp = insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmTotal + secondDriverTotal + dr7FlexTotal + cauzioneVeicoliTotal
+    // Quando Automazioni > Inclusione Coefficiente > KM Illimitati e' OFF,
+    // l'importo "Km Illimitati" esce dal subtotale coefficient-eligible e
+    // viene aggiunto AT LIST PRICE dopo (come experience / location fees).
+    const unlimitedKmInCoefficient = coefficientUnlimitedKm ? unlimitedKmTotal : 0
+    const unlimitedKmAtList = coefficientUnlimitedKm ? 0 : unlimitedKmTotal
+    const extrasListTotalNoExp = insuranceTotal + lavaggioFee + noCauzioneTotal + unlimitedKmInCoefficient + secondDriverTotal + dr7FlexTotal + cauzioneVeicoliTotal
     const listSubtotalNoExp = listRentalTotal + extrasListTotalNoExp
-    const listSubtotal = listSubtotalNoExp + experienceCost + locationFees
+    const listSubtotal = listSubtotalNoExp + experienceCost + locationFees + unlimitedKmAtList
 
     // Apply revenue coefficients ONLY to the clamp-eligible portion.
     // Experience + location fees stay at LIST PRICE — no coefficient, no
@@ -925,8 +936,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     // Real (uncapped) subtotal for display purposes — this is the "Subtotale"
     // line the admin sees, reflecting what the engine would ask for without
     // limits. The clamp lines below show how it's been capped.
-    const subtotalDisplay = Math.round((rawAfterRevenueNoExp + experienceAfterCoeff + locationFees) * 100) / 100
-    const subtotalClamped = Math.round((afterRevenueTotalNoExp + experienceAfterCoeff + locationFees) * 100) / 100
+    const subtotalDisplay = Math.round((rawAfterRevenueNoExp + experienceAfterCoeff + locationFees + unlimitedKmAtList) * 100) / 100
+    const subtotalClamped = Math.round((afterRevenueTotalNoExp + experienceAfterCoeff + locationFees + unlimitedKmAtList) * 100) / 100
     // Keep the legacy `afterRevenue` alias = the clamped subtotal used for all
     // downstream math (markup, sconto, totale finale).
     const afterRevenue = subtotalClamped

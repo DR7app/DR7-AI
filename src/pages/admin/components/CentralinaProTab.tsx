@@ -532,6 +532,11 @@ type AutomationsConfig = {
   /** Lista regole di cancellazione, valutate per `daysUntilPickup` discendente.
    *  Vince la prima regola attiva con `min_days_notice <= daysUntilPickup`. */
   cancellation_rules: CancellationRule[]
+  /** Quali extra sono inclusi nel calcolo del coefficiente dinamico Centralina
+   *  Pro. true = l'importo dell'extra viene moltiplicato dal coefficiente;
+   *  false = sold a prezzo di listino (coefficiente saltato per quell'extra).
+   *  Direzione puo' switchare da Automazioni > Inclusione Coefficiente. */
+  coefficient_unlimited_km?: boolean
 }
 
 type CancellationAppliesTo = 'all' | 'rental' | 'carwash'
@@ -570,6 +575,8 @@ const INITIAL_AUTOMATIONS: AutomationsConfig = {
     { id: 'prime_flex', label: 'Prime Flex (lavaggio)',   applies_to: 'carwash', requires_service: 'prime_flex', min_days_notice: 0, refund_pct: 90, refund_method: 'wallet', is_active: true },
     { id: 'elite',      label: 'Elite Member',            applies_to: 'all',     requires_service: 'elite',      min_days_notice: 0, refund_pct: 90, refund_method: 'wallet', is_active: true },
   ],
+  // Default: KM Illimitati ESCLUSO dal coefficiente (venduto a listino).
+  coefficient_unlimited_km: false,
 }
 
 // === Orari Lavaggio ===
@@ -5814,6 +5821,41 @@ function AutomazioniSection({
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">minuti</span>
             </div>
             <p className="text-[11px] text-theme-text-secondary mt-1.5">Default: 90 (1h30). Solo lato admin.</p>
+          </label>
+        </div>
+      </section>
+
+      {/* Coefficient inclusion toggles — direzione decide quali extra entrano
+          nel calcolo del coefficiente dinamico. Default oggi: tutti gli extra
+          inclusi tranne KM Illimitati (che va a listino). */}
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
+        <header className="px-5 pt-5 pb-3 bg-[#fff5e6] border-b border-[#ff9500]/15">
+          <h3 className="text-[15px] font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
+            <span className="inline-flex w-6 h-6 rounded-full bg-[#ff9500] text-white items-center justify-center text-[12px] font-bold">C</span>
+            Inclusione nel coefficiente dinamico
+          </h3>
+          <p className="text-[12px] text-[#3a3a3c] leading-relaxed pl-8">
+            Per ogni extra decidi se va incluso nel calcolo del coefficiente Centralina Pro (ON = prezzo moltiplicato dal coefficiente) oppure escluso (OFF = sempre a prezzo di listino).
+          </p>
+        </header>
+        <div className="p-5">
+          <label className="flex items-center justify-between gap-3 cursor-pointer">
+            <div>
+              <div className="text-[14px] font-semibold text-theme-text-primary">KM Illimitati</div>
+              <div className="text-[11px] text-theme-text-secondary mt-0.5">
+                {automations.coefficient_unlimited_km
+                  ? 'Incluso nel coefficiente — il prezzo segue la domanda dinamica.'
+                  : 'Escluso — venduto sempre al prezzo di listino della Centralina Pro.'}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => update({ coefficient_unlimited_km: !automations.coefficient_unlimited_km })}
+              className={`relative inline-flex flex-shrink-0 items-center w-12 h-6 rounded-full transition-colors ${automations.coefficient_unlimited_km ? 'bg-emerald-500' : 'bg-theme-bg-hover border border-theme-border'}`}
+              aria-pressed={!!automations.coefficient_unlimited_km}
+            >
+              <span className={`inline-block w-5 h-5 rounded-full bg-white shadow transform transition-transform ${automations.coefficient_unlimited_km ? 'translate-x-6' : 'translate-x-0.5'}`} />
+            </button>
           </label>
         </div>
       </section>
