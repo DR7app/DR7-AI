@@ -1,0 +1,85 @@
+PROPRIETARY SOFTWARE LICENSE
+============================
+
+Copyright (c) 2024-2026 Ophelie Giraud
+Dubai Rent 7.0 S.p.A. (Italy)
+All rights reserved.
+
+This software and its associated documentation, design, source code, data
+schemas, integrations, AI prompts, configuration, and any derivative works
+("the Software") are the proprietary property of the Copyright Holder.
+
+NO LICENSE GRANTED
+------------------
+No license, express or implied, is granted by this notice. The Software
+is NOT open source. It is NOT free software. It is NOT made available
+under any standard open-source license (such as MIT, Apache, GPL, BSD,
+ISC, or similar).
+
+Without the prior, written, and signed permission of the Copyright Holder
+(or a duly authorized representative of Dubai Rent 7.0 S.p.A. or its
+successor in interest DR7 AI S.r.l.), no person or entity may:
+
+  (a) reproduce, copy, fork, mirror, or republish the Software in whole
+      or in part, in any form or by any means;
+  (b) distribute, sublicense, sell, lease, rent, lend, or otherwise
+      transfer copies of the Software;
+  (c) modify, adapt, translate, port, or create derivative works based
+      upon the Software;
+  (d) reverse-engineer, decompile, disassemble, or otherwise attempt to
+      derive the source code from compiled or obfuscated artifacts;
+  (e) use the Software, in whole or in part, to train, fine-tune,
+      evaluate, or benchmark any machine-learning model, large language
+      model, or other AI system;
+  (f) remove, alter, or obscure any copyright, trademark, or attribution
+      notice contained in or affixed to the Software.
+
+CONTRIBUTIONS
+-------------
+Any contribution submitted to this repository (by any author, whether
+human or automated agent) is, by act of submission, assigned to the
+Copyright Holder for all purposes and all jurisdictions, in perpetuity
+and worldwide, in accordance with Italian Law 22 April 1941, no. 633
+(Legge sul diritto d'autore) and any successor or equivalent legislation.
+
+Contributors retain no separate copyright, joint authorship, or
+neighbouring rights in their contributions absent a separate written
+agreement to the contrary signed by both parties.
+
+AI-ASSISTED DEVELOPMENT
+-----------------------
+Portions of this Software were authored with assistance from one or
+more artificial-intelligence coding tools (including without limitation
+Anthropic Claude and Google Jules) acting under the direction of the
+Copyright Holder. All output of such tools, to the extent copyrightable,
+is treated as work-for-hire commissioned by the Copyright Holder under
+the commercial terms of service of the respective tool providers. The
+Copyright Holder makes no concession regarding the copyrightability of
+AI-generated output and reserves all rights available under Italian and
+EU law.
+
+WARRANTY DISCLAIMER
+-------------------
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF
+OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+GOVERNING LAW AND JURISDICTION
+-------------------------------
+This License is governed by the laws of the Italian Republic. Any dispute
+arising out of or in connection with this License shall be subject to the
+exclusive jurisdiction of the Court of Cagliari, Italy.
+
+CONTACT
+-------
+Permission requests, commercial license enquiries, or notices of
+infringement should be directed to:
+
+  Ophelie Giraud
+  Dubai Rent 7.0 S.p.A.
+  Viale Marconi 229, 09131 Cagliari, Italia
+  Email: ophelie@dr7.app

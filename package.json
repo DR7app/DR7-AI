@@ -1,5 +1,8 @@
 {
   "name": "dr7-empire-admin",
+  "description": "DR7 AI — admin operating platform (proprietary).",
+  "author": "Ophelie Giraud <ophelie@dr7.app>",
+  "license": "UNLICENSED",
   "private": true,
   "version": "0.0.0",
   "type": "module",
