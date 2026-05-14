@@ -54,12 +54,20 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'La password deve avere almeno 8 caratteri' }) }
   }
 
-  // Cerca l'utente auth tramite listUsers (Supabase non espone getUserByEmail).
-  const { data: list, error: listErr } = await supabase.auth.admin.listUsers({ perPage: 1000 })
-  if (listErr) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: listErr.message }) }
+  // Cerca l'utente auth — Supabase non espone getUserByEmail, quindi
+  // paginiamo listUsers fino a trovarlo (o esaurire). 1000 utenti / pagina
+  // tipicamente basta in una richiesta sola, ma per sicurezza scorriamo
+  // fino a 10 pagine (10k utenti) prima di considerarlo "non trovato".
+  let existing: { id: string; email?: string | null } | undefined
+  for (let page = 1; page <= 10; page++) {
+    const { data: list, error: listErr } = await supabase.auth.admin.listUsers({ page, perPage: 1000 })
+    if (listErr) {
+      return { statusCode: 500, headers, body: JSON.stringify({ error: listErr.message }) }
+    }
+    existing = list.users.find(u => (u.email || '').toLowerCase() === email)
+    if (existing) break
+    if (!list.users || list.users.length < 1000) break
   }
-  const existing = list.users.find(u => (u.email || '').toLowerCase() === email)
 
   let userId: string
   let created = false

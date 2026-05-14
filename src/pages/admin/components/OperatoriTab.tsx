@@ -334,9 +334,10 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
     if (count && count > AGG_HARD_LIMIT) setAggTruncated(true)
 
     // 2. Team comparison: counts per admin in same period.
-    //    Solo direzione (Valerio/Ilenia): per gli altri non carichiamo nulla
-    //    cosi' "Vs media team" resta a "—" (privacy report).
-    if (hasRoleRef.current('direzione')) {
+    //    Solo direzione (Valerio/Ilenia) e developer (ophe — manutentore):
+    //    per gli altri non carichiamo nulla cosi' "Vs media team" resta
+    //    a "—" (privacy report).
+    if (hasRoleRef.current('direzione') || hasRoleRef.current('developer')) {
         const { data: teamData } = await supabase
           .from('admin_activity_log')
           .select('admin_id')
@@ -391,12 +392,11 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
       if (Array.isArray(arr) && arr.length > 0) rosterOrder = arr.map(String)
     } catch { /* keep fallback */ }
 
-    // Privacy: ognuno vede SOLO il proprio report. Solo la direzione
-    // (failsafe valerio/ilenia, oppure ruolo `role:direzione` in permissions)
-    // vede i report di tutti.
+    // Privacy: ognuno vede SOLO il proprio report. Direzione (valerio/
+    // ilenia) e developer (ophe — manutentore) vedono i report di tutti.
     const { data: { user } } = await supabase.auth.getUser()
     const myEmail = (user?.email || '').toLowerCase()
-    const isDirection = hasRoleRef.current('direzione')
+    const isDirection = hasRoleRef.current('direzione') || hasRoleRef.current('developer')
 
     const { data } = await supabase.from('admins').select('id, email, nome, role, sede, reparto, tipo_rapporto, stato, responsabile, contatto_interno, permissions')
     if (data) {
@@ -446,7 +446,7 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
   // Only direzione (Valerio + Ilenia by email) can edit operator HR fields
   // — same allowlist as the OTP self-approval.
   const [inviteOpen, setInviteOpen] = useState(false)
-  const canEditOperators = hasRole('direzione')
+  const canEditOperators = hasRole('direzione') || hasRole('developer')
 
   // Save a single field on the selected admin row + update local state.
   const updateFieldLockRef = useRef(false)
