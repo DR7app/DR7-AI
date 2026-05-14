@@ -31,8 +31,10 @@ const handler: Handler = async (event) => {
   if (authErr) return authErr
 
   const callerEmail = (user?.email || '').toLowerCase()
-  if (!(await userHasRole(callerEmail, 'direzione'))) {
-    return { statusCode: 403, headers, body: JSON.stringify({ error: 'Solo la direzione può modificare le password.' }) }
+  const isDirezione = await userHasRole(callerEmail, 'direzione')
+  const isDeveloper = await userHasRole(callerEmail, 'developer')
+  if (!isDirezione && !isDeveloper) {
+    return { statusCode: 403, headers, body: JSON.stringify({ error: 'Solo direzione o developer possono modificare le password.' }) }
   }
 
   let body: Body = {}
