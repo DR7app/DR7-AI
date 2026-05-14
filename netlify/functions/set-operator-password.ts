@@ -11,6 +11,12 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 interface Body {
   email?: string
   password?: string
+  /** Permessi da assegnare se la riga admins viene creata da zero.
+   *  Default: ['rilevazione-orari']. Usa ['*'] per accesso completo,
+   *  oppure passa una lista di tab keys (vedi PERMISSION_SECTIONS).
+   *  Se la riga admins esiste gia', `replacePermissions=true` la sovrascrive. */
+  permissions?: string[]
+  replacePermissions?: boolean
 }
 
 /**
@@ -46,6 +52,10 @@ const handler: Handler = async (event) => {
 
   const email = String(body.email || '').trim().toLowerCase()
   const password = typeof body.password === 'string' ? body.password : ''
+  const requestedPermissions = Array.isArray(body.permissions)
+    ? body.permissions.map(String).filter(Boolean)
+    : null
+  const replacePermissions = !!body.replacePermissions
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Email non valida' }) }
@@ -117,6 +127,10 @@ const handler: Handler = async (event) => {
       .select('id')
       .or(`user_id.eq.${userId},email.ilike.${email}`)
       .maybeSingle()
+    const initialPermissions = requestedPermissions && requestedPermissions.length > 0
+      ? requestedPermissions
+      : ['rilevazione-orari']
+    const includesFinancial = ['fattura', 'nexi', 'unpaid', 'cauzioni'].some(t => initialPermissions.includes(t) || initialPermissions.includes('*'))
     if (!existingAdmin) {
       // Prendo nome dall'eventuale riga operatori_persone, fallback alla email.
       const { data: opRow } = await supabase
@@ -134,8 +148,8 @@ const handler: Handler = async (event) => {
           email,
           nome: fullName,
           role: 'admin',
-          permissions: ['rilevazione-orari'],
-          can_view_financials: false,
+          permissions: initialPermissions,
+          can_view_financials: includesFinancial,
           stato: 'attivo',
         })
       if (insErr) {
@@ -146,10 +160,17 @@ const handler: Handler = async (event) => {
     } else if (!(existingAdmin as { id: string }).id) {
       // riga rotta — niente da fare
     } else {
-      // Riga gia' presente: aggiorno user_id se mancante.
+      // Riga gia' presente: aggiorno user_id se mancante. Se il caller
+      // ha chiesto replacePermissions, sovrascrivo anche i permessi
+      // (utile per "Pieno accesso" o per estendere/restringere da UI).
+      const updatePayload: Record<string, unknown> = { user_id: userId, stato: 'attivo' }
+      if (replacePermissions && requestedPermissions && requestedPermissions.length > 0) {
+        updatePayload.permissions = requestedPermissions
+        updatePayload.can_view_financials = includesFinancial
+      }
       await supabase
         .from('admins')
-        .update({ user_id: userId, stato: 'attivo' })
+        .update(updatePayload)
         .eq('id', (existingAdmin as { id: string }).id)
     }
   } catch (e) {

@@ -1247,6 +1247,7 @@ function EditOperatoreInlineModal({ op, onClose, onSaved }: { op: Operatore; onC
     const [oreTarget, setOreTarget] = useState(String(op.ore_target_giornaliere ?? 8))
     const [password, setPassword] = useState('')
     const [pwSaving, setPwSaving] = useState(false)
+    const [grantFullAccess, setGrantFullAccess] = useState(false)
     const [saving, setSaving] = useState(false)
 
     async function save() {
@@ -1316,7 +1317,11 @@ function EditOperatoreInlineModal({ op, onClose, onSaved }: { op: Operatore; onC
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${accessToken}`,
                 },
-                body: JSON.stringify({ email: op.email, password: pw }),
+                body: JSON.stringify({
+                    email: op.email,
+                    password: pw,
+                    ...(grantFullAccess ? { permissions: ['*'], replacePermissions: true } : {}),
+                }),
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json?.error || 'Reset password fallito')
@@ -1364,6 +1369,17 @@ function EditOperatoreInlineModal({ op, onClose, onSaved }: { op: Operatore; onC
                         type="text"
                         placeholder="Lascia vuoto per non cambiarla"
                     />
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            checked={grantFullAccess}
+                            onChange={(e) => setGrantFullAccess(e.target.checked)}
+                            className="w-4 h-4 accent-[#007aff]"
+                        />
+                        <span className="text-xs text-theme-text-primary">
+                            Pieno accesso (tutte le tab admin) <span className="text-theme-text-muted">— sovrascrive i permessi attuali con <code>['*']</code></span>
+                        </span>
+                    </label>
                     <p className="text-[10px] text-theme-text-muted">
                         Imposta o resetta la password dell'account admin per <b>{op.email}</b>.
                         Se l'account non esisteva, viene creato automaticamente (email confermata).

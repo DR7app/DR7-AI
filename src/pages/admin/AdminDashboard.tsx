@@ -266,6 +266,7 @@ export default function AdminDashboard() {
       { tab: 'report-preventivi', label: 'Preventivi' },
       { tab: 'report-traffic', label: 'Rendimento Sito' },
       { tab: 'operatori', label: 'Operatori' },
+      { tab: 'rilevazione-orari', label: 'Rilevazione Orari' },
       { tab: 'dashboard-kpi', label: 'Dashboard' },
     ] },
     { name: 'Comunicazione', tabs: [
