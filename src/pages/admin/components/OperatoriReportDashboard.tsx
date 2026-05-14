@@ -1091,6 +1091,48 @@ function ManageOperatoriPanel({ operatori, onChanged }: { operatori: Operatore[]
         }
     }
 
+    async function deleteOperatoreHard(op: Operatore) {
+        const fullName = `${op.nome} ${op.cognome || ''}`.trim()
+        // Doppio confirm + typed name per evitare delete accidentali.
+        if (!confirm(
+            `ELIMINAZIONE DEFINITIVA\n\n` +
+            `${fullName} verra' rimosso da:\n` +
+            `  - Anagrafica operatori\n` +
+            `  - Contratti\n` +
+            `  - Storico orari (timesheet_entries)\n` +
+            `  - Permessi admin\n` +
+            `  - Account login (auth)\n\n` +
+            `Operazione IRREVERSIBILE. Procedere?`,
+        )) return
+        const typed = prompt(`Per confermare, digita esattamente: ELIMINA`)
+        if ((typed || '').trim().toUpperCase() !== 'ELIMINA') {
+            alert('Eliminazione annullata.')
+            return
+        }
+        setBusyId(op.id)
+        try {
+            const { data: { session } } = await supabase.auth.getSession()
+            const accessToken = session?.access_token
+            if (!accessToken) throw new Error('Sessione non valida')
+            const res = await fetch('/.netlify/functions/delete-operator-hard', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${accessToken}`,
+                },
+                body: JSON.stringify({ operatoreId: op.id, email: op.email, confirm: 'DELETE_FOREVER' }),
+            })
+            const json = await res.json()
+            if (!res.ok) throw new Error(json?.error || 'Eliminazione fallita')
+            alert(`Operatore eliminato definitivamente.`)
+            onChanged()
+        } catch (err) {
+            alert('Errore: ' + (err instanceof Error ? err.message : String(err)))
+        } finally {
+            setBusyId(null)
+        }
+    }
+
     return (
         <div className="bg-theme-bg-secondary rounded-lg border border-theme-border p-4">
             <div className="flex items-center justify-between mb-3">
@@ -1139,9 +1181,14 @@ function ManageOperatoriPanel({ operatori, onChanged }: { operatori: Operatore[]
                                         Modifica
                                     </button>
                                     <button onClick={() => deactivateOperatore(op)} disabled={busyId === op.id}
-                                        className="text-xs px-2 py-1 rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
+                                        className="text-xs px-2 py-1 rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50 mr-1"
                                         title="Disattiva — non elimina lo storico">
                                         {busyId === op.id ? '…' : 'Disattiva'}
+                                    </button>
+                                    <button onClick={() => deleteOperatoreHard(op)} disabled={busyId === op.id}
+                                        className="text-xs px-2 py-1 rounded bg-red-600/10 text-red-700 dark:text-red-400 hover:bg-red-600/20 border border-red-600/40 disabled:opacity-50"
+                                        title="Elimina definitivamente — rimuove operatore, storico orari, contratti e account auth. Irreversibile.">
+                                        Elimina
                                     </button>
                                 </td>
                             </tr>
