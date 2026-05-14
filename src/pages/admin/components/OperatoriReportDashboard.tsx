@@ -1172,6 +1172,8 @@ function EditOperatoreInlineModal({ op, onClose, onSaved }: { op: Operatore; onC
     const [cognome, setCognome] = useState(op.cognome || '')
     const [ruolo, setRuolo] = useState(op.ruolo || '')
     const [oreTarget, setOreTarget] = useState(String(op.ore_target_giornaliere ?? 8))
+    const [password, setPassword] = useState('')
+    const [pwSaving, setPwSaving] = useState(false)
     const [saving, setSaving] = useState(false)
 
     async function save() {
@@ -1215,9 +1217,48 @@ function EditOperatoreInlineModal({ op, onClose, onSaved }: { op: Operatore; onC
         }
     }
 
+    async function resetPassword() {
+        const pw = password.trim()
+        if (!pw) {
+            alert('Inserisci una password (min. 8 caratteri)')
+            return
+        }
+        if (pw.length < 8) {
+            alert('La password deve avere almeno 8 caratteri')
+            return
+        }
+        if (!op.email) {
+            alert('Operatore senza email collegata: imposta prima un\'email valida.')
+            return
+        }
+        if (!confirm(`Impostare nuova password per ${op.email}?\n\nL'operatore potrà accedere subito con questa password e potrà cambiarla dal proprio profilo.`)) return
+        setPwSaving(true)
+        try {
+            const { data: { session } } = await supabase.auth.getSession()
+            const accessToken = session?.access_token
+            if (!accessToken) throw new Error('Sessione non valida')
+            const res = await fetch('/.netlify/functions/set-operator-password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${accessToken}`,
+                },
+                body: JSON.stringify({ email: op.email, password: pw }),
+            })
+            const json = await res.json()
+            if (!res.ok) throw new Error(json?.error || 'Reset password fallito')
+            alert(json.created ? 'Account creato e password impostata.' : 'Password aggiornata. L\'operatore può accedere subito.')
+            setPassword('')
+        } catch (err) {
+            alert('Errore: ' + (err instanceof Error ? err.message : String(err)))
+        } finally {
+            setPwSaving(false)
+        }
+    }
+
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-            <div className="bg-theme-bg-secondary rounded-lg border border-theme-border max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+            <div className="bg-theme-bg-secondary rounded-lg border border-theme-border max-w-md w-full p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                 <h3 className="text-xl font-semibold text-theme-text-primary mb-1">Modifica Operatore</h3>
                 <p className="text-xs text-theme-text-muted mb-4">{op.email}</p>
                 <div className="space-y-3">
@@ -1230,6 +1271,34 @@ function EditOperatoreInlineModal({ op, onClose, onSaved }: { op: Operatore; onC
                     Le ore target vengono allineate anche sul contratto attivo dell'operatore.
                     Email e collegamento account non sono modificabili da qui.
                 </p>
+
+                {/* Password reset section — direzione only (backend enforces) */}
+                <div className="mt-5 pt-4 border-t border-theme-border space-y-2">
+                    <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-semibold text-theme-text-primary">Account & accesso admin</h4>
+                        <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-500">solo direzione</span>
+                    </div>
+                    <Field
+                        label="Nuova password (min. 8 caratteri)"
+                        value={password}
+                        onChange={setPassword}
+                        type="text"
+                        placeholder="Lascia vuoto per non cambiarla"
+                    />
+                    <p className="text-[10px] text-theme-text-muted">
+                        Imposta o resetta la password dell'account admin per <b>{op.email}</b>.
+                        Se l'account non esisteva, viene creato automaticamente (email confermata).
+                        L'operatore potrà cambiare la password dal proprio profilo dopo il primo accesso.
+                    </p>
+                    <button
+                        onClick={resetPassword}
+                        disabled={pwSaving || !password.trim()}
+                        className="w-full px-3 py-2 text-sm rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-primary hover:bg-theme-bg-hover disabled:opacity-50"
+                    >
+                        {pwSaving ? 'Imposto password…' : 'Imposta / Reset password'}
+                    </button>
+                </div>
+
                 <div className="flex justify-end gap-2 mt-4">
                     <button onClick={onClose} disabled={saving}
                         className="px-4 py-2 text-sm rounded text-theme-text-secondary hover:bg-theme-bg-tertiary">Annulla</button>
@@ -1249,6 +1318,7 @@ function AddOperatoreInlineModal({ onClose, onSaved }: { onClose: () => void; on
     const [email, setEmail] = useState('')
     const [ruolo, setRuolo] = useState('')
     const [oreTarget, setOreTarget] = useState('8')
+    const [password, setPassword] = useState('')
     const [saving, setSaving] = useState(false)
 
     async function save() {
@@ -1256,17 +1326,44 @@ function AddOperatoreInlineModal({ onClose, onSaved }: { onClose: () => void; on
             alert('Nome e email sono obbligatori')
             return
         }
+        const trimmedPw = password.trim()
+        if (trimmedPw && trimmedPw.length < 8) {
+            alert('La password deve avere almeno 8 caratteri')
+            return
+        }
         setSaving(true)
         try {
+            const emailNorm = email.trim().toLowerCase()
+            const oreNum = parseFloat(oreTarget) || 8
+            // 1) Insert operatori_persone row (anagrafica per Rilevazione Orari).
             const { error } = await supabase.from('operatori_persone').insert({
                 nome: nome.trim(),
                 cognome: cognome.trim() || null,
-                email: email.trim().toLowerCase(),
+                email: emailNorm,
                 ruolo: ruolo.trim() || null,
-                ore_target_giornaliere: parseFloat(oreTarget) || 8,
+                ore_target_giornaliere: oreNum,
                 attivo: true,
             })
             if (error) throw error
+
+            // 2) Se la direzione ha indicato una password, crea anche
+            // l'account auth in modo che l'operatore possa fare login
+            // subito. Endpoint condiviso con la Modifica Operatore.
+            if (trimmedPw) {
+                const { data: { session } } = await supabase.auth.getSession()
+                const accessToken = session?.access_token
+                if (!accessToken) throw new Error('Sessione non valida')
+                const res = await fetch('/.netlify/functions/set-operator-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${accessToken}`,
+                    },
+                    body: JSON.stringify({ email: emailNorm, password: trimmedPw }),
+                })
+                const json = await res.json()
+                if (!res.ok) throw new Error(json?.error || 'Creazione account fallita')
+            }
             onSaved()
         } catch (err) {
             alert('Errore: ' + (err instanceof Error ? err.message : String(err)))
@@ -1277,7 +1374,7 @@ function AddOperatoreInlineModal({ onClose, onSaved }: { onClose: () => void; on
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-            <div className="bg-theme-bg-secondary rounded-lg border border-theme-border max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+            <div className="bg-theme-bg-secondary rounded-lg border border-theme-border max-w-md w-full p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                 <h3 className="text-xl font-semibold text-theme-text-primary mb-4">Nuovo Operatore</h3>
                 <div className="space-y-3">
                     <Field label="Nome *" value={nome} onChange={setNome} placeholder="Es. Salvatore" />
@@ -1286,10 +1383,25 @@ function AddOperatoreInlineModal({ onClose, onSaved }: { onClose: () => void; on
                     <Field label="Ruolo" value={ruolo} onChange={setRuolo} placeholder="Es. Receptionist, Operativo" />
                     <Field label="Ore target/giorno" value={oreTarget} onChange={setOreTarget} type="number" />
                 </div>
-                <p className="text-[10px] text-theme-text-muted mt-3">
-                    L'operatore potra' collegare il suo account Supabase Auth automaticamente alla prima apertura di "I miei orari"
-                    (match per email).
-                </p>
+
+                <div className="mt-5 pt-4 border-t border-theme-border space-y-2">
+                    <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-semibold text-theme-text-primary">Account & accesso admin</h4>
+                        <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-500">solo direzione</span>
+                    </div>
+                    <Field
+                        label="Password iniziale (opzionale, min. 8 caratteri)"
+                        value={password}
+                        onChange={setPassword}
+                        type="text"
+                        placeholder="Lascia vuoto per non creare account admin"
+                    />
+                    <p className="text-[10px] text-theme-text-muted">
+                        Se imposti una password l'account admin viene creato subito (email confermata)
+                        e l'operatore potrà accedere immediatamente. Potrà cambiarla dal proprio profilo.
+                    </p>
+                </div>
+
                 <div className="flex justify-end gap-2 mt-4">
                     <button onClick={onClose} disabled={saving}
                         className="px-4 py-2 text-sm rounded text-theme-text-secondary hover:bg-theme-bg-tertiary">Annulla</button>
