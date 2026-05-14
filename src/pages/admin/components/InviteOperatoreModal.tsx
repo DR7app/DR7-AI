@@ -107,12 +107,14 @@ interface Props {
 export default function InviteOperatoreModal({ open, onClose, onCreated }: Props) {
   const [email, setEmail] = useState('')
   const [nome, setNome] = useState('')
+  const [password, setPassword] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [submitting, setSubmitting] = useState(false)
 
   const reset = () => {
     setEmail('')
     setNome('')
+    setPassword('')
     setSelected(new Set())
     setSubmitting(false)
   }
@@ -163,6 +165,11 @@ export default function InviteOperatoreModal({ open, onClose, onCreated }: Props
       toast.error('Inserisci il nome')
       return
     }
+    const trimmedPassword = password.trim()
+    if (trimmedPassword && trimmedPassword.length < 8) {
+      toast.error('La password deve avere almeno 8 caratteri')
+      return
+    }
     const permissions = Array.from(selected)
     if (permissions.length === 0) {
       toast.error('Seleziona almeno un permesso')
@@ -181,12 +188,21 @@ export default function InviteOperatoreModal({ open, onClose, onCreated }: Props
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ email: trimmedEmail, nome: trimmedNome, permissions }),
+        body: JSON.stringify({
+          email: trimmedEmail,
+          nome: trimmedNome,
+          permissions,
+          ...(trimmedPassword ? { password: trimmedPassword } : {}),
+        }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error || 'Invio invito fallito')
 
-      toast.success(`Invito inviato a ${trimmedEmail}`)
+      toast.success(
+        trimmedPassword
+          ? `Operatore ${trimmedEmail} creato. Password impostata.`
+          : `Invito inviato a ${trimmedEmail}`,
+      )
       reset()
       onCreated()
       onClose()
@@ -214,7 +230,9 @@ export default function InviteOperatoreModal({ open, onClose, onCreated }: Props
         <div className="flex items-center justify-between px-6 py-4 border-b border-theme-border">
           <div>
             <h3 className="text-xl font-bold text-theme-text-primary">Aggiungi Operatore</h3>
-            <p className="text-xs text-theme-text-muted mt-0.5">L'invitato riceve una email per impostare la propria password.</p>
+            <p className="text-xs text-theme-text-muted mt-0.5">
+              Lascia la password vuota per inviare un'email di invito. Imposta una password iniziale per attivare subito l'account: l'operatore potrà cambiarla dal proprio profilo.
+            </p>
           </div>
           <button onClick={handleClose} className="text-theme-text-muted hover:text-theme-text-primary text-2xl leading-none">×</button>
         </div>
@@ -237,6 +255,20 @@ export default function InviteOperatoreModal({ open, onClose, onCreated }: Props
               placeholder="Mario Rossi"
               disabled={submitting}
             />
+          </div>
+          <div>
+            <Input
+              label="Password iniziale (opzionale)"
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Min. 8 caratteri — lascia vuoto per inviare email di invito"
+              disabled={submitting}
+              autoComplete="new-password"
+            />
+            <p className="text-[11px] text-theme-text-muted mt-1">
+              Se imposti una password, l'account viene attivato subito (email confermata) e potrai comunicarla all'operatore. Lui potrà cambiarla dal proprio profilo.
+            </p>
           </div>
 
           {/* Presets */}

@@ -12,6 +12,10 @@ interface InviteBody {
   email?: string
   nome?: string
   permissions?: string[]
+  /** Optional initial password. Quando presente l'account viene creato
+   *  con email confermata e password impostata: l'operatore puo\' fare
+   *  login immediatamente, senza email di invito. */
+  password?: string
 }
 
 const handler: Handler = async (event) => {
@@ -38,6 +42,7 @@ const handler: Handler = async (event) => {
 
   const email = String(body.email || '').trim().toLowerCase()
   const nome = String(body.nome || '').trim()
+  const password = typeof body.password === 'string' ? body.password : ''
   const permissions = Array.isArray(body.permissions)
     ? body.permissions.map(String).filter(Boolean)
     : []
@@ -47,6 +52,9 @@ const handler: Handler = async (event) => {
   }
   if (!nome) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Nome obbligatorio' }) }
+  }
+  if (password && password.length < 8) {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: 'La password deve avere almeno 8 caratteri' }) }
   }
   if (permissions.length === 0) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Almeno un permesso richiesto' }) }
@@ -67,24 +75,48 @@ const handler: Handler = async (event) => {
     }
   }
 
-  // Send Supabase invite email — the link redirects back to /reset-password
-  // which already handles type=recovery / type=magiclink hashes (we add
-  // type=invite handling in that page in a separate change).
+  // Two flows:
+  //  - password presente → createUser con email gia' confermata, l'operatore
+  //    fa login immediatamente con la password fornita e potra' cambiarla
+  //    dal proprio profilo (/reset-password classico).
+  //  - password assente → inviteUserByEmail, l'operatore riceve un'email
+  //    con un link per impostare la sua password (flusso storico).
   const baseUrl = process.env.URL || 'https://admin.dr7empire.com'
   const redirectTo = `${baseUrl}/reset-password`
 
-  const { data: inviteData, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(email, {
-    redirectTo,
-    data: { nome, invited_by: callerEmail },
-  })
-
-  if (inviteErr || !inviteData?.user) {
-    console.error('[invite-operator] inviteUserByEmail failed', inviteErr)
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: inviteErr?.message || 'Invio invito fallito' }),
+  let newUserId: string
+  let inviteSent = false
+  if (password) {
+    const { data: created, error: createErr } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { nome, invited_by: callerEmail },
+    })
+    if (createErr || !created?.user) {
+      console.error('[invite-operator] createUser failed', createErr)
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: createErr?.message || 'Creazione utente fallita' }),
+      }
     }
+    newUserId = created.user.id
+  } else {
+    const { data: inviteData, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(email, {
+      redirectTo,
+      data: { nome, invited_by: callerEmail },
+    })
+    if (inviteErr || !inviteData?.user) {
+      console.error('[invite-operator] inviteUserByEmail failed', inviteErr)
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: inviteErr?.message || 'Invio invito fallito' }),
+      }
+    }
+    newUserId = inviteData.user.id
+    inviteSent = true
   }
 
   // Create the admins row linked to the new auth user. role='admin' is the
@@ -98,7 +130,7 @@ const handler: Handler = async (event) => {
   const { data: adminRow, error: insErr } = await supabase
     .from('admins')
     .insert({
-      user_id: inviteData.user.id,
+      user_id: newUserId,
       email,
       nome,
       role: 'admin',
@@ -113,7 +145,7 @@ const handler: Handler = async (event) => {
     console.error('[invite-operator] admins insert failed', insErr)
     // Best-effort cleanup: remove the auth user we just created so the
     // operator can be re-invited cleanly after fixing the data issue.
-    try { await supabase.auth.admin.deleteUser(inviteData.user.id) } catch (e) { console.error(e) }
+    try { await supabase.auth.admin.deleteUser(newUserId) } catch (e) { console.error(e) }
     return {
       statusCode: 500,
       headers,
@@ -127,8 +159,10 @@ const handler: Handler = async (event) => {
     body: JSON.stringify({
       success: true,
       adminId: adminRow.id,
-      userId: inviteData.user.id,
+      userId: newUserId,
       email,
+      inviteSent,
+      passwordSet: !!password,
     }),
   }
 }
