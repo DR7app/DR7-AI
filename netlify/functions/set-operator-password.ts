@@ -85,7 +85,7 @@ const handler: Handler = async (event) => {
       email,
       password,
       email_confirm: true,
-      user_metadata: { reset_by: callerEmail },
+      user_metadata: { created_by: callerEmail },
     })
     if (createErr || !newU?.user) {
       return { statusCode: 500, headers, body: JSON.stringify({ error: createErr?.message || 'Creazione utente fallita' }) }
@@ -105,10 +105,30 @@ const handler: Handler = async (event) => {
     console.warn('[set-operator-password] linking operatori_persone failed (non-blocking)', e)
   }
 
+  // Verifica esplicita: rileggi l'utente per confermare che email_confirmed_at
+  // sia stato impostato. Alcuni progetti Supabase con "Confirm email" attivo
+  // ignorano il flag email_confirm via updateUserById se l'utente era stato
+  // creato come unconfirmed in passato — in quel caso forziamo una seconda
+  // update per garantire la verifica.
+  let emailConfirmed = false
+  try {
+    const { data: check } = await supabase.auth.admin.getUserById(userId)
+    if (check?.user?.email_confirmed_at) {
+      emailConfirmed = true
+    } else {
+      // Forza la conferma con una update dedicata.
+      await supabase.auth.admin.updateUserById(userId, { email_confirm: true })
+      const { data: check2 } = await supabase.auth.admin.getUserById(userId)
+      emailConfirmed = !!check2?.user?.email_confirmed_at
+    }
+  } catch (e) {
+    console.warn('[set-operator-password] email_confirm verify failed', e)
+  }
+
   return {
     statusCode: 200,
     headers,
-    body: JSON.stringify({ success: true, userId, created }),
+    body: JSON.stringify({ success: true, userId, created, emailConfirmed }),
   }
 }
 

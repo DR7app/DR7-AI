@@ -104,6 +104,15 @@ const handler: Handler = async (event) => {
       }
     }
     newUserId = created.user.id
+    // Verify email_confirmed_at; force-confirm se necessario.
+    try {
+      const { data: check } = await supabase.auth.admin.getUserById(newUserId)
+      if (!check?.user?.email_confirmed_at) {
+        await supabase.auth.admin.updateUserById(newUserId, { email_confirm: true })
+      }
+    } catch (e) {
+      console.warn('[invite-operator] email_confirm verify failed', e)
+    }
   } else {
     const { data: inviteData, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(email, {
       redirectTo,

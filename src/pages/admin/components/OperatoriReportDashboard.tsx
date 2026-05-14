@@ -1320,7 +1320,13 @@ function EditOperatoreInlineModal({ op, onClose, onSaved }: { op: Operatore; onC
             })
             const json = await res.json()
             if (!res.ok) throw new Error(json?.error || 'Reset password fallito')
-            alert(json.created ? 'Account creato e password impostata.' : 'Password aggiornata. L\'operatore può accedere subito.')
+            const verified = json.emailConfirmed ? 'email verificata' : 'email NON verificata (attenzione!)'
+            alert(
+                (json.created
+                    ? 'Account creato e password impostata.'
+                    : 'Password aggiornata.') +
+                `\n\nUtente: ${op.email}\nUser ID: ${json.userId}\n${verified}\n\nL'operatore può accedere subito.`,
+            )
             setPassword('')
         } catch (err) {
             alert('Errore: ' + (err instanceof Error ? err.message : String(err)))
