@@ -373,21 +373,35 @@ export default function ReviewManagementTab() {
     if (!confirm('Confermi di voler approvare e inviare la richiesta di recensione a questo cliente?')) return
     setSendingId(candidateId)
     try {
-      // First approve (move to ELIGIBLE)
-      const res = await fetch(`${NETLIFY_BASE}/review-evaluate-candidate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candidateId, action: 'approve' }),
-      })
-      if (!res.ok) throw new Error('Errore approvazione')
+      // 1) Approva: passa direttamente a ELIGIBLE + TO_SEND in DB. Niente
+      //    chiamata alla netlify function review-evaluate-candidate, che
+      //    non ha mai supportato {candidateId, action:'approve'} — accettava
+      //    solo {sourceRecordId, serviceType} per creare candidati nuovi,
+      //    quindi tornava 400 e mostrava "Errore approvazione" anche
+      //    quando i dati cliente erano perfetti.
+      const { error: upErr } = await supabase
+        .from('review_candidates')
+        .update({
+          eligibility_status: 'ELIGIBLE',
+          send_status: 'TO_SEND',
+          review_risk: 'GREEN',
+          exclusion_reason_code: null,
+          exclusion_reason_text: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', candidateId)
+      if (upErr) throw new Error(`Errore approvazione: ${upErr.message}`)
 
-      // Then send
+      // 2) Invia subito
       const sendRes = await fetch(`${NETLIFY_BASE}/review-send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ candidateId, sendChannel: 'EMAIL_AND_WHATSAPP', sendMode: 'MANUAL' }),
       })
-      if (!sendRes.ok) throw new Error('Approvato ma errore durante l\'invio')
+      if (!sendRes.ok) {
+        const errBody = await sendRes.json().catch(() => ({}))
+        throw new Error(errBody.error || 'Approvato ma errore durante l\'invio')
+      }
 
       toast.success('Approvato e inviato!')
       await Promise.all([fetchCandidates(), fetchStats()])
