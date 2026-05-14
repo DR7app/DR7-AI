@@ -209,16 +209,39 @@ export default function OperatoriReportDashboard() {
             const { data: { user } } = await supabase.auth.getUser()
             const myEmail = (user?.email || '').toLowerCase()
 
-            // 1) operatori — direzione vede tutti, gli altri solo se stessi
-            let opQuery = supabase
-                .from('operatori_persone')
-                .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, avatar_url')
-                .eq('attivo', true)
-            if (!isDirezione && user?.id) {
-                opQuery = opQuery.or(`user_id.eq.${user.id},email.ilike.${myEmail}`)
+            // 1) operatori — direzione/developer vedono tutti, gli altri solo se stessi.
+            // Direzione/developer: provo PRIMA via Netlify function con
+            // service role (bypassa eventuali RLS che droppano righe).
+            // Fallback alla query diretta.
+            let opList: Operatore[] = []
+            if (isDirezione) {
+                try {
+                    const { data: { session } } = await supabase.auth.getSession()
+                    const accessToken = session?.access_token
+                    if (accessToken) {
+                        const res = await fetch('/.netlify/functions/list-operators', {
+                            headers: { Authorization: `Bearer ${accessToken}` },
+                        })
+                        if (res.ok) {
+                            const json = await res.json()
+                            opList = (json.operatori || []) as Operatore[]
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[operatori-dashboard] list-operators fallback', e)
+                }
             }
-            const { data: ops } = await opQuery
-            const opList = (ops || []) as Operatore[]
+            if (opList.length === 0) {
+                let opQuery = supabase
+                    .from('operatori_persone')
+                    .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, avatar_url')
+                    .eq('attivo', true)
+                if (!isDirezione && user?.id) {
+                    opQuery = opQuery.or(`user_id.eq.${user.id},email.ilike.${myEmail}`)
+                }
+                const { data: ops } = await opQuery
+                opList = (ops || []) as Operatore[]
+            }
             setOperatori(opList)
             const myRow = opList.find(o => o.user_id === user?.id)
                 || opList.find(o => (o.email || '').toLowerCase() === myEmail)
