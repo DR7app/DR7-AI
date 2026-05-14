@@ -370,15 +370,11 @@ export default function ReviewManagementTab() {
   }
 
   async function handleApproveAndSend(candidateId: string) {
-    if (!confirm('Confermi di voler approvare e inviare la richiesta di recensione a questo cliente?')) return
+    if (!confirm('Approvare questo cliente? Diventera\' idoneo a ricevere la richiesta recensione (l\'invio resta manuale via i bottoni Email/WhatsApp).')) return
     setSendingId(candidateId)
     try {
-      // 1) Approva: passa direttamente a ELIGIBLE + TO_SEND in DB. Niente
-      //    chiamata alla netlify function review-evaluate-candidate, che
-      //    non ha mai supportato {candidateId, action:'approve'} — accettava
-      //    solo {sourceRecordId, serviceType} per creare candidati nuovi,
-      //    quindi tornava 400 e mostrava "Errore approvazione" anche
-      //    quando i dati cliente erano perfetti.
+      // Approva soltanto — niente piu' invio automatico. La direzione
+      // controlla i dati, clicca poi Email o WhatsApp quando vuole.
       const { error: upErr } = await supabase
         .from('review_candidates')
         .update({
@@ -392,18 +388,7 @@ export default function ReviewManagementTab() {
         .eq('id', candidateId)
       if (upErr) throw new Error(`Errore approvazione: ${upErr.message}`)
 
-      // 2) Invia subito
-      const sendRes = await fetch(`${NETLIFY_BASE}/review-send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candidateId, sendChannel: 'EMAIL_AND_WHATSAPP', sendMode: 'MANUAL' }),
-      })
-      if (!sendRes.ok) {
-        const errBody = await sendRes.json().catch(() => ({}))
-        throw new Error(errBody.error || 'Approvato ma errore durante l\'invio')
-      }
-
-      toast.success('Approvato e inviato!')
+      toast.success('Approvato — pronto per l\'invio')
       await Promise.all([fetchCandidates(), fetchStats()])
     } catch (err: unknown) {
       const _errMsg = err instanceof Error ? err.message : String(err)
@@ -1210,7 +1195,7 @@ export default function ReviewManagementTab() {
                     disabled={sendingId === candidate.id}
                     className="inline-flex items-center px-3 h-8 rounded-full bg-green-600 text-white text-xs font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
                   >
-                    Approva e Invia
+                    Approva
                   </button>
                   <button
                     onClick={() => handleExclude(candidate.id)}
