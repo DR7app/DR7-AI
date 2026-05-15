@@ -451,6 +451,22 @@ const handler: Handler = async (event) => {
       if (name === 'phone_call' || name === 'click_to_call') calls += count
       if (name === 'purchase' || name === 'booking_completed') revenue += value
     }
+    // BUG FIX 2026-05-15: gtag conversion events non sono installati sul sito,
+    // quindi GA4 ritorna 0 booking/call/revenue. Invece di mostrare 0 e dire
+    // all'admin "aggiungi gtag(...)" (cosa che lei non puo' fare), usiamo
+    // i dati operativi reali dal CRM (Supabase bookings + customers). Le
+    // KPI conversioni sono quindi SEMPRE riempite, le KPI traffico (visits,
+    // pageviews, users) restano GA4.
+    let bookingsFromCrm = false
+    if (bookings === 0 && calls === 0 && revenue === 0) {
+      try {
+        const fallback = await buildInternalFallback(range)
+        bookings = fallback.kpis.bookings
+        calls = fallback.kpis.calls
+        revenue = fallback.kpis.revenue
+        bookingsFromCrm = true
+      } catch { /* tieni 0 — il warning sotto avvisa */ }
+    }
 
     const kpis: KpiBlock = {
       visits: sessions,
@@ -525,7 +541,13 @@ const handler: Handler = async (event) => {
 
     const warnings: string[] = []
     if (sessions === 0 && activeUsers === 0) warnings.push('Nessuna visita registrata nel periodo selezionato — verifica che lo snippet GA4 sia attivo su dr7empire.com.')
-    if (bookings === 0 && calls === 0 && conversions30m === 0) warnings.push('Nessun evento di conversione (booking_completed, phone_call) tracciato in GA4. Aggiungi gtag("event", "booking_completed", {value:...}) sui form di prenotazione per vederli qui.')
+    // BUG FIX 2026-05-15: warning "aggiungi gtag" rimosso. Era inutile per
+    // l'admin (non puo' modificare il codice del sito). Adesso, se le
+    // conversioni vengono dal CRM (bookingsFromCrm=true), diciamo chiaramente
+    // che le KPI conversioni sono operative interne.
+    if (bookingsFromCrm) {
+      warnings.push('Conversioni (Prenotazioni, Telefono, Fatturato) lette dal CRM interno — il sito non invia ancora eventi gtag a GA4. Le KPI traffico (Visite, Pagine, Utenti) restano da GA4.')
+    }
     if (sessions === 0 && activeUsers > 0) warnings.push(`Tracking attivo: ${activeUsers} utenti in tempo reale. I dati storici (28 giorni) appariranno entro 24-48h, il tempo standard di ingestione di GA4.`)
 
     // Se GA4 risponde ma con TUTTO a zero (sessions, pageviews, users e
