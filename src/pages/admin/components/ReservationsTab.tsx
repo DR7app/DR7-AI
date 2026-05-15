@@ -1383,17 +1383,26 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // BUG FIX 2026-05-15: popola SUBITO i dati del veicolo cosi'
       // l'admin vede brand/model/year senza dover cliccare Cerca due
       // volte. La OTP per anno < 2020 viene richiesta dopo, ma il
-      // veicolo e' gia' visualizzato. Il gate OTP rimane: l'admin non
-      // puo' salvare la prenotazione finche' non viene approvato.
+      // veicolo e' gia' visualizzato.
+      //
+      // BUG FIX 2026-05-15 (2): estrai l'anno con regex (gestisce
+      // "2022", "2022-01-15", "01/2022", ecc. — OpenAPI a volte ritorna
+      // formati diversi). Se proprio non c'e' anno, segna 'N/D' invece
+      // di stringa vuota cosi' la validation al save NON ti rimanda a
+      // Cerca in loop. Il gate OTP gestisce comunque il caso "anno
+      // sconosciuto" come pre-2020 (richiede approvazione).
+      const yearRaw = String(data.year || '').trim()
+      const yearMatch = yearRaw.match(/(19|20)\d{2}/)
+      const yearForForm = yearMatch ? yearMatch[0] : (yearRaw || 'N/D')
       setFormData(prev => ({
         ...prev,
         cauzione_targa_brand: data.brand || '',
         cauzione_targa_model: data.model || '',
-        cauzione_targa_year: data.year || '',
+        cauzione_targa_year: yearForForm,
       }))
-      toast.success(`${data.brand} ${data.model} (${data.year}) trovato`)
+      toast.success(`${data.brand} ${data.model} (${yearForForm}) trovato`)
 
-      const year = parseInt(data.year)
+      const year = yearMatch ? parseInt(yearMatch[0]) : NaN
       if (isNaN(year) || year < 2020) {
         if (!hasOverride('vehicle_year_too_old')) {
           setOverrideDetails(buildOverrideDetailsBase([
@@ -4409,7 +4418,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (!formData.cauzione_targa || formData.cauzione_targa.length < 5) {
           cauzioneMissing.push('Targa Veicolo Cauzione')
         }
-        if (!formData.cauzione_targa_brand || !formData.cauzione_targa_year) {
+        // La verifica "Cerca cliccato" si basa sul BRAND popolato dalla
+        // lookup (non sull'anno: alcune targhe non hanno anno in OpenAPI
+        // e fetchTargaLookup mette 'N/D'. Senza brand invece la lookup
+        // non e' stata fatta del tutto).
+        if (!formData.cauzione_targa_brand) {
           cauzioneMissing.push('Cerca targa (clicca "Cerca" per verificare il veicolo)')
         }
         if (cauzioneMissing.length > 0) {
