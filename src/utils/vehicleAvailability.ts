@@ -183,6 +183,15 @@ function isVehicleBlocked(
 ): boolean {
     if (!vehicle.metadata) return false
 
+    // BUG FIX 2026-05-15: ignora la finestra unavailable_from/until quando
+    // lo status del veicolo NON e' 'unavailable' o 'maintenance'. Prima
+    // bastava avere metadata.unavailable_* compilato per bloccare il
+    // veicolo, anche se l'admin l'aveva rimesso a "Disponibile" — quindi
+    // un veicolo disponibile risultava lo stesso "in manutenzione" nei
+    // periodi che erano stati bloccati in passato.
+    const status = String(vehicle.status || '')
+    if (status !== 'unavailable' && status !== 'maintenance') return false
+
     const unavailableFrom = vehicle.metadata.unavailable_from
     const unavailableUntil = vehicle.metadata.unavailable_until
     const unavailableFromTime = vehicle.metadata.unavailable_from_time || '00:00'
