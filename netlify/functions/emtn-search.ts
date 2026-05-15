@@ -75,6 +75,64 @@ export const handler: Handler = async (event) => {
         client = created
     }
 
+    // ── Enrich client da customers_extended ────────────────
+    // emtn_clients tiene solo CF + nome + cognome + data_nascita. Per
+    // popolare la dashboard servono email, telefono, indirizzo,
+    // citta\', sesso ecc., che vivono su customers_extended. Lookup
+    // case-insensitive sul CF, fallback su nome+cognome.
+    type ExtRow = {
+        nome: string | null; cognome: string | null
+        email: string | null; telefono: string | null
+        indirizzo: string | null; citta_residenza: string | null
+        codice_postale: string | null; data_nascita: string | null
+        codice_fiscale: string | null; created_at: string | null
+        metadata: Record<string, unknown> | null
+        sede_legale?: string | null
+    }
+    let ext: ExtRow | null = null
+    {
+        const { data } = await sb
+            .from('customers_extended')
+            .select('nome, cognome, email, telefono, indirizzo, citta_residenza, codice_postale, data_nascita, codice_fiscale, created_at, metadata, sede_legale')
+            .eq('codice_fiscale', cf)
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        ext = (data as ExtRow | null) || null
+    }
+    function buildAddress(e: ExtRow | null): string | null {
+        if (!e) return null
+        const street = e.indirizzo || e.sede_legale || null
+        const city = e.citta_residenza || null
+        const cap = e.codice_postale || null
+        const parts: string[] = []
+        if (street) parts.push(String(street))
+        if (cap || city) parts.push([cap, city].filter(Boolean).join(' '))
+        return parts.join(', ') || null
+    }
+    // Sesso derivato dal CF: il 10° carattere (index 9, ovvero il giorno
+    // di nascita: 1-31 maschio, 41-71 femmina).
+    function sexFromCF(c: string): 'M' | 'F' | null {
+        const m = c.match(/^[A-Z]{6}[0-9]{2}[A-Z]([0-9]{2})/)
+        if (!m) return null
+        const day = parseInt(m[1], 10)
+        return day > 31 ? 'F' : 'M'
+    }
+    function dobFromCF(c: string): string | null {
+        // CF: AAAAAA YY M DD CCCC X — month letter A=jan…T=dec, day 1-31 (m) o 41-71 (f).
+        // Anno a due cifre — assume <30 → 20xx, >=30 → 19xx.
+        const m = c.match(/^[A-Z]{6}(\d{2})([ABCDEHLMPRST])(\d{2})/)
+        if (!m) return null
+        const yy = parseInt(m[1], 10)
+        const monthMap: Record<string, number> = { A: 1, B: 2, C: 3, D: 4, E: 5, H: 6, L: 7, M: 8, P: 9, R: 10, S: 11, T: 12 }
+        const mm = monthMap[m[2]]
+        let day = parseInt(m[3], 10)
+        if (day > 40) day -= 40
+        const year = yy < 30 ? 2000 + yy : 1900 + yy
+        if (!mm || day < 1 || day > 31) return null
+        return `${year.toString().padStart(4, '0')}-${mm.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`
+    }
+
     // ── Pull DR7's own record of this customer ─────────────
     // Bookings con questo CF, espandi danni/penali da booking_details.
     // Questo permette di vedere subito il record DR7 senza dover
@@ -151,10 +209,12 @@ export const handler: Handler = async (event) => {
     let unpaidDamageTotal = 0
     let unpaidPenaltyTotal = 0
     let lastBookingDate: string | null = null
+    let firstBookingDate: string | null = null
 
     for (const b of bookings) {
         const refDate = b.pickup_date || b.appointment_date || null
         if (refDate && (!lastBookingDate || refDate > lastBookingDate)) lastBookingDate = refDate
+        if (refDate && (!firstBookingDate || refDate < firstBookingDate)) firstBookingDate = refDate
         const danni = b.booking_details?.danni || []
         for (const d of danni) {
             const total = Number(d.total ?? (Number(d.amount || 0) * Number(d.quantity || 1)))
@@ -253,10 +313,39 @@ export const handler: Handler = async (event) => {
         : band === 'yellow' ? 'La prenotazione e\' in verifica. Ti contatteremo a breve.'
         : 'La richiesta e\' in revisione amministrativa.'
 
+    // Risk score numerico 0-100 derivato dalla cronologia.
+    // Penalita\': eventi negativi (8 pt cad), eventi under_review (4 pt cad),
+    // pendenze danni/penali (1 pt ogni 50 EUR, max 25). Bonus storico:
+    // +1 pt ogni 5 noleggi regolari (max 10). Floor 5, cap 100.
+    const negPenalty = sc.negative_events * 8
+    const reviewPenalty = sc.events_under_review * 4
+    const unpaidPenalty = Math.min(25, Math.floor(dr7Unpaid / 50))
+    const regularBonus = Math.min(10, Math.floor(sc.regular_rentals / 5))
+    const riskScore = Math.max(5, Math.min(100, 100 - negPenalty - reviewPenalty - unpaidPenalty + regularBonus))
+    const riskLevel = band === 'green' ? 1 : band === 'yellow' ? 2 : 3
+
+    // Cliente arricchito: union dei campi emtn_clients + customers_extended
+    // + derivati da bookings. Il frontend (EMTNClient) li legge tutti.
+    const enrichedClient = {
+        ...(client as Record<string, unknown>),
+        email: ext?.email || null,
+        phone: ext?.telefono || null,
+        address: buildAddress(ext),
+        customer_since: firstBookingDate || (ext?.created_at ?? null),
+        last_seen_at: lastBookingDate,
+        source: ext ? 'customers_extended' : 'emtn',
+        date_of_birth: (client as { data_nascita?: string | null }).data_nascita || ext?.data_nascita || dobFromCF(cf),
+        sex: sexFromCF(cf),
+        nationality: 'IT',
+        events: sc.negative_events + sc.events_under_review,
+    }
+
     return jsonResponse(200, {
-        client,
+        client: enrichedClient,
         stats: sc,
         riskBand: band,
+        riskScore,
+        riskLevel,
         message,
         reportUnlocked: unlocked,
         recentEvents,
@@ -270,6 +359,7 @@ export const handler: Handler = async (event) => {
             unpaidDamageTotal: Math.round(unpaidDamageTotal * 100) / 100,
             unpaidPenaltyTotal: Math.round(unpaidPenaltyTotal * 100) / 100,
             lastBookingDate,
+            firstBookingDate,
         },
     }, origin)
 }
