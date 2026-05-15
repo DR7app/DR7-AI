@@ -1,4 +1,4 @@
-import { Handler, schedule } from '@netlify/functions';
+import type { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { renderTemplate } from './utils/messageTemplates';
 import { getGoogleReviewLink } from './utils/loadMarketing';
@@ -240,17 +240,12 @@ const reviewHandler: Handler = async (event) => {
 
 // DISABILITATO 2026-05-15 su richiesta direzione: i messaggi recensione
 // devono partire SOLO dal tab Recensioni in admin, mai in automatico.
-// Lasciamo la function deployata ma neutralizzata, cosi':
-//   - la cron Netlify non gira piu' (no wrapper schedule())
-//   - se qualcuno la invoca a mano, ritorna 200 senza inviare nulla
-// Storico problemi: messaggi mandati a clienti senza che operatore avesse
-// cliccato Invia, placeholder {nome}/{review_link} non sostituiti, doppi
-// invii. Il flusso corretto e' admin > Recensioni > Invia (handleSend).
-// Se direzione vuole riattivare un giorno, rimettere:
+// Lasciamo la function deployata ma neutralizzata: niente schedule, nessun
+// invio. Se direzione vuole riattivare un giorno, ripristinare:
+//   import { schedule } from '@netlify/functions';
 //   export const handler = schedule('0,30 * * * *', reviewHandler);
 void reviewHandler;
 export const handler: Handler = async () => ({
   statusCode: 200,
   body: JSON.stringify({ disabled: true, reason: 'manual-only via admin Recensioni tab' }),
 });
-void schedule;
