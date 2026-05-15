@@ -1,6 +1,16 @@
 import { useState, useRef, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { authFetch } from '../utils/authFetch'
+import { supabase } from '../supabaseClient'
+
+// Direzione + Salvatore: bypassano TUTTE le richieste OTP. Stesso elenco
+// usato da useLimitationOverride.ts. Tenuto qui per gli usi diretti del
+// modale (es. PreventiviTab) che non passano dall'hook.
+const OTP_BYPASS_EMAILS = new Set([
+  'valerio@dr7.app',
+  'ilenia@dr7.app',
+  'salvatore@dr7.app',
+])
 
 interface LimitationOverrideModalProps {
   isOpen: boolean
@@ -69,6 +79,26 @@ export default function LimitationOverrideModal({
 
   // Keep _onClose to satisfy prop interface but modal is not dismissible
   void _onClose
+
+  // Auto-bypass per direzione + Salvatore: appena la modale apre, se
+  // l'admin loggato è in whitelist auto-approva senza mostrare nulla.
+  // Genera un overrideId locale ('admin_bypass_*') per coerenza con il
+  // contratto onOverrideApproved.
+  useEffect(() => {
+    if (!isOpen) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data } = await supabase.auth.getSession()
+        const email = (data.session?.user?.email || '').toLowerCase()
+        if (!cancelled && OTP_BYPASS_EMAILS.has(email)) {
+          const bypassId = `admin_bypass_${limitationCode}_${Date.now()}`
+          onOverrideApproved(bypassId, `admin_bypass:${email}`)
+        }
+      } catch { /* ignore */ }
+    })()
+    return () => { cancelled = true }
+  }, [isOpen, limitationCode, onOverrideApproved])
 
   // Reset internal state whenever the modal is closed externally (isOpen→false)
   // or whenever the limitationCode changes (re-open for a different rule).
