@@ -12,7 +12,7 @@ import { DEFAULT_RENTAL_CONFIG } from '../hooks/rentalConfigDefaults'
 // Pro config types (mirror CentralinaProTab.tsx)
 interface ProCategory { id: string; label: string }
 interface ProFascia { id: string; label: string; description: string; min_age: number | ''; max_age: number | ''; min_license_years: number | '' }
-interface ProInsuranceOption { id: string; name: string; daily_price: number | ''; mandatory_deposit: number | ''; deductible_fixed: number | ''; deductible_percent: number | '' }
+interface ProInsuranceOption { id: string; name: string; daily_price: number | ''; mandatory_deposit: number | ''; deductible_fixed: number | ''; deductible_percent: number | ''; is_active?: boolean }
 interface ProInsuranceCategoryConfig { id: string; label: string; mode: 'per_fascia' | 'all_tiers'; byFascia: Record<string, ProInsuranceOption[]>; all: ProInsuranceOption[] }
 interface ProKmConfig {
   id: string;
@@ -123,6 +123,11 @@ export function convertProToRentalConfig(pro: ProSnapshot): RentalConfig {
 
   // ── Insurance ──
   if (pro.insurance) {
+    // 2026-05-15: filtra opzioni con is_active === false. Cosi' i nuovi
+    // booking/preventivi (admin + website) non vedono mai le opzioni
+    // disattivate. Default is_active=undefined → trattata come attiva
+    // (backwards compat per opzioni create prima del flag).
+    const isActive = (o: { is_active?: boolean }) => o.is_active !== false
     const ins: Record<string, InsuranceCategoryConfig> = {}
     for (const catIns of pro.insurance) {
       const dbCat = PRO_TO_DB_CATEGORY[catIns.id] || catIns.id
@@ -131,7 +136,7 @@ export function convertProToRentalConfig(pro: ProSnapshot): RentalConfig {
       if (catIns.mode === 'per_fascia' && catIns.byFascia) {
         for (const [fasciaId, options] of Object.entries(catIns.byFascia)) {
           const tier = PRO_TO_TIER[fasciaId] || fasciaId
-          converted[tier as keyof InsuranceCategoryConfig] = options.map(o => ({
+          converted[tier as keyof InsuranceCategoryConfig] = options.filter(isActive).map(o => ({
             id: o.id,
             name: o.name,
             daily_price: num(o.daily_price),
@@ -141,7 +146,7 @@ export function convertProToRentalConfig(pro: ProSnapshot): RentalConfig {
           }))
         }
       } else if (catIns.all) {
-        converted._all_tiers = catIns.all.map(o => ({
+        converted._all_tiers = catIns.all.filter(isActive).map(o => ({
           id: o.id,
           name: o.name,
           daily_price: num(o.daily_price),

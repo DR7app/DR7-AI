@@ -2588,6 +2588,10 @@ type InsuranceOption = {
   mandatory_deposit: number | ''
   deductible_fixed: number | ''
   deductible_percent: number | ''
+  // 2026-05-15: ON/OFF toggle. When false l'opzione non appare in nuove
+  // prenotazioni / preventivi (admin + website). Default true per
+  // backwards compat (entries seedate prima del flag = sempre attive).
+  is_active?: boolean
 }
 
 type Mode = 'per_fascia' | 'all_tiers'
@@ -2760,7 +2764,7 @@ function InsuranceList({
   function add() {
     onChange([
       ...items,
-      { id: uid(), name: 'Nuova opzione', daily_price: 0, mandatory_deposit: 0, deductible_fixed: 0, deductible_percent: 0 },
+      { id: uid(), name: 'Nuova opzione', daily_price: 0, mandatory_deposit: 0, deductible_fixed: 0, deductible_percent: 0, is_active: true },
     ])
   }
 
@@ -2781,6 +2785,17 @@ function InsuranceList({
                 placeholder="Nome opzione"
                 className="flex-1 bg-transparent outline-none text-[15px] font-semibold text-theme-text-primary placeholder:text-theme-text-muted focus:bg-theme-bg-secondary:bg-theme-bg-secondary/5 rounded-lg px-2 py-1 -mx-2 transition-colors"
               />
+              {/* ON/OFF toggle: se OFF l'opzione non appare in nuove
+                  prenotazioni/preventivi (admin + website). */}
+              <button
+                type="button"
+                onClick={() => patch(opt.id, { is_active: !(opt.is_active !== false) })}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${(opt.is_active !== false) ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                aria-label={(opt.is_active !== false) ? 'Disattiva opzione' : 'Attiva opzione'}
+                title={(opt.is_active !== false) ? 'ON — appare nei booking' : 'OFF — nascosta dai nuovi booking'}
+              >
+                <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${(opt.is_active !== false) ? 'translate-x-5' : 'translate-x-1'}`}/>
+              </button>
               <button
                 onClick={() => remove(opt.id)}
                 className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center w-8 h-8 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"
