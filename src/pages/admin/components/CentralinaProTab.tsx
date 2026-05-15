@@ -1685,7 +1685,7 @@ export default function CentralinaProTab() {
             {section === 'p4' && <CauzioniSection deposits={deposits} setDeposits={setDeposits} fasce={fasce} categories={categories} />}
             {section === 'p5' && <ServiziSection servizi={servizi} setServizi={setServizi} fasce={fasce} />}
             {section === 'p6' && (
-              <PrezzoDinamicoSection config={prezzoDinamico} setConfig={setPrezzoDinamico} />
+              <PrezzoDinamicoSection config={prezzoDinamico} setConfig={setPrezzoDinamico} categories={categories} />
             )}
             {section === 'p7' && (
               <PreventiviSection preventivi={preventivi} setPreventivi={setPreventivi} />
@@ -3792,9 +3792,14 @@ function diffCoeffRows(label: string, cur: CoefficientRow[], prev: CoefficientRo
 function PrezzoDinamicoSection({
   config,
   setConfig,
+  categories,
 }: {
   config: PrezzoDinamicoConfig
   setConfig: (next: PrezzoDinamicoConfig) => void
+  /** Lista categorie da Centralina Pro > Categorie & Fasce. Sostituisce
+   *  l'hardcoded Supercars/Urban/Aziendali in modo che il raggruppamento
+   *  del Revenue Engine resti in sync con quanto definito da direzione. */
+  categories: Category[]
 }) {
   const [vehicles, setVehicles] = useState<FleetVehicle[]>([])
   const [vehiclesLoading, setVehiclesLoading] = useState(true)
@@ -3922,21 +3927,26 @@ function PrezzoDinamicoSection({
               </p>
             )}
             <div className="max-h-[600px] overflow-y-auto -mx-1 px-1 space-y-6">
-              {(
-                [
-                  { key: 'exotic', label: 'Supercars', match: ['exotic', 'supercars'] },
-                  { key: 'urban', label: 'Urban', match: ['urban'] },
-                  { key: 'aziendali', label: 'Aziendali', match: ['aziendali', 'furgone', 'ncc'] },
-                ] as const
-              ).map((group) => {
+              {/* Raggruppa i veicoli per categoria leggendo la lista da
+                  Centralina Pro > Categorie & Fasce (source of truth).
+                  Nessuna categoria hardcoded: aggiungi/rinomina una categoria
+                  in Categorie & Fasce e qui appare subito.
+                  Match: vehicle.category in DB == categoria.id (case-insensitive).
+                  Manteniamo l'alias storico supercars<->exotic per i veicoli
+                  con la categoria DB legacy. */}
+              {categories.map((cat) => {
+                const catId = cat.id.toLowerCase()
+                const aliases = catId === 'supercars' ? ['supercars', 'exotic']
+                  : catId === 'exotic' ? ['exotic', 'supercars']
+                  : [catId]
                 const vs = vehicles.filter((v) =>
-                  (group.match as readonly string[]).includes((v.category ?? 'exotic').toLowerCase())
+                  aliases.includes((v.category ?? '').toLowerCase())
                 )
                 if (vs.length === 0) return null
                 return (
-                  <div key={group.key}>
+                  <div key={cat.id}>
                     <h4 className="text-[12px] font-semibold uppercase tracking-wider text-theme-text-secondary mb-2 px-1 sticky top-0 bg-theme-bg-secondary py-1 z-10">
-                      {group.label} <span className="text-theme-text-muted font-normal">· {vs.length}</span>
+                      {cat.label} <span className="text-theme-text-muted font-normal">· {vs.length}</span>
                     </h4>
                     <div className="space-y-2">
                       {vs.map((v) => (
@@ -3967,8 +3977,17 @@ function PrezzoDinamicoSection({
                 )
               })}
               {(() => {
-                const known = new Set(['exotic', 'supercars', 'urban', 'aziendali', 'furgone', 'ncc'])
-                const others = vehicles.filter((v) => !known.has((v.category ?? 'exotic').toLowerCase()))
+                // "Altre categorie": fallback per veicoli la cui category DB non
+                // matcha NESSUNA categoria di Centralina Pro. Permette a direzione
+                // di vedere comunque i veicoli orfani e di settarne i prezzi.
+                const known = new Set<string>()
+                for (const c of categories) {
+                  const id = c.id.toLowerCase()
+                  known.add(id)
+                  if (id === 'supercars') known.add('exotic')
+                  if (id === 'exotic') known.add('supercars')
+                }
+                const others = vehicles.filter((v) => !known.has((v.category ?? '').toLowerCase()))
                 if (others.length === 0) return null
                 return (
                   <div>
