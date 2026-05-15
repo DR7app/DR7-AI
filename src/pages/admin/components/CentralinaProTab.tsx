@@ -852,21 +852,36 @@ function canonicalDepositId(label?: string): string | null {
 function canonicalizeDepositIds(byFascia: DepositsByFascia): DepositsByFascia {
   const out: DepositsByFascia = {}
   for (const [fid, fcfg] of Object.entries(byFascia || {})) {
-    const fix = (arr?: DepositOption[]) => (arr || [])
-      .filter(o => {
+    const fix = (arr?: DepositOption[]) => {
+      const result: DepositOption[] = []
+      // BUG FIX 2026-05-15: dedup ids ALL'INTERNO della stessa lista.
+      // Prima due righe con label simili ("Carta di credito" + "Carta di
+      // debito o credito") venivano entrambe canonicalizzate a id
+      // 'credit_card', risultando in due chiavi React identiche → React
+      // le trattava come la stessa entry e modificare una modificava
+      // entrambe. Ora se la canonicalizzazione produce un id gia' usato
+      // in questa lista, manteniamo l'id originale (uid random), cosi'
+      // restano due entry distinte editabili indipendentemente.
+      const usedIds = new Set<string>()
+      for (const o of (arr || [])) {
         const label = String(o.label || '').trim()
         const amt = o.amount === '' || o.amount == null ? 0 : Number(o.amount)
         const sur = o.surcharge_per_day === '' || o.surcharge_per_day == null ? 0 : Number(o.surcharge_per_day)
-        // Droppa solo le righe TOTALMENTE vuote: nessun label, nessun importo, nessuna maggiorazione.
-        return !(label === '' && amt === 0 && sur === 0)
-      })
-      .map(o => {
+        // Droppa solo le righe TOTALMENTE vuote
+        if (label === '' && amt === 0 && sur === 0) continue
         const c = canonicalDepositId(o.label)
-        const amt = o.amount === '' || o.amount == null ? 0 : Number(o.amount)
-        const sur = o.surcharge_per_day === '' || o.surcharge_per_day == null ? 0 : Number(o.surcharge_per_day)
-        const sanitized: DepositOption = { ...o, amount: amt, surcharge_per_day: sur }
-        return c ? { ...sanitized, id: c } : sanitized
-      })
+        // Pick id: canonical se non duplicato, altrimenti id originale,
+        // altrimenti mint fresco (caso patologico in cui anche l'originale
+        // collide — preserva l'unicita' a tutti i costi).
+        let id = c && !usedIds.has(c) ? c : (o.id && !usedIds.has(o.id) ? o.id : uid())
+        // Edge: id originale ancora duplicato (puo' succedere in dati
+        // gia' corrotti caricati da Supabase) → freschiamo.
+        while (usedIds.has(id)) id = uid()
+        usedIds.add(id)
+        result.push({ ...o, id, amount: amt, surcharge_per_day: sur })
+      }
+      return result
+    }
     out[fid] = { residente: fix(fcfg?.residente), non_residente: fix(fcfg?.non_residente) }
   }
   return out
@@ -1403,7 +1418,16 @@ export default function CentralinaProTab() {
         if (remote.km) { setKm(remote.km); setSavedKm(remote.km) }
         if (remote.deposits) {
           const migrated = migrateDeposits(remote.deposits)
-          setDeposits(migrated); setSavedDeposits(migrated)
+          // Auto-heal: applica anche a LOAD time la dedup degli id duplicati,
+          // cosi' chi ha gia' salvato uno stato corrotto (es. due righe con
+          // id 'credit_card' che condividevano la stessa key React e si
+          // editavano insieme) vede le righe tornare distinte alla prossima
+          // apertura della tab, senza dover salvare manualmente.
+          const healed: DepositsConfig = {}
+          for (const [catId, byFascia] of Object.entries(migrated)) {
+            healed[catId] = canonicalizeDepositIds(byFascia as DepositsByFascia)
+          }
+          setDeposits(healed); setSavedDeposits(healed)
         }
         if (remote.servizi) { setServizi(remote.servizi); setSavedServizi(remote.servizi) }
         if (remote.prezzoDinamico) {
