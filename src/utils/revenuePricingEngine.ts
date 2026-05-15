@@ -594,22 +594,26 @@ export function calculateDynamicPrice(
   let rawDailyRate = selectedBaseRateEur * occCoeff * advCoeff * durCoeff * seasonCoeff * gapCoeff * dayTypeCoeff * vehOccCoeff * promoCoeff * vehTargetCoeff
 
   // ─── 6. Min/Max clamp ───
-  // Cerca prezzo: per-veicolo (UUID) → category:X (formato Pro) → X
-  // bare (formato legacy). L'admin in Centralina Pro puo' settare il min
-  // sotto la categoria; vogliamo che il fallback per-categoria funzioni
-  // anche se la chiave salvata e' senza il prefisso "category:".
+  // FIX 2026-05-15: leggiamo SOLO i prezzi visibili nell'UI Centralina Pro:
+  // (1) per-veicolo (UUID) e (2) category:<id> (formato Pro). NON cadiamo
+  // piu' sui bare key 'supercars'/'urban'/'aziendali' (legacy) — quelli
+  // erano dati stale invisibili nell'UI e clampavano i veicoli con MAX
+  // vuoto. Empty string e' trattato come "non settato" → no clamp.
   const cat = String(input.vehicleCategory || '').toLowerCase()
   const aliases = cat === 'supercars' ? ['supercars', 'exotic']
     : cat === 'exotic' ? ['exotic', 'supercars']
     : cat ? [cat] : []
+  const isValidPrice = (v: unknown): v is number => {
+    if (v == null || v === '') return false
+    const n = Number(v)
+    return Number.isFinite(n) && n > 0
+  }
   const pickPrice = (table: Record<string, number>): number | null => {
     const v = table[input.vehicleId]
-    if (v != null) return v
+    if (isValidPrice(v)) return Number(v)
     for (const a of aliases) {
       const fromPrefixed = table[`category:${a}`]
-      if (fromPrefixed != null) return fromPrefixed
-      const fromBare = table[a]
-      if (fromBare != null) return fromBare
+      if (isValidPrice(fromPrefixed)) return Number(fromPrefixed)
     }
     return null
   }
