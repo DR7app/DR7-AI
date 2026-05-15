@@ -119,13 +119,9 @@ function EmptyState({ message }: { message: string }) {
   )
 }
 
-interface GbpKpis { views: number; calls: number; directions: number; websiteClicks: number; bookings: number }
-interface GbpPayload { configured: boolean; range: string; kpis: GbpKpis | null; warnings: string[]; needsReauth?: boolean; noLocationFound?: boolean }
-
 export default function ReportTrafficTab() {
   const [range, setRange] = useState<RangeKey>('28d')
   const [data, setData] = useState<ReportPayload | null>(null)
-  const [gbp, setGbp] = useState<GbpPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
 
@@ -155,16 +151,6 @@ export default function ReportTrafficTab() {
           } catch { /* ignore */ }
         }
       })
-    return () => { abort = true }
-  }, [range, oauthFlag])
-
-  // Google Business Profile — fetch parallelo, indipendente dallo stato GA4.
-  useEffect(() => {
-    let abort = false
-    fetch(`/.netlify/functions/gbp-report?range=${range}`)
-      .then(r => r.json())
-      .then((p: GbpPayload) => { if (!abort) setGbp(p) })
-      .catch(() => { /* swallow — il blocco mostra il warning dalla payload */ })
     return () => { abort = true }
   }, [range, oauthFlag])
 
@@ -370,39 +356,6 @@ export default function ReportTrafficTab() {
             <KpiTile label="Prenotazioni" value={data?.kpis?.bookings ?? 0} sub={data?.conversionsSource === 'crm' ? 'da CRM' : undefined} valueClass="text-violet-400" />
             <KpiTile label="Fatturato" value={data?.kpis?.revenue ?? 0} sub={data?.conversionsSource === 'crm' ? 'da CRM' : 'da GA4'} valueClass="text-dr7-gold" format="eur" />
           </>
-        )}
-      </div>
-
-      {/* Profilo Google Business — metriche dalla scheda Google
-          (impressioni, chiamate, indicazioni, click sito).
-          Dati separati da GA4: rispondono a "come la gente trova
-          DR7 su Google Maps/Search" — non "cosa fa sul sito web". */}
-      <div className="bg-theme-bg-secondary/70 border border-theme-border rounded-xl p-3">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-theme-text-primary flex items-center gap-2">
-            <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-blue-400"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
-            Profilo Google Business — DR7 Cagliari
-          </h3>
-          <span className="text-[10px] text-theme-text-muted">{RANGES.find(r => r.key === range)?.label}</span>
-        </div>
-        {gbp?.needsReauth ? (
-          <div className="bg-amber-500/15 border border-amber-500/40 rounded-lg p-3 text-xs text-amber-900 dark:text-amber-100">
-            Per vedere i dati del profilo Google Business serve una nuova autorizzazione (scope <code>business.manage</code>).{' '}
-            <a href="/.netlify/functions/ga-oauth-start" className="underline font-semibold">Riconnetti il tuo account Google</a> e
-            quando Google ti chiede i permessi spunta anche "Gestisci la tua scheda di Google Business".
-          </div>
-        ) : gbp?.noLocationFound ? (
-          <div className="text-xs text-theme-text-muted py-2">Nessuna scheda Google Business associata a questo account.</div>
-        ) : gbp && gbp.warnings.length > 0 && !gbp.kpis ? (
-          <div className="text-xs text-amber-500 py-2">{gbp.warnings.join(' · ')}</div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            <KpiTile label="Visualizzazioni" value={gbp?.kpis?.views ?? 0} valueClass="text-cyan-400" />
-            <KpiTile label="Chiamate" value={gbp?.kpis?.calls ?? 0} valueClass="text-emerald-400" />
-            <KpiTile label="Indicazioni" value={gbp?.kpis?.directions ?? 0} valueClass="text-fuchsia-400" />
-            <KpiTile label="Click sito web" value={gbp?.kpis?.websiteClicks ?? 0} valueClass="text-orange-400" />
-            <KpiTile label="Prenotazioni" value={gbp?.kpis?.bookings ?? 0} valueClass="text-violet-400" />
-          </div>
         )}
       </div>
 

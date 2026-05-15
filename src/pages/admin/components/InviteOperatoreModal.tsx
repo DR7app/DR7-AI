@@ -48,6 +48,7 @@ const PERMISSION_SECTIONS: { name: string; tabs: { key: string; label: string }[
     { key: 'report-penali-danni', label: 'Penali & Danni' },
     { key: 'report-preventivi', label: 'Preventivi' },
     { key: 'report-traffic', label: 'Rendimento Sito' },
+    { key: 'report-gmb', label: 'Rendimento Google My Business' },
     { key: 'operatori', label: 'Operatori' },
     { key: 'rilevazione-orari', label: 'Rilevazione Orari (Ore)' },
     { key: 'dashboard-kpi', label: 'Dashboard' },
