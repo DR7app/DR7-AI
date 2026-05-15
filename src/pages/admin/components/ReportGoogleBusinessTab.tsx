@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 // Tab dedicata al Profilo Google Business (mybusinessbusinessinformation +
 // businessprofileperformance). Estratta da ReportTrafficTab a maggio 2026

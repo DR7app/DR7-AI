@@ -811,26 +811,60 @@ const INITIAL_DEPOSITS: DepositsConfig = {
 // new shape's outer values are themselves objects whose values have those keys.
 // Map a free-form deposit option label to its canonical id. Returns null when
 // the label doesn't match any known type (custom options keep their uid).
+// BUG FIX 2026-05-15: matching ora resistente a spazi multipli, accenti, e
+// sinonimi naturali ("Cauzione con auto"/"deposito veicolo"/"Carta" da sola).
+// Prima molti label naturali tipo "Cauzione con auto" finivano con uid random
+// e il sito non li riconosceva come l'opzione standard vehicle_deposit.
 function canonicalDepositId(label?: string): string | null {
-  const l = String(label || '').toLowerCase().trim()
+  const l = String(label || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // strip accents
+    .replace(/\s+/g, ' ')             // collapse multi-spaces
+    .trim()
   if (!l) return null
-  if (l === 'nessuna cauzione' || l === 'no cauzione' || l === 'senza cauzione' || l === 'no deposit') return 'no_deposit'
-  if (l === 'cauzione con veicolo' || l === 'cauzione veicolo' || l === 'vehicle deposit') return 'vehicle_deposit'
-  if (l === 'carta di credito' || l === 'carta di debito o credito' || l === 'carta di debito' || l === 'credit card') return 'credit_card'
-  if (l === 'contanti o prepagata' || l === 'contanti' || l === 'prepagata' || l === 'cash' || l === 'cash prepaid') return 'cash_prepaid'
+  if (l === 'nessuna cauzione' || l === 'no cauzione' || l === 'senza cauzione' || l === 'no deposit' || l === 'no_deposit') return 'no_deposit'
+  if (
+    l === 'cauzione con veicolo' || l === 'cauzione veicolo' || l === 'vehicle deposit'
+    || l === 'cauzione con auto' || l === 'cauzione auto' || l === 'cauzione con macchina' || l === 'cauzione macchina'
+    || l === 'deposito veicolo' || l === 'deposito con veicolo' || l === 'deposito auto'
+  ) return 'vehicle_deposit'
+  if (
+    l === 'carta di credito' || l === 'carta di debito o credito' || l === 'carta di debito' || l === 'credit card'
+    || l === 'carta' || l === 'bancomat' || l === 'pos' || l === 'carta debito' || l === 'carta credito'
+  ) return 'credit_card'
+  if (
+    l === 'contanti o prepagata' || l === 'contanti' || l === 'prepagata' || l === 'cash' || l === 'cash prepaid'
+    || l === 'contanti e prepagata' || l === 'prepagata o contanti' || l === 'denaro contante'
+  ) return 'cash_prepaid'
   return null
 }
 
 // Walk every deposit option and re-canonicalize its id from its label, so
 // admin-added entries (which start with a random uid()) become recognizable
 // to the website and Preventivi code as soon as they're saved.
+// BUG FIX 2026-05-15: anche
+//  (a) coerce amount/surcharge_per_day '' → 0, cosi' il sito non legge stringhe vuote
+//  (b) droppa righe completamente vuote (label vuota + amount vuoto + surcharge vuoto)
+//      che erano orphan create da quando l'admin lasciava la riga vuota e salvava.
 function canonicalizeDepositIds(byFascia: DepositsByFascia): DepositsByFascia {
   const out: DepositsByFascia = {}
   for (const [fid, fcfg] of Object.entries(byFascia || {})) {
-    const fix = (arr?: DepositOption[]) => (arr || []).map(o => {
-      const c = canonicalDepositId(o.label)
-      return c ? { ...o, id: c } : o
-    })
+    const fix = (arr?: DepositOption[]) => (arr || [])
+      .filter(o => {
+        const label = String(o.label || '').trim()
+        const amt = o.amount === '' || o.amount == null ? 0 : Number(o.amount)
+        const sur = o.surcharge_per_day === '' || o.surcharge_per_day == null ? 0 : Number(o.surcharge_per_day)
+        // Droppa solo le righe TOTALMENTE vuote: nessun label, nessun importo, nessuna maggiorazione.
+        return !(label === '' && amt === 0 && sur === 0)
+      })
+      .map(o => {
+        const c = canonicalDepositId(o.label)
+        const amt = o.amount === '' || o.amount == null ? 0 : Number(o.amount)
+        const sur = o.surcharge_per_day === '' || o.surcharge_per_day == null ? 0 : Number(o.surcharge_per_day)
+        const sanitized: DepositOption = { ...o, amount: amt, surcharge_per_day: sur }
+        return c ? { ...sanitized, id: c } : sanitized
+      })
     out[fid] = { residente: fix(fcfg?.residente), non_residente: fix(fcfg?.non_residente) }
   }
   return out
@@ -1513,11 +1547,20 @@ export default function CentralinaProTab() {
     submitLockRef.current = true
     try {
     const changesSnapshot = changes.slice()
+    // BUG FIX 2026-05-15: canonicalizza i deposits al save, cosi' "Cauzione
+    // con auto" → vehicle_deposit, amount '' → 0, righe completamente vuote
+    // vengono droppate. Senza questo passaggio, ID random uid restavano nel
+    // DB e il sito non riconosceva le opzioni come canoniche.
+    const cleanedDeposits: DepositsConfig = {}
+    for (const [catId, byFascia] of Object.entries(deposits)) {
+      cleanedDeposits[catId] = canonicalizeDepositIds(byFascia)
+    }
     setSavedCategories(categories)
     setSavedFasce(fasce)
     setSavedInsurance(insurance)
     setSavedKm(km)
-    setSavedDeposits(deposits)
+    setDeposits(cleanedDeposits)
+    setSavedDeposits(cleanedDeposits)
     setSavedServizi(servizi)
     setSavedPrezzoDinamico(prezzoDinamico)
     setSavedPreventivi(preventivi)
@@ -1529,7 +1572,7 @@ export default function CentralinaProTab() {
     setSavedMarketing(marketing)
     setSavedLavaggioHours(lavaggioHours)
     setSavedNoleggioHours(noleggioHours)
-    savePersisted({ categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours })
+    savePersisted({ categories, fasce, insurance, km, deposits: cleanedDeposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours })
     // Bust the payment-method cache so every dropdown across admin picks up
     // the new list on next mount, without page reload.
     invalidatePaymentMethodsCache()
