@@ -2755,6 +2755,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                     </td>
                     <td className="py-2 px-3">
                       <div className="flex gap-1 flex-wrap">
+                        {/* Preventivi site-created: Modifica e Invia disponibili come per
+                            quelli creati da admin (direzione vuole poter correggere il
+                            preventivo del sito prima di inviarlo al cliente). Accetta /
+                            Rifiuta restano in primo piano. */}
                         {p.source?.startsWith('website') && (p.status === 'bozza' || p.status === 'inviato') ? (
                           <>
                             <button
@@ -2778,6 +2782,31 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                                 Rifiuta
                               </button>
                             )}
+                            <button
+                              onClick={() => handleEdit(p)}
+                              className="px-2 py-1 text-xs bg-blue-700 hover:bg-blue-600 text-white rounded"
+                            >
+                              Modifica
+                            </button>
+                            <button
+                              onClick={async () => {
+                                setSelectedPreventivo(p);
+                                setWhatsappPhone(p.customer_phone || '');
+                                setPreviewMessage('');
+                                setIncludeCoefficienti(false);
+                                const preview = await formatWhatsAppMessage(p, { includeCoefficienti: false })
+                                if (!preview) {
+                                  const which = (p.sconto || 0) > 0 ? '"Preventivo WhatsApp"' : '"Preventivo senza sconto"'
+                                  toast.error(`Template ${which} vuoto o disattivato in Messaggi di Sistema Pro. Compilalo prima di inviare.`)
+                                  return
+                                }
+                                setPreviewMessage(preview)
+                                setShowPhoneModal(true);
+                              }}
+                              className="px-2 py-1 text-xs bg-green-700 hover:bg-green-600 text-white rounded"
+                            >
+                              Invia
+                            </button>
                           </>
                         ) : (
                           <>
