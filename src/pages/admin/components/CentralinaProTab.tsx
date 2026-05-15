@@ -3929,14 +3929,18 @@ function PrezzoDinamicoSection({
             <div className="max-h-[600px] overflow-y-auto -mx-1 px-1 space-y-6">
               {/* Raggruppa i veicoli per categoria leggendo la lista da
                   Centralina Pro > Categorie & Fasce (source of truth).
-                  Nessuna categoria hardcoded, nessun alias: il match e' puro
-                  vehicle.category in DB == categoria.id (case-insensitive).
-                  Aggiungi/rinomina una categoria in Categorie & Fasce e qui
-                  appare subito. */}
+                  Nessuna categoria hardcoded: aggiungi/rinomina una categoria
+                  in Categorie & Fasce e qui appare subito.
+                  Match: vehicle.category in DB == categoria.id (case-insensitive).
+                  Manteniamo l'alias storico supercars<->exotic per i veicoli
+                  con la categoria DB legacy. */}
               {categories.map((cat) => {
                 const catId = cat.id.toLowerCase()
+                const aliases = catId === 'supercars' ? ['supercars', 'exotic']
+                  : catId === 'exotic' ? ['exotic', 'supercars']
+                  : [catId]
                 const vs = vehicles.filter((v) =>
-                  (v.category ?? '').toLowerCase() === catId
+                  aliases.includes((v.category ?? '').toLowerCase())
                 )
                 if (vs.length === 0) return null
                 return (
