@@ -76,8 +76,9 @@ export default function CustomerWalletTab() {
   // Recurring
   const [recurringEnabled, setRecurringEnabled] = useState(false)
   const [recurringDay, setRecurringDay] = useState(1)
+  const [recurringHour, setRecurringHour] = useState(9)
   const [recurringAmount, setRecurringAmount] = useState('')
-  const [recurringSettings, setRecurringSettings] = useState<Map<string, { day: number; amount: number; active: boolean }>>(new Map())
+  const [recurringSettings, setRecurringSettings] = useState<Map<string, { day: number; hour?: number; amount: number; active: boolean }>>(new Map())
 
   // OTP
   const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', ''])
@@ -199,7 +200,7 @@ export default function CustomerWalletTab() {
         .select('id, metadata')
         .not('metadata->wallet_recurring', 'is', 'null')
       if (custExtended) {
-        const rMap = new Map<string, { day: number; amount: number; active: boolean }>()
+        const rMap = new Map<string, { day: number; hour?: number; amount: number; active: boolean }>()
         for (const c of custExtended) {
           const r = c.metadata?.wallet_recurring
           if (r && r.active) rMap.set(c.id, r)
@@ -213,7 +214,7 @@ export default function CustomerWalletTab() {
     }
   }
 
-  async function saveRecurring(customerId: string, settings: { day: number; amount: number; active: boolean } | null) {
+  async function saveRecurring(customerId: string, settings: { day: number; hour?: number; amount: number; active: boolean } | null) {
     try {
       const { data: cust } = await supabase.from('customers_extended').select('metadata').eq('id', customerId).single()
       const meta = cust?.metadata || {}
@@ -287,6 +288,7 @@ export default function CustomerWalletTab() {
     const existing = recurringSettings.get(customer.id)
     setRecurringEnabled(!!existing?.active)
     setRecurringDay(existing?.day || 1)
+    setRecurringHour(Number.isFinite(existing?.hour) ? Number(existing?.hour) : 9)
     setRecurringAmount(existing ? String(existing.amount) : '')
     setDetailLoading(true)
     setWallet(null)
@@ -413,8 +415,8 @@ export default function CustomerWalletTab() {
       }
       setActionLoading(true)
       try {
-        await saveRecurring(modalCustomer.id, { day: recurringDay, amount: recurringAmountNum, active: true })
-        toast.success(`Ricarica automatica salvata: €${recurringAmountNum.toFixed(2)} il ${recurringDay} di ogni mese alle 09:00`)
+        await saveRecurring(modalCustomer.id, { day: recurringDay, hour: recurringHour, amount: recurringAmountNum, active: true })
+        toast.success(`Ricarica automatica salvata: €${recurringAmountNum.toFixed(2)} il ${recurringDay} di ogni mese alle ${String(recurringHour).padStart(2, '0')}:00`)
         closeModal()
         loadAllWalletCustomers()
       } catch (err: unknown) {
@@ -448,7 +450,7 @@ export default function CustomerWalletTab() {
         toast.success(`${modalAction === 'credit' ? 'Credito' : 'Addebito'} di €${parsedAmount.toFixed(2)} applicato`)
         // Save recurring settings if changed
         if (modalAction === 'credit' && recurringEnabled && recurringAmount) {
-          await saveRecurring(modalCustomer.id, { day: recurringDay, amount: parseFloat(recurringAmount), active: true })
+          await saveRecurring(modalCustomer.id, { day: recurringDay, hour: recurringHour, amount: parseFloat(recurringAmount), active: true })
         } else if (modalAction === 'credit' && !recurringEnabled && recurringSettings.has(modalCustomer.id)) {
           await saveRecurring(modalCustomer.id, null)
         }
@@ -486,14 +488,15 @@ export default function CustomerWalletTab() {
 
   // Ricariche automatiche attive — recurringSettings e' Map<customerId,
   // { day, amount, active }> con amount in EURO, day del mese 1-31.
-  const recurringEntries: Array<{ id: string; name: string; amountEur: number; day: number }> = []
+  const recurringEntries: Array<{ id: string; name: string; amountEur: number; day: number; hour: number }> = []
   for (const c of allWalletCustomers) {
     const r = recurringSettings.get(c.id)
     if (!r || !r.active) continue
     const amountEur = Number(r.amount || 0)
     const day = Number(r.day || 0)
+    const hour = Number.isFinite(r.hour) ? Number(r.hour) : 9
     if (amountEur > 0) {
-      recurringEntries.push({ id: c.id, name: c.full_name || c.email || c.phone || 'N/A', amountEur, day })
+      recurringEntries.push({ id: c.id, name: c.full_name || c.email || c.phone || 'N/A', amountEur, day, hour })
     }
   }
   const recurringActiveCount = recurringEntries.length
@@ -782,7 +785,7 @@ export default function CustomerWalletTab() {
                           </div>
                           <div>
                             <p className="text-sm font-bold text-green-700 dark:text-green-400">Ricarica automatica attiva</p>
-                            <p className="text-sm text-gray-600 dark:text-theme-text-muted">&euro; {r.amount} ogni {r.day} del mese alle 09:00 (Europe/Rome)</p>
+                            <p className="text-sm text-gray-600 dark:text-theme-text-muted">&euro; {r.amount} ogni {r.day} del mese alle {String(Number.isFinite(r.hour) ? Number(r.hour) : 9).padStart(2, '0')}:00 (Europe/Rome)</p>
                           </div>
                         </div>
                         <span className="px-3 py-1 text-xs font-bold text-green-600 dark:text-green-400 border border-green-300 dark:border-green-700 rounded-full">ATTIVA</span>
@@ -894,7 +897,7 @@ export default function CustomerWalletTab() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-xs text-theme-text-primary font-semibold truncate">{r.name}</div>
-                      <div className="text-[10px] text-theme-text-muted">il {r.day} di ogni mese alle 09:00</div>
+                      <div className="text-[10px] text-theme-text-muted">il {r.day} di ogni mese alle {String(Number.isFinite(r.hour) ? Number(r.hour) : 9).padStart(2, '0')}:00</div>
                     </div>
                     <div className="text-xs font-bold text-amber-400 tabular-nums whitespace-nowrap">€{r.amountEur.toLocaleString('it-IT')}</div>
                   </div>
@@ -1041,13 +1044,22 @@ export default function CustomerWalletTab() {
                     </button>
                   </div>
                   {recurringEnabled && (
-                    <div className="grid grid-cols-2 gap-3 mt-3">
+                    <div className="grid grid-cols-3 gap-3 mt-3">
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">Giorno del mese</label>
                         <select value={recurringDay} onChange={e => setRecurringDay(parseInt(e.target.value))}
                           className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-gray-900 outline-none focus:border-[#3a6a6a]">
                           {Array.from({ length: 28 }, (_, i) => (
                             <option key={i + 1} value={i + 1}>{i + 1}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Ora (Europe/Rome)</label>
+                        <select value={recurringHour} onChange={e => setRecurringHour(parseInt(e.target.value))}
+                          className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-gray-900 outline-none focus:border-[#3a6a6a]">
+                          {Array.from({ length: 24 }, (_, i) => (
+                            <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
                           ))}
                         </select>
                       </div>
