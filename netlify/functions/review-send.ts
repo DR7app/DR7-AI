@@ -3,7 +3,7 @@ import type { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { getMessageTemplate } from './utils/messageTemplates';
-import { getGoogleReviewLink } from './utils/loadMarketing';
+import { getMarketingConfig } from './utils/loadMarketing';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -139,8 +139,13 @@ const handler: Handler = async (event) => {
       };
     }
 
-    // 4. Generate review link
-    const reviewLink = await getGoogleReviewLink(supabase);
+    // 4. Generate review link + load full marketing config so social-link
+    //    placeholders ({website}, {instagram}, {facebook}, custom links)
+    //    si auto-popolano nella stessa call. In passato passavamo solo
+    //    {review_link} e qualunque template che usasse {instagram} o un
+    //    link personalizzato finiva in WhatsApp con il placeholder letterale.
+    const marketing = await getMarketingConfig(supabase);
+    const reviewLink = marketing.google_review_link;
 
     // 5. Load templates based on service_type + channel
     const serviceTypeLabel = candidate.service_type === 'WASH' ? 'lavaggio' : 'noleggio';
@@ -151,12 +156,39 @@ const handler: Handler = async (event) => {
       customer_name: candidate.customer_name || 'Cliente',
       first_name: firstName,
       review_link: reviewLink,
+      website: marketing.website_url || '',
+      sito: marketing.website_url || '',
+      instagram: marketing.instagram_url || '',
+      facebook: marketing.facebook_url || '',
       service_type: serviceTypeLabel,
       Service_type: serviceTypeLabelCap,
       servizio: serviceTypeLabel,
       Servizio: serviceTypeLabelCap,
       vehicle_name: candidate.vehicle_name || candidate.source_details?.vehicle_name || '',
     };
+
+    // Link personalizzati creati in Centralina > Marketing (Social Links).
+    // Slug = lowercase del titolo con underscore (stesso del send-whatsapp-notification).
+    // Letti direttamente da centralina_pro_config perche' getMarketingConfig
+    // espone solo i 4 link standard; i custom non sono tipizzati.
+    try {
+      const { data: cfgRow } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle();
+      const mk = ((cfgRow?.config || {}) as { marketing?: { custom_links?: Array<{ title?: string; url?: string }> } }).marketing || {};
+      if (Array.isArray(mk.custom_links)) {
+        for (const l of mk.custom_links) {
+          if (typeof l?.title !== 'string' || typeof l?.url !== 'string') continue;
+          const slug = l.title.toLowerCase().trim()
+            .replace(/[^a-z0-9\s\-_]/g, '')
+            .replace(/[\s\-]+/g, '_')
+            .replace(/_+/g, '_')
+            .replace(/^_|_$/g, '')
+            .substring(0, 30);
+          if (slug) templateVars[slug] = l.url;
+        }
+      }
+    } catch {
+      // non-blocking: custom links resta vuoto se la lettura fallisce
+    }
 
     let emailSubject = '';
     let emailBody = '';
