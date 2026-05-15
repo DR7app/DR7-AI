@@ -705,6 +705,8 @@ type DepositOption = {
   label: string
   amount: number | ''
   surcharge_per_day: number | ''
+  // 2026-05-15: ON/OFF toggle. Default true per backwards compat.
+  is_active?: boolean
 }
 
 type DepositFasciaConfig = {
@@ -3140,7 +3142,7 @@ function CauzioniSection({
       ...catCfg,
       [fid]: {
         ...cur,
-        [scope]: [...cur[scope], { id: uid(), label: 'Nuova opzione', amount: 0, surcharge_per_day: 0 }],
+        [scope]: [...cur[scope], { id: uid(), label: 'Nuova opzione', amount: 0, surcharge_per_day: 0, is_active: true }],
       },
     })
   }
@@ -3211,6 +3213,15 @@ function CauzioniSection({
                           placeholder="Nome opzione"
                           className="flex-1 bg-transparent outline-none text-[14px] font-medium text-theme-text-primary placeholder:text-theme-text-muted focus:bg-theme-bg-primary rounded-lg px-2 py-1 -mx-2 transition-colors"
                         />
+                        {/* ON/OFF: se OFF l'opzione scompare dai nuovi booking. */}
+                        <button
+                          type="button"
+                          onClick={() => patchOption(f.id, scope, opt.id, { is_active: !(opt.is_active !== false) })}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${(opt.is_active !== false) ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                          title={(opt.is_active !== false) ? 'ON' : 'OFF — nascosta'}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${(opt.is_active !== false) ? 'translate-x-4' : 'translate-x-1'}`}/>
+                        </button>
                         <button
                           onClick={() => removeOption(f.id, scope, opt.id)}
                           className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center w-7 h-7 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"

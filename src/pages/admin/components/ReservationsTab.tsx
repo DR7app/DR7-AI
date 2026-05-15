@@ -978,9 +978,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     const fasciaKey = customerTier?.tier === 'TIER_1' ? 'B' : 'A'
     const residencyKey = isResidenteSardegna ? 'residente' : 'non_residente'
 
+    // 2026-05-15: filtra opzioni con is_active === false (toggle ON/OFF
+    // Centralina Pro). Default true per backwards compat.
+    const filterActive = (opts: ProDepositOption[]): ProDepositOption[] =>
+      opts.filter(o => (o as { is_active?: boolean }).is_active !== false)
+
     if (isOld) {
       const fasciaCfg = (proDeposits[fasciaKey] as { residente?: unknown; non_residente?: unknown } | undefined)
-      return ((fasciaCfg?.[residencyKey] as ProDepositOption[]) || [])
+      return filterActive((fasciaCfg?.[residencyKey] as ProDepositOption[]) || [])
     }
 
     // BUG FIX 2026-05-15: usa la categoria REALE del veicolo (qualunque id
@@ -998,7 +1003,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (candidate) { catCfg = candidate; break }
     }
     const fasciaCfg = catCfg?.[fasciaKey]
-    const ownOpts = ((fasciaCfg?.[residencyKey] as ProDepositOption[]) || []).slice()
+    const ownOpts = filterActive(((fasciaCfg?.[residencyKey] as ProDepositOption[]) || []).slice())
 
     // BUG FIX 2026-05-15: niente piu' auto-borrow di "Nessuna cauzione" da
     // altre categorie. Prima, se questa categoria non aveva no_cauzione, il

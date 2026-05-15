@@ -26,7 +26,7 @@ interface ProKmConfig {
   unlimitedMode?: 'all_tiers' | 'per_fascia';
   unlimitedByFascia?: Record<string, number | ''>;
 }
-interface ProDepositOption { id: string; label: string; amount: number | ''; surcharge_per_day: number | '' }
+interface ProDepositOption { id: string; label: string; amount: number | ''; surcharge_per_day: number | ''; is_active?: boolean }
 interface ProDepositFasciaConfig { residente: ProDepositOption[]; non_residente: ProDepositOption[] }
 interface ProExperienceService { id: string; name: string; price: number | ''; unit: 'per_day' | 'per_hour' | 'per_item' | 'flat' | 'per_km'; is_active: boolean; tier_only: string }
 interface ProPickupLocation { id: string; label: string; km: number | ''; is_active: boolean }
@@ -217,8 +217,10 @@ export function convertProToRentalConfig(pro: ProSnapshot): RentalConfig {
       const tier = PRO_TO_TIER[fasciaId]
       if (!tier) continue
 
+      // 2026-05-15: filtra opzioni con is_active === false (toggle ON/OFF
+      // in Centralina Pro). Default true per backwards compat.
       const mapOptions = (opts: ProDepositOption[]): DepositOption[] =>
-        opts.map(o => ({ id: o.id, label: o.label, amount: num(o.amount), surcharge_per_day: num(o.surcharge_per_day) }))
+        opts.filter(o => o.is_active !== false).map(o => ({ id: o.id, label: o.label, amount: num(o.amount), surcharge_per_day: num(o.surcharge_per_day) }))
 
       const resKey = `${tier}_RESIDENT` as keyof typeof deps
       const nonResKey = `${tier}_NON_RESIDENT` as keyof typeof deps
