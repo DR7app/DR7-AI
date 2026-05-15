@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js'
 // Returns ONLY real numbers. If env vars are missing, returns a structured
 // `configured: false` response so the UI can list what to set up.
 
-interface SeriesPoint { day: string; organico: number; ads: number; maps: number }
+interface SeriesPoint { day: string; total: number; organico: number; ads: number; maps: number }
 interface ChannelSlice { name: string; value: number }
 interface FunnelStage { stage: string; value: number }
 interface TopPage { page: string; sessions: number; pageviews: number }
@@ -494,6 +494,9 @@ const handler: Handler = async (event) => {
 
     // Daily series — pivot by channel into Organic/Paid/Social etc.
     // We bucket: "Organic Search" → organico, "Paid Search"/"Display"/"Paid Social" → ads, "Organic Map" → maps
+    // `total` somma TUTTE le sessioni del giorno (incluse Direct, Referral, Email...)
+    // cosi' la linea "Totale" e' sempre presente sul grafico anche se i visitatori
+    // digitano direttamente dr7empire.com.
     const dayMap = new Map<string, SeriesPoint>()
     for (const row of byDay.data.rows || []) {
       const day = isoDateFromGa(row.dimensionValues?.[0]?.value || '')
@@ -504,12 +507,12 @@ const handler: Handler = async (event) => {
       if (c.includes('organic search')) key = 'organico'
       else if (c.includes('paid') || c.includes('display') || c.includes('cpc')) key = 'ads'
       else if (c.includes('map')) key = 'maps'
-      if (!key) continue
-      const existing = dayMap.get(day) || { day, organico: 0, ads: 0, maps: 0 }
-      existing[key] += sess
+      const existing = dayMap.get(day) || { day, total: 0, organico: 0, ads: 0, maps: 0 }
+      existing.total += sess
+      if (key) existing[key] += sess
       dayMap.set(day, existing)
     }
-    const traffic: SeriesPoint[] = Array.from(dayMap.values())
+    const traffic: SeriesPoint[] = Array.from(dayMap.values()).sort((a, b) => a.day.localeCompare(b.day))
 
     // Top pages
     const topPages: TopPage[] = (byPage.data.rows || []).map(r => ({

@@ -23,7 +23,7 @@ interface KpiBlock {
   delta_pageviews: number
   delta_users: number
 }
-interface SeriesPoint { day: string; organico: number; ads: number; maps: number }
+interface SeriesPoint { day: string; total: number; organico: number; ads: number; maps: number }
 interface ChannelSlice { name: string; value: number }
 interface FunnelStage { stage: string; value: number }
 interface TopPage { page: string; sessions: number; pageviews: number }
@@ -417,9 +417,10 @@ export default function ReportTrafficTab() {
                   <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} />
                   <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line type="monotone" dataKey="organico" name="Organico" stroke="#10b981" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="ads"      name="Paid"     stroke="#a855f7" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="maps"     name="Maps"     stroke="#f59e0b" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="total"    name="Totale visite" stroke="#06b6d4" strokeWidth={3} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="organico" name="Organico" stroke="#10b981" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />
+                  <Line type="monotone" dataKey="ads"      name="Paid"     stroke="#a855f7" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />
+                  <Line type="monotone" dataKey="maps"     name="Maps"     stroke="#f59e0b" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
