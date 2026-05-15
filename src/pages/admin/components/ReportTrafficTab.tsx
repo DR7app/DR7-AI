@@ -51,6 +51,7 @@ interface ReportPayload {
     propertyId: string
   } | null
   dataSource?: 'ga4' | 'internal'
+  conversionsSource?: 'ga4' | 'crm'
 }
 
 const RANGES = [
@@ -365,9 +366,9 @@ export default function ReportTrafficTab() {
             <KpiTile label="Visite" value={data?.kpis?.visits ?? 0} delta={data?.kpis?.delta_visits} valueClass="text-cyan-400" />
             <KpiTile label="Pagine viste" value={data?.kpis?.pageviews ?? 0} delta={data?.kpis?.delta_pageviews} valueClass="text-fuchsia-400" />
             <KpiTile label="Utenti" value={data?.kpis?.users ?? 0} delta={data?.kpis?.delta_users} valueClass="text-emerald-400" />
-            <KpiTile label="Click telefono" value={data?.kpis?.calls ?? 0} valueClass="text-orange-400" />
-            <KpiTile label="Prenotazioni" value={data?.kpis?.bookings ?? 0} valueClass="text-violet-400" />
-            <KpiTile label="Fatturato GA" value={data?.kpis?.revenue ?? 0} valueClass="text-dr7-gold" format="eur" />
+            <KpiTile label="Click telefono" value={data?.kpis?.calls ?? 0} sub={data?.conversionsSource === 'crm' ? 'da CRM' : undefined} valueClass="text-orange-400" />
+            <KpiTile label="Prenotazioni" value={data?.kpis?.bookings ?? 0} sub={data?.conversionsSource === 'crm' ? 'da CRM' : undefined} valueClass="text-violet-400" />
+            <KpiTile label="Fatturato" value={data?.kpis?.revenue ?? 0} sub={data?.conversionsSource === 'crm' ? 'da CRM' : 'da GA4'} valueClass="text-dr7-gold" format="eur" />
           </>
         )}
       </div>

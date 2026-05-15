@@ -53,6 +53,12 @@ interface ReportPayload {
   // fallback su Supabase (bookings/customers/fatture) quando GA4 non e'
   // raggiungibile. La UI mostra un badge per non confondere le due cose.
   dataSource?: 'ga4' | 'internal'
+  // Sorgente delle KPI conversione (Prenotazioni, Click telefono, Fatturato).
+  // 'ga4' = arriva dagli eventi gtag (booking_completed/purchase/phone_call).
+  // 'crm' = fallback dal DB Supabase quando il sito non invia ancora eventi.
+  // La UI usa questo per etichettare correttamente i tile (no "Fatturato GA"
+  // quando il numero arriva dal CRM).
+  conversionsSource?: 'ga4' | 'crm'
 }
 
 // Fallback: quando GA4 non risponde (errore permessi, env mancanti, ecc.)
@@ -574,6 +580,7 @@ const handler: Handler = async (event) => {
       fetchedAt: new Date().toISOString(),
       warnings,
       dataSource: 'ga4',
+      conversionsSource: bookingsFromCrm ? 'crm' : 'ga4',
     }
 
     return { statusCode: 200, headers, body: JSON.stringify(payload) }
