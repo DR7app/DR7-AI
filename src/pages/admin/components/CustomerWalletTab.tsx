@@ -380,7 +380,36 @@ export default function CustomerWalletTab() {
   }
 
   async function handleConfirm() {
-    if (!modalCustomer || !amount) return
+    if (!modalCustomer) return
+
+    // Recurring-only save: admin enabled "Caricamento automatico mensile"
+    // and didn't enter an immediate charge amount → just persist the
+    // schedule, no OTP and no current credit. Solves the UX bug where you
+    // had to enter an importo + verify OTP just to save a future schedule.
+    const recurringAmountNum = parseFloat(recurringAmount || '')
+    const wantsRecurringOnly =
+      !amount
+      && modalAction === 'credit'
+      && recurringEnabled
+      && Number.isFinite(recurringAmountNum)
+      && recurringAmountNum > 0
+    if (wantsRecurringOnly) {
+      setActionLoading(true)
+      try {
+        await saveRecurring(modalCustomer.id, { day: recurringDay, amount: recurringAmountNum, active: true })
+        toast.success(`Ricarica automatica salvata: €${recurringAmountNum.toFixed(2)} il ${recurringDay} di ogni mese alle 09:00`)
+        closeModal()
+        loadAllWalletCustomers()
+      } catch (err: unknown) {
+        const _errMsg = err instanceof Error ? err.message : String(err)
+        toast.error('Errore salvataggio programmazione: ' + (_errMsg || ''))
+      } finally {
+        setActionLoading(false)
+      }
+      return
+    }
+
+    if (!amount) return
     const parsedAmount = parseFloat(amount)
     if (!parsedAmount || parsedAmount <= 0) return
 
@@ -1120,18 +1149,27 @@ export default function CustomerWalletTab() {
 
                 <button
                   onClick={handleConfirm}
-                  disabled={actionLoading || !amount || (otpSent && !otpVerified)}
+                  disabled={(() => {
+                    if (actionLoading) return true
+                    // Recurring-only save bypasses OTP and amount requirements
+                    const recurOnly = !amount && modalAction === 'credit' && recurringEnabled
+                      && parseFloat(recurringAmount || '') > 0
+                    if (recurOnly) return false
+                    return !amount || (otpSent && !otpVerified)
+                  })()}
                   className="flex-1 px-5 py-2.5 text-sm font-bold text-white rounded-xl disabled:opacity-40 transition-colors"
                   style={{ backgroundColor: modalAction === 'credit' ? TEAL : '#ef4444' }}
                   onMouseEnter={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.opacity = '0.9' }}
                   onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
                 >
-                  {actionLoading
-                    ? 'Elaborazione...'
-                    : otpVerified
-                      ? `Conferma ${modalAction === 'credit' ? 'Caricamento' : 'Addebito'}`
-                      : `${modalAction === 'credit' ? 'Carica' : 'Addebita'} Wallet`
-                  }
+                  {(() => {
+                    if (actionLoading) return 'Elaborazione...'
+                    const recurOnly = !amount && modalAction === 'credit' && recurringEnabled
+                      && parseFloat(recurringAmount || '') > 0
+                    if (recurOnly) return 'Salva Programmazione'
+                    if (otpVerified) return `Conferma ${modalAction === 'credit' ? 'Caricamento' : 'Addebito'}`
+                    return `${modalAction === 'credit' ? 'Carica' : 'Addebita'} Wallet`
+                  })()}
                 </button>
               </div>
             </div>
