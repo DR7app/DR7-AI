@@ -93,6 +93,28 @@ export default function FleetVehiclePanoramica({ vehicle, alerts }: FleetVehicle
     const [bookings, setBookings] = useState<BookingRow[]>([])
     const [loading, setLoading] = useState(true)
     const [reportStats, setReportStats] = useState<ReportStats | null>(null)
+    // Centralina Pro categories — used to resolve `vehicle.category` (an id like
+    // "exotic") to the admin-facing label (like "Supercars"). Fallback to the
+    // raw id if the lookup table isn't loaded yet.
+    const [proCategories, setProCategories] = useState<{ id: string; label: string }[]>([])
+    useEffect(() => {
+        let cancelled = false
+        ;(async () => {
+            const { data } = await supabase
+                .from('centralina_pro_config')
+                .select('config')
+                .eq('id', 'main')
+                .maybeSingle()
+            if (cancelled) return
+            const cats = (data?.config as { categories?: { id: string; label: string }[] } | null)?.categories
+            if (Array.isArray(cats)) setProCategories(cats)
+        })()
+        return () => { cancelled = true }
+    }, [])
+    const categoryLabel = (id: string | null | undefined): string => {
+        if (!id) return ''
+        return proCategories.find(c => c.id === id)?.label || id
+    }
 
     // Pull authoritative KPI numbers from the same monthly-report endpoint that
     // feeds Report Noleggio + VehiclesTab. Single source of truth: fatturato,
@@ -416,7 +438,7 @@ export default function FleetVehiclePanoramica({ vehicle, alerts }: FleetVehicle
                                     <h2 className="text-2xl font-bold text-theme-text-primary truncate">{vehicle.display_name}</h2>
                                     {vehicle.category && (
                                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
-                                            {vehicle.category}
+                                            {categoryLabel(vehicle.category)}
                                         </span>
                                     )}
                                 </div>
@@ -437,7 +459,7 @@ export default function FleetVehiclePanoramica({ vehicle, alerts }: FleetVehicle
                                     <Field label="Anno" value={year ? String(year) : '—'} />
                                     <Field label="Cavalli" value={cv ? `${cv} CV` : '—'} />
                                     <Field label="Chilometraggio" value={vehicle.current_km ? `${vehicle.current_km.toLocaleString('it-IT')} km` : '—'} />
-                                    <Field label="Categoria" value={vehicle.category || '—'} />
+                                    <Field label="Categoria" value={categoryLabel(vehicle.category) || '—'} />
                                     <Field label="Alimentazione" value={(vehicle as { fuel_type?: string }).fuel_type || (vehicle.metadata as { fuel_type?: string } | null)?.fuel_type || '—'} />
                                     <Field label="Cambio" value={(vehicle as { transmission?: string }).transmission || (vehicle.metadata as { transmission?: string } | null)?.transmission || '—'} />
                                     {acceleration && <Field label="0-100 km/h" value={`${acceleration}s`} />}
