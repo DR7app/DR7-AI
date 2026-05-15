@@ -969,19 +969,16 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     const maxDaily = revenueData?.enabled && typeof revenueData.maxPrice === 'number' ? revenueData.maxPrice : null
     const maxTotal = maxDaily != null ? maxDaily * rentalDays : null
     const minTotal = minDaily != null ? minDaily * rentalDays : null
-    // FIX 2026-05-15 (v2): clamp MIN solo, e SOLO quando il subtotale
-    // (dopo coefficient) e' davvero sotto il minimo. Niente clamp MAX qui
-    // (engine la fa al livello daily rate) — la max al subtotale creava
-    // banner "Min raggiunto" inattesi quando il prezzo era 1439 (sopra min)
-    // perche' max scendeva il valore sotto min e min poi rialzava in
-    // sequenza, mostrando l'etichetta sbagliata.
-    let afterRevenueTotalNoExp = rawAfterRevenueNoExp
-    type ClampHit = 'min' | 'max' | null
-    let clampHit: ClampHit = null as ClampHit
-    if (minTotal != null && afterRevenueTotalNoExp < minTotal - 0.5) {
-      afterRevenueTotalNoExp = minTotal
-      clampHit = 'min'
-    }
+    // BUG FIX 2026-05-15: la clamp min/max al livello subtotale e' stata
+    // RIMOSSA. Era duplicata: il dynamic-pricing engine fa gia' la clamp
+    // sulla daily rate del veicolo (in calculate-dynamic-price.ts /
+    // revenuePricingEngine.ts). Avere una seconda clamp qui sul subtotale
+    // (rental + extras × days) creava banner "Min/Max Raggiunto" inattesi
+    // e abbassava preventivi che erano gia' al di sopra del minimo
+    // configurato. Adesso il subtotale e' il prodotto puro del coefficient,
+    // senza ulteriori clamp.
+    const afterRevenueTotalNoExp = rawAfterRevenueNoExp
+    const clampHit: 'min' | 'max' | null = null
 
     // Real (uncapped) subtotal for display purposes — this is the "Subtotale"
     // line the admin sees, reflecting what the engine would ask for without
