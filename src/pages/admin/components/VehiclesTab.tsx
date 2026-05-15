@@ -361,6 +361,12 @@ export default function VehiclesTab() {
         : {}
 
       const parsedRate = Number.parseFloat(formData.daily_rate)
+      // BUG FIX 2026-05-15: se lo stato NON e' 'unavailable' azzeriamo TUTTI
+      // i campi della finestra di indisponibilita'. Prima venivano persistiti
+      // anche con status='available' → vehicleAvailability.isVehicleBlocked()
+      // continuava a bloccare quelle date anche dopo che l'admin aveva
+      // rimesso il veicolo a "disponibile".
+      const isUnavailable = formData.status === 'unavailable'
       const dataToSave = {
         display_name: formData.display_name,
         plate: formData.plate || null,
@@ -369,11 +375,11 @@ export default function VehiclesTab() {
         category: formData.category,
         metadata: {
           ...existingMetadata,
-          unavailable_from: formData.unavailable_from || null,
-          unavailable_until: formData.unavailable_until || null,
-          unavailable_from_time: formData.unavailable_from_time || null,
-          unavailable_until_time: formData.unavailable_until_time || null,
-          unavailable_reason: formData.unavailable_reason || null,
+          unavailable_from: isUnavailable ? (formData.unavailable_from || null) : null,
+          unavailable_until: isUnavailable ? (formData.unavailable_until || null) : null,
+          unavailable_from_time: isUnavailable ? (formData.unavailable_from_time || null) : null,
+          unavailable_until_time: isUnavailable ? (formData.unavailable_until_time || null) : null,
+          unavailable_reason: isUnavailable ? (formData.unavailable_reason || null) : null,
           model_year: formData.model_year ? parseInt(formData.model_year) : null,
           cv: formData.cv ? parseInt(formData.cv) : null,
           acceleration_0_100: formData.acceleration_0_100 ? parseFloat(formData.acceleration_0_100) : null,
