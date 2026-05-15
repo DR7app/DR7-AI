@@ -185,12 +185,16 @@ export function convertProToRentalConfig(pro: ProSnapshot): RentalConfig {
         sforoCat[dbCat] = num(kmCfg.sforo)
       }
 
+      // 2026-05-15: toggle ON/OFF per categoria. Quando unlimitedKm_enabled
+      // === false l'opzione "Km illimitati" non viene esposta ai consumer
+      // (website + admin). Default true per backwards compat.
+      const unlimitedEnabled = (kmCfg as { unlimitedKm_enabled?: boolean }).unlimitedKm_enabled !== false
       // Unlimited KM price: per-fascia (A=TIER_2, B=TIER_1) oppure tutte le fasce.
       // Fix: prima leggeva solo unlimitedPerDay, ignorando unlimitedByFascia — il
       // risultato era che la modalità "Per fascia" in Centralina Pro non arrivava
       // al booking admin (supercar Fascia B sempre 189 invece di 289).
       const unlMode = kmCfg.unlimitedMode || 'all_tiers'
-      if (unlMode === 'per_fascia' && kmCfg.unlimitedByFascia) {
+      if (unlimitedEnabled && unlMode === 'per_fascia' && kmCfg.unlimitedByFascia) {
         const faA = num(kmCfg.unlimitedByFascia.A)
         const faB = num(kmCfg.unlimitedByFascia.B)
         const entry: Record<string, { per_day: number }> = {}
@@ -199,7 +203,7 @@ export function convertProToRentalConfig(pro: ProSnapshot): RentalConfig {
         if (Object.keys(entry).length > 0) {
           unlimitedKm[dbCat] = entry as (typeof unlimitedKm)[string]
         }
-      } else if (num(kmCfg.unlimitedPerDay) > 0) {
+      } else if (unlimitedEnabled && num(kmCfg.unlimitedPerDay) > 0) {
         unlimitedKm[dbCat] = { _all_tiers: { per_day: num(kmCfg.unlimitedPerDay) } }
       }
     }

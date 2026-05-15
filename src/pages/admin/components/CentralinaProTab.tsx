@@ -918,6 +918,10 @@ type KmConfig = {
   // Backward-compatible default: 'all_tiers' → use the single unlimitedPerDay.
   unlimitedMode?: 'all_tiers' | 'per_fascia'
   unlimitedByFascia?: Record<string, number | ''>
+  // 2026-05-15: ON/OFF toggle. Default true. Quando false l'opzione
+  // "Km illimitati" non appare nei nuovi booking/preventivi per
+  // questa categoria, indipendentemente dal prezzo configurato.
+  unlimitedKm_enabled?: boolean
 }
 
 const INITIAL_KM: KmConfig[] = [
@@ -2986,10 +2990,20 @@ function KmSforoSection({
             </div>
 
             <div className="px-5 py-4 border-t border-black/[0.06] mt-auto space-y-3">
-              {/* Label su riga dedicata — niente più wrap a 3 righe */}
-              <p className="text-[12px] font-semibold text-theme-text-primary">
-                Km illimitati — prezzo al giorno
-              </p>
+              {/* Label + ON/OFF toggle */}
+              <div className="flex items-center justify-between">
+                <p className="text-[12px] font-semibold text-theme-text-primary">
+                  Km illimitati — prezzo al giorno
+                </p>
+                <button
+                  type="button"
+                  onClick={() => patch(cat.id, { unlimitedKm_enabled: !(cat.unlimitedKm_enabled !== false) })}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${(cat.unlimitedKm_enabled !== false) ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                  title={(cat.unlimitedKm_enabled !== false) ? 'ON — opzione disponibile nei booking' : 'OFF — nascosta dai nuovi booking'}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${(cat.unlimitedKm_enabled !== false) ? 'translate-x-4' : 'translate-x-1'}`}/>
+                </button>
+              </div>
 
               {/* Toggle full-width — le due opzioni sono equiparate visivamente */}
               <div className="grid grid-cols-2 bg-gray-100 rounded-lg p-0.5 text-[12px] font-medium">
