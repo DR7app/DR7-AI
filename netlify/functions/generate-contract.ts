@@ -547,6 +547,23 @@ export const handler: Handler = async (event) => {
 
         // 5a. Generate Dynamic Insurance Responsibility Text based on Vehicle Category
         const vehicleCategory = vehicleData?.category || 'standard'
+
+        // Resolve the category id to its admin-facing label from Centralina Pro
+        // (single source of truth for category names). Fallback to the raw id
+        // so contracts still render when Centralina Pro is unreachable.
+        let vehicleCategoryLabel: string = vehicleCategory
+        try {
+            const { data: cpCfg } = await supabase
+                .from('centralina_pro_config')
+                .select('config')
+                .eq('id', 'main')
+                .maybeSingle()
+            const cats = (cpCfg?.config as { categories?: { id: string; label: string }[] } | null)?.categories
+            if (Array.isArray(cats)) {
+                const match = cats.find(c => c.id === vehicleCategory)
+                if (match?.label) vehicleCategoryLabel = match.label
+            }
+        } catch (_e) { /* fallthrough to id */ }
         let insuranceResponsibilityText = ''
 
         if (vehicleCategory === 'supercar' || vehicleCategory === 'luxury') {
@@ -845,6 +862,13 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'Alimentazione': parsedFuel,
             'VehicleSeats': parsedSeats,
             'Posti': parsedSeats,
+            // Category placeholder (resolved from centralina_pro_config so it
+            // shows the admin-facing label like "Supercars", not the raw id).
+            // Multiple spellings supported: English, French (Vehicule), Italian.
+            'VehicleCategory': vehicleCategoryLabel,
+            'VehiculeCategory': vehicleCategoryLabel,
+            'Categoria': vehicleCategoryLabel,
+            'Gruppo': vehicleCategoryLabel,
             'VehicleFuelLevel': '',
             'LivelloCarburante': '',
             'VehicleKMRange': '',
