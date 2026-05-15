@@ -972,13 +972,21 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     // BUG FIX 2026-05-15: la clamp min/max al livello subtotale e' stata
     // RIMOSSA. Era duplicata: il dynamic-pricing engine fa gia' la clamp
     // sulla daily rate del veicolo (in calculate-dynamic-price.ts /
-    // revenuePricingEngine.ts). Avere una seconda clamp qui sul subtotale
-    // (rental + extras × days) creava banner "Min/Max Raggiunto" inattesi
-    // e abbassava preventivi che erano gia' al di sopra del minimo
-    // configurato. Adesso il subtotale e' il prodotto puro del coefficient,
-    // senza ulteriori clamp.
-    const afterRevenueTotalNoExp = rawAfterRevenueNoExp
-    const clampHit: 'min' | 'max' | null = null
+    // FIX 2026-05-15 (v3): clamp min/max riattivata con ELSE-IF cosi' UNA
+    // sola clamp fa fire per render, label corretta. Prima entrambe giravano
+    // in sequenza: max abbassava sotto min, poi min rialzava e clampHit
+    // finiva 'min' con label sbagliata. Adesso: max O min, mai entrambe,
+    // label sempre corretta. Tolerance 0.5 EUR per evitare banner per
+    // arrotondamenti.
+    let afterRevenueTotalNoExp = rawAfterRevenueNoExp
+    let clampHit: 'min' | 'max' | null = null
+    if (maxTotal != null && afterRevenueTotalNoExp > maxTotal + 0.5) {
+      afterRevenueTotalNoExp = maxTotal
+      clampHit = 'max'
+    } else if (minTotal != null && afterRevenueTotalNoExp < minTotal - 0.5) {
+      afterRevenueTotalNoExp = minTotal
+      clampHit = 'min'
+    }
 
     // Real (uncapped) subtotal for display purposes — this is the "Subtotale"
     // line the admin sees, reflecting what the engine would ask for without
