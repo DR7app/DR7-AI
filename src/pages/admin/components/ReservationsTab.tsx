@@ -1380,6 +1380,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         toast.error(data.error || 'Errore nella ricerca della targa')
         return
       }
+      // BUG FIX 2026-05-15: popola SUBITO i dati del veicolo cosi'
+      // l'admin vede brand/model/year senza dover cliccare Cerca due
+      // volte. La OTP per anno < 2020 viene richiesta dopo, ma il
+      // veicolo e' gia' visualizzato. Il gate OTP rimane: l'admin non
+      // puo' salvare la prenotazione finche' non viene approvato.
+      setFormData(prev => ({
+        ...prev,
+        cauzione_targa_brand: data.brand || '',
+        cauzione_targa_model: data.model || '',
+        cauzione_targa_year: data.year || '',
+      }))
+      toast.success(`${data.brand} ${data.model} (${data.year}) trovato`)
+
       const year = parseInt(data.year)
       if (isNaN(year) || year < 2020) {
         if (!hasOverride('vehicle_year_too_old')) {
@@ -1390,17 +1403,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             { label: 'Anno immatricolazione', value: String(data.year || '?') },
           ]))
           requestOverride('vehicle_year_too_old', `Veicolo immatricolato nel ${data.year || '?'}: deve essere dal 2020 in poi per la cauzione.`)
-          setTargaLoading(false)
-          return
         }
       }
-      setFormData(prev => ({
-        ...prev,
-        cauzione_targa_brand: data.brand || '',
-        cauzione_targa_model: data.model || '',
-        cauzione_targa_year: data.year || '',
-      }))
-      toast.success(`${data.brand} ${data.model} (${data.year}) trovato`)
     } catch (err: unknown) {
       const _errMsg = err instanceof Error ? err.message : String(err)
       toast.error('Errore: ' + _errMsg)
