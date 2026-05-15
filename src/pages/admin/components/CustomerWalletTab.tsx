@@ -313,12 +313,23 @@ export default function CustomerWalletTab() {
   }
 
   async function sendOtp() {
+    if (!modalCustomer) return
+
+    // Fall back to the recurring amount when no immediate-charge importo is
+    // entered — admin must be able to OTP-authorise a recurring schedule
+    // without also creating an immediate charge.
     const parsedAmount = parseFloat(amount)
-    if (!parsedAmount || parsedAmount <= 0) {
-      toast.error('Inserisci un importo valido')
+    const recurringAmountNum = parseFloat(recurringAmount || '')
+    const isRecurringOnly = (!parsedAmount || parsedAmount <= 0)
+      && modalAction === 'credit'
+      && recurringEnabled
+      && Number.isFinite(recurringAmountNum)
+      && recurringAmountNum > 0
+    const otpAmount = parsedAmount > 0 ? parsedAmount : (isRecurringOnly ? recurringAmountNum : 0)
+    if (otpAmount <= 0) {
+      toast.error('Inserisci un importo (singolo o ricorrente) prima di chiedere l\'OTP')
       return
     }
-    if (!modalCustomer) return
 
     setOtpSending(true)
     try {
@@ -335,8 +346,8 @@ export default function CustomerWalletTab() {
           code,
           action: modalAction,
           customerName: modalCustomer.full_name,
-          amount: parsedAmount.toFixed(2),
-          description: description || ''
+          amount: otpAmount.toFixed(2),
+          description: description || (isRecurringOnly ? `Programmazione ricarica mensile €${otpAmount.toFixed(2)} il ${recurringDay} di ogni mese` : '')
         })
       })
 
@@ -383,9 +394,9 @@ export default function CustomerWalletTab() {
     if (!modalCustomer) return
 
     // Recurring-only save: admin enabled "Caricamento automatico mensile"
-    // and didn't enter an immediate charge amount → just persist the
-    // schedule, no OTP and no current credit. Solves the UX bug where you
-    // had to enter an importo + verify OTP just to save a future schedule.
+    // and didn't enter an immediate charge amount → persist the schedule
+    // only. OTP is still required (authorises the customer to be charged
+    // monthly), but no immediate credit is applied.
     const recurringAmountNum = parseFloat(recurringAmount || '')
     const wantsRecurringOnly =
       !amount
@@ -394,6 +405,12 @@ export default function CustomerWalletTab() {
       && Number.isFinite(recurringAmountNum)
       && recurringAmountNum > 0
     if (wantsRecurringOnly) {
+      if (!otpVerified) {
+        // First click → kick off OTP. Admin verifies, then clicks again
+        // to actually save.
+        sendOtp()
+        return
+      }
       setActionLoading(true)
       try {
         await saveRecurring(modalCustomer.id, { day: recurringDay, amount: recurringAmountNum, active: true })
@@ -1054,7 +1071,7 @@ export default function CustomerWalletTab() {
                   <label className="text-sm font-medium text-gray-700">Codice OTP</label>
                   <button
                     onClick={sendOtp}
-                    disabled={otpSending || !amount}
+                    disabled={otpSending || (!amount && !(recurringEnabled && parseFloat(recurringAmount || '') > 0))}
                     className="px-4 py-1.5 text-sm font-semibold text-white rounded-lg disabled:opacity-50 transition-colors"
                     style={{ backgroundColor: TEAL }}
                     onMouseEnter={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = TEAL_LIGHT }}
