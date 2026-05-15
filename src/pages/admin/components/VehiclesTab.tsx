@@ -1492,6 +1492,7 @@ export default function VehiclesTab() {
                           <td className="px-1.5 py-2">
                             <div className="flex justify-center gap-1">
                               <button onClick={() => setSchedaVehicleId(vehicle.id)} className="px-2 py-0.5 text-[10px] rounded-md bg-dr7-gold hover:bg-dr7-gold/90 text-black font-semibold">Scheda</button>
+                              <button onClick={() => handleEdit(vehicle)} className="px-2 py-0.5 text-[10px] rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold">Modifica</button>
                               <button onClick={() => handleDelete(vehicle.id)} className="px-1.5 py-0.5 text-[10px] rounded-md bg-red-600/15 hover:bg-red-600/25 text-red-400 border border-red-500/30">×</button>
                             </div>
                           </td>
