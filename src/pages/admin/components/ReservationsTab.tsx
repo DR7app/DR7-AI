@@ -4413,7 +4413,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // ===== VALIDATION: Cauzione Auto — targa must be looked up =====
-      if (formData.cauzione_auto) {
+      // BUG FIX 2026-05-15: se la direzione ha gia' approvato l'override
+      // 'vehicle_year_too_old' (OTP confermato), saltiamo la validation
+      // brand/year — l'admin ha esplicitamente autorizzato il veicolo a
+      // procedere come cauzione anche se la lookup non ha popolato tutti
+      // i campi. Senza questo gate, il save bouncava sempre nonostante
+      // l'OTP corretto.
+      if (formData.cauzione_auto && !hasOverride('vehicle_year_too_old')) {
         const cauzioneMissing: string[] = []
         if (!formData.cauzione_targa || formData.cauzione_targa.length < 5) {
           cauzioneMissing.push('Targa Veicolo Cauzione')
