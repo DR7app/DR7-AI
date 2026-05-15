@@ -3096,7 +3096,7 @@ function CauzioniSection({
   categories,
 }: {
   deposits: DepositsConfig
-  setDeposits: (next: DepositsConfig) => void
+  setDeposits: (next: DepositsConfig | ((prev: DepositsConfig) => DepositsConfig)) => void
   fasce: Fascia[]
   categories: Category[]
 }) {
@@ -3119,45 +3119,57 @@ function CauzioniSection({
   function getCategoryConfig(cat: DepositsCategoryKey): DepositsByFascia {
     return deposits[cat] || {}
   }
-  function setCategoryConfig(cat: DepositsCategoryKey, next: DepositsByFascia) {
-    setDeposits({ ...deposits, [cat]: next })
-  }
 
   function patchOption(fid: string, scope: Scope, optId: string, p: Partial<DepositOption>) {
-    const catCfg = getCategoryConfig(activeCategory)
-    const cur = catCfg[fid] ?? { residente: [], non_residente: [] }
-    setCategoryConfig(activeCategory, {
-      ...catCfg,
-      [fid]: { ...cur, [scope]: cur[scope].map((o) => {
-        if (o.id !== optId) return o
-        const merged = { ...o, ...p }
-        // If the label was edited, upgrade the id to its canonical form
-        // so the rest of the system recognizes the option.
-        if (p.label !== undefined) {
-          const canonical = canonicalDepositId(merged.label)
-          if (canonical) merged.id = canonical
-        }
-        return merged
-      }) },
+    // BUG FIX 2026-05-15: NIENTE canonicalization mid-typing. Prima si
+    // chiamava canonicalDepositId(label) ad ogni keystroke; appena la
+    // label combaciava con un canonical (anche parziale tipo "carta")
+    // l'id cambiava → React key cambiava → l'input perdeva il focus e
+    // due opzioni potevano finire con lo stesso id (= duplicato).
+    // La canonicalizzazione viene fatta solo al SAVE (canonicalizeDepositIds
+    // dentro handleSave), non durante l'edit.
+    // Functional setState per evitare stale closure su edit veloci.
+    setDeposits(prev => {
+      const catCfg = prev[activeCategory] || {}
+      const cur = catCfg[fid] ?? { residente: [], non_residente: [] }
+      return {
+        ...prev,
+        [activeCategory]: {
+          ...catCfg,
+          [fid]: { ...cur, [scope]: cur[scope].map((o) => o.id === optId ? { ...o, ...p } : o) },
+        },
+      }
     })
   }
   function removeOption(fid: string, scope: Scope, optId: string) {
-    const catCfg = getCategoryConfig(activeCategory)
-    const cur = catCfg[fid] ?? { residente: [], non_residente: [] }
-    setCategoryConfig(activeCategory, {
-      ...catCfg,
-      [fid]: { ...cur, [scope]: cur[scope].filter((o) => o.id !== optId) },
+    setDeposits(prev => {
+      const catCfg = prev[activeCategory] || {}
+      const cur = catCfg[fid] ?? { residente: [], non_residente: [] }
+      return {
+        ...prev,
+        [activeCategory]: {
+          ...catCfg,
+          [fid]: { ...cur, [scope]: cur[scope].filter((o) => o.id !== optId) },
+        },
+      }
     })
+    return
   }
   function addOption(fid: string, scope: Scope) {
-    const catCfg = getCategoryConfig(activeCategory)
-    const cur = catCfg[fid] ?? { residente: [], non_residente: [] }
-    setCategoryConfig(activeCategory, {
-      ...catCfg,
-      [fid]: {
-        ...cur,
-        [scope]: [...cur[scope], { id: uid(), label: 'Nuova opzione', amount: 0, surcharge_per_day: 0, is_active: true }],
-      },
+    // Functional setState — evita perdita di precedenti edits.
+    setDeposits(prev => {
+      const catCfg = prev[activeCategory] || {}
+      const cur = catCfg[fid] ?? { residente: [], non_residente: [] }
+      return {
+        ...prev,
+        [activeCategory]: {
+          ...catCfg,
+          [fid]: {
+            ...cur,
+            [scope]: [...cur[scope], { id: uid(), label: 'Nuova opzione', amount: 0, surcharge_per_day: 0, is_active: true }],
+          },
+        },
+      }
     })
   }
 
@@ -3237,9 +3249,11 @@ function CauzioniSection({
                           <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${(opt.is_active !== false) ? 'translate-x-4' : 'translate-x-1'}`}/>
                         </button>
                         <button
+                          type="button"
                           onClick={() => removeOption(f.id, scope, opt.id)}
-                          className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center w-7 h-7 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"
+                          className="flex items-center justify-center w-7 h-7 rounded-full text-[#ff3b30] hover:bg-[#ff3b30]/10 transition-all"
                           aria-label="Rimuovi"
+                          title="Rimuovi opzione"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" />
