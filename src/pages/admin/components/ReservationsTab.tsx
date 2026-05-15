@@ -1394,13 +1394,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const yearRaw = String(data.year || '').trim()
       const yearMatch = yearRaw.match(/(19|20)\d{2}/)
       const yearForForm = yearMatch ? yearMatch[0] : (yearRaw || 'N/D')
+      // BUG FIX 2026-05-15 (3): se OpenAPI non ritorna brand/model
+      // (succede su alcune targhe), usa 'N/D' invece di stringa vuota,
+      // altrimenti la validation al save vede brand vuoto → "Clicca
+      // Cerca" → loop infinito. La presenza di QUALSIASI valore (anche
+      // 'N/D') segnala che la lookup è stata effettuata.
+      const brandForForm = (data.brand && String(data.brand).trim()) || 'N/D'
+      const modelForForm = (data.model && String(data.model).trim()) || ''
       setFormData(prev => ({
         ...prev,
-        cauzione_targa_brand: data.brand || '',
-        cauzione_targa_model: data.model || '',
+        cauzione_targa_brand: brandForForm,
+        cauzione_targa_model: modelForForm,
         cauzione_targa_year: yearForForm,
       }))
-      toast.success(`${data.brand} ${data.model} (${yearForForm}) trovato`)
+      toast.success(`${brandForForm} ${modelForForm} (${yearForForm}) trovato`)
 
       const year = yearMatch ? parseInt(yearMatch[0]) : NaN
       if (isNaN(year) || year < 2020) {
