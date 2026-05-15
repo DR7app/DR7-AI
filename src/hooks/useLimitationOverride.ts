@@ -3,6 +3,16 @@ import { authFetch } from '../utils/authFetch'
 import { logAdminAction } from '../utils/logAdminAction'
 import { ensureOtpConfigLoaded, isOtpRequired, shouldRequireOtp } from '../utils/otpConfigCache'
 import type { OtpContext } from '../utils/otpConditionEngine'
+import { supabase } from '../supabaseClient'
+
+// Direzione + Salvatore: bypassano TUTTE le richieste OTP a prescindere
+// dal codice. Stesso elenco usato da OperatoriTab/PreventiviTab per altri
+// gate sensibili.
+const OTP_BYPASS_EMAILS = new Set([
+  'valerio@dr7.app',
+  'ilenia@dr7.app',
+  'salvatore@dr7.app',
+])
 
 interface LimitationState {
   isOpen: boolean
@@ -77,6 +87,15 @@ export function useLimitationOverride() {
   // Pre-warm OTP config cache once when this hook mounts.
   useEffect(() => { ensureOtpConfigLoaded() }, [])
 
+  // Carica e memorizza l'email dell'admin loggato — usata per il bypass
+  // globale (direzione + Salvatore). Letta una sola volta al mount.
+  const adminEmailRef = useRef<string | null>(null)
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      adminEmailRef.current = (data.session?.user?.email || '').toLowerCase()
+    })
+  }, [])
+
   const requestOverride = useCallback((
     code: string,
     message: string,
@@ -93,7 +112,10 @@ export function useLimitationOverride() {
     // OTP (es. veicolo TEST). Equivalente a is_required=false ma deciso al
     // call-site con dati runtime (vehicle_plate, ecc.). Audit log marcato
     // come 'caller_bypass' per tracciabilita'.
-    const callerBypass = typeof contextOrOptions === 'object' && contextOrOptions?.bypass === true
+    const explicitBypass = typeof contextOrOptions === 'object' && contextOrOptions?.bypass === true
+    // Bypass globale per direzione + Salvatore: nessun OTP, mai, per qualsiasi codice.
+    const adminBypass = !!adminEmailRef.current && OTP_BYPASS_EMAILS.has(adminEmailRef.current)
+    const callerBypass = explicitBypass || adminBypass
 
     // Gate completo: is_required AND conditions. Se l'OTP e' disabilitato
     // OPPURE le condizioni configurate non matchano il context runtime,
@@ -115,11 +137,13 @@ export function useLimitationOverride() {
         action_context: auditCtx || `${code}_${Date.now()}`,
         draft_session_id: draftSessionIdRef.current,
         flow_type: flowTypeRef.current,
-        reason: callerBypass
-          ? 'caller_bypass (es. veicolo TEST)'
-          : isDisabled
-            ? 'is_required=false in system_otp_overrides'
-            : 'conditions_not_matched',
+        reason: adminBypass
+          ? `admin_bypass (${adminEmailRef.current})`
+          : explicitBypass
+            ? 'caller_bypass (es. veicolo TEST)'
+            : isDisabled
+              ? 'is_required=false in system_otp_overrides'
+              : 'conditions_not_matched',
         ...(runtimeCtx ? { runtime_context: runtimeCtx as Record<string, unknown> } : {}),
       })
       return
