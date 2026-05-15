@@ -974,11 +974,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
     const selectedVeh = vehicles.find(v => v.id === formData.vehicle_id)
     const vehCat = String(selectedVeh?.category || '').toLowerCase().trim()
-    const proCategory = vehCat === 'supercar' || vehCat === 'supercars' || vehCat === 'exotic'
-      ? 'supercars'
-      : vehCat === 'furgone' || vehCat === 'furgoni' || vehCat === 'aziendali' || vehCat === 'ncc'
-      ? 'aziendali'
-      : 'urban'
 
     const fasciaKey = customerTier?.tier === 'TIER_1' ? 'B' : 'A'
     const residencyKey = isResidenteSardegna ? 'residente' : 'non_residente'
@@ -988,28 +983,29 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       return ((fasciaCfg?.[residencyKey] as ProDepositOption[]) || [])
     }
 
-    const catCfg = proDeposits[proCategory] as Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
+    // BUG FIX 2026-05-15: usa la categoria REALE del veicolo (qualunque id
+    // l'admin abbia definito in Centralina Pro), con alias storici per
+    // 'exotic' ↔ 'supercars'. Prima il codice flatava ogni veicolo in uno
+    // dei 3 id legacy ('supercars'/'aziendali'/'urban') — quindi tutte le
+    // categorie custom (Suv Luxury, Flotta Aziendale, Hypercar, ecc.)
+    // venivano forzate a 'urban' e mostravano le opzioni cauzione sbagliate.
+    const aliases: string[] = vehCat === 'supercars' ? ['supercars', 'exotic']
+      : vehCat === 'exotic' ? ['exotic', 'supercars']
+      : vehCat ? [vehCat] : []
+    let catCfg: Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
+    for (const key of aliases) {
+      const candidate = proDeposits[key] as Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
+      if (candidate) { catCfg = candidate; break }
+    }
     const fasciaCfg = catCfg?.[fasciaKey]
     const ownOpts = ((fasciaCfg?.[residencyKey] as ProDepositOption[]) || []).slice()
 
-    // Fallback: if THIS category doesn't have a "Nessuna cauzione" entry, look
-    // in the other categories for the same fascia × residency combo and pull
-    // it in. The operator only needs to configure the option once, in any
-    // category, and it stays available across the whole admin.
-    if (!ownOpts.some(isNoDepositOpt)) {
-      const otherCats = (['supercars', 'aziendali', 'urban'] as const).filter(c => c !== proCategory)
-      for (const c of otherCats) {
-        const otherCatCfg = proDeposits[c] as Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
-        const otherFasciaCfg = otherCatCfg?.[fasciaKey]
-        const otherOpts = (otherFasciaCfg?.[residencyKey] as ProDepositOption[]) || []
-        const noDep = otherOpts.find(isNoDepositOpt)
-        if (noDep) {
-          ownOpts.push(noDep)
-          break
-        }
-      }
-    }
-
+    // BUG FIX 2026-05-15: niente piu' auto-borrow di "Nessuna cauzione" da
+    // altre categorie. Prima, se questa categoria non aveva no_cauzione, il
+    // codice ne prendeva una da un'altra categoria — quindi anche categorie
+    // dove l'admin NON voleva mostrare l'opzione no_cauzione finivano per
+    // mostrarla con il prezzo di un'altra categoria. Ora ogni categoria
+    // mostra SOLO le opzioni che l'admin ha configurato per essa.
     return ownOpts
   }, [proDeposits, vehicles, formData.vehicle_id, customerTier, isResidenteSardegna])
 
