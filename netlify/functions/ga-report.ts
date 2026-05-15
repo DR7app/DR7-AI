@@ -22,6 +22,18 @@ interface KpiBlock {
   delta_users: number
 }
 
+// Prenotazioni e fatturato ATTRIBUITI AL SITO — query diretta su Supabase
+// filtrando bookings.booking_source = 'website'. Sono numeri reali, non
+// proxy: rappresentano clienti che hanno completato la prenotazione dal
+// sito pubblico (CarBookingWizard), distinti da quelle create dall'admin
+// in sede/telefono ('admin'). Usati per riempire i tile Prenotazioni e
+// Fatturato in Rendimento Sito anche quando gli eventi gtag non sono
+// installati — perche' "prenotazioni dal sito" si possono sapere dal DB.
+interface WebAttributedBlock {
+  bookings: number
+  revenue: number
+}
+
 interface RealtimeBlock {
   activeUsers: number       // utenti negli ultimi 30 min
   pageviews30m: number      // pageviews ultimi 30 min
@@ -36,6 +48,7 @@ interface ReportPayload {
   range: '7d' | '28d' | '90d' | '180d' | '365d'
   kpis: KpiBlock | null
   realtime: RealtimeBlock | null
+  webAttributed: WebAttributedBlock | null
   traffic: SeriesPoint[]
   distribution: ChannelSlice[]
   funnel: FunnelStage[]
@@ -126,6 +139,30 @@ async function buildInternalFallback(range: string): Promise<{ kpis: KpiBlock; w
   } catch (e) {
     return { kpis: empty, warnings: [`Fallback interno fallito: ${e instanceof Error ? e.message : String(e)}`] }
   }
+}
+
+// Bookings creati dal sito pubblico nel periodo + revenue pagato.
+// Filtra booking_source = 'website' per escludere quelli creati in admin.
+// Status escludiamo cancelled/annullata per non gonfiare il count.
+async function fetchWebsiteAttributedBookings(range: string): Promise<WebAttributedBlock> {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!supabaseUrl || !supabaseKey) return { bookings: 0, revenue: 0 }
+  const sb = createClient(supabaseUrl, supabaseKey)
+  const days = range === '7d' ? 7 : range === '90d' ? 90 : range === '180d' ? 180 : range === '365d' ? 365 : 28
+  const start = new Date(Date.now() - days * 86400000).toISOString()
+  const { data, error } = await sb
+    .from('bookings')
+    .select('price_total, payment_status, status')
+    .eq('booking_source', 'website')
+    .gte('created_at', start)
+    .not('status', 'in', '(cancelled,annullata)')
+    .limit(5000)
+  if (error || !data) return { bookings: 0, revenue: 0 }
+  const isPaid = (s?: string | null) => s === 'paid' || s === 'completed' || s === 'succeeded'
+  const revenue = data.reduce((acc: number, b: { price_total?: number | null; payment_status?: string | null }) =>
+    isPaid(b.payment_status) ? acc + (Number(b.price_total) || 0) / 100 : acc, 0)
+  return { bookings: data.length, revenue }
 }
 
 function rangeToDates(range: string): { startDate: string; endDate: string; prevStart: string; prevEnd: string } {
@@ -257,6 +294,7 @@ const handler: Handler = async (event) => {
     range,
     kpis: null,
     realtime: null,
+    webAttributed: null,
     traffic: [],
     distribution: [],
     funnel: [],
@@ -540,6 +578,9 @@ const handler: Handler = async (event) => {
     }))
     const realtime: RealtimeBlock = { activeUsers, pageviews30m, events30m, conversions30m, topActivePages }
 
+    // Prenotazioni/fatturato attribuiti al sito (booking_source='website')
+    const webAttributed = await fetchWebsiteAttributedBookings(range)
+
     const warnings: string[] = []
     if (sessions === 0 && activeUsers === 0) warnings.push('Nessuna visita registrata nel periodo selezionato — verifica che lo snippet GA4 sia attivo su dr7empire.com.')
     if (bookings === 0 && calls === 0 && revenue === 0 && sessions > 0) {
@@ -564,6 +605,7 @@ const handler: Handler = async (event) => {
       range,
       kpis,
       realtime,
+      webAttributed,
       traffic,
       distribution,
       funnel,
