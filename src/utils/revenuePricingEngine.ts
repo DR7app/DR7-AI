@@ -594,12 +594,27 @@ export function calculateDynamicPrice(
   let rawDailyRate = selectedBaseRateEur * occCoeff * advCoeff * durCoeff * seasonCoeff * gapCoeff * dayTypeCoeff * vehOccCoeff * promoCoeff * vehTargetCoeff
 
   // ─── 6. Min/Max clamp ───
-  const minPrice = config.min_prices[input.vehicleId]
-    ?? config.min_prices[`category:${input.vehicleCategory}`]
-    ?? null
-  const maxPrice = config.max_prices[input.vehicleId]
-    ?? config.max_prices[`category:${input.vehicleCategory}`]
-    ?? null
+  // Cerca prezzo: per-veicolo (UUID) → category:X (formato Pro) → X
+  // bare (formato legacy). L'admin in Centralina Pro puo' settare il min
+  // sotto la categoria; vogliamo che il fallback per-categoria funzioni
+  // anche se la chiave salvata e' senza il prefisso "category:".
+  const cat = String(input.vehicleCategory || '').toLowerCase()
+  const aliases = cat === 'supercars' ? ['supercars', 'exotic']
+    : cat === 'exotic' ? ['exotic', 'supercars']
+    : cat ? [cat] : []
+  const pickPrice = (table: Record<string, number>): number | null => {
+    const v = table[input.vehicleId]
+    if (v != null) return v
+    for (const a of aliases) {
+      const fromPrefixed = table[`category:${a}`]
+      if (fromPrefixed != null) return fromPrefixed
+      const fromBare = table[a]
+      if (fromBare != null) return fromBare
+    }
+    return null
+  }
+  const minPrice = pickPrice(config.min_prices)
+  const maxPrice = pickPrice(config.max_prices)
 
   let finalDailyRate = rawDailyRate
   let minHit = false
