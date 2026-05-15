@@ -994,7 +994,18 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     const rentalTotal = Math.round(listDailyRate * rentalDays * 100) / 100
     const maggiorazioneAmount = Math.round(afterRevenue * (maggiorazione / 100) * 100) / 100
 
-    const desiredFinal = parseFloat(form.sconto) || 0
+    // BUG FIX 2026-05-15: il campo Sconto = prezzo finale desiderato. Prima
+    // veniva applicato SENZA ricontrollare il minimo, quindi un admin poteva
+    // accidentalmente scendere sotto il minimo per veicolo configurato in
+    // Centralina Pro. Ora calcoliamo il min sul TOTALE (min rental + experience
+    // + location fees + extras, tutto con markup) e clampiamo il prezzo
+    // desiderato a quel pavimento.
+    const desiredFinalRaw = parseFloat(form.sconto) || 0
+    const minGrandTotal = minTotal != null
+      ? Math.round((minTotal + experienceAfterCoeff + locationFees + extrasAtList) * markupMultiplier * 100) / 100
+      : null
+    const desiredBelowMin = minGrandTotal != null && desiredFinalRaw > 0 && desiredFinalRaw < minGrandTotal
+    const desiredFinal = desiredBelowMin ? minGrandTotal! : desiredFinalRaw
     const sconto = desiredFinal > 0 && desiredFinal < subtotal ? Math.round((subtotal - desiredFinal) * 100) / 100 : 0
     const totalFinal = sconto > 0 ? desiredFinal : subtotal
 
@@ -1036,6 +1047,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       afterRevenue,
       clampHit,
       clampLimitDaily: clampHit === 'max' ? maxDaily : clampHit === 'min' ? minDaily : null,
+      // Flag esposto alla UI: l'admin ha chiesto un prezzo finale sotto il
+      // minimo configurato in Centralina Pro → abbiamo clampato a min.
+      desiredBelowMin,
+      minGrandTotal,
       clampLimitTotal: clampHit === 'max' ? maxTotal : clampHit === 'min' ? minTotal : null,
       maggiorazioneAmount,
       subtotal,
