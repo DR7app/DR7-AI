@@ -2328,7 +2328,7 @@ function diffInsuranceList(
     if (prev.daily_price !== o.daily_price) out.push(`${prefix} / ${o.name}: €/giorno ${prev.daily_price} → ${o.daily_price}`)
     if (prev.mandatory_deposit !== o.mandatory_deposit) out.push(`${prefix} / ${o.name}: deposito ${prev.mandatory_deposit} → ${o.mandatory_deposit}`)
     if (prev.deductible_fixed !== o.deductible_fixed) out.push(`${prefix} / ${o.name}: franchigia ${prev.deductible_fixed} → ${o.deductible_fixed}`)
-    if (prev.deductible_percent !== o.deductible_percent) out.push(`${prefix} / ${o.name}: franchigia % ${prev.deductible_percent} → ${o.deductible_percent}`)
+    if (prev.deductible_percent !== o.deductible_percent) out.push(`${prefix} / ${o.name}: scoperto % ${prev.deductible_percent} → ${o.deductible_percent}`)
   })
 }
 
@@ -2796,7 +2796,7 @@ function InsuranceList({
               <FieldBox label="€ / giorno" value={opt.daily_price} onChange={(v) => patch(opt.id, { daily_price: v })} />
               <FieldBox label="Deposito €" value={opt.mandatory_deposit} onChange={(v) => patch(opt.id, { mandatory_deposit: v })} />
               <FieldBox label="Franchigia €" value={opt.deductible_fixed} onChange={(v) => patch(opt.id, { deductible_fixed: v })} />
-              <FieldBox label="Franchigia %" value={opt.deductible_percent} onChange={(v) => patch(opt.id, { deductible_percent: v })} />
+              <FieldBox label="Scoperto %" value={opt.deductible_percent} onChange={(v) => patch(opt.id, { deductible_percent: v })} />
             </div>
           </div>
         ))}
