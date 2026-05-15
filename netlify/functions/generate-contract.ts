@@ -560,13 +560,25 @@ export const handler: Handler = async (event) => {
                 .maybeSingle()
             const cats = (cpCfg?.config as { categories?: { id: string; label: string }[] } | null)?.categories
             if (Array.isArray(cats)) {
-                const match = cats.find(c => c.id === vehicleCategory)
+                const match = cats.find(c => c.id.toLowerCase() === vehicleCategory.toLowerCase())
                 if (match?.label) vehicleCategoryLabel = match.label
             }
         } catch (_e) { /* fallthrough to id */ }
+
+        // Bucket per category tier. Per direzione, Hypercar / Exotic Cars /
+        // Supercar / Suv Luxury usano la clausola SUPERCAR. Urban / Flotta
+        // Aziendale / Moto / Scooter usano la clausola UTILITARIE.
+        // Normalizziamo (lowercase + togliamo spazi/trattini/underscore) per
+        // accettare sia "suv_luxury" che "suv-luxury" che "Suv Luxury".
+        const normCat = vehicleCategory.toLowerCase().replace(/[\s\-_]/g, '')
+        const SUPERCAR_TIER = new Set(['supercar', 'supercars', 'luxury', 'exotic', 'exoticcars', 'hypercar', 'hypercars', 'suvluxury', 'suvluxe'])
+        const URBAN_TIER = new Set(['urban', 'economy', 'aziendali', 'aziendale', 'flottaaziendale', 'furgone', 'furgoni', 'ncc', 'moto', 'scooter'])
+        const isSupercarTier = SUPERCAR_TIER.has(normCat)
+        const isUrbanTier = URBAN_TIER.has(normCat)
+
         let insuranceResponsibilityText = ''
 
-        if (vehicleCategory === 'supercar' || vehicleCategory === 'luxury') {
+        if (isSupercarTier) {
             insuranceResponsibilityText = `RESPONSABILITÀ PENALE DEI CLIENTI - SUPERCAR:
 
 KASKO: Furto (solo in caso di restituzione chiave, altrimenti paga il 100% del valore del veicolo) - atti vandalici - agenti atmosferici - incendio - danni & distruzione totale: da risarcire €5.000 + 30% del danno.
@@ -576,7 +588,7 @@ KASKO BLACK: Furto (solo in caso di restituzione chiave, altrimenti paga il 100%
 KASKO SIGNATURE: Furto (solo in caso di restituzione chiave, altrimenti paga il 100% del valore del veicolo) - atti vandalici - agenti atmosferici - incendio - danni & distruzione totale: da risarcire €5.000.
 
 LA KASKO NON È ATTIVABILE SE AL MOMENTO DEL DANNO IL CLIENTE ERA SOTTO EFFETTO DI STUPEFACENTI O IN STATO DI EBREZZA.`
-        } else if (vehicleCategory === 'urban' || vehicleCategory === 'economy') {
+        } else if (isUrbanTier) {
             insuranceResponsibilityText = `RESPONSABILITÀ PENALE DEI CLIENTI - UTILITARIE E AZIENDALI:
 
 Copertura assicurativa KASKO: Furto (solo in caso di restituzione chiave, altrimenti paga il 100% del valore del veicolo) - atti vandalici - agenti atmosferici - incendio - distruzione totale: da risarcire €2.000 + 30% del valore del danno è attivabile per qualsiasi danno recato alla vettura anche con oggetti non identificabili per mezzo di targa, previo preventivo in officina ufficiale.
@@ -616,7 +628,7 @@ Il locatario è pienamente responsabile del veicolo durante il periodo di nolegg
         // 5b. Generate Additional Penalty/Legal Terms (for second large text area)
         let additionalTermsText = ''
 
-        if (vehicleCategory === 'supercar' || vehicleCategory === 'luxury') {
+        if (isSupercarTier) {
             additionalTermsText = `PENALI - SUPERCAR:
 
 Penale fermo del veicolo in caso di incidente o danni 350,00€ al giorno.
@@ -652,7 +664,7 @@ In caso di Subnoleggio non autorizzato la penale è di €10.000.
 Al momento del ritiro dell'auto il cliente deve avere con sé la patente fisica ed è obbligato a consegnarla all'operatore che consegna la vettura.
 
 Non sono accettate denunce di smarrimento della patente. In caso di impossibilità a mostrare la patente fisica al momento del ritiro, il cliente perde la prenotazione e l'importo pagato.`
-        } else if (vehicleCategory === 'urban' || vehicleCategory === 'economy') {
+        } else if (isUrbanTier) {
             additionalTermsText = `PENALI - UTILITARIE E AZIENDALI:
 
 Penale fermo del veicolo in caso di incidente o danni 40,00€ al giorno.
