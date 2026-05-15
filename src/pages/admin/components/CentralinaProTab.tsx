@@ -3172,6 +3172,30 @@ function CauzioniSection({
       }
     })
   }
+  // Sposta una opzione su/giu' nell'array — l'ordine viene rispettato dal
+  // sito (CarBookingWizard) e dall'admin (ReservationsTab). Cosi' l'admin
+  // puo' mettere "No cauzione" come prima riga senza ricreare le opzioni.
+  function moveOption(fid: string, scope: Scope, optId: string, dir: -1 | 1) {
+    setDeposits(prev => {
+      const catCfg = prev[activeCategory] || {}
+      const cur = catCfg[fid] ?? { residente: [], non_residente: [] }
+      const list = cur[scope]
+      const idx = list.findIndex(o => o.id === optId)
+      if (idx < 0) return prev
+      const target = idx + dir
+      if (target < 0 || target >= list.length) return prev
+      const next = list.slice()
+      const [item] = next.splice(idx, 1)
+      next.splice(target, 0, item)
+      return {
+        ...prev,
+        [activeCategory]: {
+          ...catCfg,
+          [fid]: { ...cur, [scope]: next },
+        },
+      }
+    })
+  }
 
   const activeDeposits = getCategoryConfig(activeCategory)
 
@@ -3230,7 +3254,7 @@ function CauzioniSection({
                 </header>
 
                 <ul className="divide-y divide-black/5">
-                  {items.map((opt) => (
+                  {items.map((opt, idx) => (
                     <li key={opt.id} className="px-5 py-3 group">
                       <div className="flex items-center gap-3 mb-2">
                         <input
@@ -3239,6 +3263,34 @@ function CauzioniSection({
                           placeholder="Nome opzione"
                           className="flex-1 bg-transparent outline-none text-[14px] font-medium text-theme-text-primary placeholder:text-theme-text-muted focus:bg-theme-bg-primary rounded-lg px-2 py-1 -mx-2 transition-colors"
                         />
+                        {/* Riordina: sposta su/giu' nella lista. L'ordine viene
+                            rispettato dal sito e dall'admin booking modal. */}
+                        <div className="flex items-center">
+                          <button
+                            type="button"
+                            onClick={() => moveOption(f.id, scope, opt.id, -1)}
+                            disabled={idx === 0}
+                            className="flex items-center justify-center w-7 h-7 rounded-full text-theme-text-muted hover:bg-theme-bg-tertiary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                            aria-label="Sposta su"
+                            title="Sposta su"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveOption(f.id, scope, opt.id, 1)}
+                            disabled={idx === items.length - 1}
+                            className="flex items-center justify-center w-7 h-7 rounded-full text-theme-text-muted hover:bg-theme-bg-tertiary disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                            aria-label="Sposta giu"
+                            title="Sposta giu'"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                        </div>
                         {/* ON/OFF: se OFF l'opzione scompare dai nuovi booking. */}
                         <button
                           type="button"
