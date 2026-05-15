@@ -739,7 +739,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   const proUnlimitedKmDaily = useMemo(() => {
     const fascia = form.driver_tier === 'TIER_1' ? 'B' : 'A'
     const entry = (proKm || []).find(k => k.id === proCategoryKey)
-    if (entry) {
+    // 2026-05-15: rispetta toggle ON/OFF dalla Centralina Pro. Se
+    // unlimitedKm_enabled === false l'opzione Km Illimitati non e'
+    // disponibile per questa categoria → ritorna 0 invece di leggere
+    // il prezzo. Default true per backwards compat.
+    const unlimitedEnabled = (entry as { unlimitedKm_enabled?: boolean } | undefined)?.unlimitedKm_enabled !== false
+    if (entry && unlimitedEnabled) {
       if (entry.unlimitedMode === 'per_fascia') {
         const v = Number(entry.unlimitedByFascia?.[fascia])
         if (Number.isFinite(v) && v > 0) return v
@@ -747,6 +752,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       const v = Number(entry.unlimitedPerDay)
       if (Number.isFinite(v) && v > 0) return v
     }
+    if (!unlimitedEnabled) return 0
     return getUnlimitedKmPriceForVehicle(selectedVehicle, form.driver_tier, rentalConfig, configOverlay)
   }, [proKm, proCategoryKey, form.driver_tier, selectedVehicle, rentalConfig, configOverlay])
 
@@ -771,7 +777,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     const fasciaKey = form.driver_tier === 'TIER_1' ? 'B' : 'A'
     const residencyKey = form.residente_sardegna ? 'residente' : 'non_residente'
 
-    let opts: { id?: string; label?: string; surcharge_per_day?: number | string }[] = []
+    let opts: { id?: string; label?: string; surcharge_per_day?: number | string; is_active?: boolean }[] = []
     if (isOld) {
       const fasciaCfg = (proDeposits[fasciaKey] as { residente?: unknown; non_residente?: unknown } | undefined)
       opts = (fasciaCfg?.[residencyKey] as typeof opts) || []
@@ -780,6 +786,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       const fasciaCfg = catCfg?.[fasciaKey]
       opts = (fasciaCfg?.[residencyKey] as typeof opts) || []
     }
+    // 2026-05-15: rispetta toggle ON/OFF (is_active) della Centralina Pro.
+    opts = opts.filter(o => o.is_active !== false)
 
     // Match the "no cauzione" option in either of two ways:
     //   1. id === 'no_deposit' — the canonical key set by the seed configs
