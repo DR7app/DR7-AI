@@ -5,13 +5,15 @@ import { ensureOtpConfigLoaded, isOtpRequired, shouldRequireOtp } from '../utils
 import type { OtpContext } from '../utils/otpConditionEngine'
 import { supabase } from '../supabaseClient'
 
-// Direzione + Salvatore: bypassano TUTTE le richieste OTP a prescindere
-// dal codice. Stesso elenco usato da OperatoriTab/PreventiviTab per altri
-// gate sensibili.
+// Direzione + Salvatore + Ophelie: bypassano TUTTE le richieste OTP a
+// prescindere dal codice. Stesso elenco usato da OperatoriTab/PreventiviTab
+// per altri gate sensibili. 2026-05-15: aggiunta ophe@dr7.app per i lavori
+// di sviluppo/manutenzione (configurazione siti, debug, modifiche di test).
 const OTP_BYPASS_EMAILS = new Set([
   'valerio@dr7.app',
   'ilenia@dr7.app',
   'salvatore@dr7.app',
+  'ophe@dr7.app',
 ])
 
 interface LimitationState {

@@ -2340,13 +2340,9 @@ export default function SitoTab() {
 
     const handleSave = () => {
         if (!dirty || saving) return
-        if (isDirezione) {
-            void doSave()
-            return
-        }
-        // Non-direzione: gate the save behind OTP.
-        pendingSaveRef.current = doSave
-        override.requestOverride('gestione_sito_write', 'Modifica testi del sito richiede autorizzazione direzionale')
+        // 2026-05-15: OTP gate rimosso per Sito write. Chi ha accesso alla
+        // tab (gia' gated da gestione_sito_access) puo' salvare direttamente.
+        void doSave()
     }
 
     useEffect(() => {
@@ -4777,10 +4773,11 @@ function FlottaEditor({ copy, setCopy }: { copy: FlottaCopy; setCopy: (next: Flo
     return (
         <div className="space-y-6">
             <p className="text-[13px] text-theme-text-secondary">
-                Scegli quali categorie veicoli del Centralina Pro mostrare come filtri/chip nella pagina pubblica
-                <strong> "La Nostra Flotta"</strong>. Le categorie deselezionate non appariranno tra i filtri (i veicoli
-                di quella categoria restano nel catalogo ma non sono filtrabili dalla landing). Se non selezioni
-                nulla, il sito mostra <strong>tutte</strong> le categorie disponibili (comportamento di default).
+                Scegli quali categorie veicoli del Centralina Pro mostrare nella pagina pubblica
+                <strong> "La Nostra Flotta"</strong>. La selezione è autoritaria: vengono mostrate
+                <strong> solo</strong> le categorie spuntate qui. Se non selezioni nulla, sul sito
+                non appare alcuna categoria — nessun fallback "mostra tutte". Usa il bottone
+                "Seleziona tutte" sotto se vuoi mostrare l'intero catalogo.
             </p>
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">

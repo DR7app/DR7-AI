@@ -10,6 +10,7 @@ const OTP_BYPASS_EMAILS = new Set([
   'valerio@dr7.app',
   'ilenia@dr7.app',
   'salvatore@dr7.app',
+  'ophe@dr7.app',
 ])
 
 interface LimitationOverrideModalProps {
