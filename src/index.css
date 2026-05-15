@@ -255,6 +255,20 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }
 
+/* Rimuove le freccette su/giu' (spinner) da TUTTI i campi numerici
+   nell'admin. L'admin digita i valori manualmente — i micro-bottoni
+   non sono utili e occupano spazio. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
