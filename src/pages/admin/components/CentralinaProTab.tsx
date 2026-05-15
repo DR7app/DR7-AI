@@ -3368,20 +3368,22 @@ function ServiziSection({
                   placeholder="Nome servizio"
                   className="flex-1 min-w-[200px] bg-transparent outline-none text-[14px] font-medium text-theme-text-primary placeholder:text-theme-text-muted focus:bg-theme-bg-primary:bg-theme-bg-secondary/5 rounded-lg px-2 py-1.5 -mx-2 transition-colors"
                 />
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">
+                <div className="relative" title={s.unit === 'per_km' ? 'Prezzo deciso al volo in preventivo (€/km × n. km)' : ''}>
+                  <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[13px] pointer-events-none ${s.unit === 'per_km' ? 'text-theme-text-muted/40' : 'text-theme-text-muted'}`}>
                     €
                   </span>
                   <input
                     type="number"
                     min={0}
                     step={0.01}
-                    value={s.price}
+                    value={s.unit === 'per_km' ? '' : s.price}
+                    disabled={s.unit === 'per_km'}
+                    placeholder={s.unit === 'per_km' ? 'manuale' : ''}
                     onChange={(e) => {
                       const v = e.target.value
                       patchExp(s.id, { price: v === '' ? '' : Number(v) })
                     }}
-                    className="w-24 bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-2 py-1.5 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                    className={`w-24 bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-2 py-1.5 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 ${s.unit === 'per_km' ? 'opacity-50 cursor-not-allowed' : ''}`}
                   />
                 </div>
                 <select
