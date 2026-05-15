@@ -736,7 +736,7 @@ export default function CustomerWalletTab() {
                           </div>
                           <div>
                             <p className="text-sm font-bold text-green-700 dark:text-green-400">Ricarica automatica attiva</p>
-                            <p className="text-sm text-gray-600 dark:text-theme-text-muted">&euro; {r.amount} ogni {r.day} del mese</p>
+                            <p className="text-sm text-gray-600 dark:text-theme-text-muted">&euro; {r.amount} ogni {r.day} del mese alle 09:00 (Europe/Rome)</p>
                           </div>
                         </div>
                         <span className="px-3 py-1 text-xs font-bold text-green-600 dark:text-green-400 border border-green-300 dark:border-green-700 rounded-full">ATTIVA</span>
@@ -848,7 +848,7 @@ export default function CustomerWalletTab() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-xs text-theme-text-primary font-semibold truncate">{r.name}</div>
-                      <div className="text-[10px] text-theme-text-muted">il {r.day} di ogni mese</div>
+                      <div className="text-[10px] text-theme-text-muted">il {r.day} di ogni mese alle 09:00</div>
                     </div>
                     <div className="text-xs font-bold text-amber-400 tabular-nums whitespace-nowrap">€{r.amountEur.toLocaleString('it-IT')}</div>
                   </div>

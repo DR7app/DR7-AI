@@ -89,6 +89,12 @@
 [functions."rental-extension-supercar-cron"]
   schedule = "0 16,17 * * *"
 
+# Wallet auto-recharge — daily 09:00 Europe/Rome. Cron fires at 07 + 08 UTC
+# (CEST + CET coverage). Function gates internally on Rome hour == 9 and on
+# wallet_recurring.day == today's day-of-month. Idempotent via last_run_at.
+[functions."process-wallet-auto-recharges-cron"]
+  schedule = "0 7,8 * * *"
+
 # Nexi preauth auto-refresh — riattivato 2026-05-13.
 # Cron giornaliero che rinnova le pre-autorizzazioni a lungo termine
 # (durata > 7 giorni) ogni 6 giorni. Strategia void-first:
