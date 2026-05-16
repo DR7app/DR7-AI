@@ -540,6 +540,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     [configOverlay.experienceServices, form.driver_tier]
   )
 
+  // Draft strings per-service for the "Numero KM" + "Prezzo per KM" inputs.
+  // Held SEPARATELY from form.experience_km_quotes (which is numeric) so the
+  // user can type partial values like "0", "0.", "0," without the controlled
+  // input clearing itself before they finish typing the decimals.
+  // Key shape: `${svc.id}|km` and `${svc.id}|price`.
+  const [kmInputDrafts, setKmInputDrafts] = useState<Record<string, string>>({})
+
   // Auto-check availability whenever vehicle/date/time changes.
   // The OTP modal is NOT opened here anymore — only a red warning is shown.
   // Authorization is requested only when the operator presses Salva.
@@ -3595,13 +3602,19 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                         type="number"
                         step="1"
                         min="0"
-                        value={quote.km > 0 ? String(quote.km) : ''}
+                        value={
+                          kmInputDrafts[`${svc.id}|km`] !== undefined
+                            ? kmInputDrafts[`${svc.id}|km`]
+                            : (quote.km > 0 ? String(quote.km) : '')
+                        }
                         onChange={(e) => {
-                          const km = Math.max(0, Number(e.target.value) || 0)
+                          const raw = e.target.value
+                          setKmInputDrafts(prev => ({ ...prev, [`${svc.id}|km`]: raw }))
+                          const km = Math.max(0, parseInt(raw, 10) || 0)
                           setForm(prev => {
                             const next = { ...prev.experience_km_quotes }
                             if (km > 0) next[svc.id] = { ...(next[svc.id] || { pricePerKm: 0 }), km }
-                            else delete next[svc.id]
+                            else if (next[svc.id]) next[svc.id] = { ...next[svc.id], km: 0 }
                             return { ...prev, experience_km_quotes: next }
                           })
                         }}
@@ -3612,18 +3625,26 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                         type="number"
                         step="0.01"
                         min="0"
-                        value={quote.pricePerKm > 0 ? String(quote.pricePerKm) : ''}
+                        value={
+                          kmInputDrafts[`${svc.id}|price`] !== undefined
+                            ? kmInputDrafts[`${svc.id}|price`]
+                            : (quote.pricePerKm > 0 ? String(quote.pricePerKm) : '')
+                        }
                         onChange={(e) => {
-                          // Accept Italian comma decimal (0,50) AND English (0.50).
-                          // Number("0,50") is NaN → fallback 0 → entry deleted →
-                          // l'utente non riusciva a inserire valori sub-1.
-                          const raw = e.target.value.replace(',', '.')
-                          const parsed = parseFloat(raw)
+                          // Mantieni la STRINGA digitata in kmInputDrafts (anche
+                          // "0", "0.", "0,") cosi' il campo non si svuota mentre
+                          // l'utente sta digitando "0.50". Lo state numerico
+                          // experience_km_quotes mirror la parsed value ma non
+                          // pilota piu' la visualizzazione del campo.
+                          const raw = e.target.value
+                          setKmInputDrafts(prev => ({ ...prev, [`${svc.id}|price`]: raw }))
+                          const cleaned = raw.replace(',', '.')
+                          const parsed = parseFloat(cleaned)
                           const pricePerKm = isNaN(parsed) ? 0 : Math.max(0, parsed)
                           setForm(prev => {
                             const next = { ...prev.experience_km_quotes }
                             if (pricePerKm > 0) next[svc.id] = { ...(next[svc.id] || { km: 0 }), pricePerKm }
-                            else delete next[svc.id]
+                            else if (next[svc.id]) next[svc.id] = { ...next[svc.id], pricePerKm: 0 }
                             return { ...prev, experience_km_quotes: next }
                           })
                         }}
