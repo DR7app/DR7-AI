@@ -8314,12 +8314,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   Cliccando una card → seleziona/deseleziona il pacchetto. */}
               {(() => {
                 const selVeh = vehicles.find(v => v.id === formData.vehicle_id)
-                if (!selVeh) return null
-                const cat = String(selVeh.category || '').toLowerCase().trim()
-                if (!cat) return null
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; km: number; sconto_pct: number; price: number; label: string }>> | undefined
-                if (!pkgsByCat) return null
+                if (!selVeh) {
+                  return (
+                    <div className="mt-2 p-3 rounded-md border border-dashed border-theme-border bg-theme-bg-tertiary/30 text-xs text-theme-text-muted">
+                      Seleziona prima un veicolo per vedere i pacchetti KM disponibili.
+                    </div>
+                  )
+                }
+                const cat = String(selVeh.category || '').toLowerCase().trim()
+                if (!cat) return null
+                if (!pkgsByCat) {
+                  return (
+                    <div className="mt-2 p-3 rounded-md border border-dashed border-theme-border bg-theme-bg-tertiary/30 text-xs text-theme-text-muted">
+                      Nessun pacchetto KM configurato. Vai in Centralina Pro {'>'} KM per aggiungerli.
+                    </div>
+                  )
+                }
                 const aliases = cat === 'supercars' ? ['supercars', 'exotic']
                               : cat === 'exotic' ? ['exotic', 'supercars']
                               : [cat]
@@ -8328,7 +8340,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   const v = pkgsByCat[k]
                   if (Array.isArray(v) && v.length > 0) { pkgs = v; break }
                 }
-                if (pkgs.length === 0) return null
+                if (pkgs.length === 0) {
+                  return (
+                    <div className="mt-2 p-3 rounded-md border border-dashed border-theme-border bg-theme-bg-tertiary/30 text-xs text-theme-text-muted">
+                      Nessun pacchetto KM per la categoria <b>{cat}</b>. Aggiungili da Centralina Pro {'>'} KM {'>'} {cat}.
+                    </div>
+                  )
+                }
                 return (
                   <div className="space-y-2 mt-2">
                     <h4 className="text-xs font-semibold text-theme-text-muted uppercase tracking-wider">Pacchetti KM extra (cumulativi)</h4>
