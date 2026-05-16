@@ -937,6 +937,26 @@ type KmConfig = {
   // "Km illimitati" non appare nei nuovi booking/preventivi per
   // questa categoria, indipendentemente dal prezzo configurato.
   unlimitedKm_enabled?: boolean
+  /** 2026-05-16: Pacchetti KM acquistabili dal cliente come opzione
+   *  additiva (non sostituisce il sforo). Ciascun pacchetto definisce
+   *  quanti km extra inclusi (km) e uno sconto % sul sforo della
+   *  categoria. Prezzo finale = km × sforo × (1 - sconto%/100). Se il
+   *  cliente eccede la quota del pacchetto + i km inclusi, paga
+   *  comunque il sforo €/km sul resto. */
+  pacchetti?: PacchettoKm[]
+}
+
+type PacchettoKm = {
+  /** Stable id (uid generato all'aggiunta). */
+  id: string
+  /** Quantita' km extra del pacchetto (es. 100, 200, 500). */
+  km: number | ''
+  /** Sconto % rispetto al prezzo "km × sforo" pieno. */
+  sconto_pct: number | ''
+  /** Toggle ON/OFF: nascosto dal wizard del sito quando false. */
+  is_active: boolean
+  /** Etichetta libera opzionale. Quando vuota: "Pacchetto {km} km". */
+  label?: string
 }
 
 const INITIAL_KM: KmConfig[] = [
@@ -3104,9 +3124,152 @@ function KmSforoSection({
                 </div>
               )}
             </div>
+
+            {/* ── PACCHETTI KM ────────────────────────────────────────── */}
+            <PacchettiKmEditor cat={cat} patch={patch} />
           </section>
         ))}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Editor per i pacchetti KM acquistabili dal cliente. Ogni pacchetto:
+ *   - km extra inclusi (somma a quelli inclusi nel noleggio)
+ *   - sconto % rispetto al prezzo pieno (km × sforo categoria)
+ *   - toggle ON/OFF (nasconde dal wizard del sito)
+ *   - prezzo finale calcolato live
+ * Il sforo €/km della categoria e' la base — quando l'admin cambia
+ * sforo, i prezzi finali si ricalcolano automaticamente.
+ */
+function PacchettiKmEditor({
+  cat,
+  patch,
+}: {
+  cat: KmConfig
+  patch: (id: string, p: Partial<KmConfig>) => void
+}) {
+  const sforo = typeof cat.sforo === 'number' ? cat.sforo : 0
+  const pacchetti = cat.pacchetti || []
+
+  function updatePkg(pkgId: string, p: Partial<PacchettoKm>) {
+    patch(cat.id, {
+      pacchetti: pacchetti.map(pk => (pk.id === pkgId ? { ...pk, ...p } : pk)),
+    })
+  }
+  function removePkg(pkgId: string) {
+    patch(cat.id, {
+      pacchetti: pacchetti.filter(pk => pk.id !== pkgId),
+    })
+  }
+  function addPkg() {
+    patch(cat.id, {
+      pacchetti: [
+        ...pacchetti,
+        { id: uid(), km: 100, sconto_pct: 30, is_active: true },
+      ],
+    })
+  }
+  function computeFinalPrice(km: number | '', sconto: number | ''): number {
+    const k = typeof km === 'number' ? km : 0
+    const s = typeof sconto === 'number' ? sconto : 0
+    return Math.max(0, k * sforo * (1 - s / 100))
+  }
+
+  return (
+    <div className="px-5 py-4 border-t border-black/[0.06] space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[12px] font-semibold text-theme-text-primary">
+          Pacchetti KM ({pacchetti.length})
+        </p>
+        <span className="text-[10px] text-theme-text-muted">
+          Sforo base: €{sforo.toFixed(2)}/km
+        </span>
+      </div>
+      {sforo === 0 && pacchetti.length > 0 && (
+        <p className="text-[11px] text-amber-600 dark:text-amber-400">
+          Imposta prima il sforo €/km sopra: i prezzi finali sono a 0.
+        </p>
+      )}
+      <ul className="space-y-2">
+        {pacchetti.map(pk => {
+          const finalPrice = computeFinalPrice(pk.km, pk.sconto_pct)
+          const fullPrice = (typeof pk.km === 'number' ? pk.km : 0) * sforo
+          return (
+            <li key={pk.id} className="p-3 rounded-lg border border-theme-border bg-theme-bg-primary space-y-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => updatePkg(pk.id, { is_active: !pk.is_active })}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${pk.is_active ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                  title={pk.is_active ? 'ON — visibile sul sito' : 'OFF — nascosto dal sito'}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${pk.is_active ? 'translate-x-4' : 'translate-x-1'}`}/>
+                </button>
+                <input
+                  type="text"
+                  value={pk.label || ''}
+                  onChange={(e) => updatePkg(pk.id, { label: e.target.value })}
+                  placeholder={`Pacchetto ${pk.km || 0} km`}
+                  className="flex-1 bg-transparent outline-none text-[13px] text-theme-text-primary placeholder:text-theme-text-muted"
+                />
+                <button
+                  type="button"
+                  onClick={() => removePkg(pk.id)}
+                  className="text-[#ff3b30] hover:bg-[#ff3b30]/10 rounded-full w-7 h-7 flex items-center justify-center"
+                  aria-label="Rimuovi"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3"/>
+                  </svg>
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-2 items-end">
+                <label className="block">
+                  <span className="text-[10px] uppercase tracking-wide text-theme-text-muted">KM</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={pk.km}
+                    onChange={(e) => updatePkg(pk.id, { km: e.target.value === '' ? '' : Number(e.target.value) })}
+                    className="mt-0.5 w-full bg-theme-bg-secondary border border-theme-border rounded px-2 py-1.5 text-[13px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] uppercase tracking-wide text-theme-text-muted">Sconto %</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={pk.sconto_pct}
+                    onChange={(e) => updatePkg(pk.id, { sconto_pct: e.target.value === '' ? '' : Number(e.target.value) })}
+                    className="mt-0.5 w-full bg-theme-bg-secondary border border-theme-border rounded px-2 py-1.5 text-[13px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  />
+                </label>
+                <div className="text-right">
+                  <span className="text-[10px] uppercase tracking-wide text-theme-text-muted">Prezzo</span>
+                  <div className="mt-0.5 text-[14px] font-semibold text-emerald-600 dark:text-emerald-400">
+                    €{finalPrice.toFixed(2)}
+                  </div>
+                  {fullPrice > finalPrice && (
+                    <div className="text-[10px] text-theme-text-muted line-through">
+                      €{fullPrice.toFixed(2)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+      <button
+        type="button"
+        onClick={addPkg}
+        className="w-full py-2 rounded-lg border border-dashed border-theme-border text-[12px] text-theme-text-secondary hover:border-[#007aff] hover:text-[#007aff] transition-colors"
+      >
+        + Aggiungi pacchetto KM
+      </button>
     </div>
   )
 }
