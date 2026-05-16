@@ -2830,7 +2830,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                             quelli creati da admin (direzione vuole poter correggere il
                             preventivo del sito prima di inviarlo al cliente). Accetta /
                             Rifiuta restano in primo piano. */}
-                        {p.source?.startsWith('website') && (p.status === 'bozza' || p.status === 'inviato') ? (
+                        {p.source?.startsWith('website') && p.status !== 'rifiutato' ? (
                           <>
                             <button
                               onClick={() => openAcceptModal(p)}
@@ -2876,7 +2876,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                               }}
                               className="px-2 py-1 text-xs bg-green-700 hover:bg-green-600 text-white rounded"
                             >
-                              Invia
+                              {p.status === 'bozza' ? 'Invia' : 'Reinvia'}
                             </button>
                           </>
                         ) : (
@@ -2889,7 +2889,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                                 Modifica
                               </button>
                             )}
-                            {(p.status === 'bozza' || p.status === 'inviato') && (
+                            {/* Invia / Reinvia disponibile per QUALSIASI status
+                                tranne rifiutato. Direzione vuole poter rimandare il
+                                preventivo al cliente anche dopo "accettato" o
+                                "scaduto" (rinegoziazione, recupero, ecc.). */}
+                            {p.status !== 'rifiutato' && (
                               <button
                                 onClick={async () => {
                                   setSelectedPreventivo(p);
@@ -2907,7 +2911,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                                 }}
                                 className="px-2 py-1 text-xs bg-green-700 hover:bg-green-600 text-white rounded"
                               >
-                                Invia
+                                {p.status === 'bozza' ? 'Invia' : 'Reinvia'}
                               </button>
                             )}
                             {/* "Invia coefficienti" — visible on EVERY row regardless
