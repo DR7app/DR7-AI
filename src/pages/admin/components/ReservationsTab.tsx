@@ -6216,6 +6216,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       unlimited_km: false,
       km_limit: DEFAULT_KM_LIMIT,
       km_package_id: '',
+      km_package_qty: 1,
       // Home Delivery & Pickup
       delivery_enabled: false,
       delivery_street: '',
