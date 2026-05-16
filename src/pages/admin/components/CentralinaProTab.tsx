@@ -2096,6 +2096,12 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
     if (prev.extraPerDay !== k.extraPerDay) out.push(`Km & Sforo / ${k.label}: extra/giorno ${prev.extraPerDay} → ${k.extraPerDay} km`)
     if (prev.sforo !== k.sforo) out.push(`Km & Sforo / ${k.label}: sforo €${prev.sforo} → €${k.sforo}/km`)
     if (prev.unlimitedPerDay !== k.unlimitedPerDay) out.push(`Km & Sforo / ${k.label}: km illimitati €${prev.unlimitedPerDay} → €${k.unlimitedPerDay}/giorno`)
+    // Toggle ON/OFF dell'opzione Km Illimitati per categoria (default ON).
+    // Senza questa diff la SaveBar non contava il cambio quando direzione
+    // disattivava/riattivava l'opzione (anche se il valore veniva salvato).
+    const prevEnabled = prev.unlimitedKm_enabled !== false
+    const curEnabled = k.unlimitedKm_enabled !== false
+    if (prevEnabled !== curEnabled) out.push(`Km & Sforo / ${k.label}: km illimitati ${prevEnabled ? 'ON' : 'OFF'} → ${curEnabled ? 'ON' : 'OFF'}`)
     const prevMode = prev.unlimitedMode || 'all_tiers'
     const curMode = k.unlimitedMode || 'all_tiers'
     if (prevMode !== curMode) out.push(`Km & Sforo / ${k.label}: modalità illimitati ${prevMode === 'per_fascia' ? 'per fascia' : 'tutte le fasce'} → ${curMode === 'per_fascia' ? 'per fascia' : 'tutte le fasce'}`)
