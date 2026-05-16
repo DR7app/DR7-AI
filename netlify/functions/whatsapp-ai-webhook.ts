@@ -160,7 +160,7 @@ async function callClaudeAPI(messages: Array<{role: string, content: string}>, s
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-3-haiku-20240307", // Fast and cost-effective for chat
+        model: "claude-haiku-4-5", // Fast and cost-effective for chat
         max_tokens: 500,
         system: SYSTEM_PROMPT + `\n\nIl cliente si chiama: ${senderName}`,
         messages: messages,

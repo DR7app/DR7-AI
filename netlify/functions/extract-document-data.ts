@@ -226,9 +226,13 @@ export const handler: Handler = async (event) => {
             };
         }
 
-        // Call Claude Vision API - using Opus for best OCR accuracy
+        // Call Claude Vision API. Sonnet 4.6 gives the best
+        // accuracy/cost balance for Italian ID/patente OCR. Bug fix
+        // 2026-05-16: era hardcoded sul vecchio model id date-suffixed
+        // 'claude-sonnet-4-20250514' che ora viene rifiutato dall'API,
+        // facendo fallire silenziosamente l'estrazione.
         const response = await anthropic.messages.create({
-            model: 'claude-sonnet-4-20250514',
+            model: 'claude-sonnet-4-6',
             max_tokens: 4000,
             messages: [
                 {
