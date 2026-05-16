@@ -559,24 +559,32 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editFormSnapshotRef = useRef<Record<string, any> | null>(null)
 
-  // Diff (changed fields) computed at Salva time and shown in the OTP
-  // email to direzione + saved on the limitation_overrides record.
-  const [overrideDetails, setOverrideDetails] = useState<Array<{ label: string; value: string }> | undefined>(undefined)
+  // Override details state — accetta sia legacy array (compat) sia
+  // strutturato { gate, customer, operation, meta } (preferito).
+  // Server-side limitation-override-otp.ts gestisce entrambe le forme;
+  // il payload strutturato attiva il rendering sezionato e colorato
+  // nell'email a direzione.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [overrideDetails, setOverrideDetails] = useState<any>(undefined)
 
-  // Helper: costruisce le righe "Dettaglio richiesta" che finiscono nella
-  // mail OTP a direzione. Legge lo stato corrente (formData, customers,
-  // vehicles, customerTier, modalita' nuovo cliente) e produce solo i
-  // campi con valore. Le righe `extras` vengono accodate cosi' i singoli
-  // gate possono aggiungere contesto specifico (es. "Slot non disponibile",
-  // "Patente scaduta il ...").
+  // Helper: costruisce il payload "Dettaglio richiesta" che finisce nella
+  // mail OTP a direzione, in forma STRUTTURATA (gate/customer/operation/meta).
+  // Legge lo stato corrente (formData, customers, vehicles, customerTier,
+  // modalita' nuovo cliente) e include solo i campi con valore. Gli `extras`
+  // del caller vanno tutti in `gate` (sono motivi/condizioni che hanno
+  // attivato l'OTP — meritano la sezione rossa in cima all'email).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  function buildOverrideDetailsBase(extras: Array<{ label: string; value: string }> = []): Array<{ label: string; value: string }> {
-    const rows: Array<{ label: string; value: string }> = []
-    const push = (label: string, value: string | number | null | undefined) => {
+  function buildOverrideDetailsBase(extras: Array<{ label: string; value: string }> = []): Record<string, unknown> {
+    const gate: Record<string, string> = {}
+    const customerSec: Record<string, string> = {}
+    const operation: Record<string, string> = {}
+    const meta: Record<string, string> = {}
+
+    const set = (dst: Record<string, string>, label: string, value: string | number | null | undefined) => {
       if (value === null || value === undefined) return
       const s = String(value).trim()
       if (!s || s === '—') return
-      rows.push({ label, value: s })
+      dst[label] = s
     }
     const eur = (n: unknown) => {
       const num = typeof n === 'number' ? n : parseFloat(String(n ?? 0))
@@ -589,9 +597,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const [y, mo, da] = d.split('-')
       return y && mo && da ? `${da}/${mo}/${y}${t ? ` ${t}` : ''}` : `${d}${t ? ` ${t}` : ''}`
     }
+
     // Operazione
-    push('Operazione', editingId ? 'Modifica prenotazione' : 'Nuova prenotazione')
-    if (editingId) push('ID prenotazione', editingId.slice(0, 8))
+    set(operation, 'Tipo operazione', editingId ? 'Modifica prenotazione noleggio' : 'Nuova prenotazione noleggio')
+    if (editingId) set(operation, 'Riferimento', `DR7-${editingId.slice(0, 8).toUpperCase()}`)
+
     // Cliente
     const cust = customers.find(c => c.id === formData.customer_id)
     const newFullName = `${newCustomerData?.nome || ''} ${newCustomerData?.cognome || ''}`.trim()
@@ -600,50 +610,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       : (cust?.full_name || '')
     const customerEmail = newCustomerMode ? (newCustomerData?.email || '') : (cust?.email || '')
     const customerPhone = newCustomerMode ? (newCustomerData?.telefono || '') : (cust?.phone || '')
-    push('Cliente', customerName)
-    push('Email cliente', customerEmail)
-    push('Telefono cliente', customerPhone)
-    // Veicolo + targa
-    const veh = vehicles.find(v => v.id === formData.vehicle_id)
-    if (veh) {
-      push('Veicolo', `${veh.display_name}${veh.plate ? ` (${veh.plate})` : ''}`)
-    }
-    // Date ritiro/riconsegna + giorni
-    const pickupStr = fmtDate(formData.pickup_date, formData.pickup_time)
-    const dropoffStr = fmtDate(formData.return_date, formData.return_time)
-    push('Ritiro', pickupStr)
-    push('Riconsegna', dropoffStr)
-    if (formData.pickup_date && formData.pickup_time && formData.return_date && formData.return_time) {
-      const p = new Date(`${formData.pickup_date}T${formData.pickup_time}:00`)
-      const r = new Date(`${formData.return_date}T${formData.return_time}:00`)
-      if (!isNaN(p.getTime()) && !isNaN(r.getTime()) && r > p) {
-        const diffH = (r.getTime() - p.getTime()) / (1000 * 60 * 60)
-        const days = Math.ceil(diffH / 24)
-        push('Giorni noleggio', String(days))
-      }
-    }
-    // Luogo ritiro
-    push('Luogo ritiro', formData.pickup_location || '')
-    // Importi
-    const totEur = eur(formData.total_amount)
-    if (totEur) push('Importo totale', totEur)
-    if (formData.deposit_status === 'no_cauzione') {
-      push('Cauzione', 'No Cauzione')
-    } else {
-      const depEur = eur(formData.deposit)
-      if (depEur) push('Cauzione richiesta', depEur)
-    }
-    push('Pagamento', formData.payment_method || '')
-    push('Stato pagamento', formData.payment_status || '')
-    // Kasko/Assicurazione
-    push('Assicurazione', formData.insurance_option || '')
+    set(customerSec, 'Nome', customerName)
+    set(customerSec, 'Email', customerEmail)
+    set(customerSec, 'Telefono', customerPhone)
+
     // Fascia cliente (se classificata)
     if (customerTier) {
       const fasciaLabel = customerTier.tier === 'TIER_2' ? 'A'
         : customerTier.tier === 'TIER_1' ? 'B'
         : 'Bloccata'
       const ageLic = customerTier.reason ? ` — ${customerTier.reason}` : ''
-      push('Fascia cliente', `${fasciaLabel}${ageLic}`)
+      set(customerSec, 'Fascia cliente', `${fasciaLabel}${ageLic}`)
     }
     // Patente (se presente sul cliente selezionato)
     if (cust) {
@@ -653,14 +630,54 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const patScad = c.scadenza_patente || c.data_scadenza_patente || c.metadata?.patente?.scadenza
       if (patNum) {
         const scadStr = patScad ? ` (scadenza ${new Date(patScad).toLocaleDateString('it-IT')})` : ''
-        push('Patente', `${patNum}${scadStr}`)
+        set(customerSec, 'Patente', `${patNum}${scadStr}`)
       }
     }
+
+    // Veicolo + targa
+    const veh = vehicles.find(v => v.id === formData.vehicle_id)
+    if (veh) {
+      set(operation, 'Veicolo', `${veh.display_name}${veh.plate ? ` (${veh.plate})` : ''}`)
+    }
+    // Date ritiro/riconsegna + giorni
+    set(operation, 'Ritiro', fmtDate(formData.pickup_date, formData.pickup_time))
+    set(operation, 'Riconsegna', fmtDate(formData.return_date, formData.return_time))
+    if (formData.pickup_date && formData.pickup_time && formData.return_date && formData.return_time) {
+      const p = new Date(`${formData.pickup_date}T${formData.pickup_time}:00`)
+      const r = new Date(`${formData.return_date}T${formData.return_time}:00`)
+      if (!isNaN(p.getTime()) && !isNaN(r.getTime()) && r > p) {
+        const diffH = (r.getTime() - p.getTime()) / (1000 * 60 * 60)
+        const days = Math.ceil(diffH / 24)
+        set(operation, 'Giorni noleggio', String(days))
+      }
+    }
+    // Luogo ritiro
+    set(operation, 'Luogo ritiro', formData.pickup_location || '')
+    // Importi
+    const totEur = eur(formData.total_amount)
+    if (totEur) set(operation, 'Importo totale', totEur)
+    if (formData.deposit_status === 'no_cauzione') {
+      set(operation, 'Cauzione', 'No Cauzione')
+    } else {
+      const depEur = eur(formData.deposit)
+      if (depEur) set(operation, 'Cauzione richiesta', depEur)
+    }
+    set(operation, 'Metodo pagamento', formData.payment_method || '')
+    set(operation, 'Stato pagamento', formData.payment_status || '')
+    set(operation, 'Assicurazione', formData.insurance_option || '')
+
+    // Meta — operatore + timestamp
+    const operatorEmail = typeof window !== 'undefined' ? (sessionStorage.getItem('admin-email') || null) : null
+    if (operatorEmail) set(meta, 'Operatore', operatorEmail)
+    set(meta, 'Data richiesta', new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }))
+
+    // Append extras come motivazioni in `gate` (sezione rossa
+    // evidenziata — la direzione legge per prima il PERCHE' dell'OTP)
     // Append extras
     for (const e of extras) {
-      if (e && e.label && e.value) rows.push(e)
+      if (e && e.label && e.value) set(gate, e.label, e.value)
     }
-    return rows
+    return { gate, customer: customerSec, operation, meta }
   }
 
   // Resume submission once a paused-save override is approved. Gates that
@@ -3895,20 +3912,55 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         ]
         if (editingId) baseDetails.splice(1, 0, { label: 'Prenotazione', value: editingId.slice(0, 8) })
 
-        // Aggiungiamo le motivazioni in coda — la direzione vede l'elenco
-        // completo di cosa sta autorizzando.
-        const motivazioniRows: Array<{ label: string; value: string }> = trips.length === 1
-          ? [{ label: 'Motivo', value: trips[0].motivazione }]
-          : trips.map((t, i) => ({ label: `Motivo ${i + 1}`, value: t.motivazione }))
-
-        // Per la modifica di una prenotazione paid/confirmed combiniamo il
-        // diff (campi cambiati) con i dettagli base + motivazioni — così
-        // la direzione vede sia "cosa cambia" sia "perché l'OTP scatta".
-        const finalDetails = editDiffDetails
-          ? [...editDiffDetails, ...baseDetails.filter(r =>
-              !['Operazione', 'Prenotazione', 'Cliente', 'Veicolo', 'Ritiro', 'Riconsegna'].includes(r.label)
-            ), ...motivazioniRows]
-          : [...baseDetails, ...motivazioniRows]
+        // Payload strutturato — la direzione vede sezioni colorate:
+        //   gate (rosso): motivazioni (perche' scatta l'OTP)
+        //   customer (blu): nome, telefono
+        //   diff (ambra): Prima→Dopo per ogni campo cambiato (solo se modifica)
+        //   operation (categoria): veicolo, date, importi, pagamento
+        //   meta (grigio): timestamp
+        const motivazioni: Record<string, string> = {}
+        if (trips.length === 1) {
+          motivazioni['Motivo'] = trips[0].motivazione
+        } else {
+          trips.forEach((t, i) => { motivazioni[`Motivo ${i + 1}`] = t.motivazione })
+        }
+        // Trasforma editDiffDetails (array di {label, value}) in diff strutturato.
+        // buildBookingEditDiff produce righe del tipo:
+        //   { label: 'Data ritiro', value: '15/05/2026 10:00 → 16/05/2026 10:00' }
+        // Splittiamo sul ' → ' per ottenere before/after; se non c'e' separatore
+        // mettiamo tutto in `after` (caso edge).
+        const diffStructured: Array<{ field: string; before: string; after: string }> = []
+        if (editDiffDetails) {
+          for (const row of editDiffDetails) {
+            const v = String(row.value || '')
+            const arrowIdx = v.indexOf(' → ')
+            if (arrowIdx > -1) {
+              diffStructured.push({ field: row.label, before: v.slice(0, arrowIdx).trim(), after: v.slice(arrowIdx + 3).trim() })
+            } else {
+              diffStructured.push({ field: row.label, before: '', after: v })
+            }
+          }
+        }
+        const finalDetails = {
+          gate: motivazioni,
+          customer: { Nome: customerName, Telefono: customerPhone },
+          ...(diffStructured.length > 0 ? { diff: diffStructured } : {}),
+          operation: {
+            'Tipo operazione': editingId ? 'Modifica prenotazione' : 'Nuova prenotazione',
+            ...(editingId ? { 'Riferimento': `DR7-${editingId.slice(0, 8).toUpperCase()}` } : {}),
+            Veicolo: vehLabel,
+            Ritiro: fmtDate(formData.pickup_date, formData.pickup_time),
+            Riconsegna: fmtDate(formData.return_date, formData.return_time),
+            'Luogo ritiro': formData.pickup_location || '—',
+            Totale: eur(formData.total_amount),
+            Cauzione: formData.deposit_status === 'no_cauzione' ? 'No Cauzione' : eur(formData.deposit),
+            Pagamento: formData.payment_method || '—',
+          },
+          meta: {
+            'Data richiesta': new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          },
+        }
+        void baseDetails // legacy var conservata ma non usata nel nuovo payload
 
         setOverrideDetails(finalDetails)
 
