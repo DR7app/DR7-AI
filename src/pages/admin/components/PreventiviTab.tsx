@@ -1045,8 +1045,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; price: number }>> | undefined
       if (!pkgsByCat) return 0
       const cat = String(selectedVehicle?.category || '').toLowerCase().trim()
-      const aliases = cat === 'supercars' ? ['supercars', 'exotic']
-                    : cat === 'exotic' ? ['exotic', 'supercars']
+      const aliases = (cat === 'supercars' || cat === 'supercar') ? ['supercars', 'supercar', 'exotic']
+                    : cat === 'exotic' ? ['exotic', 'supercars', 'supercar']
                     : [cat]
       let catPkgs: Array<{ id: string; price: number }> = []
       for (const k of aliases) {
@@ -1789,7 +1789,16 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       km_package_id: typeof extras.km_package_id === 'string' ? extras.km_package_id : '',
       km_package_qty: Number.isFinite(Number(extras.km_package_qty)) && Number(extras.km_package_qty) > 0 ? Number(extras.km_package_qty) : 1,
       // 2026-05-16: restore multi-select pacchetti
-      km_packages: (extras.km_packages && typeof extras.km_packages === 'object') ? extras.km_packages as Record<string, number> : {},
+      // Accetta entrambe le chiavi (snake_case e camelCase): i preventivi
+      // creati dal sito prima del 2026-05-16 erano salvati con kmPackages,
+      // dopo con km_packages. Restituiamo il primo non-vuoto.
+      km_packages: (() => {
+        const snake = extras.km_packages && typeof extras.km_packages === 'object' ? extras.km_packages as Record<string, number> : null
+        if (snake && Object.keys(snake).length > 0) return snake
+        const camel = (extras as { kmPackages?: unknown }).kmPackages && typeof (extras as { kmPackages?: unknown }).kmPackages === 'object'
+          ? (extras as { kmPackages: Record<string, number> }).kmPackages : null
+        return camel && Object.keys(camel).length > 0 ? camel : {}
+      })(),
       pickup_location: extras.pickup_location || 'dr7_office',
       dropoff_location: extras.dropoff_location || 'dr7_office',
       delivery_fee: String(extras.delivery_fee || 0),
@@ -2223,8 +2232,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; km: number; sconto_pct: number; price: number; label: string; is_quantity_buyable?: boolean; max_quantity?: number }>> | undefined
             if (cat && pkgsByCat) {
-              const aliases = cat === 'supercars' ? ['supercars', 'exotic']
-                            : cat === 'exotic' ? ['exotic', 'supercars']
+              const aliases = (cat === 'supercars' || cat === 'supercar') ? ['supercars', 'supercar', 'exotic']
+                            : cat === 'exotic' ? ['exotic', 'supercars', 'supercar']
                             : [cat]
               let catPkgs: typeof pkgsByCat[string] = []
               for (const k of aliases) {
@@ -4085,10 +4094,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             <span>{formatEur(pricing.experienceCost)}</span>
           </div>
         )}
-        {pricing.kmPackagesTotal > 0 && (
+        {(pricing.kmPackagesTotal ?? 0) > 0 && (
           <div className="flex justify-between text-sm text-theme-text-muted">
             <span>Pacchetti KM extra</span>
-            <span>{formatEur(pricing.kmPackagesTotal)}</span>
+            <span>{formatEur(pricing.kmPackagesTotal ?? 0)}</span>
           </div>
         )}
 
