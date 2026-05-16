@@ -962,6 +962,33 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
 
     const experienceCost = calculateExperienceCost(form.experience_services, rentalDays, configOverlay.experienceServices, form.experience_km_quotes)
 
+    // Pacchetti KM (multi-select cumulativo). Letti da rentalConfig.pacchetti_km
+    // con alias supercars<->exotic. Trattati come passthrough (no coefficiente),
+    // come experienceCost / location fees.
+    const kmPackagesTotal = (() => {
+      const kmPkgs = (form.km_packages || {}) as Record<string, number>
+      if (!kmPkgs || Object.keys(kmPkgs).length === 0) return 0
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; price: number }>> | undefined
+      if (!pkgsByCat) return 0
+      const cat = String(selectedVehicle?.category || '').toLowerCase().trim()
+      const aliases = cat === 'supercars' ? ['supercars', 'exotic']
+                    : cat === 'exotic' ? ['exotic', 'supercars']
+                    : [cat]
+      let catPkgs: Array<{ id: string; price: number }> = []
+      for (const k of aliases) {
+        const v = pkgsByCat[k]
+        if (Array.isArray(v) && v.length > 0) { catPkgs = v; break }
+      }
+      if (catPkgs.length === 0) return 0
+      let sum = 0
+      for (const pkg of catPkgs) {
+        const q = Number(kmPkgs[pkg.id]) || 0
+        if (q > 0) sum += Number(pkg.price || 0) * q
+      }
+      return Math.round(sum * 100) / 100
+    })()
+
     // Product of revenue coefficients.
     const revenueCoeff = revenueData?.enabled
       ? (revenueData.breakdown || []).reduce((acc, b) => acc * b.coeff, 1)
@@ -988,7 +1015,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     const extrasInCoeff = splitInsurance.inCoeff + splitLavaggio.inCoeff + splitNoCauzione.inCoeff + splitUnlimitedKm.inCoeff + splitSecondDriver.inCoeff + splitDr7Flex.inCoeff + splitCauzioneVeic.inCoeff
     const extrasAtList  = splitInsurance.atList  + splitLavaggio.atList  + splitNoCauzione.atList  + splitUnlimitedKm.atList  + splitSecondDriver.atList  + splitDr7Flex.atList  + splitCauzioneVeic.atList
     const listSubtotalNoExp = listRentalTotal + extrasInCoeff
-    const listSubtotal = listSubtotalNoExp + experienceCost + locationFees + extrasAtList
+    const listSubtotal = listSubtotalNoExp + experienceCost + locationFees + extrasAtList + kmPackagesTotal
 
     // Apply revenue coefficients ONLY to the clamp-eligible portion.
     // Experience + location fees stay at LIST PRICE — no coefficient, no
@@ -1027,8 +1054,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     // Real (uncapped) subtotal for display purposes — this is the "Subtotale"
     // line the admin sees, reflecting what the engine would ask for without
     // limits. The clamp lines below show how it's been capped.
-    const subtotalDisplay = Math.round((rawAfterRevenueNoExp + experienceAfterCoeff + locationFees + extrasAtList) * 100) / 100
-    const subtotalClamped = Math.round((afterRevenueTotalNoExp + experienceAfterCoeff + locationFees + extrasAtList) * 100) / 100
+    const subtotalDisplay = Math.round((rawAfterRevenueNoExp + experienceAfterCoeff + locationFees + extrasAtList + kmPackagesTotal) * 100) / 100
+    const subtotalClamped = Math.round((afterRevenueTotalNoExp + experienceAfterCoeff + locationFees + extrasAtList + kmPackagesTotal) * 100) / 100
     // Keep the legacy `afterRevenue` alias = the clamped subtotal used for all
     // downstream math (markup, sconto, totale finale).
     const afterRevenue = subtotalClamped
@@ -1070,6 +1097,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       pickupFee,
       experienceCost,
       experienceAfterCoeff,
+      kmPackagesTotal,
       listSubtotal,
       // Subtotale a cui il coefficiente si applica davvero: esclude
       // experience e location fees (consegna + ritiro) — quelli passano
@@ -1576,6 +1604,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           // sul preventivo cosi' al RE-LOAD vediamo lo stesso stato + al
           // SEND WhatsApp/email il template {km_package} li elenca.
           km_packages: form.km_packages,
+          km_packages_total: pricing.kmPackagesTotal,
           experience_cost: pricing.experienceCost,
         },
         status: 'bozza',
@@ -3950,6 +3979,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           <div className="flex justify-between text-sm text-theme-text-muted">
             <span>Servizi Experience</span>
             <span>{formatEur(pricing.experienceCost)}</span>
+          </div>
+        )}
+        {pricing.kmPackagesTotal > 0 && (
+          <div className="flex justify-between text-sm text-theme-text-muted">
+            <span>Pacchetti KM extra</span>
+            <span>{formatEur(pricing.kmPackagesTotal)}</span>
           </div>
         )}
 
