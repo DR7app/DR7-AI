@@ -160,13 +160,18 @@ export function convertProToRentalConfig(pro: ProSnapshot): RentalConfig {
     config.insurance = ins
   }
 
-  // ── KM Included + Sforo + Unlimited KM ──
+  // ── KM Included + Sforo + Unlimited KM + Pacchetti KM ──
   if (pro.km) {
     const kmInc: Record<string, KmIncludedEntry | { unlimited: boolean }> = {
       _global: config.km_included._global,
     }
     const sforoCat: Record<string, number> = {}
     const unlimitedKm: Record<string, Record<string, { per_day: number }>> = {}
+    // 2026-05-16: pacchetti KM per categoria. Cataloga TUTTI i pacchetti
+    // attivi (is_active=true e km>0), con prezzo precalcolato
+    // km × sforo × (1 - sconto%/100). Consumer (ReservationsTab/
+    // PreventiviTab) trova qui i pacchetti per categoria.
+    const pacchettiByCat: Record<string, Array<{ id: string; km: number; sconto_pct: number; price: number; label: string }>> = {}
 
     for (const kmCfg of pro.km) {
       const dbCat = PRO_TO_DB_CATEGORY[kmCfg.id] || kmCfg.id
@@ -211,6 +216,29 @@ export function convertProToRentalConfig(pro: ProSnapshot): RentalConfig {
     config.km_included = kmInc as RentalConfig['km_included']
     config.sforo_km.category = sforoCat
     config.unlimited_km = unlimitedKm
+    // 2026-05-16: pacchetti KM per categoria. Letti da pro.km[].pacchetti
+    // dopo aver risolto lo sforo della stessa categoria. Solo pacchetti
+    // con is_active=true e km>0 finiscono in output.
+    for (const kmCfg of pro.km) {
+      const dbCat = PRO_TO_DB_CATEGORY[kmCfg.id] || kmCfg.id
+      const sforoPerKm = sforoCat[dbCat] || 0
+      const pkgsRaw = (kmCfg as { pacchetti?: Array<{ id: string; km: number | ''; sconto_pct: number | ''; is_active?: boolean; label?: string }> }).pacchetti
+      if (Array.isArray(pkgsRaw) && pkgsRaw.length > 0) {
+        const pkgs = pkgsRaw
+          .filter(p => p && p.is_active === true)
+          .map(p => {
+            const km = num(p.km)
+            const sconto = num(p.sconto_pct)
+            const price = Math.round((km * sforoPerKm * (1 - sconto / 100)) * 100) / 100
+            const label = String(p.label || '').trim() || `Pacchetto ${km} km`
+            return { id: String(p.id), km, sconto_pct: sconto, price, label }
+          })
+          .filter(p => p.km > 0)
+        if (pkgs.length > 0) pacchettiByCat[dbCat] = pkgs
+      }
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(config as any).pacchetti_km = pacchettiByCat
   }
 
   // ── Deposits ──

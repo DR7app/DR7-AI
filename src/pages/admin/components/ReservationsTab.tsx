@@ -817,6 +817,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     km_overage_fee: '', // si popola da Centralina quando si seleziona il veicolo
     unlimited_km: false,
     km_limit: DEFAULT_KM_LIMIT, // Default KM limit when not unlimited
+    // 2026-05-16: pacchetto KM extra acquistato dal cliente (opzionale).
+    // Id del PacchettoKm in centralina_pro_config.km[category].pacchetti[].
+    // Mutuamente esclusivo con unlimited_km. Vuoto = nessun pacchetto.
+    km_package_id: '' as string,
     // Home Delivery & Pickup
     delivery_enabled: false,
     delivery_street: '',
@@ -5146,6 +5150,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // KM Limit
           km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
           unlimited_km: formData.unlimited_km,
+          // 2026-05-16: pacchetto KM extra acquistato (se selezionato).
+          // Risolto live da rentalConfig.pacchetti_km usando il categoria del veicolo.
+          km_package: (() => {
+            if (!formData.km_package_id || formData.unlimited_km) return null
+            const v = vehicles.find(vv => vv.id === formData.vehicle_id)
+            const cat = String(v?.category || '').toLowerCase().trim()
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; km: number; sconto_pct: number; price: number; label: string }>> | undefined
+            if (!cat || !pkgsByCat) return null
+            const aliases = cat === 'supercars' ? ['supercars', 'exotic']
+                          : cat === 'exotic' ? ['exotic', 'supercars']
+                          : [cat]
+            for (const k of aliases) {
+              const found = (pkgsByCat[k] || []).find(p => p.id === formData.km_package_id)
+              if (found) return { id: found.id, label: found.label, km: found.km, sconto_pct: found.sconto_pct, price: found.price }
+            }
+            return null
+          })(),
           // Centralina Pro: prezzo per-veicolo-categoria + per-fascia.
           // getUnlimitedKmPriceRes(vehicle, tier) legge rental_config.unlimited_km[category][tier]
           // invece del fallback globale CFG_UNLIMITED_KM (che ignora la categoria).
@@ -8190,6 +8212,62 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   })()}
                 </label>
               </div>
+
+              {/* === PACCHETTI KM (2026-05-16) ===
+                  Pacchetti extra acquistabili per la categoria del veicolo
+                  selezionato. Letti da rentalConfig.pacchetti_km (popolato da
+                  convertProConfig). Mutuamente esclusivi con KM Illimitati.
+                  Cliccando una card → seleziona/deseleziona il pacchetto. */}
+              {(() => {
+                const selVeh = vehicles.find(v => v.id === formData.vehicle_id)
+                if (!selVeh) return null
+                const cat = String(selVeh.category || '').toLowerCase().trim()
+                if (!cat) return null
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; km: number; sconto_pct: number; price: number; label: string }>> | undefined
+                if (!pkgsByCat) return null
+                const aliases = cat === 'supercars' ? ['supercars', 'exotic']
+                              : cat === 'exotic' ? ['exotic', 'supercars']
+                              : [cat]
+                let pkgs: Array<{ id: string; km: number; sconto_pct: number; price: number; label: string }> = []
+                for (const k of aliases) {
+                  const v = pkgsByCat[k]
+                  if (Array.isArray(v) && v.length > 0) { pkgs = v; break }
+                }
+                if (pkgs.length === 0) return null
+                return (
+                  <div className="space-y-2 mt-2">
+                    <h4 className="text-xs font-semibold text-theme-text-muted uppercase tracking-wider">Pacchetti KM extra (opzionale)</h4>
+                    {pkgs.map(pkg => {
+                      const isSelected = formData.km_package_id === pkg.id
+                      const isDisabled = formData.unlimited_km
+                      return (
+                        <div key={pkg.id}
+                          onClick={() => {
+                            if (isDisabled) return
+                            setFormData(prev => ({ ...prev, km_package_id: isSelected ? '' : pkg.id }))
+                          }}
+                          className={`p-3 rounded-md border cursor-pointer transition-colors ${
+                            isDisabled ? 'opacity-50 cursor-not-allowed border-theme-border'
+                            : isSelected ? 'border-dr7-gold bg-dr7-gold/10'
+                            : 'border-theme-border hover:border-theme-text-muted'
+                          }`}
+                        >
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <div className="text-sm font-bold text-theme-text-primary">{pkg.label} <span className="text-theme-text-muted font-normal">({pkg.km} km)</span></div>
+                              {pkg.sconto_pct > 0 && (
+                                <div className="text-xs text-theme-text-muted">Sconto {pkg.sconto_pct}% sul sforo</div>
+                              )}
+                            </div>
+                            <span className="text-sm font-bold text-dr7-gold">+€{pkg.price.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
 
               {/* Conferma Prenotazione — non scade dopo 1h, visibile in rosso con nome cliente */}
               {formData.payment_status !== 'paid' && formData.payment_status !== 'completed' && formData.payment_status !== 'succeeded' && (
