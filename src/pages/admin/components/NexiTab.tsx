@@ -133,9 +133,19 @@ export default function NexiTab() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ dryRun: true, limit: 500 }),
             })
-            const dryData = await dry.json()
+            // Parse defensively — nexi-tokenize-backfill can return an HTML
+            // error page on 502/504/404 and res.json() crashes with the
+            // useless "Unexpected token '<'" error. Read as text and surface
+            // a real status + snippet so admin sees WHAT went wrong.
+            const dryRaw = await dry.text()
+            let dryData: Record<string, unknown> = {}
+            try { dryData = JSON.parse(dryRaw) as Record<string, unknown> } catch {
+                toast.dismiss(toastId)
+                const snippet = dryRaw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200)
+                throw new Error(`Backfill ha risposto HTTP ${dry.status}, non JSON. "${snippet || '(vuota)'}"`)
+            }
             toast.dismiss(toastId)
-            if (!dry.ok) throw new Error(dryData.error || `HTTP ${dry.status}`)
+            if (!dry.ok) throw new Error(((dryData as { error?: string })?.error) || `HTTP ${dry.status}`)
 
             const wouldSave = dryData.would_save || 0
             const skipped = dryData.skipped || 0
@@ -160,10 +170,16 @@ export default function NexiTab() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ dryRun: false, limit: 500 }),
             })
-            const applyData = await apply.json()
+            const applyRaw = await apply.text()
+            let applyData: Record<string, unknown> = {}
+            try { applyData = JSON.parse(applyRaw) as Record<string, unknown> } catch {
+                toast.dismiss(applyToast)
+                const snippet = applyRaw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200)
+                throw new Error(`Apply ha risposto HTTP ${apply.status}, non JSON. "${snippet || '(vuota)'}"`)
+            }
             toast.dismiss(applyToast)
-            if (!apply.ok) throw new Error(applyData.error || `HTTP ${apply.status}`)
-            toast.success(`✓ ${applyData.saved} carte recuperate!`)
+            if (!apply.ok) throw new Error((applyData as { error?: string })?.error || `HTTP ${apply.status}`)
+            toast.success(`✓ ${(applyData as { saved?: number }).saved ?? 0} carte recuperate!`)
             await fetchTokenizedCards()
         } catch (err: any) {
             toast.dismiss(toastId)
