@@ -18,6 +18,7 @@ import { useAdminRole } from '../../../hooks/useAdminRole'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import { OTP_ACTION_CATALOG, type OtpAction } from '../../../utils/otpActionCatalog'
+import { authFetch } from '../../../utils/authFetch'
 import { OTP_CONTEXT_FIELDS, OTP_OPERATORS, type OtpCondition, type OtpOperator, type ContextFieldDef } from '../../../utils/otpConditionEngine'
 
 interface OtpRow {
@@ -265,6 +266,31 @@ export default function GestioneOtpTab() {
     const removeRow = (row: OtpRow) => {
         if (!confirm(`Eliminare l'OTP "${row.label}" (${row.id})?\n\nLa limitazione corrispondente non verrà più protetta da OTP nel codice che la richiede.`)) return
         gated('gestione_otp_delete', `Eliminazione dell'OTP "${row.label}" richiede autorizzazione direzionale`, () => doRemoveRow(row))
+    }
+
+    // Send a sample OTP email for THIS rule to the logged-in admin's inbox.
+    // No DB writes, no real OTP — just the email render so direzione can
+    // preview what the operatori would receive when this gate fires.
+    const [testingId, setTestingId] = useState<string | null>(null)
+    const sendTestForRow = async (row: OtpRow) => {
+        setTestingId(row.id)
+        try {
+            const res = await authFetch('/.netlify/functions/send-otp-preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: row.id, label: row.label, reason: row.reason }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) {
+                toast.error(`Invio fallito: ${data?.error || res.status}`)
+            } else {
+                toast.success(`Anteprima inviata a ${data.recipient || 'la tua email'}`)
+            }
+        } catch (e) {
+            toast.error('Invio fallito: ' + (e instanceof Error ? e.message : 'errore sconosciuto'))
+        } finally {
+            setTestingId(null)
+        }
     }
 
     // Derived data
@@ -700,14 +726,24 @@ export default function GestioneOtpTab() {
                                             onChange={(newConds) => setField(row.id, 'conditions', newConds as unknown as OtpRow[keyof OtpRow])}
                                         />
 
-                                        <div className="mt-4 flex items-center justify-between gap-2">
-                                            <button
-                                                onClick={() => removeRow(row)}
-                                                disabled={saving}
-                                                className="px-3 py-1.5 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 disabled:opacity-50"
-                                            >
-                                                Elimina
-                                            </button>
+                                        <div className="mt-4 flex items-center justify-between gap-2 flex-wrap">
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => removeRow(row)}
+                                                    disabled={saving}
+                                                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 disabled:opacity-50"
+                                                >
+                                                    Elimina
+                                                </button>
+                                                <button
+                                                    onClick={() => sendTestForRow(row)}
+                                                    disabled={testingId === row.id}
+                                                    title="Invia un'anteprima dell'email OTP alla tua casella"
+                                                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 disabled:opacity-50"
+                                                >
+                                                    {testingId === row.id ? 'Invio…' : 'Invia anteprima'}
+                                                </button>
+                                            </div>
                                             {dirty && (
                                                 <div className="flex items-center gap-2">
                                                     <button

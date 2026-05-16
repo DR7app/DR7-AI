@@ -4,7 +4,14 @@
  * trigger a real gate from a non-bypass operator account.
  *
  * Endpoint: POST /.netlify/functions/send-otp-preview
- * Body: { sample?: 'paid_wash_modify' | 'fattura_delete' | 'rental_modify_diff' | 'carta_punti' | 'wash_delete', recipient?: 'email@example.com' }
+ * Body: {
+ *   sample?:    'paid_wash_modify' | 'fattura_delete' | 'rental_modify_diff' | 'carta_punti' | 'wash_delete',
+ *   code?:      any OTP limitation code (e.g. 'license_expired', 'slot_unavailable', ...) — uses a generic
+ *               sample with the row's label/reason if it's not in the SAMPLES map
+ *   label?:     human label for the OTP (used when `code` is set + no matching SAMPLES)
+ *   reason?:    motivo from system_otp_overrides (becomes the "Motivo OTP" in the email)
+ *   recipient?: email to send to (defaults to authUser.email)
+ * }
  *
  * Defaults: sample='paid_wash_modify', recipient = authUser.email.
  * No DB writes, no audit log, no real OTP — just the email render path.
@@ -272,15 +279,63 @@ export const handler: Handler = async (event) => {
   const { user: authUser, error: authErr } = await requireAuth(event)
   if (authErr) return authErr
 
-  let body: { sample?: keyof typeof SAMPLES; recipient?: string } = {}
+  let body: {
+    sample?: keyof typeof SAMPLES
+    code?: string
+    label?: string
+    reason?: string
+    recipient?: string
+  } = {}
   try { body = JSON.parse(event.body || '{}') } catch { /* keep {} */ }
-  const sample = (body.sample && SAMPLES[body.sample]) ? body.sample : 'paid_wash_modify'
   const recipient = (body.recipient || authUser?.email || '').trim()
   if (!recipient) {
     return { statusCode: 400, body: JSON.stringify({ error: 'Recipient missing (no authUser.email and no body.recipient)' }) }
   }
 
-  const payload = SAMPLES[sample]
+  // Resolve payload. Priority:
+  //   1. sample (legacy / preset names)
+  //   2. code matching a SAMPLES key
+  //   3. code + label + reason → generic fallback sample
+  //   4. default to paid_wash_modify
+  let payload: SamplePayload
+  let sample: string
+  if (body.sample && SAMPLES[body.sample]) {
+    sample = body.sample
+    payload = SAMPLES[sample]
+  } else if (body.code && SAMPLES[body.code as keyof typeof SAMPLES]) {
+    sample = body.code
+    payload = SAMPLES[body.code as keyof typeof SAMPLES]
+  } else if (body.code) {
+    // Generic sample using only the row's code/label/reason — the email
+    // still renders with the full layout but with placeholder customer +
+    // booking data, so direzione sees what an OTP for THAT code looks like.
+    sample = `generic:${body.code}`
+    payload = {
+      limitationCode: body.code,
+      limitationMessage: body.reason || body.label || `OTP per ${body.code}`,
+      flowType: 'booking_create',
+      actionContext: `preview_${body.code}`,
+      details: {
+        gate: { 'Motivo OTP': body.reason || `Test OTP — ${body.label || body.code}` },
+        customer: { Nome: 'Mario Rossi (cliente di esempio)', Email: 'mario.rossi@example.com', Telefono: '+39 333 1234567' },
+        operation: {
+          'Tipo operazione': body.label || body.code,
+          Veicolo: 'BMW X5 (placeholder)',
+          Targa: 'AB123CD',
+          'Data appuntamento': '20/05/2026',
+          Ora: '10:30',
+          'Importo totale': '€ 150,00',
+        },
+        meta: {
+          Operatore: 'davide@dr7.app',
+          'Data richiesta': new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        },
+      },
+    }
+  } else {
+    sample = 'paid_wash_modify'
+    payload = SAMPLES.paid_wash_modify
+  }
   const operatorEmail = authUser!.email || 'operatore@dr7.app'
   const operatorName = (() => {
     const local = operatorEmail.split('@')[0]
