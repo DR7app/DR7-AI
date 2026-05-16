@@ -233,34 +233,40 @@ export default function ReportGoogleBusinessTab() {
                   <div>Scoperto il: {diag.location_cache.discovered_at ? new Date(diag.location_cache.discovered_at).toLocaleString('it-IT') : '—'}</div>
                 </div>
 
-                {/* Manual location input — bypass scoperta automatica */}
-                {!diag.location_cache.name && (
-                  <div className="mt-2 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
-                    <div className="text-xs text-amber-300 font-semibold mb-2">Imposta location ID manualmente</div>
-                    <div className="text-[11px] text-theme-text-muted mb-2">
-                      Soluzione definitiva al rate limit: vai su <a href="https://business.google.com" target="_blank" rel="noreferrer" className="text-cyan-400 underline">business.google.com</a>,
-                      apri la tua scheda DR7 Cagliari, copia i numeri dall'URL (es. <code>business.google.com/n/<strong>1234567890</strong>/edit/...</code>) e incollali qui sotto.
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={manualLoc}
-                        onChange={e => setManualLoc(e.target.value)}
-                        placeholder="es. 1234567890123456789"
-                        className="flex-1 px-2 py-1 rounded border border-theme-border bg-theme-bg-primary text-xs text-theme-text-primary"
-                      />
-                      <button
-                        type="button"
-                        onClick={saveManualLocation}
-                        disabled={!manualLoc.trim()}
-                        className="px-3 py-1 rounded bg-cyan-600 text-white text-xs font-semibold disabled:opacity-50"
-                      >
-                        Salva
-                      </button>
-                    </div>
-                    {manualLocStatus && <div className="mt-2 text-[11px] text-amber-300">{manualLocStatus}</div>}
+                {/* Manual location input — sempre visibile cosi' si puo'
+                    cambiare un ID sbagliato gia' salvato. */}
+                <div className="mt-2 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                  <div className="text-xs text-amber-300 font-semibold mb-2">
+                    {diag.location_cache.name ? 'Cambia location ID' : 'Imposta location ID manualmente'}
                   </div>
-                )}
+                  <div className="text-[11px] text-theme-text-muted mb-2">
+                    <strong className="text-red-300">IMPORTANTE</strong>: NON usare il numero dell'URL di Google Maps (CID) — quello e' un identificatore diverso e non funziona.
+                    <br />
+                    Vai su <a href="https://business.google.com" target="_blank" rel="noreferrer" className="text-cyan-400 underline font-semibold">business.google.com</a>,
+                    fai login con lo stesso account Google connesso, clicca sulla tua scheda DR7. Nell'URL vedrai qualcosa come{' '}
+                    <code className="bg-black/30 px-1 rounded">business.google.com/n/<strong>1234567890</strong>/edit</code> oppure{' '}
+                    <code className="bg-black/30 px-1 rounded">/dashboard/l/<strong>1234567890</strong></code>.
+                    Copia SOLO quel numero qui sotto.
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={manualLoc}
+                      onChange={e => setManualLoc(e.target.value)}
+                      placeholder="es. 1234567890123456789"
+                      className="flex-1 px-2 py-1 rounded border border-theme-border bg-theme-bg-primary text-xs text-theme-text-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={saveManualLocation}
+                      disabled={!manualLoc.trim()}
+                      className="px-3 py-1 rounded bg-cyan-600 text-white text-xs font-semibold disabled:opacity-50"
+                    >
+                      Salva
+                    </button>
+                  </div>
+                  {manualLocStatus && <div className="mt-2 text-[11px] text-amber-300">{manualLocStatus}</div>}
+                </div>
               </div>
 
               {/* Accounts test */}

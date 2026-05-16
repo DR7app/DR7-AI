@@ -327,7 +327,11 @@ const handler: Handler = async (event) => {
     }
   } catch (e: any) {
     const msg = String(e?.message || e)
-    const isQuota = /quota|rate.?limit|too.?many|RESOURCE_EXHAUSTED|429/i.test(msg)
+    const code = e?.code || e?.response?.status || e?.status
+    const detail = e?.response?.data?.error?.message || msg
+    const isQuota = /quota|rate.?limit|too.?many|RESOURCE_EXHAUSTED|429/i.test(`${code} ${detail}`)
+    const isNotFound = code === 404 || /not.?found/i.test(detail)
+    const isPermission = code === 403 || /permission|forbidden/i.test(detail)
 
     // Marca timestamp + flag quota: il prossimo request sa se aspettare
     // (quota error) o se puo' riprovare subito (altri errori non legati alla quota).
@@ -360,15 +364,21 @@ const handler: Handler = async (event) => {
       } catch { /* nessuna cache da servire */ }
     }
 
+    let userWarning: string
+    if (isQuota) {
+      userWarning = 'Quota Google esaurita (limite richieste/minuto). Riprova tra 60-120 secondi.'
+    } else if (isNotFound) {
+      userWarning = `Location ID non trovato su Google Business Profile. L'ID salvato non corrisponde a nessuna scheda. Apri Diagnostica e inserisci il numero REALE dall'URL di business.google.com (NON il numero da Google Maps — sono diversi). Dettaglio: ${detail}`
+    } else if (isPermission) {
+      userWarning = `Permesso negato: l'account Google connesso non gestisce questa scheda Business. Riconnetti con l'account che possiede la scheda DR7. Dettaglio: ${detail}`
+    } else {
+      userWarning = `Errore Performance API [${code || '?'}]: ${detail}`
+    }
     return {
       statusCode: 200, headers,
       body: JSON.stringify({
         ...empty, configured: true,
-        warnings: [
-          isQuota
-            ? 'Quota Google esaurita (limite richieste/minuto). Riprova tra 60-120 secondi — la GBP API ha quote molto strette.'
-            : `Errore Performance API: ${msg}`
-        ]
+        warnings: [userWarning],
       })
     }
   }
