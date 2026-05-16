@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { getResidenceStatus, getProvinciaByCity, getCAPByCity } from '../../../data/sardegnaProvince'
 import toast from 'react-hot-toast'
@@ -299,6 +299,14 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   // Start with empty errors
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isSaving, setIsSaving] = useState(false)
+  // Scrollable modal body — after "Compila" lo riportiamo in cima cosi'
+  // l'admin vede subito i campi (nome, cognome, ecc.) appena riempiti
+  // dall'estrazione.
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  // Riassunto dei campi compilati dall'ultima estrazione, per evidenziare
+  // a colpo d'occhio cosa ha letto Claude dai documenti. null = niente
+  // estrazione recente.
+  const [lastExtracted, setLastExtracted] = useState<string[] | null>(null)
 
   // Optional document uploads
   const [showDocumentSection, setShowDocumentSection] = useState(false)
@@ -738,7 +746,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
   return (
     <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-0 sm:p-4">
-      <div className="bg-theme-bg-secondary border border-theme-border rounded-none sm:rounded-lg w-full sm:max-w-3xl h-full sm:h-auto sm:max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
+      <div ref={scrollContainerRef} className="bg-theme-bg-secondary border border-theme-border rounded-none sm:rounded-lg w-full sm:max-w-3xl h-full sm:h-auto sm:max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
         {/* Header */}
         <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-4 sm:p-6 flex justify-between items-center z-10 flex-shrink-0">
           <h2 className="text-xl sm:text-2xl font-bold text-theme-text-primary">{initialData ? 'Modifica Cliente' : 'Nuovo Cliente'}</h2>
@@ -746,6 +754,43 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         </div>
 
         <div className="p-4 sm:p-6 space-y-6 sm:space-y-8 flex-1">
+
+          {/* Banner riassuntivo post-Compila — mostra ESATTAMENTE cosa
+              ha letto Claude dai documenti e in quali campi e' finito,
+              cosi' l'admin verifica senza dover scorrere tutti i campi
+              uno per uno. Il modal non si chiude da solo: il banner
+              resta finche' l'admin clicca x. */}
+          {lastExtracted && lastExtracted.length > 0 && (
+            <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-4">
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <h4 className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                    Dati estratti dai documenti — verifica:
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setLastExtracted(null)}
+                  className="text-theme-text-muted hover:text-theme-text-primary text-xl leading-none"
+                  aria-label="Nascondi riassunto"
+                >&times;</button>
+              </div>
+              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-theme-text-primary">
+                {lastExtracted.map((line, i) => (
+                  <li key={i} className="flex items-start gap-1.5">
+                    <span className="text-emerald-500 mt-0.5">·</span>
+                    <span className="truncate" title={line}>{line}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[11px] text-theme-text-muted mt-2">
+                Controlla che i valori nei campi qui sotto corrispondano. Se qualcosa non e' corretto, correggi a mano prima di salvare.
+              </p>
+            </div>
+          )}
 
           {/* 1. TIPO CLIENTE SELECTION */}
           <div>
@@ -1529,6 +1574,37 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       ]}
                       currentData={formData as unknown as Record<string, string | undefined | null>}
                       onDataExtracted={(data: ExtractedData, _conflicts: DataConflict[]) => {
+                        const FIELD_LABELS: Record<string, string> = {
+                          nome: 'Nome', cognome: 'Cognome', sesso: 'Sesso',
+                          data_nascita: 'Data di nascita', luogo_nascita: 'Luogo di nascita',
+                          provincia_nascita: 'Provincia nascita', codice_fiscale: 'Codice fiscale',
+                          indirizzo: 'Indirizzo', numero_civico: 'N. civico', codice_postale: 'CAP',
+                          citta_residenza: 'Citta residenza', provincia_residenza: 'Provincia residenza',
+                          patente_numero: 'N. patente', patente_tipo: 'Tipo patente',
+                          patente_rilascio: 'Rilascio patente', patente_scadenza: 'Scadenza patente',
+                          patente_ente: 'Ente patente',
+                        }
+                        const filled: string[] = []
+                        const pushIf = (key: keyof typeof FIELD_LABELS, value: string | undefined) => {
+                          if (value) filled.push(`${FIELD_LABELS[key as string]}: ${value}`)
+                        }
+                        pushIf('nome', data.nome)
+                        pushIf('cognome', data.cognome)
+                        pushIf('sesso', data.sesso)
+                        pushIf('data_nascita', data.data_nascita)
+                        pushIf('luogo_nascita', data.luogo_nascita)
+                        pushIf('provincia_nascita', data.provincia_nascita)
+                        pushIf('codice_fiscale', data.codice_fiscale)
+                        pushIf('indirizzo', data.indirizzo)
+                        pushIf('numero_civico', data.numero_civico)
+                        pushIf('codice_postale', data.codice_postale)
+                        pushIf('citta_residenza', data.citta_residenza)
+                        pushIf('provincia_residenza', data.provincia_residenza)
+                        pushIf('patente_numero', data.patente_numero)
+                        pushIf('patente_tipo', data.patente_tipo)
+                        pushIf('patente_rilascio', data.patente_rilascio)
+                        pushIf('patente_scadenza', data.patente_scadenza)
+                        pushIf('patente_ente', data.patente_ente)
                         setFormData(prev => ({
                           ...prev,
                           ...(data.nome && { nome: data.nome }),
@@ -1549,7 +1625,14 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                           ...(data.patente_scadenza && { patente_scadenza: data.patente_scadenza }),
                           ...(data.patente_ente && { patente_ente: data.patente_ente }),
                         }))
-                        toast.success('Dati compilati automaticamente dai documenti!')
+                        setLastExtracted(filled.length > 0 ? filled : ['Nessun dato leggibile estratto'])
+                        // Scroll in cima cosi' vedi subito i campi compilati
+                        // — il modal e' un singolo contenitore scrollabile,
+                        // quindi muoviamo lo scroll a 0 (con behavior smooth).
+                        try {
+                          scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+                        } catch { /* ignore */ }
+                        toast.success(`${filled.length} campi compilati dai documenti — verifica in cima al form`)
                       }}
                       onError={(err: string) => toast.error(err)}
                     />
