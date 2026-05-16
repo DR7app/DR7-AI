@@ -8042,13 +8042,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   const sv = vehicles.find(v => v.id === formData.vehicle_id)
                   const cfgSforo = getSforoForCategory(sv, rentalConfig)
                   if (!cfgSforo || Number(cfgSforo) <= 0) return null
-                  // BUG FIX 2026-05-16: leggi la label REALE dalla Centralina
-                  // Pro (`vehicle_categories[id].label`) invece dei nomi
-                  // hardcoded. Prima un veicolo con category='urban' ma
-                  // labellato "Hypercar" in Centralina Pro mostrava "Urban"
-                  // (mismatch label/id legacy).
+                  // BUG FIX 2026-05-16 (v2): legge la label da vehicle_categories
+                  // con alias supercars↔exotic. Prima il fix v1 leggeva
+                  // direttamente vehicle_categories[catId] ma convertProConfig
+                  // scrive sotto chiave 'exotic' quando Pro id e' 'supercars'
+                  // (mapping PRO_TO_DB_CATEGORY). Quindi per Lamborghini
+                  // (category='supercars') la chiave era 'exotic' → label
+                  // non trovata → si mostrava il raw id "supercars". Fix:
+                  // alias come negli altri lookup category.
                   const _svCat = (sv?.category as string | undefined) || ''
-                  const fromConfig = _svCat && rentalConfig?.vehicle_categories?.[_svCat]?.label
+                  const aliases = _svCat === 'supercars' ? ['supercars', 'exotic']
+                    : _svCat === 'exotic' ? ['exotic', 'supercars']
+                    : _svCat ? [_svCat] : []
+                  let fromConfig = ''
+                  for (const k of aliases) {
+                    const found = rentalConfig?.vehicle_categories?.[k]?.label
+                    if (found) { fromConfig = found; break }
+                  }
                   const catLabel = fromConfig || _svCat
                   return (
                     <p className="text-xs text-amber-400 mt-1">Default Centralina ({catLabel}): €{cfgSforo}/km</p>
