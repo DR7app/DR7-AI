@@ -137,7 +137,11 @@ export default function AdminDashboard() {
   const { alarmState, enableAudio } = useVehicleAlarm()
   const birthdayCount = useBirthdayCount()
   const scartataCount = useFatturaScartataCount()
-  const { role: adminRole, hasPermission, adminName, adminEmail } = useAdminRole()
+  const { role: adminRole, hasPermission, hasRole, adminName, adminEmail } = useAdminRole()
+  // Direzione (Valerio/Ilenia) + developer (ophe) sbloccano gli stessi tab
+  // gated da "superadmin" del DB. Senza questo, direzione/dev non vedevano
+  // Operatori (e i futuri tab solo-superadmin) anche con i ruoli giusti.
+  const isElevated = adminRole === 'superadmin' || hasRole('direzione') || hasRole('developer')
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const { theme, toggleTheme, palette, setPalette } = useTheme()
   const [paletteMenuOpen, setPaletteMenuOpen] = useState(false)
@@ -832,7 +836,7 @@ export default function AdminDashboard() {
           {activeTab === 'com-chiamate' && <PlaceholderTab title="Chiamate" />}
           {activeTab === 'com-chatgpt' && <PlaceholderTab title="Chat GPT" />}
           {activeTab === 'com-aruba' && <PlaceholderTab title="Aruba" />}
-          {activeTab === 'operatori' && adminRole === 'superadmin' && <OperatoriTab />}
+          {activeTab === 'operatori' && isElevated && <OperatoriTab />}
           {activeTab === 'rilevazione-orari' && <RilevazioneOrariTab />}
           {activeTab === 'dashboard-kpi' && <DashboardTab />}
           {activeTab === 'centralina-pro' && <CentralinaProTab />}

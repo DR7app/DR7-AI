@@ -106,18 +106,22 @@ export function useAdminRole(): AdminRole {
     [lowerEmail, permissions]
   )
 
-  // Direzione + superadmin always have full access regardless of `permissions`.
-  // For everyone else we honor the array; '*' = wildcard full access.
+  // Direzione + superadmin + developer hanno sempre accesso completo
+  // (ophe@dr7.app e' developer/manutentore: serve la stessa visibilita'
+  // di Valerio/Ilenia su Operatori, Report, ecc. — il bypass OTP resta
+  // scoped via OTP_TAB_DEVELOPERS dove richiesto). Per tutti gli altri
+  // si valuta `permissions[]`; '*' = wildcard full access.
   const isDirezione = useMemo(() => hasRole('direzione'), [hasRole])
+  const isDeveloper = useMemo(() => hasRole('developer'), [hasRole])
 
   const hasPermission = useCallback(
     (tab: string): boolean => {
       if (loading) return true // optimistic during initial load
-      if (role === 'superadmin' || isDirezione) return true
+      if (role === 'superadmin' || isDirezione || isDeveloper) return true
       if (permissions.includes('*')) return true
       return permissions.includes(tab)
     },
-    [loading, role, isDirezione, permissions]
+    [loading, role, isDirezione, isDeveloper, permissions]
   )
 
   return {
