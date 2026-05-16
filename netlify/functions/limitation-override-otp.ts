@@ -248,7 +248,16 @@ export const handler: Handler = async (event) => {
 
       // Estrai un nome leggibile dall'email dell'operatore.
       // ophe@dr7.app → "Ophe", mario.rossi@dr7.app → "Mario Rossi"
-      const operatorEmail = authUser!.email || 'Operatore sconosciuto'
+      const operatorEmail = authUser!.email || 'operatore sconosciuto'
+      // Traduzione del tipo flusso interno in label leggibile italiana
+      const flowTypeLabel = (() => {
+        const ft = String(flowType || '').toLowerCase()
+        if (ft === 'booking_create') return 'Creazione nuova prenotazione'
+        if (ft === 'booking_edit') return 'Modifica prenotazione esistente'
+        if (ft === 'preventivo_create') return 'Creazione nuovo preventivo'
+        if (ft === 'preventivo_edit') return 'Modifica preventivo esistente'
+        return ft || 'non specificato'
+      })()
       const operatorName = (() => {
         const local = operatorEmail.split('@')[0]
         if (!local) return operatorEmail
@@ -379,21 +388,21 @@ export const handler: Handler = async (event) => {
             </div>
 
             <!-- Subject line -->
-            <p style="margin: 0 0 6px; font-size: 12px; color: #6c757d; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700;">Richiesta di autorizzazione</p>
+            <p style="margin: 0 0 6px; font-size: 12px; color: #6c757d; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700;">Richiesta di autorizzazione direzionale</p>
             <h1 style="margin: 0 0 8px; font-size: 22px; color: #111; line-height: 1.3;">
               ${escapeHtml(operatorName)} sta chiedendo la tua autorizzazione.
             </h1>
-            <p style="margin: 0 0 24px; font-size: 14px; color: #495057; line-height: 1.5;">
-              Operatore: <strong>${escapeHtml(operatorName)}</strong> &middot;
-              <span style="color: #6c757d;">${escapeHtml(operatorEmail)}</span><br>
-              Richiesta ricevuta: <strong>${requestedAtIt}</strong> (Europe/Rome)
-            </p>
+            <table style="margin: 0 0 24px; font-size: 14px; color: #495057; line-height: 1.6; border-collapse: collapse;">
+              <tr><td style="padding-right: 12px; color: #6c757d; font-weight: 600;">Operatore:</td><td><strong>${escapeHtml(operatorName)}</strong> <span style="color:#868e96;">(${escapeHtml(operatorEmail)})</span></td></tr>
+              <tr><td style="padding-right: 12px; color: #6c757d; font-weight: 600;">Richiesta ricevuta:</td><td><strong>${requestedAtIt}</strong> <span style="color:#868e96;">ora italiana</span></td></tr>
+              <tr><td style="padding-right: 12px; color: #6c757d; font-weight: 600;">Scadenza codice:</td><td><strong>${OTP_TTL_MINUTES} minuti</strong> dall'invio</td></tr>
+            </table>
 
             <!-- Operation card — colored per category (delete=red, modify=amber, paid=green, system=indigo) -->
-            <div style="background: ${cat.bg}; border: 1px solid ${cat.border}; border-radius: 12px; padding: 18px 20px; margin: 16px 0 24px;">
-              <p style="margin: 0 0 4px; font-size: 11px; color: ${cat.text}; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700;">${escapeHtml(cat.name)}</p>
-              <p style="margin: 0; font-size: 18px; color: ${cat.accent}; font-weight: 700; line-height: 1.35;">${escapeHtml(operazioneUmana)}</p>
-              <p style="margin: 10px 0 0; font-size: 13px; color: ${cat.text}; line-height: 1.5;">${escapeHtml(limitationMessage)}</p>
+            <div style="background: ${cat.bg}; border: 2px solid ${cat.border}; border-radius: 12px; padding: 20px 22px; margin: 16px 0 24px;">
+              <p style="margin: 0 0 6px; font-size: 11px; color: ${cat.text}; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700;">Categoria operazione &middot; ${escapeHtml(cat.name)}</p>
+              <p style="margin: 0; font-size: 20px; color: ${cat.accent}; font-weight: 800; line-height: 1.3;">${escapeHtml(operazioneUmana)}</p>
+              <p style="margin: 12px 0 0; font-size: 14px; color: ${cat.text}; line-height: 1.55;">${escapeHtml(limitationMessage)}</p>
             </div>
 
             <!-- Details (sectioned if structured payload, single card if legacy) -->
@@ -416,23 +425,32 @@ export const handler: Handler = async (event) => {
 
             <!-- Decision instructions -->
             <div style="background: #f0f7ff; border-left: 4px solid #007aff; padding: 14px 16px; border-radius: 6px; margin: 24px 0;">
-              <p style="margin: 0 0 6px; font-size: 14px; color: #0a3d8c; font-weight: 700;">Come autorizzare</p>
-              <p style="margin: 0; font-size: 13px; color: #1a4f9c; line-height: 1.55;">
-                Se autorizzi questa operazione, <strong>comunica il codice OTP all'operatore</strong> (WhatsApp / telefono).<br>
-                Se NON autorizzi, ignora questa email: il codice scade da solo dopo ${OTP_TTL_MINUTES} minuti e l'operazione resta bloccata.
+              <p style="margin: 0 0 6px; font-size: 14px; color: #0a3d8c; font-weight: 700;">Come autorizzare questa operazione</p>
+              <ol style="margin: 0; padding-left: 18px; font-size: 13px; color: #1a4f9c; line-height: 1.6;">
+                <li><strong>Verifica</strong> i dettagli sopra (cliente, importo, modifiche).</li>
+                <li>Se autorizzi: <strong>comunica il codice OTP all'operatore</strong> via WhatsApp o telefono.</li>
+                <li>Se NON autorizzi: <strong>ignora questa email</strong>. Il codice scade da solo dopo ${OTP_TTL_MINUTES} minuti e l'operazione resta bloccata.</li>
+              </ol>
+              <p style="margin: 10px 0 0; font-size: 12px; color: #1a4f9c; font-style: italic;">
+                Ogni codice e' usabile una sola volta e solo per questa specifica richiesta.
               </p>
             </div>
 
-            <!-- Audit footer -->
+            <!-- Audit footer — tecnico, in italiano, per tracciabilita' completa -->
             <hr style="border: none; border-top: 1px solid #e9ecef; margin: 28px 0 16px;" />
+            <p style="margin: 0 0 8px; font-size: 10px; color: #6c757d; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700;">Riferimenti tecnici (audit)</p>
             <table style="width: 100%; font-size: 11px; color: #868e96; font-family: 'SF Mono', Menlo, Consolas, monospace;">
-              <tr><td style="padding: 2px 0; width: 32%;">codice tecnico</td><td style="padding: 2px 0;">${escapeHtml(limitationCode)}</td></tr>
-              ${actionContext ? `<tr><td style="padding: 2px 0;">contesto azione</td><td style="padding: 2px 0;">${escapeHtml(actionContext)}</td></tr>` : ''}
-              <tr><td style="padding: 2px 0;">sessione</td><td style="padding: 2px 0;">${escapeHtml(draftSessionId.substring(0, 8))}</td></tr>
-              <tr><td style="padding: 2px 0;">tipo flusso</td><td style="padding: 2px 0;">${escapeHtml(flowType || '—')}</td></tr>
+              <tr><td style="padding: 3px 8px 3px 0; width: 38%; color: #495057;">Codice tecnico OTP</td><td style="padding: 3px 0;">${escapeHtml(limitationCode)}</td></tr>
+              ${actionContext ? `<tr><td style="padding: 3px 8px 3px 0; color: #495057;">Contesto azione</td><td style="padding: 3px 0;">${escapeHtml(actionContext)}</td></tr>` : ''}
+              <tr><td style="padding: 3px 8px 3px 0; color: #495057;">ID sessione</td><td style="padding: 3px 0;">${escapeHtml(draftSessionId.substring(0, 8))}</td></tr>
+              <tr><td style="padding: 3px 8px 3px 0; color: #495057;">Tipo flusso</td><td style="padding: 3px 0;">${escapeHtml(flowTypeLabel)}</td></tr>
+              <tr><td style="padding: 3px 8px 3px 0; color: #495057;">Inviato a</td><td style="padding: 3px 0;">${escapeHtml(await getOtpRecipient())}</td></tr>
             </table>
             <p style="margin: 16px 0 0; font-size: 11px; color: #adb5bd; text-align: center;">
-              Dubai Rent 7.0 S.p.A. &middot; www.dr7empire.com
+              Dubai Rent 7.0 S.p.A. &middot; Cagliari, Sardegna &middot; <a href="https://www.dr7empire.com" style="color: #adb5bd; text-decoration: none;">www.dr7empire.com</a>
+            </p>
+            <p style="margin: 6px 0 0; font-size: 10px; color: #c7ced3; text-align: center;">
+              Questa email e' generata automaticamente dal sistema DR7 Empire. Non rispondere a questo messaggio.
             </p>
           </div>
         `
