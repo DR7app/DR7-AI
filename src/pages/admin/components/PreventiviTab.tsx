@@ -1676,6 +1676,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       include_second_driver: !!extras.include_second_driver || p.second_driver_total > 0,
       include_dr7_flex: !!extras.include_dr7_flex,
       include_cauzione_veicoli: !!extras.include_cauzione_veicoli || Number(extras.cauzione_veicoli_total || 0) > 0,
+      km_package_id: typeof extras.km_package_id === 'string' ? extras.km_package_id : '',
       pickup_location: extras.pickup_location || 'dr7_office',
       dropoff_location: extras.dropoff_location || 'dr7_office',
       delivery_fee: String(extras.delivery_fee || 0),
@@ -1711,6 +1712,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       include_second_driver: false,
       include_dr7_flex: false,
       include_cauzione_veicoli: false,
+      km_package_id: '',
       pickup_location: 'dr7_office',
       dropoff_location: 'dr7_office',
       delivery_fee: '0',
@@ -3613,7 +3615,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
               (popolato in convertProConfig). Mutuamente esclusivo con
               include_unlimited_km. */}
           {(() => {
-            const cat = String(form.vehicle_category || '').toLowerCase().trim()
+            const cat = String(selectedVehicle?.category || '').toLowerCase().trim()
             if (!cat) return null
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; km: number; sconto_pct: number; price: number; label: string }>> | undefined
