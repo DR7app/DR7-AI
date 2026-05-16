@@ -498,12 +498,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     include_second_driver: false,
     include_dr7_flex: false,
     include_cauzione_veicoli: false,
-    // 2026-05-16: pacchetto KM extra (opzionale, mutually exclusive
-    // con include_unlimited_km). Id del PacchettoKm in centralina_pro_config.
+    // 2026-05-16 legacy single-select (compat). I nuovi flussi usano
+    // km_packages sotto (multi-select cumulativo).
     km_package_id: '' as string,
-    // 2026-05-16: quantita' del pacchetto. 1..max_quantity (default 2)
-    // per pacchetti is_quantity_buyable=true. Altrimenti sempre 1.
     km_package_qty: 1 as number,
+    // 2026-05-16 multi-select cumulativo. Map pkgId → qty. Esclusivo
+    // con include_unlimited_km.
+    km_packages: {} as Record<string, number>,
     // Delivery / Pickup
     pickup_location: 'dr7_office',
     dropoff_location: 'dr7_office',
@@ -3638,40 +3639,48 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
               <div className="ml-1 mt-1 space-y-1">
                 <div className="text-[11px] font-semibold text-theme-text-muted uppercase tracking-wider">Pacchetti KM extra (opzionale)</div>
                 {pkgs.map(pkg => {
-                  const isSelected = form.km_package_id === pkg.id
+                  // 2026-05-16: multi-select cumulativo (form.km_packages).
                   const isDisabled = form.include_unlimited_km
                   const isQtyBuyable = !!(pkg as { is_quantity_buyable?: boolean }).is_quantity_buyable
-                  const maxQty = Math.max(1, Number((pkg as { max_quantity?: number }).max_quantity) || 2)
-                  const qty = isSelected ? Math.max(1, form.km_package_qty || 1) : 0
+                  const maxQty = isQtyBuyable ? Math.max(1, Number((pkg as { max_quantity?: number }).max_quantity) || 2) : 1
+                  const qty = form.km_packages?.[pkg.id] || 0
+                  const isSelected = qty > 0
+                  const setQty = (q: number) => {
+                    const clamped = Math.max(0, Math.min(maxQty, q))
+                    setForm(prev => {
+                      const next = { ...(prev.km_packages || {}) }
+                      if (clamped === 0) delete next[pkg.id]
+                      else next[pkg.id] = clamped
+                      return { ...prev, km_packages: next }
+                    })
+                  }
                   return (
                     <div key={pkg.id} className={`flex items-center gap-3 p-2 rounded-lg border ${
                       isDisabled ? 'opacity-50 cursor-not-allowed border-theme-border/30'
                       : isSelected ? 'border-dr7-gold bg-dr7-gold/10'
                       : 'border-theme-border/50 hover:bg-theme-bg-tertiary/30 cursor-pointer'
                     }`}
-                    onClick={() => {
-                      if (isDisabled) return
-                      if (isQtyBuyable && isSelected) return
-                      setForm(prev => ({ ...prev, km_package_id: isSelected ? '' : pkg.id, km_package_qty: 1 }))
-                    }}>
-                      <input type="radio" name="km_package_radio" checked={isSelected} disabled={isDisabled}
-                        onChange={() => {}}
-                        className="w-4 h-4 accent-dr7-gold" />
+                    onClick={() => { if (!isSelected && !isDisabled) setQty(1) }}>
                       <span className="text-sm text-theme-text-primary flex-1">
                         {pkg.label} ({pkg.km} km) {pkg.sconto_pct > 0 && <span className="text-xs text-theme-text-muted">— sconto {pkg.sconto_pct}%</span>}
+                        {isQtyBuyable && !isSelected && <span className="block text-xs text-dr7-gold">+ Aggiungi più volte (max {maxQty})</span>}
                         {isSelected && qty > 1 && <span className="block text-xs text-dr7-gold mt-0.5">Totale: {qty * pkg.km} km · {formatEur(pkg.price * qty)}</span>}
                       </span>
-                      {isQtyBuyable && isSelected ? (
+                      {isSelected ? (
                         <div className="flex items-center gap-1.5">
-                          <button type="button" disabled={isDisabled} onClick={(e) => { e.stopPropagation(); setForm(prev => ({ ...prev, km_package_qty: Math.max(0, (prev.km_package_qty || 1) - 1), km_package_id: (prev.km_package_qty || 1) <= 1 ? '' : prev.km_package_id })) }}
+                          <button type="button" disabled={isDisabled} onClick={(e) => { e.stopPropagation(); setQty(qty - 1) }}
                             className="w-6 h-6 rounded-full bg-theme-bg-tertiary border border-theme-border text-theme-text-primary font-bold text-xs disabled:opacity-50">−</button>
                           <span className="text-sm font-bold text-theme-text-primary min-w-[1.25rem] text-center">{qty}</span>
-                          <button type="button" disabled={isDisabled || qty >= maxQty} onClick={(e) => { e.stopPropagation(); setForm(prev => ({ ...prev, km_package_qty: Math.min(maxQty, (prev.km_package_qty || 1) + 1) })) }}
+                          <button type="button" disabled={isDisabled || qty >= maxQty} onClick={(e) => { e.stopPropagation(); setQty(qty + 1) }}
                             className="w-6 h-6 rounded-full bg-dr7-gold text-white font-bold text-xs disabled:opacity-50">+</button>
                           <span className="text-sm font-bold text-dr7-gold ml-1.5">{formatEur(pkg.price * qty)}</span>
                         </div>
                       ) : (
-                        <span className="text-sm font-bold text-dr7-gold">{formatEur(pkg.price)}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-bold text-dr7-gold">{formatEur(pkg.price)}</span>
+                          <button type="button" disabled={isDisabled} onClick={(e) => { e.stopPropagation(); setQty(1) }}
+                            className="w-6 h-6 rounded-full bg-dr7-gold text-white font-bold text-xs disabled:opacity-50">+</button>
+                        </div>
                       )}
                     </div>
                   )

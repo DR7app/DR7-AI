@@ -817,13 +817,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     km_overage_fee: '', // si popola da Centralina quando si seleziona il veicolo
     unlimited_km: false,
     km_limit: DEFAULT_KM_LIMIT, // Default KM limit when not unlimited
-    // 2026-05-16: pacchetto KM extra acquistato dal cliente (opzionale).
-    // Id del PacchettoKm in centralina_pro_config.km[category].pacchetti[].
-    // Mutuamente esclusivo con unlimited_km. Vuoto = nessun pacchetto.
+    // 2026-05-16: pacchetto KM extra (legacy single-select, mantenuti per
+    // compat con vecchio codice). I nuovi flussi usano km_packages sotto.
     km_package_id: '' as string,
-    // 2026-05-16: quantita' del pacchetto. Per pacchetti standard sempre 1.
-    // Per pacchetti is_quantity_buyable=true puo' essere 1..max_quantity (default 2).
     km_package_qty: 1 as number,
+    // 2026-05-16 multi-select cumulativo: Map pkgId → qty. Quando
+    // >= 1 entry > 0, i pacchetti si SOMMANO. Esclusivo con unlimited_km.
+    km_packages: {} as Record<string, number>,
     // Home Delivery & Pickup
     delivery_enabled: false,
     delivery_street: '',
@@ -5153,37 +5153,41 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // KM Limit
           km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
           unlimited_km: formData.unlimited_km,
-          // 2026-05-16: pacchetto KM extra acquistato (se selezionato).
-          // Risolto live da rentalConfig.pacchetti_km usando il categoria del
-          // veicolo. Per pacchetti is_quantity_buyable=true, salviamo anche
-          // quantity (1..max_quantity) e moltiplichiamo km/price.
-          km_package: (() => {
-            if (!formData.km_package_id || formData.unlimited_km) return null
+          // 2026-05-16: pacchetti KM CUMULATIVI (lista).
+          // booking_details.km_packages = [] di tutti i pacchetti selezionati,
+          // ciascuno con qty + totali. booking_details.km_package (singolo) =
+          // backward-compat se solo 1 selezionato (altrimenti null).
+          km_packages: (() => {
+            if (formData.unlimited_km) return []
+            const list = formData.km_packages || {}
             const v = vehicles.find(vv => vv.id === formData.vehicle_id)
             const cat = String(v?.category || '').toLowerCase().trim()
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; km: number; sconto_pct: number; price: number; label: string; is_quantity_buyable?: boolean; max_quantity?: number }>> | undefined
-            if (!cat || !pkgsByCat) return null
+            if (!cat || !pkgsByCat) return []
             const aliases = cat === 'supercars' ? ['supercars', 'exotic']
                           : cat === 'exotic' ? ['exotic', 'supercars']
                           : [cat]
+            let pkgs: typeof pkgsByCat[string] = []
             for (const k of aliases) {
-              const found = (pkgsByCat[k] || []).find(p => p.id === formData.km_package_id)
-              if (found) {
-                const qty = found.is_quantity_buyable ? Math.max(1, Math.min(Number(found.max_quantity) || 2, formData.km_package_qty || 1)) : 1
-                return {
-                  id: found.id,
-                  label: found.label,
-                  km: found.km,
-                  sconto_pct: found.sconto_pct,
-                  price: found.price,
-                  quantity: qty,
-                  total_km: found.km * qty,
-                  total_price: Math.round(found.price * qty * 100) / 100,
-                }
+              const arr = pkgsByCat[k]
+              if (Array.isArray(arr) && arr.length > 0) { pkgs = arr; break }
+            }
+            const out: Array<{ id: string; label: string; km: number; sconto_pct: number; price: number; quantity: number; total_km: number; total_price: number }> = []
+            for (const found of pkgs) {
+              const q = list[found.id] || 0
+              if (q <= 0) continue
+              const cap = found.is_quantity_buyable ? Math.max(1, Number(found.max_quantity) || 2) : 1
+              const clamped = Math.max(0, Math.min(cap, q))
+              if (clamped > 0) {
+                out.push({
+                  id: found.id, label: found.label, km: found.km, sconto_pct: found.sconto_pct,
+                  price: found.price, quantity: clamped,
+                  total_km: found.km * clamped, total_price: Math.round(found.price * clamped * 100) / 100,
+                })
               }
             }
-            return null
+            return out
           })(),
           // Centralina Pro: prezzo per-veicolo-categoria + per-fascia.
           // getUnlimitedKmPriceRes(vehicle, tier) legge rental_config.unlimited_km[category][tier]
@@ -8256,22 +8260,27 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 if (pkgs.length === 0) return null
                 return (
                   <div className="space-y-2 mt-2">
-                    <h4 className="text-xs font-semibold text-theme-text-muted uppercase tracking-wider">Pacchetti KM extra (opzionale)</h4>
+                    <h4 className="text-xs font-semibold text-theme-text-muted uppercase tracking-wider">Pacchetti KM extra (cumulativi)</h4>
                     {pkgs.map(pkg => {
-                      const isSelected = formData.km_package_id === pkg.id
+                      // 2026-05-16: multi-select cumulativo. Ogni pacchetto ha
+                      // qty indipendente in formData.km_packages.
                       const isDisabled = formData.unlimited_km
                       const isQtyBuyable = !!(pkg as { is_quantity_buyable?: boolean }).is_quantity_buyable
-                      const maxQty = Math.max(1, Number((pkg as { max_quantity?: number }).max_quantity) || 2)
-                      const qty = isSelected ? Math.max(1, formData.km_package_qty || 1) : 0
+                      const maxQty = isQtyBuyable ? Math.max(1, Number((pkg as { max_quantity?: number }).max_quantity) || 2) : 1
+                      const qty = formData.km_packages?.[pkg.id] || 0
+                      const isSelected = qty > 0
+                      const setQty = (q: number) => {
+                        const clamped = Math.max(0, Math.min(maxQty, q))
+                        setFormData(prev => {
+                          const next = { ...(prev.km_packages || {}) }
+                          if (clamped === 0) delete next[pkg.id]
+                          else next[pkg.id] = clamped
+                          return { ...prev, km_packages: next }
+                        })
+                      }
                       return (
                         <div key={pkg.id}
-                          onClick={() => {
-                            if (isDisabled) return
-                            // Per card normale (no qty) → toggle si/no
-                            // Per card qty-buyable → primo click = qty 1
-                            if (isQtyBuyable && isSelected) return
-                            setFormData(prev => ({ ...prev, km_package_id: isSelected ? '' : pkg.id, km_package_qty: 1 }))
-                          }}
+                          onClick={() => { if (!isSelected && !isDisabled) setQty(1) }}
                           className={`p-3 rounded-md border transition-colors ${
                             isDisabled ? 'opacity-50 cursor-not-allowed border-theme-border'
                             : isSelected ? 'border-dr7-gold bg-dr7-gold/10'
@@ -8284,21 +8293,28 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               {pkg.sconto_pct > 0 && (
                                 <div className="text-xs text-theme-text-muted">Sconto {pkg.sconto_pct}% sul sforo</div>
                               )}
+                              {isQtyBuyable && !isSelected && (
+                                <div className="text-xs text-dr7-gold mt-0.5">+ Aggiungi più volte (max {maxQty})</div>
+                              )}
                               {isSelected && qty > 1 && (
                                 <div className="text-xs text-dr7-gold font-medium">Totale: {qty * pkg.km} km — €{(pkg.price * qty).toFixed(2)}</div>
                               )}
                             </div>
-                            {isQtyBuyable && isSelected ? (
+                            {isSelected ? (
                               <div className="flex items-center gap-2">
-                                <button type="button" disabled={isDisabled} onClick={(e) => { e.stopPropagation(); setFormData(prev => ({ ...prev, km_package_qty: Math.max(0, (prev.km_package_qty || 1) - 1), km_package_id: (prev.km_package_qty || 1) <= 1 ? '' : prev.km_package_id })) }}
+                                <button type="button" disabled={isDisabled} onClick={(e) => { e.stopPropagation(); setQty(qty - 1) }}
                                   className="w-7 h-7 rounded-full bg-theme-bg-tertiary border border-theme-border text-theme-text-primary font-bold disabled:opacity-50">−</button>
                                 <span className="text-sm font-bold text-theme-text-primary min-w-[1.5rem] text-center">{qty}</span>
-                                <button type="button" disabled={isDisabled || qty >= maxQty} onClick={(e) => { e.stopPropagation(); setFormData(prev => ({ ...prev, km_package_qty: Math.min(maxQty, (prev.km_package_qty || 1) + 1) })) }}
+                                <button type="button" disabled={isDisabled || qty >= maxQty} onClick={(e) => { e.stopPropagation(); setQty(qty + 1) }}
                                   className="w-7 h-7 rounded-full bg-dr7-gold text-white font-bold disabled:opacity-50">+</button>
                                 <span className="text-sm font-bold text-dr7-gold ml-2">€{(pkg.price * qty).toFixed(2)}</span>
                               </div>
                             ) : (
-                              <span className="text-sm font-bold text-dr7-gold">+€{pkg.price.toFixed(2)}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold text-dr7-gold">+€{pkg.price.toFixed(2)}</span>
+                                <button type="button" disabled={isDisabled} onClick={(e) => { e.stopPropagation(); setQty(1) }}
+                                  className="w-7 h-7 rounded-full bg-dr7-gold text-white font-bold disabled:opacity-50">+</button>
+                              </div>
                             )}
                           </div>
                         </div>
