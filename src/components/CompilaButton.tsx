@@ -200,12 +200,16 @@ export default function CompilaButton({
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ imageUrl: doc.file }),
             })
-            const data = await res.json()
-            if (res.ok && data.extractedData) {
-              results.push(data.extractedData)
-              if (data.extractedData.notes) notes.push(`${doc.label || 'Documento'}: ${data.extractedData.notes}`)
+            const json = await res.json()
+            // Bug fix 2026-05-16: la netlify function ritorna { success, data }
+            // — non { extractedData }. Prima la chiamata riusciva server-side
+            // ma il client leggeva il campo sbagliato e mostrava "Non leggibile".
+            const extracted = json.data || json.extractedData
+            if (res.ok && extracted) {
+              results.push(extracted)
+              if (extracted.notes) notes.push(`${doc.label || 'Documento'}: ${extracted.notes}`)
             } else {
-              notes.push(`${doc.label || 'Documento'}: ${data.error || 'Non leggibile'}`)
+              notes.push(`${doc.label || 'Documento'}: ${json.error || 'Non leggibile'}`)
             }
             continue
           } else {
@@ -220,14 +224,18 @@ export default function CompilaButton({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageBase64: base64 }),
         })
-        const data = await res.json()
+        const json = await res.json()
+        // Bug fix 2026-05-16: la netlify function ritorna { success, data }
+        // — non { extractedData }. Prima la chiamata riusciva server-side
+        // ma il client leggeva il campo sbagliato e mostrava "Impossibile".
+        const extracted = json.data || json.extractedData
 
-        if (res.ok && data.extractedData) {
-          results.push(data.extractedData)
-          if (data.extractedData.notes) notes.push(`${doc.label || 'Documento'}: ${data.extractedData.notes}`)
-          if (data.extractedData.confidence === 'low') notes.push(`${doc.label || 'Documento'}: Lettura a bassa affidabilità`)
+        if (res.ok && extracted) {
+          results.push(extracted)
+          if (extracted.notes) notes.push(`${doc.label || 'Documento'}: ${extracted.notes}`)
+          if (extracted.confidence === 'low') notes.push(`${doc.label || 'Documento'}: Lettura a bassa affidabilità`)
         } else {
-          notes.push(`${doc.label || 'Documento'}: ${data.error || 'Impossibile estrarre i dati'}`)
+          notes.push(`${doc.label || 'Documento'}: ${json.error || 'Impossibile estrarre i dati'}`)
         }
       }
 
