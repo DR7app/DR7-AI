@@ -439,15 +439,37 @@ export default function NexiTab() {
             // appare piu\' nella lista "Carte Tokenizzate".
             const isOrphan = ops.length === 0 && !opMaskedPan && !orderMaskedPan
             if (isOrphan) {
-                const shouldDelete = window.confirm(
-                    summary + '\n\n— — —\n\n' +
-                    'Vuoi rimuovere il riferimento di questa carta dal cliente?\n' +
-                    'La carta non apparira\' piu\' nella lista. (Operazione reversibile solo manualmente da Supabase.)'
-                )
+                const explanation = [
+                    summary,
+                    '',
+                    '— — — DIAGNOSI — — —',
+                    '',
+                    'Questa carta NON è tokenizzata su Nexi:',
+                    '  • L\'ordine non risulta sul portale Nexi (nessuna operazione)',
+                    '  • Tipico se il cliente ha abbandonato il pagamento',
+                    '    o se Nexi ha applicato retention/cleanup',
+                    '',
+                    'NON puoi usare questa carta per addebiti/preauth:',
+                    'qualsiasi tentativo MIT verrebbe rifiutato da Nexi.',
+                    '',
+                    '— — — AZIONE PROPOSTA — — —',
+                    '',
+                    'Rimuovo il riferimento dal NOSTRO database',
+                    '(customers_extended.metadata.nexi_contract_id) cosi\' la carta',
+                    'non appare piu\' nella lista "Carte Tokenizzate".',
+                    '',
+                    'NESSUN impatto su Nexi (non possiamo cancellare di la\').',
+                    'Operazione reversibile solo manualmente via Supabase.',
+                    '',
+                    'Procedere?',
+                ].join('\n')
+                const shouldDelete = window.confirm(explanation)
                 if (shouldDelete) {
                     await forgetOrphanCard(card)
                 }
             } else {
+                // Carta valida o anomala (con operazioni ma senza PAN). Mostra
+                // diagnosi completa, l'admin decide se intervenire altrove.
                 alert(summary)
             }
         } catch (err: unknown) {
@@ -527,7 +549,15 @@ export default function NexiTab() {
             const data = await res.json()
             toast.dismiss(toastId)
             if (res.ok && data.success) {
-                toast.success(`Riferimento rimosso (${data.affected || 0} record)`)
+                // Confirmation con dettaglio: cosa abbiamo TOLTO dal nostro DB
+                // e cosa NON abbiamo toccato (Nexi resta come sta — non c'era
+                // nulla da togliere comunque, era un orfano).
+                toast.success(
+                    `Pulizia completata (${data.affected || 0} record DR7 rimossi).\n` +
+                    `Carta NON era tokenizzata su Nexi: nessun impatto sul portale Nexi.\n` +
+                    `Il cliente dovra' inserire di nuovo i dati carta per i prossimi pagamenti.`,
+                    { duration: 8000 }
+                )
                 await fetchTokenizedCards()
             } else {
                 toast.error(data.error || 'Rimozione fallita')
