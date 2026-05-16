@@ -414,44 +414,63 @@ export const handler: Handler = async (event) => {
         }
     }
 
-    // Backfill CF per gruppi rimasti senza CF: faccio una query ilike
-    // su customers_extended per nome / cognome tokens. Cattura i casi
-    // in cui le mappe in-memory hanno mancato il match (es. nomi con
-    // spazi multipli, ordine invertito, accenti, ecc.). Eseguita solo
-    // per gruppi con customer_name presente per non scansionare tutto.
-    const needCf = Array.from(byGroup.values()).filter(a => !a.codice_fiscale && a.customer_name)
+    // Backfill CF per gruppi senza CF: per ogni gruppo facciamo lookup
+    // mirati su customers_extended con ilike case-insensitive su nome,
+    // cognome, email. Niente score threshold: se troviamo un solo
+    // candidato lo prendiamo, se ne troviamo di piu\' prendiamo quello
+    // con il miglior overlap di token. Cattura nomi con spazi multipli,
+    // ordine invertito, casing diverso, accenti, email con capital
+    // letters, ecc.
+    type BackfillRow = { codice_fiscale: string | null; nome: string | null; cognome: string | null; email: string | null; telefono: string | null }
+    const needCf = Array.from(byGroup.values()).filter(a => !a.codice_fiscale)
     if (needCf.length > 0) {
         await Promise.all(needCf.map(async (agg) => {
-            const tokens = String(agg.customer_name || '').trim().split(/\s+/).filter(t => t.length >= 2)
-            if (tokens.length === 0) return
-            // Limitiamo i token a 4 per non costruire query enormi.
-            const tk = tokens.slice(0, 4)
-            // Cerca righe customers_extended con codice_fiscale non null
-            // dove almeno un token compare in nome O cognome (case-ins).
+            const name = String(agg.customer_name || '').trim()
+            const email = String(agg.customer_email || '').trim()
+            const tokens = name.split(/\s+/)
+                .map(t => t.replace(/[,*().'"%\\/]/g, ' ').trim())
+                .filter(t => t.length >= 2)
+                .slice(0, 4)
             const orParts: string[] = []
-            for (const t of tk) {
-                const safe = t.replace(/[,*()]/g, ' ').trim()
-                if (!safe) continue
-                orParts.push(`nome.ilike.%${safe}%`)
-                orParts.push(`cognome.ilike.%${safe}%`)
+            for (const t of tokens) {
+                orParts.push(`nome.ilike.%${t}%`)
+                orParts.push(`cognome.ilike.%${t}%`)
+            }
+            if (email) {
+                orParts.push(`email.ilike.${email}`)
             }
             if (orParts.length === 0) return
-            const { data } = await sb
+
+            const { data, error: orErr } = await sb
                 .from('customers_extended')
                 .select('codice_fiscale, nome, cognome, email, telefono')
                 .not('codice_fiscale', 'is', null)
                 .or(orParts.join(','))
-                .limit(10)
-            // Scegli la riga con miglior overlap di token (case-insensitive).
+                .limit(20)
+            if (orErr) {
+                console.error('[emtn-clients] backfill or() failed', { customer: name, email, err: orErr.message })
+                return
+            }
+
+            const rows = (data || []) as BackfillRow[]
+            if (rows.length === 0) return
+
+            // Score per overlap di token. Email exact (case-insensitive)
+            // vale 10, ogni token in nome o cognome vale 1.
             const lower = (s: string | null | undefined) => String(s || '').toLowerCase()
-            let best: { row: { codice_fiscale: string | null; nome: string | null; cognome: string | null; email: string | null; telefono: string | null }, score: number } | null = null
-            for (const row of (data || [])) {
+            const emailLow = email.toLowerCase()
+            let best: { row: BackfillRow; score: number } | null = null
+            for (const row of rows) {
                 const hay = `${lower(row.nome)} ${lower(row.cognome)}`
                 let score = 0
-                for (const t of tk) if (hay.includes(t.toLowerCase())) score += 1
+                if (emailLow && lower(row.email) === emailLow) score += 10
+                for (const t of tokens) if (hay.includes(t.toLowerCase())) score += 1
                 if (!best || score > best.score) best = { row, score }
             }
-            if (best && best.score >= Math.min(2, tk.length) && best.row.codice_fiscale) {
+            // Accetta se: c'e\' un solo candidato (score qualunque), oppure
+            // se il migliore ha score >= 1 (almeno un segnale).
+            const accept = best && (rows.length === 1 || best.score >= 1)
+            if (accept && best && best.row.codice_fiscale) {
                 agg.codice_fiscale = normCF(best.row.codice_fiscale)
                 if (!agg.customer_email && best.row.email) agg.customer_email = best.row.email
                 if (!agg.customer_phone && best.row.telefono) agg.customer_phone = best.row.telefono
