@@ -2631,18 +2631,30 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
 
   const filtered = useMemo(() => {
     let list = (statusFilter === 'all' || statusFilter === '__no_cauzione__') ? preventivi : preventivi.filter(p => p.status === statusFilter)
-    // Search by customer name / phone / email / vehicle name / plate.
-    // Case-insensitive, normalizes spaces. Empty query = no filter.
-    const q = searchQuery.trim().toLowerCase()
-    if (q) {
+    // Search multi-token: nome cliente, telefono, modello veicolo,
+    // marca/categoria, targa, motivo, sconto note. Tokenizza per spazi
+    // e richiede CHE OGNI TOKEN compaia in almeno un campo (AND fra i
+    // token, OR fra i campi). Cosi' "matteo huracan" trova solo le
+    // righe dove cliente=Matteo* E veicolo=*huracan*.
+    const tokens = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    if (tokens.length > 0) {
       list = list.filter(p => {
-        const fields = [
+        const haystack = [
           p.customer_name,
           p.customer_phone,
           p.vehicle_name,
           p.vehicle_plate,
+          p.vehicle_category,
+          p.insurance_option,
+          p.driver_tier,
+          p.sconto_note,
+          p.motivo_rifiuto,
+          p.motivo_rifiuto_note,
+          p.status,
         ]
-        return fields.some(v => (v || '').toString().toLowerCase().includes(q))
+          .map(v => (v ?? '').toString().toLowerCase())
+          .join(' ')
+        return tokens.every(t => haystack.includes(t))
       })
     }
     return [...list].sort((a, b) => {
@@ -2677,7 +2689,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Cerca cliente, telefono, veicolo o targa..."
+            placeholder="Cerca nome, telefono, modello (es. Huracan), targa, categoria..."
             className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-10 pr-10 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
           />
           {searchQuery && (
