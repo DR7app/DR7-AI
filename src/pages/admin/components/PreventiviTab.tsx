@@ -254,15 +254,22 @@ function resolveKmIncluded(
 ): number | 'unlimited' {
   if (!Number.isFinite(rentalDays) || rentalDays < 1) return 0
 
-  // Map DB vehicle category → Centralina Pro key (mirrors proCategoryKey)
+  // BUG FIX 2026-05-16: usa la categoria REALE del veicolo (qualunque id
+  // l'admin abbia in Centralina Pro), con alias storico supercars<->exotic.
+  // Prima il codice mappava tutto a 3 chiavi legacy ('supercars'/'aziendali'/
+  // 'urban'), quindi Suv Luxury, Flotta Aziendale, Moto, ecc. leggevano i km
+  // della Urban (= sbagliato). Stesso pattern del fix sui depositi.
   const cat = String(vehCategory || '').toLowerCase().trim()
-  let proKey = 'urban'
-  if (cat === 'supercar' || cat === 'supercars' || cat === 'exotic') proKey = 'supercars'
-  else if (cat === 'furgone' || cat === 'furgoni' || cat === 'aziendali' || cat === 'ncc') proKey = 'aziendali'
-
-  const proEntry = (proKm || []).find(k => (k as { id?: string })?.id === proKey) as
-    | { table?: Record<string, number | string>; extraPerDay?: number | string }
-    | undefined
+  const aliases: string[] = cat === 'supercars' ? ['supercars', 'exotic']
+    : cat === 'exotic' ? ['exotic', 'supercars']
+    : cat ? [cat] : []
+  let proEntry: { table?: Record<string, number | string>; extraPerDay?: number | string } | undefined
+  for (const key of aliases) {
+    const found = (proKm || []).find(k => (k as { id?: string })?.id === key) as
+      | { table?: Record<string, number | string>; extraPerDay?: number | string }
+      | undefined
+    if (found) { proEntry = found; break }
+  }
 
   if (proEntry) {
     const rawTable = proEntry.table || {}
@@ -708,10 +715,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   // both the deposits lookup and the km-unlimited lookup so they stay in
   // lockstep.
   const proCategoryKey = useMemo(() => {
-    const vehCat = String(selectedVehicle?.category || '').toLowerCase().trim()
-    if (vehCat === 'supercar' || vehCat === 'supercars' || vehCat === 'exotic') return 'supercars'
-    if (vehCat === 'furgone' || vehCat === 'furgoni' || vehCat === 'aziendali' || vehCat === 'ncc') return 'aziendali'
-    return 'urban'
+    // BUG FIX 2026-05-16: usa la categoria REALE (qualunque id custom
+    // l'admin ha in Centralina Pro). Prima ogni categoria non-legacy
+    // (Hypercar=urban OK, ma Suv Luxury=kwtcdhvs, Flotta=supercar_elit,
+    // Moto=hypercar_elit) finiva forzata a 'urban' e leggeva i pacchetti
+    // km / km illimitati / deposits della Urban — sbagliato.
+    return String(selectedVehicle?.category || '').toLowerCase().trim() || 'urban'
   }, [selectedVehicle])
 
   // Pro-resolved extras with safe fallbacks. Each falls back to the
@@ -765,13 +774,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     const isOld = !!firstVal && typeof firstVal === 'object'
       && ('residente' in firstVal || 'non_residente' in firstVal)
 
-    // Map vehicle DB category → Pro deposits category key.
+    // BUG FIX 2026-05-16: usa la categoria REALE con alias supercars<->exotic.
+    // Prima ogni categoria custom finiva forzata a 'urban' → No Cauzione
+    // letto dalla Urban anche per Suv Luxury / Flotta Aziendale / Moto.
     const vehCat = String(selectedVehicle?.category || '').toLowerCase().trim()
-    const proCategory = vehCat === 'supercar' || vehCat === 'supercars' || vehCat === 'exotic'
-      ? 'supercars'
-      : vehCat === 'furgone' || vehCat === 'furgoni' || vehCat === 'aziendali' || vehCat === 'ncc'
-      ? 'aziendali'
-      : 'urban'
+    const aliases: string[] = vehCat === 'supercars' ? ['supercars', 'exotic']
+      : vehCat === 'exotic' ? ['exotic', 'supercars']
+      : vehCat ? [vehCat] : []
 
     // TIER_1 = Fascia B (younger / less experienced), TIER_2 = Fascia A.
     const fasciaKey = form.driver_tier === 'TIER_1' ? 'B' : 'A'
@@ -782,7 +791,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       const fasciaCfg = (proDeposits[fasciaKey] as { residente?: unknown; non_residente?: unknown } | undefined)
       opts = (fasciaCfg?.[residencyKey] as typeof opts) || []
     } else {
-      const catCfg = proDeposits[proCategory] as Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
+      let catCfg: Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
+      for (const key of aliases) {
+        const candidate = proDeposits[key] as Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
+        if (candidate) { catCfg = candidate; break }
+      }
       const fasciaCfg = catCfg?.[fasciaKey]
       opts = (fasciaCfg?.[residencyKey] as typeof opts) || []
     }
