@@ -230,16 +230,16 @@ const handler: Handler = async (event) => {
     }
   }
 
-  // SELF RATE-LIMIT sul Performance API: anche questo ha 1 req/min sui
-  // progetti default. Se ne abbiamo appena fatto uno (success o fail), non
-  // ne facciamo un altro per 70s. Cosi' click multipli su Ricarica non
-  // bruciano quota.
+  // SELF RATE-LIMIT sul Performance API: bloccato SOLO se l'ultimo
+  // tentativo ha fallito con quota error. Altre cause (NOT_FOUND,
+  // INVALID_ARGUMENT, auth) non triggerano blocco: facciamo passare.
   try {
     const { data: lastPerf } = await sb.from('app_secrets').select('value').eq('key', 'gbp_perf_last_attempt').maybeSingle()
-    const lastTs = (lastPerf?.value as { at?: string } | undefined)?.at
-    if (lastTs && Date.now() - new Date(lastTs).getTime() < 70 * 1000) {
+    const last = lastPerf?.value as { at?: string; quotaError?: boolean } | undefined
+    const lastTs = last?.at
+    const wasQuotaError = last?.quotaError === true
+    if (wasQuotaError && lastTs && Date.now() - new Date(lastTs).getTime() < 60 * 1000) {
       const secsSince = Math.round((Date.now() - new Date(lastTs).getTime()) / 1000)
-      // Se c'e' cache stale serviamo quella invece dell'errore
       const { data: stale } = await sb.from('app_secrets').select('value').eq('key', cacheKey).maybeSingle()
       const cached = stale?.value as (GbpPayload & { fetchedAt?: string }) | undefined
       if (cached?.kpis) {
@@ -247,7 +247,7 @@ const handler: Handler = async (event) => {
           statusCode: 200, headers,
           body: JSON.stringify({
             ...cached, fromCache: true, cachedAt: cached.fetchedAt,
-            warnings: [`Mostro cache: prossimo aggiornamento possibile tra ${70 - secsSince}s (quota Performance API 1/min)`]
+            warnings: [`Mostro cache: prossimo aggiornamento possibile tra ${60 - secsSince}s`]
           })
         }
       }
@@ -255,7 +255,7 @@ const handler: Handler = async (event) => {
         statusCode: 200, headers,
         body: JSON.stringify({
           ...empty, configured: true,
-          warnings: [`Quota Performance API appena consumata (${secsSince}s fa). Aspetta ${70 - secsSince}s e ricarica.`]
+          warnings: [`Quota Performance API consumata ${secsSince}s fa. Aspetta ${60 - secsSince}s e ricarica.`]
         })
       }
     }
@@ -284,16 +284,6 @@ const handler: Handler = async (event) => {
     params.append('dailyRange.end_date.year', String(end.year))
     params.append('dailyRange.end_date.month', String(end.month))
     params.append('dailyRange.end_date.day', String(end.day))
-
-    // Marca il tentativo PRIMA della chiamata cosi' click multipli mentre
-    // la chiamata e' in corso (o appena fallita) sanno di non riprovare.
-    try {
-      await sb.from('app_secrets').upsert({
-        key: 'gbp_perf_last_attempt',
-        value: { at: new Date().toISOString() },
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'key' })
-    } catch { /* best effort */ }
 
     const url = `https://businessprofileperformance.googleapis.com/v1/${locationName}:fetchMultiDailyMetricsTimeSeries?${params.toString()}`
     const r = await oauth2.request<{ multiDailyMetricTimeSeries: Array<{ dailyMetricTimeSeries: Array<{ dailyMetric: string; timeSeries: { datedValues: Array<{ value?: string }> } }> }> }>({
@@ -338,6 +328,16 @@ const handler: Handler = async (event) => {
   } catch (e: any) {
     const msg = String(e?.message || e)
     const isQuota = /quota|rate.?limit|too.?many|RESOURCE_EXHAUSTED|429/i.test(msg)
+
+    // Marca timestamp + flag quota: il prossimo request sa se aspettare
+    // (quota error) o se puo' riprovare subito (altri errori non legati alla quota).
+    try {
+      await sb.from('app_secrets').upsert({
+        key: 'gbp_perf_last_attempt',
+        value: { at: new Date().toISOString(), quotaError: isQuota },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'key' })
+    } catch { /* best effort */ }
 
     // Quando Google ritorna quota exceeded, proviamo a servire l'ultimo
     // payload cached (anche se piu' vecchio di 30 min) — meglio numeri
