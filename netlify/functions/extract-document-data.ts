@@ -242,27 +242,58 @@ export const handler: Handler = async (event) => {
             };
         }
 
-        // Call Claude Vision API. Sonnet 4.6 gives the best
-        // accuracy/cost balance for Italian ID/patente OCR. Bug fix
-        // 2026-05-16: era hardcoded sul vecchio model id date-suffixed
-        // 'claude-sonnet-4-20250514' che ora viene rifiutato dall'API,
-        // facendo fallire silenziosamente l'estrazione.
-        const response = await anthropic.messages.create({
-            model: 'claude-sonnet-4-6',
-            max_tokens: 4000,
-            messages: [
-                {
-                    role: 'user',
-                    content: [
-                        imageContent,
+        // Call Claude Vision API. Tentiamo i modelli in ordine: il piu'
+        // recente prima, fallback ai precedenti se l'account non ha ancora
+        // accesso o il modello e' stato sunset. Cosi' l'estrazione funziona
+        // su account con tier diversi senza richiedere manutenzione.
+        const MODEL_FALLBACKS = [
+            'claude-sonnet-4-6',           // preferred (current)
+            'claude-sonnet-4-5',           // older but vision-capable
+            'claude-3-5-sonnet-latest',    // universally available, ottima OCR
+            'claude-3-5-sonnet-20241022',  // pinned legacy fallback
+        ];
+
+        let response: any = null;
+        let lastErr: any = null;
+        let usedModel = '';
+        for (const model of MODEL_FALLBACKS) {
+            try {
+                response = await anthropic.messages.create({
+                    model,
+                    max_tokens: 4000,
+                    messages: [
                         {
-                            type: 'text',
-                            text: EXTRACTION_PROMPT
+                            role: 'user',
+                            content: [
+                                imageContent,
+                                {
+                                    type: 'text',
+                                    text: EXTRACTION_PROMPT
+                                }
+                            ]
                         }
                     ]
-                }
-            ]
-        });
+                });
+                usedModel = model;
+                console.log(`[extract-document-data] OK with model: ${model}`);
+                break;
+            } catch (err: any) {
+                lastErr = err;
+                const msg = String(err?.message || '');
+                const status = err?.status;
+                console.warn(`[extract-document-data] model ${model} failed (status=${status}): ${msg}`);
+                // 404 not_found = modello inesistente sull'account → prova prossimo.
+                // 403 = no access → prova prossimo.
+                // 400 con "model" nel messaggio → prova prossimo.
+                // Tutti gli altri (rate limit, auth, network) sono fatali — rilancia.
+                const isModelIssue = status === 404 || status === 403 || (status === 400 && /model/i.test(msg)) || /not.?found/i.test(msg);
+                if (!isModelIssue) throw err;
+            }
+        }
+        if (!response) {
+            throw lastErr || new Error('Nessun modello Anthropic disponibile per OCR');
+        }
+        void usedModel;
 
         // Parse the response
         const responseText = response.content[0].type === 'text' ? response.content[0].text : '';
