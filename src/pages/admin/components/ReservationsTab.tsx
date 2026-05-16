@@ -6261,6 +6261,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       garante_birth_provincia: '',
       garante_phone: '',
       garante_email: '',
+      km_packages: {},
     })
     setNewCustomerData({
       tipo_cliente: 'persona_fisica',

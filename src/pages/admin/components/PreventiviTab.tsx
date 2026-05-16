@@ -1738,6 +1738,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       model_year: '',
       cv: '',
       acceleration_0_100: '',
+      km_packages: {},
     })
     setRevenueData(null)
     // Reset No-Cauzione approval when form is reset
