@@ -347,10 +347,25 @@ export default function NexiTab() {
         const toastId = toast.loading('Interrogo Nexi...')
         try {
             const res = await authFetch(`/.netlify/functions/nexi-debug-operation?${params.toString()}`)
-            const json = await res.json()
+            // Some failure modes return an HTML error page (404 on missing
+            // function, 502/503 from Netlify, etc). Reading res.json() directly
+            // throws "Unexpected token '<'" and the operator sees a useless
+            // error. Read as text first, parse defensively, surface the real
+            // status + a snippet of what came back so we can debug.
+            const raw = await res.text()
+            let json: Record<string, unknown> = {}
+            try {
+                json = JSON.parse(raw) as Record<string, unknown>
+            } catch {
+                toast.dismiss(toastId)
+                const snippet = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200)
+                toast.error(`Diagnostica fallita — Nexi/Netlify ha risposto HTTP ${res.status}, non JSON. Prime parole della risposta: "${snippet || '(vuota)'}"`, { duration: 12000 })
+                console.error('[diagnoseCard] Non-JSON response from nexi-debug-operation:', res.status, raw)
+                return
+            }
             toast.dismiss(toastId)
             if (!res.ok) {
-                toast.error(json?.error || `HTTP ${res.status}`)
+                toast.error((json?.error as string) || `HTTP ${res.status}`)
                 return
             }
 
