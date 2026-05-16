@@ -585,9 +585,48 @@ export default function GestioneOtpTab() {
                         <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-8 text-center text-sm text-theme-text-muted">
                             Nessuna regola trovata con i filtri attuali.
                         </div>
-                    ) : (
-                        <ul className="space-y-3">
-                            {filteredRows.map(row => {
+                    ) : (() => {
+                        // Group rules by OTP_ACTION_CATALOG group. Rows not in
+                        // catalog land in "Altro". Order is fixed for consistency.
+                        type GroupKey = OtpAction['group'] | 'Altro'
+                        const GROUP_ORDER: GroupKey[] = ['Noleggio', 'Lavaggio', 'Fattura', 'Cliente', 'Patente / Documenti', 'Sistema', 'Altro']
+                        const grouped = new Map<GroupKey, typeof filteredRows>()
+                        for (const r of filteredRows) {
+                            const action = OTP_ACTION_CATALOG.find(a => a.id === r.id)
+                            const g = (action?.group || 'Altro') as GroupKey
+                            if (!grouped.has(g)) grouped.set(g, [])
+                            grouped.get(g)!.push(r)
+                        }
+                        const GROUP_META: Record<GroupKey, { color: string; icon: string }> = {
+                            'Noleggio': { color: 'text-blue-400 border-blue-500/30 bg-blue-500/10', icon: 'car' },
+                            'Lavaggio': { color: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10', icon: 'wash' },
+                            'Fattura': { color: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10', icon: 'doc' },
+                            'Cliente': { color: 'text-purple-400 border-purple-500/30 bg-purple-500/10', icon: 'user' },
+                            'Patente / Documenti': { color: 'text-amber-400 border-amber-500/30 bg-amber-500/10', icon: 'id' },
+                            'Sistema': { color: 'text-indigo-400 border-indigo-500/30 bg-indigo-500/10', icon: 'cog' },
+                            'Altro': { color: 'text-theme-text-muted border-theme-border bg-theme-bg-tertiary', icon: 'dot' },
+                        }
+                        return (
+                            <div className="space-y-6">
+                                {GROUP_ORDER.filter(g => grouped.has(g)).map(g => {
+                                    const groupRows = grouped.get(g)!
+                                    const activeInGroup = groupRows.filter(r => valueOf(r, 'is_required')).length
+                                    const meta = GROUP_META[g]
+                                    return (
+                                        <section key={g}>
+                                            <div className="flex items-center justify-between mb-3 pb-2 border-b border-theme-border">
+                                                <div className="flex items-center gap-2.5">
+                                                    <span className={`inline-flex items-center justify-center w-7 h-7 rounded-lg border text-[11px] font-bold ${meta.color}`}>
+                                                        {groupRows.length}
+                                                    </span>
+                                                    <h3 className="text-base font-semibold text-theme-text-primary">{g}</h3>
+                                                </div>
+                                                <span className="text-[11px] uppercase tracking-wider text-theme-text-muted font-medium">
+                                                    {activeInGroup} attivi su {groupRows.length}
+                                                </span>
+                                            </div>
+                                            <ul className="space-y-3">
+                                                {groupRows.map(row => {
                                 const dirty = isDirty(row)
                                 const saving = savingId === row.id
                                 const required = valueOf(row, 'is_required')
@@ -691,8 +730,13 @@ export default function GestioneOtpTab() {
                                     </li>
                                 )
                             })}
-                        </ul>
-                    )}
+                                            </ul>
+                                        </section>
+                                    )
+                                })}
+                            </div>
+                        )
+                    })()}
                 </div>
 
                 {/* Right rail: decorative reminders + status */}
