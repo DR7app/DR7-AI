@@ -266,6 +266,16 @@ export default function OperatorProfileModal({
                     <ContrattoSection operatoreId={operatore.id} />
                 </div>
 
+                {/* Calcola Paga — usa contratto + ore lavorate nel periodo */}
+                <div className="px-4 sm:px-6 pt-3">
+                    <CalcolaPagaSection
+                        operatoreId={operatore.id}
+                        oreTargetGiornaliere={operatore.ore_target_giornaliere || 8}
+                        days={days}
+                        rangeLabel={`${fmtDate(range.start)} → ${fmtDate(range.end)}`}
+                    />
+                </div>
+
                 {/* KPI cards */}
                 <div className="px-4 sm:px-6 py-3 sm:py-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
                     <KpiCard label="Ore Lavorate" value={fmtMin(stats.totMinLavorati)} tone="emerald" />
@@ -895,4 +905,217 @@ function ContrattoPdfArea({ contratto, onChange }: { contratto: Contratto; onCha
             )}
         </div>
     )
+}
+
+// ──────────────────────────────────────────────────────────────────
+// CalcolaPagaSection — calcola la paga del periodo selezionato.
+//
+// Sorgenti:
+//   - operatore_contratto.attivo=true (stipendio_mensile_eur,
+//     paga_oraria_eur, paga_straordinario_eur, ore_target_giornaliere,
+//     ore_soglia_straordinario)
+//   - days[] (passato dal modal): minuti lavorati per giorno
+//   - operatori_persone.ore_a_recuperare_min (saldo manuale,
+//     editabile direttamente qui — positive = decurtazione,
+//     negative = bonus)
+//
+// Regola: per ogni giorno con minuti > soglia, eccesso = straordinari.
+// Resto = ore ordinarie.
+//   paga_ordinaria = ore_ordinarie × paga_oraria
+//   paga_straordinari = ore_straord × paga_straordinario (se abilitato)
+//   correzione_ore_recuperare = -(ore_a_recuperare × paga_oraria)
+//   stipendio_fisso = stipendio_mensile_eur (mostrato a parte come
+//     riferimento, non sommato all'orario per evitare doppio conteggio)
+// Solo direzione/developer vede questa sezione.
+// ──────────────────────────────────────────────────────────────────
+interface CalcolaPagaContract {
+    stipendio_mensile_eur: number | null
+    stipendio_frequenza: 'settimanale' | 'mensile' | null
+    paga_oraria_eur: number | null
+    paga_straordinario_eur: number | null
+    straordinario_abilitato: boolean
+    ore_soglia_straordinario: number | null
+}
+
+function CalcolaPagaSection({
+    operatoreId,
+    oreTargetGiornaliere,
+    days,
+    rangeLabel,
+}: {
+    operatoreId: string
+    oreTargetGiornaliere: number
+    days: DayBreakdown[]
+    rangeLabel: string
+}) {
+    const { hasRole } = useAdminRole()
+    const isDirezione = hasRole('direzione') || hasRole('developer')
+    const [contract, setContract] = useState<CalcolaPagaContract | null>(null)
+    const [oreRecMin, setOreRecMin] = useState<number>(0)
+    const [oreRecInput, setOreRecInput] = useState<string>('0')
+    const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
+
+    useEffect(() => {
+        if (!isDirezione) { setLoading(false); return }
+        let cancelled = false
+        ;(async () => {
+            setLoading(true)
+            const [{ data: cData }, { data: oData }] = await Promise.all([
+                supabase.from('operatore_contratto')
+                    .select('stipendio_mensile_eur, stipendio_frequenza, paga_oraria_eur, paga_straordinario_eur, straordinario_abilitato, ore_soglia_straordinario')
+                    .eq('operatore_id', operatoreId)
+                    .eq('attivo', true)
+                    .maybeSingle(),
+                supabase.from('operatori_persone')
+                    .select('ore_a_recuperare_min')
+                    .eq('id', operatoreId)
+                    .maybeSingle(),
+            ])
+            if (cancelled) return
+            setContract((cData as CalcolaPagaContract | null) || null)
+            const m = Number((oData as { ore_a_recuperare_min?: number } | null)?.ore_a_recuperare_min || 0)
+            setOreRecMin(m)
+            setOreRecInput(minutesToHourInput(m))
+            setLoading(false)
+        })()
+        return () => { cancelled = true }
+    }, [operatoreId, isDirezione])
+
+    const calc = useMemo(() => {
+        const sogliaMin = Math.round((contract?.ore_soglia_straordinario ?? oreTargetGiornaliere) * 60)
+        let minOrdinari = 0
+        let minStraord = 0
+        for (const d of days) {
+            if (d.minutiLavorati <= 0) continue
+            if (contract?.straordinario_abilitato && d.minutiLavorati > sogliaMin) {
+                minOrdinari += sogliaMin
+                minStraord += d.minutiLavorati - sogliaMin
+            } else {
+                minOrdinari += d.minutiLavorati
+            }
+        }
+        const oraria = Number(contract?.paga_oraria_eur || 0)
+        const straord = Number(contract?.paga_straordinario_eur || 0)
+        const pagaOrd = (minOrdinari / 60) * oraria
+        const pagaStraord = (minStraord / 60) * straord
+        const correzione = -(oreRecMin / 60) * oraria // recuperare = decurta
+        const totale = pagaOrd + pagaStraord + correzione
+        return { sogliaMin, minOrdinari, minStraord, pagaOrd, pagaStraord, correzione, totale }
+    }, [days, contract, oreRecMin, oreTargetGiornaliere])
+
+    async function saveOreRecuperare() {
+        const parsed = hoursInputToMinutes(oreRecInput)
+        setSaving(true)
+        const { error } = await supabase
+            .from('operatori_persone')
+            .update({ ore_a_recuperare_min: parsed })
+            .eq('id', operatoreId)
+        setSaving(false)
+        if (error) {
+            toast.error(`Errore salvataggio: ${error.message}`)
+            return
+        }
+        setOreRecMin(parsed)
+        toast.success('Ore a recuperare aggiornate')
+    }
+
+    if (!isDirezione) return null
+    if (loading) return <p className="text-[11px] text-theme-text-muted py-2">Caricamento Calcola Paga…</p>
+
+    const noContract = !contract || (!contract.paga_oraria_eur && !contract.stipendio_mensile_eur)
+    const eur = (n: number) => `€${n.toFixed(2)}`
+
+    return (
+        <div className="rounded-xl border border-theme-border bg-theme-bg-tertiary/30 p-4">
+            <div className="mb-3 flex items-baseline justify-between gap-2 flex-wrap">
+                <h3 className="text-sm font-semibold text-theme-text-primary">Calcola Paga</h3>
+                <span className="text-[10px] text-theme-text-muted">{rangeLabel}</span>
+            </div>
+
+            {noContract ? (
+                <p className="text-[12px] text-amber-400">
+                    Nessun contratto attivo o paga oraria mancante. Compila il contratto qui sopra per attivare il calcolo.
+                </p>
+            ) : (
+                <>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                        <div className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
+                            <div className="text-[10px] uppercase text-theme-text-muted">Ore Ordinarie</div>
+                            <div className="text-sm font-semibold text-theme-text-primary">{fmtMin(calc.minOrdinari)}</div>
+                            <div className="text-[10px] text-emerald-400 mt-0.5 tabular-nums">{eur(calc.pagaOrd)}</div>
+                        </div>
+                        <div className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
+                            <div className="text-[10px] uppercase text-theme-text-muted">Straordinari</div>
+                            <div className="text-sm font-semibold text-theme-text-primary">{fmtMin(calc.minStraord)}</div>
+                            <div className="text-[10px] text-sky-400 mt-0.5 tabular-nums">{eur(calc.pagaStraord)}</div>
+                        </div>
+                        <div className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
+                            <div className="text-[10px] uppercase text-theme-text-muted">Ore a Recuperare</div>
+                            <div className="text-sm font-semibold text-theme-text-primary">{oreRecMin === 0 ? '—' : fmtMin(Math.abs(oreRecMin))}</div>
+                            <div className={`text-[10px] mt-0.5 tabular-nums ${calc.correzione < 0 ? 'text-rose-400' : calc.correzione > 0 ? 'text-emerald-400' : 'text-theme-text-muted'}`}>{calc.correzione === 0 ? '—' : eur(calc.correzione)}</div>
+                        </div>
+                        <div className="bg-dr7-gold/10 border border-dr7-gold/40 rounded-lg px-3 py-2">
+                            <div className="text-[10px] uppercase text-theme-text-muted">Totale</div>
+                            <div className="text-lg font-bold text-dr7-gold tabular-nums">{eur(calc.totale)}</div>
+                            {contract?.stipendio_mensile_eur && (
+                                <div className="text-[9px] text-theme-text-muted mt-0.5">Stipendio fisso: {eur(Number(contract.stipendio_mensile_eur))} / {contract.stipendio_frequenza || 'mese'}</div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="border-t border-theme-border pt-3 flex flex-wrap items-end gap-2">
+                        <div className="flex-1 min-w-[160px]">
+                            <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">Aggiorna Ore a Recuperare</label>
+                            <input
+                                type="text"
+                                value={oreRecInput}
+                                onChange={(e) => setOreRecInput(e.target.value)}
+                                placeholder="es. 2 o 1h30 o -0h45"
+                                className="w-full bg-theme-bg-secondary border border-theme-border rounded-md px-3 py-2 text-sm text-theme-text-primary"
+                            />
+                            <p className="text-[10px] text-theme-text-muted mt-1">
+                                Positivo = decurta la paga · Negativo = bonus all&apos;operatore. Es. <code>1h30</code> · <code>-0h45</code> · <code>2</code> (= 2h)
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            disabled={saving}
+                            onClick={saveOreRecuperare}
+                            className="px-4 py-2 rounded-full bg-dr7-gold text-black font-semibold text-sm hover:opacity-90 disabled:opacity-50"
+                        >{saving ? 'Salvo…' : 'Salva'}</button>
+                    </div>
+                </>
+            )}
+        </div>
+    )
+}
+
+function minutesToHourInput(min: number): string {
+    if (min === 0) return '0'
+    const sign = min < 0 ? '-' : ''
+    const abs = Math.abs(min)
+    const h = Math.floor(abs / 60)
+    const m = abs % 60
+    if (m === 0) return `${sign}${h}`
+    return `${sign}${h}h${String(m).padStart(2, '0')}`
+}
+function hoursInputToMinutes(s: string): number {
+    const t = (s || '').trim()
+    if (!t) return 0
+    const negative = t.startsWith('-')
+    const body = negative ? t.slice(1) : t
+    // Forme: "1h30" / "1:30" / "2" / "0h45"
+    const m1 = body.match(/^(\d+)\s*[h:]\s*(\d{1,2})?$/i)
+    if (m1) {
+        const h = parseInt(m1[1], 10)
+        const mm = m1[2] ? parseInt(m1[2], 10) : 0
+        return (negative ? -1 : 1) * (h * 60 + Math.min(59, mm))
+    }
+    const m2 = body.match(/^(\d+(?:\.\d+)?)$/)
+    if (m2) {
+        const hh = parseFloat(m2[1])
+        return Math.round((negative ? -1 : 1) * hh * 60)
+    }
+    return 0
 }
