@@ -8041,14 +8041,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   // Mostra il default da Centralina Pro per la categoria del veicolo.
                   const sv = vehicles.find(v => v.id === formData.vehicle_id)
                   const cfgSforo = getSforoForCategory(sv, rentalConfig)
-                  // BUG FIX 2026-05-13: skip se 0 / '0' (oltre a falsy/empty).
-                  // Prima '0' passava il check truthy e mostrava "€0/km".
                   if (!cfgSforo || Number(cfgSforo) <= 0) return null
-                  const _svCat = sv?.category as string | undefined
-                  const catLabel = (_svCat === 'exotic' || _svCat === 'supercars') ? 'Supercar'
-                    : _svCat === 'urban' ? 'Urban'
-                    : _svCat === 'aziendali' ? 'Aziendali'
-                    : _svCat || ''
+                  // BUG FIX 2026-05-16: leggi la label REALE dalla Centralina
+                  // Pro (`vehicle_categories[id].label`) invece dei nomi
+                  // hardcoded. Prima un veicolo con category='urban' ma
+                  // labellato "Hypercar" in Centralina Pro mostrava "Urban"
+                  // (mismatch label/id legacy).
+                  const _svCat = (sv?.category as string | undefined) || ''
+                  const fromConfig = _svCat && rentalConfig?.vehicle_categories?.[_svCat]?.label
+                  const catLabel = fromConfig || _svCat
                   return (
                     <p className="text-xs text-amber-400 mt-1">Default Centralina ({catLabel}): €{cfgSforo}/km</p>
                   )
