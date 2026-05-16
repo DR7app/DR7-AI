@@ -262,7 +262,15 @@ export default function CompilaButton({
       }
 
       if (results.length === 0) {
-        onError?.('Impossibile estrarre dati dai documenti caricati')
+        // Mostriamo il motivo specifico (es. "Carta Identità Fronte: 500
+        // model not found", "Patente Retro: AnthropicError ...") invece
+        // del generico "Impossibile estrarre dati". Cosi' capiamo se e'
+        // un problema di model id, di credito API, di permessi, di
+        // formato file, ecc.
+        console.error('[CompilaButton] no results extracted. Notes:', notes)
+        const detail = notes.length > 0 ? `\n${notes.join('\n')}` : ''
+        onError?.(`Impossibile estrarre dati dai documenti caricati.${detail}`)
+        setExtractionNotes(notes)
         setIsExtracting(false)
         return
       }
