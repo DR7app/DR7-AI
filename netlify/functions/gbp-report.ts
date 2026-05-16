@@ -230,6 +230,37 @@ const handler: Handler = async (event) => {
     }
   }
 
+  // SELF RATE-LIMIT sul Performance API: anche questo ha 1 req/min sui
+  // progetti default. Se ne abbiamo appena fatto uno (success o fail), non
+  // ne facciamo un altro per 70s. Cosi' click multipli su Ricarica non
+  // bruciano quota.
+  try {
+    const { data: lastPerf } = await sb.from('app_secrets').select('value').eq('key', 'gbp_perf_last_attempt').maybeSingle()
+    const lastTs = (lastPerf?.value as { at?: string } | undefined)?.at
+    if (lastTs && Date.now() - new Date(lastTs).getTime() < 70 * 1000) {
+      const secsSince = Math.round((Date.now() - new Date(lastTs).getTime()) / 1000)
+      // Se c'e' cache stale serviamo quella invece dell'errore
+      const { data: stale } = await sb.from('app_secrets').select('value').eq('key', cacheKey).maybeSingle()
+      const cached = stale?.value as (GbpPayload & { fetchedAt?: string }) | undefined
+      if (cached?.kpis) {
+        return {
+          statusCode: 200, headers,
+          body: JSON.stringify({
+            ...cached, fromCache: true, cachedAt: cached.fetchedAt,
+            warnings: [`Mostro cache: prossimo aggiornamento possibile tra ${70 - secsSince}s (quota Performance API 1/min)`]
+          })
+        }
+      }
+      return {
+        statusCode: 200, headers,
+        body: JSON.stringify({
+          ...empty, configured: true,
+          warnings: [`Quota Performance API appena consumata (${secsSince}s fa). Aspetta ${70 - secsSince}s e ricarica.`]
+        })
+      }
+    }
+  } catch { /* fall through */ }
+
   // 2) Performance metrics — fetchMultiDailyMetricsTimeSeries
   // doc: https://developers.google.com/my-business/reference/performance/rest/v1/locations/fetchMultiDailyMetricsTimeSeries
   const start = dateMinusDays(days)
@@ -253,6 +284,16 @@ const handler: Handler = async (event) => {
     params.append('dailyRange.end_date.year', String(end.year))
     params.append('dailyRange.end_date.month', String(end.month))
     params.append('dailyRange.end_date.day', String(end.day))
+
+    // Marca il tentativo PRIMA della chiamata cosi' click multipli mentre
+    // la chiamata e' in corso (o appena fallita) sanno di non riprovare.
+    try {
+      await sb.from('app_secrets').upsert({
+        key: 'gbp_perf_last_attempt',
+        value: { at: new Date().toISOString() },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'key' })
+    } catch { /* best effort */ }
 
     const url = `https://businessprofileperformance.googleapis.com/v1/${locationName}:fetchMultiDailyMetricsTimeSeries?${params.toString()}`
     const r = await oauth2.request<{ multiDailyMetricTimeSeries: Array<{ dailyMetricTimeSeries: Array<{ dailyMetric: string; timeSeries: { datedValues: Array<{ value?: string }> } }> }> }>({
