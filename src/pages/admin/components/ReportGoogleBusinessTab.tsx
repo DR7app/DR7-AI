@@ -18,6 +18,27 @@ type RangeKey = typeof RANGES[number]['key']
 interface GbpKpis { views: number; calls: number; directions: number; websiteClicks: number; bookings: number }
 interface GbpPayload { configured: boolean; range: string; kpis: GbpKpis | null; warnings: string[]; needsReauth?: boolean; noLocationFound?: boolean; cachedAt?: string; fromCache?: boolean }
 
+interface GbpDiag {
+  envs: Record<string, boolean>
+  oauth: {
+    refresh_token_present: boolean
+    connected_email: string | null
+    obtained_at: string | null
+    scopes_in_access_token: string[] | null
+    access_token_test: 'ok' | 'failed' | null
+    access_token_error: string | null
+  }
+  location_cache: { name: string | null; title: string | null; discovered_at: string | null }
+  report_caches: { range: string; fetchedAt: string | null }[]
+  accounts_test: {
+    status: 'ok' | 'failed' | 'skipped'
+    accounts_found: number
+    error: string | null
+    error_classification: 'quota' | 'auth' | 'scope' | 'other' | null
+  }
+  recommendations: string[]
+}
+
 const fmtInt = (v: number) => v.toLocaleString('it-IT')
 
 function KpiTile({ label, value, valueClass = 'text-theme-text-primary' }: { label: string; value: number; valueClass?: string }) {
@@ -34,6 +55,18 @@ export default function ReportGoogleBusinessTab() {
   const [range, setRange] = useState<RangeKey>('28d')
   const [gbp, setGbp] = useState<GbpPayload | null>(null)
   const [loading, setLoading] = useState(true)
+  const [diag, setDiag] = useState<GbpDiag | null>(null)
+  const [diagLoading, setDiagLoading] = useState(false)
+  const [showDiag, setShowDiag] = useState(false)
+
+  const runDiagnostic = () => {
+    setDiagLoading(true)
+    setShowDiag(true)
+    fetch('/.netlify/functions/gbp-diagnostic')
+      .then(r => r.json())
+      .then((d: GbpDiag) => { setDiag(d); setDiagLoading(false) })
+      .catch(() => setDiagLoading(false))
+  }
 
   const fetchReport = (forceRefresh = false) => {
     setLoading(true)
@@ -90,6 +123,14 @@ export default function ReportGoogleBusinessTab() {
           >
             {loading ? '…' : 'Ricarica'}
           </button>
+          <button
+            type="button"
+            onClick={runDiagnostic}
+            title="Verifica stato connessione Google"
+            className="px-2 py-1 rounded-md border border-theme-border text-[11px] text-theme-text-muted hover:text-theme-text-primary"
+          >
+            Diagnostica
+          </button>
           <div className="flex gap-1 text-xs">
             {RANGES.map(r => (
               <button
@@ -104,6 +145,110 @@ export default function ReportGoogleBusinessTab() {
           </div>
         </div>
       </div>
+
+      {/* Diagnostic panel (shown on demand) */}
+      {showDiag && (
+        <div className="bg-slate-500/10 border border-slate-500/40 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-theme-text-primary">Diagnostica connessione</h3>
+            <button onClick={() => setShowDiag(false)} className="text-xs text-theme-text-muted hover:text-theme-text-primary">Chiudi</button>
+          </div>
+
+          {diagLoading || !diag ? (
+            <div className="text-xs text-theme-text-muted">Verifica in corso…</div>
+          ) : (
+            <div className="space-y-3 text-xs">
+              {/* Env vars */}
+              <div>
+                <div className="font-semibold text-theme-text-primary mb-1">Variabili d'ambiente</div>
+                <div className="grid grid-cols-2 gap-1">
+                  {Object.entries(diag.envs).map(([k, v]) => (
+                    <div key={k} className="flex items-center gap-2">
+                      <span className={v ? 'text-emerald-400' : 'text-red-400'}>{v ? '✓' : '✗'}</span>
+                      <code className="text-theme-text-muted">{k}</code>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* OAuth */}
+              <div>
+                <div className="font-semibold text-theme-text-primary mb-1">Account Google</div>
+                <div className="space-y-0.5 text-theme-text-muted">
+                  <div>Email connessa: <span className="text-theme-text-primary font-mono">{diag.oauth.connected_email || '—'}</span></div>
+                  <div>Connesso il: {diag.oauth.obtained_at ? new Date(diag.oauth.obtained_at).toLocaleString('it-IT') : '—'}</div>
+                  <div>Refresh token: <span className={diag.oauth.refresh_token_present ? 'text-emerald-400' : 'text-red-400'}>{diag.oauth.refresh_token_present ? 'presente' : 'mancante'}</span></div>
+                  <div>Test access token: <span className={diag.oauth.access_token_test === 'ok' ? 'text-emerald-400' : 'text-red-400'}>{diag.oauth.access_token_test || '—'}</span></div>
+                  {diag.oauth.access_token_error && <div className="text-red-400 break-all">Errore: {diag.oauth.access_token_error}</div>}
+                </div>
+              </div>
+
+              {/* Scopes */}
+              {diag.oauth.scopes_in_access_token && (
+                <div>
+                  <div className="font-semibold text-theme-text-primary mb-1">Permessi autorizzati (scopes)</div>
+                  <div className="space-y-0.5">
+                    {diag.oauth.scopes_in_access_token.map(s => {
+                      const isBusiness = s.includes('business.manage') || s.includes('plus.business.manage')
+                      const isAnalytics = s.includes('analytics')
+                      return (
+                        <div key={s} className="font-mono text-[10px] flex items-center gap-2">
+                          <span className={isBusiness || isAnalytics ? 'text-emerald-400' : 'text-theme-text-muted'}>•</span>
+                          <span className={isBusiness ? 'text-emerald-300 font-semibold' : 'text-theme-text-muted'}>{s}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Location cache */}
+              <div>
+                <div className="font-semibold text-theme-text-primary mb-1">Profilo Business trovato</div>
+                <div className="space-y-0.5 text-theme-text-muted">
+                  <div>Location ID: <code className="text-theme-text-primary">{diag.location_cache.name || '— non ancora scoperto'}</code></div>
+                  <div>Nome: <span className="text-theme-text-primary">{diag.location_cache.title || '—'}</span></div>
+                  <div>Scoperto il: {diag.location_cache.discovered_at ? new Date(diag.location_cache.discovered_at).toLocaleString('it-IT') : '—'}</div>
+                </div>
+              </div>
+
+              {/* Accounts test */}
+              <div>
+                <div className="font-semibold text-theme-text-primary mb-1">Test chiamata Google API</div>
+                <div className="space-y-0.5 text-theme-text-muted">
+                  <div>Status: <span className={diag.accounts_test.status === 'ok' ? 'text-emerald-400' : diag.accounts_test.status === 'failed' ? 'text-red-400' : 'text-amber-400'}>{diag.accounts_test.status}</span></div>
+                  <div>Account Business trovati: <span className="text-theme-text-primary">{diag.accounts_test.accounts_found}</span></div>
+                  {diag.accounts_test.error && (
+                    <div className="text-red-400 break-all">
+                      Errore ({diag.accounts_test.error_classification || 'non classificato'}): {diag.accounts_test.error}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Cache caches */}
+              <div>
+                <div className="font-semibold text-theme-text-primary mb-1">Cache per range</div>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1 text-[10px]">
+                  {diag.report_caches.map(c => (
+                    <div key={c.range} className="text-theme-text-muted">
+                      {c.range}: {c.fetchedAt ? new Date(c.fetchedAt).toLocaleString('it-IT') : '—'}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Recommendations */}
+              <div className="pt-2 border-t border-theme-border">
+                <div className="font-semibold text-theme-text-primary mb-1">Raccomandazioni</div>
+                {diag.recommendations.map((r, i) => (
+                  <div key={i} className="text-amber-300 text-xs mb-1">{r}</div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* KPI block / warnings */}
       <div className="bg-theme-bg-secondary/70 border border-theme-border rounded-xl p-4">
