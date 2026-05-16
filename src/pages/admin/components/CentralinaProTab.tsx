@@ -3204,11 +3204,11 @@ function PacchettiKmEditor({
           const fullPrice = (typeof pk.km === 'number' ? pk.km : 0) * sforo
           return (
             <li key={pk.id} className="p-3 rounded-lg border border-theme-border bg-theme-bg-primary space-y-2">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <button
                   type="button"
                   onClick={() => updatePkg(pk.id, { is_active: !pk.is_active })}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${pk.is_active ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                  className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none ${pk.is_active ? 'bg-emerald-500' : 'bg-gray-300'}`}
                   title={pk.is_active ? 'ON — visibile sul sito' : 'OFF — nascosto dal sito'}
                 >
                   <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${pk.is_active ? 'translate-x-4' : 'translate-x-1'}`}/>
@@ -3218,7 +3218,7 @@ function PacchettiKmEditor({
                   value={pk.label || ''}
                   onChange={(e) => updatePkg(pk.id, { label: e.target.value })}
                   placeholder={`Pacchetto ${pk.km || 0} km`}
-                  className="flex-1 bg-transparent outline-none text-[13px] text-theme-text-primary placeholder:text-theme-text-muted"
+                  className="flex-1 min-w-0 bg-transparent outline-none text-[13px] text-theme-text-primary placeholder:text-theme-text-muted px-1"
                 />
                 <button
                   type="button"
