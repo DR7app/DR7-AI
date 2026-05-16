@@ -957,6 +957,14 @@ type PacchettoKm = {
   is_active: boolean
   /** Etichetta libera opzionale. Quando vuota: "Pacchetto {km} km". */
   label?: string
+  /** 2026-05-16: se true, il cliente puo' acquistare il pacchetto piu'
+   *  volte (selettore con + e quantita'). Se false (default) → si/no
+   *  toggle. Usato per i pacchetti grandi che possono essere sommati
+   *  (es. due Pacchetti 300 km per 600 km totali). */
+  is_quantity_buyable?: boolean
+  /** 2026-05-16: limite massimo di quantita' acquistabile quando
+   *  is_quantity_buyable=true. Default 10 se non specificato. */
+  max_quantity?: number | ''
 }
 
 const INITIAL_KM: KmConfig[] = [
@@ -3265,6 +3273,21 @@ function PacchettiKmEditor({
                   )}
                 </div>
               </div>
+              {/* 2026-05-16: toggle "Acquistabile piu' volte". Quando ON, il
+                  cliente vede un + sul wizard e puo' selezionare quantita'
+                  (max 2 di default). Quando OFF, una si/no card. */}
+              <label className="flex items-center gap-2 pt-2 border-t border-theme-border/50">
+                <input
+                  type="checkbox"
+                  checked={!!pk.is_quantity_buyable}
+                  onChange={(e) => updatePkg(pk.id, { is_quantity_buyable: e.target.checked })}
+                  className="w-3.5 h-3.5 accent-[#007aff]"
+                />
+                <span className="text-[11px] text-theme-text-secondary">
+                  Acquistabile più volte
+                  <span className="text-theme-text-muted ml-1">(il cliente vede il + sul wizard, max {Number(pk.max_quantity) || 2})</span>
+                </span>
+              </label>
             </li>
           )
         })}

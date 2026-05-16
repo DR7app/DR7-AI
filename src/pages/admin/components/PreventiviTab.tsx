@@ -501,6 +501,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     // 2026-05-16: pacchetto KM extra (opzionale, mutually exclusive
     // con include_unlimited_km). Id del PacchettoKm in centralina_pro_config.
     km_package_id: '' as string,
+    // 2026-05-16: quantita' del pacchetto. 1..max_quantity (default 2)
+    // per pacchetti is_quantity_buyable=true. Altrimenti sempre 1.
+    km_package_qty: 1 as number,
     // Delivery / Pickup
     pickup_location: 'dr7_office',
     dropoff_location: 'dr7_office',
@@ -3635,21 +3638,40 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                 {pkgs.map(pkg => {
                   const isSelected = form.km_package_id === pkg.id
                   const isDisabled = form.include_unlimited_km
+                  const isQtyBuyable = !!(pkg as { is_quantity_buyable?: boolean }).is_quantity_buyable
+                  const maxQty = Math.max(1, Number((pkg as { max_quantity?: number }).max_quantity) || 2)
+                  const qty = isSelected ? Math.max(1, form.km_package_qty || 1) : 0
                   return (
-                    <label key={pkg.id} className={`flex items-center gap-3 cursor-pointer p-2 rounded-lg border ${
+                    <div key={pkg.id} className={`flex items-center gap-3 p-2 rounded-lg border ${
                       isDisabled ? 'opacity-50 cursor-not-allowed border-theme-border/30'
                       : isSelected ? 'border-dr7-gold bg-dr7-gold/10'
-                      : 'border-theme-border/50 hover:bg-theme-bg-tertiary/30'
-                    }`}>
+                      : 'border-theme-border/50 hover:bg-theme-bg-tertiary/30 cursor-pointer'
+                    }`}
+                    onClick={() => {
+                      if (isDisabled) return
+                      if (isQtyBuyable && isSelected) return
+                      setForm(prev => ({ ...prev, km_package_id: isSelected ? '' : pkg.id, km_package_qty: 1 }))
+                    }}>
                       <input type="radio" name="km_package_radio" checked={isSelected} disabled={isDisabled}
-                        onChange={() => setForm(prev => ({ ...prev, km_package_id: isSelected ? '' : pkg.id }))}
-                        onClick={() => { if (isSelected) setForm(prev => ({ ...prev, km_package_id: '' })) }}
+                        onChange={() => {}}
                         className="w-4 h-4 accent-dr7-gold" />
                       <span className="text-sm text-theme-text-primary flex-1">
                         {pkg.label} ({pkg.km} km) {pkg.sconto_pct > 0 && <span className="text-xs text-theme-text-muted">— sconto {pkg.sconto_pct}%</span>}
+                        {isSelected && qty > 1 && <span className="block text-xs text-dr7-gold mt-0.5">Totale: {qty * pkg.km} km · {formatEur(pkg.price * qty)}</span>}
                       </span>
-                      <span className="text-sm font-bold text-dr7-gold">{formatEur(pkg.price)}</span>
-                    </label>
+                      {isQtyBuyable && isSelected ? (
+                        <div className="flex items-center gap-1.5">
+                          <button type="button" disabled={isDisabled} onClick={(e) => { e.stopPropagation(); setForm(prev => ({ ...prev, km_package_qty: Math.max(0, (prev.km_package_qty || 1) - 1), km_package_id: (prev.km_package_qty || 1) <= 1 ? '' : prev.km_package_id })) }}
+                            className="w-6 h-6 rounded-full bg-theme-bg-tertiary border border-theme-border text-theme-text-primary font-bold text-xs disabled:opacity-50">−</button>
+                          <span className="text-sm font-bold text-theme-text-primary min-w-[1.25rem] text-center">{qty}</span>
+                          <button type="button" disabled={isDisabled || qty >= maxQty} onClick={(e) => { e.stopPropagation(); setForm(prev => ({ ...prev, km_package_qty: Math.min(maxQty, (prev.km_package_qty || 1) + 1) })) }}
+                            className="w-6 h-6 rounded-full bg-dr7-gold text-white font-bold text-xs disabled:opacity-50">+</button>
+                          <span className="text-sm font-bold text-dr7-gold ml-1.5">{formatEur(pkg.price * qty)}</span>
+                        </div>
+                      ) : (
+                        <span className="text-sm font-bold text-dr7-gold">{formatEur(pkg.price)}</span>
+                      )}
+                    </div>
                   )
                 })}
               </div>

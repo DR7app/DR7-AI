@@ -170,8 +170,10 @@ export function convertProToRentalConfig(pro: ProSnapshot): RentalConfig {
     // 2026-05-16: pacchetti KM per categoria. Cataloga TUTTI i pacchetti
     // attivi (is_active=true e km>0), con prezzo precalcolato
     // km × sforo × (1 - sconto%/100). Consumer (ReservationsTab/
-    // PreventiviTab) trova qui i pacchetti per categoria.
-    const pacchettiByCat: Record<string, Array<{ id: string; km: number; sconto_pct: number; price: number; label: string }>> = {}
+    // PreventiviTab) trova qui i pacchetti per categoria. Plus flag
+    // is_quantity_buyable + max_quantity per i pacchetti acquistabili
+    // in piu' copie (default max 2).
+    const pacchettiByCat: Record<string, Array<{ id: string; km: number; sconto_pct: number; price: number; label: string; is_quantity_buyable: boolean; max_quantity: number }>> = {}
 
     for (const kmCfg of pro.km) {
       const dbCat = PRO_TO_DB_CATEGORY[kmCfg.id] || kmCfg.id
@@ -222,7 +224,7 @@ export function convertProToRentalConfig(pro: ProSnapshot): RentalConfig {
     for (const kmCfg of pro.km) {
       const dbCat = PRO_TO_DB_CATEGORY[kmCfg.id] || kmCfg.id
       const sforoPerKm = sforoCat[dbCat] || 0
-      const pkgsRaw = (kmCfg as { pacchetti?: Array<{ id: string; km: number | ''; sconto_pct: number | ''; is_active?: boolean; label?: string }> }).pacchetti
+      const pkgsRaw = (kmCfg as { pacchetti?: Array<{ id: string; km: number | ''; sconto_pct: number | ''; is_active?: boolean; label?: string; is_quantity_buyable?: boolean; max_quantity?: number | '' }> }).pacchetti
       if (Array.isArray(pkgsRaw) && pkgsRaw.length > 0) {
         const pkgs = pkgsRaw
           .filter(p => p && p.is_active === true)
@@ -231,7 +233,9 @@ export function convertProToRentalConfig(pro: ProSnapshot): RentalConfig {
             const sconto = num(p.sconto_pct)
             const price = Math.round((km * sforoPerKm * (1 - sconto / 100)) * 100) / 100
             const label = String(p.label || '').trim() || `Pacchetto ${km} km`
-            return { id: String(p.id), km, sconto_pct: sconto, price, label }
+            const isQty = p.is_quantity_buyable === true
+            const maxQ = isQty ? Math.max(1, num(p.max_quantity) || 2) : 1
+            return { id: String(p.id), km, sconto_pct: sconto, price, label, is_quantity_buyable: isQty, max_quantity: maxQ }
           })
           .filter(p => p.km > 0)
         if (pkgs.length > 0) pacchettiByCat[dbCat] = pkgs
