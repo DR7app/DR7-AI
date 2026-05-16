@@ -688,7 +688,7 @@ In caso di Subnoleggio non autorizzato la penale è di €10.000.
 Al momento del ritiro dell'auto il cliente deve avere con sé la patente fisica ed è obbligato a consegnarla all'operatore che consegna la vettura.
 
 Non sono accettate denunce di smarrimento della patente. In caso di impossibilità a mostrare la patente fisica al momento del ritiro, il cliente perde la prenotazione e l'importo pagato.`
-        } else if (isUrbanTier) {
+        } else if (isUrbanLegacy) {
             additionalTermsText = `PENALI - UTILITARIE E AZIENDALI:
 
 Penale fermo del veicolo in caso di incidente o danni 40,00€ al giorno.
