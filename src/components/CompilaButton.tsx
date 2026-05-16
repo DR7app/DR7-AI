@@ -13,6 +13,7 @@
  */
 
 import { useState } from 'react'
+import { getCAPByCity, getProvinciaByCity } from '../data/sardegnaProvince'
 
 export interface ExtractedData {
   // Personal
@@ -281,6 +282,24 @@ export default function CompilaButton({
 
       // Merge data from all documents
       const merged = mergeExtractedData(results)
+
+      // CAP auto-fill: la carta identita' non riporta il CAP. Se Claude
+      // non l'ha inferito dalla citta' di residenza, proviamo a lookuparlo
+      // localmente dal database CAP sardo (copre il mercato principale
+      // DR7). Stessa logica per la provincia.
+      if (!merged.codice_postale && merged.citta_residenza) {
+        const inferredCap = getCAPByCity(merged.citta_residenza)
+        if (inferredCap) {
+          merged.codice_postale = inferredCap
+          notes.push(`CAP inferito da ${merged.citta_residenza}: ${inferredCap}`)
+        }
+      }
+      if (!merged.provincia_residenza && merged.citta_residenza) {
+        const inferredProv = getProvinciaByCity(merged.citta_residenza)
+        if (inferredProv) {
+          merged.provincia_residenza = inferredProv
+        }
+      }
 
       // Check for expired documents
       const today = new Date().toISOString().split('T')[0]

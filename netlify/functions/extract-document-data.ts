@@ -80,6 +80,22 @@ CODICE FISCALE:
 - Formato: LLLLLLNNLNNLNNNL (L=lettera, N=numero)
 - NON aggiungere caratteri extra
 
+CODICE POSTALE (CAP):
+- ESATTAMENTE 5 cifre
+- Se sul documento e' visibile, trascrivilo
+- Se NON e' visibile sul documento (es. la CIE non riporta sempre il CAP)
+  MA conosci la citta' di residenza, INFERISCI il CAP italiano corretto
+  dalla citta'. Esempi:
+    Cagliari → 09121 (o 09100 se generico)
+    Quartu Sant'Elena → 09045
+    Sassari → 07100
+    Olbia → 07026
+    Alghero → 07041
+    Milano → 20121 (centro) / usa CAP principale
+    Roma → 00100 / 00184 (a seconda della zona se nota)
+  Se non sei sicuro del CAP esatto della zona, usa il CAP principale
+  della citta'. Meglio fornire un CAP della citta' che lasciare vuoto.
+
 === CAMPI DA ESTRARRE ===
 
 {
