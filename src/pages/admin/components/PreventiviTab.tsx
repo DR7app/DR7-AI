@@ -3585,7 +3585,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                         min="0"
                         value={quote.pricePerKm > 0 ? String(quote.pricePerKm) : ''}
                         onChange={(e) => {
-                          const pricePerKm = Math.max(0, Number(e.target.value) || 0)
+                          // Accept Italian comma decimal (0,50) AND English (0.50).
+                          // Number("0,50") is NaN → fallback 0 → entry deleted →
+                          // l'utente non riusciva a inserire valori sub-1.
+                          const raw = e.target.value.replace(',', '.')
+                          const parsed = parseFloat(raw)
+                          const pricePerKm = isNaN(parsed) ? 0 : Math.max(0, parsed)
                           setForm(prev => {
                             const next = { ...prev.experience_km_quotes }
                             if (pricePerKm > 0) next[svc.id] = { ...(next[svc.id] || { km: 0 }), pricePerKm }
