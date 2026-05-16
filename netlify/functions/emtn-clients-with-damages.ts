@@ -253,6 +253,7 @@ export const handler: Handler = async (event) => {
     // booking_details.danni[].paidAt esplicito.
     const bookingIds = Array.from(new Set(interesting.map(b => b.id)))
     const fatturaByBookingItem = new Map<string, { paidAt: string; numero: string }>()
+    const fatturaByBooking = new Map<string, { paidAt: string; numero: string }>()
     if (bookingIds.length > 0) {
         const { data: fatture } = await sb
             .from('fatture')
@@ -260,11 +261,16 @@ export const handler: Handler = async (event) => {
             .in('booking_id', bookingIds)
         for (const f of (fatture || []) as (FatturaRow & { numero_fattura?: string })[]) {
             if (!f.booking_id) continue
-            // Solo fatture saldate hanno una data pagamento utile.
             const isPaid = String(f.stato || '').toLowerCase() === 'paid'
             if (!isPaid) continue
             const paidAt = f.data_emissione || f.created_at || ''
             const numero = f.numero_fattura || ''
+            // Fallback per-booking: la prima fattura saldata trovata per
+            // questa booking. Serve quando l'item-label nella fattura non
+            // coincide letteralmente con il label nel booking_details.
+            if (!fatturaByBooking.has(f.booking_id)) {
+                fatturaByBooking.set(f.booking_id, { paidAt, numero })
+            }
             const items = Array.isArray(f.items) ? f.items : []
             for (const it of items) {
                 const labelKey = (it.description || it.label || '').trim().toLowerCase()
@@ -278,8 +284,10 @@ export const handler: Handler = async (event) => {
     }
 
     function lookupFattura(bookingId: string, label: string): { paidAt: string; numero: string } | null {
+        // Prima esatta per (booking, label). Poi fallback a "qualsiasi fattura
+        // saldata per questa booking" — meno preciso ma evita pagato senza data.
         const key = `${bookingId}::${label.trim().toLowerCase()}`
-        return fatturaByBookingItem.get(key) || null
+        return fatturaByBookingItem.get(key) || fatturaByBooking.get(bookingId) || null
     }
     function daysBetween(a: string | null, b: string | null): number | null {
         if (!a || !b) return null
@@ -404,6 +412,51 @@ export const handler: Handler = async (event) => {
             }
             agg.events.push(ev)
         }
+    }
+
+    // Backfill CF per gruppi rimasti senza CF: faccio una query ilike
+    // su customers_extended per nome / cognome tokens. Cattura i casi
+    // in cui le mappe in-memory hanno mancato il match (es. nomi con
+    // spazi multipli, ordine invertito, accenti, ecc.). Eseguita solo
+    // per gruppi con customer_name presente per non scansionare tutto.
+    const needCf = Array.from(byGroup.values()).filter(a => !a.codice_fiscale && a.customer_name)
+    if (needCf.length > 0) {
+        await Promise.all(needCf.map(async (agg) => {
+            const tokens = String(agg.customer_name || '').trim().split(/\s+/).filter(t => t.length >= 2)
+            if (tokens.length === 0) return
+            // Limitiamo i token a 4 per non costruire query enormi.
+            const tk = tokens.slice(0, 4)
+            // Cerca righe customers_extended con codice_fiscale non null
+            // dove almeno un token compare in nome O cognome (case-ins).
+            const orParts: string[] = []
+            for (const t of tk) {
+                const safe = t.replace(/[,*()]/g, ' ').trim()
+                if (!safe) continue
+                orParts.push(`nome.ilike.%${safe}%`)
+                orParts.push(`cognome.ilike.%${safe}%`)
+            }
+            if (orParts.length === 0) return
+            const { data } = await sb
+                .from('customers_extended')
+                .select('codice_fiscale, nome, cognome, email, telefono')
+                .not('codice_fiscale', 'is', null)
+                .or(orParts.join(','))
+                .limit(10)
+            // Scegli la riga con miglior overlap di token (case-insensitive).
+            const lower = (s: string | null | undefined) => String(s || '').toLowerCase()
+            let best: { row: { codice_fiscale: string | null; nome: string | null; cognome: string | null; email: string | null; telefono: string | null }, score: number } | null = null
+            for (const row of (data || [])) {
+                const hay = `${lower(row.nome)} ${lower(row.cognome)}`
+                let score = 0
+                for (const t of tk) if (hay.includes(t.toLowerCase())) score += 1
+                if (!best || score > best.score) best = { row, score }
+            }
+            if (best && best.score >= Math.min(2, tk.length) && best.row.codice_fiscale) {
+                agg.codice_fiscale = normCF(best.row.codice_fiscale)
+                if (!agg.customer_email && best.row.email) agg.customer_email = best.row.email
+                if (!agg.customer_phone && best.row.telefono) agg.customer_phone = best.row.telefono
+            }
+        }))
     }
 
     // Sort eventi per data desc dentro ogni cliente, cosi\' la lista

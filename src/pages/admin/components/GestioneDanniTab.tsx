@@ -597,10 +597,19 @@ export default function GestioneDanniTab() {
           const existing = arr[item.arrayIndex]
           const newAmountPaid = (existing.amountPaid || 0) + paymentAmount
           const total = existing.total || (existing.amount || 0) * (existing.quantity || 1)
+          const fullyPaid = newAmountPaid >= total
+          const nowIso = new Date().toISOString()
+          // Storico pagamenti per supportare report tipo "quanto tempo
+          // ha impiegato il cliente a saldare". paidAt = data dell'ultimo
+          // pagamento; payments[] tiene la lista completa con importo
+          // e timestamp per audit.
+          const prevPayments = Array.isArray(existing.payments) ? existing.payments : []
           arr[item.arrayIndex] = {
             ...existing,
             amountPaid: Math.min(newAmountPaid, total),
-            paymentStatus: newAmountPaid >= total ? 'paid' : 'partial',
+            paymentStatus: fullyPaid ? 'paid' : 'partial',
+            paidAt: fullyPaid ? nowIso : (existing.paidAt || null),
+            payments: [...prevPayments, { amount: paymentAmount, paidAt: nowIso }],
           }
         }
 
