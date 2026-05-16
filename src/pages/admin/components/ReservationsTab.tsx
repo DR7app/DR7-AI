@@ -1153,6 +1153,29 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 : 0
               const experienceCost = calculateExperienceCost(prev.experience_services, data.rentalDays)
               const flexCost = prev.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * data.rentalDays : 0
+              const kmPackagesCost = (() => {
+                const kmPkgs = (prev.km_packages || {}) as Record<string, number>
+                if (!kmPkgs || Object.keys(kmPkgs).length === 0) return 0
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; price: number }>> | undefined
+                if (!pkgsByCat) return 0
+                const cat = String(selectedVehicle?.category || '').toLowerCase().trim()
+                const aliases = cat === 'supercars' ? ['supercars', 'exotic']
+                              : cat === 'exotic' ? ['exotic', 'supercars']
+                              : [cat]
+                let catPkgs: Array<{ id: string; price: number }> = []
+                for (const k of aliases) {
+                  const v = pkgsByCat[k]
+                  if (Array.isArray(v) && v.length > 0) { catPkgs = v; break }
+                }
+                if (catPkgs.length === 0) return 0
+                let sum = 0
+                for (const pkg of catPkgs) {
+                  const q = Number(kmPkgs[pkg.id]) || 0
+                  if (q > 0) sum += Number(pkg.price || 0) * q
+                }
+                return Math.round(sum * 100) / 100
+              })()
               // List price: base rate (no coefficients) × days + all services.
               // Experience services are EXCLUDED from the clamp — the Max €/g
               // from Centralina applies to rental + standard extras only; any
@@ -1186,8 +1209,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
               if (maxTotal != null && afterRevenueNoExp > maxTotal) afterRevenueNoExp = maxTotal
               if (minTotal != null && afterRevenueNoExp < minTotal) afterRevenueNoExp = minTotal
-              // Experience + location fees + extras-at-list stay at LIST PRICE — no coefficient, no clamp.
-              const subtotal = Math.round((afterRevenueNoExp + experienceCost + deliveryFees + extrasAtList) * 100) / 100
+              // Experience + location fees + extras-at-list + pacchetti KM stay at LIST PRICE — no coefficient, no clamp.
+              const subtotal = Math.round((afterRevenueNoExp + experienceCost + deliveryFees + extrasAtList + kmPackagesCost) * 100) / 100
               const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
               // Auto-calculate KM limit from rental days (only if not unlimited)
               const updates: Record<string, string> = { total_amount: total.toFixed(2) }
@@ -1254,6 +1277,29 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         : 0
       const experienceCost = calculateExperienceCost(formData.experience_services, revenueSuggestion.rentalDays)
       const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * revenueSuggestion.rentalDays : 0
+      const kmPackagesCost = (() => {
+        const kmPkgs = (formData.km_packages || {}) as Record<string, number>
+        if (!kmPkgs || Object.keys(kmPkgs).length === 0) return 0
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; price: number }>> | undefined
+        if (!pkgsByCat) return 0
+        const cat = String(selectedVehicle?.category || '').toLowerCase().trim()
+        const aliases = cat === 'supercars' ? ['supercars', 'exotic']
+                      : cat === 'exotic' ? ['exotic', 'supercars']
+                      : [cat]
+        let catPkgs: Array<{ id: string; price: number }> = []
+        for (const k of aliases) {
+          const v = pkgsByCat[k]
+          if (Array.isArray(v) && v.length > 0) { catPkgs = v; break }
+        }
+        if (catPkgs.length === 0) return 0
+        let sum = 0
+        for (const pkg of catPkgs) {
+          const q = Number(kmPkgs[pkg.id]) || 0
+          if (q > 0) sum += Number(pkg.price || 0) * q
+        }
+        return Math.round(sum * 100) / 100
+      })()
       // List price: base rate (no coefficients) × days + all services.
       // Experience excluded from the clamp — same rationale as the
       // auto_apply branch above.
@@ -1279,8 +1325,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
       if (maxTotal != null && afterRevenueNoExp > maxTotal) afterRevenueNoExp = maxTotal
       if (minTotal != null && afterRevenueNoExp < minTotal) afterRevenueNoExp = minTotal
-      // Experience + location fees + extras-at-list stay at LIST PRICE — no coefficient, no clamp.
-      const subtotal = Math.round((afterRevenueNoExp + experienceCost + deliveryFees + extrasAtList) * 100) / 100
+      // Experience + location fees + extras-at-list + pacchetti KM stay at LIST PRICE — no coefficient, no clamp.
+      const subtotal = Math.round((afterRevenueNoExp + experienceCost + deliveryFees + extrasAtList + kmPackagesCost) * 100) / 100
       const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
       const updates: Record<string, string> = { total_amount: newTotal.toFixed(2) }
       // Auto-calculate KM limit from rental days
@@ -1295,7 +1341,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       setFormData(prev => ({ ...prev, ...updates }))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, formData.deposit_option_id, formData.has_second_driver, formData.experience_services, formData.dr7_flex, customerTier, noCauzioneResolvedDaily, selectedDepositSurchargePerDay, rentalConfig])
+  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, formData.deposit_option_id, formData.has_second_driver, formData.experience_services, formData.dr7_flex, formData.km_packages, customerTier, noCauzioneResolvedDaily, selectedDepositSurchargePerDay, rentalConfig])
 
   // Auto-populate second driver fields when customer is selected
   useEffect(() => {
@@ -7897,6 +7943,30 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1) * revenueSuggestion.rentalDays : 0
                           const experienceCost = calculateExperienceCost(formData.experience_services, revenueSuggestion.rentalDays)
                           const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * revenueSuggestion.rentalDays : 0
+                          // Pacchetti KM (multi-select cumulativo). Passthrough, fuori coefficiente.
+                          const kmPackagesCost = (() => {
+                            const kmPkgs = (formData.km_packages || {}) as Record<string, number>
+                            if (!kmPkgs || Object.keys(kmPkgs).length === 0) return 0
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; price: number }>> | undefined
+                            if (!pkgsByCat) return 0
+                            const cat = String(sv?.category || '').toLowerCase().trim()
+                            const aliases = cat === 'supercars' ? ['supercars', 'exotic']
+                                          : cat === 'exotic' ? ['exotic', 'supercars']
+                                          : [cat]
+                            let catPkgs: Array<{ id: string; price: number }> = []
+                            for (const k of aliases) {
+                              const v = pkgsByCat[k]
+                              if (Array.isArray(v) && v.length > 0) { catPkgs = v; break }
+                            }
+                            if (catPkgs.length === 0) return 0
+                            let sum = 0
+                            for (const pkg of catPkgs) {
+                              const q = Number(kmPkgs[pkg.id]) || 0
+                              if (q > 0) sum += Number(pkg.price || 0) * q
+                            }
+                            return Math.round(sum * 100) / 100
+                          })()
                           // List price (no coefficients). Experience AND location
                           // fees (consegna + ritiro) excluded from the
                           // clamp-eligible subtotal — devono restare a listino,
@@ -7907,7 +7977,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           const listDailyRate = revenueSuggestion.selectedBaseRateEur || getDailyRateFromConfig(sv, revenueSuggestion.rentalDays)
                           const listRentalTotal = listDailyRate * revenueSuggestion.rentalDays
                           const listSubtotalNoExp = listRentalTotal + insTotal + CFG_LAVAGGIO_FEE + noCauzioneCost + unlimitedKmCost + secondDriverCost + flexCost
-                          const listSubtotal = listSubtotalNoExp + experienceCost + deliveryFees
+                          const listSubtotal = listSubtotalNoExp + experienceCost + deliveryFees + kmPackagesCost
                           const combinedCoeff = (revenueSuggestion.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
                           const rawAfterCoeffNoExp = listSubtotalNoExp * combinedCoeff
                           // Experience + location fees stay at LIST PRICE — no
@@ -7921,8 +7991,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           let clampHit: 'min' | 'max' | null = null
                           if (maxTotal != null && clampedNoExp > maxTotal) { clampedNoExp = maxTotal; clampHit = 'max' }
                           if (minTotal != null && clampedNoExp < minTotal) { clampedNoExp = minTotal; clampHit = 'min' }
-                          const uncappedSubtotal = Math.round((rawAfterCoeffNoExp + experienceCost + deliveryFees) * 100) / 100
-                          const dynamicSubtotal = Math.round((clampedNoExp + experienceCost + deliveryFees) * 100) / 100
+                          const uncappedSubtotal = Math.round((rawAfterCoeffNoExp + experienceCost + deliveryFees + kmPackagesCost) * 100) / 100
+                          const dynamicSubtotal = Math.round((clampedNoExp + experienceCost + deliveryFees + kmPackagesCost) * 100) / 100
                           const grandTotal = formData.payment_method === 'Contanti' ? dynamicSubtotal * 1.20 : dynamicSubtotal
                           const uncappedGrand = formData.payment_method === 'Contanti' ? uncappedSubtotal * 1.20 : uncappedSubtotal
                           const hasDiscount = Math.abs(combinedCoeff - 1) > 0.001
