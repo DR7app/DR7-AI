@@ -1572,6 +1572,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           pickup_address: form.pickup_address,
           experience_services: form.experience_services,
           experience_km_quotes: form.experience_km_quotes,
+          // 2026-05-16: pacchetti KM cumulativi (multi-select). Persistiti
+          // sul preventivo cosi' al RE-LOAD vediamo lo stesso stato + al
+          // SEND WhatsApp/email il template {km_package} li elenca.
+          km_packages: form.km_packages,
           experience_cost: pricing.experienceCost,
         },
         status: 'bozza',
@@ -1682,6 +1686,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       include_cauzione_veicoli: !!extras.include_cauzione_veicoli || Number(extras.cauzione_veicoli_total || 0) > 0,
       km_package_id: typeof extras.km_package_id === 'string' ? extras.km_package_id : '',
       km_package_qty: Number.isFinite(Number(extras.km_package_qty)) && Number(extras.km_package_qty) > 0 ? Number(extras.km_package_qty) : 1,
+      // 2026-05-16: restore multi-select pacchetti
+      km_packages: (extras.km_packages && typeof extras.km_packages === 'object') ? extras.km_packages as Record<string, number> : {},
       pickup_location: extras.pickup_location || 'dr7_office',
       dropoff_location: extras.dropoff_location || 'dr7_office',
       delivery_fee: String(extras.delivery_fee || 0),
@@ -2097,8 +2103,41 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           // Vuoto se nessun servizio al-km e' stato configurato — la riga
           // collassa automaticamente come per le altre voci opzionali.
           km_package: (() => {
-            const quotes = (extras?.experience_km_quotes || {}) as Record<string, { km?: number; pricePerKm?: number }>
             const lines: string[] = []
+            // 2026-05-16: Pacchetti KM cumulativi (nuovo schema). Letti da
+            // extras.km_packages = { pkgId: qty } + lookup categoria su
+            // rentalConfig.pacchetti_km. Una riga per pacchetto, formato:
+            // "<NomeServizio> <km> Km = <importo>" (× N quando qty > 1).
+            const kmPkgs = (extras?.km_packages || {}) as Record<string, number>
+            const cat = String(p.vehicle_category || '').toLowerCase().trim()
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; km: number; sconto_pct: number; price: number; label: string; is_quantity_buyable?: boolean; max_quantity?: number }>> | undefined
+            if (cat && pkgsByCat) {
+              const aliases = cat === 'supercars' ? ['supercars', 'exotic']
+                            : cat === 'exotic' ? ['exotic', 'supercars']
+                            : [cat]
+              let catPkgs: typeof pkgsByCat[string] = []
+              for (const k of aliases) {
+                const arr = pkgsByCat[k]
+                if (Array.isArray(arr) && arr.length > 0) { catPkgs = arr; break }
+              }
+              for (const pkg of catPkgs) {
+                const qty = kmPkgs[pkg.id] || 0
+                if (qty <= 0) continue
+                const cap = pkg.is_quantity_buyable ? Math.max(1, Number(pkg.max_quantity) || 2) : 1
+                const q = Math.max(0, Math.min(cap, qty))
+                if (q <= 0) continue
+                const totalKm = pkg.km * q
+                const totalPrice = Math.round(pkg.price * q * 100) / 100
+                const labelStr = q > 1
+                  ? `${pkg.label} × ${q} ${totalKm} Km`
+                  : `${pkg.label} ${totalKm} Km`
+                lines.push(`${labelStr} = ${formatEur(totalPrice)}`)
+              }
+            }
+            // Legacy: experience_km_quotes (Servizi Extra al km, vecchio
+            // catalogo). Mantenuto per backward-compat.
+            const quotes = (extras?.experience_km_quotes || {}) as Record<string, { km?: number; pricePerKm?: number }>
             for (const [id, q] of Object.entries(quotes)) {
               const km = Number(q?.km || 0)
               const ppk = Number(q?.pricePerKm || 0)
