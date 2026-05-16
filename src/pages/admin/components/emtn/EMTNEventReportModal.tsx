@@ -18,14 +18,22 @@ const TYPES: { id: string; label: string; helper: string }[] = [
 const ALLOWED_EXTS = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'heic', 'doc', 'docx']
 const MAX_BYTES = 10 * 1024 * 1024
 
+export interface ReportPrefill {
+    type?: string
+    headline?: string
+    description?: string
+    occurredAt?: string
+}
+
 interface Props {
     open: boolean
     onClose: () => void
     onCreated: (eventId: string) => void
     clientId: string
+    prefill?: ReportPrefill | null
 }
 
-export default function EMTNEventReportModal({ open, onClose, onCreated, clientId }: Props) {
+export default function EMTNEventReportModal({ open, onClose, onCreated, clientId, prefill }: Props) {
     const [type, setType] = useState<string>('UNPAID_DAMAGE')
     const [headline, setHeadline] = useState('')
     const [description, setDescription] = useState('')
@@ -35,9 +43,20 @@ export default function EMTNEventReportModal({ open, onClose, onCreated, clientI
     const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
-        if (!open) {
+        if (open) {
+            // Applica eventuale prefill (da "Segnala EMTN" di un danno/penale).
+            // Solo all'apertura — non vogliamo sovrascrivere quel che l'utente
+            // sta editando mentre il modale e\' aperto.
+            if (prefill) {
+                if (prefill.type) setType(prefill.type)
+                if (prefill.headline) setHeadline(prefill.headline)
+                if (prefill.description) setDescription(prefill.description)
+                if (prefill.occurredAt) setOccurredAt(prefill.occurredAt)
+            }
+        } else {
             setHeadline(''); setDescription(''); setFiles([]); setError(null)
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open])
 
     if (!open) return null

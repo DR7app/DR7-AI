@@ -14,7 +14,7 @@
  */
 import { useEffect, useState } from 'react'
 import EMTNAuthorizationModal from './emtn/EMTNAuthorizationModal'
-import EMTNEventReportModal from './emtn/EMTNEventReportModal'
+import EMTNEventReportModal, { type ReportPrefill } from './emtn/EMTNEventReportModal'
 import { authFetch } from '../../../utils/authFetch'
 
 interface DamageEvent {
@@ -134,6 +134,39 @@ export default function EMTNTab() {
 
     const [authOpen, setAuthOpen] = useState(false)
     const [reportOpen, setReportOpen] = useState(false)
+    const [reportPrefill, setReportPrefill] = useState<ReportPrefill | null>(null)
+
+    // Promuove un danno/penale DR7 a evento EMTN: assicura che il
+    // cliente sia caricato (runSearch se manca o non corrisponde),
+    // costruisce un prefill ragionato per il modale e lo apre.
+    async function reportDamageAsEMTN(cf: string | null, ev: DamageEvent) {
+        if (!cf) {
+            alert('Questo cliente non ha un codice fiscale risolvibile: aggiungilo a customers_extended prima di segnalarlo su EMTN.')
+            return
+        }
+        if (!data || data.client.codice_fiscale !== cf) {
+            await runSearch(cf)
+        }
+        const fmt = (n: number) => `€${n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        const isPenale = ev.kind === 'penale'
+        // Map: il "kind" del booking_details non corrisponde 1:1 ai tipi
+        // EMTN. Scelta di default sensata; l'operatore puo\' cambiarla nel modale.
+        const type = isPenale ? 'INSOLVENCY' : 'UNPAID_DAMAGE'
+        const headline = `${isPenale ? 'Penale' : 'Danno'} non saldato: ${ev.label}`.slice(0, 100)
+        const lines = [
+            `${isPenale ? 'Penale' : 'Danno'} registrato il ${formatDate(ev.eventDate) || 'data n/d'} sul veicolo ${ev.vehicle || 'n/d'}.`,
+            `Importo: ${fmt(ev.amount)} · Pagato: ${fmt(ev.amountPaid)} · Residuo: ${fmt(ev.remaining)}.`,
+            ev.note ? `Note interne: ${ev.note}` : null,
+            `Booking di riferimento: ${ev.bookingId}.`,
+        ].filter(Boolean)
+        setReportPrefill({
+            type,
+            headline,
+            description: lines.join('\n'),
+            occurredAt: ev.eventDate || new Date().toISOString().slice(0, 10),
+        })
+        setReportOpen(true)
+    }
 
     const [damagedClients, setDamagedClients] = useState<ClientWithDamages[]>([])
     const [damagedLoading, setDamagedLoading] = useState(false)
@@ -220,6 +253,7 @@ export default function EMTNTab() {
                                 loading={damagedLoading}
                                 error={damagedError}
                                 onSelect={(cf) => runSearch(cf)}
+                                onReportDamage={reportDamageAsEMTN}
                             />
                         )}
                         {data && (
@@ -301,9 +335,10 @@ export default function EMTNTab() {
                     />
                     <EMTNEventReportModal
                         open={reportOpen}
-                        onClose={() => setReportOpen(false)}
+                        onClose={() => { setReportOpen(false); setReportPrefill(null) }}
                         onCreated={refresh}
                         clientId={data.client.id}
+                        prefill={reportPrefill}
                     />
                 </>
             )}
@@ -1160,9 +1195,11 @@ function ConformitaFooter() {
 
 /* ---------- Clienti con danni (lista DR7 sotto la barra di ricerca) ---------- */
 
-function EventiCliente({ events, totals }: {
+function EventiCliente({ events, totals, onReport, canReport }: {
     events: DamageEvent[]
     totals: { paidDamage: number; unpaidDamage: number; paidPenalty: number; unpaidPenalty: number }
+    onReport?: (ev: DamageEvent) => void
+    canReport: boolean
 }) {
     if (events.length === 0) {
         return <p className="text-[11px] text-theme-text-muted italic">Nessun dettaglio disponibile.</p>
@@ -1193,6 +1230,7 @@ function EventiCliente({ events, totals }: {
                             <th className="px-2 py-1 font-semibold">Stato</th>
                             <th className="px-2 py-1 font-semibold">Fattura</th>
                             <th className="px-2 py-1 font-semibold">Booking</th>
+                            <th className="px-2 py-1 font-semibold w-20"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1245,6 +1283,29 @@ function EventiCliente({ events, totals }: {
                                     </td>
                                     <td className="px-2 py-1 font-mono text-[10px] text-theme-text-muted">{ev.fatturaNumero || '—'}</td>
                                     <td className="px-2 py-1 font-mono text-[10px] text-theme-text-muted">{ev.bookingId.slice(0, 8)}…</td>
+                                    <td className="px-2 py-1 text-right">
+                                        {onReport && (
+                                            <button
+                                                type="button"
+                                                disabled={!canReport}
+                                                onClick={() => onReport(ev)}
+                                                title={canReport
+                                                    ? `Segnala questo ${ev.kind === 'danno' ? 'danno' : 'penale'} alla rete EMTN`
+                                                    : 'CF mancante: aggiungilo a customers_extended prima di segnalare'}
+                                                className={
+                                                    'inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-semibold ' +
+                                                    (canReport
+                                                        ? 'border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
+                                                        : 'border-theme-border text-theme-text-muted cursor-not-allowed')
+                                                }
+                                            >
+                                                Segnala EMTN
+                                                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+                                                </svg>
+                                            </button>
+                                        )}
+                                    </td>
                                 </tr>
                             )
                         })}
@@ -1255,11 +1316,12 @@ function EventiCliente({ events, totals }: {
     )
 }
 
-function ClientiConDanniCard({ clients, loading, error, onSelect }: {
+function ClientiConDanniCard({ clients, loading, error, onSelect, onReportDamage }: {
     clients: ClientWithDamages[]
     loading: boolean
     error: string | null
     onSelect: (cf: string) => void
+    onReportDamage: (cf: string | null, ev: DamageEvent) => void
 }) {
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
     function toggle(key: string) {
@@ -1388,12 +1450,17 @@ function ClientiConDanniCard({ clients, loading, error, onSelect }: {
                                             {isOpen && (
                                                 <tr key={rowKey + '-events'} className="bg-theme-bg-tertiary/40">
                                                     <td colSpan={9} className="px-3 py-3">
-                                                        <EventiCliente events={c.events} totals={{
-                                                            paidDamage: c.paid_damage_total,
-                                                            unpaidDamage: c.unpaid_damage_total,
-                                                            paidPenalty: c.paid_penalty_total,
-                                                            unpaidPenalty: c.unpaid_penalty_total,
-                                                        }} />
+                                                        <EventiCliente
+                                                            events={c.events}
+                                                            totals={{
+                                                                paidDamage: c.paid_damage_total,
+                                                                unpaidDamage: c.unpaid_damage_total,
+                                                                paidPenalty: c.paid_penalty_total,
+                                                                unpaidPenalty: c.unpaid_penalty_total,
+                                                            }}
+                                                            canReport={!!cf}
+                                                            onReport={(ev) => onReportDamage(cf, ev)}
+                                                        />
                                                     </td>
                                                 </tr>
                                             )}
