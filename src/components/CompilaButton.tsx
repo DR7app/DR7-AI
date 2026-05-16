@@ -262,14 +262,18 @@ export default function CompilaButton({
       }
 
       if (results.length === 0) {
-        // Mostriamo il motivo specifico (es. "Carta Identità Fronte: 500
-        // model not found", "Patente Retro: AnthropicError ...") invece
-        // del generico "Impossibile estrarre dati". Cosi' capiamo se e'
-        // un problema di model id, di credito API, di permessi, di
-        // formato file, ecc.
+        // Surface the SPECIFIC reason each doc failed (model not found,
+        // 401 unauthorized, file corrotto, ecc.) — react-hot-toast collassa
+        // \n, quindi usiamo ' — ' come separatore visibile e tronchiamo a
+        // un singolo motivo se ne abbiamo piu' di uno per non sforare la
+        // larghezza del toast.
         console.error('[CompilaButton] no results extracted. Notes:', notes)
-        const detail = notes.length > 0 ? `\n${notes.join('\n')}` : ''
-        onError?.(`Impossibile estrarre dati dai documenti caricati.${detail}`)
+        const firstNote = notes[0] || ''
+        const more = notes.length > 1 ? ` (+${notes.length - 1} altri — vedi console)` : ''
+        const msg = firstNote
+          ? `Estrazione fallita — ${firstNote}${more}`
+          : 'Impossibile estrarre dati dai documenti caricati (nessuna risposta dal server — vedi console)'
+        onError?.(msg)
         setExtractionNotes(notes)
         setIsExtracting(false)
         return
