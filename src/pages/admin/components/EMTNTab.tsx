@@ -243,6 +243,10 @@ export default function EMTNTab() {
                                     onOpenAuth={() => setAuthOpen(true)}
                                     onOpenReport={() => setReportOpen(true)}
                                 />
+                                <MobilityRiskReportLocked
+                                    unlocked={data.reportUnlocked}
+                                    onOpenAuth={() => setAuthOpen(true)}
+                                />
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                                     <AutorizzazioneClienteCard
                                         defaultEmail={data.client.email || ''}
@@ -250,21 +254,7 @@ export default function EMTNTab() {
                                         onOpenModal={() => setAuthOpen(true)}
                                         authorized={data.reportUnlocked}
                                     />
-                                    <RiskReportAnteprimaCard
-                                        unlocked={data.reportUnlocked}
-                                        onOpenAuth={() => setAuthOpen(true)}
-                                    />
-                                    <RiskScoreCard
-                                        riskBand={data.riskBand}
-                                        riskScore={data.riskScore}
-                                        stats={data.stats}
-                                        dr7History={data.dr7History}
-                                        client={data.client}
-                                    />
-                                </div>
-                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                                     <SegnalazioneEventoCard onOpenModal={() => setReportOpen(true)} />
-                                    <DocumentazioneCard onOpenModal={() => setReportOpen(true)} />
                                     <StatoSegnalazioneCard events={data.recentEvents} />
                                 </div>
                             </>
@@ -278,11 +268,13 @@ export default function EMTNTab() {
                                     client={data.client}
                                     stats={data.stats}
                                     riskBand={data.riskBand}
+                                    riskScore={data.riskScore}
                                     riskLevel={data.riskLevel}
+                                    dr7History={data.dr7History}
                                 />
                                 <AttivitaRecenti events={data.recentEvents} dr7History={data.dr7History} />
                                 <AlertSistema events={data.recentEvents} />
-                                <AutomazioniAttive />
+                                <InformazioniLegali />
                             </>
                         ) : (
                             <SidebarPlaceholder />
@@ -672,121 +664,73 @@ function Step({ n }: { n: number }) {
     )
 }
 
-/* ---------- Mobility Risk Report Anteprima (col 2 di 3) ---------- */
+/* ---------- Mobility Risk Report (full-width locked panel) ---------- */
 
-function RiskReportAnteprimaCard({ unlocked, onOpenAuth }: { unlocked: boolean; onOpenAuth: () => void }) {
+function MobilityRiskReportLocked({ unlocked, onOpenAuth }: { unlocked: boolean; onOpenAuth: () => void }) {
     const items = [
-        'Storico contratti completi',
-        'Pagamenti e scadenze',
-        'Eventi segnalati',
-        'Segnalazioni in revisione',
-        'Indici di affidabilità',
+        { label: 'Storico contratti completi', icon: 'M3 7h18M3 12h18M3 17h18' },
+        { label: 'Eventi segnalati (sospesi)', icon: 'M12 9v3m0 4h.01' },
+        { label: 'Risk Score in dettaglio', icon: 'M3 18l6-6 4 4 8-8' },
+        { label: 'Segnalazioni in revisione', icon: 'M12 8v4l3 3' },
+        { label: 'Cronologia attività network', icon: 'M4 7h16M4 12h16M4 17h10' },
     ]
     return (
-        <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4 flex flex-col">
-            <div className="flex items-center justify-between mb-1">
-                <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted">Mobility Risk Report (anteprima)</h3>
-                <span className={'text-[10px] font-semibold ' + (unlocked ? 'text-emerald-500' : 'text-amber-500')}>
-                    {unlocked ? 'Disponibile' : 'Autorizzazione necessaria'}
+        <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5">
+            <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-theme-text-primary">Mobility Risk Report</h3>
+                <span className={'text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border ' +
+                    (unlocked
+                        ? 'border-emerald-500/40 text-emerald-500 bg-emerald-500/10'
+                        : 'border-amber-500/40 text-amber-500 bg-amber-500/10')
+                }>
+                    {unlocked ? 'Disponibile' : 'Bloccato'}
                 </span>
             </div>
-            <p className="text-[11px] text-theme-text-muted mb-3">
-                {unlocked
-                    ? 'Tutti i dati EMTN sono consultabili per la durata di questo OTP.'
-                    : 'Richiedi l’autorizzazione al cliente per visualizzare il Mobility Risk Report completo.'}
-            </p>
-            <ul className="space-y-1.5 text-[11px] flex-1">
-                {items.map(it => (
-                    <li key={it} className="flex items-center gap-2 text-theme-text-primary">
-                        <span className={
-                            'w-4 h-4 grid place-items-center rounded-full shrink-0 ' +
-                            (unlocked ? 'bg-emerald-500/15 text-emerald-500' : 'bg-theme-bg-tertiary text-theme-text-muted')
-                        }>
-                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
+            {unlocked ? (
+                <p className="text-xs text-theme-text-primary">Tutti i dati EMTN sono consultabili per la durata di questo OTP.</p>
+            ) : (
+                <>
+                    <div className="flex flex-col items-center justify-center py-6">
+                        <span className="w-12 h-12 grid place-items-center rounded-full bg-theme-bg-tertiary text-theme-text-muted mb-3">
+                            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                <rect x="5" y="11" width="14" height="10" rx="2"/>
+                                <path d="M8 11V7a4 4 0 118 0v4"/>
                             </svg>
                         </span>
-                        <span className={unlocked ? '' : 'text-theme-text-muted'}>{it}</span>
-                    </li>
-                ))}
-            </ul>
-            {!unlocked && (
-                <button
-                    type="button"
-                    onClick={onOpenAuth}
-                    className="mt-3 w-full inline-flex items-center justify-center gap-2 border border-theme-border bg-theme-bg-tertiary text-theme-text-primary text-xs font-semibold rounded-lg px-3 py-2 hover:bg-theme-bg-hover"
-                >
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                        <rect x="5" y="11" width="14" height="10" rx="2"/>
-                        <path d="M8 11V7a4 4 0 118 0v4"/>
-                    </svg>
-                    Richiedi autorizzazione per sbloccare
-                </button>
+                        <p className="text-sm font-semibold text-theme-text-primary">Report non disponibile</p>
+                        <p className="text-[11px] text-theme-text-muted text-center max-w-md mt-1">
+                            Per visualizzare il Mobility Risk Report devi prima richiedere l&apos;autorizzazione del cliente.
+                        </p>
+                    </div>
+                    <div className="pt-3 border-t border-theme-border">
+                        <p className="text-[10px] uppercase tracking-wider text-theme-text-muted mb-2">Cosa vedrai dopo l&apos;autorizzazione</p>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                            {items.map(it => (
+                                <div key={it.label} className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-theme-border bg-theme-bg-primary">
+                                    <svg className="w-3.5 h-3.5 text-theme-text-muted shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d={it.icon}/>
+                                    </svg>
+                                    <span className="text-[11px] text-theme-text-primary truncate" title={it.label}>{it.label}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onOpenAuth}
+                        className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-400 hover:underline"
+                    >
+                        Richiedi autorizzazione cliente
+                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+                        </svg>
+                    </button>
+                </>
             )}
         </section>
     )
 }
 
-/* ---------- Risk Score AI (col 3 di 3) ---------- */
-
-function RiskScoreCard({ riskBand, riskScore, stats, dr7History, client }: {
-    riskBand: 'green' | 'yellow' | 'red'
-    riskScore?: number
-    stats: EMTNStats | null
-    dr7History?: DR7History
-    client: EMTNClient
-}) {
-    const score = typeof riskScore === 'number'
-        ? riskScore
-        : (riskBand === 'green' ? 85 : riskBand === 'yellow' ? 60 : 30)
-    const tone = riskBand === 'green'
-        ? { text: 'text-emerald-500', stroke: '#10b981', label: 'Affidabile' }
-        : riskBand === 'yellow'
-            ? { text: 'text-amber-500', stroke: '#f59e0b', label: 'Medio rischio' }
-            : { text: 'text-red-500', stroke: '#ef4444', label: 'Alto rischio' }
-    const total = (stats?.total_rentals as number) ?? dr7History?.totalBookings ?? 0
-    const events = (stats?.reported_events as number) ?? 0
-    const damages = dr7History?.damages.length ?? 0
-    const since = client.customer_since || client.created_at
-    const months = monthsSince(since)
-
-    return (
-        <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4 flex flex-col">
-            <div className="flex items-center justify-between mb-1">
-                <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted">Risk Score AI</h3>
-                <span className={'text-[10px] font-semibold ' + tone.text}>{tone.label}</span>
-            </div>
-            <div className="flex items-center justify-center my-2">
-                <ScoreGauge score={score} stroke={tone.stroke} />
-            </div>
-            <div className="text-center mb-3">
-                <p className={'text-[10px] uppercase tracking-wider font-semibold ' + tone.text}>Score {tone.label}</p>
-            </div>
-            <p className="text-[10px] uppercase tracking-wider text-theme-text-muted mb-1.5">Fattori di valutazione</p>
-            <ul className="space-y-1 text-[11px]">
-                <li className="flex justify-between">
-                    <span className="text-theme-text-muted">Storico contratti</span>
-                    <span className="text-theme-text-primary tabular-nums">{total}</span>
-                </li>
-                <li className="flex justify-between">
-                    <span className="text-theme-text-muted">Eventi segnalati</span>
-                    <span className="text-theme-text-primary tabular-nums">{events}</span>
-                </li>
-                <li className="flex justify-between">
-                    <span className="text-theme-text-muted">Danni / penali</span>
-                    <span className="text-theme-text-primary tabular-nums">{damages}</span>
-                </li>
-                <li className="flex justify-between">
-                    <span className="text-theme-text-muted">Anzianità nel network</span>
-                    <span className="text-theme-text-primary tabular-nums">{months ? `${months} mesi` : '—'}</span>
-                </li>
-            </ul>
-            <p className="mt-3 text-[10px] text-theme-text-muted">
-                Aggiornato il {formatDate(new Date().toISOString())}
-            </p>
-        </section>
-    )
-}
 
 function ScoreGauge({ score, stroke }: { score: number; stroke: string }) {
     const r = 42
@@ -831,13 +775,13 @@ function SegnalazioneEventoCard({ onOpenModal }: { onOpenModal: () => void }) {
     const [selected, setSelected] = useState<string | null>(null)
     return (
         <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary overflow-hidden flex flex-col">
-            <div className="border-l-4 border-emerald-500 px-4 py-3 flex-1 flex flex-col">
+            <div className="border-l-4 border-amber-500 px-4 py-3 flex-1 flex flex-col">
                 <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted mb-1">Segnalazione evento</h3>
                 <p className="text-[11px] text-theme-text-muted mb-3">
                     Segnala un evento avvenuto durante il noleggio. Tutte le segnalazioni sono soggette a revisione.
                 </p>
                 <p className="text-[10px] uppercase tracking-wider text-theme-text-muted mb-2">Tipologia evento</p>
-                <div className="grid grid-cols-2 gap-2 mb-3 flex-1">
+                <div className="grid grid-cols-2 gap-2 mb-3">
                     {EVENT_CATEGORIES.map(cat => {
                         const active = selected === cat.key
                         return (
@@ -848,8 +792,8 @@ function SegnalazioneEventoCard({ onOpenModal }: { onOpenModal: () => void }) {
                                 className={
                                     'flex flex-col items-start gap-1 px-2.5 py-2 rounded-lg border text-[11px] transition-colors text-left ' +
                                     (active
-                                        ? 'border-emerald-500 bg-emerald-500/10 text-theme-text-primary'
-                                        : 'border-theme-border text-theme-text-primary hover:border-emerald-500/60')
+                                        ? 'border-amber-500 bg-amber-500/10 text-theme-text-primary'
+                                        : 'border-theme-border text-theme-text-primary hover:border-amber-500/60')
                                 }
                             >
                                 <svg className="w-3.5 h-3.5 text-theme-text-muted shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -861,13 +805,25 @@ function SegnalazioneEventoCard({ onOpenModal }: { onOpenModal: () => void }) {
                         )
                     })}
                 </div>
+                <p className="text-[10px] uppercase tracking-wider text-theme-text-muted mb-2">Documentazione obbligatoria</p>
+                <button
+                    type="button"
+                    onClick={onOpenModal}
+                    className="rounded-xl border-2 border-dashed border-theme-border bg-theme-bg-primary px-4 py-4 text-center hover:border-amber-500/60 transition-colors mb-3"
+                >
+                    <svg className="w-5 h-5 mx-auto text-theme-text-muted mb-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16v-2a4 4 0 014-4h10a4 4 0 014 4v2M12 4v12m0 0l-4-4m4 4l4-4"/>
+                    </svg>
+                    <span className="block text-xs text-theme-text-primary font-medium">Carica documenti</span>
+                    <span className="block text-[10px] text-theme-text-muted">Trascina file qui o clicca per selezionare</span>
+                </button>
                 <button
                     type="button"
                     onClick={onOpenModal}
                     disabled={!selected}
-                    className="w-full inline-flex items-center justify-center gap-2 bg-emerald-500 text-white text-sm font-semibold rounded-lg px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-600"
+                    className="w-full inline-flex items-center justify-center gap-2 bg-amber-500 text-white text-sm font-semibold rounded-lg px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-amber-600"
                 >
-                    Apri segnalazione
+                    Invia segnalazione evento
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
                     </svg>
@@ -877,39 +833,7 @@ function SegnalazioneEventoCard({ onOpenModal }: { onOpenModal: () => void }) {
     )
 }
 
-/* ---------- Documentazione obbligatoria (col 2) ---------- */
 
-function DocumentazioneCard({ onOpenModal }: { onOpenModal: () => void }) {
-    return (
-        <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4 flex flex-col">
-            <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted mb-1">Documentazione obbligatoria</h3>
-            <p className="text-[11px] text-theme-text-muted mb-3">
-                Allega prove a supporto della segnalazione. Senza documenti il caso non viene processato.
-            </p>
-            <button
-                type="button"
-                onClick={onOpenModal}
-                className="flex-1 rounded-xl border-2 border-dashed border-theme-border bg-theme-bg-primary px-4 py-6 text-center hover:border-emerald-500/60 transition-colors"
-            >
-                <svg className="w-6 h-6 mx-auto text-theme-text-muted mb-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16v-2a4 4 0 014-4h10a4 4 0 014 4v2M12 4v12m0 0l-4-4m4 4l4-4"/>
-                </svg>
-                <span className="block text-xs text-theme-text-primary font-medium">Carica documenti</span>
-                <span className="block text-[11px] text-theme-text-muted">Trascina file qui o clicca per selezionare</span>
-                <span className="block text-[10px] text-theme-text-muted mt-1">PDF, PNG, JPG · max 10 MB</span>
-            </button>
-            <ul className="mt-3 space-y-1 text-[10px] text-theme-text-muted">
-                <li className="flex items-center gap-1.5"><Dot/> Verbale di polizia o incidente</li>
-                <li className="flex items-center gap-1.5"><Dot/> Foto del veicolo / del danno</li>
-                <li className="flex items-center gap-1.5"><Dot/> Ricevute, contratto, fattura</li>
-            </ul>
-        </section>
-    )
-}
-
-function Dot() {
-    return <span className="w-1 h-1 rounded-full bg-theme-text-muted shrink-0"/>
-}
 
 /* ---------- Stato segnalazione (col 3) ---------- */
 
@@ -961,29 +885,33 @@ function statusTone(status: string): string {
 
 /* ---------- Sidebar: Mobility Trust Status ---------- */
 
-function MobilityTrustStatus({ client, stats, riskBand, riskLevel }: {
+function MobilityTrustStatus({ client, stats, riskBand, riskScore, riskLevel, dr7History }: {
     client: EMTNClient
     stats: EMTNStats | null
     riskBand: 'green' | 'yellow' | 'red'
+    riskScore?: number
     riskLevel?: number
+    dr7History?: DR7History
 }) {
     const level = typeof riskLevel === 'number' ? riskLevel : (riskBand === 'green' ? 1 : riskBand === 'yellow' ? 2 : 3)
     const tone = riskBand === 'green'
-        ? { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-500', label: 'Storico positivo' }
+        ? { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-500', stroke: '#10b981', label: 'Storico positivo', riskLabel: 'Rischio basso' }
         : riskBand === 'yellow'
-            ? { bg: 'bg-amber-500/10', border: 'border-amber-500/30', text: 'text-amber-500', label: 'Da monitorare' }
-            : { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-500', label: 'Allerta attiva' }
-    const totalRentals = (stats?.total_rentals as number) ?? 0
+            ? { bg: 'bg-amber-500/10', border: 'border-amber-500/30', text: 'text-amber-500', stroke: '#f59e0b', label: 'Da monitorare', riskLabel: 'Rischio medio' }
+            : { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-500', stroke: '#ef4444', label: 'Allerta attiva', riskLabel: 'Rischio alto' }
+    const totalRentals = (stats?.total_rentals as number) ?? dr7History?.totalBookings ?? 0
     const recent = (stats?.recent_rentals as number) ?? 0
-    const events = (stats?.reported_events as number) ?? 0
+    const negative = (stats?.negative_events as number) ?? 0
+    const review = (stats?.events_under_review as number) ?? 0
+    const score = typeof riskScore === 'number' ? riskScore : (riskBand === 'green' ? 85 : riskBand === 'yellow' ? 60 : 30)
 
     return (
-        <section className={`rounded-2xl border ${tone.border} ${tone.bg} p-4`}>
-            <div className="flex items-center justify-between mb-3">
+        <section className={`rounded-2xl border ${tone.border} ${tone.bg} p-4 space-y-3`}>
+            <div className="flex items-center justify-between">
                 <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted">Mobility Trust Status</h3>
                 <span className={`text-[10px] font-semibold ${tone.text}`}>{tone.label}</span>
             </div>
-            <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-3">
                 <span className={`w-12 h-12 grid place-items-center rounded-full ${tone.text} bg-theme-bg-secondary border ${tone.border}`}>
                     <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M12 21a9 9 0 100-18 9 9 0 000 18z"/>
@@ -994,7 +922,7 @@ function MobilityTrustStatus({ client, stats, riskBand, riskLevel }: {
                     <p className={`text-xs ${tone.text} mt-1`}>{tone.label}</p>
                 </div>
             </div>
-            <p className="text-[11px] text-theme-text-muted mb-3">
+            <p className="text-[11px] text-theme-text-muted">
                 Affidabilità calcolata sul comportamento storico, eventi segnalati e indicatori di rischio AI.
             </p>
             <div className="grid grid-cols-3 gap-2 text-center">
@@ -1007,11 +935,47 @@ function MobilityTrustStatus({ client, stats, riskBand, riskLevel }: {
                     <p className="text-[10px] text-theme-text-muted">Recenti</p>
                 </div>
                 <div className="rounded-lg border border-theme-border bg-theme-bg-secondary py-2">
-                    <p className="text-base font-bold text-theme-text-primary tabular-nums">{events}</p>
+                    <p className="text-base font-bold text-theme-text-primary tabular-nums">{negative}</p>
                     <p className="text-[10px] text-theme-text-muted">Eventi negativi</p>
                 </div>
             </div>
-            <div className="mt-3 pt-3 border-t border-theme-border flex items-center justify-between text-[11px]">
+            <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-lg border border-theme-border bg-theme-bg-secondary py-2">
+                    <p className="text-base font-bold text-theme-text-primary tabular-nums">{review}</p>
+                    <p className="text-[10px] text-theme-text-muted">In revisione</p>
+                </div>
+                <div className="rounded-lg border border-theme-border bg-theme-bg-secondary py-2">
+                    <p className="text-base font-bold text-theme-text-primary tabular-nums">{Math.round(score * (totalRentals || 1) / 35)}</p>
+                    <p className="text-[10px] text-theme-text-muted">Score noleggi</p>
+                </div>
+                <div className="rounded-lg border border-theme-border bg-theme-bg-secondary py-2">
+                    <p className="text-[10px] font-bold text-theme-text-primary tabular-nums">
+                        {formatDate(dr7History?.lastBookingDate) || formatDate(client.last_seen_at) || '—'}
+                    </p>
+                    <p className="text-[10px] text-theme-text-muted">Ultima attività</p>
+                </div>
+            </div>
+            <div className="pt-3 border-t border-theme-border space-y-2">
+                <div className="flex items-center justify-between">
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted">Mobility Risk Score AI</h4>
+                    <span className={`text-[10px] font-semibold ${tone.text}`}>{tone.riskLabel}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                    <ScoreGauge score={score} stroke={tone.stroke} />
+                    <div className="flex-1">
+                        <p className={`text-3xl font-bold tabular-nums leading-none ${tone.text}`}>
+                            {Math.round(score)}<span className="text-base text-theme-text-muted font-medium">/100</span>
+                        </p>
+                        <p className="text-[11px] text-theme-text-muted mt-1">
+                            Aggiornato il {formatDate(new Date().toISOString())}
+                        </p>
+                        <div className="mt-2 h-1.5 rounded-full bg-theme-bg-tertiary overflow-hidden">
+                            <div className="h-full" style={{ width: `${Math.max(0, Math.min(100, score))}%`, background: tone.stroke }}/>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div className="pt-3 border-t border-theme-border flex items-center justify-between text-[11px]">
                 <span className="text-theme-text-muted">Cliente fidelizzato da</span>
                 <span className="text-theme-text-primary font-medium tabular-nums">
                     {formatDate(client.customer_since) || formatDate(client.created_at) || '—'}
@@ -1132,55 +1096,32 @@ function AlertSistema({ events }: { events: RecentEvent[] }) {
     )
 }
 
-/* ---------- Sidebar: Automazioni attive ---------- */
+/* ---------- Sidebar: Informazioni legali ---------- */
 
-const AUTOMATIONS = [
-    { key: 'verify-doc', label: 'Verifica documenti automatica', defaultOn: true },
-    { key: 'match', label: 'Match cliente automatico', defaultOn: true },
-    { key: 'notify', label: 'Notifica eventi negativi', defaultOn: true },
-    { key: 'log', label: 'Log audit GDPR', defaultOn: true },
-    { key: 'score', label: 'Aggiornamento score giornaliero', defaultOn: true },
-]
-
-function AutomazioniAttive() {
+function InformazioniLegali() {
+    const items = [
+        { label: 'Privacy', href: '#', icon: 'M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4' },
+        { label: 'Regolamento EMTN', href: '#', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+        { label: 'GDPR Compliance', href: '#', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
+        { label: 'Hosting UE', href: '#', icon: 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+        { label: 'Conservazione 12 mesi', href: '#', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
+    ]
     return (
         <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
-            <div className="flex items-center justify-between mb-2">
-                <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted">Automazioni attive</h3>
-                <span className="text-[10px] text-emerald-500 font-semibold">Tutte attive</span>
-            </div>
-            <ul className="space-y-2">
-                {AUTOMATIONS.map(a => (
-                    <li key={a.key} className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-theme-text-primary">{a.label}</span>
-                        <Switch defaultOn={a.defaultOn} />
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted mb-2">Informazioni legali</h3>
+            <ul className="space-y-1.5">
+                {items.map(it => (
+                    <li key={it.label}>
+                        <a href={it.href} className="flex items-center gap-2 text-xs text-theme-text-primary hover:text-dr7-gold transition-colors">
+                            <svg className="w-3.5 h-3.5 text-theme-text-muted shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d={it.icon}/>
+                            </svg>
+                            <span>{it.label}</span>
+                        </a>
                     </li>
                 ))}
             </ul>
         </section>
-    )
-}
-
-function Switch({ defaultOn }: { defaultOn?: boolean }) {
-    const [on, setOn] = useState(!!defaultOn)
-    return (
-        <button
-            type="button"
-            role="switch"
-            aria-checked={on}
-            onClick={() => setOn(v => !v)}
-            className={
-                'relative inline-flex h-4 w-7 items-center rounded-full transition-colors ' +
-                (on ? 'bg-emerald-500' : 'bg-theme-bg-tertiary')
-            }
-        >
-            <span
-                className={
-                    'inline-block h-3 w-3 transform rounded-full bg-white transition-transform ' +
-                    (on ? 'translate-x-3.5' : 'translate-x-0.5')
-                }
-            />
-        </button>
     )
 }
 
@@ -1477,10 +1418,3 @@ function formatDate(value?: string | null): string {
     return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-function monthsSince(value?: string | null): number {
-    if (!value) return 0
-    const d = new Date(value)
-    if (isNaN(d.getTime())) return 0
-    const ms = Date.now() - d.getTime()
-    return Math.max(0, Math.round(ms / (1000 * 60 * 60 * 24 * 30)))
-}
