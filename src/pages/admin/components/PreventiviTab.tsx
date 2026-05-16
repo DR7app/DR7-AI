@@ -498,6 +498,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     include_second_driver: false,
     include_dr7_flex: false,
     include_cauzione_veicoli: false,
+    // 2026-05-16: pacchetto KM extra (opzionale, mutually exclusive
+    // con include_unlimited_km). Id del PacchettoKm in centralina_pro_config.
+    km_package_id: '' as string,
     // Delivery / Pickup
     pickup_location: 'dr7_office',
     dropoff_location: 'dr7_office',
@@ -3600,11 +3603,56 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             </span>
           </label>
           <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
-            <input type="checkbox" checked={form.include_unlimited_km} onChange={(e) => setForm(prev => ({ ...prev, include_unlimited_km: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
+            <input type="checkbox" checked={form.include_unlimited_km} onChange={(e) => setForm(prev => ({ ...prev, include_unlimited_km: e.target.checked, ...(e.target.checked ? { km_package_id: '' } : {}) }))} className="w-4 h-4 accent-dr7-gold" />
             <span className="text-sm text-theme-text-primary">
               Km Illimitati ({formatEur(proUnlimitedKmDaily)}/giorno)
             </span>
           </label>
+          {/* === PACCHETTI KM (2026-05-16) === per la categoria del veicolo
+              selezionato nel preventivo. Letti da rentalConfig.pacchetti_km
+              (popolato in convertProConfig). Mutuamente esclusivo con
+              include_unlimited_km. */}
+          {(() => {
+            const cat = String(form.vehicle_category || '').toLowerCase().trim()
+            if (!cat) return null
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; km: number; sconto_pct: number; price: number; label: string }>> | undefined
+            if (!pkgsByCat) return null
+            const aliases = cat === 'supercars' ? ['supercars', 'exotic']
+                          : cat === 'exotic' ? ['exotic', 'supercars']
+                          : [cat]
+            let pkgs: Array<{ id: string; km: number; sconto_pct: number; price: number; label: string }> = []
+            for (const k of aliases) {
+              const v = pkgsByCat[k]
+              if (Array.isArray(v) && v.length > 0) { pkgs = v; break }
+            }
+            if (pkgs.length === 0) return null
+            return (
+              <div className="ml-1 mt-1 space-y-1">
+                <div className="text-[11px] font-semibold text-theme-text-muted uppercase tracking-wider">Pacchetti KM extra (opzionale)</div>
+                {pkgs.map(pkg => {
+                  const isSelected = form.km_package_id === pkg.id
+                  const isDisabled = form.include_unlimited_km
+                  return (
+                    <label key={pkg.id} className={`flex items-center gap-3 cursor-pointer p-2 rounded-lg border ${
+                      isDisabled ? 'opacity-50 cursor-not-allowed border-theme-border/30'
+                      : isSelected ? 'border-dr7-gold bg-dr7-gold/10'
+                      : 'border-theme-border/50 hover:bg-theme-bg-tertiary/30'
+                    }`}>
+                      <input type="radio" name="km_package_radio" checked={isSelected} disabled={isDisabled}
+                        onChange={() => setForm(prev => ({ ...prev, km_package_id: isSelected ? '' : pkg.id }))}
+                        onClick={() => { if (isSelected) setForm(prev => ({ ...prev, km_package_id: '' })) }}
+                        className="w-4 h-4 accent-dr7-gold" />
+                      <span className="text-sm text-theme-text-primary flex-1">
+                        {pkg.label} ({pkg.km} km) {pkg.sconto_pct > 0 && <span className="text-xs text-theme-text-muted">— sconto {pkg.sconto_pct}%</span>}
+                      </span>
+                      <span className="text-sm font-bold text-dr7-gold">{formatEur(pkg.price)}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            )
+          })()}
           <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
             <input type="checkbox" checked={form.include_second_driver} onChange={(e) => setForm(prev => ({ ...prev, include_second_driver: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
             <span className="text-sm text-theme-text-primary">
