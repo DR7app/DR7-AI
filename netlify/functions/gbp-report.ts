@@ -30,7 +30,15 @@ interface GbpPayload {
   warnings: string[]
   needsReauth?: boolean
   noLocationFound?: boolean
+  cachedAt?: string         // ISO timestamp del payload servito da cache
+  fromCache?: boolean       // true se serviamo cache, false se appena fetchato
 }
+
+// La GBP API ha quota molto stretta (errori "Requests per minute" tipici
+// gia' al secondo refresh). Cachiamo il payload in app_secrets per 30 min
+// e l'ID location forever (non cambia mai). Cosi' aprendo/chiudendo la tab
+// piu' volte di fila non bruciamo la quota.
+const REPORT_CACHE_TTL_MS = 30 * 60 * 1000  // 30 minuti
 
 function dateMinusDays(days: number): { year: number; month: number; day: number } {
   const d = new Date(Date.now() - days * 86400000)
@@ -67,9 +75,30 @@ const handler: Handler = async (event) => {
     }
   }
 
+  const sb = createClient(supabaseUrl, supabaseKey, { auth: { autoRefreshToken: false, persistSession: false } })
+  const force = event.queryStringParameters?.refresh === '1'
+
+  // 1) CACHE LOOKUP: prima di chiamare Google guardiamo app_secrets per
+  //    un payload recente (<30 min). Una riga per range cosi' 7d/28d/90d
+  //    non si scambiano. Salta se ?refresh=1 (bottone "ricarica" nella UI).
+  const cacheKey = `gbp_report_cache_${range}`
+  if (!force) {
+    try {
+      const { data } = await sb.from('app_secrets').select('value, updated_at').eq('key', cacheKey).maybeSingle()
+      const cached = data?.value as (GbpPayload & { fetchedAt?: string }) | undefined
+      const fetchedAt = cached?.fetchedAt ? new Date(cached.fetchedAt).getTime() : 0
+      if (cached && Date.now() - fetchedAt < REPORT_CACHE_TTL_MS) {
+        return {
+          statusCode: 200, headers,
+          body: JSON.stringify({ ...cached, fromCache: true, cachedAt: cached.fetchedAt })
+        }
+      }
+    } catch { /* cache miss = fall through al fetch */ }
+  }
+
+  // 2) Refresh token
   let refreshToken: string | undefined
   try {
-    const sb = createClient(supabaseUrl, supabaseKey, { auth: { autoRefreshToken: false, persistSession: false } })
     const { data } = await sb.from('app_secrets').select('value').eq('key', 'ga4_oauth_refresh_token').maybeSingle()
     refreshToken = (data?.value as any)?.refresh_token
   } catch (e) {
@@ -90,49 +119,66 @@ const handler: Handler = async (event) => {
   const oauth2 = new google.auth.OAuth2(clientId, clientSecret)
   oauth2.setCredentials({ refresh_token: refreshToken })
 
-  // 1) Trova le location (business profiles) che l'utente possiede.
-  // Account Management API → accounts.locations.list
-  // Se l'utente non ha mai concesso scope business.manage, qui scatta 403.
+  // 3) LOCATION CACHE: la location ID di DR7 non cambia mai. Cachiamo
+  //    forever in app_secrets dopo la prima scoperta. Risparmia 2
+  //    chiamate API per request (accounts.list + locations.list), che
+  //    sono PROPRIO quelle che fanno scattare il rate limit
+  //    "mybusinessaccountmanagement.googleapis.com Requests per minute".
   let locationName: string | undefined
   try {
-    // Step A: lista account
-    const accountsRes = await oauth2.request<{ accounts: Array<{ name: string }> }>({
-      url: 'https://mybusinessaccountmanagement.googleapis.com/v1/accounts',
-      method: 'GET',
-    })
-    const account = accountsRes.data.accounts?.[0]
-    if (!account?.name) {
-      return {
-        statusCode: 200, headers,
-        body: JSON.stringify({ ...empty, configured: true, noLocationFound: true, warnings: ['Nessun account Google Business Profile collegato a questo Google account'] })
-      }
-    }
+    const { data: locCache } = await sb.from('app_secrets').select('value').eq('key', 'gbp_location_name').maybeSingle()
+    locationName = (locCache?.value as any)?.name
+  } catch { /* fall through alla scoperta */ }
 
-    // Step B: lista locations dell'account
-    const locsRes = await oauth2.request<{ locations: Array<{ name: string; title?: string }> }>({
-      url: `https://mybusinessbusinessinformation.googleapis.com/v1/${account.name}/locations?readMask=name,title`,
-      method: 'GET',
-    })
-    const loc = locsRes.data.locations?.[0]
-    if (!loc?.name) {
+  if (!locationName) {
+    try {
+      // Step A: lista account
+      const accountsRes = await oauth2.request<{ accounts: Array<{ name: string }> }>({
+        url: 'https://mybusinessaccountmanagement.googleapis.com/v1/accounts',
+        method: 'GET',
+      })
+      const account = accountsRes.data.accounts?.[0]
+      if (!account?.name) {
+        return {
+          statusCode: 200, headers,
+          body: JSON.stringify({ ...empty, configured: true, noLocationFound: true, warnings: ['Nessun account Google Business Profile collegato a questo Google account'] })
+        }
+      }
+
+      // Step B: lista locations dell'account
+      const locsRes = await oauth2.request<{ locations: Array<{ name: string; title?: string }> }>({
+        url: `https://mybusinessbusinessinformation.googleapis.com/v1/${account.name}/locations?readMask=name,title`,
+        method: 'GET',
+      })
+      const loc = locsRes.data.locations?.[0]
+      if (!loc?.name) {
+        return {
+          statusCode: 200, headers,
+          body: JSON.stringify({ ...empty, configured: true, noLocationFound: true, warnings: ['Nessuna location nel profilo Business'] })
+        }
+      }
+      locationName = loc.name
+
+      // Salva in cache forever (chiave separata da quella del report)
+      try {
+        await sb.from('app_secrets').upsert({
+          key: 'gbp_location_name',
+          value: { name: locationName, title: loc.title || null, discovered_at: new Date().toISOString() },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'key' })
+      } catch { /* salvataggio cache best-effort */ }
+    } catch (e: any) {
+      const msg = String(e?.message || e)
+      const needsReauth = /insufficient|invalid_scope|forbidden|403/i.test(msg)
       return {
         statusCode: 200, headers,
-        body: JSON.stringify({ ...empty, configured: true, noLocationFound: true, warnings: ['Nessuna location nel profilo Business'] })
+        body: JSON.stringify({
+          ...empty, configured: true, needsReauth,
+          warnings: [`Errore Business Profile API: ${msg}`,
+            needsReauth ? 'Lo scope business.manage non e\' stato autorizzato — riconnetti l\'account Google.' : '']
+            .filter(Boolean),
+        })
       }
-    }
-    // I name di location sono "locations/12345"; estrai l'ID per il Performance API
-    locationName = loc.name
-  } catch (e: any) {
-    const msg = String(e?.message || e)
-    const needsReauth = /insufficient|invalid_scope|forbidden|403/i.test(msg)
-    return {
-      statusCode: 200, headers,
-      body: JSON.stringify({
-        ...empty, configured: true, needsReauth,
-        warnings: [`Errore Business Profile API: ${msg}`,
-          needsReauth ? 'Lo scope business.manage non e\' stato autorizzato — riconnetti l\'account Google.' : '']
-          .filter(Boolean),
-      })
     }
   }
 
@@ -184,15 +230,57 @@ const handler: Handler = async (event) => {
       websiteClicks: sums.WEBSITE_CLICKS || 0,
       bookings: sums.BUSINESS_BOOKINGS || 0,
     }
+    const fetchedAt = new Date().toISOString()
+    const payload: GbpPayload & { fetchedAt: string } = { configured: true, range, kpis, warnings: [], fetchedAt }
+
+    // Cache server-side per 30 min: i prossimi refresh non chiamano Google.
+    try {
+      await sb.from('app_secrets').upsert({
+        key: cacheKey,
+        value: payload,
+        updated_at: fetchedAt,
+      }, { onConflict: 'key' })
+    } catch { /* cache write best-effort */ }
+
     return {
       statusCode: 200, headers,
-      body: JSON.stringify({ configured: true, range, kpis, warnings: [] } satisfies GbpPayload)
+      body: JSON.stringify({ ...payload, fromCache: false, cachedAt: fetchedAt })
     }
   } catch (e: any) {
     const msg = String(e?.message || e)
+    const isQuota = /quota|rate.?limit|too.?many|RESOURCE_EXHAUSTED|429/i.test(msg)
+
+    // Quando Google ritorna quota exceeded, proviamo a servire l'ultimo
+    // payload cached (anche se piu' vecchio di 30 min) — meglio numeri
+    // vecchi di 1 ora che una tab vuota con un errore tecnico illeggibile.
+    if (isQuota) {
+      try {
+        const { data: stale } = await sb.from('app_secrets').select('value').eq('key', cacheKey).maybeSingle()
+        const cached = stale?.value as (GbpPayload & { fetchedAt?: string }) | undefined
+        if (cached?.kpis) {
+          const cachedAt = cached.fetchedAt || ''
+          const minsOld = cachedAt ? Math.round((Date.now() - new Date(cachedAt).getTime()) / 60000) : 0
+          return {
+            statusCode: 200, headers,
+            body: JSON.stringify({
+              ...cached, fromCache: true, cachedAt,
+              warnings: [`Quota Google temporaneamente esaurita — mostro dati cache di ${minsOld} min fa. Riprova tra qualche minuto per aggiornare.`]
+            })
+          }
+        }
+      } catch { /* nessuna cache da servire */ }
+    }
+
     return {
       statusCode: 200, headers,
-      body: JSON.stringify({ ...empty, configured: true, warnings: [`Errore Performance API: ${msg}`] })
+      body: JSON.stringify({
+        ...empty, configured: true,
+        warnings: [
+          isQuota
+            ? 'Quota Google esaurita (limite richieste/minuto). Riprova tra 60-120 secondi — la GBP API ha quote molto strette.'
+            : `Errore Performance API: ${msg}`
+        ]
+      })
     }
   }
 }

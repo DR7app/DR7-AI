@@ -16,7 +16,7 @@ const RANGES = [
 type RangeKey = typeof RANGES[number]['key']
 
 interface GbpKpis { views: number; calls: number; directions: number; websiteClicks: number; bookings: number }
-interface GbpPayload { configured: boolean; range: string; kpis: GbpKpis | null; warnings: string[]; needsReauth?: boolean; noLocationFound?: boolean }
+interface GbpPayload { configured: boolean; range: string; kpis: GbpKpis | null; warnings: string[]; needsReauth?: boolean; noLocationFound?: boolean; cachedAt?: string; fromCache?: boolean }
 
 const fmtInt = (v: number) => v.toLocaleString('it-IT')
 
@@ -35,6 +35,15 @@ export default function ReportGoogleBusinessTab() {
   const [gbp, setGbp] = useState<GbpPayload | null>(null)
   const [loading, setLoading] = useState(true)
 
+  const fetchReport = (forceRefresh = false) => {
+    setLoading(true)
+    const qs = `range=${range}${forceRefresh ? '&refresh=1' : ''}`
+    return fetch(`/.netlify/functions/gbp-report?${qs}`)
+      .then(r => r.json())
+      .then((p: GbpPayload) => { setGbp(p); setLoading(false) })
+      .catch(() => setLoading(false))
+  }
+
   useEffect(() => {
     let abort = false
     setLoading(true)
@@ -47,6 +56,14 @@ export default function ReportGoogleBusinessTab() {
 
   const rangeLabel = useMemo(() => RANGES.find(r => r.key === range)?.label ?? '', [range])
 
+  const cacheAgeLabel = useMemo(() => {
+    if (!gbp?.cachedAt) return null
+    const minsOld = Math.round((Date.now() - new Date(gbp.cachedAt).getTime()) / 60000)
+    if (minsOld < 1) return 'aggiornato ora'
+    if (minsOld < 60) return `aggiornato ${minsOld} min fa`
+    return `aggiornato ${Math.round(minsOld / 60)} h fa`
+  }, [gbp?.cachedAt])
+
   return (
     <div className="space-y-3">
       {/* Header + range picker */}
@@ -58,17 +75,33 @@ export default function ReportGoogleBusinessTab() {
           </h2>
           <p className="text-xs text-theme-text-muted mt-0.5">Dati dalla scheda Google (Maps/Search) — DR7 Cagliari</p>
         </div>
-        <div className="flex gap-1 text-xs">
-          {RANGES.map(r => (
-            <button
-              key={r.key}
-              type="button"
-              onClick={() => setRange(r.key)}
-              className={`px-2.5 py-1 rounded-md border transition-colors ${range === r.key ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300' : 'border-theme-border text-theme-text-muted hover:text-theme-text-primary'}`}
-            >
-              {r.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 flex-wrap">
+          {cacheAgeLabel && (
+            <span className="text-[10px] text-theme-text-muted italic">
+              {gbp?.fromCache ? cacheAgeLabel : `aggiornato ora`}
+            </span>
+          )}
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => fetchReport(true)}
+            title="Forza un nuovo fetch da Google (consuma quota — usare con parsimonia)"
+            className="px-2 py-1 rounded-md border border-theme-border text-[11px] text-theme-text-muted hover:text-theme-text-primary disabled:opacity-50"
+          >
+            {loading ? '…' : 'Ricarica'}
+          </button>
+          <div className="flex gap-1 text-xs">
+            {RANGES.map(r => (
+              <button
+                key={r.key}
+                type="button"
+                onClick={() => setRange(r.key)}
+                className={`px-2.5 py-1 rounded-md border transition-colors ${range === r.key ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300' : 'border-theme-border text-theme-text-muted hover:text-theme-text-primary'}`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
