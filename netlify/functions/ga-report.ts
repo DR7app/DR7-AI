@@ -583,9 +583,6 @@ const handler: Handler = async (event) => {
 
     const warnings: string[] = []
     if (sessions === 0 && activeUsers === 0) warnings.push('Nessuna visita registrata nel periodo selezionato — verifica che lo snippet GA4 sia attivo su dr7empire.com.')
-    if (bookings === 0 && calls === 0 && revenue === 0 && sessions > 0) {
-      warnings.push('GA4 registra visite ma il sito non invia ancora eventi di conversione (booking_completed, purchase, phone_call). Le KPI Prenotazioni/Telefono/Fatturato resteranno a "—" finche\' non vengono installati gli eventi gtag.')
-    }
     if (sessions === 0 && activeUsers > 0) warnings.push(`Tracking attivo: ${activeUsers} utenti in tempo reale. I dati storici (28 giorni) appariranno entro 24-48h, il tempo standard di ingestione di GA4.`)
 
     // Se GA4 risponde ma con TUTTO a zero (sessions, pageviews, users e
