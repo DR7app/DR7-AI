@@ -292,15 +292,13 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       const bPlate = (b.vehicle_plate || b.booking_details?.vehicle?.plate)?.replace(/\s/g, '').toUpperCase()
       const bVehicleId = b.vehicle_id || b.booking_details?.vehicle_id
 
-      // Try plate match first (targa)
-      if (bPlate) {
-        const plateMatch = vehicles.find(v => v.plate?.replace(/\s/g, '').toUpperCase() === bPlate)
-        if (plateMatch) {
-          bookingToVehicleId.set(b.id, plateMatch.id)
-          return
-        }
-      }
-      // Fallback: vehicle_id match
+      // BUG FIX 2026-05-16: vehicle_id PRIMA del plate. UUID e' unico,
+      // plate puo' essere condivisa tra piu' veicoli (es. flotta con
+      // targa "000000" placeholder per veicoli non ancora immatricolati).
+      // Prima il plate match metteva la prenotazione sul PRIMO veicolo
+      // trovato con quella targa, anche se la prenotazione era per un
+      // altro veicolo con stessa targa (es. booking Cayenne finiva su
+      // BMW M8 perche' entrambi avevano "000000").
       if (bVehicleId) {
         const idMatch = vehicles.find(v => v.id === bVehicleId)
         if (idMatch) {
@@ -308,7 +306,14 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
           return
         }
       }
-      // No name-based fallback — with multiple same-model cars, plate match is the only reliable method
+      // Fallback: plate match (per booking legacy senza vehicle_id)
+      if (bPlate) {
+        const plateMatch = vehicles.find(v => v.plate?.replace(/\s/g, '').toUpperCase() === bPlate)
+        if (plateMatch) {
+          bookingToVehicleId.set(b.id, plateMatch.id)
+          return
+        }
+      }
     })
 
     // Order rows by Centralina Pro category position (first = top of
