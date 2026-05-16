@@ -549,36 +549,55 @@ export const handler: Handler = async (event) => {
         const vehicleCategory = vehicleData?.category || 'standard'
 
         // Resolve the category id to its admin-facing label from Centralina Pro
-        // (single source of truth for category names). Fallback to the raw id
-        // so contracts still render when Centralina Pro is unreachable.
+        // (single source of truth for category names). Also read per-category
+        // contract clauses (contract_clauses[<catId>]) so direzione puo'
+        // gestire un testo Responsabilita' + Penali dedicato per OGNI categoria
+        // (Hypercar e' Hypercar, non si lumpa con Supercar).
         let vehicleCategoryLabel: string = vehicleCategory
+        let proInsuranceText: string | null = null
+        let proPenaltyText: string | null = null
         try {
             const { data: cpCfg } = await supabase
                 .from('centralina_pro_config')
                 .select('config')
                 .eq('id', 'main')
                 .maybeSingle()
-            const cats = (cpCfg?.config as { categories?: { id: string; label: string }[] } | null)?.categories
-            if (Array.isArray(cats)) {
-                const match = cats.find(c => c.id.toLowerCase() === vehicleCategory.toLowerCase())
+            const cfg = (cpCfg?.config || {}) as {
+                categories?: { id: string; label: string }[]
+                contract_clauses?: Record<string, { insurance_text?: string; penalty_text?: string }>
+            }
+            if (Array.isArray(cfg.categories)) {
+                const match = cfg.categories.find(c => c.id.toLowerCase() === vehicleCategory.toLowerCase())
                 if (match?.label) vehicleCategoryLabel = match.label
             }
-        } catch (_e) { /* fallthrough to id */ }
+            if (cfg.contract_clauses) {
+                // Case-insensitive lookup: lo slug salvato dall'EditableList e'
+                // gia' normalizzato, ma proteggiamo da differenze legacy.
+                const key = Object.keys(cfg.contract_clauses).find(
+                    k => k.toLowerCase() === vehicleCategory.toLowerCase()
+                )
+                if (key) {
+                    const c = cfg.contract_clauses[key]
+                    if (c?.insurance_text && c.insurance_text.trim()) proInsuranceText = c.insurance_text
+                    if (c?.penalty_text && c.penalty_text.trim()) proPenaltyText = c.penalty_text
+                }
+            }
+        } catch (_e) { /* fallthrough to id + hardcoded defaults */ }
 
-        // Bucket per category tier. Per direzione, Hypercar / Exotic Cars /
-        // Supercar / Suv Luxury usano la clausola SUPERCAR. Urban / Flotta
-        // Aziendale / Moto / Scooter usano la clausola UTILITARIE.
-        // Normalizziamo (lowercase + togliamo spazi/trattini/underscore) per
-        // accettare sia "suv_luxury" che "suv-luxury" che "Suv Luxury".
-        const normCat = vehicleCategory.toLowerCase().replace(/[\s\-_]/g, '')
-        const SUPERCAR_TIER = new Set(['supercar', 'supercars', 'luxury', 'exotic', 'exoticcars', 'hypercar', 'hypercars', 'suvluxury', 'suvluxe'])
-        const URBAN_TIER = new Set(['urban', 'economy', 'aziendali', 'aziendale', 'flottaaziendale', 'furgone', 'furgoni', 'ncc', 'moto', 'scooter'])
-        const isSupercarTier = SUPERCAR_TIER.has(normCat)
-        const isUrbanTier = URBAN_TIER.has(normCat)
+        // Legacy bucketing (fallback). Usato SOLO se Centralina Pro non ha
+        // una clausola specifica per questa categoria. La direzione vede
+        // questo testo finche' non sovrascrive in Centralina Pro > Contratti.
+        const isSupercarLegacy = vehicleCategory === 'supercar' || vehicleCategory === 'luxury'
+        const isUrbanLegacy = vehicleCategory === 'urban' || vehicleCategory === 'economy'
 
         let insuranceResponsibilityText = ''
 
-        if (isSupercarTier) {
+        // Priorita': testo custom da Centralina Pro per QUESTA categoria.
+        // Se direzione ha riempito centralina_pro_config.contract_clauses[<cat>].insurance_text
+        // vince sempre sul testo hardcoded di fallback (cosi' "Hypercar e' Hypercar").
+        if (proInsuranceText) {
+            insuranceResponsibilityText = proInsuranceText
+        } else if (isSupercarLegacy) {
             insuranceResponsibilityText = `RESPONSABILITÀ PENALE DEI CLIENTI - SUPERCAR:
 
 KASKO: Furto (solo in caso di restituzione chiave, altrimenti paga il 100% del valore del veicolo) - atti vandalici - agenti atmosferici - incendio - danni & distruzione totale: da risarcire €5.000 + 30% del danno.
@@ -588,7 +607,7 @@ KASKO BLACK: Furto (solo in caso di restituzione chiave, altrimenti paga il 100%
 KASKO SIGNATURE: Furto (solo in caso di restituzione chiave, altrimenti paga il 100% del valore del veicolo) - atti vandalici - agenti atmosferici - incendio - danni & distruzione totale: da risarcire €5.000.
 
 LA KASKO NON È ATTIVABILE SE AL MOMENTO DEL DANNO IL CLIENTE ERA SOTTO EFFETTO DI STUPEFACENTI O IN STATO DI EBREZZA.`
-        } else if (isUrbanTier) {
+        } else if (isUrbanLegacy) {
             insuranceResponsibilityText = `RESPONSABILITÀ PENALE DEI CLIENTI - UTILITARIE E AZIENDALI:
 
 Copertura assicurativa KASKO: Furto (solo in caso di restituzione chiave, altrimenti paga il 100% del valore del veicolo) - atti vandalici - agenti atmosferici - incendio - distruzione totale: da risarcire €2.000 + 30% del valore del danno è attivabile per qualsiasi danno recato alla vettura anche con oggetti non identificabili per mezzo di targa, previo preventivo in officina ufficiale.
@@ -628,7 +647,12 @@ Il locatario è pienamente responsabile del veicolo durante il periodo di nolegg
         // 5b. Generate Additional Penalty/Legal Terms (for second large text area)
         let additionalTermsText = ''
 
-        if (isSupercarTier) {
+        // Stessa priorita' del testo Responsabilita': se direzione ha
+        // riempito centralina_pro_config.contract_clauses[<cat>].penalty_text
+        // per QUESTA categoria, sovrascrive il default hardcoded.
+        if (proPenaltyText) {
+            additionalTermsText = proPenaltyText
+        } else if (isSupercarLegacy) {
             additionalTermsText = `PENALI - SUPERCAR:
 
 Penale fermo del veicolo in caso di incidente o danni 350,00€ al giorno.
