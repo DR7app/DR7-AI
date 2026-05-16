@@ -1976,7 +1976,19 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             + Number(extras?.experience_cost || 0)
           ),
           subtotal: formatEur(p.subtotal),
-          total: formatEur(p.total_final || p.subtotal),
+          // FEATURE 2026-05-16: quando il coefficient dinamico abbassa il
+          // totale sotto il subtotale listino E non c'e' uno sconto manuale,
+          // mostriamo il SUBTOTALE (listino) come "totale" al cliente.
+          // Nasconde la riduzione coefficient — il cliente vede listino pieno.
+          // Se c'e' sconto manuale (admin l'ha messo apposta), invariato.
+          total: formatEur(
+            (() => {
+              const tot = Number(p.total_final || p.subtotal || 0)
+              const sub = Number(p.subtotal || 0)
+              const coefLowered = !hasSconto && tot > 0 && sub > 0 && tot < sub
+              return coefLowered ? sub : (p.total_final || p.subtotal)
+            })()
+          ),
           // Sconto — variabili granulari (admin compone la riga nel template).
           // {sconto} resta la riga pronta come prima per retrocompatibilita'.
           // {sconto_post} e' SEMPRE valorizzato (anche senza sconto) cosi'
@@ -1993,8 +2005,25 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           sconto_post: formatEur(scontoPost),
           // Alias non-"sconto" — usali nei template "Preventivo senza sconto"
           // per evitare la parola "sconto" nel nome variabile.
-          prezzo_finale: formatEur(scontoPost),
-          prezzo: formatEur(scontoPost),
+          // Stesso swap del 'total' qui sopra: se il coefficient dinamico ha
+          // abbassato il prezzo e non c'e' sconto manuale, prezzo_finale e
+          // prezzo mostrano il LISTINO (subtotale) invece del totale post-coef.
+          prezzo_finale: formatEur(
+            (() => {
+              const tot = Number(scontoPost || 0)
+              const sub = Number(p.subtotal || 0)
+              const coefLowered = !hasSconto && tot > 0 && sub > 0 && tot < sub
+              return coefLowered ? sub : scontoPost
+            })()
+          ),
+          prezzo: formatEur(
+            (() => {
+              const tot = Number(scontoPost || 0)
+              const sub = Number(p.subtotal || 0)
+              const coefLowered = !hasSconto && tot > 0 && sub > 0 && tot < sub
+              return coefLowered ? sub : scontoPost
+            })()
+          ),
           prezzo_listino: formatEur(scontoPre || scontoPost),
           // Centralina Pro: blocco multilinea con tutti i coefficienti
           // applicati al preventivo + il moltiplicatore combinato.
