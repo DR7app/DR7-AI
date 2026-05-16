@@ -156,8 +156,14 @@ const handler: Handler = async () => {
     } catch { /* skip */ }
   }
 
-  // Test reale: chiama accounts.list UNA volta e classifica l'errore
-  if (hasBusinessScope) {
+  // SKIP accounts.list se la location e' gia' cachata — non ha senso
+  // bruciare quota per riverificare quello che gia' sappiamo.
+  if (diag.location_cache.name) {
+    diag.accounts_test.status = 'skipped'
+    diag.accounts_test.error = 'Skipped — location gia\' cachata (' + diag.location_cache.name + '). Niente chiamata reale per non bruciare quota.'
+    diag.accounts_test.accounts_found = 1
+  } else if (hasBusinessScope) {
+    // Test reale solo se non abbiamo location cache: classifica l'errore
     try {
       const r = await oauth2.request<{ accounts?: Array<{ name: string }> }>({
         url: 'https://mybusinessaccountmanagement.googleapis.com/v1/accounts',
@@ -177,7 +183,12 @@ const handler: Handler = async () => {
       diag.accounts_test.error = msg
       if (/quota|rate.?limit|RESOURCE_EXHAUSTED|429/i.test(msg)) {
         diag.accounts_test.error_classification = 'quota'
-        diag.recommendations.push('Quota esaurita ORA — attendi 60-120 secondi e ricarica questa diagnostica. La connessione e\' valida.')
+        diag.recommendations.push(
+          'Quota Google esaurita. La GBP API ha un limite di ~1 richiesta/minuto sul tuo progetto. ' +
+          'Soluzione definitiva: setta env var GBP_LOCATION_NAME su Netlify ' +
+          '(prendi il tuo location ID da business.google.com URL → "/l/XXXXXXX"). ' +
+          'Cosi\' saltiamo del tutto questo endpoint e usiamo solo il Performance API che ha quota piu\' larga.'
+        )
       } else if (/insufficient.*scope|invalid_scope/i.test(msg)) {
         diag.accounts_test.error_classification = 'scope'
         diag.recommendations.push('Lo scope business.manage manca — riconnetti Google e autorizza "Gestisci la tua scheda di Google Business".')

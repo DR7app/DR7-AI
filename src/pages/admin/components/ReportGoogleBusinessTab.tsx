@@ -58,6 +58,28 @@ export default function ReportGoogleBusinessTab() {
   const [diag, setDiag] = useState<GbpDiag | null>(null)
   const [diagLoading, setDiagLoading] = useState(false)
   const [showDiag, setShowDiag] = useState(false)
+  const [manualLoc, setManualLoc] = useState('')
+  const [manualLocStatus, setManualLocStatus] = useState<string | null>(null)
+
+  const saveManualLocation = async () => {
+    setManualLocStatus('Salvataggio…')
+    try {
+      const res = await fetch('/.netlify/functions/gbp-set-location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: manualLoc }),
+      })
+      const j = await res.json()
+      if (j.ok) {
+        setManualLocStatus(`Salvato: ${j.name}. Ricarica i dati ora.`)
+        runDiagnostic()
+      } else {
+        setManualLocStatus(`Errore: ${j.error}`)
+      }
+    } catch (e) {
+      setManualLocStatus(`Errore di rete: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
 
   const runDiagnostic = () => {
     setDiagLoading(true)
@@ -210,6 +232,35 @@ export default function ReportGoogleBusinessTab() {
                   <div>Nome: <span className="text-theme-text-primary">{diag.location_cache.title || '—'}</span></div>
                   <div>Scoperto il: {diag.location_cache.discovered_at ? new Date(diag.location_cache.discovered_at).toLocaleString('it-IT') : '—'}</div>
                 </div>
+
+                {/* Manual location input — bypass scoperta automatica */}
+                {!diag.location_cache.name && (
+                  <div className="mt-2 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                    <div className="text-xs text-amber-300 font-semibold mb-2">Imposta location ID manualmente</div>
+                    <div className="text-[11px] text-theme-text-muted mb-2">
+                      Soluzione definitiva al rate limit: vai su <a href="https://business.google.com" target="_blank" rel="noreferrer" className="text-cyan-400 underline">business.google.com</a>,
+                      apri la tua scheda DR7 Cagliari, copia i numeri dall'URL (es. <code>business.google.com/n/<strong>1234567890</strong>/edit/...</code>) e incollali qui sotto.
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={manualLoc}
+                        onChange={e => setManualLoc(e.target.value)}
+                        placeholder="es. 1234567890123456789"
+                        className="flex-1 px-2 py-1 rounded border border-theme-border bg-theme-bg-primary text-xs text-theme-text-primary"
+                      />
+                      <button
+                        type="button"
+                        onClick={saveManualLocation}
+                        disabled={!manualLoc.trim()}
+                        className="px-3 py-1 rounded bg-cyan-600 text-white text-xs font-semibold disabled:opacity-50"
+                      >
+                        Salva
+                      </button>
+                    </div>
+                    {manualLocStatus && <div className="mt-2 text-[11px] text-amber-300">{manualLocStatus}</div>}
+                  </div>
+                )}
               </div>
 
               {/* Accounts test */}

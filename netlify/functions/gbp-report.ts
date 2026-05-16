@@ -130,7 +130,55 @@ const handler: Handler = async (event) => {
     locationName = (locCache?.value as any)?.name
   } catch { /* fall through alla scoperta */ }
 
+  // ENV OVERRIDE: se GBP_LOCATION_NAME e' settato su Netlify (es.
+  // "locations/12345678901234567890") saltiamo COMPLETAMENTE accounts.list +
+  // locations.list — le 2 chiamate che bruciano la quota. L'utente puo'
+  // recuperare il proprio ID dall'URL di business.google.com.
+  if (!locationName && process.env.GBP_LOCATION_NAME) {
+    locationName = process.env.GBP_LOCATION_NAME
+    // Salva subito in cache cosi' anche se l'env var sparisce continua a funzionare
+    try {
+      await sb.from('app_secrets').upsert({
+        key: 'gbp_location_name',
+        value: { name: locationName, title: 'from env GBP_LOCATION_NAME', discovered_at: new Date().toISOString() },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'key' })
+    } catch { /* best effort */ }
+  }
+
+  // SELF RATE-LIMIT: se l'ultimo tentativo di accounts.list e' stato meno
+  // di 90 sec fa, NON riproviamo (sappiamo gia' che fallira con 429).
+  // Memorizziamo last_attempt in app_secrets.
   if (!locationName) {
+    try {
+      const { data: lastAttempt } = await sb.from('app_secrets').select('value').eq('key', 'gbp_accounts_last_attempt').maybeSingle()
+      const lastTs = (lastAttempt?.value as { at?: string } | undefined)?.at
+      if (lastTs && Date.now() - new Date(lastTs).getTime() < 90 * 1000) {
+        const secsSince = Math.round((Date.now() - new Date(lastTs).getTime()) / 1000)
+        return {
+          statusCode: 200, headers,
+          body: JSON.stringify({
+            ...empty, configured: true,
+            warnings: [
+              `Quota Google e' stata appena consumata (${secsSince}s fa). Attendi ${90 - secsSince}s e ricarica — limite "1 richiesta/minuto" sull'endpoint Business Profile.`
+            ]
+          })
+        }
+      }
+    } catch { /* fall through */ }
+  }
+
+  if (!locationName) {
+    // Marca il tentativo PRIMA della chiamata: se Netlify ri-invoca durante
+    // la chiamata in corso, il second non riprova.
+    try {
+      await sb.from('app_secrets').upsert({
+        key: 'gbp_accounts_last_attempt',
+        value: { at: new Date().toISOString() },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'key' })
+    } catch { /* best effort */ }
+
     try {
       // Step A: lista account
       const accountsRes = await oauth2.request<{ accounts: Array<{ name: string }> }>({
