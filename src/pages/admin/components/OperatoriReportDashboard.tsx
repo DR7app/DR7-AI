@@ -84,6 +84,8 @@ interface Operatore {
     email: string
     ruolo: string | null
     ore_target_giornaliere: number
+    ore_target_settimanali: number | null
+    ore_target_mensili: number | null
     avatar_url: string | null
 }
 
@@ -234,7 +236,7 @@ export default function OperatoriReportDashboard() {
             if (opList.length === 0) {
                 let opQuery = supabase
                     .from('operatori_persone')
-                    .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, avatar_url')
+                    .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, avatar_url')
                     .eq('attivo', true)
                 if (!isDirezione && user?.id) {
                     opQuery = opQuery.or(`user_id.eq.${user.id},email.ilike.${myEmail}`)
@@ -643,19 +645,32 @@ export default function OperatoriReportDashboard() {
                                 {isSingleDay && <th className="text-center py-2 font-medium">Pause</th>}
                                 <th className="text-right py-2 font-medium">Ore Lav.</th>
                                 <th className="text-right py-2 font-medium">Straord.</th>
+                                <th className="text-right py-2 font-medium" title="Saldo del periodo: ore lavorate − obiettivo del periodo. Positivo = recupero / surplus, negativo = ore da recuperare.">Saldo</th>
                                 <th className="text-center py-2 font-medium">Stato</th>
                                 <th className="text-right py-2 font-medium"></th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-theme-border/50">
                             {dailyRows.length === 0 && (
-                                <tr><td colSpan={11} className="text-center py-6 text-theme-text-muted">Nessun operatore.</td></tr>
+                                <tr><td colSpan={12} className="text-center py-6 text-theme-text-muted">Nessun operatore.</td></tr>
                             )}
                             {dailyRows.map(r => {
                                 const isMine = r.operatore.id === me?.id
                                 const target = Math.round((r.operatore.ore_target_giornaliere || 8) * 60)
                                 const straord = Math.max(0, r.minuti_lavorati - target)
                                 const deficit = Math.max(0, target - r.minuti_lavorati)
+                                // Saldo del periodo: minuti_lavorati − obiettivo del periodo.
+                                // Usa obiettivo settimanale per range 7gg, mensile per
+                                // range >=28gg (30gg/mese), altrimenti daily × giorni del range.
+                                // Positivo = surplus (recupero), negativo = ore da recuperare.
+                                const periodTargetMin = (() => {
+                                    const daily = (r.operatore.ore_target_giornaliere || 8) * 60
+                                    if (range === 'oggi' || rangeDays.length <= 1) return daily
+                                    if (range === '7gg' && r.operatore.ore_target_settimanali) return r.operatore.ore_target_settimanali * 60
+                                    if ((range === 'mese' || range === '30gg') && r.operatore.ore_target_mensili) return r.operatore.ore_target_mensili * 60
+                                    return daily * rangeDays.length
+                                })()
+                                const saldoMin = r.minuti_lavorati - Math.round(periodTargetMin)
                                 const isExpanded = expandedOpId === r.operatore.id
                                 // Pair pausa starts with ends into pause windows.
                                 const pauseWindows = r.pausa_inizi.map((start, i) => {
@@ -717,6 +732,15 @@ export default function OperatoriReportDashboard() {
                                         </td>
                                         <td className="py-2 text-right tabular-nums">
                                             <span className={straord > 0 ? 'text-sky-500 font-semibold' : 'text-theme-text-muted text-xs'}>{fmtMin(straord)}</span>
+                                        </td>
+                                        <td className="py-2 text-right tabular-nums">
+                                            <span
+                                                className={`${saldoMin >= 0 ? 'text-emerald-500' : 'text-rose-500'} font-semibold`}
+                                                title={`Obiettivo del periodo: ${fmtMin(Math.round(periodTargetMin))} (${rangeDays.length} giorni)`}
+                                            >
+                                                {saldoMin >= 0 ? '+' : ''}{fmtMin(Math.abs(saldoMin))}
+                                            </span>
+                                            <div className="text-[9px] text-theme-text-muted">su {fmtMin(Math.round(periodTargetMin))}</div>
                                         </td>
                                         <td className="py-2 text-center">{isSingleDay ? <StatoLabel s={r.stato} /> : <span className="text-[10px] text-theme-text-muted">Range</span>}</td>
                                         <td className="py-2 text-right">
