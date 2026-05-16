@@ -223,6 +223,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   // Salva. Quando l'OTP è approvato il useEffect ripete createBooking(force)
   // così l'operatore non deve premere di nuovo Salva.
   const pendingCreateBookingRef = useRef<{ force: boolean } | null>(null)
+  // Set right before wash.delete OTP fires — so otpDetails can show full
+  // booking context (customer, servizio, veicolo, importo, stato) to direzione.
+  const pendingDeleteBookingRef = useRef<CarWashBooking | null>(null)
 
   // Centralized "Modifica" handler — gates paid/confirmed bookings behind OTP
   // (Valerio + Ilenia bypass server-side automatically).
@@ -984,6 +987,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // Test bookings bypassano sempre l'OTP (vehicle TEST*).
     const bookingToDelete = bookings.find(b => b.id === bookingId)
     if (!isTestBooking(bookingToDelete) && !override.hasOverride('wash.delete')) {
+      pendingDeleteBookingRef.current = bookingToDelete || null
       override.requestOverride('wash.delete', `Eliminare il lavaggio di ${customerName}: azione irreversibile.`)
       if (!override.hasOverride('wash.delete')) return
     }
@@ -2222,56 +2226,193 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // data/ora + totale).
     const cust = customers.find(c => c.id === formData.customer_id)
     const serviceLabel = buildServiceNames()
+    const operatorEmail = typeof window !== 'undefined'
+      ? (sessionStorage.getItem('admin-email') || null)
+      : null
+    const nowIt = new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+
+    // ─── wash.delete: contesto completo della prenotazione che si sta
+    // eliminando. Letto da pendingDeleteBookingRef, settato proprio prima
+    // di requestOverride in handleDeleteBooking.
+    if (code === 'wash.delete') {
+      const b = pendingDeleteBookingRef.current
+      if (b) {
+        const bookingRef = (b.id || '').substring(0, 8).toUpperCase() || null
+        const totalEur = typeof b.price_total === 'number' ? fmtEur(b.price_total / 100) : null
+        return {
+          gate: {
+            'Motivo OTP': 'Eliminazione prenotazione lavaggio — azione irreversibile.',
+          },
+          customer: {
+            Nome: b.customer_name || null,
+            Email: b.customer_email || null,
+            Telefono: b.customer_phone || null,
+          },
+          operation: {
+            'Tipo operazione': 'Elimina prenotazione lavaggio',
+            'Riferimento': bookingRef ? `DR7-${bookingRef}` : null,
+            Servizio: b.service_name || null,
+            Veicolo: b.vehicle_name || null,
+            Targa: b.vehicle_plate || null,
+            'Data appuntamento': fmtDateIt(String(b.appointment_date || '').split('T')[0]),
+            Ora: b.appointment_time || null,
+            'Importo totale': totalEur,
+            'Stato pagamento': b.payment_status || null,
+            'Stato prenotazione': b.status || null,
+          },
+          meta: { Operatore: operatorEmail, 'Data richiesta': nowIt },
+        } as unknown as Record<string, string | null | undefined>
+      }
+    }
+
+    // ─── prenotazione_lavaggio_conferma: nuova prenotazione — snapshot
+    // completo del wizard cosi' la direzione vede tutto il contesto
+    // prima di approvare la conferma.
+    if (code === 'prenotazione_lavaggio_conferma') {
+      const duration = getTotalDuration()
+      const categoryLabel = vehicleCategory === 'moto' ? 'Moto'
+        : vehicleCategory === 'urban' ? 'Auto urban'
+        : vehicleCategory === 'maxi' ? 'Auto maxi / SUV'
+        : vehicleCategory === 'aziendali' ? 'Aziendale'
+        : vehicleCategory || null
+      return {
+        gate: {
+          'Motivo OTP': 'Conferma prenotazione lavaggio — la direzione vuole approvare ogni nuova prenotazione.',
+        },
+        customer: {
+          Nome: cust?.full_name || null,
+          Email: cust?.email || null,
+          Telefono: cust?.phone || null,
+        },
+        operation: {
+          'Tipo operazione': 'Nuova prenotazione lavaggio',
+          Servizio: serviceLabel || null,
+          'Durata stimata': duration > 0 ? `${duration} min` : null,
+          Veicolo: vehicleMakeModel || null,
+          Targa: vehiclePlate || null,
+          'Tipo veicolo': categoryLabel,
+          'Data appuntamento': fmtDateIt(formData.appointment_date),
+          Ora: formData.appointment_time || null,
+          'Importo totale': getFinalPrice() > 0 ? fmtEur(getFinalPrice()) : null,
+          'Metodo pagamento': formData.payment_method || null,
+          'Stato pagamento': formData.payment_status || null,
+          Note: formData.notes || null,
+        },
+        meta: { Operatore: operatorEmail, 'Data richiesta': nowIt },
+      } as unknown as Record<string, string | null | undefined>
+    }
+
+    // ─── manual_category_carwash: la targa non e' nel DB, l'operatore
+    // chiede di selezionare categoria manualmente. Direzione vede targa
+    // + cliente + appuntamento per autorizzare in sicurezza.
+    if (code === 'manual_category_carwash') {
+      return {
+        gate: {
+          'Motivo OTP': `Targa "${vehiclePlate || '(non inserita)'}" non trovata nel database veicoli. L'operatore vuole selezionare la categoria manualmente.`,
+        },
+        customer: {
+          Nome: cust?.full_name || null,
+          Email: cust?.email || null,
+          Telefono: cust?.phone || null,
+        },
+        operation: {
+          'Tipo operazione': 'Selezione manuale categoria veicolo (targa sconosciuta)',
+          Targa: vehiclePlate || null,
+          Servizio: serviceLabel || null,
+          'Data appuntamento': fmtDateIt(formData.appointment_date),
+          Ora: formData.appointment_time || null,
+        },
+        meta: { Operatore: operatorEmail, 'Data richiesta': nowIt },
+      } as unknown as Record<string, string | null | undefined>
+    }
+
+    // ─── foreign_plate_carwash: targa estera, operatore chiede di
+    // procedere comunque. Categoria viene scelta dall'operatore.
+    if (code === 'foreign_plate_carwash') {
+      const categoryLabel = pendingForeignCategory === 'urban' ? 'URBAN'
+        : pendingForeignCategory === 'maxi' ? 'MAXI'
+        : pendingForeignCategory || null
+      return {
+        gate: {
+          'Motivo OTP': `Targa estera "${vehiclePlate || '(non inserita)'}" — il sistema non puo' classificare automaticamente. L'operatore propone categoria ${categoryLabel || '(in scelta)'}.`,
+        },
+        customer: {
+          Nome: cust?.full_name || null,
+          Email: cust?.email || null,
+          Telefono: cust?.phone || null,
+        },
+        operation: {
+          'Tipo operazione': 'Lavaggio targa estera',
+          Targa: vehiclePlate || null,
+          'Categoria scelta': categoryLabel,
+          Servizio: serviceLabel || null,
+          'Data appuntamento': fmtDateIt(formData.appointment_date),
+          Ora: formData.appointment_time || null,
+        },
+        meta: { Operatore: operatorEmail, 'Data richiesta': nowIt },
+      } as unknown as Record<string, string | null | undefined>
+    }
 
     // Carta Punti — riusa la stessa snapshot del wizard ma flagga il
     // metodo di pagamento così la direzione capisce subito perché serve
     // l'OTP, e include ogni dettaglio operativo utile per autorizzare.
     if (code === 'carta_punti_lavaggio') {
-      const categoryLabel = vehicleCategory === 'moto'
-        ? 'Moto'
-        : vehicleCategory === 'urban'
-          ? 'Auto urban'
-          : vehicleCategory === 'maxi'
-            ? 'Auto maxi / SUV'
-            : vehicleCategory === 'aziendali'
-              ? 'Aziendale'
-              : vehicleCategory || null
-      const operatorEmail = typeof window !== 'undefined'
-        ? (sessionStorage.getItem('admin-email') || null)
-        : null
+      const categoryLabel = vehicleCategory === 'moto' ? 'Moto'
+        : vehicleCategory === 'urban' ? 'Auto urban'
+        : vehicleCategory === 'maxi' ? 'Auto maxi / SUV'
+        : vehicleCategory === 'aziendali' ? 'Aziendale'
+        : vehicleCategory || null
       const duration = getTotalDuration()
       return {
-        Operazione: 'Pagamento Carta Punti (lavaggio)',
-        'Metodo pagamento': 'Carta Punti',
-        Cliente: cust?.full_name || null,
-        Email: cust?.email || null,
-        Telefono: cust?.phone || null,
-        Servizio: serviceLabel || null,
-        'Durata stimata': duration > 0 ? `${duration} min` : null,
-        Veicolo: vehicleMakeModel || null,
-        Targa: vehiclePlate || null,
-        'Tipo veicolo': categoryLabel,
-        'Data appuntamento': fmtDateIt(formData.appointment_date),
-        'Ora appuntamento': formData.appointment_time || null,
-        'Importo totale': getFinalPrice() > 0 ? fmtEur(getFinalPrice()) : null,
-        'Stato pagamento': formData.payment_status || null,
-        Note: formData.notes || null,
-        Operatore: operatorEmail,
-        'Data richiesta': new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      }
+        gate: {
+          'Motivo OTP': 'Pagamento con Carta Punti — ogni operazione richiede approvazione direzionale.',
+          'Metodo pagamento': 'Carta Punti',
+        },
+        customer: {
+          Nome: cust?.full_name || null,
+          Email: cust?.email || null,
+          Telefono: cust?.phone || null,
+        },
+        operation: {
+          'Tipo operazione': 'Nuova prenotazione lavaggio (Carta Punti)',
+          Servizio: serviceLabel || null,
+          'Durata stimata': duration > 0 ? `${duration} min` : null,
+          Veicolo: vehicleMakeModel || null,
+          Targa: vehiclePlate || null,
+          'Tipo veicolo': categoryLabel,
+          'Data appuntamento': fmtDateIt(formData.appointment_date),
+          'Ora appuntamento': formData.appointment_time || null,
+          'Importo totale': getFinalPrice() > 0 ? fmtEur(getFinalPrice()) : null,
+          'Stato pagamento': formData.payment_status || null,
+          Note: formData.notes || null,
+        },
+        meta: { Operatore: operatorEmail, 'Data richiesta': nowIt },
+      } as unknown as Record<string, string | null | undefined>
     }
 
+    // Fallback — qualsiasi altro codice OTP che non ha un branch dedicato
+    // sopra. Stessa filosofia: payload strutturato, l'auto-section nel
+    // server lo rendera' sezionato.
     return {
-      Operazione: editingBooking ? 'Modifica prenotazione lavaggio' : 'Nuova prenotazione lavaggio',
-      Cliente: cust?.full_name || null,
-      Email: cust?.email || null,
-      Telefono: cust?.phone || null,
-      Servizio: serviceLabel || null,
-      Veicolo: vehicleMakeModel || null,
-      'Data appuntamento': fmtDateIt(formData.appointment_date),
-      Ora: formData.appointment_time || null,
-      'Importo totale': getFinalPrice() > 0 ? fmtEur(getFinalPrice()) : null,
-    }
+      gate: {
+        'Motivo OTP': editingBooking ? 'Modifica prenotazione lavaggio' : 'Nuova prenotazione lavaggio',
+      },
+      customer: {
+        Nome: cust?.full_name || null,
+        Email: cust?.email || null,
+        Telefono: cust?.phone || null,
+      },
+      operation: {
+        'Tipo operazione': editingBooking ? 'Modifica prenotazione lavaggio' : 'Nuova prenotazione lavaggio',
+        Servizio: serviceLabel || null,
+        Veicolo: vehicleMakeModel || null,
+        Targa: vehiclePlate || null,
+        'Data appuntamento': fmtDateIt(formData.appointment_date),
+        Ora: formData.appointment_time || null,
+        'Importo totale': getFinalPrice() > 0 ? fmtEur(getFinalPrice()) : null,
+      },
+      meta: { Operatore: operatorEmail, 'Data richiesta': nowIt },
+    } as unknown as Record<string, string | null | undefined>
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     override.limitationState.limitationCode,
