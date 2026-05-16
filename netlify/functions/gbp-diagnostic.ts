@@ -156,12 +156,61 @@ const handler: Handler = async () => {
     } catch { /* skip */ }
   }
 
-  // SKIP accounts.list se la location e' gia' cachata — non ha senso
-  // bruciare quota per riverificare quello che gia' sappiamo.
+  // Se cachata, testiamo direttamente il Performance API per vedere
+  // l'errore VERO (quota? NOT_FOUND? PERMISSION_DENIED?). Sappiamo gia'
+  // che la location e' settata — il nodo del problema e' la chiamata
+  // metrics, non quella di scoperta.
   if (diag.location_cache.name) {
-    diag.accounts_test.status = 'skipped'
-    diag.accounts_test.error = 'Skipped — location gia\' cachata (' + diag.location_cache.name + '). Niente chiamata reale per non bruciare quota.'
     diag.accounts_test.accounts_found = 1
+    try {
+      const params = new URLSearchParams()
+      params.append('dailyMetrics', 'BUSINESS_IMPRESSIONS_DESKTOP_MAPS')
+      const end = new Date()
+      const start = new Date(Date.now() - 7 * 86400000)
+      params.append('dailyRange.start_date.year', String(start.getUTCFullYear()))
+      params.append('dailyRange.start_date.month', String(start.getUTCMonth() + 1))
+      params.append('dailyRange.start_date.day', String(start.getUTCDate()))
+      params.append('dailyRange.end_date.year', String(end.getUTCFullYear()))
+      params.append('dailyRange.end_date.month', String(end.getUTCMonth() + 1))
+      params.append('dailyRange.end_date.day', String(end.getUTCDate()))
+
+      const url = `https://businessprofileperformance.googleapis.com/v1/${diag.location_cache.name}:fetchMultiDailyMetricsTimeSeries?${params.toString()}`
+      const r = await oauth2.request<any>({ url, method: 'GET' })
+      diag.accounts_test.status = 'ok'
+      const rowCount = r.data?.multiDailyMetricTimeSeries?.[0]?.dailyMetricTimeSeries?.[0]?.timeSeries?.datedValues?.length || 0
+      diag.recommendations.push(`Performance API risponde: ${rowCount} giorni di dati negli ultimi 7gg. Se tutto e' a 0, la location non ha attivita' tracciata.`)
+    } catch (e: any) {
+      diag.accounts_test.status = 'failed'
+      // Estrai codice/status reale dall'errore Google
+      const code = e?.code || e?.response?.status || e?.status
+      const detail = e?.errors?.[0]?.message || e?.response?.data?.error?.message || e?.message || String(e)
+      const reason = e?.response?.data?.error?.status || e?.response?.data?.error?.errors?.[0]?.reason || ''
+      diag.accounts_test.error = `[${code}/${reason}] ${detail}`
+
+      const txt = `${code} ${reason} ${detail}`.toLowerCase()
+      if (/quota|rate.?limit|resource_exhausted|429/i.test(txt)) {
+        diag.accounts_test.error_classification = 'quota'
+        diag.recommendations.push('Performance API ha esaurito la quota — richiedi aumento su Cloud Console.')
+      } else if (/not.?found|404/i.test(txt)) {
+        diag.accounts_test.error_classification = 'other'
+        diag.recommendations.push(
+          `La location "${diag.location_cache.name}" NON ESISTE per il Performance API. ` +
+          `Significa che l'ID che hai inserito manualmente (il CID dei Maps) non e' il vero location ID GBP. ` +
+          `Devi recuperarlo da business.google.com — l'URL ti dara' un numero diverso.`
+        )
+      } else if (/permission|403/i.test(txt)) {
+        diag.accounts_test.error_classification = 'auth'
+        diag.recommendations.push(
+          `L'account Google ${diag.oauth.connected_email} NON ha permessi su questa location. ` +
+          `Devi connettere l'account che possiede/gestisce la scheda DR7 su Google Business Profile.`
+        )
+      } else if (/invalid|400/i.test(txt)) {
+        diag.accounts_test.error_classification = 'other'
+        diag.recommendations.push(`Formato richiesta non valido: ${detail}`)
+      } else {
+        diag.accounts_test.error_classification = 'other'
+      }
+    }
   } else if (hasBusinessScope) {
     // Test reale solo se non abbiamo location cache: classifica l'errore
     try {
