@@ -284,6 +284,12 @@ export function getEarliestValidPickupTime(
         // Lavaggio Rientro is the internal post-rental cleaning slot — handover
         // is already covered by rental_buffer_minutes, don't double-block.
         if (isLavaggioRientro(booking)) return false
+        // BUG FIX 2026-05-16: skip 0-min bookings (pickup === dropoff).
+        // Sono dati corrotti legacy che bloccavano slot senza motivo.
+        if (booking.pickup_date && booking.dropoff_date &&
+            new Date(booking.pickup_date).getTime() === new Date(booking.dropoff_date).getTime()) {
+          return false
+        }
         // Pending Nexi Pay by Link bookings BLOCK the slot for 1 hour while awaiting payment
         return matchVehicleByPlate(booking, vehicle)
     })
@@ -435,6 +441,15 @@ export function isVehicleAvailable(
         // Lavaggio Rientro is the internal post-rental cleaning slot — handover
         // is already covered by rental_buffer_minutes, don't double-block.
         if (isLavaggioRientro(booking)) return false
+        // BUG FIX 2026-05-16: skip booking corrotti con pickup === dropoff
+        // (durata 0 minuti). Erano dati legacy che bloccavano slot inutilmente
+        // mostrando "Slot non disponibile" per intervalli di 0 minuti — non
+        // un vero conflitto. I car wash hanno service_type filtrato altrove,
+        // qui escludiamo solo i noleggi corrotti.
+        if (booking.pickup_date && booking.dropoff_date &&
+            new Date(booking.pickup_date).getTime() === new Date(booking.dropoff_date).getTime()) {
+          return false
+        }
 
         // CRITICAL: Skip linked car wash bookings when extending a rental
         // Car wash bookings are automatically created/updated, so they shouldn't block extensions
@@ -536,6 +551,11 @@ export function isVehicleAvailable(
         if (booking.service_type && booking.service_type !== 'car_rental') continue
         // Same-vehicle conflicts are already covered above with the 75-min buffer.
         if (matchVehicleByPlate(booking, vehicle)) continue
+        // BUG FIX 2026-05-16: skip 0-min bookings.
+        if (booking.pickup_date && booking.dropoff_date &&
+            new Date(booking.pickup_date).getTime() === new Date(booking.dropoff_date).getTime()) {
+          continue
+        }
 
         const otherPickup = new Date(booking.pickup_date).getTime()
         const otherDropoff = new Date(booking.dropoff_date).getTime()
