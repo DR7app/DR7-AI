@@ -423,6 +423,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   // checkbox is checked.
   const [includeCoefficienti, setIncludeCoefficienti] = useState<boolean>(false)
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [searchQuery, setSearchQuery] = useState<string>('')
   // Modal "Rifiutato" — stato isolato dentro PreventivoRejectModal e aperto
   // tramite CustomEvent su window, così aprirlo NON ri-renderizza l'intera
   // lista preventivi (era il motivo dei 15 sec di apertura).
@@ -2629,7 +2630,21 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   const sortArrow = (field: typeof sortField) => sortField === field ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''
 
   const filtered = useMemo(() => {
-    const list = (statusFilter === 'all' || statusFilter === '__no_cauzione__') ? preventivi : preventivi.filter(p => p.status === statusFilter)
+    let list = (statusFilter === 'all' || statusFilter === '__no_cauzione__') ? preventivi : preventivi.filter(p => p.status === statusFilter)
+    // Search by customer name / phone / email / vehicle name / plate.
+    // Case-insensitive, normalizes spaces. Empty query = no filter.
+    const q = searchQuery.trim().toLowerCase()
+    if (q) {
+      list = list.filter(p => {
+        const fields = [
+          p.customer_name,
+          p.customer_phone,
+          p.vehicle_name,
+          p.vehicle_plate,
+        ]
+        return fields.some(v => (v || '').toString().toLowerCase().includes(q))
+      })
+    }
     return [...list].sort((a, b) => {
       let va: any, vb: any
       if (sortField === 'created_at' || sortField === 'pickup_date') {
@@ -2639,7 +2654,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       }
       return sortDir === 'asc' ? va - vb : vb - va
     })
-  }, [preventivi, statusFilter, sortField, sortDir]
+  }, [preventivi, statusFilter, searchQuery, sortField, sortDir]
   )
 
   // ─── RENDER ─────────────────────────────────────────────────────────────
@@ -2651,6 +2666,32 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h2 className="text-2xl font-bold text-theme-text-primary">Preventivi</h2>
           <Button onClick={() => { resetForm(); setEditingId(null); setView('form') }}>+ Nuovo Preventivo</Button>
+        </div>
+
+        {/* Search box: cliente, telefono, email, veicolo, targa */}
+        <div className="relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Cerca cliente, telefono, veicolo o targa..."
+            className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-10 pr-10 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary"
+              aria-label="Pulisci ricerca"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Subtab Switch */}
