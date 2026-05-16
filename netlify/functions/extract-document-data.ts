@@ -203,18 +203,34 @@ export const handler: Handler = async (event) => {
         let imageContent: any;
 
         if (imageBase64) {
-            // Direct base64 image
-            const mediaType = imageBase64.startsWith('/9j/') ? 'image/jpeg' :
-                             imageBase64.startsWith('iVBORw') ? 'image/png' :
-                             'image/jpeg';
-            imageContent = {
-                type: 'image',
-                source: {
-                    type: 'base64',
-                    media_type: mediaType,
-                    data: imageBase64
-                }
-            };
+            // Direct base64. Detect file type from leading bytes — supporta
+            // jpeg, png, webp, gif e PDF (l'API Claude accetta PDF via
+            // type=document, non type=image).
+            const isPdf = imageBase64.startsWith('JVBERi')
+            if (isPdf) {
+                imageContent = {
+                    type: 'document',
+                    source: {
+                        type: 'base64',
+                        media_type: 'application/pdf',
+                        data: imageBase64
+                    }
+                };
+            } else {
+                const mediaType = imageBase64.startsWith('/9j/') ? 'image/jpeg' :
+                                 imageBase64.startsWith('iVBORw') ? 'image/png' :
+                                 imageBase64.startsWith('R0lGOD') ? 'image/gif' :
+                                 imageBase64.startsWith('UklGR') ? 'image/webp' :
+                                 'image/jpeg';
+                imageContent = {
+                    type: 'image',
+                    source: {
+                        type: 'base64',
+                        media_type: mediaType,
+                        data: imageBase64
+                    }
+                };
+            }
         } else if (imageUrl) {
             // URL-based image
             imageContent = {

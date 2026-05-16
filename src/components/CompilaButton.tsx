@@ -68,7 +68,25 @@ interface CompilaButtonProps {
   disabled?: boolean
 }
 
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = String(reader.result || '')
+      const base64 = result.includes(',') ? result.split(',')[1] : result
+      resolve(base64)
+    }
+    reader.onerror = () => reject(new Error(`Lettura file fallita: ${file.name}`))
+    reader.readAsDataURL(file)
+  })
+}
+
 async function compressImage(file: File, maxSizeKB = 4000, maxDim = 3000): Promise<string> {
+  // Non-image files (PDF, etc): skip canvas compression, base64-encode raw.
+  // Claude Vision supporta PDF nativamente via type=document.
+  if (!file.type.startsWith('image/')) {
+    return fileToBase64(file)
+  }
   return new Promise((resolve, reject) => {
     const img = new Image()
     const url = URL.createObjectURL(file)
@@ -94,7 +112,11 @@ async function compressImage(file: File, maxSizeKB = 4000, maxDim = 3000): Promi
       }
       resolve(base64)
     }
-    img.onerror = reject
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      // Fallback: encode raw bytes so unknown image formats still go to OCR.
+      fileToBase64(file).then(resolve).catch(reject)
+    }
     img.src = url
   })
 }
@@ -285,7 +307,11 @@ export default function CompilaButton({
         onDataExtracted(safeData, [])
       }
     } catch (err: any) {
-      onError?.(err.message || 'Errore durante la lettura del documento')
+      console.error('[CompilaButton] handleCompila error:', err)
+      const msg = err?.message
+        ? `Errore durante la lettura del documento: ${err.message}`
+        : 'Errore durante la lettura del documento (vedi console per dettagli)'
+      onError?.(msg)
     } finally {
       setIsExtracting(false)
     }
