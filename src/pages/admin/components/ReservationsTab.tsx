@@ -3282,6 +3282,35 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         : (booking.booking_details?.km_limit
             || (typeof booking.booking_details?.kmPackage?.includedKm === 'number' ? String(booking.booking_details.kmPackage.includedKm) : null)
             || DEFAULT_KM_LIMIT),
+      // 2026-05-17: ripristina pacchetti KM extra dal booking esistente
+      // cosi' l'admin vede subito quali ha comprato il cliente e puo'
+      // aggiungerne/rimuoverne. Senza questa restore il modal apriva
+      // con km_packages={} (vuoto) → l'operatore non vedeva il pacchetto
+      // gia' acquistato e quando ne aggiungeva uno nuovo, il ricalcolo
+      // appariva come se fosse l'unico (subtotale rimaneva apparentemente
+      // invariato perche\' il vecchio pacchetto era invisibile).
+      km_packages: (() => {
+        const out: Record<string, number> = {}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const raw = (booking.booking_details as any)?.km_packages
+        if (Array.isArray(raw)) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          for (const p of raw as any[]) {
+            if (!p || !p.id) continue
+            const q = Number(p.quantity) || 1
+            if (q > 0) out[String(p.id)] = q
+          }
+        }
+        // Backward-compat: legacy single-package shape booking_details.km_package
+        // (object) with id + quantity.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const single = (booking.booking_details as any)?.km_package
+        if (single && typeof single === 'object' && single.id && !out[single.id]) {
+          const q = Number(single.quantity) || 1
+          if (q > 0) out[String(single.id)] = q
+        }
+        return out
+      })(),
       // Home Delivery & Pickup
       delivery_enabled: booking.delivery_enabled || booking.booking_details?.delivery_enabled || false,
       delivery_street: booking.delivery_address?.street || booking.booking_details?.delivery_address?.street || '',
