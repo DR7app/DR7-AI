@@ -592,12 +592,16 @@ export const handler: Handler = async (event) => {
         let vehicleCategoryLabel: string = vehicleCategory
         let proInsuranceText: string | null = null
         let proPenaltyText: string | null = null
+        // 2026-05-17: hoist a scope esterno cosi' la lookup sforo (sotto) puo'
+        // riutilizzare la stessa fetch invece di chiamare Supabase due volte.
+        let cpCfg: { config?: Record<string, unknown> } | null = null
         try {
-            const { data: cpCfg } = await supabase
+            const { data } = await supabase
                 .from('centralina_pro_config')
                 .select('config')
                 .eq('id', 'main')
                 .maybeSingle()
+            cpCfg = data as { config?: Record<string, unknown> } | null
             const cfg = (cpCfg?.config || {}) as {
                 categories?: { id: string; label: string }[]
                 contract_clauses?: Record<string, { insurance_text?: string; penalty_text?: string }>
@@ -945,8 +949,48 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'LivelloCarburante': '',
             'VehicleKMRange': '',
             'KMRange': '',
-            'KMOverageFee': booking.km_overage_fee ? `€${(booking.km_overage_fee).toFixed(2)}` : '',
-            'SforoPerKM': booking.km_overage_fee ? `€${(booking.km_overage_fee).toFixed(2)}` : '',
+            'KMOverageFee': (() => {
+                // 2026-05-17: fallback su Centralina Pro per categoria veicolo.
+                // Prima usavamo solo booking.km_overage_fee — se la booking
+                // era stata creata senza quel campo (admin booking senza
+                // pacchetto km, importi vecchi), il contratto mostrava sforo
+                // vuoto. Ora leggiamo da centralina_pro_config.km[<cat>].sforo
+                // come fallback.
+                if (booking.km_overage_fee && Number(booking.km_overage_fee) > 0) {
+                    return `€${Number(booking.km_overage_fee).toFixed(2)}`
+                }
+                const vehCat = String(vehicleCategory || '').toLowerCase()
+                const proKm = (cpCfg?.config as { km?: Array<{ id: string; sforo?: number | string }> } | null)?.km
+                if (Array.isArray(proKm)) {
+                    const aliases = (vehCat === 'supercars' || vehCat === 'supercar' || vehCat === 'exotic')
+                        ? ['supercars', 'supercar', 'exotic']
+                        : [vehCat]
+                    for (const a of aliases) {
+                        const entry = proKm.find(k => String(k.id).toLowerCase() === a)
+                        const v = Number(entry?.sforo)
+                        if (Number.isFinite(v) && v > 0) return `€${v.toFixed(2)}`
+                    }
+                }
+                return ''
+            })(),
+            'SforoPerKM': (() => {
+                if (booking.km_overage_fee && Number(booking.km_overage_fee) > 0) {
+                    return `€${Number(booking.km_overage_fee).toFixed(2)}`
+                }
+                const vehCat = String(vehicleCategory || '').toLowerCase()
+                const proKm = (cpCfg?.config as { km?: Array<{ id: string; sforo?: number | string }> } | null)?.km
+                if (Array.isArray(proKm)) {
+                    const aliases = (vehCat === 'supercars' || vehCat === 'supercar' || vehCat === 'exotic')
+                        ? ['supercars', 'supercar', 'exotic']
+                        : [vehCat]
+                    for (const a of aliases) {
+                        const entry = proKm.find(k => String(k.id).toLowerCase() === a)
+                        const v = Number(entry?.sforo)
+                        if (Number.isFinite(v) && v > 0) return `€${v.toFixed(2)}`
+                    }
+                }
+                return ''
+            })(),
 
 
             // Rental Specifics — resolve location IDs to addresses

@@ -233,11 +233,11 @@ export function convertProToRentalConfig(pro: ProSnapshot): RentalConfig {
             const sconto = num(p.sconto_pct)
             const price = Math.round((km * sforoPerKm * (1 - sconto / 100)) * 100) / 100
             const label = String(p.label || '').trim() || `Pacchetto ${km} km`
-            // 2026-05-16: pacchetti >=300 km SEMPRE quantity-buyable (richiesta
-            // utente: 300 km deve avere il + per arrivare a 2 sul wizard).
-            // 100/200 restano si/no di default (toggle admin opzionale).
+            // 2026-05-17: pacchetti >=300 km SEMPRE quantity-buyable, con
+            // max_quantity 99 (effettivamente illimitato — direzione vuole
+            // poter aggiungere 300 km piu' volte senza tetto).
             const isQty = km >= 300 || p.is_quantity_buyable === true
-            const maxQ = isQty ? Math.max(2, num(p.max_quantity) || 2) : 1
+            const maxQ = isQty ? Math.max(99, num(p.max_quantity) || 99) : 1
             return { id: String(p.id), km, sconto_pct: sconto, price, label, is_quantity_buyable: isQty, max_quantity: maxQ }
           })
           .filter(p => p.km > 0)
