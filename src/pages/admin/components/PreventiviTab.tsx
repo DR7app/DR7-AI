@@ -6,6 +6,7 @@ import { appendPreventivoEvent } from '../../../utils/preventivoEvents'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { buildConfigOverlay } from '../../../utils/configOverlay'
 import { getKmIncluded, getInsuranceOptions, getUnlimitedKmPrice } from '../../../utils/configLookup'
+import { resolvePacchetti } from '../../../utils/pacchettiResolver'
 import type { RentalConfig } from '../../../types/rentalConfig'
 import Input from './Input'
 import Select from './Select'
@@ -1043,16 +1044,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       if (!kmPkgs || Object.keys(kmPkgs).length === 0) return 0
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; price: number }>> | undefined
-      if (!pkgsByCat) return 0
-      const cat = String(selectedVehicle?.category || '').toLowerCase().trim()
-      const aliases = (cat === 'supercars' || cat === 'supercar') ? ['supercars', 'supercar', 'exotic']
-                    : cat === 'exotic' ? ['exotic', 'supercars', 'supercar']
-                    : [cat]
-      let catPkgs: Array<{ id: string; price: number }> = []
-      for (const k of aliases) {
-        const v = pkgsByCat[k]
-        if (Array.isArray(v) && v.length > 0) { catPkgs = v; break }
-      }
+      const catPkgs = resolvePacchetti(selectedVehicle?.category, pkgsByCat)
       if (catPkgs.length === 0) return 0
       let sum = 0
       for (const pkg of catPkgs) {
@@ -2228,31 +2220,21 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             // rentalConfig.pacchetti_km. Una riga per pacchetto, formato:
             // "<NomeServizio> <km> Km = <importo>" (× N quando qty > 1).
             const kmPkgs = (extras?.km_packages || {}) as Record<string, number>
-            const cat = String(p.vehicle_category || '').toLowerCase().trim()
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; km: number; sconto_pct: number; price: number; label: string; is_quantity_buyable?: boolean; max_quantity?: number }>> | undefined
-            if (cat && pkgsByCat) {
-              const aliases = (cat === 'supercars' || cat === 'supercar') ? ['supercars', 'supercar', 'exotic']
-                            : cat === 'exotic' ? ['exotic', 'supercars', 'supercar']
-                            : [cat]
-              let catPkgs: typeof pkgsByCat[string] = []
-              for (const k of aliases) {
-                const arr = pkgsByCat[k]
-                if (Array.isArray(arr) && arr.length > 0) { catPkgs = arr; break }
-              }
-              for (const pkg of catPkgs) {
-                const qty = kmPkgs[pkg.id] || 0
-                if (qty <= 0) continue
-                const cap = pkg.is_quantity_buyable ? Math.max(1, Number(pkg.max_quantity) || 2) : 1
-                const q = Math.max(0, Math.min(cap, qty))
-                if (q <= 0) continue
-                const totalKm = pkg.km * q
-                const totalPrice = Math.round(pkg.price * q * 100) / 100
-                const labelStr = q > 1
-                  ? `${pkg.label} × ${q} ${totalKm} Km`
-                  : `${pkg.label} ${totalKm} Km`
-                lines.push(`${labelStr} = ${formatEur(totalPrice)}`)
-              }
+            const catPkgs = resolvePacchetti(p.vehicle_category, pkgsByCat)
+            for (const pkg of catPkgs) {
+              const qty = kmPkgs[pkg.id] || 0
+              if (qty <= 0) continue
+              const cap = pkg.is_quantity_buyable ? Math.max(1, Number(pkg.max_quantity) || 2) : 1
+              const q = Math.max(0, Math.min(cap, qty))
+              if (q <= 0) continue
+              const totalKm = pkg.km * q
+              const totalPrice = Math.round(pkg.price * q * 100) / 100
+              const labelStr = q > 1
+                ? `${pkg.label} × ${q} ${totalKm} Km`
+                : `${pkg.label} ${totalKm} Km`
+              lines.push(`${labelStr} = ${formatEur(totalPrice)}`)
             }
             // Legacy: experience_km_quotes (Servizi Extra al km, vecchio
             // catalogo). Mantenuto per backward-compat.
@@ -3803,19 +3785,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
               (popolato in convertProConfig). Mutuamente esclusivo con
               include_unlimited_km. */}
           {(() => {
-            const cat = String(selectedVehicle?.category || '').toLowerCase().trim()
-            if (!cat) return null
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; km: number; sconto_pct: number; price: number; label: string }>> | undefined
-            if (!pkgsByCat) return null
-            const aliases = cat === 'supercars' ? ['supercars', 'exotic']
-                          : cat === 'exotic' ? ['exotic', 'supercars']
-                          : [cat]
-            let pkgs: Array<{ id: string; km: number; sconto_pct: number; price: number; label: string }> = []
-            for (const k of aliases) {
-              const v = pkgsByCat[k]
-              if (Array.isArray(v) && v.length > 0) { pkgs = v; break }
-            }
+            const pkgs = resolvePacchetti(selectedVehicle?.category, pkgsByCat)
             if (pkgs.length === 0) return null
             return (
               <div className="ml-1 mt-1 space-y-1">

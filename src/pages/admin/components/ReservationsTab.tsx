@@ -90,6 +90,7 @@ import {
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { buildConfigOverlay, getVehicleSforoOverride } from '../../../utils/configOverlay'
 import { getKmIncluded, getUnlimitedKmPrice as getUnlimitedKmPriceFromConfig, getInsuranceOptions as getInsuranceOptionsFromConfig, getInsuranceNameById } from '../../../utils/configLookup'
+import { resolvePacchetti } from '../../../utils/pacchettiResolver'
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
 
 // --- Kasko Constants & Types ---
@@ -1158,16 +1159,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 if (!kmPkgs || Object.keys(kmPkgs).length === 0) return 0
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; price: number }>> | undefined
-                if (!pkgsByCat) return 0
-                const cat = String(selectedVehicle?.category || '').toLowerCase().trim()
-                const aliases = cat === 'supercars' ? ['supercars', 'exotic']
-                              : cat === 'exotic' ? ['exotic', 'supercars']
-                              : [cat]
-                let catPkgs: Array<{ id: string; price: number }> = []
-                for (const k of aliases) {
-                  const v = pkgsByCat[k]
-                  if (Array.isArray(v) && v.length > 0) { catPkgs = v; break }
-                }
+                const catPkgs = resolvePacchetti(selectedVehicle?.category, pkgsByCat)
                 if (catPkgs.length === 0) return 0
                 let sum = 0
                 for (const pkg of catPkgs) {
@@ -1282,16 +1274,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (!kmPkgs || Object.keys(kmPkgs).length === 0) return 0
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; price: number }>> | undefined
-        if (!pkgsByCat) return 0
-        const cat = String(selectedVehicle?.category || '').toLowerCase().trim()
-        const aliases = cat === 'supercars' ? ['supercars', 'exotic']
-                      : cat === 'exotic' ? ['exotic', 'supercars']
-                      : [cat]
-        let catPkgs: Array<{ id: string; price: number }> = []
-        for (const k of aliases) {
-          const v = pkgsByCat[k]
-          if (Array.isArray(v) && v.length > 0) { catPkgs = v; break }
-        }
+        const catPkgs = resolvePacchetti(selectedVehicle?.category, pkgsByCat)
         if (catPkgs.length === 0) return 0
         let sum = 0
         for (const pkg of catPkgs) {
@@ -5236,18 +5219,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             if (formData.unlimited_km) return []
             const list = formData.km_packages || {}
             const v = vehicles.find(vv => vv.id === formData.vehicle_id)
-            const cat = String(v?.category || '').toLowerCase().trim()
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; km: number; sconto_pct: number; price: number; label: string; is_quantity_buyable?: boolean; max_quantity?: number }>> | undefined
-            if (!cat || !pkgsByCat) return []
-            const aliases = cat === 'supercars' ? ['supercars', 'exotic']
-                          : cat === 'exotic' ? ['exotic', 'supercars']
-                          : [cat]
-            let pkgs: typeof pkgsByCat[string] = []
-            for (const k of aliases) {
-              const arr = pkgsByCat[k]
-              if (Array.isArray(arr) && arr.length > 0) { pkgs = arr; break }
-            }
+            const pkgs = resolvePacchetti(v?.category, pkgsByCat)
             const out: Array<{ id: string; label: string; km: number; sconto_pct: number; price: number; quantity: number; total_km: number; total_price: number }> = []
             for (const found of pkgs) {
               const q = list[found.id] || 0
@@ -7978,16 +7952,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             if (!kmPkgs || Object.keys(kmPkgs).length === 0) return 0
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; price: number }>> | undefined
-                            if (!pkgsByCat) return 0
-                            const cat = String(sv?.category || '').toLowerCase().trim()
-                            const aliases = cat === 'supercars' ? ['supercars', 'exotic']
-                                          : cat === 'exotic' ? ['exotic', 'supercars']
-                                          : [cat]
-                            let catPkgs: Array<{ id: string; price: number }> = []
-                            for (const k of aliases) {
-                              const v = pkgsByCat[k]
-                              if (Array.isArray(v) && v.length > 0) { catPkgs = v; break }
-                            }
+                            const catPkgs = resolvePacchetti(sv?.category, pkgsByCat)
                             if (catPkgs.length === 0) return 0
                             let sum = 0
                             for (const pkg of catPkgs) {
@@ -8361,14 +8326,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     </div>
                   )
                 }
-                const aliases = cat === 'supercars' ? ['supercars', 'exotic']
-                              : cat === 'exotic' ? ['exotic', 'supercars']
-                              : [cat]
-                let pkgs: Array<{ id: string; km: number; sconto_pct: number; price: number; label: string }> = []
-                for (const k of aliases) {
-                  const v = pkgsByCat[k]
-                  if (Array.isArray(v) && v.length > 0) { pkgs = v; break }
-                }
+                const pkgs = resolvePacchetti(cat, pkgsByCat)
                 if (pkgs.length === 0) {
                   return (
                     <div className="mt-2 p-3 rounded-md border border-dashed border-theme-border bg-theme-bg-tertiary/30 text-xs text-theme-text-muted">
