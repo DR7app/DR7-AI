@@ -352,13 +352,27 @@ export const handler: Handler = async (event) => {
         const websiteIncludedKm = Number.isFinite(includedKmNum) && includedKmNum > 0 && includedKmNum < 9999
             ? String(includedKmNum)
             : null
+        // 2026-05-17: coercion a stringa per evitare TypeError su .includes()
+        // se km_limit e' stato salvato come numero. Inoltre: se il sito ha
+        // venduto un pacchetto km, kmPackage.includedKm e' la fonte di
+        // verita' (base + pacchetto) — preferiamo quella sul km_limit raw
+        // (che a volte conteneva solo i km base, ignorando il pacchetto).
+        const rawKmLimitStr = rawKmLimit == null ? null : String(rawKmLimit)
+        const rawKmLimitNum = Number(rawKmLimitStr)
+        const baseKmFromRaw = Number.isFinite(rawKmLimitNum) && rawKmLimitNum > 0 ? rawKmLimitNum : 0
+        const totalFromPackage = Number.isFinite(includedKmNum) && includedKmNum > 0 && includedKmNum < 9999 ? includedKmNum : 0
+        // Quando il pacchetto include piu' km del km_limit base, usiamo
+        // l'includedKm del pacchetto (ha gia' sommato base + extra acquistati).
+        const preferPackage = totalFromPackage > baseKmFromRaw
         const kmLimitRaw = isUnlimitedKm
             ? 'Illimitati'
-            : (rawKmLimit && rawKmLimit !== '0' && rawKmLimit !== 'Illimitati'
-                ? rawKmLimit
-                : (websiteIncludedKm
-                    || booking.booking_details?.total_km
-                    || 'Illimitati'))
+            : (preferPackage
+                ? String(totalFromPackage)
+                : (rawKmLimitStr && rawKmLimitStr !== '0' && rawKmLimitStr !== 'Illimitati'
+                    ? rawKmLimitStr
+                    : (websiteIncludedKm
+                        || booking.booking_details?.total_km
+                        || 'Illimitati')))
         // Format KM limit for contract display
         let kmLimitValue: string
         if (kmLimitRaw === '50/giorno') {
