@@ -314,6 +314,49 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // 2026-05-17 BUG FIX: invia anche un MESSAGGIO TESTUALE separato
+        // PRIMA del PDF, cosi' il cliente riceve almeno la conferma
+        // payment_received_damages anche se il PDF send fallisce.
+        // Prima il flusso "segna pagato" inviava SOLO il PDF — se PDF
+        // generation/upload/send falliva il cliente non riceveva NULLA
+        // (caso reale 2026-05-17: penali pagati senza fattura ne' msg).
+        try {
+            const customerPhoneForMsg = invoice.customer_phone || resolvedPhone || ''
+            if (customerPhoneForMsg && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+                let cleanPhone = customerPhoneForMsg.replace(/[\s\-\+\(\)]/g, '')
+                if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
+                if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
+
+                const amountEur = Number(invoice.totale || invoice.subtotale || 0).toFixed(2)
+                const custName = invoice.customer_name || invoice.cliente_nome || invoice.denominazione || 'Cliente'
+                // type sent in body — use 'penali' or 'danni' from request
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const bodyType = (typeof type === 'string' ? type : 'penali') as string
+                const paymentType = bodyType === 'danni' ? 'danni' : bodyType === 'penali' ? 'penali' : 'danni/penali'
+                const msg = await renderTemplate('payment_received_damages', { custName, amountEur, paymentType })
+                if (msg) {
+                    const sendUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
+                    const r = await fetch(sendUrl, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ chatId: `${cleanPhone}@c.us`, message: msg })
+                    })
+                    if (r.ok) console.log('[Penalty Invoice] Conferma testuale payment_received_damages inviata')
+                    else console.error('[Penalty Invoice] payment_received_damages send failed:', await r.text())
+                } else {
+                    console.log('[Penalty Invoice] Template payment_received_damages missing — fallback to generic text')
+                    // Fallback hardcoded cosi' il cliente sa comunque che ha pagato
+                    const fallback = `Ciao ${custName}, abbiamo ricevuto il tuo pagamento di €${amountEur} per ${paymentType}. La fattura ti arrivera' tra poco. Grazie — DR7`
+                    const sendUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
+                    await fetch(sendUrl, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ chatId: `${cleanPhone}@c.us`, message: fallback })
+                    })
+                }
+            }
+        } catch (msgErr: any) {
+            console.error('[Penalty Invoice] Text confirmation send failed (non-blocking):', msgErr?.message || msgErr)
+        }
+
         // --- Generate PDF, upload to storage, send via WhatsApp ---
         let pdfUrl: string | null = null
         try {
