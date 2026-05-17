@@ -353,21 +353,43 @@ export const handler: Handler = async (event) => {
             ? String(includedKmNum)
             : null
         // 2026-05-17: coercion a stringa per evitare TypeError su .includes()
-        // se km_limit e' stato salvato come numero. Inoltre: se il sito ha
-        // venduto un pacchetto km, kmPackage.includedKm e' la fonte di
-        // verita' (base + pacchetto) — preferiamo quella sul km_limit raw
-        // (che a volte conteneva solo i km base, ignorando il pacchetto).
+        // se km_limit e' stato salvato come numero.
         const rawKmLimitStr = rawKmLimit == null ? null : String(rawKmLimit)
         const rawKmLimitNum = Number(rawKmLimitStr)
         const baseKmFromRaw = Number.isFinite(rawKmLimitNum) && rawKmLimitNum > 0 ? rawKmLimitNum : 0
-        const totalFromPackage = Number.isFinite(includedKmNum) && includedKmNum > 0 && includedKmNum < 9999 ? includedKmNum : 0
-        // Quando il pacchetto include piu' km del km_limit base, usiamo
-        // l'includedKm del pacchetto (ha gia' sommato base + extra acquistati).
-        const preferPackage = totalFromPackage > baseKmFromRaw
+
+        // Admin shape (NUOVO 2026-05-16): booking_details.km_packages e' una
+        // LISTA di pacchetti, ciascuno con { km, quantity, total_km, ... }.
+        // Sommiamo total_km di tutti i pacchetti acquistati. Questo va
+        // AGGIUNTO al km base (km_limit raw) — al contrario del website
+        // shape dove includedKm gia' include tutto.
+        const adminKmPackages = Array.isArray(booking.booking_details?.km_packages)
+            ? booking.booking_details?.km_packages as Array<{ total_km?: number | string }>
+            : []
+        const adminPackageKmTotal = adminKmPackages.reduce((acc, p) => {
+            const t = Number(p?.total_km)
+            return acc + (Number.isFinite(t) && t > 0 ? t : 0)
+        }, 0)
+
+        // Website shape: kmPackage.includedKm gia' INCLUDE base + pacchetto.
+        const totalFromWebsitePackage = Number.isFinite(includedKmNum) && includedKmNum > 0 && includedKmNum < 9999 ? includedKmNum : 0
+
+        // Calcolo del km totale che andra' sul contratto:
+        //  - Se admin shape (km_packages array > 0): base raw + somma pacchetti
+        //  - Else if website shape (kmPackage.includedKm > 0): usa direttamente quello
+        //  - Else: usa km_limit raw
+        let computedTotalKm = 0
+        if (adminPackageKmTotal > 0) {
+            computedTotalKm = baseKmFromRaw + adminPackageKmTotal
+        } else if (totalFromWebsitePackage > 0) {
+            computedTotalKm = totalFromWebsitePackage
+        } else {
+            computedTotalKm = baseKmFromRaw
+        }
         const kmLimitRaw = isUnlimitedKm
             ? 'Illimitati'
-            : (preferPackage
-                ? String(totalFromPackage)
+            : (computedTotalKm > 0
+                ? String(computedTotalKm)
                 : (rawKmLimitStr && rawKmLimitStr !== '0' && rawKmLimitStr !== 'Illimitati'
                     ? rawKmLimitStr
                     : (websiteIncludedKm
