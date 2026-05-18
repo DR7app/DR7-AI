@@ -1137,8 +1137,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier, configOverlay, rentalConfig) : []
               const selectedKasko = kaskoOptions.find(k => k.id === prev.insurance_option)
               const insuranceTotal = (selectedKasko?.pricePerDay || 0) * data.rentalDays
-              const deliveryFees = (prev.delivery_enabled ? parseFloat(prev.delivery_fee || '0') : 0)
-                + (prev.pickup_enabled ? parseFloat(prev.pickup_fee || '0') : 0)
+              // BUG FIX 2026-05-18: count delivery / pickup fee if EITHER the
+              // checkbox was ticked OR the location dropdown is 'domicilio'.
+              // Prima domicilio nel dropdown non implicava il fee → totale
+              // sbagliato. Stessa regola di PreventiviTab.
+              const _deliveryActive = prev.delivery_enabled || prev.pickup_location === 'domicilio'
+              const _pickupActive = prev.pickup_enabled || prev.dropoff_location === 'domicilio'
+              const deliveryFees = (_deliveryActive ? parseFloat(prev.delivery_fee || '0') : 0)
+                + (_pickupActive ? parseFloat(prev.pickup_fee || '0') : 0)
               // Surcharge per day comes from the Pro option the admin picked.
               // For backwards compat, when status='no_cauzione' but no specific
               // option was chosen, fall back to the configured no-cauzione daily.
@@ -1253,8 +1259,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier, configOverlay, rentalConfig) : []
       const selectedKasko = kaskoOptions.find(k => k.id === formData.insurance_option)
       const insuranceTotal = (selectedKasko?.pricePerDay || 0) * revenueSuggestion.rentalDays
-      const deliveryFees = (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
-        + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
+      // BUG FIX 2026-05-18: domicilio nel dropdown forza il fee come per
+      // i preventivi. Senza, selezionare "Consegna a domicilio" senza
+      // ticcare delivery_enabled lasciava il fee fuori dal totale.
+      const _deliveryActive = formData.delivery_enabled || formData.pickup_location === 'domicilio'
+      const _pickupActive = formData.pickup_enabled || formData.dropoff_location === 'domicilio'
+      const deliveryFees = (_deliveryActive ? parseFloat(formData.delivery_fee || '0') : 0)
+        + (_pickupActive ? parseFloat(formData.pickup_fee || '0') : 0)
       // Surcharge from the Pro option the admin picked, falling back to the
       // legacy no-cauzione daily for older records.
       const surchargePerDay = selectedDepositSurchargePerDay
@@ -7935,8 +7946,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           const ko = sv ? getInsuranceOptions(sv, activeTier, configOverlay, rentalConfig) : []
                           const sk = ko.find(k => k.id === formData.insurance_option)
                           const insTotal = (sk?.pricePerDay || 0) * revenueSuggestion.rentalDays
-                          const deliveryFees = (formData.delivery_enabled ? parseFloat(formData.delivery_fee || '0') : 0)
-                            + (formData.pickup_enabled ? parseFloat(formData.pickup_fee || '0') : 0)
+                          const _delActive = formData.delivery_enabled || formData.pickup_location === 'domicilio'
+                          const _pkpActive = formData.pickup_enabled || formData.dropoff_location === 'domicilio'
+                          const deliveryFees = (_delActive ? parseFloat(formData.delivery_fee || '0') : 0)
+                            + (_pkpActive ? parseFloat(formData.pickup_fee || '0') : 0)
                           const dpSurchargePerDay = selectedDepositSurchargePerDay
                             || (formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY : 0)
                           const noCauzioneCost = dpSurchargePerDay * revenueSuggestion.rentalDays
