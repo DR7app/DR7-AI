@@ -2607,8 +2607,17 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     const customerPhone = c.telefono || c.phone || p.customer_phone || ''
 
     // bookings.price_total stores cents (INTEGER); convert from euros.
+    // BUG FIX 2026-05-18: usa total_final || subtotal come fallback per
+    // proteggersi da preventivi vecchi/abbozzati dove total_final e' null.
+    // Prima la conversione salvava price_total = 0 → la fattura post-pagamento
+    // veniva generata a 0 EUR (anche se il cliente aveva effettivamente
+    // pagato il link Nexi col totale corretto).
     const eurToCents = (eur: number) => Math.round((eur || 0) * 100)
-    const totalCents = eurToCents(p.total_final ?? 0)
+    const totalCents = eurToCents(p.total_final || (p as { subtotal?: number }).subtotal || 0)
+    if (totalCents <= 0) {
+      toast.error('Totale del preventivo a 0 EUR — impossibile convertire. Imposta un prezzo nel preventivo.', { duration: 10000 })
+      return
+    }
     const paidCents = payment_status === 'paid' ? totalCents : eurToCents(amount_paid_eur)
 
     const bookingPayload = {

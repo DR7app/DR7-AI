@@ -301,6 +301,12 @@ export async function getMessageTemplate(
     amountEur:     ['amount', 'importo', 'totale', 'total'],
     amount:        ['amountEur', 'importo', 'totale', 'total'],
     importo:       ['amountEur', 'amount', 'totale', 'total'],
+    // Booking identifier — il caller passa {booking_id} ma l'admin spesso
+    // scrive {booking-id}, {bookingId}, {ref} o {codice} nel template. Tutti
+    // gli alias risolvono allo stesso valore cosi' nessuno vede placeholder
+    // letterali tipo "booking-id" nel messaggio uscente.
+    booking_id:    ['booking_ref', 'bookingId', 'bookingRef', 'ref', 'reference', 'codice', 'booking-id', 'booking-ref'],
+    booking_ref:   ['booking_id', 'bookingId', 'bookingRef', 'ref', 'reference', 'codice', 'booking-id', 'booking-ref'],
   }
   const escRx = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const replaceFor = (key: string, value: string) => {
