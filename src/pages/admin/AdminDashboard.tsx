@@ -244,6 +244,7 @@ export default function AdminDashboard() {
       { tab: 'carwash-catalog', label: 'Catalogo' },
     ] },
     { name: 'Flotta', tabs: [
+      { tab: 'fleet', label: 'Gestione Flotta' },
       { tab: 'vehicles', label: 'Veicoli' },
       { tab: 'magazzino', label: 'Magazzino' },
       { tab: 'gps-keyless', label: 'GPS Flotta' },

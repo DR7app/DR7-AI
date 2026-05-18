@@ -2618,7 +2618,14 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       toast.error('Totale del preventivo a 0 EUR — impossibile convertire. Imposta un prezzo nel preventivo.', { duration: 10000 })
       return
     }
-    const paidCents = payment_status === 'paid' ? totalCents : eurToCents(amount_paid_eur)
+    // 2026-05-18: payment_status "paid" e' una delle TRE varianti pagate
+    // (paid | completed | succeeded). Wallet usa 'succeeded', Nexi usa
+    // 'completed', "Segna pagato" usa 'paid'. Senza questa tripletta i
+    // preventivi convertiti via wallet/nexi non risultavano pagati nel
+    // booking creato → fattura/contratto trigger gates fallivano.
+    const PAID_STATUSES = ['paid', 'completed', 'succeeded'] as const
+    const isPaid = (PAID_STATUSES as readonly string[]).includes(String(payment_status))
+    const paidCents = isPaid ? totalCents : eurToCents(amount_paid_eur)
 
     const bookingPayload = {
       // user_id satisfies the bookings_user_or_guest_check constraint
@@ -2631,7 +2638,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       dropoff_date: p.dropoff_date,
       price_total: totalCents,
       currency: 'EUR',
-      status: payment_status === 'paid' ? 'confirmed' : 'pending',
+      status: isPaid ? 'confirmed' : 'pending',
       payment_status,
       payment_method,
       amount_paid: paidCents,
