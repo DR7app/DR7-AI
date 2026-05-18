@@ -98,11 +98,16 @@ export function useLimitationOverride() {
     })
   }, [])
 
+  // 2026-05-18: ritorna `true` se la richiesta e' stata BYPASSATA
+  // (admin in OTP_BYPASS_EMAILS, OTP disabilitato, conditions non match,
+  // o explicit bypass) — in quel caso il caller puo' continuare senza
+  // ri-cliccare Salva. Ritorna `false` se e' stata aperta la modale OTP
+  // (caller deve abortire e aspettare l'approvazione).
   const requestOverride = useCallback((
     code: string,
     message: string,
     contextOrOptions?: string | { audit?: string; context?: OtpContext; bypass?: boolean }
-  ) => {
+  ): boolean => {
     // Normalize il 3o parametro: stringa = solo audit, oggetto = { audit, context, bypass }
     const auditCtx = typeof contextOrOptions === 'string'
       ? contextOrOptions
@@ -148,7 +153,7 @@ export function useLimitationOverride() {
               : 'conditions_not_matched',
         ...(runtimeCtx ? { runtime_context: runtimeCtx as Record<string, unknown> } : {}),
       })
-      return
+      return true
     }
     setLimitationState({
       isOpen: true,
@@ -156,6 +161,7 @@ export function useLimitationOverride() {
       limitationMessage: message,
       actionContext: auditCtx || `${code}_${Date.now()}`,
     })
+    return false
   }, [])
 
   const handleOverrideApproved = useCallback((overrideId: string, notes?: string) => {

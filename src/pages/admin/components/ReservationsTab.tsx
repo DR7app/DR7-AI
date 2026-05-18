@@ -4635,10 +4635,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               { label: 'Motivo richiesta', value: 'Slot non disponibile / conflitto disponibilita' },
               { label: 'Dettaglio conflitto', value: availabilityResult.reason || 'Slot non disponibile' },
             ]))
-            requestOverride('slot_unavailable', availabilityResult.reason || 'Slot non disponibile')
-            setIsSubmitting(false)
-            submitLockRef.current = false
-            return
+            // 2026-05-18: requestOverride ritorna true se bypassato
+            // (admin OTP_BYPASS_EMAILS: ophe/salvatore/valerio/ilenia) →
+            // continuiamo senza abortire. False = modale OTP aperta → exit.
+            const wasBypassed = requestOverride('slot_unavailable', availabilityResult.reason || 'Slot non disponibile')
+            if (!wasBypassed) {
+              setIsSubmitting(false)
+              submitLockRef.current = false
+              return
+            }
+            // bypass: l'override e' gia' in overrideMap, proseguiamo col save
           }
 
           logger.log('✅ Vehicle availability check passed')
