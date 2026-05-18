@@ -1137,14 +1137,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier, configOverlay, rentalConfig) : []
               const selectedKasko = kaskoOptions.find(k => k.id === prev.insurance_option)
               const insuranceTotal = (selectedKasko?.pricePerDay || 0) * data.rentalDays
-              // BUG FIX 2026-05-18: count delivery / pickup fee if EITHER the
-              // checkbox was ticked OR the location dropdown is 'domicilio'.
-              // Prima domicilio nel dropdown non implicava il fee → totale
-              // sbagliato. Stessa regola di PreventiviTab.
-              const _deliveryActive = prev.delivery_enabled || prev.pickup_location === 'domicilio'
-              const _pickupActive = prev.pickup_enabled || prev.dropoff_location === 'domicilio'
-              const deliveryFees = (_deliveryActive ? parseFloat(prev.delivery_fee || '0') : 0)
-                + (_pickupActive ? parseFloat(prev.pickup_fee || '0') : 0)
+              // Stesso comportamento di PreventiviTab: il fee tipato
+              // dall'admin entra SEMPRE nel totale (niente gate su
+              // delivery_enabled / pickup_location). Se vale 0 non
+              // influisce; se vale > 0 e' perche' admin l'ha messo,
+              // quindi va contato.
+              const deliveryFees = (parseFloat(prev.delivery_fee || '0') || 0)
+                + (parseFloat(prev.pickup_fee || '0') || 0)
               // Surcharge per day comes from the Pro option the admin picked.
               // For backwards compat, when status='no_cauzione' but no specific
               // option was chosen, fall back to the configured no-cauzione daily.
@@ -1259,13 +1258,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier, configOverlay, rentalConfig) : []
       const selectedKasko = kaskoOptions.find(k => k.id === formData.insurance_option)
       const insuranceTotal = (selectedKasko?.pricePerDay || 0) * revenueSuggestion.rentalDays
-      // BUG FIX 2026-05-18: domicilio nel dropdown forza il fee come per
-      // i preventivi. Senza, selezionare "Consegna a domicilio" senza
-      // ticcare delivery_enabled lasciava il fee fuori dal totale.
-      const _deliveryActive = formData.delivery_enabled || formData.pickup_location === 'domicilio'
-      const _pickupActive = formData.pickup_enabled || formData.dropoff_location === 'domicilio'
-      const deliveryFees = (_deliveryActive ? parseFloat(formData.delivery_fee || '0') : 0)
-        + (_pickupActive ? parseFloat(formData.pickup_fee || '0') : 0)
+      // Stesso comportamento di PreventiviTab — il fee viene contato
+      // ogni volta che ha un valore > 0, senza dipendere da checkbox
+      // o dal valore del dropdown pickup_location. Admin ha digitato
+      // il fee → admin vuole che sia nel totale.
+      const deliveryFees = (parseFloat(formData.delivery_fee || '0') || 0)
+        + (parseFloat(formData.pickup_fee || '0') || 0)
       // Surcharge from the Pro option the admin picked, falling back to the
       // legacy no-cauzione daily for older records.
       const surchargePerDay = selectedDepositSurchargePerDay
@@ -5128,8 +5126,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         pickup_location: pickupLocationLabel,
         dropoff_location: dropoffLocationLabel,
         price_total: Math.round(eurToCents(formData.total_amount) // Convert to cents (base rental)
-          + (formData.delivery_enabled ? eurToCents(formData.delivery_fee) : 0)
-          + (formData.pickup_enabled ? eurToCents(formData.pickup_fee) : 0)),
+          + eurToCents(formData.delivery_fee || '0')
+          + eurToCents(formData.pickup_fee || '0')),
         km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
         currency: formData.currency.toUpperCase(),
         // Pay by Link bookings start as pending_payment/unpaid;
@@ -5154,7 +5152,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           province: formData.delivery_province,
           notes: formData.delivery_notes
         } : null,
-        delivery_fee: formData.delivery_enabled ? eurToCents(formData.delivery_fee) : 0,
+        delivery_fee: eurToCents(formData.delivery_fee || '0'),
         pickup_enabled: formData.pickup_enabled,
         pickup_address: formData.pickup_enabled ? {
           street: formData.pickup_street,
@@ -5163,7 +5161,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           province: formData.pickup_province,
           notes: formData.pickup_notes
         } : null,
-        pickup_fee: formData.pickup_enabled ? eurToCents(formData.pickup_fee) : 0,
+        pickup_fee: eurToCents(formData.pickup_fee || '0'),
         booking_details: {
           // When editing, preserve metadata that the form doesn't manage
           // (extension history, contracts, deposit options, etc.)
@@ -5332,7 +5330,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             province: formData.delivery_province,
             notes: formData.delivery_notes
           } : null,
-          delivery_fee: formData.delivery_enabled ? formData.delivery_fee : '0',
+          delivery_fee: formData.delivery_fee || '0',
           pickup_enabled: formData.pickup_enabled,
           pickup_address: formData.pickup_enabled ? {
             street: formData.pickup_street,
@@ -5341,7 +5339,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             province: formData.pickup_province,
             notes: formData.pickup_notes
           } : null,
-          pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0',
+          pickup_fee: formData.pickup_fee || '0',
           notes: formData.notes || null,
           // Manually confirmed flag: prevents auto-cancel + shows red in calendar with customer name
           ...(confirmBooking ? {
@@ -5426,8 +5424,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // Use cents-based addition to avoid float drift, then convert to EUR
           // Subtract already paid amount for partial payments
           const fullTotalCents = eurToCents(formData.total_amount || '0')
-            + (formData.delivery_enabled ? eurToCents(formData.delivery_fee || '0') : 0)
-            + (formData.pickup_enabled ? eurToCents(formData.pickup_fee || '0') : 0)
+            + eurToCents(formData.delivery_fee || '0')
+            + eurToCents(formData.pickup_fee || '0')
           const alreadyPaidCents = formData.payment_status === 'partial' ? eurToCents(formData.amount_paid || '0') : 0
           const totalCents = Math.max(0, fullTotalCents - alreadyPaidCents)
           const totalEur = totalCents / 100
@@ -5575,12 +5573,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               }] : [])
             ],
             subtotal: eurToCents(formData.total_amount)
-              + (formData.delivery_enabled ? eurToCents(formData.delivery_fee) : 0)
-              + (formData.pickup_enabled ? eurToCents(formData.pickup_fee) : 0),
+              + eurToCents(formData.delivery_fee || '0')
+              + eurToCents(formData.pickup_fee || '0'),
             tax: 0,
             total: eurToCents(formData.total_amount)
-              + (formData.delivery_enabled ? eurToCents(formData.delivery_fee) : 0)
-              + (formData.pickup_enabled ? eurToCents(formData.pickup_fee) : 0),
+              + eurToCents(formData.delivery_fee || '0')
+              + eurToCents(formData.pickup_fee || '0'),
             paymentStatus: formData.payment_status || 'pending',
             bookingDate: new Date().toISOString(),
             serviceDate: `${formData.pickup_date}T${formData.pickup_time}:00`,
@@ -5636,7 +5634,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   zip: formData.delivery_zip,
                   province: formData.delivery_province
                 } : null,
-                delivery_fee: formData.delivery_enabled ? formData.delivery_fee : '0',
+                delivery_fee: formData.delivery_fee || '0',
                 pickup_enabled: formData.pickup_enabled,
                 pickup_address: formData.pickup_enabled ? {
                   street: formData.pickup_street,
@@ -5644,7 +5642,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   zip: formData.pickup_zip,
                   province: formData.pickup_province
                 } : null,
-                pickup_fee: formData.pickup_enabled ? formData.pickup_fee : '0',
+                pickup_fee: formData.pickup_fee || '0',
                 notes: formData.notes || null,
                 depositOption: insertedBooking?.booking_details?.depositOption,
                 noDepositSurcharge: insertedBooking?.booking_details?.noDepositSurcharge
@@ -7873,8 +7871,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   if (newStatus === 'paid') {
                     // Full payment = base + delivery fee + pickup fee (cents-based to avoid float drift)
                     const fullTotalCents = eurToCents(formData.total_amount || '0')
-                      + (formData.delivery_enabled ? eurToCents(formData.delivery_fee || '0') : 0)
-                      + (formData.pickup_enabled ? eurToCents(formData.pickup_fee || '0') : 0)
+                      + eurToCents(formData.delivery_fee || '0')
+                      + eurToCents(formData.pickup_fee || '0')
                     newAmountPaid = centsToEurStr(fullTotalCents)
                   } else if (newStatus === 'unpaid') {
                     newAmountPaid = '0' // No payment
@@ -7946,10 +7944,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           const ko = sv ? getInsuranceOptions(sv, activeTier, configOverlay, rentalConfig) : []
                           const sk = ko.find(k => k.id === formData.insurance_option)
                           const insTotal = (sk?.pricePerDay || 0) * revenueSuggestion.rentalDays
-                          const _delActive = formData.delivery_enabled || formData.pickup_location === 'domicilio'
-                          const _pkpActive = formData.pickup_enabled || formData.dropoff_location === 'domicilio'
-                          const deliveryFees = (_delActive ? parseFloat(formData.delivery_fee || '0') : 0)
-                            + (_pkpActive ? parseFloat(formData.pickup_fee || '0') : 0)
+                          const deliveryFees = (parseFloat(formData.delivery_fee || '0') || 0)
+                            + (parseFloat(formData.pickup_fee || '0') || 0)
                           const dpSurchargePerDay = selectedDepositSurchargePerDay
                             || (formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY : 0)
                           const noCauzioneCost = dpSurchargePerDay * revenueSuggestion.rentalDays
@@ -8195,8 +8191,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   setFormData(prev => {
                     // If currently paid, update paid amount to match new total (cents-based to avoid float drift)
                     const fullTotalCents = eurToCents(newTotal || '0')
-                      + (prev.delivery_enabled ? eurToCents(prev.delivery_fee || '0') : 0)
-                      + (prev.pickup_enabled ? eurToCents(prev.pickup_fee || '0') : 0)
+                      + eurToCents(prev.delivery_fee || '0')
+                      + eurToCents(prev.pickup_fee || '0')
                     const newPaid = prev.payment_status === 'paid' ? centsToEurStr(fullTotalCents) : prev.amount_paid
                     return { ...prev, total_amount: newTotal, amount_paid: newPaid }
                   })
@@ -8491,8 +8487,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <span className="font-mono text-xl font-bold text-dr7-gold">
                         €{centsToEurStr(
                           eurToCents(formData.total_amount || '0') +
-                          (formData.delivery_enabled ? eurToCents(formData.delivery_fee || '0') : 0) +
-                          (formData.pickup_enabled ? eurToCents(formData.pickup_fee || '0') : 0)
+                          eurToCents(formData.delivery_fee || '0') +
+                          eurToCents(formData.pickup_fee || '0')
                         )}
                       </span>
                     </div>
