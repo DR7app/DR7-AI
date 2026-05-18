@@ -697,29 +697,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return { gate, customer: customerSec, operation, meta }
   }
 
-  // Resume submission once a paused-save override is approved. Gates that
-  // remember their pending-save state via pendingSubmitRef are
-  // `paid_rental_modify` (booking edit guard) and `out_of_office_hours`
-  // (Salva-time time-window guard). Other limitation gates inside the
-  // validation flow run at Salva already and only require re-click.
+  // 2026-05-18: AUTO-RESUME del save dopo approvazione OTP.
+  // Se un gate ha messo pendingSubmitRef e poi e' arrivato l'approve
+  // (overrideCodes contiene almeno un nuovo codice), ri-firiamo subito
+  // processBookingSubmission — niente piu' "infinity loop" dove l'admin
+  // dopo OK alla modale doveva ri-cliccare Salva.
+  // I codici extra del combo vengono marchiati in markCodesApproved
+  // dentro onOverrideApproved.
   useEffect(() => {
     const pending = pendingSubmitRef.current
     if (!pending) return
-    // Riprendi il save quando UNO dei codici combo è stato approvato.
-    // I codici extra vengono marchiati come approvati nel wrapper di
-    // onOverrideApproved (markCodesApproved), quindi qui basta osservare
-    // qualsiasi codice del set.
-    const comboCodes = [
-      'paid_rental_modify',
-      'out_of_office_hours',
-      'tier1_no_cauzione',
-      'no_cauzione_rca_only',
-      'driver_blocked',
-    ]
-    if (comboCodes.some(c => overrideCodes.has(c))) {
-      pendingSubmitRef.current = null
-      processBookingSubmission(pending.skipValidation, pending.overrideCustomerId)
-    }
+    if (overrideCodes.size === 0) return
+    pendingSubmitRef.current = null
+    processBookingSubmission(pending.skipValidation, pending.overrideCustomerId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overrideCodes])
 
@@ -3865,6 +3855,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     if (submitLockRef.current || isSubmitting) return
     submitLockRef.current = true
 
+    // 2026-05-18: helper per abort quando si apre la modale OTP — salva
+    // skipValidation/overrideCustomerId in pendingSubmitRef cosi' la
+    // useEffect su overrideCodes ri-fira processBookingSubmission dopo
+    // l'approvazione. Niente piu' "click OK → devo ri-cliccare Salva".
+    const abortForOtp = () => {
+      pendingSubmitRef.current = { skipValidation, overrideCustomerId }
+      setIsSubmitting(false)
+      submitLockRef.current = false
+    }
+
     // ─── OTP gates (Salva-time) ─────────────────────────────────────────
     // Valutiamo TUTTI i gate insieme: se più condizioni richiedono
     // autorizzazione, la direzione riceve UNA sola email con TUTTE le
@@ -4088,6 +4088,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           },
         )
         if (!wasBypassed) {
+          // pendingSubmitRef gia' settato a riga 4074, l'auto-resume
+          // riprende dopo l'approvazione OTP.
           submitLockRef.current = false
           return
         }
@@ -4124,7 +4126,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               { label: 'Motivo richiesta', value: `Cliente non idoneo al noleggio: ${customerTier.reason || 'fascia bloccata'}` },
             ]))
             if (!requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${customerTier.reason}`)) {
-              submitLockRef.current = false
+              abortForOtp()
               return
             }
           }
@@ -4133,7 +4135,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               { label: 'Motivo richiesta', value: 'No Cauzione richiesta per cliente Fascia B' },
             ]))
             if (!requestOverride('tier1_no_cauzione', 'No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')) {
-              submitLockRef.current = false
+              abortForOtp()
               return
             }
           }
@@ -4142,7 +4144,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               { label: 'Motivo richiesta', value: 'No Cauzione abbinata a RCA (Kasko mancante)' },
             ]))
             if (!requestOverride('no_cauzione_rca_only', 'No Cauzione richiede una Kasko attiva. Seleziona una Kasko prima di procedere.')) {
-              submitLockRef.current = false
+              abortForOtp()
               return
             }
           }
@@ -4305,7 +4307,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   { label: 'Anni patente', value: `${licYears} anni` },
                 ]))
                 if (!requestOverride('license_too_recent', 'Patente rilasciata da meno di 3 anni. Il cliente non può noleggiare.')) {
-                  submitLockRef.current = false
+                  abortForOtp()
                   return
                 }
               }
@@ -4321,7 +4323,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   { label: 'Anni patente', value: `${licYears} anni` },
                 ]))
                 if (!requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${tier.reason}`)) {
-                  submitLockRef.current = false
+                  abortForOtp()
                   return
                 }
               }
@@ -4332,7 +4334,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   { label: 'Anni patente', value: `${licYears} anni` },
                 ]))
                 if (!requestOverride('tier1_no_cauzione', 'No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')) {
-                  submitLockRef.current = false
+                  abortForOtp()
                   return
                 }
               }
@@ -4342,7 +4344,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 { label: 'Motivo richiesta', value: 'No Cauzione abbinata a RCA (Kasko mancante)' },
               ]))
               if (!requestOverride('no_cauzione_rca_only', 'No Cauzione richiede una Kasko attiva. Seleziona una Kasko prima di procedere.')) {
-                submitLockRef.current = false
+                abortForOtp()
                 return
               }
             }
@@ -4501,8 +4503,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             { label: 'Ora attuale (Roma)', value: nowRome.toLocaleString('it-IT', { timeZone: 'Europe/Rome' }) },
           ]))
           if (!requestOverride('pickup_in_past', 'La data e ora di ritiro è nel passato. Serve autorizzazione per procedere.')) {
-            setIsSubmitting(false)
-            submitLockRef.current = false
+            abortForOtp()
             return
           }
         }
@@ -4654,8 +4655,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             // continuiamo senza abortire. False = modale OTP aperta → exit.
             const wasBypassed = requestOverride('slot_unavailable', availabilityResult.reason || 'Slot non disponibile')
             if (!wasBypassed) {
-              setIsSubmitting(false)
-              submitLockRef.current = false
+              abortForOtp()
               return
             }
             // bypass: l'override e' gia' in overrideMap, proseguiamo col save
@@ -5088,8 +5088,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           { label: 'Motivo richiesta', value: 'Conferma prenotazione noleggio richiede autorizzazione direzionale' },
         ]))
         if (!requestOverride('prenotazione_noleggio_conferma', 'Conferma prenotazione noleggio richiede autorizzazione direzionale')) {
-          setIsSubmitting(false)
-          submitLockRef.current = false
+          abortForOtp()
           return
         }
       }
