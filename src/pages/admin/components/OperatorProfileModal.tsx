@@ -1074,17 +1074,19 @@ function CalcolaPagaSection({
                             </span>
                         )}
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                    <div className={`grid grid-cols-2 ${calc.straordEnabled ? 'sm:grid-cols-4' : 'sm:grid-cols-3'} gap-2 mb-3`}>
                         <div className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
                             <div className="text-[10px] uppercase text-theme-text-muted">Ore Ordinarie</div>
                             <div className="text-sm font-semibold text-theme-text-primary">{fmtMin(calc.minOrdinari)}</div>
                             <div className="text-[10px] text-emerald-400 mt-0.5 tabular-nums">{eur(calc.pagaOrd)}</div>
                         </div>
-                        <div className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
-                            <div className="text-[10px] uppercase text-theme-text-muted">Straordinari</div>
-                            <div className="text-sm font-semibold text-theme-text-primary">{fmtMin(calc.minStraord)}</div>
-                            <div className="text-[10px] text-sky-400 mt-0.5 tabular-nums">{eur(calc.pagaStraord)}</div>
-                        </div>
+                        {calc.straordEnabled && (
+                            <div className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
+                                <div className="text-[10px] uppercase text-theme-text-muted">Straordinari</div>
+                                <div className="text-sm font-semibold text-theme-text-primary">{fmtMin(calc.minStraord)}</div>
+                                <div className="text-[10px] text-sky-400 mt-0.5 tabular-nums">{eur(calc.pagaStraord)}</div>
+                            </div>
+                        )}
                         <div className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
                             <div className="text-[10px] uppercase text-theme-text-muted">Ore a Recuperare</div>
                             <div className="text-sm font-semibold text-theme-text-primary">{oreRecMin === 0 ? '—' : fmtMin(Math.abs(oreRecMin))}</div>
