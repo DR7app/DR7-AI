@@ -1200,7 +1200,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const splitX = (amt: number, on: boolean) => on ? { inC: amt, at: 0 } : { inC: 0, at: amt }
               const sIns = splitX(insuranceTotal,         coeffFlags.insurance)
               const sLav = splitX(CFG_LAVAGGIO_FEE,       coeffFlags.lavaggio)
-              const sNoC = splitX(noCauzioneSurcharge,    coeffFlags.no_cauzione)
+              // 2026-05-18: No Cauzione passa SEMPRE a listino (vedi PreventiviTab).
+              // Era dentro extrasInCoeff e veniva mangiato dal max clamp / scalato
+              // dal coefficiente → l'admin aggiungeva "No Cauzione" e il totale
+              // cresceva di pochi euro invece dei €49 × giorni attesi.
+              const sNoC = { inC: 0, at: noCauzioneSurcharge }
               const sKm  = splitX(unlimitedKmSurcharge,   coeffFlags.unlimited_km)
               const sSec = splitX(secondDriverFee,        coeffFlags.second_driver)
               const sFlx = splitX(flexCost,               coeffFlags.dr7_flex)
@@ -1259,15 +1263,31 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // sforo finché l'operatore non cambiava manualmente veicolo o data.
   }, [formData.vehicle_id, formData.pickup_date, formData.return_date, formData.pickup_time, formData.return_time, customerTier, noCauzioneResolvedDaily, rentalConfig])
 
+  // Track previous deposit values to detect user-initiated changes in edit mode.
+  // Senza questo, il useEffect sotto non saprebbe distinguere "admin ha appena
+  // selezionato No Cauzione" (deve ricalcolare il totale) da "form appena
+  // caricato dalla prenotazione esistente" (deve preservare il prezzo concordato).
+  const prevDepositRef = useRef<{ status: string; option_id: string } | null>(null)
+
   // Recalculate total when insurance, delivery fees, or payment method change.
   // Runs in any engine mode — the dynamic coefficient + clamp must always
   // apply to the full subtotal (rental + extras), matching Preventivi.
   //
-  // In edit mode (editingId set) skip ENTIRELY: la prenotazione esiste gia'
-  // con un prezzo concordato; cambiare data/ora non deve sovrascrivere il
-  // totale. Se direzione vuole ricalcolare, modifica manualmente l'importo.
+  // In edit mode (editingId set): per default skip — la prenotazione esiste
+  // gia' con un prezzo concordato. ECCEZIONE: se admin ha cambiato Opzione
+  // Cauzione / Stato Cauzione, ricalcola il totale (la No Cauzione e' un
+  // supplemento fisso che DEVE apparire nel totale, vedi richiesta utente
+  // 2026-05-18). Date/ora/altri campi rimangono bloccati come prima.
   useEffect(() => {
-    if (editingId) return
+    if (editingId) {
+      const prev = prevDepositRef.current
+      const depositChanged = prev !== null
+        && (prev.status !== formData.deposit_status || prev.option_id !== formData.deposit_option_id)
+      prevDepositRef.current = { status: formData.deposit_status, option_id: formData.deposit_option_id }
+      if (!depositChanged) return
+    } else {
+      prevDepositRef.current = { status: formData.deposit_status, option_id: formData.deposit_option_id }
+    }
     if (revenueSuggestion && formData.vehicle_id) {
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
       const activeTier = customerTier?.tier || 'TIER_1'
@@ -1318,7 +1338,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const splitX = (amt: number, on: boolean) => on ? { inC: amt, at: 0 } : { inC: 0, at: amt }
       const sIns = splitX(insuranceTotal,         coeffFlags.insurance)
       const sLav = splitX(CFG_LAVAGGIO_FEE,       coeffFlags.lavaggio)
-      const sNoC = splitX(noCauzioneSurcharge,    coeffFlags.no_cauzione)
+      // 2026-05-18: No Cauzione SEMPRE a listino — coerente con auto_apply.
+      const sNoC = { inC: 0, at: noCauzioneSurcharge }
       const sKm  = splitX(unlimitedKmSurcharge,   coeffFlags.unlimited_km)
       const sSec = splitX(secondDriverFee,        coeffFlags.second_driver)
       const sFlx = splitX(flexCost,               coeffFlags.dr7_flex)
@@ -7592,7 +7613,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       )}
                       {selectedDepositOption && (
                         <p className="text-xs text-blue-400 mt-1">
-                          Importo: €{Number(selectedDepositOption.amount || 0).toLocaleString('it-IT')}
+                          {isNoDepositOpt(selectedDepositOption)
+                            ? 'Senza cauzione'
+                            : `Importo: €${Number(selectedDepositOption.amount || 0).toLocaleString('it-IT')}`}
                           {selectedDepositSurchargePerDay > 0 && ` · Supplemento €${selectedDepositSurchargePerDay}/giorno aggiunto al totale`}
                         </p>
                       )}
@@ -7609,10 +7632,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         value={formData.deposit_status}
                         onChange={(e) => {
                           const val = e.target.value as 'da_incassare' | 'incassata' | 'no_cauzione';
+                          // When switching to "No Cauzione", realign deposit_option_id
+                          // so the panel doesn't keep showing "Importo: €2.000" from
+                          // the previously picked Card option. Prefer the explicit
+                          // no_deposit option from Centralina if present; otherwise
+                          // clear the option id entirely.
+                          const noDepOpt = depositOptionsForCurrentBooking.find(o => isNoDepositOpt(o));
                           setFormData(prev => ({
                             ...prev,
                             deposit_status: val,
-                            ...(val === 'no_cauzione' ? { deposit: '0' } : {}),
+                            ...(val === 'no_cauzione'
+                              ? { deposit: '0', deposit_option_id: noDepOpt?.id || '' }
+                              : (prev.deposit_option_id && depositOptionsForCurrentBooking.find(o => o.id === prev.deposit_option_id && isNoDepositOpt(o))
+                                  ? { deposit_option_id: '' }
+                                  : {})),
                           }));
                         }}
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary"
