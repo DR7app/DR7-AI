@@ -10,6 +10,8 @@ import { resolvePacchetti } from '../../../utils/pacchettiResolver'
 import type { RentalConfig } from '../../../types/rentalConfig'
 import Input from './Input'
 import Select from './Select'
+import AddressAutocomplete from './AddressAutocomplete'
+import { kmFromDR7Office } from '../../../utils/dr7Distance'
 import PreventivoRejectModal, { openPreventivoRejectModal } from './PreventivoRejectModal'
 import PreventivoAcceptModal, { openPreventivoAcceptModal } from './PreventivoAcceptModal'
 import Button from './Button'
@@ -521,6 +523,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     pickup_fee: '0',
     delivery_address: '',
     pickup_address: '',
+    // Distanza dall'ufficio DR7 al domicilio, calcolata automaticamente
+    // quando si seleziona un suggerimento Nominatim. Usata per moltiplicare
+    // delivery.price_per_km della Centralina Pro (default €3/km).
+    delivery_km: 0,
+    pickup_km: 0,
     // Experience services: id → quantity
     experience_services: {} as Record<string, number>,
     // Per-km services: id → { km, pricePerKm } typed by the operator at quote time
@@ -1663,6 +1670,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           dropoff_location: form.dropoff_location,
           delivery_address: form.delivery_address,
           pickup_address: form.pickup_address,
+          delivery_km: form.delivery_km,
+          pickup_km: form.pickup_km,
           experience_services: form.experience_services,
           experience_km_quotes: form.experience_km_quotes,
           // 2026-05-16: pacchetti KM cumulativi (multi-select). Persistiti
@@ -1797,6 +1806,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       pickup_fee: String(extras.pickup_fee || 0),
       delivery_address: extras.delivery_address || '',
       pickup_address: extras.pickup_address || '',
+      delivery_km: Number(extras.delivery_km) || 0,
+      pickup_km: Number(extras.pickup_km) || 0,
       experience_services: extras.experience_services || {},
       experience_km_quotes: (extras.experience_km_quotes || {}) as KmQuoteMap,
       sconto: p.sconto > 0 ? String(p.total_final) : '',
@@ -1841,6 +1852,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       pickup_fee: '0',
       delivery_address: '',
       pickup_address: '',
+      delivery_km: 0,
+      pickup_km: 0,
       experience_services: {},
       experience_km_quotes: {},
       sconto: '',
@@ -3685,14 +3698,52 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                 pickup_location: e.target.value,
                 delivery_fee: loc && e.target.value !== 'domicilio' ? String(loc.fee) : prev.delivery_fee,
                 delivery_address: '',
+                delivery_km: e.target.value !== 'domicilio' ? 0 : prev.delivery_km,
               }))
             }}
             options={LOCATIONS.map(l => ({ value: l.value, label: l.label }))}
           />
           {form.pickup_location === 'domicilio' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <Input label="Indirizzo consegna" value={form.delivery_address} onChange={(e) => setForm(prev => ({ ...prev, delivery_address: e.target.value }))} placeholder="Via, citta, CAP" />
-              <Input label="Costo consegna (€)" type="number" value={form.delivery_fee} onChange={(e) => setForm(prev => ({ ...prev, delivery_fee: e.target.value }))} placeholder="0" />
+            <div className="space-y-2">
+              <AddressAutocomplete
+                label="Indirizzo consegna"
+                value={form.delivery_address}
+                onChange={(v) => setForm(prev => ({ ...prev, delivery_address: v }))}
+                onSelectParts={(parts) => {
+                  const km = (parts.lat != null && parts.lon != null)
+                    ? kmFromDR7Office({ lat: parts.lat, lon: parts.lon })
+                    : 0
+                  const rate = Number(rentalConfig?.delivery?.price_per_km) || 3
+                  const fee = km * rate
+                  setForm(prev => ({
+                    ...prev,
+                    delivery_address: parts.full,
+                    delivery_km: km,
+                    delivery_fee: fee > 0 ? fee.toFixed(2) : '0',
+                  }))
+                }}
+                placeholder="Inizia a digitare via, città..."
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="bg-theme-bg-tertiary/40 border border-theme-border rounded px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Distanza dall'ufficio</div>
+                  <div className="font-semibold text-sm text-theme-text-primary tabular-nums">
+                    {form.delivery_km > 0 ? `${form.delivery_km} km` : '—'}
+                  </div>
+                  <div className="text-[10px] text-theme-text-muted mt-0.5">
+                    {form.delivery_km > 0
+                      ? `${form.delivery_km} km × €${(Number(rentalConfig?.delivery?.price_per_km) || 3).toFixed(2)}/km`
+                      : 'Seleziona un indirizzo dai suggerimenti'}
+                  </div>
+                </div>
+                <Input
+                  label="Costo consegna (€)"
+                  type="number"
+                  value={form.delivery_fee}
+                  onChange={(e) => setForm(prev => ({ ...prev, delivery_fee: e.target.value }))}
+                  placeholder="0"
+                />
+              </div>
             </div>
           )}
         </div>
@@ -3707,14 +3758,52 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                 dropoff_location: e.target.value,
                 pickup_fee: loc && e.target.value !== 'domicilio' ? String(loc.fee) : prev.pickup_fee,
                 pickup_address: '',
+                pickup_km: e.target.value !== 'domicilio' ? 0 : prev.pickup_km,
               }))
             }}
             options={LOCATIONS.map(l => ({ value: l.value, label: l.label }))}
           />
           {form.dropoff_location === 'domicilio' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <Input label="Indirizzo ritiro" value={form.pickup_address} onChange={(e) => setForm(prev => ({ ...prev, pickup_address: e.target.value }))} placeholder="Via, citta, CAP" />
-              <Input label="Costo ritiro (€)" type="number" value={form.pickup_fee} onChange={(e) => setForm(prev => ({ ...prev, pickup_fee: e.target.value }))} placeholder="0" />
+            <div className="space-y-2">
+              <AddressAutocomplete
+                label="Indirizzo ritiro"
+                value={form.pickup_address}
+                onChange={(v) => setForm(prev => ({ ...prev, pickup_address: v }))}
+                onSelectParts={(parts) => {
+                  const km = (parts.lat != null && parts.lon != null)
+                    ? kmFromDR7Office({ lat: parts.lat, lon: parts.lon })
+                    : 0
+                  const rate = Number(rentalConfig?.delivery?.price_per_km) || 3
+                  const fee = km * rate
+                  setForm(prev => ({
+                    ...prev,
+                    pickup_address: parts.full,
+                    pickup_km: km,
+                    pickup_fee: fee > 0 ? fee.toFixed(2) : '0',
+                  }))
+                }}
+                placeholder="Inizia a digitare via, città..."
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="bg-theme-bg-tertiary/40 border border-theme-border rounded px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Distanza dall'ufficio</div>
+                  <div className="font-semibold text-sm text-theme-text-primary tabular-nums">
+                    {form.pickup_km > 0 ? `${form.pickup_km} km` : '—'}
+                  </div>
+                  <div className="text-[10px] text-theme-text-muted mt-0.5">
+                    {form.pickup_km > 0
+                      ? `${form.pickup_km} km × €${(Number(rentalConfig?.delivery?.price_per_km) || 3).toFixed(2)}/km`
+                      : 'Seleziona un indirizzo dai suggerimenti'}
+                  </div>
+                </div>
+                <Input
+                  label="Costo ritiro (€)"
+                  type="number"
+                  value={form.pickup_fee}
+                  onChange={(e) => setForm(prev => ({ ...prev, pickup_fee: e.target.value }))}
+                  placeholder="0"
+                />
+              </div>
             </div>
           )}
         </div>
