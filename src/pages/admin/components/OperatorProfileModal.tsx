@@ -1051,25 +1051,26 @@ function CalcolaPagaSection({
             ) : (
                 <>
                     {/* Regole applicate dal contratto: l'admin vede subito che
-                        formula sta usando il calcolo (paga oraria, paga
-                        straordinario, soglia ore/giorno). */}
+                        formula sta usando il calcolo. Mostriamo "Straordinario"
+                        e "Soglia" SOLO se i straordinari sono effettivamente
+                        attivi (paga_straord > 0 AND abilitato !== false). */}
                     <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-theme-text-muted">
                         <span className="px-2 py-0.5 rounded bg-theme-bg-secondary border border-theme-border">
                             Ordinaria: <strong className="text-theme-text-primary">€{calc.oraria.toFixed(2)}/h</strong>
                         </span>
-                        {calc.straord > 0 && (
-                            <span className="px-2 py-0.5 rounded bg-theme-bg-secondary border border-theme-border">
-                                Straordinario: <strong className="text-sky-400">€{calc.straord.toFixed(2)}/h</strong>
-                            </span>
+                        {calc.straordEnabled && (
+                            <>
+                                <span className="px-2 py-0.5 rounded bg-theme-bg-secondary border border-theme-border">
+                                    Straordinario: <strong className="text-sky-400">€{calc.straord.toFixed(2)}/h</strong>
+                                </span>
+                                <span className="px-2 py-0.5 rounded bg-theme-bg-secondary border border-theme-border">
+                                    Soglia: <strong className="text-theme-text-primary">{Math.round(calc.sogliaMin / 60 * 10) / 10}h/giorno</strong>
+                                </span>
+                            </>
                         )}
-                        {calc.sogliaMin > 0 && (
-                            <span className="px-2 py-0.5 rounded bg-theme-bg-secondary border border-theme-border">
-                                Soglia straord: <strong className="text-theme-text-primary">{Math.round(calc.sogliaMin / 60 * 10) / 10}h/giorno</strong>
-                            </span>
-                        )}
-                        {!calc.straordEnabled && calc.straord > 0 && (
-                            <span className="px-2 py-0.5 rounded bg-rose-500/20 border border-rose-500/40 text-rose-300">
-                                Straordinari disabilitati nel contratto
+                        {!calc.straordEnabled && (
+                            <span className="px-2 py-0.5 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-muted">
+                                Straordinari non previsti
                             </span>
                         )}
                     </div>
