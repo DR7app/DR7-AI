@@ -704,14 +704,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // dopo OK alla modale doveva ri-cliccare Salva.
   // I codici extra del combo vengono marchiati in markCodesApproved
   // dentro onOverrideApproved.
+  // Safety guards:
+  //  - showForm: solo se il form e' aperto (no resume su form chiuso)
+  //  - !submitLockRef.current: evita doppio submit se gia' in corso
+  //  - overrideCodes.size > 0: deve esserci almeno una approvazione
   useEffect(() => {
     const pending = pendingSubmitRef.current
     if (!pending) return
     if (overrideCodes.size === 0) return
+    if (!showForm) return
+    if (submitLockRef.current || isSubmitting) return
     pendingSubmitRef.current = null
     processBookingSubmission(pending.skipValidation, pending.overrideCustomerId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [overrideCodes])
+  }, [overrideCodes, showForm])
 
   // Missing Data Modal State
   const [showMissingDataModal, setShowMissingDataModal] = useState(false)
@@ -6274,6 +6280,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     setCustomerTier(null)
     editFormSnapshotRef.current = null
     setTotalLock(false)
+    // 2026-05-18: pulizia stato OTP residuo per evitare auto-resume su
+    // form fresca dopo una sessione di approvazioni.
+    pendingSubmitRef.current = null
+    comboExtraCodesRef.current = []
+    comboMessageRef.current = ''
     setFormData({
       customer_id: '',
       vehicle_id: '',
