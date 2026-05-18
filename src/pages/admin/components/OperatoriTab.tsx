@@ -4,6 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import { formatAdminLog, formatEntityLabel } from '../../../utils/formatAdminLog'
 import OperatoriReportDashboard from './OperatoriReportDashboard'
 import OperatoriReportDashboardV2 from './OperatoriReportDashboardV2'
+import PayrollPeriodoView from './PayrollPeriodoView'
 import InviteOperatoreModal from './InviteOperatoreModal'
 import ContrattiOperatoreView from './ContrattiOperatoreView'
 import { useAdminRole } from '../../../hooks/useAdminRole'
@@ -231,19 +232,20 @@ function previousMonthRange(): { from: string; to: string } {
 
 const AGG_HARD_LIMIT = 5000  // cap aggregation fetch to avoid OOM
 
-type OperatoriView = 'dashboard' | 'rilevazione' | 'audit' | 'contratti'
+type OperatoriView = 'dashboard' | 'rilevazione' | 'payroll' | 'audit' | 'contratti'
 
 function OperatoriViewSwitch({ view, setView }: { view: OperatoriView; setView: (v: OperatoriView) => void }) {
   const LABELS: Record<OperatoriView, string> = {
     dashboard: 'Report Orari',
     rilevazione: 'Rilevazione Orari',
+    payroll: 'Buste Paga',
     contratti: 'Contratti',
     audit: 'Audit log',
   }
   return (
     <div className="flex justify-end">
       <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-secondary p-0.5 text-xs">
-        {(['dashboard', 'rilevazione', 'contratti', 'audit'] as const).map(v => (
+        {(['dashboard', 'rilevazione', 'payroll', 'contratti', 'audit'] as const).map(v => (
           <button
             key={v}
             onClick={() => setView(v)}
@@ -308,6 +310,14 @@ export default function OperatoriTab() {
         <Suspense fallback={<div className="p-6 text-center text-theme-text-muted">Caricamento Rilevazione Orari...</div>}>
           <RilevazioneOrariTab />
         </Suspense>
+      </div>
+    )
+  }
+  if (view === 'payroll') {
+    return (
+      <div className="space-y-3">
+        <OperatoriViewSwitch view={view} setView={setView} />
+        <PayrollPeriodoView />
       </div>
     )
   }
