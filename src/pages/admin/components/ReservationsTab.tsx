@@ -560,6 +560,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editFormSnapshotRef = useRef<Record<string, any> | null>(null)
 
+  // 2026-05-18: quando l'admin scrive a mano nel campo "Importo Totale (€)",
+  // questo flag diventa true e i recalc effects NON sovrascrivono piu' il
+  // total_amount. Cosi' l'admin puo' decidere il prezzo finale a piacere
+  // dopo aver aggiunto pacchetti / consegna / ritiro / etc. Si resetta
+  // quando: apre nuova booking, cambia veicolo, cambia date, oppure
+  // chiude/resetta il form.
+  const totalAmountManuallyOverriddenRef = useRef<boolean>(false)
+  // Forza re-render quando il flag cambia (per mostrare/nascondere il banner).
+  const [, setTotalLockTick] = useState(0)
+  const setTotalLock = (v: boolean) => {
+    if (totalAmountManuallyOverriddenRef.current !== v) {
+      totalAmountManuallyOverriddenRef.current = v
+      setTotalLockTick(t => t + 1)
+    }
+  }
+
   // Override details state — accetta sia legacy array (compat) sia
   // strutturato { gate, customer, operation, meta } (preferito).
   // Server-side limitation-override-otp.ts gestisce entrambe le forme;
@@ -1210,7 +1226,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const subtotal = Math.round((afterRevenueNoExp + experienceCost + deliveryFees + extrasAtList + kmPackagesCost) * 100) / 100
               const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
               // Auto-calculate KM limit from rental days (only if not unlimited)
-              const updates: Record<string, string> = { total_amount: total.toFixed(2) }
+              // 2026-05-18: salta total_amount se l'admin l'ha gia' modificato a mano.
+              const updates: Record<string, string> = {}
+              if (!totalAmountManuallyOverriddenRef.current) {
+                updates.total_amount = total.toFixed(2)
+              }
               if (!prev.unlimited_km) {
                 const vehCategory = selectedVehicle?.category || ''
                 const kmCat = vehCategory === 'urban' ? 'urban' : (vehCategory || '_global')
@@ -1320,7 +1340,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Experience + location fees + extras-at-list + pacchetti KM stay at LIST PRICE — no coefficient, no clamp.
       const subtotal = Math.round((afterRevenueNoExp + experienceCost + deliveryFees + extrasAtList + kmPackagesCost) * 100) / 100
       const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
-      const updates: Record<string, string> = { total_amount: newTotal.toFixed(2) }
+      // 2026-05-18: salta total_amount se l'admin l'ha gia' modificato a mano.
+      const updates: Record<string, string> = {}
+      if (!totalAmountManuallyOverriddenRef.current) {
+        updates.total_amount = newTotal.toFixed(2)
+      }
       // Auto-calculate KM limit from rental days
       if (!formData.unlimited_km) {
         const vehCategory = selectedVehicle?.category || ''
@@ -1330,7 +1354,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           updates.km_limit = String(kmIncluded)
         }
       }
-      setFormData(prev => ({ ...prev, ...updates }))
+      if (Object.keys(updates).length > 0) setFormData(prev => ({ ...prev, ...updates }))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, formData.deposit_option_id, formData.has_second_driver, formData.experience_services, formData.dr7_flex, formData.km_packages, customerTier, noCauzioneResolvedDaily, selectedDepositSurchargePerDay, rentalConfig])
@@ -6229,6 +6253,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   function resetForm() {
     setCustomerTier(null)
     editFormSnapshotRef.current = null
+    setTotalLock(false)
     setFormData({
       customer_id: '',
       vehicle_id: '',
@@ -8031,16 +8056,28 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 value={formData.total_amount}
                 onChange={(e) => {
                   const newTotal = e.target.value
+                  // 2026-05-18: admin sta digitando il totale a mano → blocca
+                  // i recalc effects dall'overridarlo (consegna/ritiro/pacchetti
+                  // non possono piu' modificare il totale dopo questa azione).
+                  setTotalLock(true)
                   setFormData(prev => {
-                    // If currently paid, update paid amount to match new total (cents-based to avoid float drift)
-                    const fullTotalCents = eurToCents(newTotal || '0')
-                      + eurToCents(prev.delivery_fee || '0')
-                      + eurToCents(prev.pickup_fee || '0')
-                    const newPaid = prev.payment_status === 'paid' ? centsToEurStr(fullTotalCents) : prev.amount_paid
+                    // 2026-05-18: total_amount include GIA' delivery + pickup nel
+                    // recalc; ora che admin lo decide a mano, prendiamo newTotal
+                    // come VERITA' assoluta. amount_paid = newTotal (no doppi).
+                    const newPaid = prev.payment_status === 'paid' ? newTotal : prev.amount_paid
                     return { ...prev, total_amount: newTotal, amount_paid: newPaid }
                   })
                 }}
               />
+              {totalAmountManuallyOverriddenRef.current && (
+                <p className="text-xs text-amber-400 mt-1">
+                  Importo bloccato — modifiche a consegna/ritiro/pacchetti non lo cambieranno piu'.
+                  <button type="button" className="ml-2 underline text-dr7-gold"
+                    onClick={() => setTotalLock(false)}>
+                    Sblocca ricalcolo automatico
+                  </button>
+                </p>
+              )}
               <div>
                 <Input
                   label="Sforo per KM (€)"
@@ -8303,7 +8340,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               />
             </div>
 
-            {/* Riepilogo Totale - shows breakdown with delivery/pickup fees + KM packages */}
+            {/* Riepilogo Totale - shows breakdown with delivery/pickup fees + KM packages.
+                2026-05-18: total_amount include GIA' consegna + ritiro + pacchetti
+                (sommati dal recalc effect). Quindi il "Totale da saldare" e' SEMPLICEMENTE
+                total_amount — non aggiungiamo piu' delivery/pickup sopra (bug double-count).
+                Le righe Consegna/Ritiro/Pacchetti sono SOLO una decomposizione di total_amount,
+                con "Noleggio base" = total_amount - tutti gli extra elencati. */}
             {(() => {
               const selVeh = vehicles.find(v => v.id === formData.vehicle_id)
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -8324,8 +8366,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const showRiepilogo = formData.delivery_enabled || formData.pickup_enabled || kmEntries.length > 0
               if (!showRiepilogo) return null
               const totalAmountCents = eurToCents(formData.total_amount || '0')
+              const deliveryCents = formData.delivery_enabled ? eurToCents(formData.delivery_fee || '0') : 0
+              const pickupCents = formData.pickup_enabled ? eurToCents(formData.pickup_fee || '0') : 0
               const kmCostCents = Math.round(kmPackagesCost * 100)
-              const baseCents = Math.max(0, totalAmountCents - kmCostCents)
+              // Noleggio base = total - tutti gli extra mostrati come righe sotto.
+              const baseCents = Math.max(0, totalAmountCents - kmCostCents - deliveryCents - pickupCents)
               return (
                 <div className="md:col-span-2 bg-theme-text-primary/5 rounded-lg p-4 border border-theme-border/50">
                   <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-3">Riepilogo Totale</h4>
@@ -8345,24 +8390,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     {formData.delivery_enabled && (
                       <div className="flex justify-between items-center">
                         <span className="text-theme-text-muted">Consegna a domicilio</span>
-                        <span className="font-mono text-theme-text-primary">€{centsToEurStr(eurToCents(formData.delivery_fee || '0'))}</span>
+                        <span className="font-mono text-theme-text-primary">€{centsToEurStr(deliveryCents)}</span>
                       </div>
                     )}
                     {formData.pickup_enabled && (
                       <div className="flex justify-between items-center">
                         <span className="text-theme-text-muted">Ritiro a domicilio</span>
-                        <span className="font-mono text-theme-text-primary">€{centsToEurStr(eurToCents(formData.pickup_fee || '0'))}</span>
+                        <span className="font-mono text-theme-text-primary">€{centsToEurStr(pickupCents)}</span>
                       </div>
                     )}
                     <div className="border-t border-theme-border/50 pt-2 mt-2">
                       <div className="flex justify-between items-center">
                         <span className="font-bold text-dr7-gold">Totale da saldare</span>
                         <span className="font-mono text-xl font-bold text-dr7-gold">
-                          €{centsToEurStr(
-                            totalAmountCents +
-                            eurToCents(formData.delivery_fee || '0') +
-                            eurToCents(formData.pickup_fee || '0')
-                          )}
+                          €{centsToEurStr(totalAmountCents)}
                         </span>
                       </div>
                     </div>
