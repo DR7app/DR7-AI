@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import OperatorProfileModal from './OperatorProfileModal'
 
 /**
  * OperatoriReportDashboardV2 — dashboard a vista singola "tutto in uno",
@@ -190,6 +191,9 @@ export default function OperatoriReportDashboardV2() {
     const [loading, setLoading] = useState(true)
     const [operatori, setOperatori] = useState<Operatore[]>([])
     const [todayRows, setTodayRows] = useState<DayRow[]>([])
+    // Operatore selezionato per la modale di profilo (stesso component
+    // usato dal Dashboard classico — KPI, trend, pause analytics).
+    const [profileOp, setProfileOp] = useState<Operatore | null>(null)
     const [kpi, setKpi] = useState({
         fatturatoGenerale: 0,
         bookingsCount: 0,
@@ -462,8 +466,12 @@ export default function OperatoriReportDashboardV2() {
                                 {topFatturato.map((t, i) => {
                                     const max = Math.max(...topFatturato.map(x => x.value), 1)
                                     const pct = Math.round((t.value / max) * 100)
+                                    // Match operator by name to enable click → profile modal
+                                    const op = operatori.find(o => `${o.nome} ${o.cognome || ''}`.trim() === t.name)
                                     return (
-                                        <div key={i}>
+                                        <div key={i}
+                                            onClick={() => op && setProfileOp(op)}
+                                            className={op ? 'cursor-pointer hover:bg-theme-bg-hover/40 -mx-1 px-1 rounded' : ''}>
                                             <div className="flex justify-between text-[11px]">
                                                 <span className="text-theme-text-primary truncate">{t.name}</span>
                                                 <span className="text-theme-text-muted tabular-nums">{fmtMin(t.value)}</span>
@@ -484,7 +492,9 @@ export default function OperatoriReportDashboardV2() {
                                     const tgt = Math.round((o.ore_target_giornaliere || 8) * 60)
                                     const pct = tgt > 0 ? Math.min(100, Math.round((m / tgt) * 100)) : 0
                                     return (
-                                        <div key={o.id}>
+                                        <div key={o.id}
+                                            onClick={() => setProfileOp(o)}
+                                            className="cursor-pointer hover:bg-theme-bg-hover/40 -mx-1 px-1 rounded">
                                             <div className="flex justify-between text-[11px]">
                                                 <span className="text-theme-text-primary truncate">{o.nome} {o.cognome}</span>
                                                 <span className="text-theme-text-muted tabular-nums">{pct}%</span>
@@ -543,13 +553,15 @@ export default function OperatoriReportDashboardV2() {
                                         const target = Math.round((r.operatore.ore_target_giornaliere || 8) * 60)
                                         const straord = Math.max(0, r.minuti_lavorati - target)
                                         return (
-                                            <tr key={r.operatore.id} className="border-t border-theme-border/30 hover:bg-theme-bg-hover/30">
+                                            <tr key={r.operatore.id}
+                                                onClick={() => setProfileOp(r.operatore)}
+                                                className="border-t border-theme-border/30 hover:bg-theme-bg-hover/30 cursor-pointer">
                                                 <td className="py-1.5 px-2">
                                                     <span className="inline-flex items-center gap-2">
                                                         {r.operatore.avatar_url
                                                             ? <img src={r.operatore.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover" />
                                                             : <span className={`w-6 h-6 rounded-full ${tone} flex items-center justify-center text-white text-[10px] font-bold`}>{initials}</span>}
-                                                        <span className="text-theme-text-primary">{r.operatore.nome} {r.operatore.cognome}</span>
+                                                        <span className="text-theme-text-primary underline-offset-2 hover:underline">{r.operatore.nome} {r.operatore.cognome}</span>
                                                     </span>
                                                 </td>
                                                 <td className="py-1.5 px-2 text-theme-text-muted">{r.operatore.ruolo || '—'}</td>
@@ -713,6 +725,16 @@ export default function OperatoriReportDashboardV2() {
             </div>
 
             {loading && <div className="text-center text-theme-text-muted text-xs py-2">Caricamento dati...</div>}
+
+            {/* Modale profilo operatore — stesso component usato dal
+                Dashboard classico. Si apre cliccando su un operatore
+                nella tabella Rilevazione, nei Top 5, ovunque. */}
+            {profileOp && (
+                <OperatorProfileModal
+                    operatore={profileOp}
+                    onClose={() => setProfileOp(null)}
+                />
+            )}
         </div>
     )
 }
