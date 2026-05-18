@@ -3323,7 +3323,7 @@ export default function UnpaidBookingsTab() {
         <div className="flex-1 min-w-0 bg-theme-bg-secondary rounded-2xl border border-theme-border overflow-hidden">
         {/* Column headers — 8 colonne come da mockup */}
         <div className="grid gap-3 px-4 py-3 text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold border-b border-theme-border items-center"
-             style={{ gridTemplateColumns: 'minmax(220px,1.6fr) minmax(110px,0.9fr) minmax(160px,1.4fr) 110px 100px 110px 130px 56px' }}>
+             style={{ gridTemplateColumns: 'minmax(220px,1.6fr) minmax(110px,0.9fr) minmax(160px,1.4fr) 110px 100px 110px 130px 200px' }}>
           <div className="flex items-center gap-2">
             <button onClick={() => handleSort('name')} className="flex items-center text-theme-text-primary hover:text-dr7-gold transition-colors text-[10px] uppercase">
               Cliente<SortArrow col="name" />
@@ -3383,7 +3383,7 @@ export default function UnpaidBookingsTab() {
           return (
             <div key={group.customerKey} className="border-b border-theme-border/30 hover:bg-theme-bg-tertiary/30">
               <div className="grid gap-3 px-4 py-3 items-center"
-                   style={{ gridTemplateColumns: 'minmax(220px,1.6fr) minmax(110px,0.9fr) minmax(160px,1.4fr) 110px 100px 110px 130px 56px' }}>
+                   style={{ gridTemplateColumns: 'minmax(220px,1.6fr) minmax(110px,0.9fr) minmax(160px,1.4fr) 110px 100px 110px 130px 200px' }}>
 
                 {/* CLIENTE */}
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -3456,12 +3456,34 @@ export default function UnpaidBookingsTab() {
                   )}
                 </div>
 
-                {/* AZIONI */}
-                <div className="relative flex justify-end">
+                {/* AZIONI — bottone principale "Salda Tutto / Segna Pagato"
+                    visibile direttamente sulla riga (uscito dal menu 3-dots
+                    perche' troppo nascosto). Il menu 3-dots rimane per
+                    azioni secondarie (Pay by Link, Nexi addebito, ecc.). */}
+                <div className="relative flex justify-end items-center gap-1">
+                  {remainingEur > 0 && (
+                    <button
+                      disabled={!!processingKey}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (itemCount >= 2) {
+                          askPaymentMethod(`Salda Tutto — €${remainingEur.toFixed(2)} per ${group.customerName}`, (method) => markAllCustomerPaid(group, method))
+                        } else if (group.noleggioBookings[0]) {
+                          askPaymentMethod(`Segna Pagato — €${remainingEur.toFixed(2)} per ${group.customerName}`, (method) => updatePaymentStatus(group.noleggioBookings[0].id, 'paid', method))
+                        } else if (group.primeWashBookings[0]) {
+                          askPaymentMethod(`Segna Pagato — €${remainingEur.toFixed(2)} per ${group.customerName}`, (method) => updatePaymentStatus(group.primeWashBookings[0].id, 'paid', method))
+                        }
+                      }}
+                      title={itemCount >= 2 ? 'Crea una fattura unica con TUTTE le voci di questo cliente' : 'Segna come pagato'}
+                      className="px-3 py-1.5 rounded-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[11px] font-bold whitespace-nowrap shadow-sm transition-colors"
+                    >
+                      {itemCount >= 2 ? `Salda Tutto · €${remainingEur.toFixed(0)}` : `Segna Pagato`}
+                    </button>
+                  )}
                   <button
                     onClick={(e) => { e.stopPropagation(); setOpenActionsRowKey(isActionsOpen ? null : group.customerKey) }}
                     className="w-8 h-8 rounded-full flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-primary/50 transition-colors"
-                    title="Azioni"
+                    title="Altre azioni"
                   >
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                       <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
