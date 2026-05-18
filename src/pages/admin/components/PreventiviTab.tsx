@@ -12,6 +12,7 @@ import Input from './Input'
 import Select from './Select'
 import AddressAutocomplete from './AddressAutocomplete'
 import { kmFromDR7Office } from '../../../utils/dr7Distance'
+import { isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
 import PreventivoRejectModal, { openPreventivoRejectModal } from './PreventivoRejectModal'
 import PreventivoAcceptModal, { openPreventivoAcceptModal } from './PreventivoAcceptModal'
 import Button from './Button'
@@ -2691,7 +2692,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
 
     // If admin chose Pay by Link Nexi, generate it and send to customer via
     // WhatsApp using the same flow as ReservationsTab "Da saldare".
-    if (payment_method === 'Pay by Link Nexi' && payment_status === 'pending' && inserted?.id) {
+    // BUG FIX 2026-05-18: usa il matcher tollerante invece dello literal
+    // "Pay by Link Nexi" che mai matchava il label reale ("Nexi - Pay by
+    // Link" da Centralina Pro). Risultato: nessun link generato quando
+    // l'admin convertiva un preventivo selezionando Nexi pay-by-link.
+    if (isNexiPayByLink(payment_method) && payment_status === 'pending' && inserted?.id) {
       try {
         const totalEur = p.total_final ?? 0
         const remainingEur = Math.max(0, totalEur - amount_paid_eur)
