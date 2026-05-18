@@ -4076,7 +4076,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // ricevere autorizzazioni direzionali per i veicoli di test.
         const selectedVeh = vehicles.find(v => v.id === formData.vehicle_id)
         const isTestRental = isTestVehicle(selectedVeh?.display_name || null, selectedVeh?.plate || null)
-        requestOverride(
+        // 2026-05-18: requestOverride ritorna true se bypassato (admin in
+        // OTP_BYPASS_EMAILS o test rental). In quel caso NON abortiamo: il
+        // save continua subito, niente toast/alert/click extra.
+        const wasBypassed = requestOverride(
           primary.code,
           limitationMessage,
           {
@@ -4084,8 +4087,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             bypass: isTestRental,
           },
         )
-        submitLockRef.current = false
-        return
+        if (!wasBypassed) {
+          submitLockRef.current = false
+          return
+        }
+        // bypassed: prosegui col save
       }
     }
 
@@ -4117,25 +4123,28 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             setOverrideDetails(buildOverrideDetailsBase([
               { label: 'Motivo richiesta', value: `Cliente non idoneo al noleggio: ${customerTier.reason || 'fascia bloccata'}` },
             ]))
-            requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${customerTier.reason}`)
-            submitLockRef.current = false
-            return
+            if (!requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${customerTier.reason}`)) {
+              submitLockRef.current = false
+              return
+            }
           }
           if (customerTier?.tier === 'TIER_1' && formData.deposit_status === 'no_cauzione' && !hasOverride('tier1_no_cauzione')) {
             setOverrideDetails(buildOverrideDetailsBase([
               { label: 'Motivo richiesta', value: 'No Cauzione richiesta per cliente Fascia B' },
             ]))
-            requestOverride('tier1_no_cauzione', 'No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')
-            submitLockRef.current = false
-            return
+            if (!requestOverride('tier1_no_cauzione', 'No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')) {
+              submitLockRef.current = false
+              return
+            }
           }
           if (formData.deposit_status === 'no_cauzione' && formData.insurance_option === 'RCA' && !hasOverride('no_cauzione_rca_only')) {
             setOverrideDetails(buildOverrideDetailsBase([
               { label: 'Motivo richiesta', value: 'No Cauzione abbinata a RCA (Kasko mancante)' },
             ]))
-            requestOverride('no_cauzione_rca_only', 'No Cauzione richiede una Kasko attiva. Seleziona una Kasko prima di procedere.')
-            submitLockRef.current = false
-            return
+            if (!requestOverride('no_cauzione_rca_only', 'No Cauzione richiede una Kasko attiva. Seleziona una Kasko prima di procedere.')) {
+              submitLockRef.current = false
+              return
+            }
           }
         } else if (newCustomerData.tipo_cliente === 'azienda') {
           if (!newCustomerData.denominazione) missing.push('denominazione')
@@ -4295,9 +4304,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   { label: 'Data rilascio patente', value: new Date(patenteDate).toLocaleDateString('it-IT') },
                   { label: 'Anni patente', value: `${licYears} anni` },
                 ]))
-                requestOverride('license_too_recent', 'Patente rilasciata da meno di 3 anni. Il cliente non può noleggiare.')
-                submitLockRef.current = false
-                return
+                if (!requestOverride('license_too_recent', 'Patente rilasciata da meno di 3 anni. Il cliente non può noleggiare.')) {
+                  submitLockRef.current = false
+                  return
+                }
               }
             }
             if (customer.data_nascita && patenteDate) {
@@ -4310,9 +4320,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   { label: 'Eta cliente', value: `${age} anni` },
                   { label: 'Anni patente', value: `${licYears} anni` },
                 ]))
-                requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${tier.reason}`)
-                submitLockRef.current = false
-                return
+                if (!requestOverride('driver_blocked', `Cliente non idoneo al noleggio: ${tier.reason}`)) {
+                  submitLockRef.current = false
+                  return
+                }
               }
               if (tier.tier === 'TIER_1' && formData.deposit_status === 'no_cauzione' && !hasOverride('tier1_no_cauzione')) {
                 setOverrideDetails(buildOverrideDetailsBase([
@@ -4320,18 +4331,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   { label: 'Eta cliente', value: `${age} anni` },
                   { label: 'Anni patente', value: `${licYears} anni` },
                 ]))
-                requestOverride('tier1_no_cauzione', 'No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')
-                submitLockRef.current = false
-                return
+                if (!requestOverride('tier1_no_cauzione', 'No Cauzione non disponibile per clienti Fascia B (età 21-25 o patente 3-4 anni).')) {
+                  submitLockRef.current = false
+                  return
+                }
               }
             }
             if (formData.deposit_status === 'no_cauzione' && formData.insurance_option === 'RCA' && !hasOverride('no_cauzione_rca_only')) {
               setOverrideDetails(buildOverrideDetailsBase([
                 { label: 'Motivo richiesta', value: 'No Cauzione abbinata a RCA (Kasko mancante)' },
               ]))
-              requestOverride('no_cauzione_rca_only', 'No Cauzione richiede una Kasko attiva. Seleziona una Kasko prima di procedere.')
-              submitLockRef.current = false
-              return
+              if (!requestOverride('no_cauzione_rca_only', 'No Cauzione richiede una Kasko attiva. Seleziona una Kasko prima di procedere.')) {
+                submitLockRef.current = false
+                return
+              }
             }
           }
 
@@ -4487,10 +4500,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             { label: 'Motivo richiesta', value: 'Data e ora di ritiro nel passato' },
             { label: 'Ora attuale (Roma)', value: nowRome.toLocaleString('it-IT', { timeZone: 'Europe/Rome' }) },
           ]))
-          requestOverride('pickup_in_past', 'La data e ora di ritiro è nel passato. Serve autorizzazione per procedere.')
-          setIsSubmitting(false)
-          submitLockRef.current = false
-          return
+          if (!requestOverride('pickup_in_past', 'La data e ora di ritiro è nel passato. Serve autorizzazione per procedere.')) {
+            setIsSubmitting(false)
+            submitLockRef.current = false
+            return
+          }
         }
       }
 
@@ -5073,10 +5087,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         setOverrideDetails(buildOverrideDetailsBase([
           { label: 'Motivo richiesta', value: 'Conferma prenotazione noleggio richiede autorizzazione direzionale' },
         ]))
-        requestOverride('prenotazione_noleggio_conferma', 'Conferma prenotazione noleggio richiede autorizzazione direzionale')
-        setIsSubmitting(false)
-        submitLockRef.current = false
-        return
+        if (!requestOverride('prenotazione_noleggio_conferma', 'Conferma prenotazione noleggio richiede autorizzazione direzionale')) {
+          setIsSubmitting(false)
+          submitLockRef.current = false
+          return
+        }
       }
 
       // Create or update vehicle rental booking in bookings table (for website availability blocking)
