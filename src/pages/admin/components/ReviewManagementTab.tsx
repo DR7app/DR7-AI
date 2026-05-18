@@ -50,6 +50,34 @@ interface ReviewTemplate {
 
 type TabKey = 'ELIGIBLE' | 'TO_REVIEW' | 'EXCLUDED'
 
+interface GoogleReviewMatched {
+  google_review_name: string
+  google_display_name: string
+  candidate_id: string
+  candidate_name: string
+  score: number
+  stars: number
+  comment: string | null
+  create_time: string | null
+}
+interface GoogleReviewUnmatched {
+  google_review_name: string
+  google_display_name: string
+  stars: number
+  comment: string | null
+  create_time: string | null
+  hint: string
+}
+interface GoogleReviewsTestResponse {
+  ok: boolean
+  accountName?: string
+  locationName?: string
+  totalReviews?: number
+  matched: GoogleReviewMatched[]
+  unmatched: GoogleReviewUnmatched[]
+  warnings: string[]
+}
+
 const NETLIFY_BASE = '/.netlify/functions'
 
 const DEFAULT_SETTINGS: ReviewSettings = {
@@ -101,6 +129,8 @@ export default function ReviewManagementTab() {
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [generatingCodeId, setGeneratingCodeId] = useState<string | null>(null)
   const [bulkSending, setBulkSending] = useState(false)
+  const [testingGoogle, setTestingGoogle] = useState(false)
+  const [googleTestResult, setGoogleTestResult] = useState<GoogleReviewsTestResponse | null>(null)
   const [evaluating, setEvaluating] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
   const [savingTemplateKey, setSavingTemplateKey] = useState<string | null>(null)
@@ -395,6 +425,30 @@ export default function ReviewManagementTab() {
       toast.error(_errMsg)
     } finally {
       setSendingId(null)
+    }
+  }
+
+  // Test integrazione Google Business Profile: tira le ultime recensioni
+  // GBP e prova a fare match fuzzy con i candidati. Non scrive nulla,
+  // solo legge — serve a verificare che l'OAuth e lo scope siano OK.
+  async function handleTestGoogleReviews() {
+    setTestingGoogle(true)
+    setGoogleTestResult(null)
+    try {
+      const res = await fetch('/.netlify/functions/gbp-list-reviews', { method: 'GET' })
+      const data = (await res.json()) as GoogleReviewsTestResponse
+      setGoogleTestResult(data)
+      if (data.ok) {
+        toast.success(`Trovate ${data.totalReviews ?? 0} recensioni Google · ${data.matched.length} matchate · ${data.unmatched.length} non matchate`)
+      } else if (data.warnings && data.warnings.length > 0) {
+        toast.error(data.warnings[0])
+      } else {
+        toast.error('Risposta non valida')
+      }
+    } catch (err) {
+      toast.error('Errore test Google: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setTestingGoogle(false)
     }
   }
 
@@ -893,6 +947,17 @@ export default function ReviewManagementTab() {
           <p className="text-sm text-theme-text-secondary mt-0.5">Invia richieste di recensione ai clienti idonei</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => handleTestGoogleReviews()}
+            disabled={testingGoogle}
+            title="Tira le ultime recensioni Google Business Profile e prova a fare match con i candidati"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white text-theme-text-primary text-sm font-semibold rounded-full border border-theme-border hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11 3a8 8 0 100 16 8 8 0 000-16zm0 0v8l5 3"/>
+            </svg>
+            {testingGoogle ? 'Test in corso…' : 'Test Google reviews'}
+          </button>
           <button
             onClick={() => handleBulkSend()}
             disabled={bulkSending}
@@ -1449,6 +1514,113 @@ export default function ReviewManagementTab() {
         )
       })()}
 
+      {googleTestResult && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setGoogleTestResult(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[85vh] overflow-y-auto border border-theme-border"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b border-theme-border flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-semibold text-theme-text-primary">Test Google Business Profile · Recensioni</h3>
+                <p className="text-xs text-theme-text-secondary mt-0.5">
+                  {googleTestResult.ok
+                    ? `${googleTestResult.totalReviews ?? 0} recensioni · ${googleTestResult.matched.length} matchate · ${googleTestResult.unmatched.length} non matchate`
+                    : 'Non e\' stato possibile leggere le recensioni Google.'}
+                </p>
+              </div>
+              <button
+                onClick={() => setGoogleTestResult(null)}
+                className="text-theme-text-secondary hover:text-theme-text-primary"
+                aria-label="Chiudi"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-4 text-sm">
+              {googleTestResult.warnings.length > 0 && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <p className="font-semibold mb-1">Avvisi</p>
+                  <ul className="list-disc list-inside space-y-0.5">
+                    {googleTestResult.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              {googleTestResult.accountName && googleTestResult.locationName && (
+                <div className="text-[11px] font-mono text-theme-text-secondary">
+                  account: {googleTestResult.accountName}<br/>
+                  location: {googleTestResult.locationName}
+                </div>
+              )}
+
+              {googleTestResult.matched.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-emerald-700 mb-2">
+                    Match probabili ({googleTestResult.matched.length})
+                  </h4>
+                  <ul className="space-y-2">
+                    {googleTestResult.matched.map(m => (
+                      <li key={m.google_review_name} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-semibold text-theme-text-primary">
+                            {m.google_display_name}
+                            <span className="ml-2 text-xs text-theme-text-secondary">→ {m.candidate_name}</span>
+                          </div>
+                          <div className="text-xs text-emerald-700 font-semibold tabular-nums">{'★'.repeat(m.stars)} · {Math.round(m.score * 100)}%</div>
+                        </div>
+                        {m.comment && <p className="text-xs text-theme-text-secondary mt-1 line-clamp-2">{m.comment}</p>}
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-[10px] text-theme-text-secondary">{m.create_time ? new Date(m.create_time).toLocaleString('it-IT') : ''}</span>
+                          <button
+                            onClick={() => { handleMarcaGiaRecensito(m.candidate_id); setGoogleTestResult(null) }}
+                            className="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700"
+                          >
+                            Conferma e marca come recensito
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {googleTestResult.unmatched.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-secondary mb-2">
+                    Non matchate ({googleTestResult.unmatched.length})
+                  </h4>
+                  <ul className="space-y-2">
+                    {googleTestResult.unmatched.map(u => (
+                      <li key={u.google_review_name} className="rounded-lg border border-theme-border bg-theme-bg-secondary px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-semibold text-theme-text-primary">{u.google_display_name}</div>
+                          <div className="text-xs text-theme-text-secondary tabular-nums">{'★'.repeat(u.stars)}</div>
+                        </div>
+                        {u.comment && <p className="text-xs text-theme-text-secondary mt-1 line-clamp-2">{u.comment}</p>}
+                        <div className="flex items-center justify-between mt-1.5">
+                          <span className="text-[10px] text-theme-text-secondary">{u.create_time ? new Date(u.create_time).toLocaleString('it-IT') : ''}</span>
+                          <span className="text-[10px] italic text-theme-text-secondary">{u.hint}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {googleTestResult.ok && googleTestResult.matched.length === 0 && googleTestResult.unmatched.length === 0 && (
+                <p className="text-xs text-theme-text-secondary italic">Nessuna recensione restituita.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
