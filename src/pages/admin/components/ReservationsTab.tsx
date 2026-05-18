@@ -5311,7 +5311,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           insuranceOption: formData.insurance_option,
           deposit: formData.deposit,
           deposit_status: formData.deposit_status,
-          no_cauzione_surcharge_per_day: formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY : 0,
+          // 2026-05-18: persist depositOption + noDepositSurcharge for contract gen
+          // and WhatsApp notifications. Previously these were only preserved from
+          // existing bookings, so a fresh admin-created No Cauzione booking would
+          // show €0 surcharge in the contract / pre-rental message even though the
+          // amount was already added to total_amount.
+          depositOption: formData.deposit_option_id
+            || (formData.deposit_status === 'no_cauzione' ? 'no_deposit' : null),
+          noDepositSurcharge: Math.round(
+            (selectedDepositSurchargePerDay
+              || (formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY : 0))
+            * (revenueSuggestion?.rentalDays || 1) * 100
+          ) / 100,
+          no_cauzione_surcharge_per_day: selectedDepositSurchargePerDay
+            || (formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY : 0),
           // KM Limit
           km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
           unlimited_km: formData.unlimited_km,
@@ -8950,15 +8963,28 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               : 'N/A'
                         }</span></div>
                         <div><span className="text-theme-text-muted">KM:</span> <span className="text-theme-text-primary">{(() => {
-                          const bd = selectedBooking.booking_details;
-                          if (bd?.unlimited_km || bd?.km_limit === 'Illimitati') return 'KM Illimitati';
-                          const perDayMatch = bd?.km_limit?.match?.(/^(\d+)\/giorno$/)
+                          const bd = selectedBooking.booking_details as Record<string, unknown> | undefined;
+                          const isUnlimitedFlag = bd?.unlimited_km === true
+                            || bd?.km_limit === 'Illimitati'
+                            || (bd?.kmPackage as { type?: string } | undefined)?.type === 'unlimited'
+                            || Number((bd?.kmPackage as { includedKm?: number } | undefined)?.includedKm) >= 9999;
+                          if (isUnlimitedFlag) return 'KM Illimitati';
+                          const rawLimit = bd?.km_limit as string | number | undefined;
+                          const perDayMatch = typeof rawLimit === 'string' ? rawLimit.match(/^(\d+)\/giorno$/) : null;
                           if (perDayMatch && selectedBooking.pickup_date && selectedBooking.dropoff_date) {
-                            const kmPerDay = parseInt(perDayMatch[1])
+                            const kmPerDay = parseInt(perDayMatch[1]);
                             const days = Math.ceil((new Date(selectedBooking.dropoff_date).getTime() - new Date(selectedBooking.pickup_date).getTime()) / (1000 * 60 * 60 * 24));
                             return `${kmPerDay * days} Km (${kmPerDay}/g x ${days}gg)`;
                           }
-                          return bd?.km_limit ? `${bd.km_limit} km` : 'KM Illimitati';
+                          const numLimit = typeof rawLimit === 'string' ? parseInt(rawLimit, 10) : (typeof rawLimit === 'number' ? rawLimit : NaN);
+                          if (Number.isFinite(numLimit) && numLimit > 0) return `${numLimit} km`;
+                          const pkgKm = Number((bd?.kmPackage as { includedKm?: number } | undefined)?.includedKm);
+                          if (Number.isFinite(pkgKm) && pkgKm > 0) return `${pkgKm} km`;
+                          const pkgsTotal = Array.isArray(bd?.km_packages)
+                            ? (bd?.km_packages as Array<{ total_km?: number }>).reduce((s, p) => s + (Number(p?.total_km) || 0), 0)
+                            : 0;
+                          if (pkgsTotal > 0) return `${pkgsTotal} km`;
+                          return rawLimit ? `${rawLimit} km` : 'KM Illimitati';
                         })()}</span></div>
                         {(selectedBooking.delivery_enabled || selectedBooking.booking_details?.delivery_enabled) && (
                           <div className="mt-2 pt-2 border-t border-theme-border/30">
