@@ -19,6 +19,7 @@ import { randomUUID } from 'crypto'
 import { requireAuth } from './require-auth'
 import { getCorsOrigin } from './cors-headers'
 import { fetchNexiCardInfo } from './utils/nexiCardInfo'
+import { lookupBin as lookupBinShared } from './utils/binLookup'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -41,13 +42,11 @@ async function fetchOperationByOrderId(orderId: string): Promise<any> {
 // fetchOperationDetails removed — replaced by the shared fetchNexiCardInfo
 // helper which retries and falls back to /orders/{orderId}/operations.
 
+// Delegata a binLookup.ts (tabella locale + binlist.net fallback) per evitare
+// che il 429 di binlist.net lasci nexi_card_type vuoto sul backfill.
 async function lookupBin(bin: string): Promise<{ type: string; brand: string } | null> {
-    try {
-        const r = await fetch(`https://lookup.binlist.net/${bin}`, { headers: { 'Accept-Version': '3' } })
-        if (!r.ok) return null
-        const d = await r.json()
-        return { type: (d.type || '').toLowerCase(), brand: (d.scheme || '').toLowerCase() }
-    } catch { return null }
+    const r = await lookupBinShared(bin)
+    return r ? { type: r.type, brand: r.brand } : null
 }
 
 export const handler: Handler = async (event) => {

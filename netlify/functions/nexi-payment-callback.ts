@@ -6,6 +6,7 @@ import { detectCardType, logCardAttempt, voidNexiTransaction, cancelBooking, not
 import { renderTemplate } from './utils/messageTemplates';
 import { getClubCashbackPct } from './utils/dr7ClubCashback';
 import { fetchNexiCardInfo } from './utils/nexiCardInfo';
+import { lookupBin as lookupBinShared } from './utils/binLookup';
 import { getAdminNotificationPhone } from './utils/notificationPhone';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
@@ -38,24 +39,17 @@ async function fetchNexiOperationDetails(operationId: string): Promise<any> {
     return null;
 }
 
-// BIN lookup to determine card type (credit/debit/prepaid)
+// BIN lookup to determine card type (credit/debit/prepaid) and brand
+// (visa/mastercard/etc). Delegata al helper condiviso che ha:
+//   1) tabella locale di prefissi IT (Intesa/Unicredit/Postepay/Nexi/Revolut...)
+//   2) fallback a binlist.net (free, rate-limitato, fallisce spesso silenziosamente)
+// Senza la tabella locale, lookup.binlist.net torna 429 e nexi_card_type
+// rimane vuoto → badge credit/debit invisibile sul NexiTab.
 async function lookupBin(bin: string): Promise<{ type: string; brand: string } | null> {
-    try {
-        const res = await fetch(`https://lookup.binlist.net/${bin}`, {
-            headers: { 'Accept-Version': '3' }
-        });
-        if (res.ok) {
-            const data = await res.json();
-            console.log('[nexi-payment-callback] BIN lookup result:', JSON.stringify(data));
-            return {
-                type: (data.type || '').toLowerCase(), // credit, debit, prepaid
-                brand: (data.scheme || '').toLowerCase()
-            };
-        }
-    } catch (e) {
-        console.warn('[nexi-payment-callback] BIN lookup error:', e);
-    }
-    return null;
+    const r = await lookupBinShared(bin);
+    if (!r) return null;
+    console.log('[nexi-payment-callback] BIN lookup:', { bin, type: r.type, brand: r.brand });
+    return { type: r.type, brand: r.brand };
 }
 
 const handler: Handler = async (event) => {
