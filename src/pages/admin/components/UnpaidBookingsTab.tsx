@@ -900,9 +900,16 @@ export default function UnpaidBookingsTab() {
 
   async function handleExtensionPartialPayment(booking: UnpaidBooking, extIndex: number, paymentAmount: number) {
     try {
+      if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+        toast.error('Importo non valido')
+        return
+      }
       const extensions = [...(booking.booking_details?.extension_history || [])]
       const ext = extensions[extIndex]
-      if (!ext) return
+      if (!ext) {
+        toast.error('Estensione non trovata')
+        return
+      }
 
       const total = ext.additional_amount || 0
       const currentPaid = ext.amount_paid || 0
@@ -1321,11 +1328,30 @@ export default function UnpaidBookingsTab() {
 
   async function handleBookingPartialPayment(bookingId: string, amount: number) {
     try {
-      const booking = bookings.find(b => b.id === bookingId)
-      if (!booking) return
+      if (!bookingId || !Number.isFinite(amount) || amount <= 0) {
+        toast.error('Importo non valido')
+        return
+      }
+      // Local state may be momentarily stale because the realtime subscription
+      // resets `bookings` between the "Parziale" click and the OK click. Fetch
+      // fresh from DB so we never silently bail.
+      let booking = bookings.find(b => b.id === bookingId)
+      if (!booking) {
+        const { data: fresh, error: fetchErr } = await supabase
+          .from('bookings')
+          .select('id, price_total, booking_details, service_type')
+          .eq('id', bookingId)
+          .maybeSingle()
+        if (fetchErr) throw fetchErr
+        if (!fresh) {
+          toast.error('Prenotazione non trovata')
+          return
+        }
+        booking = fresh as unknown as UnpaidBooking
+      }
 
       const details = booking.booking_details || {}
-      const currentPaid = details.amountPaid || 0
+      const currentPaid = Number(details.amountPaid) || 0
       const newPaid = currentPaid + Math.round(amount * 100)
       const isFullyPaid = newPaid >= booking.price_total
 
@@ -1338,7 +1364,7 @@ export default function UnpaidBookingsTab() {
         .eq('id', bookingId)
 
       if (error) throw error
-      toast.success('Pagamento parziale registrato')
+      toast.success(`Pagamento parziale €${amount.toFixed(2)} registrato`)
 
       // DR7 Privilege — fire when partial completes the full balance.
       if (isFullyPaid) {
