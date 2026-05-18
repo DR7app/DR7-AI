@@ -234,15 +234,72 @@ export default function OperatoriReportDashboard() {
                 }
             }
             if (opList.length === 0) {
-                let opQuery = supabase
-                    .from('operatori_persone')
-                    .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, avatar_url')
-                    .eq('attivo', true)
-                if (!isDirezione && user?.id) {
-                    opQuery = opQuery.or(`user_id.eq.${user.id},email.ilike.${myEmail}`)
+                if (isDirezione) {
+                    const { data: ops } = await supabase
+                        .from('operatori_persone')
+                        .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, avatar_url')
+                        .eq('attivo', true)
+                    opList = (ops || []) as Operatore[]
+                } else if (user) {
+                    // Non-direzione: stessa fallback chain di RilevazioneOrariTab
+                    // (user_id → email → auto-link → auto-create). Prima il
+                    // singolo .or() con email contenente '.' poteva fallire
+                    // silenziosamente lasciando il report vuoto per operatori
+                    // come salvatore che hanno user_id NULL sulla loro riga.
+                    const SELECT = 'id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, avatar_url'
+                    // 1) match per user_id
+                    const { data: byId } = await supabase
+                        .from('operatori_persone')
+                        .select(SELECT)
+                        .eq('attivo', true)
+                        .eq('user_id', user.id)
+                    opList = (byId || []) as Operatore[]
+                    // 2) fallback per email (gestisce righe con user_id NULL)
+                    if (opList.length === 0 && user.email) {
+                        const { data: byEmail } = await supabase
+                            .from('operatori_persone')
+                            .select(SELECT)
+                            .eq('attivo', true)
+                            .ilike('email', user.email)
+                        opList = (byEmail || []) as Operatore[]
+                        // 3) se trovato per email senza user_id, linka l'auth user
+                        const linkable = opList.find(o => !o.user_id)
+                        if (linkable) {
+                            await supabase.from('operatori_persone').update({ user_id: user.id }).eq('id', linkable.id)
+                        }
+                    }
+                    // 4) auto-create se ancora niente (operatore mai registrato
+                    //    in operatori_persone — succede se l'admin ha solo il
+                    //    record `admins` ma non quello operativo).
+                    if (opList.length === 0 && user.email) {
+                        let fullName = ''
+                        try {
+                            const { data: adminRow } = await supabase
+                                .from('admins')
+                                .select('nome')
+                                .ilike('email', user.email)
+                                .maybeSingle()
+                            fullName = (adminRow?.nome || '').trim()
+                        } catch { /* admins RLS-blocked: ignoro */ }
+                        const local = user.email.split('@')[0]
+                        const fallback = local.charAt(0).toUpperCase() + local.slice(1).toLowerCase()
+                        const [nome, ...rest] = (fullName || fallback).split(/\s+/)
+                        const cognome = rest.join(' ') || null
+                        const { data: created } = await supabase
+                            .from('operatori_persone')
+                            .insert({
+                                nome: nome || fallback,
+                                cognome,
+                                email: user.email.toLowerCase(),
+                                user_id: user.id,
+                                ore_target_giornaliere: 8,
+                                attivo: true,
+                            })
+                            .select(SELECT)
+                            .single()
+                        if (created) opList = [created as Operatore]
+                    }
                 }
-                const { data: ops } = await opQuery
-                opList = (ops || []) as Operatore[]
             }
             setOperatori(opList)
             const myRow = opList.find(o => o.user_id === user?.id)
