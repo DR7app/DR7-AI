@@ -22,7 +22,16 @@ export const handler: Handler = async (event) => {
 
     try {
         const body = JSON.parse(event.body || '{}')
-        const { bookingId, customerId, note, type, paymentStatus, rawDescriptions, discountAmount } = body
+        const { bookingId, customerId, note, type, paymentStatus, rawDescriptions, discountAmount, paymentMethod } = body
+        // 2026-05-18: DR7 Wallet (credit_wallet) NON deve generare fattura SDI
+        // perche' l'IVA e' gia' stata pagata sulla ricarica del wallet.
+        // Riconosciamo ogni variante: "credit_wallet", "Credit Wallet",
+        // "DR7 Wallet", "wallet", etc.
+        const isWalletPayment = (() => {
+            const m = String(paymentMethod || '').toLowerCase().trim().replace(/\s+/g, '_').replace(/^dr7_/, '')
+            return m === 'credit_wallet' || m === 'wallet' || m === 'dr7_wallet'
+                || m.includes('wallet')
+        })()
         const discount = Number.isFinite(Number(discountAmount)) && Number(discountAmount) > 0
             ? Math.round(Number(discountAmount) * 100) / 100
             : 0
@@ -298,6 +307,9 @@ export const handler: Handler = async (event) => {
             console.log('[Penalty Invoice] Test vehicle — skipping SDI, will send PDF via WhatsApp only')
         } else if (invoiceTotale <= 0) {
             console.log('[Penalty Invoice] Totale <= 0 — skipping SDI (no electronic invoice for zero-amount)')
+        } else if (isWalletPayment) {
+            console.log('[Penalty Invoice] Pagamento DR7 Wallet — skip SDI (IVA gia\' pagata in fase di ricarica)')
+            await supabase.from('fatture').update({ sdi_status: 'skipped_wallet' }).eq('id', invoice.id)
         } else if (paymentStatus === 'paid' && invoice.customer_tax_code) {
             try {
                 const xmlContent = generateFatturaXML(invoice as any)

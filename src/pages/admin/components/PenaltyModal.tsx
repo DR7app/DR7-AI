@@ -269,7 +269,8 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                         items: cart.map(c => ({ label: c.label, amount: c.unitPrice, quantity: c.quantity })),
                         discountAmount: cartDiscount > 0 ? cartDiscount : undefined,
                         note: note || undefined,
-                        paymentStatus
+                        paymentStatus,
+                        paymentMethod, // 2026-05-18: per skip SDI quando DR7 Wallet
                     })
                 })
 

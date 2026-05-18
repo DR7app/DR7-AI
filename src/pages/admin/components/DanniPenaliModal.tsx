@@ -608,7 +608,8 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                         discountAmount: cartDiscount > 0 ? cartDiscount : undefined,
                         note: note || undefined,
                         type: paymentPurpose,
-                        paymentStatus
+                        paymentStatus,
+                        paymentMethod, // 2026-05-18: per skip SDI quando DR7 Wallet
                     })
                 })
                 const data = await response.json()

@@ -279,7 +279,8 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                         items: cart.map(c => ({ label: c.label, amount: c.unitPrice, quantity: c.quantity })),
                         note: note || undefined,
                         type: 'danni',
-                        paymentStatus
+                        paymentStatus,
+                        paymentMethod, // 2026-05-18: per skip SDI quando DR7 Wallet
                     })
                 })
 
