@@ -45,6 +45,7 @@ interface PenaltyDannoItem {
   date: string
   status: 'pending' | 'invoiced'
   fatturaNumero?: string
+  fatturaId?: string
   arrayKey: 'penalties' | 'danni'
   arrayIndex: number // index in the booking_details array (for pending items)
   photos?: string[] // danni photo URLs
@@ -67,6 +68,27 @@ function formatCurrency(amount: number): string {
 
 function normalizeKey(name: string): string {
   return (name || '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+async function openFatturaPdf(invoiceId: string) {
+  const printWindow = window.open('', '_blank')
+  if (printWindow) {
+    printWindow.document.write(`<html><body style="font-family:system-ui,sans-serif;text-align:center;padding:50px;">Generazione fattura in corso...</body></html>`)
+  }
+  try {
+    const response = await authFetch('/.netlify/functions/generate-invoice-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invoiceId })
+    })
+    if (!response.ok) throw new Error('Failed to generate invoice PDF')
+    const html = await response.text()
+    if (printWindow) { printWindow.document.open(); printWindow.document.write(html); printWindow.document.close() }
+  } catch (err) {
+    console.error('Open fattura PDF error:', err)
+    if (printWindow) printWindow.close()
+    toast.error('Errore apertura fattura')
+  }
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -255,6 +277,7 @@ export default function GestioneDanniTab() {
             date: '',
             status: 'invoiced',
             fatturaNumero: f.numero_fattura || undefined,
+            fatturaId: f.id || undefined,
             arrayKey: classification === 'danni' ? 'danni' : 'penalties',
             arrayIndex: -1,
           }
@@ -1163,11 +1186,23 @@ function ItemRow({ item, accentColor, onDelete, onUpdateAmount, onPartialPayment
           )}
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             {item.paymentStatus === 'paid' || item.status === 'invoiced' ? (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 font-medium">
-                {item.status === 'invoiced'
-                  ? `Fatturato${item.fatturaNumero ? ` — ${item.fatturaNumero}` : ''}`
-                  : 'Pagato'}
-              </span>
+              item.status === 'invoiced' && item.fatturaId ? (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); openFatturaPdf(item.fatturaId!) }}
+                  title="Apri la fattura PDF"
+                  className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 font-medium hover:bg-green-500/25 hover:underline inline-flex items-center gap-1"
+                >
+                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                  Fatturato{item.fatturaNumero ? ` — ${item.fatturaNumero}` : ''}
+                </button>
+              ) : (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 font-medium">
+                  {item.status === 'invoiced'
+                    ? `Fatturato${item.fatturaNumero ? ` — ${item.fatturaNumero}` : ''}`
+                    : 'Pagato'}
+                </span>
+              )
             ) : isPartial ? (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 font-medium">
                 Parziale — {formatCurrency(item.amountPaid)}/{formatCurrency(item.total)}
