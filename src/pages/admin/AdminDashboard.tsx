@@ -272,7 +272,8 @@ export default function AdminDashboard() {
       { tab: 'report-traffic', label: 'Rendimento Sito' },
       { tab: 'report-gmb', label: 'Rendimento Google My Business' },
       { tab: 'operatori', label: 'Operatori' },
-      { tab: 'rilevazione-orari', label: 'Rilevazione Orari' },
+      // 2026-05-18: 'rilevazione-orari' rimossa dal menu — adesso e' una
+      // sub-view dentro Operatori (Dashboard / Rilevazione / Contratti / Audit).
       { tab: 'dashboard-kpi', label: 'Dashboard' },
     ] },
     { name: 'Comunicazione', tabs: [

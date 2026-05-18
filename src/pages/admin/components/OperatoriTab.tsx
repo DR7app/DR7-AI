@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, useEffect, useCallback, useRef } from 'react'
+import { Fragment, useMemo, useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { formatAdminLog, formatEntityLabel } from '../../../utils/formatAdminLog'
@@ -6,6 +6,11 @@ import OperatoriReportDashboard from './OperatoriReportDashboard'
 import InviteOperatoreModal from './InviteOperatoreModal'
 import ContrattiOperatoreView from './ContrattiOperatoreView'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+
+// 2026-05-18: Rilevazione Orari spostata DENTRO Operatori (sub-view).
+// Prima era una top-level tab "Rilevazione Orari" — ora vive insieme
+// al Report Orari (Dashboard) e a Contratti, logicamente raggruppata.
+const RilevazioneOrariTab = lazy(() => import('./RilevazioneOrariTab'))
 
 // Per-row display: which admin emails get the "Amministratore" label in the
 // roster. Email-only failsafe (matches useAdminRole.ROLE_FAILSAFE); when a
@@ -225,19 +230,25 @@ function previousMonthRange(): { from: string; to: string } {
 
 const AGG_HARD_LIMIT = 5000  // cap aggregation fetch to avoid OOM
 
-type OperatoriView = 'dashboard' | 'audit' | 'contratti'
+type OperatoriView = 'dashboard' | 'rilevazione' | 'audit' | 'contratti'
 
 function OperatoriViewSwitch({ view, setView }: { view: OperatoriView; setView: (v: OperatoriView) => void }) {
+  const LABELS: Record<OperatoriView, string> = {
+    dashboard: 'Report Orari',
+    rilevazione: 'Rilevazione Orari',
+    contratti: 'Contratti',
+    audit: 'Audit log',
+  }
   return (
     <div className="flex justify-end">
       <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-secondary p-0.5 text-xs">
-        {(['dashboard', 'contratti', 'audit'] as const).map(v => (
+        {(['dashboard', 'rilevazione', 'contratti', 'audit'] as const).map(v => (
           <button
             key={v}
             onClick={() => setView(v)}
             className={`px-3 py-1.5 rounded-full ${view === v ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}
           >
-            {v === 'dashboard' ? 'Dashboard' : v === 'contratti' ? 'Contratti' : 'Audit log'}
+            {LABELS[v]}
           </button>
         ))}
       </div>
@@ -253,6 +264,16 @@ export default function OperatoriTab() {
       <div className="space-y-3">
         <OperatoriViewSwitch view={view} setView={setView} />
         <OperatoriReportDashboard />
+      </div>
+    )
+  }
+  if (view === 'rilevazione') {
+    return (
+      <div className="space-y-3">
+        <OperatoriViewSwitch view={view} setView={setView} />
+        <Suspense fallback={<div className="p-6 text-center text-theme-text-muted">Caricamento Rilevazione Orari...</div>}>
+          <RilevazioneOrariTab />
+        </Suspense>
       </div>
     )
   }
