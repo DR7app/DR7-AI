@@ -51,11 +51,25 @@ export const handler: Handler = async (event) => {
 
         console.log(`[delete-booking] Attempting to delete booking: ${bookingId}`)
 
-        // Soft delete: mark as cancelled (preserves booking, contracts, fatture)
-        const { error } = await supabase
+        // Soft delete: mark as cancelled (preserves booking, contracts, fatture).
+        // Aggiungiamo `.select(...)` per CONFERMARE che la riga e' davvero
+        // passata a 'cancelled'. Prima il chiamante riceveva "success" anche
+        // se la update colpiva 0 righe (RLS/constraint silenzioso), e la
+        // pagina mostrava ancora "CONFERMATA".
+        const { data: updatedRow, error } = await supabase
             .from('bookings')
             .update({ status: 'cancelled' })
             .eq('id', bookingId)
+            .select('id, status, customer_name, customer_email, customer_phone, vehicle_name, pickup_date, dropoff_date')
+            .maybeSingle()
+        if (!error && !updatedRow) {
+            console.error(`[delete-booking] update returned no row for ${bookingId}`)
+            return {
+                statusCode: 404,
+                headers,
+                body: JSON.stringify({ error: 'Prenotazione non trovata o gia\' annullata' })
+            }
+        }
 
         // Cancel any active signature_requests for this booking so the
         // 30-min reminder cron stops chasing the customer with "Firma il
@@ -108,7 +122,7 @@ export const handler: Handler = async (event) => {
         return {
             statusCode: 200,
             headers,
-            body: JSON.stringify({ message: 'Booking deleted successfully' })
+            body: JSON.stringify({ message: 'Booking deleted successfully', booking: updatedRow })
         }
     } catch (error: any) {
         console.error('[delete-booking] Server error:', error)

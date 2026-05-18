@@ -2936,6 +2936,35 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const errData = await deleteRes.json().catch(() => ({}))
           throw new Error(errData.error || 'Errore durante l\'eliminazione')
         }
+
+        // Notify customer via WhatsApp template "booking_cancelled_whatsapp"
+        // (gestito in Messaggi di Sistema Pro). Non-blocking: se manca il
+        // template o il telefono, log + continua.
+        const cancelledBooking = booking || bookings.find(b => b.id === bookingId)
+        const custPhone = cancelledBooking?.customer_phone
+          || cancelledBooking?.booking_details?.customer?.phone
+        if (custPhone) {
+          try {
+            await authFetch('/.netlify/functions/send-whatsapp-notification', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                customPhone: custPhone,
+                templateKey: 'booking_cancelled_whatsapp',
+                templateVars: {
+                  custName: cancelledBooking?.customer_name || 'Cliente',
+                  customer_name: cancelledBooking?.customer_name || 'Cliente',
+                  bookingRef: `DR7-${bookingId.slice(0, 8).toUpperCase()}`,
+                  vehicle_name: cancelledBooking?.vehicle_name || '',
+                  pickup_date: cancelledBooking?.pickup_date || '',
+                  dropoff_date: cancelledBooking?.dropoff_date || '',
+                },
+              }),
+            })
+          } catch (waErr) {
+            console.warn('[handleDeleteBooking] WhatsApp cancellation send failed (non-blocking):', waErr)
+          }
+        }
       } else {
         const reservation = reservations.find(r => r.id === bookingId)
         customerName = reservation?.customers?.full_name || ''
