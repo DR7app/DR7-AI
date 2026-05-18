@@ -91,10 +91,28 @@ export function useLimitationOverride() {
 
   // Carica e memorizza l'email dell'admin loggato — usata per il bypass
   // globale (direzione + Salvatore). Letta una sola volta al mount.
-  const adminEmailRef = useRef<string | null>(null)
+  // 2026-05-18: prima leggevamo solo via getSession() async — se l'admin
+  // cliccava Salva prima della risposta, adminEmailRef era null e il
+  // bypass falliva. Adesso leggiamo sincronamente dal localStorage al
+  // mount (Supabase persiste la sessione li') con fallback all'async.
+  const readEmailSync = (): string | null => {
+    try {
+      const keys = Object.keys(localStorage).filter(k => k.startsWith('sb-') && k.endsWith('-auth-token'))
+      for (const k of keys) {
+        const raw = localStorage.getItem(k)
+        if (!raw) continue
+        const parsed = JSON.parse(raw)
+        const email = parsed?.user?.email || parsed?.currentSession?.user?.email
+        if (email) return String(email).toLowerCase()
+      }
+    } catch { /* fallback to async */ }
+    return null
+  }
+  const adminEmailRef = useRef<string | null>(readEmailSync())
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      adminEmailRef.current = (data.session?.user?.email || '').toLowerCase()
+      const e = (data.session?.user?.email || '').toLowerCase()
+      if (e) adminEmailRef.current = e
     })
   }, [])
 
@@ -121,6 +139,11 @@ export function useLimitationOverride() {
     // come 'caller_bypass' per tracciabilita'.
     const explicitBypass = typeof contextOrOptions === 'object' && contextOrOptions?.bypass === true
     // Bypass globale per direzione + Salvatore: nessun OTP, mai, per qualsiasi codice.
+    // Re-leggi dal localStorage se la ref e' ancora null (race-condition con mount).
+    if (!adminEmailRef.current) {
+      const fresh = readEmailSync()
+      if (fresh) adminEmailRef.current = fresh
+    }
     const adminBypass = !!adminEmailRef.current && OTP_BYPASS_EMAILS.has(adminEmailRef.current)
     const callerBypass = explicitBypass || adminBypass
 
