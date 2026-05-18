@@ -41,7 +41,31 @@ interface ExtractedPersonData {
     notes?: string;
 }
 
-const EXTRACTION_PROMPT = `Estrai i dati da questo documento italiano.
+const EXTRACTION_PROMPT = `Estrai i dati dai documenti italiani in questa immagine.
+
+!!! L'IMMAGINE PUO' CONTENERE PIU' DOCUMENTI INSIEME !!!
+Spesso il cliente carica una scansione/foto con DUE documenti diversi
+impilati sulla stessa immagine, ad esempio:
+- Fronte Carta Identità SOPRA + Fronte Patente SOTTO
+- Retro Carta Identità SOPRA + Retro Patente SOTTO
+- Tessera Sanitaria/CF SOPRA + Carta Identità SOTTO
+- Carta Identità Fronte SOPRA + Carta Identità Retro SOTTO
+
+QUANDO VEDI PIU' DOCUMENTI:
+1. Esamina CIASCUN documento separatamente.
+2. Compila TUTTI i campi pertinenti nello STESSO JSON di output:
+   - Campi della carta identità → documento_* (documento_numero, scadenza, ecc.)
+   - Campi della patente → patente_* (patente_numero, scadenza, ecc.)
+   - codice_fiscale → estrai dalla tessera sanitaria/CF se presente,
+     altrimenti dalla carta identità (la CIE riporta il CF sul retro)
+3. nome, cognome, data_nascita, sesso → usa il valore consistente tra
+   i documenti (devono essere identici). Se differiscono, usa il piu'
+   leggibile.
+4. NON ignorare un documento perche' "ce n'e' un altro nella stessa
+   immagine". Estraili TUTTI.
+5. documento_tipo deve riflettere il documento di identita' (Carta
+   d'Identità Elettronica / Passaporto / ecc.), NON la patente — la
+   patente ha i suoi campi patente_*.
 
 !!! REGOLA CRITICA PER PATENTE !!!
 Il NUMERO PATENTE si trova SOLO sul FRONTE della patente, al campo numero 5.
