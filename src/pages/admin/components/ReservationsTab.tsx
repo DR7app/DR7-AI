@@ -2950,7 +2950,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 customPhone: custPhone,
-                templateKey: 'booking_cancelled_whatsapp',
+                // Template "Annullamento al Cliente" definito in Messaggi
+                // di Sistema Pro. Diretto sul pro_* key, niente
+                // mappatura OLD_TO_PRO.
+                templateKey: 'pro_annullamento_cliente',
                 templateVars: {
                   custName: cancelledBooking?.customer_name || 'Cliente',
                   customer_name: cancelledBooking?.customer_name || 'Cliente',
