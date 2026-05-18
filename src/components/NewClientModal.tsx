@@ -455,31 +455,39 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       logger.log('[NewClientModal] Saving customer. editingId:', editingId)
       logger.log('[NewClientModal] Customer data to save:', customerData)
 
-      let result
-      if (editingId) {
-        // UPDATE existing customer
-        const { data: updatedClient, error } = await supabase
-          .from('customers_extended')
-          .update(customerData)
-          .eq('id', editingId)
-          .select()
-          .single()
-
-        if (error) throw error
-        result = updatedClient
-        toast.success('Cliente aggiornato con successo!')
-      } else {
-        // INSERT new customer
-        const { data: newClient, error } = await supabase
-          .from('customers_extended')
-          .insert([customerData])
-          .select()
-          .single()
-
-        if (error) throw error
-        result = newClient
-        toast.success('Cliente creato con successo!')
+      // 2026-05-18: i clienti aziendali (con tanti campi) richiedono una sessione
+      // ancora valida. Se il browser e' aperto da un po' il JWT puo' essere
+      // scaduto → l'insert RLS rispondeva "expired token". Forziamo il refresh
+      // della sessione PRIMA del save e poi passiamo tramite save-customer
+      // (service-role) che bypassa RLS in modo affidabile.
+      const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession()
+      const accessToken = refreshed?.session?.access_token
+        || (await supabase.auth.getSession()).data.session?.access_token
+      if (refreshErr || !accessToken) {
+        toast.error('Sessione scaduta. Effettua nuovamente il login e riprova.')
+        setIsSaving(false)
+        return
       }
+
+      let result
+      const saveRes = await fetch('/.netlify/functions/save-customer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          customerData,
+          customerId: editingId || undefined,
+        }),
+      })
+      if (!saveRes.ok) {
+        const errJson = await saveRes.json().catch(() => ({}))
+        throw new Error(errJson.error || `save-customer ${saveRes.status}`)
+      }
+      const saveJson = await saveRes.json()
+      result = saveJson.customer || saveJson.data || saveJson
+      toast.success(editingId ? 'Cliente aggiornato con successo!' : 'Cliente creato con successo!')
 
       if (onClientCreated && result) {
         onClientCreated(result.id)
