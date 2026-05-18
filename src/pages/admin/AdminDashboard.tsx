@@ -12,6 +12,7 @@ import MyDayEditorModal from './components/MyDayEditorModal'
 import { useAdminRole } from '../../hooks/useAdminRole'
 import { clearAdminCache } from '../../utils/logAdminAction'
 import lazyWithRetry from '../../utils/lazyWithRetry'
+import SedePicker from '../../components/SedePicker'
 
 // Lazy-load all tabs with automatic retry on chunk load failure (post-deploy resilience)
 const CustomersTab = lazyWithRetry(() => import('./components/CustomersTab'))
@@ -657,6 +658,10 @@ export default function AdminDashboard() {
             <span className="text-sm text-theme-text-secondary hidden lg:block">
               {new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}
             </span>
+
+            {/* Sede picker — visible solo per direzione con piu' sedi.
+                Per operatori sede-bound mostra solo il nome sede come badge. */}
+            <SedePicker />
 
             {/* Operator badge — current admin login. On mobile shows only the
                 square avatar + chevron; on sm+ also name + role. Click toggles

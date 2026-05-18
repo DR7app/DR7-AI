@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast'
 import { VehicleAlarmProvider } from './contexts/VehicleAlarmContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { ClientStatusProvider } from './contexts/ClientStatusContext'
+import { BrandSedeProvider } from './contexts/BrandSedeContext'
 import ErrorBoundary from './components/ErrorBoundary'
 import AlarmNotification from './components/AlarmNotification'
 import LateReturnAlarm from './components/admin/LateReturnAlarm'
@@ -66,13 +67,15 @@ function App() {
               path="/admin"
               element={
                 <AdminRoute>
-                  <ClientStatusProvider>
-                    <VehicleAlarmProvider>
-                      <AlarmNotification />
-                      <LateReturnAlarm />
-                      <AdminDashboard />
-                    </VehicleAlarmProvider>
-                  </ClientStatusProvider>
+                  <BrandSedeProvider>
+                    <ClientStatusProvider>
+                      <VehicleAlarmProvider>
+                        <AlarmNotification />
+                        <LateReturnAlarm />
+                        <AdminDashboard />
+                      </VehicleAlarmProvider>
+                    </ClientStatusProvider>
+                  </BrandSedeProvider>
                 </AdminRoute>
               }
             />
