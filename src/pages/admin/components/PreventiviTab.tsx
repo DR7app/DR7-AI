@@ -3715,12 +3715,24 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                     : 0
                   const rate = Number(rentalConfig?.delivery?.price_per_km) || 3
                   const fee = km * rate
-                  setForm(prev => ({
-                    ...prev,
-                    delivery_address: parts.full,
-                    delivery_km: km,
-                    delivery_fee: fee > 0 ? fee.toFixed(2) : '0',
-                  }))
+                  // BUG FIX 2026-05-18: rispetta il prezzo manuale digitato
+                  // dall'admin. Prima qualsiasi nuova selezione di indirizzo
+                  // sovrascriveva delivery_fee col calcolato km×rate, e
+                  // l'admin perdeva il valore appena scritto. Adesso il fee
+                  // calcolato e' solo un SUGGERIMENTO: lo usiamo solo se il
+                  // campo e' vuoto o 0 (admin non ha ancora messo nulla).
+                  setForm(prev => {
+                    const currentFee = parseFloat(prev.delivery_fee || '0')
+                    const keepManual = currentFee > 0
+                    return {
+                      ...prev,
+                      delivery_address: parts.full,
+                      delivery_km: km,
+                      delivery_fee: keepManual
+                        ? prev.delivery_fee
+                        : (fee > 0 ? fee.toFixed(2) : '0'),
+                    }
+                  })
                 }}
                 placeholder="Inizia a digitare via, città..."
               />
@@ -3775,12 +3787,21 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                     : 0
                   const rate = Number(rentalConfig?.delivery?.price_per_km) || 3
                   const fee = km * rate
-                  setForm(prev => ({
-                    ...prev,
-                    pickup_address: parts.full,
-                    pickup_km: km,
-                    pickup_fee: fee > 0 ? fee.toFixed(2) : '0',
-                  }))
+                  // BUG FIX 2026-05-18: rispetta il prezzo manuale digitato
+                  // dall'admin (stesso fix di delivery_fee). Il fee calcolato
+                  // e' solo un SUGGERIMENTO se l'admin non ha gia' messo nulla.
+                  setForm(prev => {
+                    const currentFee = parseFloat(prev.pickup_fee || '0')
+                    const keepManual = currentFee > 0
+                    return {
+                      ...prev,
+                      pickup_address: parts.full,
+                      pickup_km: km,
+                      pickup_fee: keepManual
+                        ? prev.pickup_fee
+                        : (fee > 0 ? fee.toFixed(2) : '0'),
+                    }
+                  })
                 }}
                 placeholder="Inizia a digitare via, città..."
               />
