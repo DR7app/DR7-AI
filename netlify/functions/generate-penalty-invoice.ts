@@ -291,9 +291,13 @@ export const handler: Handler = async (event) => {
             throw insertError
         }
 
-        // Auto-send to SDI via Aruba if paid and customer has tax code (skip for test vehicles)
+        // Auto-send to SDI via Aruba if paid, customer has tax code, AND totale > 0
+        // (skip SDI for test vehicles and zero-amount fatture)
+        const invoiceTotale = Number(invoice.importo_totale || invoice.totale || 0)
         if (isTestVehicle) {
             console.log('[Penalty Invoice] Test vehicle — skipping SDI, will send PDF via WhatsApp only')
+        } else if (invoiceTotale <= 0) {
+            console.log('[Penalty Invoice] Totale <= 0 — skipping SDI (no electronic invoice for zero-amount)')
         } else if (paymentStatus === 'paid' && invoice.customer_tax_code) {
             try {
                 const xmlContent = generateFatturaXML(invoice as any)
