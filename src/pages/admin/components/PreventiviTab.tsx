@@ -3706,9 +3706,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           {form.pickup_location === 'domicilio' && (
             <div className="space-y-2">
               <AddressAutocomplete
-                label="Indirizzo consegna"
+                label="Indirizzo consegna (basta la città)"
                 value={form.delivery_address}
                 onChange={(v) => setForm(prev => ({ ...prev, delivery_address: v }))}
+                placeholder="Es. Cagliari oppure Via Roma 15, Cagliari"
                 onSelectParts={(parts) => {
                   const km = (parts.lat != null && parts.lon != null)
                     ? kmFromDR7Office({ lat: parts.lat, lon: parts.lon })
@@ -3734,7 +3735,6 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                     }
                   })
                 }}
-                placeholder="Inizia a digitare via, città..."
               />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div className="bg-theme-bg-tertiary/40 border border-theme-border rounded px-3 py-2">
@@ -3778,9 +3778,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           {form.dropoff_location === 'domicilio' && (
             <div className="space-y-2">
               <AddressAutocomplete
-                label="Indirizzo ritiro"
+                label="Indirizzo ritiro (basta la città)"
                 value={form.pickup_address}
                 onChange={(v) => setForm(prev => ({ ...prev, pickup_address: v }))}
+                placeholder="Es. Cagliari oppure Via Roma 15, Cagliari"
                 onSelectParts={(parts) => {
                   const km = (parts.lat != null && parts.lon != null)
                     ? kmFromDR7Office({ lat: parts.lat, lon: parts.lon })
@@ -3803,7 +3804,6 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                     }
                   })
                 }}
-                placeholder="Inizia a digitare via, città..."
               />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div className="bg-theme-bg-tertiary/40 border border-theme-border rounded px-3 py-2">

@@ -4507,12 +4507,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // ===== VALIDATION: Home Delivery fields =====
+      // 2026-05-18: solo Città + Costo sono richiesti. Indirizzo completo
+      // (via/CAP/provincia) e' opzionale — l'utente vuole poter mettere
+      // solo "Cagliari" senza dover compilare l'indirizzo intero.
       if (formData.delivery_enabled) {
         const deliveryMissing: string[] = []
-        if (!formData.delivery_street.trim()) deliveryMissing.push('Via e numero (consegna)')
         if (!formData.delivery_city.trim()) deliveryMissing.push('Città (consegna)')
-        if (!formData.delivery_zip.trim()) deliveryMissing.push('CAP (consegna)')
-        if (!formData.delivery_province.trim()) deliveryMissing.push('Provincia (consegna)')
         if (!formData.delivery_fee || parseFloat(formData.delivery_fee) < 0) deliveryMissing.push('Costo consegna')
         if (deliveryMissing.length > 0) {
           setTimeout(() => {
@@ -4529,12 +4529,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // ===== VALIDATION: Home Pickup fields =====
+      // 2026-05-18: solo Città + Costo sono richiesti per ritiro a domicilio.
       if (formData.pickup_enabled) {
         const pickupMissing: string[] = []
-        if (!formData.pickup_street.trim()) pickupMissing.push('Via e numero (ritiro)')
         if (!formData.pickup_city.trim()) pickupMissing.push('Città (ritiro)')
-        if (!formData.pickup_zip.trim()) pickupMissing.push('CAP (ritiro)')
-        if (!formData.pickup_province.trim()) pickupMissing.push('Provincia (ritiro)')
         if (!formData.pickup_fee || parseFloat(formData.pickup_fee) < 0) pickupMissing.push('Costo ritiro')
         if (pickupMissing.length > 0) {
           setTimeout(() => {
@@ -7019,10 +7017,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 />
                 {formData.pickup_location === 'domicilio' && (
                   <div className="mt-2 space-y-2 p-3 bg-theme-bg-tertiary rounded border border-theme-border">
-                    <p className="text-xs text-amber-400 font-semibold">Indirizzo di consegna</p>
+                    <p className="text-xs text-amber-400 font-semibold">Indirizzo di consegna (basta la città)</p>
                     <AddressAutocomplete
-                      label="Indirizzo Consegna *"
-                      required
+                      label="Indirizzo Consegna (opzionale)"
                       value={formData.delivery_street}
                       onChange={(val) => setFormData(prev => ({ ...prev, delivery_street: val }))}
                       onSelectParts={(parts) => setFormData(prev => ({
@@ -7107,10 +7104,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 />
                 {formData.dropoff_location === 'domicilio' && (
                   <div className="mt-2 space-y-2 p-3 bg-theme-bg-tertiary rounded border border-theme-border">
-                    <p className="text-xs text-amber-400 font-semibold">Indirizzo di ritiro veicolo</p>
+                    <p className="text-xs text-amber-400 font-semibold">Indirizzo di ritiro veicolo (basta la città)</p>
                     <AddressAutocomplete
-                      label="Indirizzo Ritiro *"
-                      required
+                      label="Indirizzo Ritiro (opzionale)"
                       value={formData.pickup_street}
                       onChange={(val) => setFormData(prev => ({ ...prev, pickup_street: val }))}
                       onSelectParts={(parts) => setFormData(prev => ({
@@ -8307,42 +8303,73 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               />
             </div>
 
-            {/* Riepilogo Totale - shows breakdown with delivery/pickup fees */}
-            {(formData.delivery_enabled || formData.pickup_enabled) && (
-              <div className="md:col-span-2 bg-theme-text-primary/5 rounded-lg p-4 border border-theme-border/50">
-                <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-3">Riepilogo Totale</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="text-theme-text-muted">Noleggio base</span>
-                    <span className="font-mono text-theme-text-primary">€{centsToEurStr(eurToCents(formData.total_amount || '0'))}</span>
-                  </div>
-                  {formData.delivery_enabled && (
+            {/* Riepilogo Totale - shows breakdown with delivery/pickup fees + KM packages */}
+            {(() => {
+              const selVeh = vehicles.find(v => v.id === formData.vehicle_id)
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; price: number; label?: string; km?: number }>> | undefined
+              const catPkgs = pkgsByCat ? resolvePacchetti(selVeh?.category, pkgsByCat) : []
+              const kmEntries: Array<{ id: string; qty: number; price: number; label: string; km?: number }> = []
+              let kmPackagesCost = 0
+              const kmMap = (formData.km_packages || {}) as Record<string, number>
+              for (const [pkgId, q] of Object.entries(kmMap)) {
+                const qty = Number(q) || 0
+                if (qty <= 0) continue
+                const pkg = catPkgs.find(p => p.id === pkgId)
+                if (!pkg) continue
+                const price = Number(pkg.price) || 0
+                kmEntries.push({ id: pkgId, qty, price, label: (pkg as { label?: string }).label || pkgId, km: (pkg as { km?: number }).km })
+                kmPackagesCost += price * qty
+              }
+              const showRiepilogo = formData.delivery_enabled || formData.pickup_enabled || kmEntries.length > 0
+              if (!showRiepilogo) return null
+              const totalAmountCents = eurToCents(formData.total_amount || '0')
+              const kmCostCents = Math.round(kmPackagesCost * 100)
+              const baseCents = Math.max(0, totalAmountCents - kmCostCents)
+              return (
+                <div className="md:col-span-2 bg-theme-text-primary/5 rounded-lg p-4 border border-theme-border/50">
+                  <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-3">Riepilogo Totale</h4>
+                  <div className="space-y-2 text-sm">
                     <div className="flex justify-between items-center">
-                      <span className="text-theme-text-muted">Consegna a domicilio</span>
-                      <span className="font-mono text-theme-text-primary">€{centsToEurStr(eurToCents(formData.delivery_fee || '0'))}</span>
+                      <span className="text-theme-text-muted">Noleggio base</span>
+                      <span className="font-mono text-theme-text-primary">€{centsToEurStr(baseCents)}</span>
                     </div>
-                  )}
-                  {formData.pickup_enabled && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-theme-text-muted">Ritiro a domicilio</span>
-                      <span className="font-mono text-theme-text-primary">€{centsToEurStr(eurToCents(formData.pickup_fee || '0'))}</span>
-                    </div>
-                  )}
-                  <div className="border-t border-theme-border/50 pt-2 mt-2">
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-dr7-gold">Totale da saldare</span>
-                      <span className="font-mono text-xl font-bold text-dr7-gold">
-                        €{centsToEurStr(
-                          eurToCents(formData.total_amount || '0') +
-                          eurToCents(formData.delivery_fee || '0') +
-                          eurToCents(formData.pickup_fee || '0')
-                        )}
-                      </span>
+                    {kmEntries.map(e => (
+                      <div key={`riepilogo-km-${e.id}`} className="flex justify-between items-center">
+                        <span className="text-theme-text-muted">
+                          {e.label}{e.qty > 1 ? ` x${e.qty}` : ''}{typeof e.km === 'number' ? ` (${e.km * e.qty} km)` : ''}
+                        </span>
+                        <span className="font-mono text-theme-text-primary">€{centsToEurStr(Math.round(e.price * e.qty * 100))}</span>
+                      </div>
+                    ))}
+                    {formData.delivery_enabled && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-theme-text-muted">Consegna a domicilio</span>
+                        <span className="font-mono text-theme-text-primary">€{centsToEurStr(eurToCents(formData.delivery_fee || '0'))}</span>
+                      </div>
+                    )}
+                    {formData.pickup_enabled && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-theme-text-muted">Ritiro a domicilio</span>
+                        <span className="font-mono text-theme-text-primary">€{centsToEurStr(eurToCents(formData.pickup_fee || '0'))}</span>
+                      </div>
+                    )}
+                    <div className="border-t border-theme-border/50 pt-2 mt-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-dr7-gold">Totale da saldare</span>
+                        <span className="font-mono text-xl font-bold text-dr7-gold">
+                          €{centsToEurStr(
+                            totalAmountCents +
+                            eurToCents(formData.delivery_fee || '0') +
+                            eurToCents(formData.pickup_fee || '0')
+                          )}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             <div className="flex flex-wrap gap-3 mt-4">
               <Button type="submit" disabled={isSubmitting} className="flex-1 sm:flex-none">
