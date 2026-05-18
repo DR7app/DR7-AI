@@ -1034,9 +1034,7 @@ function CalcolaPagaSection({
             </div>
 
             {noContract ? (
-                <p className="text-[12px] text-amber-400">
-                    Nessun contratto attivo o paga oraria mancante. Compila il contratto qui sopra per attivare il calcolo.
-                </p>
+                <QuickPagaCalc days={days} rangeLabel={rangeLabel} />
             ) : (
                 <>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
@@ -1100,6 +1098,79 @@ function minutesToHourInput(min: number): string {
     if (m === 0) return `${sign}${h}`
     return `${sign}${h}h${String(m).padStart(2, '0')}`
 }
+/**
+ * QuickPagaCalc — calcolatrice rapida inline quando l'operatore NON ha
+ * contratto attivo o paga oraria configurata. L'admin digita €/ora
+ * (e opzionalmente €/h straordinario + soglia ore) e vede subito la
+ * paga totale sul range selezionato. Niente persistenza: e' un
+ * "what-if" veloce per stimare quanto pagare un operatore senza dover
+ * configurare il contratto.
+ */
+function QuickPagaCalc({ days, rangeLabel }: { days: DayBreakdown[]; rangeLabel: string }) {
+    const [oraria, setOraria] = useState<string>('10')
+    const [straord, setStraord] = useState<string>('15')
+    const [sogliaH, setSogliaH] = useState<string>('8')
+    const oraNum = Number(oraria.replace(',', '.')) || 0
+    const straordNum = Number(straord.replace(',', '.')) || 0
+    const sogliaMin = Math.round((Number(sogliaH.replace(',', '.')) || 8) * 60)
+
+    let minOrd = 0, minStr = 0
+    for (const d of days) {
+        if (d.minutiLavorati <= 0) continue
+        if (d.minutiLavorati > sogliaMin && straordNum > 0) {
+            minOrd += sogliaMin
+            minStr += d.minutiLavorati - sogliaMin
+        } else {
+            minOrd += d.minutiLavorati
+        }
+    }
+    const pagaOrd = (minOrd / 60) * oraNum
+    const pagaStr = (minStr / 60) * straordNum
+    const totale = pagaOrd + pagaStr
+    const eur = (n: number) => `€${n.toFixed(2)}`
+
+    return (
+        <div>
+            <p className="text-[12px] text-amber-400 mb-3">
+                Nessun contratto attivo. Inserisci la paga oraria qui sotto per un calcolo veloce (non viene salvato sul contratto).
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
+                <label className="block">
+                    <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">Paga oraria (€/h)</span>
+                    <input type="number" step="0.01" value={oraria} onChange={(e) => setOraria(e.target.value)}
+                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-sm text-theme-text-primary mt-1" />
+                </label>
+                <label className="block">
+                    <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">Straordinario (€/h)</span>
+                    <input type="number" step="0.01" value={straord} onChange={(e) => setStraord(e.target.value)}
+                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-sm text-theme-text-primary mt-1" />
+                </label>
+                <label className="block">
+                    <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">Soglia straord. (h/giorno)</span>
+                    <input type="number" step="0.5" value={sogliaH} onChange={(e) => setSogliaH(e.target.value)}
+                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-sm text-theme-text-primary mt-1" />
+                </label>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+                <div className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
+                    <div className="text-[10px] uppercase text-theme-text-muted">Ore Ordinarie</div>
+                    <div className="text-sm font-semibold text-theme-text-primary">{fmtMin(minOrd)}</div>
+                    <div className="text-[10px] text-emerald-400 mt-0.5 tabular-nums">{eur(pagaOrd)}</div>
+                </div>
+                <div className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
+                    <div className="text-[10px] uppercase text-theme-text-muted">Straordinari</div>
+                    <div className="text-sm font-semibold text-theme-text-primary">{fmtMin(minStr)}</div>
+                    <div className="text-[10px] text-sky-400 mt-0.5 tabular-nums">{eur(pagaStr)}</div>
+                </div>
+                <div className="bg-dr7-gold/10 border border-dr7-gold/40 rounded-lg px-3 py-2">
+                    <div className="text-[10px] uppercase text-theme-text-muted">Totale {rangeLabel}</div>
+                    <div className="text-lg font-bold text-dr7-gold tabular-nums">{eur(totale)}</div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 function hoursInputToMinutes(s: string): number {
     const t = (s || '').trim()
     if (!t) return 0
