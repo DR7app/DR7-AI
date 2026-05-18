@@ -205,6 +205,22 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // Niente fattura su importi a 0 — quando admin segna un servizio
+        // in omaggio (lavaggio/noleggio gratis), price_total e' 0 → la
+        // fattura non ha senso (niente da fatturare, IVA 0). Skip definitivo
+        // a prescindere da chi chiama (UI o callback Nexi).
+        if (!extensionAmount && (!booking.price_total || booking.price_total <= 0)) {
+            console.log(`[Invoice] Skipping — booking.price_total e' 0 (servizio in omaggio)`)
+            return {
+                statusCode: 200,
+                body: JSON.stringify({
+                    message: 'Prezzo 0 — nessuna fattura generata (servizio in omaggio)',
+                    skipped: true,
+                    reason: 'zero_price',
+                })
+            }
+        }
+
         // Test vehicle: generate fattura + WhatsApp PDF, but skip SDI
         const vehicleName = (booking.vehicle_name || booking.booking_details?.vehicle?.name || '').toLowerCase()
         const vehiclePlate = (booking.vehicle_plate || booking.booking_details?.vehicle_plate || booking.booking_details?.vehicle?.plate || '').toUpperCase()

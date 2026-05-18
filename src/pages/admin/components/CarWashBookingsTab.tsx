@@ -1151,6 +1151,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       return
     }
 
+    // Never generate fattura for €0 bookings (lavaggio in omaggio, override
+    // manuale a 0). Niente importo da fatturare = niente fattura.
+    if (!booking.price_total || booking.price_total <= 0) {
+      toast(`Lavaggio a €0 — nessuna fattura generata (in omaggio).`, { icon: 'ℹ️' })
+      return
+    }
+
     // Don't generate fattura if the chosen payment method has
     // auto_invoice=false in Centralina Pro > Fiscale. Source of truth =
     // centralina_pro_config.fiscale.payment_methods (admin-managed).
@@ -1603,11 +1610,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
     // Generate fattura ONLY if paid AND if the payment method has
     // auto_invoice=true in Centralina Pro > Fiscale (admin-managed —
-    // niente piu' liste hardcoded di metodi).
+    // niente piu' liste hardcoded di metodi). Inoltre niente fattura
+    // se il prezzo finale e' 0 (lavaggio in omaggio / override admin).
     const isPaid = formData.payment_status === 'paid' || formData.payment_status === 'completed' || formData.payment_status === 'succeeded'
     const skipFattura = !(await paymentMethodAutoInvoice(formData.payment_method))
+    const _priceCents = Number(data?.price_total) || 0
+    const isZeroPrice = _priceCents <= 0
 
-    if (isPaid && !skipFattura) {
+    if (isPaid && !skipFattura && !isZeroPrice) {
       try {
         const invoiceResponse = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
           method: 'POST',
