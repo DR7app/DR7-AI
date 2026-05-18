@@ -398,6 +398,34 @@ export default function ReviewManagementTab() {
     }
   }
 
+  // Marca manualmente come "gia\' recensito" — il cliente ha confermato a
+  // voce / via WhatsApp che ha gia\' lasciato la recensione su Google.
+  // Setta send_status='SENT' cosi\' esce da "Da Inviare" e finisce nella
+  // colonna "Inviate" senza bisogno di triggerare l'invio automatico.
+  async function handleMarcaGiaRecensito(candidateId: string) {
+    if (!confirm('Marcare questo cliente come gia\' recensito?\nNon riceverà più la richiesta automatica.')) return
+    setSendingId(candidateId)
+    try {
+      const { error } = await supabase
+        .from('review_candidates')
+        .update({
+          send_status: 'SENT',
+          eligibility_status: 'ELIGIBLE',
+          exclusion_reason_code: 'ALREADY_REVIEWED',
+          exclusion_reason_text: 'Marcato manualmente: cliente ha gia\' lasciato la recensione',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', candidateId)
+      if (error) throw error
+      toast.success('Segnato come gia\' recensito')
+      await Promise.all([fetchCandidates(), fetchStats()])
+    } catch (err: unknown) {
+      toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSendingId(null)
+    }
+  }
+
   // Sblocca: reset a candidate back to ELIGIBLE + TO_SEND so they can receive review request again
   async function handleSblocca(candidateId: string) {
     if (!confirm('Sbloccare questo cliente per ricevere nuovamente la richiesta di recensione?')) return
@@ -1175,6 +1203,19 @@ export default function ReviewManagementTab() {
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 8a3 3 0 116 0 3 3 0 01-6 0zM12 16a3 3 0 116 0 3 3 0 01-6 0zM4 20l16-16" />
                       </svg>
+                    </button>
+                  )}
+                  {candidate.send_status !== 'SENT' && (
+                    <button
+                      onClick={() => handleMarcaGiaRecensito(candidate.id)}
+                      disabled={sendingId === candidate.id}
+                      title="Il cliente ha gia\' lasciato la recensione su Google — non inviare richiesta"
+                      className="inline-flex items-center gap-1.5 px-3 h-8 rounded-full border border-emerald-500/60 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M12 21a9 9 0 100-18 9 9 0 000 18z" />
+                      </svg>
+                      Già recensito
                     </button>
                   )}
                   {candidate.send_status === 'SENT' && (
