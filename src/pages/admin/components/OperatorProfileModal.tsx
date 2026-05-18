@@ -984,24 +984,37 @@ function CalcolaPagaSection({
 
     const calc = useMemo(() => {
         const sogliaMin = Math.round((contract?.ore_soglia_straordinario ?? oreTargetGiornaliere) * 60)
+        const oraria = Number(contract?.paga_oraria_eur || 0)
+        const straord = Number(contract?.paga_straordinario_eur || 0)
+        // 2026-05-18: straordinari calcolati AUTOMATICAMENTE se il contratto
+        // ha sia paga_straordinario_eur > 0 sia ore_soglia_straordinario > 0.
+        // Il flag legacy `straordinario_abilitato` resta come override
+        // esplicito: se l'utente lo mette su false in maniera intenzionale,
+        // i straordinari NON vengono calcolati. Default (null/undefined) =
+        // abilitato se paga + soglia sono configurati.
+        const straordEnabled =
+            contract?.straordinario_abilitato !== false
+            && straord > 0
+            && sogliaMin > 0
         let minOrdinari = 0
         let minStraord = 0
         for (const d of days) {
             if (d.minutiLavorati <= 0) continue
-            if (contract?.straordinario_abilitato && d.minutiLavorati > sogliaMin) {
+            if (straordEnabled && d.minutiLavorati > sogliaMin) {
+                // Oltre la soglia giornaliera, il surplus va a paga straordinario.
+                // Es. contratto: soglia 8h, paga ord 10€/h, paga str 15€/h
+                // Giorno con 10h lavorate → 8h × 10€ = 80€ + 2h × 15€ = 30€
                 minOrdinari += sogliaMin
                 minStraord += d.minutiLavorati - sogliaMin
             } else {
                 minOrdinari += d.minutiLavorati
             }
         }
-        const oraria = Number(contract?.paga_oraria_eur || 0)
-        const straord = Number(contract?.paga_straordinario_eur || 0)
         const pagaOrd = (minOrdinari / 60) * oraria
         const pagaStraord = (minStraord / 60) * straord
         const correzione = -(oreRecMin / 60) * oraria // recuperare = decurta
         const totale = pagaOrd + pagaStraord + correzione
-        return { sogliaMin, minOrdinari, minStraord, pagaOrd, pagaStraord, correzione, totale }
+        return { sogliaMin, minOrdinari, minStraord, pagaOrd, pagaStraord, correzione, totale, straordEnabled, oraria, straord }
     }, [days, contract, oreRecMin, oreTargetGiornaliere])
 
     async function saveOreRecuperare() {
@@ -1037,6 +1050,29 @@ function CalcolaPagaSection({
                 <QuickPagaCalc days={days} rangeLabel={rangeLabel} />
             ) : (
                 <>
+                    {/* Regole applicate dal contratto: l'admin vede subito che
+                        formula sta usando il calcolo (paga oraria, paga
+                        straordinario, soglia ore/giorno). */}
+                    <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-theme-text-muted">
+                        <span className="px-2 py-0.5 rounded bg-theme-bg-secondary border border-theme-border">
+                            Ordinaria: <strong className="text-theme-text-primary">€{calc.oraria.toFixed(2)}/h</strong>
+                        </span>
+                        {calc.straord > 0 && (
+                            <span className="px-2 py-0.5 rounded bg-theme-bg-secondary border border-theme-border">
+                                Straordinario: <strong className="text-sky-400">€{calc.straord.toFixed(2)}/h</strong>
+                            </span>
+                        )}
+                        {calc.sogliaMin > 0 && (
+                            <span className="px-2 py-0.5 rounded bg-theme-bg-secondary border border-theme-border">
+                                Soglia straord: <strong className="text-theme-text-primary">{Math.round(calc.sogliaMin / 60 * 10) / 10}h/giorno</strong>
+                            </span>
+                        )}
+                        {!calc.straordEnabled && calc.straord > 0 && (
+                            <span className="px-2 py-0.5 rounded bg-rose-500/20 border border-rose-500/40 text-rose-300">
+                                Straordinari disabilitati nel contratto
+                            </span>
+                        )}
+                    </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
                         <div className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2">
                             <div className="text-[10px] uppercase text-theme-text-muted">Ore Ordinarie</div>
