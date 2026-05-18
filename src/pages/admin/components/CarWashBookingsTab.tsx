@@ -4461,7 +4461,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       }
 
                       const updatedServiceName = editService ? buildEditServiceNames() : editingBooking.service_name
-                      const updatedPrice = editService ? Math.round(getEditTotal() * 100) : editingBooking.price_total
+                      // BUG FIX 2026-05-18: rispetta l'override manuale del prezzo
+                      // anche quando l'admin ha modificato i servizi. Prima
+                      // editService=true riscriveva price_total col calcolato,
+                      // buttando via lo 0€ che l'admin aveva appena digitato.
+                      // Adesso: se il valore in state differisce dal calcolato
+                      // (= override manuale presente), lo manteniamo SEMPRE.
+                      const _calculatedPrice = Math.round(getEditTotal() * 100)
+                      const _hasManualOverride = editingBooking.price_total !== _calculatedPrice
+                      const updatedPrice = _hasManualOverride
+                        ? editingBooking.price_total
+                        : (editService ? _calculatedPrice : editingBooking.price_total)
                       const updatedDuration = editService ? getEditTotalDuration() : (editingBooking.booking_details?.totalDuration || 0)
 
                       const updatedDetails = {
