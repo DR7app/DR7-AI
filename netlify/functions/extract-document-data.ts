@@ -248,14 +248,70 @@ export const handler: Handler = async (event) => {
                 };
             }
         } else if (imageUrl) {
-            // URL-based image
-            imageContent = {
-                type: 'image',
-                source: {
-                    type: 'url',
-                    url: imageUrl
+            // URL-based input. Fetch the bytes server-side, detect the file
+            // type from magic bytes, then send to Claude as base64. Cosi':
+            // (a) i PDF vanno come type=document invece di type=image (l'errore
+            //     "messages.0.content.0.image.source.base64.data: file format
+            //     invalid" del 2026-05-18 era esattamente questo: PDF Massimo
+            //     spediti come image)
+            // (b) HEIC/HEIF iPhone (prefisso ftypheic) vengono rifiutati con
+            //     errore esplicito invece di un 400 criptico
+            // (c) qualsiasi altro formato non supportato ritorna un messaggio
+            //     comprensibile per il caller
+            try {
+                const fetched = await fetch(imageUrl);
+                if (!fetched.ok) {
+                    return {
+                        statusCode: 502,
+                        headers,
+                        body: JSON.stringify({ error: `Impossibile scaricare il file dalla URL: ${fetched.status} ${fetched.statusText}` })
+                    };
                 }
-            };
+                const arrayBuffer = await fetched.arrayBuffer();
+                const bytes = new Uint8Array(arrayBuffer);
+                // Encode in base64 — usiamo Buffer (Node) per sicurezza con file >1MB
+                const base64Data = Buffer.from(bytes).toString('base64');
+                // Magic-byte detection: same heuristics del path base64 diretto.
+                const isPdf = base64Data.startsWith('JVBERi');
+                const isHeic = base64Data.includes('ZnR5cGhlaWM') || base64Data.includes('ZnR5cG1pZjE'); // 'ftypheic' / 'ftypmif1'
+                if (isHeic) {
+                    return {
+                        statusCode: 415,
+                        headers,
+                        body: JSON.stringify({ error: 'Formato HEIC/HEIF non supportato — chiedi al cliente di ricaricare in JPEG o PDF' })
+                    };
+                }
+                if (isPdf) {
+                    imageContent = {
+                        type: 'document',
+                        source: {
+                            type: 'base64',
+                            media_type: 'application/pdf',
+                            data: base64Data
+                        }
+                    };
+                } else {
+                    const mediaType = base64Data.startsWith('/9j/') ? 'image/jpeg' :
+                                     base64Data.startsWith('iVBORw') ? 'image/png' :
+                                     base64Data.startsWith('R0lGOD') ? 'image/gif' :
+                                     base64Data.startsWith('UklGR') ? 'image/webp' :
+                                     'image/jpeg';
+                    imageContent = {
+                        type: 'image',
+                        source: {
+                            type: 'base64',
+                            media_type: mediaType,
+                            data: base64Data
+                        }
+                    };
+                }
+            } catch (fetchErr: any) {
+                return {
+                    statusCode: 502,
+                    headers,
+                    body: JSON.stringify({ error: `Errore download file: ${fetchErr?.message || String(fetchErr)}` })
+                };
+            }
         }
 
         // Call Claude Vision API. Tentiamo i modelli in ordine: il piu'
