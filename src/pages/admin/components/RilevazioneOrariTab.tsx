@@ -115,7 +115,7 @@ function OperatoreAvatar({ op, size = 32 }: { op: { nome?: string | null; cognom
     )
 }
 
-type ViewMode = 'giornaliera' | 'settimanale' | 'mensile'
+type ViewMode = 'giornaliera' | 'settimanale' | 'mensile' | 'personalizzato'
 
 /**
  * Rilevazione Orari — admin tab.
@@ -143,6 +143,13 @@ export default function RilevazioneOrariTab() {
     const [me, setMe] = useState<Operatore | null>(null)
     const [view, setView] = useState<ViewMode>('giornaliera')
     const [refDate, setRefDate] = useState(new Date())
+    // 2026-05-18: range custom Da/A per "Personalizzato".
+    // Default: ultimi 30 giorni cosi' partiamo da uno stato sensato.
+    const [customFrom, setCustomFrom] = useState<string>(() => {
+        const d = new Date(); d.setDate(d.getDate() - 29)
+        return toRomeDate(d)
+    })
+    const [customTo, setCustomTo] = useState<string>(() => toRomeDate(new Date()))
     const [loading, setLoading] = useState(true)
     const [showAddOp, setShowAddOp] = useState(false)
     const [editMyDay, setEditMyDay] = useState(false)
@@ -182,6 +189,21 @@ export default function RilevazioneOrariTab() {
             }
             return { start: days[0], end: days[6], days }
         }
+        if (view === 'personalizzato') {
+            // Range Da/A arbitrario. Generiamo l'array giornaliero solo
+            // se l'intervallo e' sensato (da <= a); altrimenti restituiamo
+            // un singolo giorno per evitare un ciclo che non termina.
+            const startISO = customFrom
+            const endISO = customTo >= customFrom ? customTo : customFrom
+            const days: string[] = []
+            const start = new Date(startISO + 'T00:00:00')
+            const end = new Date(endISO + 'T00:00:00')
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                days.push(toRomeDate(new Date(d)))
+                if (days.length > 366) break // safety: max 1 anno
+            }
+            return { start: startISO, end: endISO, days }
+        }
         const y = refDate.getFullYear()
         const m = refDate.getMonth()
         const first = new Date(y, m, 1)
@@ -191,7 +213,7 @@ export default function RilevazioneOrariTab() {
             days.push(toRomeDate(new Date(d)))
         }
         return { start: days[0], end: days[days.length - 1], days }
-    }, [view, refDate])
+    }, [view, refDate, customFrom, customTo])
 
     const load = useCallback(async () => {
         setLoading(true)
@@ -435,24 +457,51 @@ export default function RilevazioneOrariTab() {
 
             {/* View toggle + period nav */}
             <div className="flex flex-wrap items-center justify-between gap-3 bg-theme-bg-secondary p-3 rounded border border-theme-border">
-                <div className="flex gap-1 bg-theme-bg-tertiary rounded p-1">
-                    {(['giornaliera', 'settimanale', 'mensile'] as ViewMode[]).map(v => (
+                <div className="flex gap-1 bg-theme-bg-tertiary rounded p-1 flex-wrap">
+                    {(['giornaliera', 'settimanale', 'mensile', 'personalizzato'] as ViewMode[]).map(v => (
                         <button key={v} onClick={() => setView(v)}
                             className={`text-sm px-3 py-1 rounded ${view === v ? 'bg-theme-text-primary text-theme-bg-primary font-semibold' : 'text-theme-text-secondary hover:text-theme-text-primary'}`}>
                             {v[0].toUpperCase() + v.slice(1)}
                         </button>
                     ))}
                 </div>
-                <div className="flex items-center gap-2">
-                    <button onClick={() => shiftRef(-1)} className="px-3 py-1 rounded bg-theme-bg-tertiary text-theme-text-primary">←</button>
-                    <span className="text-sm text-theme-text-primary font-semibold min-w-[180px] text-center">
-                        {view === 'giornaliera' && new Date(periodRange.start).toLocaleDateString('it-IT', { timeZone: ROME_TZ, weekday: 'long', day: 'numeric', month: 'long' })}
-                        {view === 'settimanale' && `${periodRange.start} → ${periodRange.end}`}
-                        {view === 'mensile' && new Date(periodRange.start).toLocaleDateString('it-IT', { timeZone: ROME_TZ, month: 'long', year: 'numeric' })}
-                    </span>
-                    <button onClick={() => shiftRef(+1)} className="px-3 py-1 rounded bg-theme-bg-tertiary text-theme-text-primary">→</button>
-                    <button onClick={() => setRefDate(new Date())} className="text-xs px-3 py-1 rounded bg-theme-bg-tertiary text-theme-text-secondary">Oggi</button>
-                </div>
+                {view === 'personalizzato' ? (
+                    /* 2026-05-18: due date input per range arbitrario Da → A. */
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <label className="flex items-center gap-1 text-xs text-theme-text-secondary">
+                            Da
+                            <input type="date" value={customFrom}
+                                max={customTo}
+                                onChange={(e) => setCustomFrom(e.target.value || customFrom)}
+                                className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary"
+                            />
+                        </label>
+                        <label className="flex items-center gap-1 text-xs text-theme-text-secondary">
+                            A
+                            <input type="date" value={customTo}
+                                min={customFrom}
+                                onChange={(e) => setCustomTo(e.target.value || customTo)}
+                                className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary"
+                            />
+                        </label>
+                        <button onClick={() => {
+                            const d = new Date(); d.setDate(d.getDate() - 29)
+                            setCustomFrom(toRomeDate(d))
+                            setCustomTo(toRomeDate(new Date()))
+                        }} className="text-xs px-3 py-1 rounded bg-theme-bg-tertiary text-theme-text-secondary">Ultimi 30 gg</button>
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => shiftRef(-1)} className="px-3 py-1 rounded bg-theme-bg-tertiary text-theme-text-primary">←</button>
+                        <span className="text-sm text-theme-text-primary font-semibold min-w-[180px] text-center">
+                            {view === 'giornaliera' && new Date(periodRange.start).toLocaleDateString('it-IT', { timeZone: ROME_TZ, weekday: 'long', day: 'numeric', month: 'long' })}
+                            {view === 'settimanale' && `${periodRange.start} → ${periodRange.end}`}
+                            {view === 'mensile' && new Date(periodRange.start).toLocaleDateString('it-IT', { timeZone: ROME_TZ, month: 'long', year: 'numeric' })}
+                        </span>
+                        <button onClick={() => shiftRef(+1)} className="px-3 py-1 rounded bg-theme-bg-tertiary text-theme-text-primary">→</button>
+                        <button onClick={() => setRefDate(new Date())} className="text-xs px-3 py-1 rounded bg-theme-bg-tertiary text-theme-text-secondary">Oggi</button>
+                    </div>
+                )}
             </div>
 
             {loading && <p className="text-theme-text-muted text-sm">Caricamento…</p>}
