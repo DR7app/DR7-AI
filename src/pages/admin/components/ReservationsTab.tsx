@@ -1341,13 +1341,28 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (!totalAmountManuallyOverriddenRef.current) {
         updates.total_amount = newTotal.toFixed(2)
       }
-      // Auto-calculate KM limit from rental days
+      // Auto-calculate KM limit = base (da rental days) + km dei pacchetti
+      // KM selezionati × quantita'. Admin vuole vedere subito il limite totale
+      // gia' sommato, senza doverlo digitare a mano.
       if (!formData.unlimited_km) {
         const vehCategory = selectedVehicle?.category || ''
         const kmCat = vehCategory === 'urban' ? 'urban' : (vehCategory || '_global')
         const kmIncluded = getKmIncluded(rentalConfig, revenueSuggestion.rentalDays, kmCat)
         if (kmIncluded !== 'unlimited') {
-          updates.km_limit = String(kmIncluded)
+          // Somma i km dei pacchetti KM extra (id → quantita').
+          const kmPkgs = (formData.km_packages || {}) as Record<string, number>
+          let kmFromPackages = 0
+          if (kmPkgs && Object.keys(kmPkgs).length > 0) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; km: number }>> | undefined
+            const catPkgs = resolvePacchetti(selectedVehicle?.category, pkgsByCat)
+            for (const pkg of catPkgs) {
+              const q = Number(kmPkgs[pkg.id]) || 0
+              if (q > 0) kmFromPackages += Number(pkg.km || 0) * q
+            }
+          }
+          const totalKm = Number(kmIncluded) + kmFromPackages
+          updates.km_limit = String(totalKm)
         }
       }
       if (Object.keys(updates).length > 0) setFormData(prev => ({ ...prev, ...updates }))
