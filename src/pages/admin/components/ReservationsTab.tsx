@@ -9019,6 +9019,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           if (pkgsTotal > 0) return `${pkgsTotal} km`;
                           return rawLimit ? `${rawLimit} km` : 'KM Illimitati';
                         })()}</span></div>
+                        {(() => {
+                          const bd = selectedBooking.booking_details as Record<string, unknown> | undefined;
+                          const hasFlex = bd?.dr7_flex === true
+                            || (bd?.extras_detail as { flex?: boolean } | undefined)?.flex === true;
+                          if (!hasFlex) return null;
+                          const flexCost = Number(bd?.flex_cost) || 0;
+                          return (
+                            <div className="mt-2 pt-2 border-t border-theme-border/30 flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-dr7-gold/20 text-dr7-gold border border-dr7-gold/40">
+                                DR7 FLEX
+                              </span>
+                              {flexCost > 0 && (
+                                <span className="text-xs text-theme-text-muted">€{flexCost.toFixed(2)}</span>
+                              )}
+                              <span className="text-xs text-theme-text-muted">4 condizioni FLEX attive</span>
+                            </div>
+                          );
+                        })()}
                         {(selectedBooking.delivery_enabled || selectedBooking.booking_details?.delivery_enabled) && (
                           <div className="mt-2 pt-2 border-t border-theme-border/30">
                             <span className="text-theme-text-muted">Consegna a domicilio:</span>

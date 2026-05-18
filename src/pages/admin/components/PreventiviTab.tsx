@@ -1064,6 +1064,21 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       }
       return Math.round(sum * 100) / 100
     })()
+    // Total Km contributed by selected packages (used for "Totale KM" recap line).
+    const kmPackagesKm = (() => {
+      const kmPkgs = (form.km_packages || {}) as Record<string, number>
+      if (!kmPkgs || Object.keys(kmPkgs).length === 0) return 0
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pkgsByCat = (rentalConfig as any)?.pacchetti_km as Record<string, Array<{ id: string; price: number; km?: number }>> | undefined
+      const catPkgs = resolvePacchetti(selectedVehicle?.category, pkgsByCat) as Array<{ id: string; price: number; km?: number }>
+      if (catPkgs.length === 0) return 0
+      let sum = 0
+      for (const pkg of catPkgs) {
+        const q = Number(kmPkgs[pkg.id]) || 0
+        if (q > 0) sum += (Number(pkg.km) || 0) * q
+      }
+      return Math.round(sum)
+    })()
 
     // Product of revenue coefficients.
     const revenueCoeff = revenueData?.enabled
@@ -1084,10 +1099,16 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     const splitUnlimitedKm    = pick(unlimitedKmTotal,    coeffFlags.unlimited_km)
     const splitInsurance      = pick(insuranceTotal,      coeffFlags.insurance)
     const splitLavaggio       = pick(lavaggioFee,         coeffFlags.lavaggio)
-    const splitNoCauzione     = pick(noCauzioneTotal,     coeffFlags.no_cauzione)
+    // 2026-05-18: No Cauzione e Cauzione Veicolo passano SEMPRE a listino,
+    // come Experience / location fees. Sono surcharge fissi per la scelta
+    // della cauzione: non devono scalare col coefficiente dinamico ne'
+    // essere mangiati dal clamp max. Prima erano dentro extrasInCoeff e,
+    // se il preventivo era gia' al max del clamp, aggiungere "No Cauzione"
+    // cambiava il totale di solo pochi euro (€4 invece di €49 × giorni).
+    const splitNoCauzione     = { inCoeff: 0, atList: noCauzioneTotal }
     const splitSecondDriver   = pick(secondDriverTotal,   coeffFlags.second_driver)
     const splitDr7Flex        = pick(dr7FlexTotal,        coeffFlags.dr7_flex)
-    const splitCauzioneVeic   = pick(cauzioneVeicoliTotal,coeffFlags.cauzione_veicoli)
+    const splitCauzioneVeic   = { inCoeff: 0, atList: cauzioneVeicoliTotal }
     const extrasInCoeff = splitInsurance.inCoeff + splitLavaggio.inCoeff + splitNoCauzione.inCoeff + splitUnlimitedKm.inCoeff + splitSecondDriver.inCoeff + splitDr7Flex.inCoeff + splitCauzioneVeic.inCoeff
     const extrasAtList  = splitInsurance.atList  + splitLavaggio.atList  + splitNoCauzione.atList  + splitUnlimitedKm.atList  + splitSecondDriver.atList  + splitDr7Flex.atList  + splitCauzioneVeic.atList
     const listSubtotalNoExp = listRentalTotal + extrasInCoeff
@@ -1174,6 +1195,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       experienceCost,
       experienceAfterCoeff,
       kmPackagesTotal,
+      kmPackagesKm,
       listSubtotal,
       // Subtotale a cui il coefficiente si applica davvero: esclude
       // experience e location fees (consegna + ritiro) — quelli passano
@@ -2664,6 +2686,14 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         no_cauzione: (p.no_cauzione_total || 0) > 0,
         include_lavaggio: (p.lavaggio_fee || 0) > 0,
         driver_tier: p.driver_tier,
+        // 2026-05-18: persist No Cauzione fields so contract gen
+        // (signature-complete.ts) and WhatsApp notifications
+        // (send-whatsapp-notification.ts) can display the surcharge
+        // — both read booking_details.depositOption + noDepositSurcharge.
+        depositOption: (p.no_cauzione_total || 0) > 0 ? 'no_deposit' : null,
+        noDepositSurcharge: Number(p.no_cauzione_total) || 0,
+        no_cauzione_surcharge_per_day: Number(p.no_cauzione_daily) || 0,
+        deposit_status: (p.no_cauzione_total || 0) > 0 ? 'no_cauzione' : 'da_incassare',
       },
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -4313,10 +4343,23 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           <span>KM Inclusi</span>
           <span>{pricing.kmIncluded === 'unlimited' ? 'Illimitati' : `${pricing.kmIncluded} Km`}</span>
         </div>
+        {(pricing.kmPackagesKm ?? 0) > 0 && (
+          <div className="flex justify-between text-sm text-theme-text-muted">
+            <span>Pacchetti KM</span>
+            <span>+{pricing.kmPackagesKm} Km</span>
+          </div>
+        )}
         <div className="flex justify-between text-sm text-theme-text-muted">
           <span>Sforo KM</span>
           <span>{formatEur(pricing.sforo)}/km</span>
         </div>
+        {/* Totale KM = inclusi + pacchetti acquistati. Illimitati passa attraverso. */}
+        {pricing.kmIncluded !== 'unlimited' && (
+          <div className="flex justify-between text-sm text-theme-text-primary font-semibold">
+            <span>Totale KM</span>
+            <span>{(Number(pricing.kmIncluded) || 0) + (pricing.kmPackagesKm ?? 0)} Km</span>
+          </div>
+        )}
 
         <div className="border-t border-dr7-gold/50 pt-2 flex justify-between text-xl font-bold text-dr7-gold">
           <span>TOTALE FINALE</span>
