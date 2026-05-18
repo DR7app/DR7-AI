@@ -20,11 +20,15 @@ export type AdminRoleTag =
 const ROLE_FAILSAFE: Record<string, ReadonlySet<AdminRoleTag>> = {
   'valerio@dr7.app':   new Set(['direzione', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
   'ilenia@dr7.app':    new Set(['direzione', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
+  // 2026-05-18: Salvatore promosso a 'direzione' (prima aveva solo
+  // 'sito-direzione'). Direzione ha richiesto pieno accesso a tutto,
+  // incluso il Report Operatori. Permissions in DB sono gia' '*' ma
+  // il Dashboard usa hasRole('direzione') per i KPI fatturato/team.
   'ophe@dr7.app':      new Set(['developer', 'sito-direzione']),
   // Salvatore gestisce il Sito CMS senza OTP — entry diretta in failsafe
   // su richiesta direzione 2026-05-13. Solo `sito-direzione`: bypassa
   // gestione_sito_access + gestione_sito_write; ogni altro OTP resta attivo.
-  'salvatore@dr7.app': new Set(['sito-direzione']),
+  'salvatore@dr7.app': new Set(['direzione', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
 }
 
 export interface AdminRole {
