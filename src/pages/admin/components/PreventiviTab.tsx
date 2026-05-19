@@ -415,14 +415,6 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   const isValerio = hasRole('preventivi-admin')
   const [view, setView] = useState<'list' | 'form'>('list')
   const [editingId, setEditingId] = useState<string | null>(null)
-  // Saved preventivo snapshot caricato all'apertura del Modifica. Finche'
-  // la direzione non clicca "Sblocca per modificare", il pricing mostrato
-  // resta IDENTICO al preventivo (stesso totale che il cliente ha visto).
-  // Evita la divergenza tra €943,39 salvato e €1750 ricalcolato live a
-  // causa di Centralina Pro modificata dopo il quote (Km Illimitati,
-  // Min floor, coefficienti, ecc.).
-  const [editingOriginalP, setEditingOriginalP] = useState<Preventivo | null>(null)
-  const [pricingUnlocked, setPricingUnlocked] = useState<boolean>(false)
   const [preventivi, setPreventivi] = useState<Preventivo[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [loading, setLoading] = useState(true)
@@ -917,71 +909,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   // ─── Pricing Calculation ────────────────────────────────────────────────
 
   const pricing = useMemo(() => {
-    // ─── Modifica preventivo (frozen mode) ────────────────────────────────
-    // Quando direzione apre Modifica su un preventivo esistente e NON ha
-    // ancora cliccato "Sblocca per modificare", restituiamo i valori salvati
-    // 1:1 cosi' il prezzo mostrato e' identico a quello che il cliente ha
-    // visto (€943,39 nel caso del Porsche 911 Carrera cabrio 2026-05-16).
-    // Il sito potrebbe aver applicato coefficienti / pacchetti km diversi
-    // da quelli che la Centralina Pro produce OGGI: ricalcolare live al
-    // primo open era fonte di confusione e prezzi inventati.
-    if (editingId && editingOriginalP && !pricingUnlocked) {
-      const p = editingOriginalP
-      const ex = (p.extras_detail || {}) as Record<string, unknown>
-      const num = (v: unknown): number => {
-        const n = Number(v); return Number.isFinite(n) ? n : 0
-      }
-      const rDays = Math.max(1, p.rental_days || 1)
-      return {
-        baseDailyRate: p.base_daily_rate || 0,
-        maggiorazione: p.maggiorazione_pct || 0,
-        dailyAfterMarkup: p.daily_rate_after_markup || p.base_daily_rate || 0,
-        rentalTotal: Math.round((p.base_daily_rate || 0) * rDays * 100) / 100,
-        insuranceDailyPrice: p.insurance_daily_price || 0,
-        insuranceTotal: p.insurance_total || 0,
-        lavaggioFee: p.lavaggio_fee || 0,
-        noCauzioneDaily: p.no_cauzione_daily || 0,
-        noCauzioneTotal: p.no_cauzione_total || 0,
-        unlimitedKmDaily: p.unlimited_km_daily || 0,
-        unlimitedKmTotal: p.unlimited_km_total || 0,
-        secondDriverDaily: p.second_driver_daily || 0,
-        secondDriverTotal: p.second_driver_total || 0,
-        dr7FlexDaily: num(ex.dr7_flex_daily),
-        dr7FlexTotal: num(ex.dr7_flex_total),
-        cauzioneVeicoliDaily: num(ex.cauzione_veicoli_daily),
-        cauzioneVeicoliTotal: num(ex.cauzione_veicoli_total),
-        deliveryFee: num(ex.delivery_fee),
-        pickupFee: num(ex.pickup_fee),
-        experienceCost: num(ex.experience_cost),
-        experienceAfterCoeff: num(ex.experience_cost),
-        listSubtotal: p.subtotal || 0,
-        listSubtotalNoExp: (p.subtotal || 0) - num(ex.experience_cost) - num(ex.delivery_fee) - num(ex.pickup_fee),
-        revenueCoeff: 1,
-        revenueBreakdown: [],
-        subtotalDisplay: p.subtotal || 0,
-        afterRevenue: p.subtotal || 0,
-        clampHit: null as null | 'min' | 'max',
-        clampLimitDaily: null as number | null,
-        clampLimitTotal: null as number | null,
-        maggiorazioneAmount: 0,
-        subtotal: p.subtotal || 0,
-        sconto: p.sconto || 0,
-        totalFinal: p.total_final || p.subtotal || 0,
-        kmIncluded: (() => {
-          // Stessa label vista dal cliente. Per preventivi SITO con kmPackages
-          // il sito ha calcolato il totale includendo i pacchetti — non
-          // riapriamo qui il ricalcolo (il valore stampato sul preventivo
-          // resta corretto). Default a 0 quando il preventivo non porta
-          // un km_limit esplicito.
-          const isUnlimited = (p.unlimited_km_total || 0) > 0 || !!(ex as { include_unlimited_km?: unknown }).include_unlimited_km
-          if (isUnlimited) return 'unlimited'
-          if (typeof ex.kmPackages === 'object' && ex.kmPackages) return 'package'
-          const klim = num((ex as { km_limit?: unknown }).km_limit)
-          return klim > 0 ? Math.round(klim / rDays) : 0
-        })(),
-        sforo: 0,
-      }
-    }
+    // Modifica: ricalcola SEMPRE in base ai valori correnti del form. Il vecchio
+    // "Prezzo congelato" snapshot e' stato rimosso 2026-05-19 — bloccava
+    // l'aggiornamento del totale quando si modificava un preventivo.
     // Base rate: per-vehicle from Prezzo Dinamico > category tariffe
     let listDailyRate = 0
 
@@ -1220,7 +1150,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       kmIncluded: resolveKmIncluded(selectedVehicle?.category, rentalDays, proKm, rentalConfig),
       sforo: (configOverlay as any).sforoKm ?? (configOverlay as any).sforo_km ?? 0,
     }
-  }, [form, rentalDays, revenueData, selectedVehicle, insuranceOptions, configOverlay, rentalConfig, noCauzioneResolvedDaily, proLavaggioFee, proSecondDriverDaily, proDr7FlexDaily, proUnlimitedKmDaily, proKm, editingId, editingOriginalP, pricingUnlocked, coeffFlags])
+  }, [form, rentalDays, revenueData, selectedVehicle, insuranceOptions, configOverlay, rentalConfig, noCauzioneResolvedDaily, proLavaggioFee, proSecondDriverDaily, proDr7FlexDaily, proUnlimitedKmDaily, proKm, editingId, coeffFlags])
 
   // ─── Data Loading ─────────────────────────────────────────────────────────
 
@@ -1843,17 +1773,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       acceleration_0_100: p.vehicle_0_100 ? String(p.vehicle_0_100) : '',
     })
     setEditingId(p.id)
-    // Salva lo snapshot per il "prezzo congelato" + reset del flag unlock.
-    setEditingOriginalP(p)
-    setPricingUnlocked(false)
     setView('form')
   }
 
   function resetForm() {
-    // Reset anche degli stati legati al Modifica: stiamo lasciando il form
-    // (salvataggio o "Torna alla Lista"), niente piu' snapshot da congelare.
-    setEditingOriginalP(null)
-    setPricingUnlocked(false)
     setForm({
       vehicle_id: '',
       pickup_date: '',
@@ -3579,30 +3502,6 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         <h2 className="text-2xl font-bold text-theme-text-primary">{editingId ? 'Modifica Preventivo' : 'Nuovo Preventivo'}</h2>
         <Button variant="secondary" onClick={() => { setView('list'); setEditingId(null); resetForm() }}>Torna alla Lista</Button>
       </div>
-
-      {/* Banner "Prezzo congelato" su Modifica preventivo: mostra il totale
-          salvato e offre lo sblocco per ricalcolare da Centralina Pro.
-          Senza sblocco, il riepilogo qui sotto resta IDENTICO al preventivo
-          che il cliente ha visto (niente sorprese da coefficienti / Min
-          floor / KM Illimitati modificati nel frattempo). */}
-      {editingId && editingOriginalP && !pricingUnlocked && (
-        <div className="rounded-xl border border-blue-400/40 bg-blue-500/5 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-          <div className="text-[13px]">
-            <div className="font-semibold text-blue-300">Prezzo congelato dal preventivo</div>
-            <div className="text-theme-text-muted">
-              Stai vedendo il riepilogo cosi&apos; come e&apos; stato salvato (totale {formatEur(editingOriginalP.total_final || editingOriginalP.subtotal || 0)}).
-              Per ricalcolare con i valori attuali della Centralina Pro, sblocca qui.
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setPricingUnlocked(true)}
-            className="text-[12px] px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium whitespace-nowrap"
-          >
-            Sblocca per modificare
-          </button>
-        </div>
-      )}
 
       {/* Vehicle + Fascia/Customer combined dropdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
