@@ -5871,6 +5871,24 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             '{total}': ((insertedBooking?.price_total || eurToCents(formData.total_amount)) / 100).toFixed(2),
             '{payment_method}': formData.payment_method || '',
             '{payment_status}': isPending ? 'Da saldare' : 'Pagato',
+            // 2026-05-19: {payment_info} è la composizione "metodo · stato"
+            // che molti template Pro usano nella riga "Pagamento:". Senza
+            // questa var il safety-net (line 271 send-whatsapp-notification.ts)
+            // strippava il placeholder lasciando "Pagamento:" vuoto.
+            // Alias {pagamento} aggiunto per compatibilità con template
+            // scritti in italiano dall'admin.
+            '{payment_info}': (() => {
+              const status = isPending ? 'Da saldare' : 'Pagato'
+              const method = formData.payment_method || ''
+              if (!method) return status
+              return `${method} · ${status}`
+            })(),
+            '{pagamento}': (() => {
+              const status = isPending ? 'Da saldare' : 'Pagato'
+              const method = formData.payment_method || ''
+              if (!method) return status
+              return `${method} · ${status}`
+            })(),
             '{notes}': formData.notes || '',
             // Payment link + expiry placeholders — only meaningful when the
             // rental_da_saldare_customer / payment_link_customer template is
@@ -6275,20 +6293,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       //     Da Saldare to ask for more money): the original customer already
       //     signed the old terms, so they need the updated contract. The
       //     pay-by-link handles the additional payment separately.
-      //   - Admin manually checked "Conferma Prenotazione" (confirmBooking):
-      //     the booking is intentionally confirmed without payment (it won't
-      //     expire after 1h) — the customer needs the contract to sign now,
-      //     the payment is handled separately via pay-by-link.
       // Cases that DON'T trigger:
       //   - New Da Saldare booking (customer has never paid, not confirmed).
       //   - Edit with an outstanding balance (defer until customer pays delta).
+      //   - Conferma Prenotazione ticked su pending booking: il contratto
+      //     parte SOLO dopo il pagamento effettivo (non basta confermare
+      //     la prenotazione). 2026-05-19: rimosso confirmBooking dalla
+      //     condizione perché direzione vuole il contratto post-pagamento.
+      //     Il pay-by-link callback (nexi-payment-callback.ts) farà partire
+      //     il contratto quando il pagamento arriva davvero.
       const PAID_STATUSES = ['paid', 'completed', 'succeeded']
       const currentlyPaid = PAID_STATUSES.includes(formData.payment_status || '')
       const wasOriginallyPaid = !!editingId
         && PAID_STATUSES.includes(editingOriginalPaymentStatus || '')
       const shouldSendSigningLink = !!insertedBooking?.id
         && !editHasBalanceOwed  // defer signing link until after payment on edits with balance
-        && (currentlyPaid || wasOriginallyPaid || confirmBooking)
+        && (currentlyPaid || wasOriginallyPaid)
       if (shouldSendSigningLink) {
         try {
           // Fetch the contract that was just generated for this booking
