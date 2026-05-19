@@ -17,9 +17,10 @@ const ROLE_FAILSAFE: Record<string, ReadonlySet<AdminRoleTag>> = {
   'valerio@dr7.app':   new Set(['direzione', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
   'ilenia@dr7.app':    new Set(['direzione', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
   'ophe@dr7.app':      new Set(['developer', 'sito-direzione']),
-  // Salvatore: solo sito-direzione (bypass Sito CMS OTPs). Aggiunto su
-  // richiesta direzione 2026-05-13. KEEP IN SYNC con src/hooks/useAdminRole.ts.
-  'salvatore@dr7.app': new Set(['sito-direzione']),
+  // Salvatore promosso a direzione il 2026-05-18 (allineato a src/hooks/useAdminRole.ts).
+  // Prima aveva solo sito-direzione → list-operators ritornava 403 e il
+  // Report Operatori era vuoto. KEEP IN SYNC con src/hooks/useAdminRole.ts.
+  'salvatore@dr7.app': new Set(['direzione', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
 }
 
 let cachedClient: ReturnType<typeof createClient> | null = null
