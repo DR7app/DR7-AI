@@ -1359,7 +1359,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       return
     }
 
-    // Validate customer has all required fields for fattura
+    // 2026-05-19: validazione cliente NON piu' bloccante. Prima
+    // bloccava il salvataggio della booking se mancavano Indirizzo/Citta/
+    // CAP — anche con i dati apparentemente presenti il check falliva su
+    // valori stringa vuota / campi sparsi tra colonne diverse. Adesso
+    // mostro solo un warning + procedo: la fattura puo' essere completata
+    // dopo, quando i dati di fatturazione sono effettivamente noti.
     try {
       const custResp = await authFetch(`/.netlify/functions/get-customer?id=${formData.customer_id}`)
       if (custResp.ok) {
@@ -1368,21 +1373,23 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           const missing: string[] = []
           const isAzienda = custData.tipo_cliente === 'azienda'
 
-          if (!custData.indirizzo) missing.push('Indirizzo')
-          if (!custData.citta_residenza && !custData.citta) missing.push('Città')
-          if (!custData.codice_postale) missing.push('CAP')
+          const hasVal = (v: unknown) => typeof v === 'string' && v.trim().length > 0
+          if (!hasVal(custData.indirizzo)) missing.push('Indirizzo')
+          if (!hasVal(custData.citta_residenza) && !hasVal(custData.citta)) missing.push('Citta')
+          if (!hasVal(custData.codice_postale)) missing.push('CAP')
 
           if (isAzienda) {
-            if (!custData.partita_iva && !custData.codice_fiscale) missing.push('Partita IVA')
+            if (!hasVal(custData.partita_iva) && !hasVal(custData.codice_fiscale)) missing.push('Partita IVA')
           } else {
-            if (!custData.nome) missing.push('Nome')
-            if (!custData.cognome) missing.push('Cognome')
-            if (!custData.codice_fiscale) missing.push('Codice Fiscale')
+            if (!hasVal(custData.nome)) missing.push('Nome')
+            if (!hasVal(custData.cognome)) missing.push('Cognome')
+            if (!hasVal(custData.codice_fiscale)) missing.push('Codice Fiscale')
           }
 
           if (missing.length > 0) {
-            toast.error(`Dati cliente incompleti per la fatturazione:\n${missing.join(', ')}\n\nCompletare il profilo cliente prima di prenotare.`)
-            return
+            // Solo warning, non blocca. L'admin puo' completare i dati di
+            // fatturazione quando emette la fattura.
+            toast(`Avviso: dati cliente incompleti (${missing.join(', ')}). La booking viene creata, completa i dati prima della fattura.`, { duration: 6000, icon: 'ℹ️' })
           }
         }
       }
