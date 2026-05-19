@@ -1,0 +1,45 @@
+name: Mirror to DR7app/DR7-AI
+
+# Auto-sync this repo (bonaparks-dev/DR7-empire-admin) to the staging
+# mirror at DR7app/DR7-AI. Every push to any branch + every tag gets
+# copied across. Used as a continuous backup / SaaS-experiment sandbox.
+#
+# Setup once: add a repo secret named DR7AI_PUSH_TOKEN containing a
+# classic PAT with `repo` scope owned by a user with write access to
+# DR7app/DR7-AI. The same token you used for the initial bootstrap
+# push works — just save it in repo settings instead of re-pasting it.
+#
+# Repo Settings → Secrets and variables → Actions → New repository secret
+#   Name:  DR7AI_PUSH_TOKEN
+#   Value: ghp_... (classic token, repo scope)
+
+on:
+  push:
+    branches: ['**']
+    tags: ['**']
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history + all refs)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Required so the mirror push has all the commits to send.
+
+      - name: Push to DR7-AI mirror
+        env:
+          DR7AI_TOKEN: ${{ secrets.DR7AI_PUSH_TOKEN }}
+        run: |
+          if [ -z "$DR7AI_TOKEN" ]; then
+            echo "::error::DR7AI_PUSH_TOKEN secret is missing — add it in repo settings."
+            exit 1
+          fi
+          git remote add dr7ai "https://x-access-token:${DR7AI_TOKEN}@github.com/DR7app/DR7-AI.git"
+          # --mirror sincronizza TUTTI i refs (branch, tag, eliminazioni)
+          # cosi' DR7-AI riflette esattamente lo stato di main + tutte le
+          # branch di feature. Force-protetto dal fatto che il token deve
+          # avere write access ESPLICITO a DR7-AI.
+          git push --mirror dr7ai
+          echo "Mirror push complete."
