@@ -2612,6 +2612,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customPhone: custPhone,
+          booking: {
+            id: booking.id,
+            service_type: booking.service_type || 'car_rental',
+          },
           templateKey: 'payment_link_customer',
           templateVars: { '{customer_name}': custName, '{booking_id}': bookingRef, '{total}': totalEur, '{payment_link}': newPaymentLink, '{expiry}': '1 ora' }
         })
@@ -2780,6 +2784,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customPhone: booking.customer_phone,
+            booking: {
+              id: booking.id,
+              service_type: booking.service_type || 'car_rental',
+            },
             templateKey: 'signature_request_link',
             templateVars: {
               signerName: booking.customer_name || 'Cliente',
@@ -2986,6 +2994,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 customPhone: custPhone,
+                booking: {
+                  id: bookingId,
+                  service_type: cancelledBooking?.service_type || 'car_rental',
+                },
                 // EVENTO LEGACY: il resolver server cerca il template che
                 // ha ticchettato `booking_cancelled_whatsapp` in Eventi
                 // gestiti (Messaggi di Sistema Pro). Cosi' non si confonde
@@ -3840,6 +3852,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     customPhone: customerPhone,
+                    booking: {
+                      id: extendingBooking.id,
+                      service_type: extendingBooking.service_type || 'car_rental',
+                    },
                     templateKey: 'payment_link_customer',
                     templateVars: {
                       '{nome}': custName,
@@ -5982,6 +5998,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 customPhone: custPhone,
+                booking: {
+                  id: insertedBooking?.id || editingId || null,
+                  service_type: insertedBooking?.service_type || formData.service_type || 'car_rental',
+                },
                 templateKey: finalTemplateKey,
                 templateVars,
               })
@@ -6019,6 +6039,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   customPhone: custPhone,
+                  booking: {
+                    id: insertedBooking?.id || editingId || null,
+                    service_type: insertedBooking?.service_type || formData.service_type || 'car_rental',
+                  },
                   templateKey: finalMethodEvent,
                   templateVars,
                 })
