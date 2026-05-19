@@ -452,16 +452,19 @@ function nextCronAttemptText(sendHour: number | null): string {
  * invio solo a mano dall'admin".
  */
 function buildScheduleSummary(
-  t: { message_key?: string; label?: string | null; is_automatic?: boolean; trigger_event?: string; trigger_offset_hours?: number; send_hour?: number | null; target_status?: string | null; target_category?: string | null },
+  t: { message_key?: string; label?: string | null; is_automatic?: boolean; trigger_event?: string; trigger_offset_hours?: number; send_hour?: number | null; target_status?: string | null; target_category?: string | null; handled_events?: string[] | null },
   categoryLabels: Record<string, string>,
 ): string[] {
   const lines: string[] = []
 
-  // Eventi di codice che instradano qui — usa SIA message_key SIA label.
-  // I template custom (message_key `pro_custom_*`) la cui label corrisponde
-  // a uno slot canonico (es. "Conferma Noleggio") vengono riconosciuti
-  // tramite LABEL_FALLBACKS, esattamente come fa il resolver server.
-  const eventTriggers = getProKeyEventTriggers(t.message_key, t.label)
+  // 2026-05-19: il preview Programmazione ora rispecchia ESATTAMENTE
+  // gli `handled_events` selezionati dall'admin in "EVENTI GESTITI DA
+  // QUESTO TEMPLATE". Prima usava `getProKeyEventTriggers` (mappa
+  // canonical hardcoded OLD_TO_PRO + LABEL_FALLBACKS): mostrava 13
+  // eventi quando l'admin ne aveva selezionato solo 1. Discrepanza
+  // confondente + pericolosa (l'admin pensava di aver attivato cose
+  // che NON aveva attivato). Adesso unica fonte: handled_events.
+  const eventTriggers = Array.isArray(t.handled_events) ? t.handled_events : []
 
   // Quando il template è guidato da eventi di codice, il vero
   // momento di invio è l'evento — il cron è solo configurazione
@@ -476,7 +479,8 @@ function buildScheduleSummary(
     // template event-driven è di fatto irrilevante. Mostriamo solo le
     // righe Evento e basta — niente cron, niente warning sull'Automatico.
     for (const ev of eventTriggers) {
-      lines.push(`Evento · ${ev}`)
+      const label = EVENT_LABELS_IT[ev as keyof typeof EVENT_LABELS_IT] || ev
+      lines.push(`Evento · ${label}`)
     }
     // Per i template event-driven mostriamo comunque i filtri advanced
     // attivi (cauzione, payment method, tier, ecc.) così l'admin sa che

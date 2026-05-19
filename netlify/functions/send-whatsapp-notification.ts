@@ -127,6 +127,25 @@ const handler: Handler = async (event) => {
         };
       }
 
+      // 2026-05-19 HARDENING: rifiuta SEMPRE l'invio se il resolver torna una
+      // chiave legacy (presente in OLD_TO_PRO). I template legacy esistono solo
+      // come alias di routing — il loro body non deve mai partire. Se questo
+      // controllo scatta, c'è un bug nella mappatura admin / Programmazione.
+      // Loggiamo forte cosi' direzione vede subito in console / Netlify logs.
+      const { OLD_TO_PRO: LEGACY_KEYS } = await import('../../src/utils/proTemplateRouting');
+      if (Object.prototype.hasOwnProperty.call(LEGACY_KEYS, resolvedKey)) {
+        console.error(`[send-whatsapp] BLOCKED legacy template send "${resolvedKey}" (caller passed templateKey=${templateKey}). Legacy templates are routing aliases only — assegna l'evento a un pro_* in Messaggi di Sistema Pro > Programmazione.`);
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            message: `Legacy template "${resolvedKey}" blocked — only pro_* templates can fire`,
+            success: true,
+            skipped: true,
+            reason: 'legacy_template_blocked',
+          }),
+        };
+      }
+
       const { data: tpl } = await sb
         .from('system_messages')
         .select('message_body, include_header, is_enabled, target_service_type')
@@ -396,6 +415,23 @@ const handler: Handler = async (event) => {
       }
       messageKey = resolved;
       usedTemplateKey = messageKey;
+
+      // 2026-05-19 HARDENING: gli stessi controlli anti-legacy del path
+      // templateKey. Se per qualunque motivo il resolver torna una chiave
+      // legacy (es. handled_events mancante in tutti i pro_*), blocca subito.
+      const { OLD_TO_PRO: LEGACY_KEYS_2 } = await import('../../src/utils/proTemplateRouting');
+      if (Object.prototype.hasOwnProperty.call(LEGACY_KEYS_2, messageKey)) {
+        console.error(`[send-whatsapp] BLOCKED legacy template send "${messageKey}" (derived from booking). Aggiorna handled_events di un pro_* in Messaggi di Sistema Pro > Programmazione.`);
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            message: `Legacy template "${messageKey}" blocked — only pro_* templates can fire`,
+            success: true,
+            skipped: true,
+            reason: 'legacy_template_blocked',
+          }),
+        };
+      }
 
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
       let { data: tpl } = await supabase

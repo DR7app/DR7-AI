@@ -9,7 +9,9 @@
  * Variables in templates use {variable_name} syntax.
  */
 import { createClient } from '@supabase/supabase-js'
-import { OLD_TO_PRO as SHARED_OLD_TO_PRO, LABEL_FALLBACKS as SHARED_LABEL_FALLBACKS } from '../../../src/utils/proTemplateRouting'
+// 2026-05-19: LABEL_FALLBACKS import rimosso — non più usato dal resolver.
+// L'unica fonte di routing è handled_events (Programmazione admin).
+import { OLD_TO_PRO as SHARED_OLD_TO_PRO } from '../../../src/utils/proTemplateRouting'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -47,7 +49,7 @@ interface MessageTemplate {
  * specifici stanno prima per non essere "rubati" da pattern più
  * generici.
  */
-const LABEL_FALLBACKS: Record<string, string[][]> = SHARED_LABEL_FALLBACKS
+// 2026-05-19: LABEL_FALLBACKS rimosso. Il resolver usa solo handled_events.
 
 /**
  * Old-key → Pro-key router.
@@ -92,29 +94,12 @@ export async function resolveKeyForContext(key: string, _context?: RenderContext
   void _context
   if (key === 'message_wrapper_header' || key === 'message_wrapper_footer') return key
 
-  // Helper: if the chosen pro_* key has no enabled+non-empty row, try a
-  // label-based match against custom (pro_custom_*) templates the admin
-  // may have created.
-  const resolveWithLabelFallback = async (proKey: string, templates: MessageTemplate[]): Promise<string | null> => {
-    const pro = templates.find(t => t.message_key === proKey)
-    if (pro && pro.is_enabled && pro.message_body) return proKey
-    const groups = LABEL_FALLBACKS[proKey]
-    if (groups && groups.length) {
-      const enabled = templates.filter(t => t.is_enabled && t.message_body && t.label)
-      // Try each AND-group in order. First group where a template has ALL
-      // fragments in its lowercase label wins. More-specific groups are
-      // listed first in LABEL_FALLBACKS so they take priority over generic
-      // fallbacks like ['link pagamento'].
-      for (const group of groups) {
-        const match = enabled.find(t => {
-          const lbl = (t.label || '').toLowerCase()
-          return group.every(f => lbl.includes(f))
-        })
-        if (match) return match.message_key
-      }
-    }
-    return null
-  }
+  // 2026-05-19: rimosso `resolveWithLabelFallback` (era un helper che faceva
+  // match dei template per label se il canonical pro_* mancava). Bypassava
+  // i handled_events configurati dall'admin → la direzione vedeva template
+  // partire su eventi che NON aveva selezionato in Programmazione. Adesso
+  // l'unica fonte di routing è `handled_events`, gestito da
+  // Messaggi di Sistema Pro > Programmazione.
 
   const templates = await loadAllTemplates()
 
@@ -161,13 +146,18 @@ export async function resolveKeyForContext(key: string, _context?: RenderContext
           .filter(x => x.r > 0)
           .sort((a, b) => b.r - a.r)
         if (ranked.length > 0) return ranked[0].t.message_key
-        // Tutti i candidati incompatibili → cade nel label-fallback sotto
-        // (che alla peggio torna il canonical originale).
       }
     }
-    // Fallback storico: label-based per predefined pro_* slots che hanno
-    // body proprio, o ricerca per pattern label se il canonical è vuoto.
-    return await resolveWithLabelFallback(key, templates)
+    // 2026-05-19: rispetta SOLO handled_events. Se nessun template li ha
+    // configurati per gli eventi di questo pro_key, prova il canonical
+    // esatto SE è enabled+non vuoto. Niente label-fallback fuzzy: l'admin
+    // assegna gli eventi in Programmazione, fine.
+    const canonical = templates.find(t => t.message_key === key)
+    if (canonical && canonical.is_enabled && canonical.message_body) {
+      return key
+    }
+    console.warn(`[resolveKeyForContext] No Pro template handles "${key}" — message skipped. Verifica handled_events o riabilita il canonical.`)
+    return null
   }
 
   // 1. DB-driven event routing (admin-editable). Cerca i template
@@ -181,11 +171,20 @@ export async function resolveKeyForContext(key: string, _context?: RenderContext
   // serviceType del booking passato in _context. Senza questa logica il
   // primo trovato vinceva e i template custom service-specific venivano
   // mascherati dai canonical seedati.
+  //
+  // 2026-05-19: ESCLUDI i template legacy (con message_key uguale a una chiave
+  // di OLD_TO_PRO) dai candidati. Altrimenti, se l'admin aveva un legacy row
+  // (es. `rental_new_customer`) con handled_events che include se stesso, il
+  // resolver tornava il legacy invece del pro_* assegnato dall'admin in UI.
+  // Risultato: la "Programmazione" custom impostata dall'admin in
+  // Messaggi di Sistema Pro veniva ignorata e partiva sempre il body legacy
+  // (spesso con placeholders extra non sostituiti).
   const candidates = templates.filter(t =>
     Array.isArray(t.handled_events)
     && t.handled_events.includes(key)
     && t.is_enabled
     && !!t.message_body
+    && !(t.message_key && Object.prototype.hasOwnProperty.call(OLD_TO_PRO, t.message_key))
   )
   if (candidates.length > 0) {
     const ctxSvc = (_context?.serviceType || '').toLowerCase()
@@ -209,21 +208,25 @@ export async function resolveKeyForContext(key: string, _context?: RenderContext
       .filter(x => x.r > 0)
       .sort((a, b) => b.r - a.r)
     if (ranked.length > 0) return ranked[0].t.message_key
-    // Tutti i candidati hanno target_service_type incompatibile col
-    // booking corrente. FIX 2026-05-13: invece di tornare null (che
-    // causava silent-drop quando il caller dimenticava di passare
-    // serviceType nel context), cadiamo sulla mappa OLD_TO_PRO storica.
-    // Garantisce che un messaggio parta sempre — al peggio si usa il
-    // canonical originale invece del custom service-specific.
   }
 
-  // 2. Fallback alla mappa hardcoded (compat). Si raggiunge in tre casi:
-  //   (a) nessun template claima questo evento via handled_events
-  //   (b) tutti i candidati hanno target_service_type incompatibile
-  //   (c) handled_events column non esiste ancora (migrazione non applicata)
-  const proKey = OLD_TO_PRO[key]
-  if (!proKey) return null
-  return await resolveWithLabelFallback(proKey, templates)
+  // 2026-05-19: NO MORE HARDCODED FALLBACK.
+  //
+  // Prima qui c'era un fallback su OLD_TO_PRO + LABEL_FALLBACKS che faceva
+  // partire il template canonical (es. pro_conferma_da_saldare per
+  // payment_received_damages) anche quando l'admin aveva tolto quell'evento
+  // dalla Programmazione del template. Ignorava completamente le scelte
+  // della direzione.
+  //
+  // Adesso: SOLO i template con handled_events che include l'evento
+  // possono fire. Se la direzione vuole che un template gestisca un
+  // evento, lo seleziona in Messaggi di Sistema Pro > Programmazione.
+  // Se nessun template lo gestisce → nessun messaggio (silent skip + log).
+  //
+  // Log esplicito così, se qualcosa NON parte, l'admin vede in console
+  // / Netlify logs quale evento è "orfano" e può assegnarlo.
+  console.warn(`[resolveKeyForContext] No Pro template has "${key}" in handled_events — message skipped. Assegna l'evento a un pro_* in Messaggi di Sistema Pro > Programmazione se vuoi che parta.`)
+  return null
 }
 
 // No cache — admin edits to Pro templates must take effect on the very next

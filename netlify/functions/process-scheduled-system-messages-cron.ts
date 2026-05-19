@@ -29,7 +29,7 @@
 import { schedule } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { matchesAdvancedFilters, passesCustomerFilters, loadPaymentMethodAliases, loadResidentProvinces } from './utils/triggerSystemMessageEvent';
-import { getProKeyEventTriggers } from '../../src/utils/proTemplateRouting';
+import { getProKeyEventTriggers, OLD_TO_PRO } from '../../src/utils/proTemplateRouting';
 import { getAdminNotificationPhone } from './utils/notificationPhone';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
@@ -418,6 +418,18 @@ const cronHandler = async () => {
     for (const tpl of templates as SystemMessage[]) {
         // Skip eventi non gestiti (preventivo gestito altrove)
         if (tpl.trigger_event === 'on_preventivo') continue;
+
+        // 2026-05-19: skip i template LEGACY (message_key in OLD_TO_PRO).
+        // L'admin assegna i loro eventi ai pro_* via Messaggi di Sistema Pro >
+        // Programmazione (handled_events). Se questo cron continuasse a far
+        // fire i legacy, il cliente riceveva 2 messaggi per lo stesso evento:
+        // uno dal pro_* (via resolver/templateKey path) e uno dal legacy (qui).
+        const legacyKeys = Object.keys(OLD_TO_PRO)
+        if ((tpl as { message_key?: string }).message_key
+            && legacyKeys.includes((tpl as { message_key?: string }).message_key as string)) {
+            console.log(`[scheduled-msgs] Skipping legacy template ${tpl.label} (${tpl.message_key}) — superseded by pro_* via handled_events`)
+            continue;
+        }
 
         // Skip i template guidati da eventi di codice (Conferma Noleggio,
         // Wallet Bonus, Firma, ecc.). Il loro invio avviene quando l'evento

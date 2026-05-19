@@ -20,7 +20,15 @@ interface BookingLike {
     customer_name?: string | null
     customer_phone?: string | null
     customer_email?: string | null
+    vehicle_name?: string | null
     vehicle_plate?: string | null
+    pickup_date?: string | null
+    dropoff_date?: string | null
+    pickup_location?: string | null
+    dropoff_location?: string | null
+    payment_method?: string | null
+    payment_status?: string | null
+    price_total?: number | null
     booking_details?: Record<string, unknown> | null
     dr7_privilege_sent_at?: string | null
 }
@@ -157,18 +165,68 @@ export async function sendDr7Privilege(
     })
     if (insErr) return { sent: false, error: `insert_code_failed: ${insErr.message}` }
 
-    // Build message body with placeholder substitutions
+    // Build message body with placeholder substitutions.
+    // 2026-05-19: prima sostituivamo SOLO {nome} / {customer_name} / {codice_*}.
+    // Se l'admin in Messaggi di Sistema Pro aggiungeva altri placeholder
+    // standard (es. {booking_id}, {vehicle_name}, {pickup_date}, ecc.) al
+    // template DR7 Privilege, restavano letterali nel WhatsApp inviato — il
+    // cliente vedeva "Veicolo: {vehicle_name} Ritiro: {pickup_date}". Adesso
+    // mirroring del set base di send-whatsapp-notification.ts.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const detailsCustomer = (booking.booking_details as any)?.customer || {}
     const fullName = booking.customer_name || detailsCustomer.fullName || "Cliente"
     const nome = fullName.split(" ")[0] || "Cliente"
     const placeholderKey = kind === "noleggio" ? "codice_supercar" : "codice_lavaggio"
-
+    const bookingIdShort = (booking.id || "").substring(0, 8).toUpperCase()
+    const fmtDate = (iso: string | null | undefined): { date: string; time: string } => {
+        if (!iso) return { date: "", time: "" }
+        const d = new Date(iso)
+        if (isNaN(d.getTime())) return { date: "", time: "" }
+        return {
+            date: d.toLocaleDateString("it-IT", { timeZone: "Europe/Rome" }),
+            time: d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Europe/Rome" }),
+        }
+    }
+    const pickup = fmtDate(booking.pickup_date)
+    const dropoff = fmtDate(booking.dropoff_date)
+    const totalEur = typeof booking.price_total === "number"
+        ? (booking.price_total / 100).toFixed(2)
+        : ""
+    const paymentStatusLabel = (() => {
+        const ps = booking.payment_status
+        if (ps === "paid" || ps === "succeeded" || ps === "completed") return "Pagato"
+        if (ps === "pending" || ps === "unpaid") return "Da saldare"
+        return ps || ""
+    })()
+    const vars: Record<string, string> = {
+        nome,
+        customer_name: fullName,
+        cliente: fullName,
+        booking_id: bookingIdShort,
+        booking_ref: bookingIdShort,
+        vehicle_name: booking.vehicle_name || "",
+        plate: booking.vehicle_plate || "",
+        targa: booking.vehicle_plate || "",
+        pickup_date: pickup.date,
+        pickup_time: pickup.time,
+        dropoff_date: dropoff.date,
+        dropoff_time: dropoff.time,
+        pickup_location: booking.pickup_location || "",
+        dropoff_location: booking.dropoff_location || booking.pickup_location || "",
+        total: totalEur,
+        totale: totalEur,
+        importo: totalEur,
+        payment_method: booking.payment_method || "",
+        pagamento: paymentStatusLabel,
+        payment_status: paymentStatusLabel,
+        customer_email: booking.customer_email || "",
+        customer_phone: booking.customer_phone || "",
+        [placeholderKey]: code,
+    }
     let body = tpl.message_body as string
-    body = body
-        .replace(/\{nome\}/g, nome)
-        .replace(/\{customer_name\}/g, fullName)
-        .replace(new RegExp(`\\{${placeholderKey}\\}`, "g"), code)
+    for (const [k, v] of Object.entries(vars)) {
+        body = body.replace(new RegExp(`\\{\\s*${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\}`, "g"), v || "")
+    }
 
     const finalMessage = (header || footer)
         ? [header, body, footer].filter(Boolean).join("\n\n")
