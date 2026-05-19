@@ -138,7 +138,7 @@ export default function AdminDashboard() {
   const { alarmState, enableAudio } = useVehicleAlarm()
   const birthdayCount = useBirthdayCount()
   const scartataCount = useFatturaScartataCount()
-  const { role: adminRole, hasPermission, adminName, adminEmail } = useAdminRole()
+  const { role: adminRole, hasPermission, adminName, adminEmail, adminAvatar } = useAdminRole()
   // 2026-05-19: isElevated rimosso (era declared but never read). Quando
   // serve in futuro, riaggiungerlo qui basato su:
   // adminRole === 'superadmin' || hasRole('direzione') || hasRole('developer')
@@ -673,8 +673,10 @@ export default function AdminDashboard() {
                 aria-label="Operatore"
                 title={adminEmail || 'Operatore'}
               >
-                <div className="w-8 h-8 rounded-lg bg-dr7-gold/20 text-dr7-gold flex items-center justify-center text-xs font-bold border border-dr7-gold/30">
-                  {(() => {
+                <div className="w-8 h-8 rounded-full overflow-hidden bg-dr7-gold/20 text-dr7-gold flex items-center justify-center text-xs font-bold border border-dr7-gold/30 shrink-0">
+                  {adminAvatar ? (
+                    <img src={adminAvatar} alt={adminName || 'Operatore'} className="w-full h-full object-cover" />
+                  ) : (() => {
                     const src = adminName || adminEmail || ''
                     const parts = src.split(/[\s@.]+/).filter(Boolean)
                     return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '?'
@@ -695,10 +697,21 @@ export default function AdminDashboard() {
                   {/* Dropdown — width capped to viewport so it never clips
                       off-screen on narrow phones. Touch targets >=44px. */}
                   <div className="absolute right-0 top-12 z-50 w-64 max-w-[calc(100vw-1rem)] bg-theme-bg-secondary border border-theme-border rounded-xl shadow-2xl py-2 text-sm overflow-hidden">
-                    <div className="px-3 pb-2 border-b border-theme-border">
-                      <div className="text-xs font-bold text-theme-text-primary truncate">{adminName || 'Operatore'}</div>
-                      <div className="text-[11px] text-theme-text-muted truncate">{adminEmail || '—'}</div>
-                      <div className="text-[10px] text-theme-text-muted mt-0.5">{adminRole === 'superadmin' ? 'Super Admin' : 'Admin'}</div>
+                    <div className="px-3 pb-2 border-b border-theme-border flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-full overflow-hidden bg-dr7-gold/20 text-dr7-gold flex items-center justify-center text-sm font-bold border border-dr7-gold/30 shrink-0">
+                        {adminAvatar ? (
+                          <img src={adminAvatar} alt={adminName || 'Operatore'} className="w-full h-full object-cover" />
+                        ) : (() => {
+                          const src = adminName || adminEmail || ''
+                          const parts = src.split(/[\s@.]+/).filter(Boolean)
+                          return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '?'
+                        })()}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-theme-text-primary truncate">{adminName || 'Operatore'}</div>
+                        <div className="text-[11px] text-theme-text-muted truncate">{adminEmail || '—'}</div>
+                        <div className="text-[10px] text-theme-text-muted mt-0.5">{adminRole === 'superadmin' ? 'Super Admin' : 'Admin'}</div>
+                      </div>
                     </div>
                     {/* I miei orari — quick access to the operator's own
                         Rilevazione Orari tab. */}

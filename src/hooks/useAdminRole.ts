@@ -40,6 +40,8 @@ export interface AdminRole {
   adminName: string | null
   adminId: string | null
   adminEmail: string | null
+  /** Avatar URL caricato in Operatori (operatori_persone.avatar_url). null = mostra le iniziali. */
+  adminAvatar: string | null
   permissions: string[]
   hasPermission: (tab: string) => boolean
   hasRole: (role: AdminRoleTag) => boolean
@@ -51,6 +53,7 @@ export function useAdminRole(): AdminRole {
   const [adminName, setAdminName] = useState<string | null>(null)
   const [adminId, setAdminId] = useState<string | null>(null)
   const [adminEmail, setAdminEmail] = useState<string | null>(null)
+  const [adminAvatar, setAdminAvatar] = useState<string | null>(null)
   const [permissions, setPermissions] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -83,6 +86,29 @@ export function useAdminRole(): AdminRole {
           setAdminId(data.id || null)
           const raw = (data as { permissions?: unknown }).permissions
           setPermissions(Array.isArray(raw) ? raw.map(String) : [])
+
+          // Carica avatar da operatori_persone (collegato via user_id).
+          // Fallback su email se user_id non e' ancora settato.
+          // Tabella separata da admins: l'upload avviene da OperatorProfileModal
+          // / RilevazioneOrariTab e scrive su operatori_persone.avatar_url.
+          try {
+            let opRow: { avatar_url?: string | null } | null = null
+            const { data: byUser } = await supabase
+              .from('operatori_persone')
+              .select('avatar_url')
+              .eq('user_id', user.id)
+              .maybeSingle()
+            opRow = byUser
+            if (!opRow && user.email) {
+              const { data: byEmail } = await supabase
+                .from('operatori_persone')
+                .select('avatar_url')
+                .eq('email', user.email)
+                .maybeSingle()
+              opRow = byEmail
+            }
+            if (opRow?.avatar_url) setAdminAvatar(opRow.avatar_url)
+          } catch { /* avatar opzionale, niente blocco se fallisce */ }
         }
       } catch (err) {
         console.error('Failed to load admin role:', err)
@@ -135,6 +161,7 @@ export function useAdminRole(): AdminRole {
     canManageAdmins,
     loading,
     adminName,
+    adminAvatar,
     adminId,
     adminEmail,
     permissions,
