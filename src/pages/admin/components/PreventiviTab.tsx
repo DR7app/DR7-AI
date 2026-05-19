@@ -416,6 +416,15 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   const [view, setView] = useState<'list' | 'form'>('list')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [preventivi, setPreventivi] = useState<Preventivo[]>([])
+  // Snapshot dei valori inviati dal cliente quando il preventivo arriva
+  // dal sito (source='website*'). Usato per mostrare un pannello
+  // read-only "Richiesta dal cliente" durante la Modifica cosi'
+  // l'admin vede a colpo d'occhio cosa il cliente aveva chiesto
+  // (veicolo, date, extra, totale visto) prima di toccare il form.
+  const editingPreventivo = useMemo(
+    () => editingId ? preventivi.find(p => p.id === editingId) || null : null,
+    [editingId, preventivi]
+  )
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -3502,6 +3511,71 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         <h2 className="text-2xl font-bold text-theme-text-primary">{editingId ? 'Modifica Preventivo' : 'Nuovo Preventivo'}</h2>
         <Button variant="secondary" onClick={() => { setView('list'); setEditingId(null); resetForm() }}>Torna alla Lista</Button>
       </div>
+
+      {/* Pannello "Richiesta dal cliente" — sempre visibile quando il
+          preventivo arriva dal sito. Mostra i valori originali che il
+          cliente ha visto/inserito. Read-only: per modificare si usa
+          il form sotto (le modifiche ricalcolano il totale in tempo
+          reale grazie alla rimozione del prezzo congelato). */}
+      {editingId && editingPreventivo && editingPreventivo.source?.startsWith('website') && (
+        (() => {
+          const p = editingPreventivo
+          const ex = (p.extras_detail || {}) as Record<string, any>
+          const pickupDate = new Date(p.pickup_date)
+          const dropoffDate = new Date(p.dropoff_date)
+          const requested: string[] = []
+          if (p.insurance_option) requested.push(`Assicurazione: ${p.insurance_option}`)
+          if (p.unlimited_km_total > 0 || ex.include_unlimited_km) requested.push('KM Illimitati')
+          if (p.no_cauzione_total > 0 || ex.include_no_cauzione) requested.push('Senza Cauzione')
+          if (p.second_driver_total > 0 || ex.include_second_driver) requested.push('2° Conducente')
+          if (p.lavaggio_fee > 0 || ex.include_lavaggio) requested.push('Lavaggio')
+          if (ex.include_dr7_flex) requested.push('DR7 Flex')
+          if (ex.km_packages && typeof ex.km_packages === 'object' && Object.keys(ex.km_packages).length > 0) {
+            const labels = Object.entries(ex.km_packages as Record<string, number>).map(([k, qty]) => `${k} ×${qty}`)
+            requested.push(`Pacchetti KM: ${labels.join(', ')}`)
+          }
+          const isNoCauzione = p.source === 'website_no_cauzione'
+          return (
+            <div className={`rounded-xl border px-4 py-3 ${isNoCauzione ? 'border-orange-400/40 bg-orange-500/5' : 'border-blue-400/40 bg-blue-500/5'}`}>
+              <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                <div className={`text-sm font-semibold ${isNoCauzione ? 'text-orange-300' : 'text-blue-300'}`}>
+                  Richiesta dal cliente {isNoCauzione && '· Senza Cauzione'}
+                </div>
+                <div className="text-[11px] text-theme-text-muted">
+                  Ricevuto il {new Date(p.created_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1 text-[12px]">
+                <div><span className="text-theme-text-muted">Cliente:</span> <span className="text-theme-text-primary font-medium">{p.customer_name || '—'}</span></div>
+                <div><span className="text-theme-text-muted">Telefono:</span> <span className="text-theme-text-primary">{p.customer_phone || '—'}</span></div>
+                <div><span className="text-theme-text-muted">Fascia:</span> <span className="text-theme-text-primary">{p.driver_tier === 'TIER_2' ? 'A' : p.driver_tier === 'TIER_1' ? 'B' : '—'}</span></div>
+                <div><span className="text-theme-text-muted">Veicolo:</span> <span className="text-theme-text-primary">{p.vehicle_name}</span></div>
+                <div><span className="text-theme-text-muted">Ritiro:</span> <span className="text-theme-text-primary">{pickupDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })} {pickupDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}</span></div>
+                <div><span className="text-theme-text-muted">Riconsegna:</span> <span className="text-theme-text-primary">{dropoffDate.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })} {dropoffDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}</span></div>
+                <div><span className="text-theme-text-muted">Giorni:</span> <span className="text-theme-text-primary">{p.rental_days}</span></div>
+                {ex.pickup_location && <div><span className="text-theme-text-muted">Ritiro:</span> <span className="text-theme-text-primary">{String(ex.pickup_location)}</span></div>}
+                {ex.dropoff_location && <div><span className="text-theme-text-muted">Riconsegna:</span> <span className="text-theme-text-primary">{String(ex.dropoff_location)}</span></div>}
+              </div>
+              {requested.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-theme-border/50 text-[12px]">
+                  <span className="text-theme-text-muted">Extra richiesti: </span>
+                  <span className="text-theme-text-primary">{requested.join(' · ')}</span>
+                </div>
+              )}
+              <div className="mt-2 pt-2 border-t border-theme-border/50 flex items-center justify-between flex-wrap gap-2 text-[12px]">
+                <div>
+                  <span className="text-theme-text-muted">Totale visto dal cliente: </span>
+                  <span className="text-theme-text-primary font-bold tabular-nums">{formatEur(p.total_final || p.subtotal || 0)}</span>
+                  {p.sconto > 0 && <span className="ml-2 text-[11px] text-green-400">(sconto: {formatEur(p.sconto)})</span>}
+                </div>
+                <div className="text-theme-text-muted/70 italic text-[11px]">
+                  Modifica i campi sotto — il totale si ricalcola in tempo reale.
+                </div>
+              </div>
+            </div>
+          )
+        })()
+      )}
 
       {/* Vehicle + Fascia/Customer combined dropdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
