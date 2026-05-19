@@ -3270,6 +3270,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       status: booking.status,
       payment_status: booking.payment_status || 'paid',
       payment_method: booking.payment_method || 'Contanti',
+      // Track conferma state at load so the save handler can detect
+      // a pending->paid transition on an already-confirmed booking and
+      // skip the duplicate "Conferma Noleggio" send (the customer already
+      // got "Conferma Da Saldare" on initial save; on payment they only
+      // need the per-method "Pagamento ricevuto", not another conferma).
+      _wasConfirmedAtLoad: booking.booking_details?.manually_confirmed === true,
       amount_paid: booking.booking_details?.amountPaid ? centsToEurStr(Math.round(booking.booking_details.amountPaid)) : '0',
       // Subtract delivery/pickup fees to get BASE rental amount only
       // (fees are re-added on save at price_total calculation)
@@ -5916,8 +5922,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // - New + paid (no conferma checkbox) → rental_new_customer
           // - Pending (da-saldare) without conferma → null (silent until
           //   admin records the payment or explicitly ticks Conferma)
+          // Pending -> paid transition on an already-confirmed booking?
+          // The customer already received "Conferma Da Saldare" at the first
+          // save. On payment we must NOT send another "Conferma Noleggio";
+          // the per-method "Pagamento ricevuto" template (booking_paid_cash
+          // / booking_paid_card / ...) below is the right signal.
+          const prevSnap = editFormSnapshotRef.current
+          const prevPaymentStatus = String(prevSnap?.payment_status || '').toLowerCase()
+          const prevWasPending = prevPaymentStatus === 'unpaid' || prevPaymentStatus === 'pending' || prevPaymentStatus === ''
+          const wasConfirmedAtLoad = prevSnap?._wasConfirmedAtLoad === true
+          const isDaSaldareToPaidTransition = !!editingId && wasConfirmedAtLoad && prevWasPending && !isPending
+
           let templateKey: string | null
-          if (confirmBooking && isPending) {
+          if (isDaSaldareToPaidTransition) {
+            logger.log('[Save] Da-saldare -> paid transition on already-confirmed booking. Skipping conferma resend; per-method paid template will fire below.')
+            templateKey = null
+          } else if (confirmBooking && isPending) {
             // Admin ha spuntato "Conferma Prenotazione" mentre payment_status
             // resta pending → questa NON e' una conferma di pagamento, e' una
             // conferma "Da Saldare". Routing dedicato cosi' l'admin puo'
