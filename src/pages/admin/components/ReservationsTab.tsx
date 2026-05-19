@@ -5616,6 +5616,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     customPhone: custPhone,
+                    // Passa il booking cosi' il resolver vede il service_type
+                    // e puo' matchare i template con filtro "solo Noleggio".
+                    // Senza questo il template "Link Pagamento" (target rental)
+                    // veniva scartato e il messaggio non partiva.
+                    booking: {
+                      id: insertedBooking.id,
+                      service_type: insertedBooking.service_type || 'car_rental',
+                    },
                     templateKey: 'payment_link_customer',
                     templateVars: {
                       '{customer_name}': customerInfo?.full_name || 'Cliente',
@@ -6285,6 +6293,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     customPhone: custPhone,
+                    booking: {
+                      id: insertedBooking.id,
+                      service_type: insertedBooking.service_type || 'car_rental',
+                    },
                     templateKey: 'payment_link_customer',
                     templateVars: {
                       '{customer_name}': customerInfo?.full_name || firstName,
