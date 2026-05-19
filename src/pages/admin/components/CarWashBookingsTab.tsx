@@ -1207,6 +1207,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       }
 
       toast.dismiss('gen-invoice')
+
+      // 2026-05-19: il backend puo' rispondere 200 OK con { skipped:true }
+      // (es. Wallet/Gift card, auto-fattura disattivata in Centralina Pro,
+      // price_total=0). Prima il frontend assumeva sempre data.invoice.id
+      // presente → crash "Cannot read properties of undefined (reading 'id')".
+      if (data?.skipped || !data?.invoice) {
+        const reason = data?.message || data?.reason || 'motivo non specificato'
+        toast(`Fattura non generata: ${reason}`, { duration: 8000, icon: 'ℹ️' })
+        return
+      }
+
       // Generate and open the invoice PDF
       const invoiceId = data.invoice.id
       const pdfResponse = await authFetch('/.netlify/functions/generate-invoice-pdf', {
