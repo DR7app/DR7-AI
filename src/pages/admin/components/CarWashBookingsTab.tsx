@@ -1178,10 +1178,24 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     setGeneratingInvoice(true)
     toast.loading('Generazione fattura in corso...', { id: 'gen-invoice' })
     try {
+      // 2026-05-19: passa customerId esplicito al backend cosi' bypassa
+      // il fallback per nome che NON funziona per clienti azienda (nome+
+      // cognome sono NULL, il nome e' in denominazione/ragione_sociale).
+      // Senza questo, fatture per azienda fallivano con "Indirizzo
+      // cliente obbligatorio" anche quando sede_legale era compilata.
+      const explicitCustomerId =
+        (booking.booking_details as { customer?: { customerId?: string } } | null)?.customer?.customerId
+        || (booking as { customer_id?: string; user_id?: string }).customer_id
+        || (booking as { user_id?: string }).user_id
+        || undefined
       const response = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: booking.id, includeIVA })
+        body: JSON.stringify({
+          bookingId: booking.id,
+          includeIVA,
+          ...(explicitCustomerId ? { customerId: explicitCustomerId } : {}),
+        })
       })
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

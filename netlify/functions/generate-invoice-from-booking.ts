@@ -101,6 +101,7 @@ export const handler: Handler = async (event) => {
         purchaseType,
         purchaseId,
         purchaseData,
+        customerId: explicitCustomerId,
     } = body
 
     // ── WALLET / CREDIT RECHARGE FATTURA (no auth required) ───────────────
@@ -229,20 +230,22 @@ export const handler: Handler = async (event) => {
         // Fetch customer data with robust fallback (Logic from generate-contract.ts)
         const bookingDetails = booking.booking_details || {}
         // Priority order:
-        // 1. booking.booking_details.customer.customerId (admin-created bookings)
-        // 2. booking.user_id (website bookings)
-        // 3. booking.customer_id (legacy)
-        const customerId = bookingDetails.customer?.customerId || booking.user_id || booking.customer_id
+        // 1. explicitCustomerId (frontend passa l'id esplicito — bypass affidabile per azienda)
+        // 2. booking.booking_details.customer.customerId (admin-created bookings)
+        // 3. booking.user_id (website bookings)
+        // 4. booking.customer_id (legacy)
+        const customerId = explicitCustomerId || bookingDetails.customer?.customerId || booking.user_id || booking.customer_id
 
         console.log('=== INVOICE GENERATION DEBUG ===')
         console.log('Booking ID:', bookingId)
-        console.log('Looking for Customer ID:', customerId)
+        console.log('Looking for Customer ID:', customerId, 'explicit?', !!explicitCustomerId)
         console.log('Booking Email:', booking.customer_email)
 
         let customerData: any = null
 
-        // 1. Try by all possible IDs (customerId from booking_details, user_id, customer_id)
+        // 1. Try by all possible IDs (explicit first, poi i fallback)
         const idsToTry = [
+            explicitCustomerId,
             bookingDetails.customer?.customerId,
             booking.user_id,
             booking.customer_id
@@ -297,23 +300,41 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // 2b. Fallback: Try by customer_name in customers_extended
+        // 2b. Fallback: Try by customer_name in customers_extended.
+        // 2026-05-19: prima provo nome azienda (denominazione/ragione_sociale)
+        // perche' per i clienti azienda nome+cognome sono NULL e l'unico hit
+        // possibile e' tramite il nome societa'. Senza questo le fatture azienda
+        // fallivano con "Indirizzo obbligatorio" anche con dati completi.
         if (!customerData && booking.customer_name) {
             console.log(`Fallback: Fetching by name from customers_extended: ${booking.customer_name}`)
-            const nameParts = booking.customer_name.trim().split(/\s+/)
-            if (nameParts.length >= 2) {
-                const nome = nameParts.slice(0, -1).join(' ')
-                const cognome = nameParts[nameParts.length - 1]
-                const { data } = await supabase
-                    .from('customers_extended')
-                    .select('*')
-                    .ilike('nome', nome)
-                    .ilike('cognome', cognome)
-                    .limit(1)
-                    .maybeSingle()
-                if (data) {
-                    customerData = data
-                    console.log('✅ Found customer by Name (extended)')
+            const fullName = booking.customer_name.trim()
+            // Cerca prima come azienda (denominazione o ragione_sociale)
+            const { data: aziendaMatch } = await supabase
+                .from('customers_extended')
+                .select('*')
+                .or(`denominazione.ilike.${fullName},ragione_sociale.ilike.${fullName}`)
+                .limit(1)
+                .maybeSingle()
+            if (aziendaMatch) {
+                customerData = aziendaMatch
+                console.log('✅ Found customer by Denominazione/RagioneSociale (azienda)')
+            } else {
+                // Poi prova persona fisica (nome+cognome)
+                const nameParts = fullName.split(/\s+/)
+                if (nameParts.length >= 2) {
+                    const nome = nameParts.slice(0, -1).join(' ')
+                    const cognome = nameParts[nameParts.length - 1]
+                    const { data } = await supabase
+                        .from('customers_extended')
+                        .select('*')
+                        .ilike('nome', nome)
+                        .ilike('cognome', cognome)
+                        .limit(1)
+                        .maybeSingle()
+                    if (data) {
+                        customerData = data
+                        console.log('✅ Found customer by Name (persona fisica)')
+                    }
                 }
             }
         }
