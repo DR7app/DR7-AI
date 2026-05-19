@@ -131,12 +131,12 @@ export async function resolveKeyForContext(key: string, _context?: RenderContext
         const normalisedSvc = ctxSvc === 'mechanical_service' ? 'mechanical'
           : ctxSvc === 'car_wash' ? 'car_wash'
           : ctxSvc === 'mechanical' ? 'mechanical'
-          : ctxSvc === 'rental' ? 'rental'
+          : (ctxSvc === 'rental' || ctxSvc === 'car_rental') ? 'rental'
           : ''
         const score = (tplSvc: string | null | undefined): number => {
           const s = String(tplSvc || 'all').toLowerCase()
           if (s === 'all' || s === '') return 1
-          if (!normalisedSvc) return s === 'all' ? 1 : 0
+          if (!normalisedSvc) return 1  // 2026-05-19: no context → neutral
           if (s === normalisedSvc) return 3
           if (s === 'prime_wash' && (normalisedSvc === 'car_wash' || normalisedSvc === 'mechanical')) return 2
           return 0
@@ -191,14 +191,20 @@ export async function resolveKeyForContext(key: string, _context?: RenderContext
     const normalisedSvc = ctxSvc === 'mechanical_service' ? 'mechanical'
       : ctxSvc === 'car_wash' ? 'car_wash'
       : ctxSvc === 'mechanical' ? 'mechanical'
-      : ctxSvc === 'rental' ? 'rental'
+      : (ctxSvc === 'rental' || ctxSvc === 'car_rental') ? 'rental'
       : ''
     // Rank: 3 = service-type match esatto, 2 = match via prime_wash umbrella,
     // 1 = target_service_type 'all'/null (generic), 0 = mismatch esplicito.
+    // 2026-05-19: quando il caller non passa serviceType nel context
+    // (es. ReservationsTab non passa booking nel POST), NON penalizziamo
+    // i template con target_service_type specifico — il rischio prima
+    // era che pro_conferma_noleggio (target=rental) venisse filtrato a
+    // score=0 e il messaggio non partisse affatto. Adesso senza context
+    // tutti i candidati hanno score=1 e il primo handled_events match vince.
     const score = (tplSvc: string | null | undefined): number => {
       const s = String(tplSvc || 'all').toLowerCase()
       if (s === 'all' || s === '') return 1
-      if (!normalisedSvc) return s === 'all' ? 1 : 0
+      if (!normalisedSvc) return 1  // no context → tutti i target neutrali
       if (s === normalisedSvc) return 3
       if (s === 'prime_wash' && (normalisedSvc === 'car_wash' || normalisedSvc === 'mechanical')) return 2
       return 0
