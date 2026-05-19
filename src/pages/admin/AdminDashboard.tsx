@@ -138,11 +138,10 @@ export default function AdminDashboard() {
   const { alarmState, enableAudio } = useVehicleAlarm()
   const birthdayCount = useBirthdayCount()
   const scartataCount = useFatturaScartataCount()
-  const { role: adminRole, hasPermission, hasRole, adminName, adminEmail } = useAdminRole()
-  // Direzione (Valerio/Ilenia) + developer (ophe) sbloccano gli stessi tab
-  // gated da "superadmin" del DB. Senza questo, direzione/dev non vedevano
-  // Operatori (e i futuri tab solo-superadmin) anche con i ruoli giusti.
-  const isElevated = adminRole === 'superadmin' || hasRole('direzione') || hasRole('developer')
+  const { role: adminRole, hasPermission, adminName, adminEmail } = useAdminRole()
+  // 2026-05-19: isElevated rimosso (era declared but never read). Quando
+  // serve in futuro, riaggiungerlo qui basato su:
+  // adminRole === 'superadmin' || hasRole('direzione') || hasRole('developer')
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const { theme, toggleTheme, palette, setPalette } = useTheme()
   const [paletteMenuOpen, setPaletteMenuOpen] = useState(false)

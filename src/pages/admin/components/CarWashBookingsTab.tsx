@@ -1359,31 +1359,42 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       return
     }
 
-    // 2026-05-19: validazione cliente NON piu' bloccante. Prima
-    // bloccava il salvataggio della booking se mancavano Indirizzo/Citta/
-    // CAP — anche con i dati apparentemente presenti il check falliva su
-    // valori stringa vuota / campi sparsi tra colonne diverse. Adesso
-    // mostro solo un warning + procedo: la fattura puo' essere completata
-    // dopo, quando i dati di fatturazione sono effettivamente noti.
+    // 2026-05-19: validazione cliente per tipo (persona_fisica / azienda /
+    // pubblica_amministrazione). Indirizzo struttura DIVERSA per ogni tipo:
+    //  - persona_fisica → indirizzo + citta_residenza + codice_postale
+    //  - azienda        → sede_legale (unica stringa free-text)
+    //  - pubblica_amm.  → ente_ufficio + codice_univoco + citta
+    // Prima il check assumeva sempre la struttura persona_fisica, quindi
+    // ogni booking di cliente azienda mostrava "Indirizzo/Citta/CAP missing"
+    // anche se sede_legale era compilata.
+    // Non bloccante: solo warning se mancano davvero dati.
     try {
       const custResp = await authFetch(`/.netlify/functions/get-customer?id=${formData.customer_id}`)
       if (custResp.ok) {
         const { customer: custData } = await custResp.json()
         if (custData) {
           const missing: string[] = []
-          const isAzienda = custData.tipo_cliente === 'azienda'
-
+          const tipo = String(custData.tipo_cliente || 'persona_fisica').toLowerCase()
           const hasVal = (v: unknown) => typeof v === 'string' && v.trim().length > 0
-          if (!hasVal(custData.indirizzo)) missing.push('Indirizzo')
-          if (!hasVal(custData.citta_residenza) && !hasVal(custData.citta)) missing.push('Citta')
-          if (!hasVal(custData.codice_postale)) missing.push('CAP')
 
-          if (isAzienda) {
+          if (tipo === 'azienda') {
+            // Azienda: serve denominazione + p.iva (o CF) + sede_legale.
+            if (!hasVal(custData.denominazione) && !hasVal(custData.ragione_sociale)) missing.push('Denominazione')
             if (!hasVal(custData.partita_iva) && !hasVal(custData.codice_fiscale)) missing.push('Partita IVA')
+            if (!hasVal(custData.sede_legale) && !hasVal(custData.indirizzo)) missing.push('Sede legale')
+          } else if (tipo === 'pubblica_amministrazione' || tipo === 'pa') {
+            // PA: ente + codice univoco SDI + CF.
+            if (!hasVal(custData.denominazione) && !hasVal(custData.ente_ufficio)) missing.push('Ente / Ufficio')
+            if (!hasVal(custData.codice_univoco)) missing.push('Codice Univoco SDI')
+            if (!hasVal(custData.codice_fiscale)) missing.push('Codice Fiscale Ente')
           } else {
+            // Persona fisica: nome/cognome/CF + indirizzo strutturato.
             if (!hasVal(custData.nome)) missing.push('Nome')
             if (!hasVal(custData.cognome)) missing.push('Cognome')
             if (!hasVal(custData.codice_fiscale)) missing.push('Codice Fiscale')
+            if (!hasVal(custData.indirizzo)) missing.push('Indirizzo')
+            if (!hasVal(custData.citta_residenza) && !hasVal(custData.citta)) missing.push('Citta')
+            if (!hasVal(custData.codice_postale)) missing.push('CAP')
           }
 
           if (missing.length > 0) {
