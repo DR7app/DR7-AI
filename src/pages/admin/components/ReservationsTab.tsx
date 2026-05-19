@@ -2986,10 +2986,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 customPhone: custPhone,
-                // Template "Annullamento al Cliente" definito in Messaggi
-                // di Sistema Pro. Diretto sul pro_* key, niente
-                // mappatura OLD_TO_PRO.
-                templateKey: 'pro_annullamento_cliente',
+                // EVENTO LEGACY: il resolver server cerca il template che
+                // ha ticchettato `booking_cancelled_whatsapp` in Eventi
+                // gestiti (Messaggi di Sistema Pro). Cosi' non si confonde
+                // con il template del cliente che si auto-cancella dal
+                // sito (quello ha `website_booking_cancelled_customer`).
+                templateKey: 'booking_cancelled_whatsapp',
                 templateVars: {
                   custName: cancelledBooking?.customer_name || 'Cliente',
                   customer_name: cancelledBooking?.customer_name || 'Cliente',
@@ -8454,14 +8456,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                                   className="w-7 h-7 rounded-full bg-theme-bg-tertiary border border-theme-border text-theme-text-primary font-bold disabled:opacity-50">−</button>
                                 <span className="text-sm font-bold text-theme-text-primary min-w-[1.5rem] text-center">{qty}</span>
                                 <button type="button" disabled={isDisabled || qty >= maxQty} onClick={(e) => { e.stopPropagation(); setQty(qty + 1) }}
-                                  className="w-7 h-7 rounded-full bg-dr7-gold text-white font-bold disabled:opacity-50">+</button>
+                                  className="w-7 h-7 rounded-full bg-dr7-gold !text-white font-bold disabled:opacity-50">+</button>
                                 <span className="text-sm font-bold text-dr7-gold ml-2">€{(pkg.price * qty).toFixed(2)}</span>
                               </div>
                             ) : (
                               <div className="flex items-center gap-2">
                                 <span className="text-sm font-bold text-dr7-gold">+€{pkg.price.toFixed(2)}</span>
                                 <button type="button" disabled={isDisabled} onClick={(e) => { e.stopPropagation(); setQty(1) }}
-                                  className="w-7 h-7 rounded-full bg-dr7-gold text-white font-bold disabled:opacity-50">+</button>
+                                  className="w-7 h-7 rounded-full bg-dr7-gold !text-white font-bold disabled:opacity-50">+</button>
                               </div>
                             )}
                           </div>

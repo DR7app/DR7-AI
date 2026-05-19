@@ -44,13 +44,12 @@ export const OLD_TO_PRO: Record<string, string> = {
   // Pagamenti & annullamenti
   payment_link_customer: 'pro_richiesta_pagamento',
   rental_da_saldare_customer: 'pro_richiesta_pagamento',
-  // Annullamento: punta allo slot CANONICO (pro_annullamento_cliente). Se
-  // quello è vuoto, il resolver fa fallback via LABEL_FALLBACKS al custom
-  // pro_custom_prenotazione_annullata_da_sito_<ts> per retrocompatibilità.
-  // Beneficio: la "Programmazione" nei settings del template canonico
-  // mostra ora correttamente "Annullamento prenotazione (cron pagamento
-  // non riuscito o richiesta admin)" invece di "Manuale".
-  booking_cancelled_whatsapp: 'pro_annullamento_cliente',
+  // Annullamento DA ADMIN: slot dedicato pro_annullamento_admin, separato
+  // da quello del cliente. Cosi' l'admin puo' scrivere un messaggio del tipo
+  // "Salve, abbiamo annullato la sua prenotazione..." invece di
+  // "Hai annullato la tua prenotazione dal sito" (testo errato quando e'
+  // l'operatore a cancellare).
+  booking_cancelled_whatsapp: 'pro_annullamento_admin',
 
   // Pagamento ricevuto
   payment_received_extension: 'pro_conferma_da_saldare',
@@ -139,7 +138,7 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
   // Pagamenti
   payment_link_customer: 'Quando si invia il link di pagamento al cliente',
   rental_da_saldare_customer: 'Promemoria noleggio da saldare',
-  booking_cancelled_whatsapp: 'Annullamento prenotazione (cron pagamento non riuscito o richiesta admin)',
+  booking_cancelled_whatsapp: 'Annullamento prenotazione (admin annulla manualmente o cron pagamento non riuscito)',
   payment_received_extension: 'Conferma pagamento estensione (al cliente)',
   payment_received_extension_admin: 'Conferma pagamento estensione (admin)',
   payment_received_damages: 'Conferma pagamento danni/penali (al cliente)',
@@ -338,18 +337,21 @@ export const LABEL_FALLBACKS: Record<string, string[][]> = {
   ],
 
   // ── Annullamenti & Rimborsi ───────────────────────────────────
-  // Cover sia il nome del slot canonico ("Annullamento al Cliente") sia
-  // il vecchio custom "Prenotazione Annullata da Sito" — entrambi
-  // gestiscono lo stesso evento di codice (booking cancellato).
+  // SLOT SEPARATI per chi cancella:
+  //   pro_annullamento_admin    -> ticka evento 'booking_cancelled_whatsapp' in Eventi gestiti
+  //   pro_annullamento_cliente  -> ticka evento 'website_booking_cancelled_customer'
+  // Le LABEL_FALLBACKS non sono piu' usate dal resolver (2026-05-19) ma
+  // restano qui come documentazione del naming atteso per le label admin.
+  pro_annullamento_admin: [
+    ['annullament', 'admin'],
+    ['annullato', 'admin'],
+    ['annullament', 'manuale'],
+  ],
   pro_annullamento_cliente: [
-    ['annullament', 'cliente'],
-    ['annullament', 'prenotazione'],
-    ['prenotazione', 'annullat'],
+    ['annullament', 'sito'],
     ['annullat', 'sito'],
-    ['annullat'],
-    ['cancellat', 'prenotazione'],
-    ['cancellat'],
-    ['cancel'],
+    ['annullato', 'cliente'],
+    ['website', 'cancel'],
   ],
   pro_rimborso_iniziato: [
     ['rimborso', 'iniziat'],
