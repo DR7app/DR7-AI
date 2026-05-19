@@ -5963,6 +5963,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // segnale corretto "abbiamo ricevuto il tuo pagamento".
           const prevSnap = editFormSnapshotRef.current
           const wasConfirmedAtLoad = prevSnap?._wasConfirmedAtLoad === true
+          // 2026-05-19: Pay-by-Link "Da Saldare" deve sempre mandare la
+          // conferma automaticamente, anche senza la checkbox Conferma
+          // Prenotazione spuntata. Il cliente DEVE sapere che il booking
+          // e' registrato + ricevere il link separato per pagare.
+          const isPayByLinkPending = isNexiPayByLink(formData.payment_method) && isPending
 
           let templateKey: string | null
           if (editingId && wasConfirmedAtLoad) {
@@ -5971,9 +5976,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             // (da saldare -> paid, cambio data, aggiunta nota, ecc.).
             logger.log('[Save] Booking gia\' confermato in precedenza — salto reinvio conferma.')
             templateKey = null
-          } else if (confirmBooking && isPending) {
-            // Prima conferma "Da Saldare" — l'admin spunta la checkbox mentre
-            // il pagamento resta pending. Template dedicato.
+          } else if ((confirmBooking && isPending) || isPayByLinkPending) {
+            // Prima conferma "Da Saldare" — checkbox Conferma OPPURE
+            // Pay-by-Link automatica (deve sempre confermare il booking
+            // cliente, il link pagamento parte separato dopo).
             templateKey = 'booking_confirmed_da_saldare'
           } else if (confirmBooking) {
             // Prima conferma con pagamento gia' registrato.
