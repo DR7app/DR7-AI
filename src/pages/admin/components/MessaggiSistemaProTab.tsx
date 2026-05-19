@@ -204,7 +204,12 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; servic
   {
     label: 'Cauzione & Annullamento',
     color: 'amber',
-    keys: ['deposit_return_iban', 'booking_cancelled_whatsapp', 'website_booking_cancelled_customer'],
+    keys: [
+      'deposit_return_iban',
+      'deposit_request_customer',       // 2026-05-19: admin invia link cauzione manuale
+      'booking_cancelled_whatsapp',
+      'website_booking_cancelled_customer',
+    ],
   },
   {
     label: 'Admin Alerts',
@@ -212,9 +217,28 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; servic
     keys: ['admin_new_website_quote', 'admin_no_cauzione_request'],
   },
   {
+    label: 'No Cauzione & Preventivi',
+    color: 'orange',
+    keys: [
+      // 2026-05-19: erano orfani — non comparivano in nessun gruppo, quindi
+      // l'admin non poteva assegnarli a nessun template via la UI.
+      'no_cauzione_approved',
+      'no_cauzione_rejected',
+      'quote_discount_offered',
+    ],
+  },
+  {
     label: 'Marketing / Wallet / Fidelity',
     color: 'pink',
-    keys: ['review_request_whatsapp', 'birthday_message', 'wallet_bonus_credit', 'fidelity_voucher_whatsapp'],
+    keys: [
+      'review_request_whatsapp',
+      'review_discount_code',           // 2026-05-19: codice sconto post-recensione
+      'birthday_message',
+      'wallet_bonus_credit',
+      'fidelity_voucher_whatsapp',
+      'promo_incassi_whatsapp',         // 2026-05-19: cron mensile promo veicoli sotto soglia
+      'maxi_promo_gap_whatsapp',        // 2026-05-19: cron giornaliero gap 1 giorno
+    ],
   },
 ]
 
@@ -3292,6 +3316,7 @@ export default function MessaggiSistemaProTab() {
                                                                 amber:   { dot: 'bg-amber-400',   pillOn: 'bg-amber-500/25 border-amber-400/70',     pillTxt: 'text-amber-100' },
                                                                 rose:    { dot: 'bg-rose-400',    pillOn: 'bg-rose-500/25 border-rose-400/70',       pillTxt: 'text-rose-100' },
                                                                 pink:    { dot: 'bg-pink-400',    pillOn: 'bg-pink-500/25 border-pink-400/70',       pillTxt: 'text-pink-100' },
+                                                                orange:  { dot: 'bg-orange-400',  pillOn: 'bg-orange-500/25 border-orange-400/70',   pillTxt: 'text-orange-100' },
                                                             }
                                                             const colors = colorMap[group.color] || colorMap.blue
                                                             const knownKeys = group.keys.filter(k => EVENT_LABELS_IT[k as keyof typeof EVENT_LABELS_IT])
