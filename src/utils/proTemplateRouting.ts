@@ -44,7 +44,13 @@ export const OLD_TO_PRO: Record<string, string> = {
   // Pagamenti & annullamenti
   payment_link_customer: 'pro_richiesta_pagamento',
   rental_da_saldare_customer: 'pro_richiesta_pagamento',
-  booking_cancelled_whatsapp: 'pro_custom_prenotazione_annullata_da_sito_1776503923221',
+  // Annullamento: punta allo slot CANONICO (pro_annullamento_cliente). Se
+  // quello è vuoto, il resolver fa fallback via LABEL_FALLBACKS al custom
+  // pro_custom_prenotazione_annullata_da_sito_<ts> per retrocompatibilità.
+  // Beneficio: la "Programmazione" nei settings del template canonico
+  // mostra ora correttamente "Annullamento prenotazione (cron pagamento
+  // non riuscito o richiesta admin)" invece di "Manuale".
+  booking_cancelled_whatsapp: 'pro_annullamento_cliente',
 
   // Pagamento ricevuto
   payment_received_extension: 'pro_conferma_da_saldare',
@@ -92,8 +98,10 @@ export const OLD_TO_PRO: Record<string, string> = {
   // Fidelity Card — voucher fired at 250 punti
   fidelity_voucher_whatsapp: 'pro_fidelity_voucher',
 
-  // Website customer actions
-  website_booking_cancelled_customer: 'pro_custom_prenotazione_annullata_da_sito_1776503923221',
+  // Website customer actions — cancellation lifecycle now points all to
+  // the canonical pro_annullamento_cliente slot (was pinned to a specific
+  // pro_custom_* key). LABEL_FALLBACKS keeps the legacy custom alive.
+  website_booking_cancelled_customer: 'pro_annullamento_cliente',
 }
 
 /**
@@ -327,6 +335,35 @@ export const LABEL_FALLBACKS: Record<string, string[][]> = {
     ['link', 'pagamento', 'estension'],
     ['estension'],
     ['link pagamento'],
+  ],
+
+  // ── Annullamenti & Rimborsi ───────────────────────────────────
+  // Cover sia il nome del slot canonico ("Annullamento al Cliente") sia
+  // il vecchio custom "Prenotazione Annullata da Sito" — entrambi
+  // gestiscono lo stesso evento di codice (booking cancellato).
+  pro_annullamento_cliente: [
+    ['annullament', 'cliente'],
+    ['annullament', 'prenotazione'],
+    ['prenotazione', 'annullat'],
+    ['annullat', 'sito'],
+    ['annullat'],
+    ['cancellat', 'prenotazione'],
+    ['cancellat'],
+    ['cancel'],
+  ],
+  pro_rimborso_iniziato: [
+    ['rimborso', 'iniziat'],
+    ['rimborso', 'avviat'],
+    ['rimborso', 'in', 'corso'],
+    ['refund', 'started'],
+    ['refund', 'initiated'],
+  ],
+  pro_rimborso_completato: [
+    ['rimborso', 'completat'],
+    ['rimborso', 'effettuat'],
+    ['rimborso', 'erogat'],
+    ['refund', 'completed'],
+    ['refund', 'done'],
   ],
 
   // ── Marketing & Wallet & Fidelity ──────────────────────────────
