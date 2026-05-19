@@ -1,4 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { supabase } from '../../../supabaseClient'
+
+interface ProCategory { id: string; label: string }
 
 interface BookingDetail {
   booking_id: string
@@ -101,28 +104,25 @@ interface WashReportData {
   internalByVehicle?: InternalWashBreakdown[]
 }
 
-const CATEGORY_ORDER = ['exotic', 'urban', 'moto', 'utilitaire', '-']
-const CATEGORY_LABELS: Record<string, string> = {
-  exotic: 'Supercar & Luxury',
-  urban: 'Urban',
-  moto: 'Moto',
-  utilitaire: 'Utilitaire',
-  '-': 'Altro'
-}
-const CATEGORY_COLORS: Record<string, string> = {
-  exotic: 'border-yellow-500/50 bg-yellow-500/5',
-  urban: 'border-blue-500/50 bg-blue-500/5',
-  moto: 'border-purple-500/50 bg-purple-500/5',
-  utilitaire: 'border-green-500/50 bg-green-500/5',
-  '-': 'border-theme-border/50 bg-theme-bg-hover/5'
-}
-const CATEGORY_BADGE: Record<string, string> = {
-  exotic: 'bg-yellow-500/20 text-yellow-400',
-  urban: 'bg-blue-500/20 text-blue-400',
-  moto: 'bg-purple-500/20 text-purple-400',
-  utilitaire: 'bg-green-500/20 text-green-400',
-  '-': 'bg-theme-bg-hover/20 text-theme-text-muted'
-}
+// 2026-05-19: categorie + label + colori erano hardcoded a 4 legacy
+// (exotic/urban/moto/utilitaire). Adesso le leggiamo da
+// centralina_pro_config.config.categories — stessa fonte di VehiclesTab.
+// Cosi' il Report mostra esattamente le categorie + label scelte
+// dall'admin in Centralina Pro > Categorie & Fascia, nello stesso
+// ordine, e i nomi dei gruppi corrispondono a quelli della Flotta Veicoli.
+
+// Palette colori ciclica usata per i gruppi: l'ordine in centralina_pro_config
+// determina quale categoria prende quale colore. Aggiungi più colori se hai
+// più di 6 categorie (oltre cicla).
+const CATEGORY_PALETTE = [
+  { container: 'border-yellow-500/50 bg-yellow-500/5', badge: 'bg-yellow-500/20 text-yellow-400' },
+  { container: 'border-blue-500/50 bg-blue-500/5',     badge: 'bg-blue-500/20 text-blue-400'     },
+  { container: 'border-purple-500/50 bg-purple-500/5', badge: 'bg-purple-500/20 text-purple-400' },
+  { container: 'border-green-500/50 bg-green-500/5',   badge: 'bg-green-500/20 text-green-400'   },
+  { container: 'border-pink-500/50 bg-pink-500/5',     badge: 'bg-pink-500/20 text-pink-400'     },
+  { container: 'border-cyan-500/50 bg-cyan-500/5',     badge: 'bg-cyan-500/20 text-cyan-400'     },
+]
+const FALLBACK_STYLE = { container: 'border-theme-border/50 bg-theme-bg-hover/5', badge: 'bg-theme-bg-hover/20 text-theme-text-muted' }
 
 export default function ReportsTab() {
   const now = new Date()
@@ -136,6 +136,50 @@ export default function ReportsTab() {
   const [vehicleData, setVehicleData] = useState<VehicleReportData | null>(null)
   const [washData, setWashData] = useState<WashReportData | null>(null)
   const [cauzioniData, setCauzioniData] = useState<CauzioniReportData | null>(null)
+
+  // 2026-05-19: categorie da Centralina Pro (stessa fonte di VehiclesTab).
+  // Realtime sub così add/rename/delete in Categorie & Fascia si propagano.
+  const [proCategories, setProCategories] = useState<ProCategory[]>([])
+  useEffect(() => {
+    let cancelled = false
+    async function loadCategories() {
+      const { data } = await supabase
+        .from('centralina_pro_config')
+        .select('config')
+        .eq('id', 'main')
+        .maybeSingle()
+      if (cancelled) return
+      const cfg = (data?.config as { categories?: ProCategory[] } | null) || null
+      setProCategories(Array.isArray(cfg?.categories) ? cfg.categories : [])
+    }
+    loadCategories()
+    const channel = supabase
+      .channel('reports-categories-sync')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config', filter: 'id=eq.main' }, (payload) => {
+        const cfg = (payload.new as { config?: { categories?: ProCategory[] } } | undefined)?.config
+        setProCategories(Array.isArray(cfg?.categories) ? cfg.categories : [])
+      })
+      .subscribe()
+    return () => { cancelled = true; supabase.removeChannel(channel) }
+  }, [])
+
+  // Mappature derivate da proCategories. Manteniamo "-" come bucket
+  // "Altro" per veicoli senza categoria assegnata.
+  const CATEGORY_ORDER = useMemo(() => {
+    const ids = proCategories.map(c => c.id)
+    if (!ids.includes('-')) ids.push('-')
+    return ids
+  }, [proCategories])
+  const CATEGORY_LABELS = useMemo(() => {
+    const m: Record<string, string> = { '-': 'Altro' }
+    for (const c of proCategories) m[c.id] = c.label || c.id
+    return m
+  }, [proCategories])
+  const CATEGORY_STYLE = useMemo(() => {
+    const m: Record<string, typeof FALLBACK_STYLE> = { '-': FALLBACK_STYLE }
+    proCategories.forEach((c, i) => { m[c.id] = CATEGORY_PALETTE[i % CATEGORY_PALETTE.length] })
+    return m
+  }, [proCategories])
 
   // Auto-load report on mount and when month/report type changes
   useEffect(() => {
@@ -624,8 +668,9 @@ export default function ReportsTab() {
           {grouped.map(group => {
             const summary = getCategorySummary(group.vehicles)
             const catLabel = CATEGORY_LABELS[group.category] || group.category
-            const catColor = CATEGORY_COLORS[group.category] || CATEGORY_COLORS['-']
-            const badgeColor = CATEGORY_BADGE[group.category] || CATEGORY_BADGE['-']
+            const catStyle = CATEGORY_STYLE[group.category] || FALLBACK_STYLE
+            const catColor = catStyle.container
+            const badgeColor = catStyle.badge
 
             return (
               <div key={group.category} className={`rounded-xl border overflow-hidden ${catColor}`}>
