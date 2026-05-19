@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { PDFDocument } from 'pdf-lib'
 import crypto from 'crypto'
+import { renderTemplate } from './utils/messageTemplates'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -106,37 +107,21 @@ const processHandler: Handler = async () => {
         try {
             const amountFormatted = (addebito.amount_cents / 100).toFixed(2)
 
-            // Send second formal email with MIT authorization clause
-            const emailBody = `Spett.le ${addebito.customer_name || 'Cliente'},
-
-con la presente Le comunichiamo formalmente che, in relazione al contratto di noleggio n. ${addebito.contract_number}, è stato rilevato un importo a Suo carico derivante da obbligazioni contrattuali maturate nel corso o al termine del periodo di utilizzo del veicolo.
-
-L'importo complessivo oggetto di addebito è pari a € ${amountFormatted}, con la seguente causale:
-• ${addebito.causale}
-
-Tale importo è determinato in conformità:
-• alle condizioni generali di contratto sottoscritte e accettate;
-• alla documentazione contrattuale e/o tecnica disponibile (ove applicabile);
-• alle disposizioni normative vigenti.
-
-Ai sensi dell'art. 1218 c.c., il debitore che non esegue esattamente la prestazione dovuta è tenuto al risarcimento del danno.
-Ai sensi dell'art. 1372 c.c., il contratto ha forza di legge tra le parti.
-Ai sensi dell'art. 1588 c.c., il conduttore risponde della perdita e del deterioramento del bene locato.
-
-Si richiama inoltre quanto espressamente previsto nel contratto di noleggio in merito:
-• alla responsabilità del cliente per costi, danni, penali e oneri accessori;
-• all'autorizzazione preventiva all'addebito di importi ulteriori rispetto al corrispettivo iniziale;
-• all'utilizzo del metodo di pagamento fornito per operazioni successive (MIT – Merchant Initiated Transactions).
-
-Pertanto, in conformità alle suddette disposizioni contrattuali e normative, si sta procedendo all'addebito dell'importo sopra indicato mediante il metodo di pagamento da Lei utilizzato in fase di noleggio.
-
-Resta a disposizione, su richiesta, la documentazione a supporto dell'addebito (contratto, report, documentazione fotografica, verbali, ecc.).
-
-La presente costituisce comunicazione formale dell'addebito in corso.
-
-Cordiali saluti,
-Dubai Rent 7.0 S.p.A.`
-
+            // 2026-05-19: corpo email caricato da Messaggi di Sistema Pro
+            // (chiave: pro_email_addebito). Niente piu' fallback hardcoded;
+            // se il template manca saltiamo l'addebito e logghiamo errore.
+            const emailBody = await renderTemplate('pro_email_addebito', {
+                customer_name: addebito.customer_name || 'Cliente',
+                nome: addebito.customer_name || 'Cliente',
+                contract_number: String(addebito.contract_number || '—'),
+                amount: amountFormatted,
+                importo: amountFormatted,
+                causale: String(addebito.causale || '—'),
+            })
+            if (!emailBody) {
+                console.error('[process-pending-addebiti] template pro_email_addebito mancante per addebito', addebito.id)
+                continue
+            }
             const emailHtml = `<pre style="font-family: Arial, sans-serif; white-space: pre-wrap;">${emailBody}</pre>`
             let photoUrls: string[] = (addebito.photo_urls && Array.isArray(addebito.photo_urls)) ? addebito.photo_urls.filter((u: any) => typeof u === 'string' && u.length > 0) : []
 

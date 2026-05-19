@@ -1,6 +1,7 @@
 import { Handler } from '@netlify/functions'
 import nodemailer from 'nodemailer'
 import { createClient } from '@supabase/supabase-js'
+import { renderTemplate } from './utils/messageTemplates'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -93,11 +94,33 @@ export const handler: Handler = async (event) => {
         console.log('[send-contract-email] SMTP user configured:', smtpUser)
 
         // 5. Send Email
+        // 2026-05-19: body+subject letti da Messaggi di Sistema Pro
+        // (chiave: pro_email_contratto). Niente piu' hardcoded.
+        const customerName = booking.customer_name
+            || booking.booking_details?.customer?.fullName
+            || 'Cliente'
+        const templateVars = {
+            customer_name: customerName,
+            nome: customerName,
+            vehicle_name: booking.vehicle_name || '',
+            booking_id: String(booking.id || '').substring(0, 8).toUpperCase(),
+        }
+        const bodyText = await renderTemplate('pro_email_contratto', templateVars)
+        const subjectFromTpl = await renderTemplate('pro_email_contratto_subject', templateVars)
+        if (!bodyText) {
+            console.error('[send-contract-email] template pro_email_contratto mancante')
+            return {
+                statusCode: 500,
+                body: JSON.stringify({
+                    error: 'Template "pro_email_contratto" non configurato in Messaggi di Sistema Pro',
+                }),
+            }
+        }
         const mailOptions = {
             from: '"DR7 Empire" <info@dr7.app>',
             to: recipientEmail,
-            subject: `Contratto Noleggio DR7 - ${booking.vehicle_name}`,
-            text: `Gentile ${booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente'},\n\nIn allegato trovi il contratto di noleggio per il veicolo ${booking.vehicle_name}.\n\nGrazie per aver scelto DR7 Empire.\n\nCordiali saluti,\nDR7 Empire Team`,
+            subject: subjectFromTpl || `Contratto Noleggio DR7 — ${booking.vehicle_name}`,
+            text: bodyText,
             attachments: [
                 {
                     filename: `Contratto_${booking.vehicle_name.replace(/\s+/g, '_')}.pdf`,

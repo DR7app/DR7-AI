@@ -195,36 +195,23 @@ const handler: Handler = async (event) => {
     let whatsappMessage = '';
 
     if (needsEmail) {
-      const templateKey = `${candidate.service_type}_EMAIL`; // e.g. RENTAL_EMAIL, WASH_EMAIL
-      const { data: emailTemplate } = await supabase
-        .from('review_templates')
-        .select('*')
-        .eq('template_key', templateKey)
-        .single();
-
-      if (emailTemplate) {
-        emailSubject = renderTemplate(emailTemplate.subject || '', templateVars);
-        emailBody = renderTemplate(emailTemplate.body || '', templateVars);
-      } else {
-        // Fallback default email template
-        emailSubject = 'Come \u00e8 stata la tua esperienza con DR7?';
-        emailBody = `<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #111; color: #fff; padding: 0;">
-          <div style="padding: 40px 20px; text-align: center;">
-            <p style="color: #ccc; font-size: 16px; line-height: 1.6; margin-bottom: 30px;">
-              Ciao ${templateVars.customer_name},
-            </p>
-            <p style="color: #ccc; font-size: 16px; line-height: 1.6; margin-bottom: 30px;">
-              La tua esperienza con noi \u00e8 importante. Se ti fa piacere, lascia una recensione a 5 stelle raccontando il tuo Servizio ricevuto.
-            </p>
-            <p style="color: #ccc; font-size: 16px; line-height: 1.6; margin-bottom: 30px;">
-              In segno di gratitudine, inviandoci uno screenshot della recensione riceverai subito un buono sconto da 100\u20ac sul tuo prossimo noleggio e uno da 10\u20ac sul tuo prossimo lavaggio.
-            </p>
-            <a href="${reviewLink}"
-               style="display: inline-block; background-color: #D4AF37; color: #000; padding: 15px 30px; text-decoration: none; font-weight: bold; border-radius: 5px; font-size: 16px; margin: 10px 0;">
-              LASCIA UNA RECENSIONE
-            </a>
-          </div>
-        </div>`;
+      // 2026-05-19: review email passa per Messaggi di Sistema Pro
+      // (system_messages) come tutti gli altri messaggi. Niente piu'
+      // review_templates separato + fallback hardcoded. Il template per
+      // l'email recensione e' lo STESSO usato per WhatsApp
+      // (review_request_whatsapp), perche' l'utente ha riconfigurato
+      // tutto in Messaggi di Sistema Pro come un unico template per
+      // servizio. Subject letto dalla prima riga oppure default.
+      const fullText = (await getMessageTemplate('review_request_whatsapp', templateVars)) ?? '';
+      emailBody = fullText;
+      // Subject: prima riga del template se identificata, altrimenti
+      // fallback minimo (no leak \u2014 l'admin puo' definirla nel template).
+      const firstLine = fullText.split('\n')[0].trim();
+      emailSubject = firstLine.length > 0 && firstLine.length <= 120
+        ? firstLine
+        : 'DR7 \u2014 Lascia la tua recensione';
+      if (!emailBody) {
+        console.warn('[review-send] template review_request_whatsapp mancante in Messaggi di Sistema Pro \u2014 email skippata');
       }
     }
 
