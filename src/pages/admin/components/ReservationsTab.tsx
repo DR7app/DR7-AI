@@ -5922,35 +5922,46 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // - New + paid (no conferma checkbox) → rental_new_customer
           // - Pending (da-saldare) without conferma → null (silent until
           //   admin records the payment or explicitly ticks Conferma)
-          // Pending -> paid transition on an already-confirmed booking?
-          // The customer already received "Conferma Da Saldare" at the first
-          // save. On payment we must NOT send another "Conferma Noleggio";
-          // the per-method "Pagamento ricevuto" template (booking_paid_cash
-          // / booking_paid_card / ...) below is the right signal.
+          // Regola anti-duplicato: la conferma noleggio parte UNA SOLA VOLTA
+          // nella vita di una prenotazione. Una volta che il cliente ha
+          // ricevuto un messaggio di conferma (Da Saldare o Noleggio),
+          // qualsiasi modifica successiva (cambio data, nota, segna pagato,
+          // ecc.) NON deve rispedire una nuova conferma.
+          //
+          // Il segnale e' booking_details.manually_confirmed: la prima volta
+          // che la conferma parte, viene salvato a true. Da quel momento in
+          // poi, su edit l'invio della conferma e' bloccato.
+          //
+          // Il messaggio per-metodo (booking_paid_cash, booking_paid_card,
+          // ecc.) continua a partire al momento del pagamento — quello e' il
+          // segnale corretto "abbiamo ricevuto il tuo pagamento".
           const prevSnap = editFormSnapshotRef.current
-          const prevPaymentStatus = String(prevSnap?.payment_status || '').toLowerCase()
-          const prevWasPending = prevPaymentStatus === 'unpaid' || prevPaymentStatus === 'pending' || prevPaymentStatus === ''
           const wasConfirmedAtLoad = prevSnap?._wasConfirmedAtLoad === true
-          const isDaSaldareToPaidTransition = !!editingId && wasConfirmedAtLoad && prevWasPending && !isPending
 
           let templateKey: string | null
-          if (isDaSaldareToPaidTransition) {
-            logger.log('[Save] Da-saldare -> paid transition on already-confirmed booking. Skipping conferma resend; per-method paid template will fire below.')
+          if (editingId && wasConfirmedAtLoad) {
+            // Booking gia' stato confermato in precedenza — niente reinvio
+            // conferma su questa modifica, qualunque sia la transizione
+            // (da saldare -> paid, cambio data, aggiunta nota, ecc.).
+            logger.log('[Save] Booking gia\' confermato in precedenza — salto reinvio conferma.')
             templateKey = null
           } else if (confirmBooking && isPending) {
-            // Admin ha spuntato "Conferma Prenotazione" mentre payment_status
-            // resta pending → questa NON e' una conferma di pagamento, e' una
-            // conferma "Da Saldare". Routing dedicato cosi' l'admin puo'
-            // assegnare un template diverso da "Conferma Noleggio".
+            // Prima conferma "Da Saldare" — l'admin spunta la checkbox mentre
+            // il pagamento resta pending. Template dedicato.
             templateKey = 'booking_confirmed_da_saldare'
           } else if (confirmBooking) {
+            // Prima conferma con pagamento gia' registrato.
             templateKey = 'rental_new_customer'
           } else if (isPending) {
-            logger.log('[Save] Booking pending (da saldare) — skipping conferma-noleggio (Conferma Prenotazione checkbox not ticked)')
+            logger.log('[Save] Booking pending senza Conferma Prenotazione — niente conferma WhatsApp.')
             templateKey = null
           } else if (editingId) {
+            // Edit di booking gia' pagato ma MAI confermato in precedenza
+            // (es. l'admin aveva creato senza spuntare Conferma e ora la
+            // sta spuntando per la prima volta).
             templateKey = 'rental_new_customer'
           } else {
+            // Nuova prenotazione gia' pagata (senza checkbox conferma).
             templateKey = 'rental_new_customer'
           }
 
@@ -5974,7 +5985,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // method (Pagato Contanti, Pagato Carta, ...) by ticking the
           // matching event in the template's handled_events. If no template
           // claims the event, the send silently skips (no fallback).
-          if (confirmBooking && !isPending) {
+          //
+          // Anti-duplicato: parte SOLO se il pagamento e' appena diventato
+          // paid (transition pending -> paid) OPPURE se e' una prenotazione
+          // nuova creata direttamente paid. Su edit di una booking gia'
+          // pagata al momento del load, NON ririlascia il "Pagamento ricevuto".
+          const prevPaymentStatusForMethod = String(editFormSnapshotRef.current?.payment_status || '').toLowerCase()
+          const prevWasPaidAtLoad = ['paid', 'succeeded', 'completed'].includes(prevPaymentStatusForMethod)
+          const justTransitionedToPaid = !editingId || !prevWasPaidAtLoad
+          if (confirmBooking && !isPending && justTransitionedToPaid) {
             const pm = String(formData.payment_method || '').toLowerCase().trim()
             let methodEvent: string | null = null
             if (pm.includes('contanti') || pm === 'cash' || pm === 'prepagata') methodEvent = 'booking_paid_cash'
