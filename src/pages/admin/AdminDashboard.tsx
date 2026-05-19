@@ -843,7 +843,7 @@ export default function AdminDashboard() {
           {activeTab === 'com-chiamate' && <PlaceholderTab title="Chiamate" />}
           {activeTab === 'com-chatgpt' && <PlaceholderTab title="Chat GPT" />}
           {activeTab === 'com-aruba' && <PlaceholderTab title="Aruba" />}
-          {activeTab === 'operatori' && isElevated && <OperatoriTab />}
+          {activeTab === 'operatori' && <OperatoriTab />}
           {activeTab === 'rilevazione-orari' && <RilevazioneOrariTab />}
           {activeTab === 'dashboard-kpi' && <DashboardTab />}
           {activeTab === 'centralina-pro' && <CentralinaProTab />}
