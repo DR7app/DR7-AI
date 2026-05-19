@@ -6000,7 +6000,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 customPhone: custPhone,
                 booking: {
                   id: insertedBooking?.id || editingId || null,
-                  service_type: insertedBooking?.service_type || formData.service_type || 'car_rental',
+                  service_type: (insertedBooking as { service_type?: string } | null)?.service_type || 'car_rental',
                 },
                 templateKey: finalTemplateKey,
                 templateVars,
@@ -6041,7 +6041,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   customPhone: custPhone,
                   booking: {
                     id: insertedBooking?.id || editingId || null,
-                    service_type: insertedBooking?.service_type || formData.service_type || 'car_rental',
+                    service_type: (insertedBooking as { service_type?: string } | null)?.service_type || 'car_rental',
                   },
                   templateKey: finalMethodEvent,
                   templateVars,
