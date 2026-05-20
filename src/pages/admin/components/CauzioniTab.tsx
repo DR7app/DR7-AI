@@ -1074,8 +1074,12 @@ export default function CauzioniTab() {
                 <CauzioneKpi label="A Rischio" count={stats.a_rischio} amount={stats.totale_rischio_amount} ring="#EAB308" urgent={stats.a_rischio > 0}/>
             </div>
 
+            {/* 2-column layout: main (8) + right sidebar (4) */}
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+            <div className="xl:col-span-8 space-y-4">
+
             {/* Filters */}
-            <div className="mb-6 bg-theme-bg-tertiary border border-theme-border rounded-3xl p-4">
+            <div className="bg-theme-bg-tertiary border border-theme-border rounded-3xl p-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <input
                         type="text"
@@ -1302,6 +1306,21 @@ export default function CauzioniTab() {
                     />
                 </div>
             </div>
+            </div>{/* end main col */}
+
+            {/* Right sidebar */}
+            <aside className="xl:col-span-4 space-y-4">
+                <RiepilogoDonut stats={stats} />
+                <ScadenzeProssime cauzioni={cauzioni} />
+                <CauzioniARischio cauzioni={cauzioni} onCassa={handleCassa} />
+                <AzioniRapide
+                    onNuova={() => setShowModal(true)}
+                    onStorico={() => setShowStorico(true)}
+                />
+                <ReportVeloci />
+            </aside>
+
+            </div>{/* end 8/4 grid */}
 
             {/* Modal */}
             {showModal && (
@@ -1418,5 +1437,218 @@ function CauzioniAnalysisDonut({ incassate, daIncassare, inCassa }: { incassate:
                 ))}
             </div>
         </div>
+    )
+}
+
+/* ---------- Right sidebar components ---------- */
+
+function fmtMoney(n: number): string {
+    return `€${n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+// Big donut + breakdown delle cauzioni attive per stato.
+function RiepilogoDonut({ stats }: { stats: {
+    incassate: number; da_incassare: number; in_cassa: number; scadute: number;
+    totale_incassate: number; totale_da_incassare: number; totale_in_cassa: number;
+    totale_attive_amount: number; totale_scadute_amount: number;
+} }) {
+    const total = stats.totale_attive_amount + stats.totale_incassate + stats.totale_in_cassa + stats.totale_scadute_amount
+    const segments = [
+        { label: 'Incassate',    value: stats.totale_incassate,     color: '#10B981' },
+        { label: 'Da incassare', value: stats.totale_da_incassare,  color: '#F59E0B' },
+        { label: 'In cassa',     value: stats.totale_in_cassa,      color: '#3B82F6' },
+        { label: 'Scadute',      value: stats.totale_scadute_amount, color: '#EF4444' },
+    ]
+    const sum = segments.reduce((a, b) => a + b.value, 0) || 1
+    // Build SVG donut
+    const r = 56
+    const c = 2 * Math.PI * r
+    let offset = 0
+    return (
+        <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
+            <div className="flex items-center justify-between mb-3">
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted">Riepilogo Cauzioni</h3>
+            </div>
+            <div className="flex items-center gap-4">
+                <div className="relative w-32 h-32 shrink-0">
+                    <svg viewBox="0 0 140 140" className="w-full h-full -rotate-90">
+                        <circle cx="70" cy="70" r={r} fill="none" stroke="currentColor" className="text-theme-bg-tertiary" strokeWidth={14}/>
+                        {segments.map(s => {
+                            const len = (s.value / sum) * c
+                            const seg = (
+                                <circle key={s.label} cx="70" cy="70" r={r} fill="none" stroke={s.color} strokeWidth={14}
+                                    strokeDasharray={`${len} ${c - len}`} strokeDashoffset={-offset} strokeLinecap="butt"/>
+                            )
+                            offset += len
+                            return seg
+                        })}
+                    </svg>
+                    <div className="absolute inset-0 grid place-items-center text-center">
+                        <div>
+                            <p className="text-base font-bold text-theme-text-primary tabular-nums leading-none">{fmtMoney(total)}</p>
+                            <p className="text-[9px] uppercase tracking-wider text-theme-text-muted mt-0.5">totale</p>
+                        </div>
+                    </div>
+                </div>
+                <ul className="flex-1 space-y-1.5 min-w-0">
+                    {segments.map(s => {
+                        const pct = sum > 0 ? Math.round((s.value / sum) * 100) : 0
+                        return (
+                            <li key={s.label} className="flex items-center gap-2 text-[11px]">
+                                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color }}/>
+                                <span className="text-theme-text-secondary flex-1 truncate">{s.label}</span>
+                                <span className="text-theme-text-primary font-semibold tabular-nums">{fmtMoney(s.value)}</span>
+                                <span className="text-theme-text-muted tabular-nums w-9 text-right">{pct}%</span>
+                            </li>
+                        )
+                    })}
+                </ul>
+            </div>
+        </section>
+    )
+}
+
+// Cauzioni Attive in scadenza nei prossimi 30 giorni.
+function ScadenzeProssime({ cauzioni }: { cauzioni: Cauzione[] }) {
+    const upcoming = cauzioni
+        .filter(c => c.stato === 'Attiva' && typeof c.days_until_deadline === 'number' && c.days_until_deadline >= 0 && c.days_until_deadline <= 30)
+        .sort((a, b) => a.days_until_deadline - b.days_until_deadline)
+        .slice(0, 5)
+    return (
+        <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
+            <div className="flex items-center justify-between mb-2">
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted">Scadenze prossime</h3>
+                <span className="text-[10px] text-theme-text-muted">{upcoming.length}</span>
+            </div>
+            {upcoming.length === 0 ? (
+                <p className="text-[11px] text-theme-text-muted italic">Nessuna scadenza nei prossimi 30 giorni.</p>
+            ) : (
+                <ul className="space-y-2">
+                    {upcoming.map(c => {
+                        const urgent = c.days_until_deadline <= 3
+                        return (
+                            <li key={c.id} className="flex items-center gap-2">
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs text-theme-text-primary truncate">{c.cliente_nome || 'Cliente'}</p>
+                                    <p className="text-[10px] text-theme-text-muted truncate">{c.veicolo_modello || ''}{c.veicolo_targa ? ` · ${c.veicolo_targa}` : ''}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs text-theme-text-primary font-semibold tabular-nums">{fmtMoney(c.importo)}</p>
+                                    <p className={'text-[10px] tabular-nums ' + (urgent ? 'text-red-400 font-semibold' : 'text-theme-text-muted')}>
+                                        {c.days_until_deadline} {c.days_until_deadline === 1 ? 'giorno' : 'giorni'}
+                                    </p>
+                                </div>
+                            </li>
+                        )
+                    })}
+                </ul>
+            )}
+        </section>
+    )
+}
+
+// Cauzioni scadute o in stato "danno" / "bloccata".
+function CauzioniARischio({ cauzioni, onCassa }: { cauzioni: Cauzione[]; onCassa: (c: Cauzione) => void }) {
+    const rischio = cauzioni
+        .filter(c => c.is_overdue || c.stato === 'Bloccata' || c.stato === 'Danno')
+        .sort((a, b) => (b.importo || 0) - (a.importo || 0))
+        .slice(0, 4)
+    return (
+        <section className="rounded-2xl border border-red-500/20 bg-theme-bg-secondary p-4">
+            <div className="flex items-center justify-between mb-2">
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-red-400">Cauzioni a rischio</h3>
+                <span className="text-[10px] text-theme-text-muted">{rischio.length}</span>
+            </div>
+            {rischio.length === 0 ? (
+                <p className="text-[11px] text-theme-text-muted italic">Nessuna cauzione a rischio.</p>
+            ) : (
+                <ul className="space-y-2">
+                    {rischio.map(c => (
+                        <li key={c.id} className="flex items-center gap-2">
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs text-theme-text-primary truncate">{c.cliente_nome || 'Cliente'}</p>
+                                <p className="text-[10px] text-red-400 truncate">{c.stato}{c.is_overdue ? ' · scaduta' : ''}</p>
+                            </div>
+                            <span className="text-xs text-red-400 font-semibold tabular-nums">{fmtMoney(c.importo)}</span>
+                            <button
+                                type="button"
+                                onClick={() => onCassa(c)}
+                                className="px-2 py-1 rounded-full bg-red-500/10 border border-red-500/40 text-red-400 text-[10px] font-semibold hover:bg-red-500/20"
+                            >
+                                Incassa
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </section>
+    )
+}
+
+function AzioniRapide({ onNuova, onStorico }: { onNuova: () => void; onStorico: () => void }) {
+    const items = [
+        { label: 'Nuova', icon: 'M12 5v14M5 12h14', onClick: onNuova },
+        { label: 'Storico', icon: 'M12 8v4l3 3', onClick: onStorico },
+        { label: 'Esporta CSV', icon: 'M12 5v12m0 0l-4-4m4 4l4-4', onClick: () => {
+            // CSV download trigger handled inline — placeholder; fallback to no-op if not wired.
+            window.alert('Esporta CSV disponibile dalla sezione Storico.')
+        } },
+        { label: 'Report', icon: 'M3 7h18M3 12h18M3 17h12', onClick: () => window.alert('Apri sezione Report (in arrivo).') },
+        { label: 'Filtri', icon: 'M4 6h16M6 12h12M10 18h4', onClick: () => {
+            const el = document.querySelector<HTMLInputElement>('input[placeholder="Cerca cliente, veicolo, targa..."]')
+            el?.focus()
+        } },
+        { label: 'Stampa', icon: 'M6 9V2h12v7M6 18h12v4H6zM6 14h12', onClick: () => window.print() },
+    ]
+    return (
+        <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted mb-2">Azioni rapide</h3>
+            <div className="grid grid-cols-3 gap-2">
+                {items.map(it => (
+                    <button
+                        key={it.label}
+                        type="button"
+                        onClick={it.onClick}
+                        className="flex flex-col items-center justify-center gap-1 px-2 py-2.5 rounded-lg border border-theme-border bg-theme-bg-primary hover:bg-theme-bg-hover transition-colors"
+                    >
+                        <svg className="w-4 h-4 text-theme-text-secondary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d={it.icon}/>
+                        </svg>
+                        <span className="text-[10px] text-theme-text-secondary text-center leading-tight">{it.label}</span>
+                    </button>
+                ))}
+            </div>
+        </section>
+    )
+}
+
+function ReportVeloci() {
+    const reports = [
+        { label: 'Cauzioni per cliente', filter: 'cliente' },
+        { label: 'Cauzioni per veicolo', filter: 'veicolo' },
+        { label: 'Cauzioni scadute', filter: 'scadute' },
+        { label: 'Cauzioni incassate', filter: 'incassate' },
+        { label: 'Andamento mensile', filter: 'andamento' },
+    ]
+    return (
+        <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-theme-text-muted mb-2">Report veloci</h3>
+            <ul className="space-y-1.5">
+                {reports.map(r => (
+                    <li key={r.filter}>
+                        <button
+                            type="button"
+                            onClick={() => window.alert(`Report "${r.label}" — in arrivo nella prossima iterazione.`)}
+                            className="flex items-center justify-between w-full px-2 py-1.5 rounded text-xs text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary transition-colors"
+                        >
+                            <span>{r.label}</span>
+                            <svg className="w-3 h-3 text-theme-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+                            </svg>
+                        </button>
+                    </li>
+                ))}
+            </ul>
+        </section>
     )
 }
