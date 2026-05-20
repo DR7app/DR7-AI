@@ -409,7 +409,7 @@ async function getBossPhone(): Promise<string> {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking }: Props) {
-  const { adminEmail, hasRole, hasPermission, permissions } = useAdminRole()
+  const { adminEmail, hasRole, hasPermission, permissions, loading: adminRoleLoading } = useAdminRole()
   // Collaboratore = ha solo `reservations-preventivi`, NON `reservations`.
   // Per coerenza con "non puo' vedere le prenotazioni di altri", restringe
   // anche la lista preventivi ai propri (created_by = adminEmail).
@@ -1171,12 +1171,20 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
 
   // ─── Data Loading ─────────────────────────────────────────────────────────
 
+  // Aspetta che useAdminRole abbia caricato (permissions / adminEmail risolti)
+  // prima di fare la prima query, altrimenti per i collaboratori la query
+  // parte con hasPermission ottimistico = true → niente filtro → la lista
+  // mostra TUTTI i preventivi (bug del 20/05). Re-fetch anche quando
+  // isPreventivoOnly o adminEmail cambiano (es. cambio account, refresh
+  // del role hook).
   useEffect(() => {
+    if (adminRoleLoading) return
     loadPreventivi()
     loadVehicles()
     loadCustomers()
     loadNoCauzioneRequests()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminRoleLoading, isPreventivoOnly, adminEmail])
 
   async function loadCustomers() {
     try {
