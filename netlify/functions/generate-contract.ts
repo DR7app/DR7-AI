@@ -951,14 +951,10 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             // Customer Info — per AZIENDA tutti i campi del "1° Guidatore"
             // (Customer*/Driver*/Nome*/CF/Indirizzo/Patente/etc) ritornano
             // stringa vuota: i dati azienda vanno SOLO nella sezione Azienda
-            // sotto. PartitaIVA / CustomerVAT restano popolati anche per
-            // azienda perche' la P.IVA e' un campo che il template puo'
-            // riusare nella sezione azienda.
+            // sotto (CompanyName/CompanyVAT/CompanyAddress/etc).
             'CustomerName': isAzienda ? '' : (clientName || ''),
             'NomeCognome': isAzienda ? '' : (clientName || ''),
-            'CustomerVAT': clientVat || '',
             'CodiceFiscale': isAzienda ? '' : (clientVat || ''),
-            'PartitaIVA': clientVat || '',
             'CustomerPhone': isAzienda ? '' : (customer?.telefono || resolvedPhone || ''),
             'Telefono': isAzienda ? '' : (customer?.telefono || resolvedPhone || ''),
             'CustomerEmail': isAzienda ? '' : (customer?.email || resolvedEmail || ''),
