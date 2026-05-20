@@ -64,14 +64,13 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-8 relative overflow-hidden bg-theme-bg-primary">
+    <div className="min-h-screen flex items-center justify-center px-4 py-8 relative overflow-hidden bg-white dark:bg-theme-bg-primary">
 
       <div className="w-full max-w-md relative z-10">
-        {/* Box login: SEGUE il tema. Light = bianco con testo scuro,
-            dark = nero con testo chiaro. Il logo usa la classe
-            theme-aware-logo (filter invert+hue-rotate in light) cosi'
-            lo stesso PNG funziona in entrambi i temi. */}
-        <div className="rounded-2xl px-6 sm:px-10 pt-10 pb-8 border border-dr7-gold/40 relative shadow-2xl shadow-dr7-gold/10 bg-theme-bg-primary">
+        {/* Box login: in light theme usa bianco puro per matchare lo
+            sfondo bianco del logo JPEG (niente piu' rettangolo grigio
+            attorno al logo). In dark resta il tema standard. */}
+        <div className="rounded-2xl px-6 sm:px-10 pt-10 pb-8 border border-dr7-gold/40 relative shadow-2xl shadow-dr7-gold/10 bg-white dark:bg-theme-bg-primary">
           {/* Logo */}
           <div className="flex justify-center mb-8">
             <img
