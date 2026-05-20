@@ -991,8 +991,8 @@ export default function CauzioniTab() {
                 €{Number(cauzione.importo).toFixed(2)}
             </td>
             <td className="px-4 py-3 text-sm text-theme-text-primary capitalize">{cauzione.metodo}</td>
-            <td className="px-4 py-3">
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatoBadgeClass(cauzione)}`}>
+            <td className="px-4 py-3 whitespace-nowrap">
+                <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${getStatoBadgeClass(cauzione)}`}>
                     {getStatoLabel(cauzione)}
                 </span>
             </td>
