@@ -293,8 +293,22 @@ export const handler: Handler = async (event) => {
         }
 
         // 2b. Fetch Vehicle Data (to get plate and other details if missing in booking)
+        // Lookup priority: vehicle_id > vehicle_plate > display_name.
+        // The name fallback breaks when booking.vehicle_name and
+        // vehicles.display_name drift apart (typos like "Turbo S cabrio"
+        // vs "Turbo cabrio", trailing spaces, apostrophes). When that
+        // happens AND we only matched by name, vehicleData ends up null
+        // and the contract prints Targa/Categoria as blank/"standard".
         let vehicleData = null
-        if (booking.vehicle_name) {
+        if (booking.vehicle_id) {
+            const { data: vData } = await supabase.from('vehicles').select('*').eq('id', booking.vehicle_id).maybeSingle()
+            vehicleData = vData
+        }
+        if (!vehicleData && booking.vehicle_plate) {
+            const { data: vData } = await supabase.from('vehicles').select('*').eq('plate', booking.vehicle_plate).maybeSingle()
+            vehicleData = vData
+        }
+        if (!vehicleData && booking.vehicle_name) {
             const { data: vData } = await supabase.from('vehicles').select('*').eq('display_name', booking.vehicle_name).maybeSingle()
             vehicleData = vData
         }
