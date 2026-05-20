@@ -53,7 +53,16 @@ interface Booking {
   type?: 'check-in' | 'check-out' | 'lavaggio' | 'meccanica' | 'varie'
 }
 
+// Importato in linea: evita di toccare la firma del file per allinearsi
+// al pattern delle altre tab. useAdminRole / hasPermission usate per
+// detect collaboratori (nessun accesso a `reservations`).
+import { useAdminRole as useAdminRoleInternal } from '../../../hooks/useAdminRole'
+
 export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleId: string, date: Date) => void }) {
+  const { hasPermission: _calHasPerm } = useAdminRoleInternal()
+  // Collaboratore = vede solo "Riservato" sulle barre, niente click per
+  // aprire i dettagli, niente tooltip con nome/dettagli cliente.
+  const isCollaboratoreCal = _calHasPerm('reservations-preventivi') && !_calHasPerm('reservations')
   const { canViewFinancials } = useAdminRole()
   const [hideFinancials, setHideFinancials] = useState(false)
 
@@ -675,17 +684,18 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                             top: top,
                             height: BAR_HEIGHT,
                             ...(bookingHasNotes ? { boxShadow: 'inset 0 0 0 2.5px #FACC15', borderColor: '#FACC15' } : {}),
+                            ...(isCollaboratoreCal ? { cursor: 'default' } : {}),
                           }}
                           onClick={(e) => {
                             e.stopPropagation()
-                            // TODO: Properly open booking edit modal
-                            // For now we just alert, but in real integration this should open the modal
+                            // Collaboratore: niente apertura dettagli prenotazione.
+                            if (isCollaboratoreCal) return
                             setSelectedBooking(evt.booking)
                           }}
                         >
                           <div className="px-2 flex flex-col justify-center h-full">
                             <span className="font-bold text-[10px] truncate leading-tight">
-                              {(isPendingPayment && !isDaSaldareConfirmed) ? '⏳ IN ATTESA — ' : ''}{evt.booking.customer_name || evt.booking.booking_details?.customer?.fullName || evt.booking.guest_name || 'Cliente Sconosciuto'} • {(() => {
+                              {(isPendingPayment && !isDaSaldareConfirmed) ? '⏳ IN ATTESA — ' : ''}{isCollaboratoreCal ? 'Riservato' : (evt.booking.customer_name || evt.booking.booking_details?.customer?.fullName || evt.booking.guest_name || 'Cliente Sconosciuto')} • {(() => {
                                 // Calculate drop-off day: if end time is exactly 00:00, use previous day
                                 const endHours = evt.endLocal.getHours()
                                 const endMinutes = evt.endLocal.getMinutes()
@@ -709,7 +719,9 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                           <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-theme-text-primary/50"></div>
 
 
-                          {/* TOOLTIP ON HOVER */}
+                          {/* TOOLTIP ON HOVER — nascosto per collaboratori
+                              (niente dati cliente, niente targa, niente date). */}
+                          {!isCollaboratoreCal && (
                           <div className="hidden group-hover/evt:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-theme-bg-primary border border-theme-border text-theme-text-primary text-xs p-3 rounded shadow-2xl w-max z-[100] pointer-events-none min-w-[200px]">
                             <div className="font-bold mb-1 text-base">{evt.booking.customer_name}</div>
                             <div className="text-theme-text-muted mb-2">{evt.booking.vehicle_name} ({evt.booking.vehicle_plate})</div>
@@ -727,6 +739,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
 
                             <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-theme-bg-primary rotate-45 border-r border-b border-theme-border"></div>
                           </div>
+                          )}
 
                         </div>
                       )
