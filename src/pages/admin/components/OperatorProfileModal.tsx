@@ -266,6 +266,11 @@ export default function OperatorProfileModal({
                     <ContrattoSection operatoreId={operatore.id} />
                 </div>
 
+                {/* Nascondi UI — toggle hide:X keys direttamente dal profilo */}
+                <div className="px-4 sm:px-6 pt-3">
+                    <HideUiSection operatoreId={operatore.id} />
+                </div>
+
                 {/* Calcola Paga — usa contratto + ore lavorate nel periodo */}
                 <div className="px-4 sm:px-6 pt-3">
                     <CalcolaPagaSection
@@ -440,6 +445,94 @@ function emptyContratto(): Contratto {
         pdf_filename: null,
         pdf_uploaded_at: null,
     }
+}
+
+const HIDE_KEY_OPTIONS: { tag: string; label: string; hint: string }[] = [
+    { tag: 'hide:allarmi',               label: 'Nascondi Allarmi',                hint: 'Toglie il blocco "Attiva Allarmi" + gear in sidebar' },
+    { tag: 'hide:miei-orari',            label: 'Nascondi "I miei orari"',         hint: 'Toglie il pulsante (sidebar, header, menu profilo)' },
+    { tag: 'hide:richieste-no-cauzione', label: 'Nascondi "Richieste No Cauzione"', hint: 'Toglie il sub-tab dentro Preventivi' },
+]
+
+function HideUiSection({ operatoreId }: { operatoreId: string }) {
+    const { hasRole } = useAdminRole()
+    const canEdit = hasRole('direzione') || hasRole('developer')
+    const [permissions, setPermissions] = useState<string[] | null>(null)
+    const [loading, setLoading] = useState(true)
+    const [savingTag, setSavingTag] = useState<string | null>(null)
+
+    useEffect(() => {
+        if (!canEdit) { setLoading(false); return }
+        let cancelled = false
+        ;(async () => {
+            const { data, error } = await supabase
+                .from('admins')
+                .select('permissions')
+                .eq('id', operatoreId)
+                .maybeSingle()
+            if (cancelled) return
+            setLoading(false)
+            if (error) {
+                console.error('[HideUi] load error', error)
+                return
+            }
+            const perms = (data as { permissions?: unknown } | null)?.permissions
+            setPermissions(Array.isArray(perms) ? perms.map(String) : [])
+        })()
+        return () => { cancelled = true }
+    }, [operatoreId, canEdit])
+
+    const toggle = async (tag: string) => {
+        if (!permissions) return
+        setSavingTag(tag)
+        const next = permissions.includes(tag)
+            ? permissions.filter(p => p !== tag)
+            : [...permissions, tag]
+        const { error } = await supabase
+            .from('admins')
+            .update({ permissions: next })
+            .eq('id', operatoreId)
+        setSavingTag(null)
+        if (error) {
+            toast.error(`Salvataggio fallito: ${error.message}`)
+            return
+        }
+        setPermissions(next)
+        toast.success(permissions.includes(tag) ? 'Riattivato' : 'Nascosto')
+    }
+
+    if (!canEdit) return null
+    return (
+        <div className="rounded-xl bg-theme-bg-secondary border border-theme-border p-4 sm:p-5">
+            <div className="flex items-center justify-between mb-1">
+                <h3 className="text-sm font-semibold text-theme-text-primary">Nascondi UI</h3>
+                {loading && <span className="text-[10px] text-theme-text-muted">Caricamento…</span>}
+            </div>
+            <p className="text-[12px] text-theme-text-muted mb-3">
+                Toglie elementi dall&apos;interfaccia di questo operatore. Non modifica i permessi reali —
+                serve a tenere l&apos;UI pulita per i collaboratori esterni che non devono vedere pannelli interni.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {HIDE_KEY_OPTIONS.map(opt => {
+                    const checked = permissions?.includes(opt.tag) ?? false
+                    return (
+                        <label key={opt.tag} className="flex items-start gap-2 px-3 py-2 rounded-md border border-theme-border bg-theme-bg-primary cursor-pointer hover:border-dr7-gold/40 transition-colors">
+                            <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={loading || savingTag === opt.tag || !permissions}
+                                onChange={() => toggle(opt.tag)}
+                                className="mt-0.5"
+                            />
+                            <div className="min-w-0">
+                                <div className="text-[13px] font-medium text-theme-text-primary">{opt.label}</div>
+                                <div className="text-[11px] text-theme-text-muted">{opt.hint}</div>
+                            </div>
+                        </label>
+                    )
+                })}
+            </div>
+        </div>
+    )
 }
 
 function ContrattoSection({ operatoreId }: { operatoreId: string }) {
