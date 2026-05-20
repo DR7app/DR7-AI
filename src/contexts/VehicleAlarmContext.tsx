@@ -61,6 +61,10 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     })
 
     const [session, setSession] = useState<Session | null>(null)
+    // Quando l'admin ha permissions includes 'hide:allarmi' tutto il motore
+    // si spegne: niente polling, niente audio, niente toast. Letto direttamente
+    // dalla riga admins per non dipendere dall'ordine di mount di useAdminRole.
+    const [alarmsDisabledForUser, setAlarmsDisabledForUser] = useState(false)
     const audioRef = useRef<HTMLAudioElement | null>(null)
     const audioContextRef = useRef<AudioContext | null>(null)
 
@@ -148,6 +152,26 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         })
         return () => subscription.unsubscribe()
     }, [])
+
+    // Check if the current user has hide:allarmi in their admins.permissions.
+    // If yes, the alarm engine is completely OFF for them: no polling, no
+    // audio, no toast. Re-checks on session change.
+    useEffect(() => {
+        if (!session?.user?.id) { setAlarmsDisabledForUser(false); return }
+        let cancelled = false
+        ;(async () => {
+            const { data } = await supabase
+                .from('admins')
+                .select('permissions')
+                .eq('user_id', session.user.id)
+                .maybeSingle()
+            if (cancelled) return
+            const perms = (data as { permissions?: unknown } | null)?.permissions
+            const list = Array.isArray(perms) ? perms.map(String) : []
+            setAlarmsDisabledForUser(list.includes('hide:allarmi'))
+        })()
+        return () => { cancelled = true }
+    }, [session])
 
     // Load alarm config + subscribe to changes. Admin edits in
     // AlarmInventoryModal flow through this realtime channel so the
@@ -968,9 +992,11 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         }
     }
 
-    // Poll every 60 seconds — only when authenticated and tab is visible
+    // Poll every 60 seconds — only when authenticated and tab is visible.
+    // Skippato totalmente se l'admin ha hide:allarmi (collaboratori).
     useEffect(() => {
         if (!session) return
+        if (alarmsDisabledForUser) return
 
         let interval: ReturnType<typeof setInterval> | null = null
         let isRunning = false
@@ -1014,7 +1040,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             document.removeEventListener('visibilitychange', handleVisibilityChange)
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [session])
+    }, [session, alarmsDisabledForUser])
 
     // Cleanup audio on unmount
     useEffect(() => {
