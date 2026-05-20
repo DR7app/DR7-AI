@@ -424,24 +424,73 @@ export default function ReportsTab() {
             <span className="text-dr7-gold font-bold">{formatCurrency(v.totalRevenue)}</span>
           </div>
         </div>
-        {/* Expanded booking details */}
+        {/* Expanded booking details — same data as the desktop expanded
+            row (Cliente, Ritiro, Riconsegna, GG Tot/Mese, Pagamento,
+            Totale, Penali, Danni, Ricavo Mese) but stacked in cards so
+            it's readable on mobile without horizontal scroll. */}
         {isExpanded && v.bookings && v.bookings.length > 0 && (
           <div className="mt-3 pt-3 border-t border-theme-border space-y-2">
             <p className="text-xs font-semibold text-theme-text-muted mb-1">Dettaglio Prenotazioni:</p>
             {v.bookings.map((b: BookingDetail) => {
               const badge = getPaymentBadge(b.payment_status, b.payment_method)
+              const pen = b.penalty_amount || 0
+              const dan = b.danni_amount || 0
+              const revInMonth = b.billable_days > 0
+                ? Math.round((b.total_price / b.billable_days) * b.days_in_month * 100) / 100
+                : b.total_price
               return (
-                <div key={b.booking_id} className="bg-theme-bg-primary/30 rounded p-2 text-xs">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="font-medium text-theme-text-primary">{b.customer_name}</span>
-                    <span className={`px-2 py-0.5 rounded-full font-semibold ${badge.color}`}>{badge.label}</span>
+                <div
+                  key={b.booking_id}
+                  className="bg-theme-bg-primary/30 rounded p-2 text-xs"
+                  onClick={e => e.stopPropagation()}
+                >
+                  {/* Header: customer + payment badge */}
+                  <div className="flex justify-between items-center mb-1.5">
+                    <span className="font-medium text-theme-text-primary truncate">{b.customer_name}</span>
+                    <span className={`shrink-0 ml-2 px-2 py-0.5 rounded-full font-semibold ${badge.color}`}>{badge.label}</span>
                   </div>
-                  <div className="flex justify-between text-theme-text-muted">
-                    <span>{formatDateIT(b.start_at)} - {formatDateIT(b.end_at)}</span>
-                    <span className="text-dr7-gold font-semibold">{formatCurrency(b.total_price)}</span>
+
+                  {/* Date range */}
+                  <div className="text-theme-text-muted mb-1.5">
+                    <span>{formatDateIT(b.start_at)} → {formatDateIT(b.end_at)}</span>
                   </div>
-                  <div className="flex justify-between text-theme-text-muted mt-0.5">
-                    <span>{b.billable_days}g totali / {b.days_in_month}g nel mese</span>
+
+                  {/* Days: total / in-month */}
+                  <div className="flex justify-between text-theme-text-muted mb-1.5">
+                    <span>GG totali</span>
+                    <span className="text-theme-text-primary font-medium">{b.billable_days}g</span>
+                  </div>
+                  <div className="flex justify-between text-theme-text-muted mb-1.5">
+                    <span>GG nel mese</span>
+                    <span className="text-green-400 font-medium">{b.days_in_month}g</span>
+                  </div>
+
+                  {/* Totale */}
+                  <div className="flex justify-between mb-1.5">
+                    <span className="text-theme-text-muted">Totale</span>
+                    <span className="text-theme-text-primary font-semibold">{formatCurrency(b.total_price)}</span>
+                  </div>
+
+                  {/* Penali (only if > 0) */}
+                  {pen > 0 && (
+                    <div className="flex justify-between mb-1.5">
+                      <span className="text-theme-text-muted">Penali</span>
+                      <span className="text-yellow-400 font-semibold">{formatCurrency(pen)}</span>
+                    </div>
+                  )}
+
+                  {/* Danni (only if > 0) */}
+                  {dan > 0 && (
+                    <div className="flex justify-between mb-1.5">
+                      <span className="text-theme-text-muted">Danni</span>
+                      <span className="text-red-400 font-semibold">{formatCurrency(dan)}</span>
+                    </div>
+                  )}
+
+                  {/* Ricavo mese (prorated revenue for the report month) */}
+                  <div className="flex justify-between pt-1.5 border-t border-theme-border/40">
+                    <span className="text-theme-text-muted font-semibold">Ricavo Mese</span>
+                    <span className="text-dr7-gold font-bold">{formatCurrency(revInMonth + pen + dan)}</span>
                   </div>
                 </div>
               )
