@@ -76,10 +76,18 @@ function buildAziendaFields(customer: any, booking: any, isAzienda: boolean): Re
     ]
     for (const k of telNames) fields[k] = tel
 
-    // P.IVA
+    // P.IVA — tutte le varianti TVA/IVA/VAT immaginabili
     const pivaNames = [
+        // Italian
         'CompanyVAT', 'PartitaIVAAzienda', 'PivaAzienda', 'partita_iva_azienda',
-        'PartitaIvaAzienda', 'PartitaIVA Azienda',
+        'PartitaIvaAzienda', 'PartitaIVA Azienda', 'PartitaIVA', 'PartitaIva',
+        'PIva', 'piva', 'p_iva', 'PartIVA', 'PartIva',
+        // English
+        'VAT', 'vat', 'CompanyVat', 'VATNumber', 'VatNumber', 'vat_number',
+        // French (in case PDF designer was bilingual)
+        'TVA', 'tva', 'NumeroTVA', 'numero_tva',
+        // Label literal
+        'Partita IVA', 'partita iva', 'P. IVA', 'P.IVA',
     ]
     for (const k of pivaNames) fields[k] = piva
 
