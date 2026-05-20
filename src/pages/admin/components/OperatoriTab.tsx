@@ -55,6 +55,15 @@ const ROLE_TAG_OPTIONS: { tag: string; label: string; hint: string }[] = [
   { tag: 'role:preventivi-admin',  label: 'Preventivi Admin',   hint: 'Flussi speciali preventivi' },
 ]
 
+// hide:X keys per nascondere singoli elementi UI a un operatore.
+// Letti direttamente da permissions[] (no bypass direzione/developer/`*`),
+// quindi funzionano anche se l'utente ha permessi pieni.
+const HIDE_KEY_OPTIONS: { tag: string; label: string; hint: string }[] = [
+  { tag: 'hide:allarmi',                 label: 'Nascondi Allarmi',           hint: 'Toglie il blocco "Attiva Allarmi" + gear nella sidebar' },
+  { tag: 'hide:miei-orari',              label: 'Nascondi "I miei orari"',    hint: 'Toglie il pulsante (sidebar, header, menu profilo)' },
+  { tag: 'hide:richieste-no-cauzione',   label: 'Nascondi "Richieste No Cauzione"', hint: 'Toglie il sub-tab nella pagina Preventivi' },
+]
+
 interface LogEntry {
   id: string
   admin_id: string
@@ -697,6 +706,36 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {ROLE_TAG_OPTIONS.map(opt => {
+                      const currentPerms = Array.isArray(selected.permissions) ? selected.permissions : []
+                      const checked = currentPerms.includes(opt.tag)
+                      return (
+                        <label key={opt.tag} className="flex items-start gap-2 px-3 py-2 rounded-md border border-theme-border bg-theme-bg-primary cursor-pointer hover:border-dr7-gold/40 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleAdminRole(selected, opt.tag)}
+                            className="mt-0.5"
+                          />
+                          <div className="min-w-0">
+                            <div className="text-[13px] font-medium text-theme-text-primary">{opt.label}</div>
+                            <div className="text-[11px] text-theme-text-muted">{opt.hint}</div>
+                          </div>
+                        </label>
+                      )
+                    })}
+                  </div>
+
+                  {/* Nascondi UI — toggle per togliere singoli elementi UI a
+                      questo operatore SENZA modificare i suoi permessi reali.
+                      Letti direttamente da permissions[], funzionano anche
+                      sopra direzione/developer/`*`. */}
+                  <h4 className="text-sm font-semibold text-theme-text-primary mt-5 mb-1">Nascondi UI</h4>
+                  <p className="text-[12px] text-theme-text-muted mb-3">
+                    Toglie elementi dall&apos;interfaccia di questo operatore (non tocca i permessi).
+                    Utile per i collaboratori che non devono vedere pannelli interni operatore.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {HIDE_KEY_OPTIONS.map(opt => {
                       const currentPerms = Array.isArray(selected.permissions) ? selected.permissions : []
                       const checked = currentPerms.includes(opt.tag)
                       return (
