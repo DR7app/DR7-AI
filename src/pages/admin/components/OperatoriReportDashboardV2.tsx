@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import OperatorProfileModal from './OperatorProfileModal'
+import InviteOperatoreModal from './InviteOperatoreModal'
 
 /**
  * OperatoriReportDashboardV2 — dashboard a vista singola "tutto in uno",
@@ -194,6 +195,7 @@ export default function OperatoriReportDashboardV2() {
     // Operatore selezionato per la modale di profilo (stesso component
     // usato dal Dashboard classico — KPI, trend, pause analytics).
     const [profileOp, setProfileOp] = useState<Operatore | null>(null)
+    const [inviteOpen, setInviteOpen] = useState(false)
     const [kpi, setKpi] = useState({
         fatturatoGenerale: 0,
         bookingsCount: 0,
@@ -676,7 +678,13 @@ export default function OperatoriReportDashboardV2() {
                     <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-3">
                         <div className="text-xs uppercase tracking-wider text-theme-text-muted mb-2">Azioni Rapide</div>
                         <div className="space-y-1.5 text-xs">
-                            <button className="w-full text-left px-2 py-1.5 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary">+ Nuovo Operatore</button>
+                            <button
+                                type="button"
+                                onClick={() => setInviteOpen(true)}
+                                className="w-full text-left px-2 py-1.5 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary"
+                            >
+                                + Nuovo Operatore
+                            </button>
                             <button className="w-full text-left px-2 py-1.5 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary">📋 Genera Buste Paga</button>
                             <button className="w-full text-left px-2 py-1.5 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary">📅 Calendario Presenze</button>
                             <button className="w-full text-left px-2 py-1.5 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary">📤 Export CSV</button>
@@ -735,6 +743,11 @@ export default function OperatoriReportDashboardV2() {
                     onClose={() => setProfileOp(null)}
                 />
             )}
+            <InviteOperatoreModal
+                open={inviteOpen}
+                onClose={() => setInviteOpen(false)}
+                onCreated={() => { setInviteOpen(false); /* dashboard list reloads on its own polling */ }}
+            />
         </div>
     )
 }
