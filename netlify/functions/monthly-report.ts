@@ -269,15 +269,38 @@ async function generateVehicleReport(
   })
 
   // Build vehicle report
+  // Set of all valid vehicle ids so we can detect "orphan" bookings whose
+  // vehicle_id no longer points to a row in the vehicles table — those need
+  // to fall through to the name-based matcher instead of silently dropping.
+  const validVehicleIds = new Set((vehicles || []).map(v => v.id))
+
+  // Normalize text for name matching:
+  // - lower case + trim
+  // - collapse any whitespace run to a single space
+  // - replace curly/typographic apostrophes (’ ` ʼ ′) with a straight one
+  // Without this, bookings like "Porsche Cayenne Coupe’" (curly ’) never
+  // matched the vehicle "Porsche Cayenne Coupe'" (straight ').
+  const normName = (s: string | null | undefined): string => {
+    return (s || '')
+      .toLowerCase()
+      .replace(/[‘’‛ʼ′`´]/g, "'")
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+
   const vehicleReports = (vehicles || []).map(vehicle => {
     const vPlate = (vehicle.plate || '').replace(/\s/g, '').toUpperCase()
-    const vName = (vehicle.display_name || '').trim().toLowerCase()
+    const vName = normName(vehicle.display_name)
 
-    // Match bookings by plate first, then by vehicle_id for bookings without a plate
-    // (website bookings store vehicle_id but not vehicle_plate)
+    // Match bookings by plate first, then by vehicle_id, then by name.
+    // Important: the name fallback also runs when vehicle_id is set but
+    // points to a vehicle that no longer exists in the vehicles table
+    // (orphaned reference). Previously this case dropped the booking from
+    // every vehicle report and admins saw wallet bookings disappear.
     const vehicleBookings = rentalBookings.filter(b => {
       const bPlate = (b.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
       const detailsPlate = (b.booking_details?.vehicle_plate || b.booking_details?.plate || '').replace(/\s/g, '').toUpperCase()
+      const bName = normName(b.vehicle_name)
 
       // 1. Match by plate (targa) — primary method
       if (vPlate && vPlate.length >= 4) {
@@ -289,9 +312,18 @@ async function generateVehicleReport(
       if (b.vehicle_id === vehicle.id) return true
       if (b.booking_details?.vehicle_id === vehicle.id) return true
 
-      // 3. Match by vehicle_name (for wallet/credit bookings that have no vehicle_id or plate)
-      if (!b.vehicle_id && !bPlate && !detailsPlate && b.vehicle_name) {
-        if (vName && b.vehicle_name.trim().toLowerCase() === vName) return true
+      // 3. Match by vehicle_name. Two cases:
+      //    a) booking has no vehicle_id and no plate at all (old shape)
+      //    b) booking has a vehicle_id but that id no longer points to any
+      //       row in vehicles (orphan / deleted vehicle) — without this the
+      //       wallet booking would be filtered out completely.
+      const detailsVehicleId = b.booking_details?.vehicle_id
+      const bookingIdMissingOrOrphan =
+        (!b.vehicle_id || !validVehicleIds.has(b.vehicle_id))
+        && (!detailsVehicleId || !validVehicleIds.has(detailsVehicleId))
+      const noPlateOnBooking = !bPlate && !detailsPlate
+      if (bookingIdMissingOrOrphan && noPlateOnBooking && bName) {
+        if (vName && bName === vName) return true
       }
 
       return false
