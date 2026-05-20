@@ -74,7 +74,8 @@ const PERMISSION_SECTIONS: { name: string; tabs: { key: string; label: string }[
     { key: 'verifica-documenti', label: 'Verifica Documenti' },
   ]},
   { name: 'Centralina Pro', tabs: [
-    { key: 'centralina-pro', label: 'Centralina Pro' },
+    { key: 'centralina-pro', label: 'Centralina Pro (accesso completo)' },
+    { key: 'view-cauzioni-readonly', label: 'View Cauzioni readonly (solo Supercar / Hypercar / Exotic Cars, sola lettura)' },
   ]},
   { name: 'Trustera', tabs: [
     { key: 'trustera', label: 'Trustera' },

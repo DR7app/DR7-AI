@@ -6,6 +6,7 @@ import AddressAutocomplete from './AddressAutocomplete'
 import { kmFromDR7Office } from '../../../utils/dr7Distance'
 import { invalidatePaymentMethodsCache } from '../../../hooks/usePaymentMethods'
 import { reloadAutoInvoiceConfig } from '../../../utils/paymentMethodAutoInvoice'
+import { useAdminRole } from '../../../hooks/useAdminRole'
 
 type FleetVehicle = {
   id: string
@@ -1369,7 +1370,22 @@ function mergePrezzoDinamico(saved: Partial<PrezzoDinamicoConfig> | null | undef
 }
 
 export default function CentralinaProTab() {
-  const [section, setSection] = useState<SectionId>('categorie-fascia')
+  // Modalita' "View Cauzioni Readonly" per collaboratori esterni che devono
+  // SOLO visualizzare le cauzioni di Supercar / Hypercar / Exotic Cars.
+  // Triggerata dal permesso 'view-cauzioni-readonly' nelle permissions[]
+  // dell'admin. Letto direttamente da permissions (no bypass) cosi'
+  // anche direzione/developer puo' essere messa in modalita' view se serve.
+  const { permissions: _cpPerms } = useAdminRole()
+  const isCauzioniViewOnly = Array.isArray(_cpPerms) && _cpPerms.includes('view-cauzioni-readonly')
+  // I 3 id categoria che il collaboratore puo' vedere. Post Path B i
+  // canonical id sono: exotic_cars, hypercar, supercar. Inseriamo anche
+  // alias legacy ('exotic', 'supercars') nel caso il DB non sia ancora
+  // stato migrato.
+  const CAUZIONI_VIEW_ALLOWED = useMemo(() => new Set([
+    'exotic_cars', 'hypercar', 'supercar', 'exotic', 'supercars',
+  ]), [])
+
+  const [section, setSection] = useState<SectionId>(isCauzioniViewOnly ? 'p4' : 'categorie-fascia')
 
   // Hydrate from localStorage (sync, before first render of children)
   const persisted = useMemo(() => loadPersisted(), [])
@@ -1693,7 +1709,7 @@ export default function CentralinaProTab() {
         <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-6">
           <aside className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden h-fit">
             <nav className="py-2">
-              {SECTIONS.map((s, idx) => {
+              {(isCauzioniViewOnly ? SECTIONS.filter(s => s.id === 'p4') : SECTIONS).map((s, idx) => {
                 const active = section === s.id
                 return (
                   <button
@@ -1740,7 +1756,23 @@ export default function CentralinaProTab() {
               <AssicurazioniSection insurance={insurance} setInsurance={setInsurance} fasce={fasce} />
             )}
             {section === 'p3' && <KmSforoSection km={km} setKm={setKm} />}
-            {section === 'p4' && <CauzioniSection deposits={deposits} setDeposits={setDeposits} fasce={fasce} categories={categories} />}
+            {section === 'p4' && (
+              isCauzioniViewOnly ? (
+                <div style={{ pointerEvents: 'none', userSelect: 'text', opacity: 0.95 }} aria-readonly="true">
+                  <div className="mb-3 px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/30 text-xs text-blue-300 pointer-events-auto">
+                    Vista in sola lettura. Vedi le cauzioni di Supercar, Hypercar e Exotic Cars. Non puoi modificare nulla.
+                  </div>
+                  <CauzioniSection
+                    deposits={deposits}
+                    setDeposits={setDeposits}
+                    fasce={fasce}
+                    categories={categories.filter(c => CAUZIONI_VIEW_ALLOWED.has(c.id))}
+                  />
+                </div>
+              ) : (
+                <CauzioniSection deposits={deposits} setDeposits={setDeposits} fasce={fasce} categories={categories} />
+              )
+            )}
             {section === 'p5' && <ServiziSection servizi={servizi} setServizi={setServizi} fasce={fasce} />}
             {section === 'p6' && (
               <PrezzoDinamicoSection config={prezzoDinamico} setConfig={setPrezzoDinamico} categories={categories} />
@@ -1787,12 +1819,14 @@ export default function CentralinaProTab() {
         </div>
       </div>
 
-      <SaveBar
-        changes={changes}
-        justSaved={justSaved}
-        onSave={handleSave}
-        onDiscard={handleDiscard}
-      />
+      {!isCauzioniViewOnly && (
+        <SaveBar
+          changes={changes}
+          justSaved={justSaved}
+          onSave={handleSave}
+          onDiscard={handleDiscard}
+        />
+      )}
     </div>
   )
 }
