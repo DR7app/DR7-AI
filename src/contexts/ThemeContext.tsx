@@ -21,18 +21,24 @@ import type { ReactNode } from 'react'
  * call sites that only know about dark/light don't break.
  */
 
-export type Palette = 'dr7' | 'slate' | 'midnight' | 'graphite' | 'forest' | 'crimson' | 'mono' | 'plum'
+export type Palette = 'dr7' | 'graphite' | 'slate' | 'mono' | 'obsidian' | 'frost' | 'tesla'
 export type Mode = 'dark' | 'light'
 
-export const PALETTES: { id: Palette; label: string; description: string }[] = [
-    { id: 'dr7', label: 'DR7', description: 'Brand DR7 originale, accento ciano.' },
-    { id: 'slate', label: 'Slate', description: 'Grigio-blu neutro, professionale.' },
-    { id: 'midnight', label: 'Midnight', description: 'Navy profondo, accento indaco.' },
-    { id: 'graphite', label: 'Graphite', description: 'Grigio caldo, accento teal.' },
-    { id: 'forest', label: 'Forest', description: 'Verde foresta profondo, accento smeraldo.' },
-    { id: 'crimson', label: 'Crimson', description: 'Bordeaux scuro, accento rosso intenso.' },
-    { id: 'mono', label: 'Mono', description: 'Bianco e nero puro, minimal.' },
-    { id: 'plum', label: 'Plum', description: 'Viola profondo, accento magenta.' },
+/**
+ * 6 premium themes. Each works in both dark + light.
+ * IDs are kept stable (dr7 / graphite / slate / mono) for backward
+ * compatibility with users who already had one selected; the legacy
+ * IDs (midnight / forest / crimson / plum) are silently mapped to
+ * 'dr7' by the validator.
+ */
+export const PALETTES: { id: Palette; label: string; description: string; inspiration: string }[] = [
+    { id: 'dr7',      label: 'DR7 Motion',       description: 'Brand DR7 raffinato, accento ciano.', inspiration: 'Tesla UI · mobility OS' },
+    { id: 'graphite', label: 'Graphite Pro',     description: 'Monocromatico esecutivo, ultra clean.', inspiration: 'Apple Pro Apps · Linear' },
+    { id: 'slate',    label: 'Slate Enterprise', description: 'Fintech AI, blu professionale.', inspiration: 'Stripe · Bloomberg' },
+    { id: 'mono',     label: 'Mono Minimal',     description: 'Bianco e nero puro, timeless.', inspiration: 'Apple · Nothing Tech' },
+    { id: 'obsidian', label: 'Obsidian',         description: 'Stealth luxury, titanio nero.', inspiration: 'Aston Martin · executive OS' },
+    { id: 'frost',    label: 'Frost AI',         description: 'Vetro futuristico, accento ghiaccio.', inspiration: 'Vision Pro · AI OS' },
+    { id: 'tesla',    label: 'Tesla Command',    description: 'Mobility OS, accento azzurro elettrico.', inspiration: 'Tesla vehicle OS · fleet dashboard' },
 ]
 
 interface ThemeContextType {

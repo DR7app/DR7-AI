@@ -622,35 +622,57 @@ export default function AdminDashboard() {
               </button>
               {paletteMenuOpen && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setPaletteMenuOpen(false)} />
-                  <div className="absolute right-0 mt-2 w-60 max-h-[80vh] overflow-y-auto rounded-xl border border-theme-border bg-theme-bg-secondary shadow-lg z-50">
-                    <div className="sticky top-0 z-10 bg-theme-bg-secondary px-3 py-2 text-[10px] uppercase tracking-wider text-theme-text-muted border-b border-theme-border">
-                      Palette ({PALETTES.length})
+                  <div className="fixed inset-0 z-40 backdrop-blur-[2px]" onClick={() => setPaletteMenuOpen(false)} />
+                  <div
+                    className="absolute right-0 mt-3 w-[340px] max-h-[85vh] overflow-y-auto rounded-2xl border border-theme-border bg-theme-bg-secondary z-50"
+                    style={{ boxShadow: '0 24px 60px -12px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04)' }}
+                  >
+                    <div className="sticky top-0 z-10 bg-theme-bg-secondary/95 backdrop-blur px-4 pt-4 pb-3 border-b border-theme-border">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-theme-text-muted font-semibold">Theme</p>
+                      <p className="text-sm text-theme-text-primary font-semibold mt-0.5">Premium Interface Modes</p>
+                      <p className="text-[11px] text-theme-text-muted mt-0.5">Apple-style enterprise platform.</p>
                     </div>
-                    {PALETTES.map(p => (
-                      <button
-                        key={p.id}
-                        onClick={() => { setPalette(p.id); setPaletteMenuOpen(false) }}
-                        className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition-colors ${
-                          palette === p.id
-                            ? 'bg-theme-bg-hover text-theme-text-primary'
-                            : 'text-theme-text-secondary hover:bg-theme-bg-hover hover:text-theme-text-primary'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <PalettePreview palette={p.id} />
-                          <div className="min-w-0">
-                            <div className="font-medium truncate">{p.label}</div>
-                            <div className="text-[10px] text-theme-text-muted truncate">{p.description}</div>
-                          </div>
-                        </div>
-                        {palette === p.id && (
-                          <svg className="w-4 h-4 text-dr7-gold shrink-0" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </button>
-                    ))}
+                    <div className="p-3 space-y-2">
+                      {PALETTES.map(p => {
+                        const selected = palette === p.id
+                        return (
+                          <button
+                            key={p.id}
+                            onClick={() => { setPalette(p.id); setPaletteMenuOpen(false) }}
+                            className={
+                              'group relative w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-300 ' +
+                              (selected
+                                ? 'border-dr7-gold/60 bg-theme-bg-hover shadow-[0_0_0_1px_var(--color-dr7-gold)] '
+                                : 'border-theme-border hover:border-theme-border-light bg-theme-bg-primary hover:bg-theme-bg-hover')
+                            }
+                          >
+                            <PalettePreview palette={p.id} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className={'text-sm font-semibold truncate ' + (selected ? 'text-theme-text-primary' : 'text-theme-text-primary')}>
+                                  {p.label}
+                                </span>
+                                {selected && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-dr7-gold/15 border border-dr7-gold/40">
+                                    <svg className="w-2.5 h-2.5 text-dr7-gold" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    <span className="text-[9px] uppercase tracking-wider text-dr7-gold font-semibold">Attivo</span>
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-theme-text-secondary truncate mt-0.5">{p.description}</p>
+                              <p className="text-[10px] text-theme-text-muted truncate mt-0.5 italic">{p.inspiration}</p>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <div className="sticky bottom-0 px-4 py-2.5 border-t border-theme-border bg-theme-bg-secondary/95 backdrop-blur">
+                      <p className="text-[10px] text-theme-text-muted text-center">
+                        Dark/Light mode si controlla con il pulsante luna/sole accanto.
+                      </p>
+                    </div>
                   </div>
                 </>
               )}
@@ -990,23 +1012,69 @@ export default function AdminDashboard() {
  * Used inside the palette picker dropdown so the user previews
  * each option without applying it.
  */
+/**
+ * Mini dashboard preview per ogni tema. Renderizza un "mockup" in 70x44px:
+ *  - sidebar verticale a sinistra con 3 nav item
+ *  - top bar
+ *  - card principale + 2 stat boxes
+ *  - accent dot in alto a destra
+ * Tutti i colori sono i token reali del tema (dark variant) cosi\' il
+ * preview riflette esattamente l'aspetto effettivo del CRM.
+ */
 function PalettePreview({ palette }: { palette: Palette }) {
-    const swatch: Record<Palette, { a: string; b: string; c: string }> = {
-        dr7:      { a: '#19C2D6', b: '#4DE3F0', c: '#050708' },
-        slate:    { a: '#3B82F6', b: '#1E293B', c: '#0F172A' },
-        midnight: { a: '#6366F1', b: '#112236', c: '#0A1628' },
-        graphite: { a: '#06B6D4', b: '#262626', c: '#1A1A1A' },
-        forest:   { a: '#10B981', b: '#152B25', c: '#0D1F1A' },
-        crimson:  { a: '#DC2626', b: '#2A1212', c: '#1A0A0A' },
-        mono:     { a: '#FFFFFF', b: '#0A0A0A', c: '#000000' },
-        plum:     { a: '#A855F7', b: '#1F1230', c: '#14091F' },
+    const swatch: Record<Palette, { bg: string; surface: string; border: string; accent: string; text: string }> = {
+        dr7:      { bg: '#050708', surface: '#12171B', border: '#1E262C', accent: '#19C2D6', text: '#F5F7FA' },
+        graphite: { bg: '#090909', surface: '#141414', border: '#1F1F1F', accent: '#8BA3B8', text: '#F5F5F5' },
+        slate:    { bg: '#0B1220', surface: '#131C2E', border: '#1F2A3F', accent: '#5E7CE2', text: '#E5EAF2' },
+        mono:     { bg: '#000000', surface: '#111111', border: '#2A2A2A', accent: '#FFFFFF', text: '#FFFFFF' },
+        obsidian: { bg: '#050505', surface: '#101010', border: '#1A1A1B', accent: '#C0C7D1', text: '#E8EAEE' },
+        frost:    { bg: '#0A0F18', surface: '#0F1622', border: '#1A2438', accent: '#7DD3FC', text: '#E0E8F2' },
+        tesla:    { bg: '#08090B', surface: '#171A1F', border: '#1F232A', accent: '#00BFFF', text: '#F5F7FA' },
     }
     const s = swatch[palette]
     return (
-        <div className="flex shrink-0 items-center -space-x-1.5">
-            <span className="w-4 h-4 rounded-full border-2 border-theme-bg-secondary" style={{ backgroundColor: s.a }} />
-            <span className="w-4 h-4 rounded-full border-2 border-theme-bg-secondary" style={{ backgroundColor: s.b }} />
-            <span className="w-4 h-4 rounded-full border-2 border-theme-bg-secondary" style={{ backgroundColor: s.c }} />
+        <div
+            className="relative shrink-0 w-[72px] h-11 rounded-md overflow-hidden border"
+            style={{ backgroundColor: s.bg, borderColor: s.border }}
+        >
+            {/* Sidebar */}
+            <div
+                className="absolute left-0 top-0 bottom-0 w-[14px] flex flex-col items-center justify-around"
+                style={{ backgroundColor: s.bg, borderRight: `1px solid ${s.border}` }}
+            >
+                <span className="w-1 h-1 rounded-full" style={{ backgroundColor: s.accent }}/>
+                <span className="w-1 h-1 rounded-full" style={{ backgroundColor: s.text, opacity: 0.4 }}/>
+                <span className="w-1 h-1 rounded-full" style={{ backgroundColor: s.text, opacity: 0.4 }}/>
+            </div>
+            {/* Top bar */}
+            <div
+                className="absolute left-[14px] right-0 top-0 h-[6px]"
+                style={{ backgroundColor: s.surface, borderBottom: `1px solid ${s.border}` }}
+            />
+            {/* Main card */}
+            <div
+                className="absolute left-[18px] top-[10px] right-[20px] h-[16px] rounded-sm"
+                style={{ backgroundColor: s.surface, border: `1px solid ${s.border}` }}
+            >
+                <div className="absolute left-1 top-1 w-3 h-0.5 rounded-full" style={{ backgroundColor: s.accent }}/>
+                <div className="absolute left-1 top-2.5 w-6 h-0.5 rounded-full" style={{ backgroundColor: s.text, opacity: 0.3 }}/>
+            </div>
+            {/* Two mini stat boxes */}
+            <div
+                className="absolute left-[18px] top-[30px] w-[20px] h-[10px] rounded-sm"
+                style={{ backgroundColor: s.surface, border: `1px solid ${s.border}` }}
+            />
+            <div
+                className="absolute left-[42px] top-[30px] w-[20px] h-[10px] rounded-sm"
+                style={{ backgroundColor: s.surface, border: `1px solid ${s.border}` }}
+            >
+                <div className="absolute left-0.5 bottom-0.5 right-0.5 h-1 rounded-sm" style={{ backgroundColor: s.accent, opacity: 0.7 }}/>
+            </div>
+            {/* Accent dot top-right */}
+            <span
+                className="absolute top-1 right-1 w-1 h-1 rounded-full"
+                style={{ backgroundColor: s.accent, boxShadow: `0 0 4px ${s.accent}` }}
+            />
         </div>
     )
 }
