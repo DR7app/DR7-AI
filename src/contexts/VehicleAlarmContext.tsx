@@ -64,7 +64,9 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     // Quando l'admin ha permissions includes 'hide:allarmi' tutto il motore
     // si spegne: niente polling, niente audio, niente toast. Letto direttamente
     // dalla riga admins per non dipendere dall'ordine di mount di useAdminRole.
-    const [alarmsDisabledForUser, setAlarmsDisabledForUser] = useState(false)
+    // null = ancora da verificare (polling fermo), false = abilitato (polling
+    // attivo), true = disabilitato per questo utente.
+    const [alarmsDisabledForUser, setAlarmsDisabledForUser] = useState<boolean | null>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
     const audioContextRef = useRef<AudioContext | null>(null)
 
@@ -155,9 +157,11 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
 
     // Check if the current user has hide:allarmi in their admins.permissions.
     // If yes, the alarm engine is completely OFF for them: no polling, no
-    // audio, no toast. Re-checks on session change.
+    // audio, no toast. Stato iniziale null finche' la check non finisce —
+    // cosi' il polling NON parte mai prima della verifica (race condition
+    // del 20/05: alarm suonava nel primo secondo per Nicola).
     useEffect(() => {
-        if (!session?.user?.id) { setAlarmsDisabledForUser(false); return }
+        if (!session?.user?.id) { setAlarmsDisabledForUser(null); return }
         let cancelled = false
         ;(async () => {
             const { data } = await supabase
@@ -994,9 +998,11 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
 
     // Poll every 60 seconds — only when authenticated and tab is visible.
     // Skippato totalmente se l'admin ha hide:allarmi (collaboratori).
+    // alarmsDisabledForUser === null significa "ancora da verificare":
+    // NON partire (blocca race condition con la prima query).
     useEffect(() => {
         if (!session) return
-        if (alarmsDisabledForUser) return
+        if (alarmsDisabledForUser !== false) return
 
         let interval: ReturnType<typeof setInterval> | null = null
         let isRunning = false
