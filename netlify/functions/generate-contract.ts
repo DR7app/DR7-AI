@@ -1370,31 +1370,6 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                 }
             }
 
-            // OVERLAY P.IVA azienda: il template master_contract.pdf NON ha
-            // un AcroForm field per il box "Codice fiscale / partita iva"
-            // nella sezione DATI AZIENDALI. Workaround: disegnamo il valore
-            // come testo sopra la pagina 0 a coordinate fisse.
-            // Coordinate determinate ispezionando il PDF (vedi list-contract-fields.ts):
-            //   - Row 3 della sezione Azienda e' a y=284
-            //   - Box CF/PIVA inizia dopo il label, x≈170
-            //   - PDF y-origin = bottom-left
-            if (isAzienda && customer?.partita_iva) {
-                try {
-                    const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
-                    const firstPage = pdfDoc.getPage(0)
-                    firstPage.drawText(String(customer.partita_iva), {
-                        x: 170,
-                        y: 286,
-                        size: 9,
-                        font: helvetica,
-                        color: rgb(0, 0, 0),
-                    })
-                    console.log('[generate-contract] Drew P.IVA overlay for azienda:', customer.partita_iva)
-                } catch (drawErr) {
-                    console.error('[generate-contract] Failed to draw P.IVA overlay:', drawErr)
-                }
-            }
-
             try {
                 form.flatten()
                 console.log('[generate-contract] Form flattened successfully — PDF is now read-only')
