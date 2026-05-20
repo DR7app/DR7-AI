@@ -1225,6 +1225,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       // identica a prima per loro.
       if (isPreventivoOnly && adminEmail) {
         query = query.eq('created_by', adminEmail)
+        // Niente vecchi preventivi gia' chiusi: nascondiamo scaduto e
+        // rifiutato per tenere la lista del collaboratore concentrata
+        // sui preventivi attivi (bozza / inviato / accettato).
+        query = query.not('status', 'in', '(scaduto,rifiutato)')
       }
       const { data, error } = await query
 

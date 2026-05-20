@@ -326,6 +326,14 @@ export default function AdminDashboard() {
   const sectionForActiveTab = SECTIONS.find(s => s.tabs.some(t => t.tab === activeTab)) || null
   const isSectionActive = (sectionName: string) => sectionForActiveTab?.name === sectionName
 
+  // Per i collaboratori (1 sola sezione visibile) la sidebar non serve:
+  // l'unica sezione e' gia' attiva di default e il sub-tab bar in alto
+  // mostra Preventivi + Calendario. Nascondiamo hamburger + drawer.
+  const visibleSectionCount = SECTIONS.filter(s =>
+    s.tabs.some(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin'))
+  ).length
+  const hideSidebar = visibleSectionCount <= 1
+
   // Mobile tab labels
   const tabLabels: Record<string, string> = {
     'reservations': 'Prenotazioni Noleggio',
@@ -553,6 +561,7 @@ export default function AdminDashboard() {
             erano hardcoded per dark; ora usano i token tema-aware. */}
         <header className="bg-theme-bg-primary border-b border-theme-border px-3 sm:px-8 py-3 sm:py-4 flex flex-wrap justify-between items-center gap-y-2 gap-x-3 sticky top-0 z-30" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
           <div className="flex items-center gap-3">
+            {!hideSidebar && (
             <button
               onClick={() => setSidebarOpen(true)}
               className="text-theme-text-primary p-2 min-h-[44px] min-w-[44px] flex-shrink-0 flex items-center justify-center hover:bg-theme-bg-hover rounded-lg transition-colors"
@@ -562,6 +571,7 @@ export default function AdminDashboard() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
+            )}
             {tabHistory.length > 0 && (
               <button
                 onClick={goBack}
@@ -788,6 +798,15 @@ export default function AdminDashboard() {
                         <div className="border-t border-theme-border my-1" />
                       </>
                     )}
+                    <button
+                      onClick={() => { setUserMenuOpen(false); setShowPasswordModal(true); setPasswordMsg(null); setNewPassword(''); setConfirmPassword(''); setPasswordVisible(false); }}
+                      className="w-full text-left px-3 py-3 hover:bg-theme-bg-tertiary text-theme-text-primary flex items-center gap-2 min-h-[44px]"
+                    >
+                      <svg className="w-4 h-4 text-theme-text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      Cambia Password
+                    </button>
                     <button
                       onClick={() => { setUserMenuOpen(false); handleSignOut() }}
                       className="w-full text-left px-3 py-3 hover:bg-theme-bg-tertiary text-red-400 flex items-center gap-2 min-h-[44px]"
