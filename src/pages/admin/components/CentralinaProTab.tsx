@@ -1387,6 +1387,18 @@ export default function CentralinaProTab() {
 
   const [section, setSection] = useState<SectionId>(isCauzioniViewOnly ? 'p4' : 'categorie-fascia')
 
+  // Permissions load async via useAdminRole. Al primo render isCauzioniViewOnly
+  // e' false (permissions vuote) e section parte a 'categorie-fascia'. Quando
+  // le permissions caricano e diventa true (caso collaboratore), forziamo
+  // section='p4' qui — altrimenti l'utente resta bloccato su Categorie & Fascia
+  // anche se la nav a sinistra mostra solo Cauzioni.
+  useEffect(() => {
+    if (isCauzioniViewOnly && section !== 'p4') {
+      setSection('p4')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCauzioniViewOnly])
+
   // Hydrate from localStorage (sync, before first render of children)
   const persisted = useMemo(() => loadPersisted(), [])
 

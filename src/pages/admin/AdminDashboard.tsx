@@ -337,10 +337,14 @@ export default function AdminDashboard() {
   const hideSidebar = visibleSectionCount <= 1 || isCollaboratore
   // Lista piatta di tutte le tab accessibili (per collaboratori). Tiene il
   // primo entry per ogni (tab + permKey) cosi' Preventivi sotto Noleggio
-  // e Centralina Pro readonly compaiono nello stesso bar.
-  const collaboratoreFlatTabs = SECTIONS.flatMap(s => s.tabs).filter(t =>
-    hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin')
-  )
+  // e Centralina Pro readonly compaiono nello stesso bar. Label di
+  // 'centralina-pro' viene sovrascritta a "Cauzioni" se l'utente ha
+  // solo `view-cauzioni-readonly` (e quindi vedra' SOLO Cauzioni dentro
+  // Centralina Pro), per evitare confusione nel bar in alto.
+  const hasCauzioniReadOnly = permissions.includes('view-cauzioni-readonly')
+  const collaboratoreFlatTabs = SECTIONS.flatMap(s => s.tabs)
+    .filter(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin'))
+    .map(t => (t.tab === 'centralina-pro' && hasCauzioniReadOnly) ? { ...t, label: 'Cauzioni' } : t)
 
   // Mobile tab labels
   const tabLabels: Record<string, string> = {
