@@ -15,6 +15,8 @@ interface BookingDetail {
   revenue_per_day: number
   payment_status: string
   payment_method: string
+  penalty_amount?: number
+  danni_amount?: number
 }
 
 interface VehicleReport {
@@ -504,12 +506,16 @@ export default function ReportsTab() {
                     <th className="text-center py-1 px-2">GG Mese</th>
                     <th className="text-center py-1 px-2">Pagamento</th>
                     <th className="text-right py-1 px-2">Totale</th>
+                    <th className="text-right py-1 px-2">Penali</th>
+                    <th className="text-right py-1 px-2">Danni</th>
                     <th className="text-right py-1 px-2">Ricavo Mese</th>
                   </tr>
                 </thead>
                 <tbody>
                   {v.bookings.map((b: BookingDetail) => {
                     const badge = getPaymentBadge(b.payment_status, b.payment_method)
+                    const pen = b.penalty_amount || 0
+                    const dan = b.danni_amount || 0
                     return (
                       <tr key={b.booking_id} className="border-t border-theme-border/30">
                         <td className="py-1 px-2 text-theme-text-primary font-medium">{b.customer_name}</td>
@@ -523,6 +529,12 @@ export default function ReportsTab() {
                           </span>
                         </td>
                         <td className="text-right py-1 px-2 text-theme-text-primary">{formatCurrency(b.total_price)}</td>
+                        <td className={`text-right py-1 px-2 font-semibold ${pen > 0 ? 'text-yellow-400' : 'text-theme-text-muted'}`}>
+                          {pen > 0 ? formatCurrency(pen) : '—'}
+                        </td>
+                        <td className={`text-right py-1 px-2 font-semibold ${dan > 0 ? 'text-red-400' : 'text-theme-text-muted'}`}>
+                          {dan > 0 ? formatCurrency(dan) : '—'}
+                        </td>
                         <td className="text-right py-1 px-2 text-dr7-gold">
                           {formatCurrency(b.billable_days > 0 ? (b.total_price / b.billable_days) * b.days_in_month : 0)}
                         </td>

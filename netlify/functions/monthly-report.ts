@@ -404,21 +404,6 @@ async function generateVehicleReport(
         || booking.vehicle_name
         || '-'
 
-      // Per-booking detail (always included in output)
-      bookingDetailsList.push({
-        booking_id: booking.id,
-        customer_name: customerName,
-        targa: vPlate || (booking.vehicle_plate || '').replace(/\s/g, '').toUpperCase() || '-',
-        start_at: pickupDateRaw,
-        end_at: dropoffDateRaw,
-        billable_days: totalBookingDays,
-        days_in_month: overlapDays,
-        total_price: bookingRevenue,
-        revenue_per_day: totalBookingDays > 0 ? Math.round((bookingRevenue / totalBookingDays) * 100) / 100 : 0,
-        payment_status: booking.payment_status || '-',
-        payment_method: booking.payment_method || '-',
-      })
-
       // Sum danni and penalties from booking_details (amounts in EUR)
       const details = booking.booking_details || {}
       let bookingPenaltyFromDetails = 0
@@ -443,14 +428,35 @@ async function generateVehicleReport(
         bookingPenaltyFromFatture += parseFloat(f.importo_totale || 0)
       })
       // Use the higher of the two sources (avoid double-counting)
-      penaltyRevenue += Math.max(bookingPenaltyFromDetails, bookingPenaltyFromFatture)
+      const bookingPenaltyAmount = Math.max(bookingPenaltyFromDetails, bookingPenaltyFromFatture)
+      penaltyRevenue += bookingPenaltyAmount
 
       const danniFatture = fattureDanniMap.get(booking.id) || []
       let bookingDanniFromFatture = 0
       danniFatture.forEach((f: any) => {
         bookingDanniFromFatture += parseFloat(f.importo_totale || 0)
       })
-      danniRevenue += Math.max(bookingDanniFromDetails, bookingDanniFromFatture)
+      const bookingDanniAmount = Math.max(bookingDanniFromDetails, bookingDanniFromFatture)
+      danniRevenue += bookingDanniAmount
+
+      // Per-booking detail (always included in output)
+      // Note: declared AFTER penali/danni sums so each row carries its own
+      // breakdown — surfaced in the UI Report Noleggio per-booking expansion.
+      bookingDetailsList.push({
+        booking_id: booking.id,
+        customer_name: customerName,
+        targa: vPlate || (booking.vehicle_plate || '').replace(/\s/g, '').toUpperCase() || '-',
+        start_at: pickupDateRaw,
+        end_at: dropoffDateRaw,
+        billable_days: totalBookingDays,
+        days_in_month: overlapDays,
+        total_price: bookingRevenue,
+        revenue_per_day: totalBookingDays > 0 ? Math.round((bookingRevenue / totalBookingDays) * 100) / 100 : 0,
+        payment_status: booking.payment_status || '-',
+        payment_method: booking.payment_method || '-',
+        penalty_amount: Math.round(bookingPenaltyAmount * 100) / 100,
+        danni_amount: Math.round(bookingDanniAmount * 100) / 100,
+      })
 
       if (debug) {
         matchedBookingDetails.push({
