@@ -1621,6 +1621,16 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       const pickup = `${form.pickup_date}T${form.pickup_time}:00+02:00`
       const dropoff = `${form.return_date}T${form.return_time}:00+02:00`
 
+      // 2026-05-20: km_limit deve riflettere il VERO totale visibile
+      // nel recap (base + pacchetti). Prima il campo non veniva mai
+      // scritto da PreventiviTab → restava il valore inseirto da
+      // create-website-preventivo o da save precedente, spesso sbagliato
+      // (es. customer cambia date o categoria veicolo dopo aver salvato).
+      // Calcolo qui = stesso visibile in UI (riga "Totale KM" del recap).
+      const computedKmLimit = pricing.kmIncluded === 'unlimited'
+        ? 9999
+        : (Number(pricing.kmIncluded) || 0) + (pricing.kmPackagesKm ?? 0)
+
       const record = {
         vehicle_id: form.vehicle_id,
         vehicle_name: selectedVehicle?.display_name || '',
@@ -1632,6 +1642,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         pickup_date: pickup,
         dropoff_date: dropoff,
         rental_days: rentalDays,
+        km_limit: computedKmLimit,
+        unlimited_km: pricing.kmIncluded === 'unlimited',
         base_daily_rate: pricing.baseDailyRate,
         maggiorazione_pct: pricing.maggiorazione,
         daily_rate_after_markup: pricing.dailyAfterMarkup,
