@@ -48,12 +48,17 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
+// Set di tutti gli id palette validi. Tenuto in sync con il tipo
+// Palette via PALETTES.map(). 2026-05-20 BUG FIX: prima accettava
+// solo le 4 palette originali (dr7/slate/midnight/graphite), quindi
+// scegliere forest/crimson/mono/plum si salvava in localStorage ma
+// al refresh il validator scartava il valore e tornava a 'dr7'.
+const VALID_PALETTES = new Set<string>(PALETTES.map(p => p.id))
+
 function loadPalette(): Palette {
     if (typeof window === 'undefined') return 'dr7'
     const saved = localStorage.getItem('dr7-palette')
-    if (saved === 'dr7' || saved === 'slate' || saved === 'midnight' || saved === 'graphite') {
-        return saved
-    }
+    if (saved && VALID_PALETTES.has(saved)) return saved as Palette
     return 'dr7'
 }
 
