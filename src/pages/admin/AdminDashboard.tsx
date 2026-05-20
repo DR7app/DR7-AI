@@ -152,6 +152,14 @@ export default function AdminDashboard() {
   // while loading so we don't flash "Accesso non autorizzato" on mount.
   const isTabRestricted = (tab: TabType) => !hasPermission(tab)
 
+  // "Collaboratore" = utente esterno che ha SOLO accesso a creare
+  // preventivi, NON ha permesso sulle prenotazioni complete. Per questi
+  // utenti l'UI di gestione operatore (allarmi, miei orari) e i sotto-tab
+  // interni come "Richieste No Cauzione" non hanno senso. Direzione e
+  // operatori standard passano sempre il check `hasPermission('reservations')`
+  // (per bypass o per permesso esplicito) e mantengono l'UI intera.
+  const isCollaboratore = hasPermission('reservations-preventivi') && !hasPermission('reservations')
+
   async function handleSignOut() {
     clearAdminCache()
     try { sessionStorage.removeItem(ACTIVE_TAB_KEY) } catch { /* ignore */ }
@@ -464,7 +472,9 @@ export default function AdminDashboard() {
         <div className="px-3 py-3 border-t border-white/10 space-y-1">
           {/* Alarm row: bell button (Attiva Allarmi) + gear opens the inventory.
               The gear is always visible so admins can review what alarms exist
-              even after audio is enabled. */}
+              even after audio is enabled. Gated da `feature:allarmi` cosi'
+              i collaboratori (preventivi-only) non vedono il blocco. */}
+          {!isCollaboratore && (
           <div className="flex items-stretch gap-1">
             {!alarmState.audioEnabled ? (
               <button
@@ -496,7 +506,8 @@ export default function AdminDashboard() {
               </svg>
             </button>
           </div>
-          {hasPermission('rilevazione-orari') && (
+          )}
+          {!isCollaboratore && (
             <div className="flex items-center gap-2 mb-1">
               <button
                 onClick={() => { setSidebarOpen(false); setShowMyOrari(true); }}
@@ -594,7 +605,7 @@ export default function AdminDashboard() {
             </h2>
           </div>
           <div className="flex items-center gap-3">
-            {hasPermission('rilevazione-orari') && (
+            {!isCollaboratore && (
               <button
                 onClick={() => setShowMyOrari(true)}
                 title="I miei orari — inserisci/modifica i tuoi orari di oggi"
@@ -758,7 +769,7 @@ export default function AdminDashboard() {
                     {/* I miei orari — quick access to the operator's own
                         Rilevazione Orari tab. Nascosto per i collaboratori
                         (chi non ha il permesso "rilevazione-orari"). */}
-                    {hasPermission('rilevazione-orari') && (
+                    {!isCollaboratore && (
                       <>
                         <button
                           onClick={() => { setUserMenuOpen(false); setActiveTab('rilevazione-orari') }}

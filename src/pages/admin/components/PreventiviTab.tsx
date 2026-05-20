@@ -2901,8 +2901,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             )}
           </div>
         </div>
-        {/* Subtab Switch */}
-        {(() => {
+        {/* Subtab Switch — nascosto per i collaboratori (hanno solo
+            `reservations-preventivi`): Richieste No Cauzione e' una
+            funzione admin sulle prenotazioni, non sui preventivi. */}
+        {!isPreventivoOnly && (() => {
           const pendingCount = noCauzioneRequests.filter((b: any) => b.booking_details?.no_cauzione_status === 'pending').length
           return (
             <div className="flex gap-1 bg-theme-bg-tertiary rounded-lg p-1">
