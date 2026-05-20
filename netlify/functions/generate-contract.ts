@@ -259,6 +259,7 @@ export const handler: Handler = async (event) => {
         const clientAddress = civico ? `${rawAddress} ${civico}`.trim() : rawAddress
         const clientVat = customer?.tipo_cliente === 'azienda' ? customer.partita_iva : customer?.codice_fiscale
         const driverLicense = customer?.numero_patente || customer?.patente || customer?.driver_license_number || ''
+        const isAzienda = customer?.tipo_cliente === 'azienda' || customer?.tipo_cliente === 'pubblica_amministrazione'
 
         console.log('[generate-contract] Resolved contract data:', { clientName, clientAddress, clientVat, driverLicense })
 
@@ -878,52 +879,59 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'OrarioStipula': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }),
 
             // Customer Info — use resolved values (booking top-level can be null for credit wallet bookings)
-            'CustomerName': clientName || '',
-            'NomeCognome': clientName || '',
-            'CustomerVAT': clientVat || '',
-            'CodiceFiscale': clientVat || '',
-            'PartitaIVA': clientVat || '',
-            'CustomerPhone': customer?.telefono || resolvedPhone || '',
-            'Telefono': customer?.telefono || resolvedPhone || '',
-            'CustomerEmail': customer?.email || resolvedEmail || '',
-            'Email': customer?.email || resolvedEmail || '',
-            'CustomerAddress': clientAddress || '',
-            'Indirizzo': clientAddress || '',
-            'CustomerCity': customer?.citta_residenza || '',
-            'Citta': customer?.citta_residenza || '',
-            'CustomerProvince': customer?.provincia_residenza || '',
-            'Provincia': customer?.provincia_residenza || '',
-            'CustomerZipCode': customer?.codice_postale || '',
-            'CAP': customer?.codice_postale || '',
-            'DriverZipCode': customer?.codice_postale || '',
+            // Per AZIENDA / PUBBLICA AMMINISTRAZIONE: i dati cliente devono
+            // apparire SOLO nella sezione Azienda (Company*/RagioneSociale/
+            // PartitaIVAAzienda/ecc.), NON nel "1° Guidatore". Quindi
+            // svuotiamo i campi Customer*/NomeCognome/CodiceFiscale/Patente
+            // etc. quando tipo_cliente='azienda'. Il guidatore reale
+            // (persona fisica) andra' compilato manualmente o via
+            // booking_details.driver in un'iterazione futura.
+            'CustomerName': isAzienda ? '' : (clientName || ''),
+            'NomeCognome': isAzienda ? '' : (clientName || ''),
+            'CustomerVAT': clientVat || '',  // P.IVA azienda — campo non-driver, OK
+            'CodiceFiscale': isAzienda ? '' : (clientVat || ''),
+            'PartitaIVA': clientVat || '',   // P.IVA: anche per azienda OK
+            'CustomerPhone': isAzienda ? '' : (customer?.telefono || resolvedPhone || ''),
+            'Telefono': isAzienda ? '' : (customer?.telefono || resolvedPhone || ''),
+            'CustomerEmail': isAzienda ? '' : (customer?.email || resolvedEmail || ''),
+            'Email': isAzienda ? '' : (customer?.email || resolvedEmail || ''),
+            'CustomerAddress': isAzienda ? '' : (clientAddress || ''),
+            'Indirizzo': isAzienda ? '' : (clientAddress || ''),
+            'CustomerCity': isAzienda ? '' : (customer?.citta_residenza || ''),
+            'Citta': isAzienda ? '' : (customer?.citta_residenza || ''),
+            'CustomerProvince': isAzienda ? '' : (customer?.provincia_residenza || ''),
+            'Provincia': isAzienda ? '' : (customer?.provincia_residenza || ''),
+            'CustomerZipCode': isAzienda ? '' : (customer?.codice_postale || ''),
+            'CAP': isAzienda ? '' : (customer?.codice_postale || ''),
+            'DriverZipCode': isAzienda ? '' : (customer?.codice_postale || ''),
 
-            // Personal Details (New)
-            'CustomerBirthDate': customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : '',
-            'DataNascita': customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : '',
-            'CustomerBirthPlace': customer?.luogo_nascita || '',
-            'LuogoNascita': customer?.luogo_nascita || '',
-            'CittaNascita': customer?.luogo_nascita || '', // Variance
-            'CustomerBirthProvince': customer?.provincia_nascita || '',
-            'ProvinciaNascita': customer?.provincia_nascita || '',
-            'CustomerSex': customer?.sesso || customer?.metadata?.sesso || '',
-            'Sesso': customer?.sesso || customer?.metadata?.sesso || '',
-            'DriverSex': customer?.sesso || customer?.metadata?.sesso || '',
+            // Personal Details — azienda non ha data/luogo nascita/sesso
+            'CustomerBirthDate': isAzienda ? '' : (customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : ''),
+            'DataNascita': isAzienda ? '' : (customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : ''),
+            'CustomerBirthPlace': isAzienda ? '' : (customer?.luogo_nascita || ''),
+            'LuogoNascita': isAzienda ? '' : (customer?.luogo_nascita || ''),
+            'CittaNascita': isAzienda ? '' : (customer?.luogo_nascita || ''),
+            'CustomerBirthProvince': isAzienda ? '' : (customer?.provincia_nascita || ''),
+            'ProvinciaNascita': isAzienda ? '' : (customer?.provincia_nascita || ''),
+            'CustomerSex': isAzienda ? '' : (customer?.sesso || customer?.metadata?.sesso || ''),
+            'Sesso': isAzienda ? '' : (customer?.sesso || customer?.metadata?.sesso || ''),
+            'DriverSex': isAzienda ? '' : (customer?.sesso || customer?.metadata?.sesso || ''),
 
-            // License Details
-            'DriverLicense': customer?.numero_patente || driverLicense || '',
-            'NumeroPatente': customer?.numero_patente || driverLicense || '',
-            'DriverLicenseType': customer?.tipo_patente || customer?.metadata?.patente?.tipo || 'B',
-            'TipoPatente': customer?.tipo_patente || customer?.metadata?.patente?.tipo || 'B',
-            'DriverLicenseIssuedBy': customer?.emessa_da || customer?.metadata?.patente?.ente || '',
-            'PatenteEmessaDa': customer?.emessa_da || customer?.metadata?.patente?.ente || '',
-            'EmessaDa': customer?.emessa_da || customer?.metadata?.patente?.ente || '',
-            'DriverLicenseIssueDate': customer?.data_rilascio_patente ? new Date(customer.data_rilascio_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.rilascio || ''),
-            'DataRilascioPatente': customer?.data_rilascio_patente ? new Date(customer.data_rilascio_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.rilascio || ''),
-            'DataRilascio': customer?.data_rilascio_patente ? new Date(customer.data_rilascio_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.rilascio || ''),
-            'DriverLicenseExpiryDate': customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.scadenza || ''),
-            'DataScadenzaPatente': customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.scadenza || ''),
-            'ScadenzaPatente': customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.scadenza || ''),
-            'Scadenza': customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.scadenza || ''),
+            // License Details — azienda non ha patente
+            'DriverLicense': isAzienda ? '' : (customer?.numero_patente || driverLicense || ''),
+            'NumeroPatente': isAzienda ? '' : (customer?.numero_patente || driverLicense || ''),
+            'DriverLicenseType': isAzienda ? '' : (customer?.tipo_patente || customer?.metadata?.patente?.tipo || 'B'),
+            'TipoPatente': isAzienda ? '' : (customer?.tipo_patente || customer?.metadata?.patente?.tipo || 'B'),
+            'DriverLicenseIssuedBy': isAzienda ? '' : (customer?.emessa_da || customer?.metadata?.patente?.ente || ''),
+            'PatenteEmessaDa': isAzienda ? '' : (customer?.emessa_da || customer?.metadata?.patente?.ente || ''),
+            'EmessaDa': isAzienda ? '' : (customer?.emessa_da || customer?.metadata?.patente?.ente || ''),
+            'DriverLicenseIssueDate': isAzienda ? '' : (customer?.data_rilascio_patente ? new Date(customer.data_rilascio_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.rilascio || '')),
+            'DataRilascioPatente': isAzienda ? '' : (customer?.data_rilascio_patente ? new Date(customer.data_rilascio_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.rilascio || '')),
+            'DataRilascio': isAzienda ? '' : (customer?.data_rilascio_patente ? new Date(customer.data_rilascio_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.rilascio || '')),
+            'DriverLicenseExpiryDate': isAzienda ? '' : (customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.scadenza || '')),
+            'DataScadenzaPatente': isAzienda ? '' : (customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.scadenza || '')),
+            'ScadenzaPatente': isAzienda ? '' : (customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.scadenza || '')),
+            'Scadenza': isAzienda ? '' : (customer?.scadenza_patente ? new Date(customer.scadenza_patente).toLocaleDateString('it-IT') : (customer?.metadata?.patente?.scadenza || '')),
 
             // Vehicle Fields
             'VehicleBrand': parsedBrand,
@@ -1070,21 +1078,40 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'TelefonoSecondoGuidatore': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.phone || '') : '',
             'EmailSecondoGuidatore': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.email || '') : '',
 
-            // Company Data (for business clients)
-            'CompanyName': customer?.tipo_cliente === 'azienda' ? customer.denominazione : '',
-            'Denominazione': customer?.tipo_cliente === 'azienda' ? customer.denominazione : '',
-            'RagioneSociale': customer?.tipo_cliente === 'azienda' ? customer.denominazione : '',
-            'CompanyEmail': customer?.tipo_cliente === 'azienda' ? customer.email : '',
-            'EmailAzienda': customer?.tipo_cliente === 'azienda' ? customer.email : '',
-            'CompanyAddress': customer?.tipo_cliente === 'azienda' ? customer.indirizzo : '',
-            'IndirizzoAzienda': customer?.tipo_cliente === 'azienda' ? customer.indirizzo : '',
-            'SedeLegale': customer?.tipo_cliente === 'azienda' ? customer.indirizzo : '',
-            'CompanyPhone': customer?.tipo_cliente === 'azienda' ? customer.telefono : '',
-            'TelefonoAzienda': customer?.tipo_cliente === 'azienda' ? customer.telefono : '',
-            'CompanyVAT': customer?.tipo_cliente === 'azienda' ? customer.partita_iva : '',
-            'PartitaIVAAzienda': customer?.tipo_cliente === 'azienda' ? customer.partita_iva : '',
-            'CompanyFiscalCode': customer?.tipo_cliente === 'azienda' ? customer.codice_fiscale : '',
-            'CodiceFiscaleAzienda': customer?.tipo_cliente === 'azienda' ? customer.codice_fiscale : '',
+            // Company Data (for business clients) — usiamo isAzienda (azienda + PA)
+            // Mappiamo TUTTI i possibili nomi AcroForm del PDF perche' il template
+            // template usa label tipo "Regione/Ragione sociale", "Sede legale",
+            // "Codice fiscale / partita iva" — i field name possono essere
+            // CamelCase, snake_case o con spazi.
+            'CompanyName': isAzienda ? (customer?.denominazione || '') : '',
+            'Denominazione': isAzienda ? (customer?.denominazione || '') : '',
+            'RagioneSociale': isAzienda ? (customer?.denominazione || '') : '',
+            'Ragione_Sociale': isAzienda ? (customer?.denominazione || '') : '',
+            'RegioneSociale': isAzienda ? (customer?.denominazione || '') : '', // template typo variant
+            'RagioneSocialeAzienda': isAzienda ? (customer?.denominazione || '') : '',
+            'NomeAzienda': isAzienda ? (customer?.denominazione || '') : '',
+            'CompanyEmail': isAzienda ? (customer?.email || '') : '',
+            'EmailAzienda': isAzienda ? (customer?.email || '') : '',
+            'EmailAziendale': isAzienda ? (customer?.email || '') : '',
+            'CompanyAddress': isAzienda ? (customer?.indirizzo || '') : '',
+            'IndirizzoAzienda': isAzienda ? (customer?.indirizzo || '') : '',
+            'SedeLegale': isAzienda ? (customer?.indirizzo || '') : '',
+            'Sede_Legale': isAzienda ? (customer?.indirizzo || '') : '',
+            'SedeLegaleAzienda': isAzienda ? (customer?.indirizzo || '') : '',
+            'IndirizzoSedeLegale': isAzienda ? (customer?.indirizzo || '') : '',
+            'CompanyPhone': isAzienda ? (customer?.telefono || '') : '',
+            'TelefonoAzienda': isAzienda ? (customer?.telefono || '') : '',
+            'TelefonoAziendale': isAzienda ? (customer?.telefono || '') : '',
+            'CompanyVAT': isAzienda ? (customer?.partita_iva || '') : '',
+            'PartitaIVAAzienda': isAzienda ? (customer?.partita_iva || '') : '',
+            'PivaAzienda': isAzienda ? (customer?.partita_iva || '') : '',
+            'CompanyFiscalCode': isAzienda ? (customer?.codice_fiscale || customer?.partita_iva || '') : '',
+            'CodiceFiscaleAzienda': isAzienda ? (customer?.codice_fiscale || customer?.partita_iva || '') : '',
+            'CFAzienda': isAzienda ? (customer?.codice_fiscale || customer?.partita_iva || '') : '',
+            // Campo combinato "Codice fiscale / partita iva" (label nel PDF)
+            'CodiceFiscalePartitaIVA': isAzienda ? (customer?.codice_fiscale || customer?.partita_iva || '') : '',
+            'CFPiva': isAzienda ? (customer?.codice_fiscale || customer?.partita_iva || '') : '',
+            'CFPivaAzienda': isAzienda ? (customer?.codice_fiscale || customer?.partita_iva || '') : '',
             'CompanyCity': customer?.tipo_cliente === 'azienda' ? (customer.citta_residenza || customer.citta || '') : '',
             'CittaAzienda': customer?.tipo_cliente === 'azienda' ? (customer.citta_residenza || customer.citta || '') : '',
             'CompanyProvince': customer?.tipo_cliente === 'azienda' ? (customer.provincia_residenza || customer.provincia || '') : '',
