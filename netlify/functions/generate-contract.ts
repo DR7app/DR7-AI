@@ -23,7 +23,13 @@ function buildAziendaFields(customer: any, booking: any, isAzienda: boolean): Re
     if (!isAzienda) return {}
     const denom = customer?.denominazione || customer?.ragione_sociale || booking?.customer_name || ''
     const ragSoc = customer?.ragione_sociale || customer?.denominazione || booking?.customer_name || ''
-    const indir = customer?.indirizzo || ''
+    // Le aziende usano colonne dedicate: sede_legale + indirizzo_azienda.
+    // Fallback su indirizzo (per record vecchi/migrati) e su sede_operativa.
+    const indir = customer?.sede_legale
+        || customer?.indirizzo_azienda
+        || customer?.indirizzo
+        || customer?.sede_operativa
+        || ''
     const tel = customer?.telefono || ''
     const email = customer?.email || ''
     const piva = customer?.partita_iva || ''
@@ -88,8 +94,12 @@ function buildAziendaFields(customer: any, booking: any, isAzienda: boolean): Re
     const cfPivaNames = [
         'CodiceFiscalePartitaIVA', 'CFPiva', 'CFPivaAzienda', 'cf_piva',
         'codice_fiscale_partita_iva', 'CodiceFiscale_PartitaIVA',
-        'Codice fiscale / partita iva',
+        'Codice fiscale / partita iva', 'Codice fiscale/partita iva',
         'CodiceFiscalePartitaIvaAzienda',
+        'CodFiscPIva', 'cf_p_iva', 'Cod_Fiscale_Part_IVA',
+        'CodiceFiscalePartitaIva', 'codicefiscalepartitaiva',
+        // Letterali con underscore e variazioni
+        'codice_fiscale___partita_iva', 'CodiceFiscale___PartitaIVA',
     ]
     for (const k of cfPivaNames) fields[k] = cfPiva
 
