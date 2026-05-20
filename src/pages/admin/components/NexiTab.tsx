@@ -209,6 +209,22 @@ export default function NexiTab() {
     const [preauthDurationDays, setPreauthDurationDays] = useState('7')
     const [preauthSending, setPreauthSending] = useState(false)
 
+    // 2026-05-20: Pre-autorizzazione VIA LINK — il cliente paga via link
+    // Nexi e i fondi vengono BLOCCATI (non addebitati). Cattura/svincolo
+    // poi gestiti dall'admin con i bottoni "Cattura"/"Sblocca" sulla
+    // riga della transazione. Usa il backend esistente nexi-create-preauth
+    // (stesso endpoint usato per le cauzioni; cauzioneId opzionale).
+    const [showPreauthLinkModal, setShowPreauthLinkModal] = useState(false)
+    const [preauthLinkAmount, setPreauthLinkAmount] = useState('')
+    const [preauthLinkCustomerName, setPreauthLinkCustomerName] = useState('')
+    const [preauthLinkCustomerEmail, setPreauthLinkCustomerEmail] = useState('')
+    const [preauthLinkCustomerPhone, setPreauthLinkCustomerPhone] = useState('')
+    const [preauthLinkDescription, setPreauthLinkDescription] = useState('')
+    const [preauthLinkExpirationHours, setPreauthLinkExpirationHours] = useState('168') // 7 giorni default
+    const [preauthLinkSending, setPreauthLinkSending] = useState(false)
+    const [preauthLinkResult, setPreauthLinkResult] = useState<{ url: string; orderId: string } | null>(null)
+    const [preauthLinkSendWhatsApp, setPreauthLinkSendWhatsApp] = useState(true)
+
     function openPreauthModal(card: TokenizedCard) {
         setPreauthCard(card)
         setPreauthAmount('')
@@ -337,6 +353,87 @@ export default function NexiTab() {
             toast.error('Errore: ' + msg)
         } finally {
             setPreauthSending(false)
+        }
+    }
+
+    function openPreauthLinkModal() {
+        setPreauthLinkAmount('')
+        setPreauthLinkCustomerName('')
+        setPreauthLinkCustomerEmail('')
+        setPreauthLinkCustomerPhone('')
+        setPreauthLinkDescription('')
+        setPreauthLinkExpirationHours('168')
+        setPreauthLinkSendWhatsApp(true)
+        setPreauthLinkResult(null)
+        setShowPreauthLinkModal(true)
+    }
+
+    async function handleCreatePreauthLink() {
+        const amt = parseFloat(preauthLinkAmount)
+        if (!amt || amt <= 0) {
+            toast.error('Inserisci un importo valido')
+            return
+        }
+        const hours = Math.max(1, Math.min(8760, parseInt(preauthLinkExpirationHours) || 168))
+        setPreauthLinkSending(true)
+        const toastId = toast.loading('Creo link pre-autorizzazione...')
+        try {
+            const res = await authFetch('/.netlify/functions/nexi-create-preauth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    // cauzioneId omesso → backend genera orderId con prefisso "PA"
+                    amount: amt,
+                    customerEmail: preauthLinkCustomerEmail || null,
+                    customerName: preauthLinkCustomerName || null,
+                    description: preauthLinkDescription || `Pre-autorizzazione - ${preauthLinkCustomerName || preauthLinkCustomerEmail || 'cliente'}`,
+                    expirationHours: hours,
+                }),
+            })
+            const data = await res.json()
+            toast.dismiss(toastId)
+            if (!res.ok || !data.success || !data.paymentUrl) {
+                toast.error(data.error || 'Creazione link fallita')
+                return
+            }
+            setPreauthLinkResult({ url: data.paymentUrl, orderId: data.orderId })
+            toast.success('Link pre-autorizzazione creato')
+
+            // Invio WhatsApp opzionale via Green API (template invio link)
+            if (preauthLinkSendWhatsApp && preauthLinkCustomerPhone) {
+                try {
+                    const waRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            customPhone: preauthLinkCustomerPhone,
+                            customMessage:
+                                `Salve ${preauthLinkCustomerName || ''},\n\n` +
+                                `di seguito trova il link per la pre-autorizzazione di €${amt.toFixed(2)} sulla sua carta.\n\n` +
+                                `${preauthLinkDescription ? preauthLinkDescription + '\n\n' : ''}` +
+                                `${data.paymentUrl}\n\n` +
+                                `I fondi verranno solo bloccati (NON addebitati). La pre-autorizzazione decade automaticamente entro ${hours >= 24 ? Math.round(hours / 24) + ' giorni' : hours + ' ore'} se non catturata.\n\n` +
+                                `Cordiali Saluti,\nDR7`,
+                        }),
+                    })
+                    if (waRes.ok) {
+                        toast.success('Link inviato via WhatsApp')
+                    } else {
+                        toast('Link creato ma invio WhatsApp fallito — copialo manualmente.', { duration: 8000 })
+                    }
+                } catch (waErr) {
+                    console.error('[preauth-link] WhatsApp send failed:', waErr)
+                    toast('Link creato ma invio WhatsApp fallito — copialo manualmente.', { duration: 8000 })
+                }
+            }
+
+            await fetchTransactions()
+        } catch (err) {
+            toast.dismiss(toastId)
+            const msg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + msg)
+        } finally {
+            setPreauthLinkSending(false)
         }
     }
 
@@ -854,6 +951,13 @@ export default function NexiTab() {
                         <option value="90d">Ultimi 90 giorni</option>
                         <option value="year">Ultimo anno</option>
                     </select>
+                    <button
+                        onClick={openPreauthLinkModal}
+                        className="px-3 py-2 text-sm rounded-lg bg-dr7-gold text-black hover:bg-dr7-gold/85 font-semibold transition-colors"
+                        title="Crea un link pay-by-link che BLOCCA i fondi (non addebita) sulla carta del cliente — gli mandi il link via WhatsApp e lui paga, la cattura/sblocco li gestisci dopo"
+                    >
+                        + Link Pre-Autorizzazione
+                    </button>
                     <button
                         onClick={fetchTransactions}
                         className="p-2 hover:bg-theme-text-primary/5 rounded-full transition-colors"
@@ -1433,6 +1537,156 @@ export default function NexiTab() {
                                 {preauthSending ? 'Creazione...' : 'Crea Pre-autorizzazione'}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modale "Link Pre-Autorizzazione" — invia link al cliente per
+                bloccare fondi (no addebito). Usa nexi-create-preauth backend
+                (cauzioneId omesso → orderId con prefisso "PA"). */}
+            {showPreauthLinkModal && (
+                <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => !preauthLinkSending && setShowPreauthLinkModal(false)}>
+                    <div className="bg-theme-bg-secondary border border-theme-border rounded-2xl max-w-lg w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h3 className="text-lg font-bold text-theme-text-primary">Link Pre-Autorizzazione</h3>
+                                <p className="text-xs text-theme-text-muted mt-1">
+                                    Il cliente paga via link Nexi; i fondi vengono <strong>bloccati</strong>, non addebitati.
+                                    Tu poi clicchi <em>Cattura</em> o <em>Sblocca</em> sulla riga della transazione.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => !preauthLinkSending && setShowPreauthLinkModal(false)}
+                                className="text-theme-text-muted hover:text-theme-text-primary text-xl leading-none"
+                                aria-label="Chiudi"
+                            >×</button>
+                        </div>
+
+                        {!preauthLinkResult ? (
+                            <>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <label className="block">
+                                        <span className="text-xs text-theme-text-muted">Importo (€) *</span>
+                                        <input
+                                            type="number"
+                                            min="0.01"
+                                            step="0.01"
+                                            value={preauthLinkAmount}
+                                            onChange={e => setPreauthLinkAmount(e.target.value)}
+                                            placeholder="es. 500.00"
+                                            className="w-full mt-1 px-3 py-2 text-sm bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                                        />
+                                    </label>
+                                    <label className="block">
+                                        <span className="text-xs text-theme-text-muted">Scadenza (ore) *</span>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="8760"
+                                            value={preauthLinkExpirationHours}
+                                            onChange={e => setPreauthLinkExpirationHours(e.target.value)}
+                                            className="w-full mt-1 px-3 py-2 text-sm bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                                        />
+                                        <span className="text-[10px] text-theme-text-muted">Default 168 (7 giorni). Max 8760 (1 anno).</span>
+                                    </label>
+                                </div>
+
+                                <label className="block">
+                                    <span className="text-xs text-theme-text-muted">Nome cliente</span>
+                                    <input
+                                        type="text"
+                                        value={preauthLinkCustomerName}
+                                        onChange={e => setPreauthLinkCustomerName(e.target.value)}
+                                        placeholder="Mario Rossi"
+                                        className="w-full mt-1 px-3 py-2 text-sm bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                                    />
+                                </label>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <label className="block">
+                                        <span className="text-xs text-theme-text-muted">Email cliente</span>
+                                        <input
+                                            type="email"
+                                            value={preauthLinkCustomerEmail}
+                                            onChange={e => setPreauthLinkCustomerEmail(e.target.value)}
+                                            placeholder="cliente@example.com"
+                                            className="w-full mt-1 px-3 py-2 text-sm bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                                        />
+                                    </label>
+                                    <label className="block">
+                                        <span className="text-xs text-theme-text-muted">Telefono (WhatsApp)</span>
+                                        <input
+                                            type="tel"
+                                            value={preauthLinkCustomerPhone}
+                                            onChange={e => setPreauthLinkCustomerPhone(e.target.value)}
+                                            placeholder="+39 333 1234567"
+                                            className="w-full mt-1 px-3 py-2 text-sm bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                                        />
+                                    </label>
+                                </div>
+
+                                <label className="block">
+                                    <span className="text-xs text-theme-text-muted">Descrizione</span>
+                                    <input
+                                        type="text"
+                                        value={preauthLinkDescription}
+                                        onChange={e => setPreauthLinkDescription(e.target.value)}
+                                        placeholder="es. Cauzione noleggio Porsche 911 - 25/05"
+                                        className="w-full mt-1 px-3 py-2 text-sm bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                                    />
+                                </label>
+
+                                <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+                                    <input
+                                        type="checkbox"
+                                        checked={preauthLinkSendWhatsApp}
+                                        onChange={e => setPreauthLinkSendWhatsApp(e.target.checked)}
+                                        className="w-4 h-4"
+                                    />
+                                    Invia link via WhatsApp al telefono inserito
+                                </label>
+
+                                <div className="flex justify-end gap-2 pt-2">
+                                    <button
+                                        onClick={() => setShowPreauthLinkModal(false)}
+                                        disabled={preauthLinkSending}
+                                        className="px-4 py-2 rounded-lg text-sm bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover disabled:opacity-50"
+                                    >Annulla</button>
+                                    <button
+                                        onClick={handleCreatePreauthLink}
+                                        disabled={preauthLinkSending || !preauthLinkAmount}
+                                        className="px-4 py-2 rounded-lg text-sm font-semibold bg-dr7-gold text-black hover:bg-dr7-gold/85 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {preauthLinkSending ? 'Creazione...' : 'Crea link e invia'}
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="p-4 bg-green-900/20 border border-green-600/50 rounded-lg space-y-2">
+                                    <p className="text-sm text-green-300 font-semibold">✓ Link creato</p>
+                                    <p className="text-xs text-theme-text-muted">Order ID: <code className="text-theme-text-primary">{preauthLinkResult.orderId}</code></p>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            value={preauthLinkResult.url}
+                                            readOnly
+                                            className="flex-1 px-3 py-2 text-xs bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary"
+                                        />
+                                        <button
+                                            onClick={() => { navigator.clipboard.writeText(preauthLinkResult.url); toast.success('Link copiato') }}
+                                            className="px-3 py-2 text-xs rounded-lg bg-dr7-gold text-black font-semibold"
+                                        >Copia</button>
+                                    </div>
+                                </div>
+                                <div className="flex justify-end">
+                                    <button
+                                        onClick={() => setShowPreauthLinkModal(false)}
+                                        className="px-4 py-2 rounded-lg text-sm font-semibold bg-dr7-gold text-black hover:bg-dr7-gold/85"
+                                    >Chiudi</button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             )}
