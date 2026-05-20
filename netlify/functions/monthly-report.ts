@@ -194,12 +194,19 @@ async function generateVehicleReport(
 
   // Fetch ALL bookings that overlap with this month — we filter in JS for full control
   // Only fetch bookings with statuses that represent actual rentals (exclude admin@dr7.app)
+  //
+  // IMPORTANT (2026-05-20 bug fix): the previous `.not('vehicle_plate', 'in', ...)`
+  // filter accidentally dropped every booking with vehicle_plate=NULL. In
+  // PostgreSQL three-valued logic, `NULL NOT IN ('TEST000','TEST002')` returns
+  // NULL (not TRUE), and PostgREST treats NULL as falsy → row excluded. That
+  // wiped out all credit-wallet bookings (book_with_credits doesn't always
+  // populate vehicle_plate at the top level). Move the TEST-plate exclusion
+  // into the JS filter below so NULLs are kept.
   const { data: allBookings, error: bookingsError } = await supabase
     .from('bookings')
     .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, appointment_date, payment_status, payment_method, customer_name, customer_email')
     .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active'])
     .or('customer_email.is.null,customer_email.neq.admin@dr7.app')
-    .not('vehicle_plate', 'in', '("TEST000","TEST002")')
 
   if (bookingsError) throw bookingsError
 
@@ -237,6 +244,11 @@ async function generateVehicleReport(
     const custEmail = (b.customer_name || '').toLowerCase()
     const bookingEmail = (b.booking_details?.customer?.email || '').toLowerCase()
     if (custEmail.includes('admin dr7') || bookingEmail === 'admin@dr7.app') return false
+
+    // Exclude TEST-plate fixtures (moved from the supabase query because
+    // .not('vehicle_plate','in',...) silently dropped NULL plates too).
+    const bPlateRaw = (b.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
+    if (bPlateRaw === 'TEST000' || bPlateRaw === 'TEST002') return false
 
     // Must have pickup_date and dropoff_date (car wash uses appointment_date instead)
     if (!b.pickup_date || !b.dropoff_date) return false
