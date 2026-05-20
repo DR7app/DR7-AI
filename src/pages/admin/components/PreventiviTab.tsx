@@ -418,10 +418,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   // Hide-key esplicito: admin puo' spuntare "Nascondi richieste no cauzione"
   // nella modale invito per togliere il subtab anche a chi non e' collaboratore.
   const hideRichiesteNoCauzione = Array.isArray(permissions) && permissions.includes('hide:richieste-no-cauzione')
-  // 2026-05-20: collaboratori (es. Nicola Frongia) che devono solo poter
-  // copiare/incollare il template ma non gestire i coefficienti tecnici.
-  // Permission key: aggiungere `hide:invia-coefficienti` in admins.permissions.
-  const hideInviaCoefficienti = Array.isArray(permissions) && permissions.includes('hide:invia-coefficienti')
+  // 2026-05-20: template-only mode. Collaboratori (es. Nicola Frongia) che
+  // devono solo COPIARE il template da inviare al proprio cliente — niente
+  // selezione cliente, niente invio diretto, niente accesso alle anagrafiche.
+  // Cliccano "Invia" sul preventivo, vedono il preview formattato + bottone
+  // Copia, poi incollano nella loro chat WhatsApp manualmente.
+  const isPreventivoTemplateOnly = Array.isArray(permissions) && permissions.includes('preventivo-template-only')
   // Storica: solo Valerio. Ora gestita tramite `role:preventivi-admin`
   // (failsafe valerio/ilenia). Conserva la stessa semantica della whitelist.
   const isValerio = hasRole('preventivi-admin')
@@ -2562,6 +2564,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
 
   function openAcceptModal(p: Preventivo) {
     if (gateNoCauzioneApproval(p)) return
+    // 2026-05-20: template-only mode (Nicola Frongia & simili) — niente
+    // selezione cliente / metodo pagamento. "Accetta" segna solo lo stato
+    // a 'accettato' senza creare il booking. Direzione poi finalizza.
+    if (isPreventivoTemplateOnly) {
+      acceptPreventivoSimple(p.id)
+      return
+    }
     openPreventivoAcceptModal({
       id: p.id,
       vehicle_name: p.vehicle_name,
@@ -2570,6 +2579,22 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       total_final: p.total_final ?? null,
       customer_phone: p.customer_phone ?? null,
     })
+  }
+
+  async function acceptPreventivoSimple(preventivoId: string) {
+    try {
+      const { error } = await supabase
+        .from('preventivi')
+        .update({ status: 'accettato', updated_at: new Date().toISOString() })
+        .eq('id', preventivoId)
+      if (error) throw error
+      appendPreventivoEvent(preventivoId, 'preventivo_accettato_template_only', { detail: 'collaboratore template-only' })
+      toast.success('Preventivo segnato come accettato')
+      await loadPreventivi()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      toast.error('Errore: ' + msg)
+    }
   }
 
   async function confirmAccept(args: {
@@ -3183,32 +3208,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                                 {p.status === 'bozza' ? 'Invia' : 'Reinvia'}
                               </button>
                             )}
-                            {/* "Invia coefficienti" — visible on EVERY row regardless
-                                of status. Pre-checks the box and pre-fills the
-                                preview with the coefficienti-only payload.
-                                Nascosta per operatori con `hide:invia-coefficienti`
-                                (es. Nicola Frongia — vede solo template invio). */}
-                            {!hideInviaCoefficienti && (
-                            <button
-                              onClick={async () => {
-                                setSelectedPreventivo(p)
-                                setWhatsappPhone(p.customer_phone || '')
-                                setPreviewMessage('')
-                                const preview = await formatWhatsAppMessage(p, { coefficientiOnly: true })
-                                if (!preview) {
-                                  toast.error('Nessun coefficiente disponibile per questo preventivo (Centralina Pro disabilitata o trace mancante).')
-                                  return
-                                }
-                                setIncludeCoefficienti(true)
-                                setPreviewMessage(preview)
-                                setShowPhoneModal(true)
-                              }}
-                              className="px-2 py-1 text-xs bg-purple-700 hover:bg-purple-600 text-white rounded"
-                              title="Invia al cliente solo la ripartizione dei coefficienti applicati"
-                            >
-                              Invia coefficienti
-                            </button>
-                            )}
+                            {/* 2026-05-20: bottone "Invia coefficienti" rimosso
+                                completamente — direzione lo voleva via per
+                                tutti gli operatori (non solo Nicola Frongia). */}
                             {(p.status === 'inviato' || p.status === 'bozza') && (
                               <button
                                 onClick={() => openAcceptModal(p)}
@@ -3338,30 +3340,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                           Invia
                         </button>
                       )}
-                      {/* "Invia coefficienti" — visible on EVERY card.
-                          Nascosta per operatori con `hide:invia-coefficienti`. */}
-                      {!hideInviaCoefficienti && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          setSelectedPreventivo(p)
-                          setWhatsappPhone(p.customer_phone || '')
-                          setPreviewMessage('')
-                          const preview = await formatWhatsAppMessage(p, { coefficientiOnly: true })
-                          if (!preview) {
-                            toast.error('Nessun coefficiente disponibile per questo preventivo (Centralina Pro disabilitata o trace mancante).')
-                            return
-                          }
-                          setIncludeCoefficienti(true)
-                          setPreviewMessage(preview)
-                          setShowPhoneModal(true)
-                        }}
-                        className="flex-1 min-w-[48%] h-10 rounded-lg bg-purple-600 hover:bg-purple-500 active:opacity-70 text-white text-[13px] font-semibold"
-                        title="Invia al cliente solo la ripartizione dei coefficienti applicati"
-                      >
-                        Invia coefficienti
-                      </button>
-                      )}
+                      {/* 2026-05-20: bottone "Invia coefficienti" rimosso
+                          completamente (anche dalla view card mobile). */}
                       {canConvert && (
                         <button
                           type="button"
@@ -3409,7 +3389,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
               {/* Sticky header */}
               <div className="shrink-0 px-5 pt-4 pb-3 border-b border-theme-border flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h3 className="text-[17px] font-semibold text-theme-text-primary">Invia Preventivo via WhatsApp</h3>
+                  <h3 className="text-[17px] font-semibold text-theme-text-primary">
+                    {isPreventivoTemplateOnly ? 'Template Preventivo' : 'Invia Preventivo via WhatsApp'}
+                  </h3>
                   <p className="text-[12px] text-theme-text-muted truncate">{selectedPreventivo.vehicle_name} · {formatEur(selectedPreventivo.total_final)}</p>
                 </div>
                 <button
@@ -3424,95 +3406,93 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
 
               {/* Scrollable body — all form content lives here */}
               <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Cerca Cliente</label>
-                  <CustomerAutocomplete
-                    customers={customers}
-                    selectedCustomerId={selectedCustomerId}
-                    onSelectCustomer={(id) => {
-                      setSelectedCustomerId(id)
-                      const c = customers.find((c: any) => c.id === id)
-                      if (c?.phone) setWhatsappPhone(c.phone)
-                    }}
-                    placeholder="Nome, email o telefono..."
-                    required={false}
-                  />
-                </div>
-
-                <Input
-                  label="Numero di Telefono"
-                  type="tel"
-                  value={whatsappPhone}
-                  onChange={(e) => setWhatsappPhone(e.target.value)}
-                  placeholder="393xxxxxxxxx"
-                />
-
-                <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Messaggio (modificabile prima dell'invio)</label>
-                  <textarea
-                    value={previewMessage}
-                    onChange={(e) => setPreviewMessage(e.target.value)}
-                    rows={10}
-                    className="w-full bg-theme-bg-primary rounded p-3 text-xs text-theme-text-primary whitespace-pre-wrap font-mono focus:outline-none focus:ring-1 focus:ring-dr7-gold resize-y"
-                  />
-                  <p className="text-[11px] text-theme-text-muted mt-1">
-                    Template caricato da {(selectedPreventivo.sconto || 0) > 0 ? '"Preventivo WhatsApp"' : '"Preventivo senza sconto"'} in Messaggi di Sistema Pro.
-                  </p>
-
-                  {/* Invia SOLO i coefficienti — sostituisce completamente
-                      il messaggio normale con il solo blocco coefficienti.
-                      Usato quando il cliente chiede esplicitamente la
-                      ripartizione dei coefficienti applicati.
-                      Nascosta per operatori con `hide:invia-coefficienti`. */}
-                  {!hideInviaCoefficienti && (
-                  <label className="mt-3 flex items-start gap-2 cursor-pointer text-xs text-theme-text-secondary select-none">
-                    <input
-                      type="checkbox"
-                      checked={includeCoefficienti}
-                      onChange={async (e) => {
-                        const next = e.target.checked
-                        setIncludeCoefficienti(next)
-                        const refreshed = next
-                          ? await formatWhatsAppMessage(selectedPreventivo, { coefficientiOnly: true })
-                          : await formatWhatsAppMessage(selectedPreventivo)
-                        if (next && !refreshed) {
-                          toast.error('Nessun coefficiente disponibile per questo preventivo (Centralina Pro disabilitata o trace mancante).')
-                          setIncludeCoefficienti(false)
-                          return
-                        }
-                        if (refreshed) setPreviewMessage(refreshed)
-                      }}
-                      className="mt-0.5 accent-dr7-gold"
+                {isPreventivoTemplateOnly ? (
+                  /* 2026-05-20: template-only mode (Nicola Frongia & simili).
+                     Nessuna ricerca cliente, nessun campo telefono, nessun
+                     invio diretto. Solo preview formattato + bottone Copia
+                     da incollare manualmente nella propria chat WhatsApp. */
+                  <div>
+                    <p className="text-[12px] text-theme-text-muted mb-2">
+                      Copia il messaggio qui sotto e incollalo nella tua chat WhatsApp con il cliente.
+                    </p>
+                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">Anteprima formattata</label>
+                    <div
+                      className="w-full bg-theme-bg-primary rounded p-3 text-xs text-theme-text-primary whitespace-pre-wrap break-words border border-theme-border/50"
+                      dangerouslySetInnerHTML={{ __html: renderWhatsAppHtml(previewMessage) }}
                     />
-                    <span>
-                      <span className="font-medium text-theme-text-primary">Invia SOLO i coefficienti</span>
-                      <span className="block text-[11px] text-theme-text-muted">
-                        Sostituisce il messaggio con la sola ripartizione dei coefficienti Centralina Pro applicati al preventivo. Da usare quando il cliente chiede esplicitamente il dettaglio.
-                      </span>
-                    </span>
-                  </label>
-                  )}
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">Cerca Cliente</label>
+                      <CustomerAutocomplete
+                        customers={customers}
+                        selectedCustomerId={selectedCustomerId}
+                        onSelectCustomer={(id) => {
+                          setSelectedCustomerId(id)
+                          const c = customers.find((c: any) => c.id === id)
+                          if (c?.phone) setWhatsappPhone(c.phone)
+                        }}
+                        placeholder="Nome, email o telefono..."
+                        required={false}
+                      />
+                    </div>
 
-                  <label className="block text-sm font-medium text-theme-text-secondary mt-3 mb-1">Anteprima formattata</label>
-                  <div
-                    className="w-full bg-theme-bg-primary rounded p-3 text-xs text-theme-text-primary whitespace-pre-wrap break-words"
-                    dangerouslySetInnerHTML={{ __html: renderWhatsAppHtml(previewMessage) }}
-                  />
-                </div>
+                    <Input
+                      label="Numero di Telefono"
+                      type="tel"
+                      value={whatsappPhone}
+                      onChange={(e) => setWhatsappPhone(e.target.value)}
+                      placeholder="393xxxxxxxxx"
+                    />
+
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">Messaggio (modificabile prima dell'invio)</label>
+                      <textarea
+                        value={previewMessage}
+                        onChange={(e) => setPreviewMessage(e.target.value)}
+                        rows={10}
+                        className="w-full bg-theme-bg-primary rounded p-3 text-xs text-theme-text-primary whitespace-pre-wrap font-mono focus:outline-none focus:ring-1 focus:ring-dr7-gold resize-y"
+                      />
+                      <p className="text-[11px] text-theme-text-muted mt-1">
+                        Template caricato da {(selectedPreventivo.sconto || 0) > 0 ? '"Preventivo WhatsApp"' : '"Preventivo senza sconto"'} in Messaggi di Sistema Pro.
+                      </p>
+
+                      <label className="block text-sm font-medium text-theme-text-secondary mt-3 mb-1">Anteprima formattata</label>
+                      <div
+                        className="w-full bg-theme-bg-primary rounded p-3 text-xs text-theme-text-primary whitespace-pre-wrap break-words"
+                        dangerouslySetInnerHTML={{ __html: renderWhatsAppHtml(previewMessage) }}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Sticky action bar — always reachable */}
               <div className="shrink-0 px-5 py-3 border-t border-theme-border bg-theme-bg-secondary flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
                 <Button variant="secondary" className="w-full sm:w-auto" onClick={() => { setShowPhoneModal(false); setWhatsappPhone('') }}>
-                  Annulla
+                  {isPreventivoTemplateOnly ? 'Chiudi' : 'Annulla'}
                 </Button>
-                <Button
-                  className="w-full sm:w-auto"
-                  disabled={!whatsappPhone.trim() || !previewMessage.trim() || sendingWhatsapp}
-                  onClick={() => handleSendWhatsApp(selectedPreventivo, whatsappPhone.trim(), previewMessage)}
-                >
-                  {sendingWhatsapp ? 'Invio...' : 'Invia WhatsApp'}
-                </Button>
+                {isPreventivoTemplateOnly ? (
+                  <Button
+                    className="w-full sm:w-auto"
+                    disabled={!previewMessage.trim()}
+                    onClick={() => {
+                      navigator.clipboard.writeText(previewMessage)
+                      toast.success('Messaggio copiato — incollalo nella tua chat WhatsApp')
+                    }}
+                  >
+                    Copia messaggio
+                  </Button>
+                ) : (
+                  <Button
+                    className="w-full sm:w-auto"
+                    disabled={!whatsappPhone.trim() || !previewMessage.trim() || sendingWhatsapp}
+                    onClick={() => handleSendWhatsApp(selectedPreventivo, whatsappPhone.trim(), previewMessage)}
+                  >
+                    {sendingWhatsapp ? 'Invio...' : 'Invia WhatsApp'}
+                  </Button>
+                )}
               </div>
             </div>
           </div>
