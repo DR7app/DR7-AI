@@ -259,9 +259,6 @@ function OperatoriViewSwitch({ view, setView }: { view: OperatoriView; setView: 
 }
 
 // 2026-05-20: V1 (OperatoriReportDashboard) rimossa. Resta solo V2.
-function DashboardToggle() {
-  return <OperatoriReportDashboardV2 />
-}
 
 export default function OperatoriTab() {
   const [view, setView] = useState<OperatoriView>('dashboard')
@@ -270,7 +267,7 @@ export default function OperatoriTab() {
     return (
       <div className="space-y-3">
         <OperatoriViewSwitch view={view} setView={setView} />
-        <DashboardToggle />
+        <OperatoriReportDashboardV2 onSwitchView={setView} />
       </div>
     )
   }

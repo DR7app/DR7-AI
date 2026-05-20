@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
@@ -107,12 +107,36 @@ interface Props {
   onCreated: () => void
 }
 
+// Generate a temporary 12-char password admin can share with the operator.
+// Mixed case + digits + safe symbols, excludes ambiguous chars (0/O/l/I).
+function generateTempPassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&'
+  let out = ''
+  const arr = new Uint32Array(12)
+  crypto.getRandomValues(arr)
+  for (let i = 0; i < 12; i++) out += chars[arr[i] % chars.length]
+  return out
+}
+
+interface CreatedCredentials {
+  email: string
+  password: string
+  nome: string
+}
+
 export default function InviteOperatoreModal({ open, onClose, onCreated }: Props) {
   const [email, setEmail] = useState('')
   const [nome, setNome] = useState('')
   const [password, setPassword] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [submitting, setSubmitting] = useState(false)
+  const [created, setCreated] = useState<CreatedCredentials | null>(null)
+
+  // Auto-generate a temp password when the modal opens for the first time
+  // so admin doesn't have to think one up. Still editable.
+  useEffect(() => {
+    if (open && !password && !created) setPassword(generateTempPassword())
+  }, [open, password, created])
 
   const reset = () => {
     setEmail('')
@@ -120,6 +144,7 @@ export default function InviteOperatoreModal({ open, onClose, onCreated }: Props
     setPassword('')
     setSelected(new Set())
     setSubmitting(false)
+    setCreated(null)
   }
 
   const handleClose = () => {
@@ -169,8 +194,10 @@ export default function InviteOperatoreModal({ open, onClose, onCreated }: Props
       return
     }
     const trimmedPassword = password.trim()
-    if (trimmedPassword && trimmedPassword.length < 8) {
-      toast.error('La password deve avere almeno 8 caratteri')
+    // Temp password is mandatory: NO email-invite flow. Admin shares the
+    // generated credentials directly with the operator (WhatsApp / SMS / call).
+    if (!trimmedPassword || trimmedPassword.length < 8) {
+      toast.error('La password temporanea deve avere almeno 8 caratteri')
       return
     }
     const permissions = Array.from(selected)
@@ -195,20 +222,17 @@ export default function InviteOperatoreModal({ open, onClose, onCreated }: Props
           email: trimmedEmail,
           nome: trimmedNome,
           permissions,
-          ...(trimmedPassword ? { password: trimmedPassword } : {}),
+          password: trimmedPassword,
         }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error || 'Invio invito fallito')
+      if (!res.ok) throw new Error(json?.error || 'Creazione operatore fallita')
 
-      toast.success(
-        trimmedPassword
-          ? `Operatore ${trimmedEmail} creato. Password impostata.`
-          : `Invito inviato a ${trimmedEmail}`,
-      )
-      reset()
+      toast.success(`Operatore ${trimmedEmail} creato.`)
+      // Show the credentials screen instead of closing immediately, so admin
+      // can copy them and send them to the operator manually.
+      setCreated({ email: trimmedEmail, password: trimmedPassword, nome: trimmedNome })
       onCreated()
-      onClose()
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       toast.error(msg)
@@ -232,14 +256,72 @@ export default function InviteOperatoreModal({ open, onClose, onCreated }: Props
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-theme-border">
           <div>
-            <h3 className="text-xl font-bold text-theme-text-primary">Aggiungi Operatore</h3>
+            <h3 className="text-xl font-bold text-theme-text-primary">{created ? 'Operatore creato' : 'Aggiungi Operatore'}</h3>
             <p className="text-xs text-theme-text-muted mt-0.5">
-              Lascia la password vuota per inviare un'email di invito. Imposta una password iniziale per attivare subito l'account: l'operatore potrà cambiarla dal proprio profilo.
+              {created
+                ? 'Account attivo. Condividi le credenziali con l\'operatore — potrà cambiare la password dal proprio profilo dopo il primo accesso.'
+                : 'L\'account viene creato subito con una password temporanea (modificabile qui sotto). Niente email di invito: condividi tu email + password all\'operatore.'}
             </p>
           </div>
           <button onClick={handleClose} className="text-theme-text-muted hover:text-theme-text-primary text-2xl leading-none">×</button>
         </div>
 
+        {/* Credentials screen — shown after successful creation */}
+        {created && (() => {
+          const adminUrl = (typeof window !== 'undefined' ? window.location.origin : 'https://admin.dr7empire.com')
+          const credsText = `Ciao ${created.nome},\n\nEcco le tue credenziali DR7 Admin:\nLink: ${adminUrl}\nEmail: ${created.email}\nPassword: ${created.password}\n\nPotrai cambiare la password dal tuo profilo dopo il primo accesso.`
+          return (
+            <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-4 space-y-3">
+                <div className="text-sm font-semibold text-emerald-400">Credenziali pronte da condividere</div>
+                <div className="grid grid-cols-[80px_1fr] gap-2 text-sm">
+                  <span className="text-theme-text-muted">Link:</span>
+                  <code className="text-theme-text-primary break-all">{adminUrl}</code>
+                  <span className="text-theme-text-muted">Email:</span>
+                  <code className="text-theme-text-primary break-all">{created.email}</code>
+                  <span className="text-theme-text-muted">Password:</span>
+                  <code className="text-theme-text-primary break-all font-mono">{created.password}</code>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(credsText)
+                    toast.success('Credenziali copiate')
+                  }}
+                  className="px-3 py-2 rounded-lg bg-dr7-gold text-black text-xs font-semibold hover:opacity-90"
+                >
+                  Copia messaggio completo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(created.password)
+                    toast.success('Password copiata')
+                  }}
+                  className="px-3 py-2 rounded-lg border border-theme-border text-xs text-theme-text-secondary hover:text-theme-text-primary"
+                >
+                  Copia solo password
+                </button>
+                <a
+                  href={`https://wa.me/?text=${encodeURIComponent(credsText)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-2 rounded-lg border border-emerald-500/40 text-xs text-emerald-400 hover:bg-emerald-500/10"
+                >
+                  Invia su WhatsApp
+                </a>
+              </div>
+              <div className="flex justify-end pt-2">
+                <Button onClick={handleClose}>Chiudi</Button>
+              </div>
+            </div>
+          )
+        })()}
+
+        {!created && (
+        <>
         {/* Body */}
         <div className="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -260,17 +342,30 @@ export default function InviteOperatoreModal({ open, onClose, onCreated }: Props
             />
           </div>
           <div>
-            <Input
-              label="Password iniziale (opzionale)"
-              type="text"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Min. 8 caratteri — lascia vuoto per inviare email di invito"
-              disabled={submitting}
-              autoComplete="new-password"
-            />
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <Input
+                  label="Password temporanea"
+                  type="text"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Min. 8 caratteri"
+                  disabled={submitting}
+                  autoComplete="new-password"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setPassword(generateTempPassword())}
+                disabled={submitting}
+                className="px-3 py-2 rounded-lg border border-theme-border text-xs text-theme-text-secondary hover:text-theme-text-primary disabled:opacity-50"
+                title="Genera una nuova password casuale"
+              >
+                Rigenera
+              </button>
+            </div>
             <p className="text-[11px] text-theme-text-muted mt-1">
-              Se imposti una password, l'account viene attivato subito (email confermata) e potrai comunicarla all'operatore. Lui potrà cambiarla dal proprio profilo.
+              Auto-generata sicura. Account attivato subito: condividi email + password all'operatore (WhatsApp / SMS / di persona). L'operatore può cambiarla dal profilo dopo il primo accesso.
             </p>
           </div>
 
@@ -341,9 +436,11 @@ export default function InviteOperatoreModal({ open, onClose, onCreated }: Props
         <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-theme-border">
           <Button onClick={handleClose} disabled={submitting} variant="secondary">Annulla</Button>
           <Button onClick={submit} disabled={submitting}>
-            {submitting ? 'Invio...' : 'Invia invito'}
+            {submitting ? 'Creazione...' : 'Crea Operatore'}
           </Button>
         </div>
+        </>
+        )}
       </div>
     </div>
   )

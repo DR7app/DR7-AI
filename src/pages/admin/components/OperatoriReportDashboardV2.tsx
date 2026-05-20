@@ -165,7 +165,13 @@ function DonutChart({ data, total }: { data: { label: string; value: number; col
     )
 }
 
-export default function OperatoriReportDashboardV2() {
+type OperatoriView = 'dashboard' | 'rilevazione' | 'payroll' | 'audit' | 'contratti'
+
+interface OperatoriReportDashboardV2Props {
+    onSwitchView?: (view: OperatoriView) => void
+}
+
+export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriReportDashboardV2Props = {}) {
     const { hasRole } = useAdminRole()
     const isDirezione = hasRole('direzione') || hasRole('developer')
 
@@ -685,9 +691,46 @@ export default function OperatoriReportDashboardV2() {
                             >
                                 + Nuovo Operatore
                             </button>
-                            <button className="w-full text-left px-2 py-1.5 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary">📋 Genera Buste Paga</button>
-                            <button className="w-full text-left px-2 py-1.5 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary">📅 Calendario Presenze</button>
-                            <button className="w-full text-left px-2 py-1.5 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary">📤 Export CSV</button>
+                            <button
+                                type="button"
+                                onClick={() => onSwitchView?.('payroll')}
+                                className="w-full text-left px-2 py-1.5 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary"
+                            >
+                                Genera Buste Paga
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => onSwitchView?.('rilevazione')}
+                                className="w-full text-left px-2 py-1.5 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary"
+                            >
+                                Calendario Presenze
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const headers = ['Nome', 'Cognome', 'Email', 'Ruolo', 'Stato']
+                                    const rows = operatori.map(o => [
+                                        String(o.nome || ''),
+                                        String((o as { cognome?: string }).cognome || ''),
+                                        String((o as { email?: string }).email || ''),
+                                        String((o as { ruolo?: string }).ruolo || (o as { role?: string }).role || ''),
+                                        String((o as { stato?: string }).stato || ''),
+                                    ])
+                                    const csv = [headers, ...rows]
+                                        .map(r => r.map(c => `"${c.replace(/"/g, '""')}"`).join(','))
+                                        .join('\n')
+                                    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+                                    const url = URL.createObjectURL(blob)
+                                    const a = document.createElement('a')
+                                    a.href = url
+                                    a.download = `operatori_${new Date().toISOString().slice(0, 10)}.csv`
+                                    a.click()
+                                    setTimeout(() => URL.revokeObjectURL(url), 1000)
+                                }}
+                                className="w-full text-left px-2 py-1.5 rounded bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary"
+                            >
+                                Export CSV
+                            </button>
                         </div>
                     </div>
                     {/* Alert & Critica */}
