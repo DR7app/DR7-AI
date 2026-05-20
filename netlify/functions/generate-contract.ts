@@ -11,6 +11,103 @@ console.log('[generate-contract] supabase keyType:', supabaseKeyType)
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+/**
+ * Helper: ritorna un oggetto con TUTTE le varianti possibili di nome
+ * AcroForm per la sezione "DATI AZIENDALI" del contratto.
+ * Copre CamelCase, snake_case, con spazi, lowercase, con suffisso Azienda.
+ * Un campo che resta vuoto significa che il PDF usa un naming ancora
+ * diverso — basta aggiungerlo qui.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildAziendaFields(customer: any, booking: any, isAzienda: boolean): Record<string, string> {
+    if (!isAzienda) return {}
+    const denom = customer?.denominazione || customer?.ragione_sociale || booking?.customer_name || ''
+    const ragSoc = customer?.ragione_sociale || customer?.denominazione || booking?.customer_name || ''
+    const indir = customer?.indirizzo || ''
+    const tel = customer?.telefono || ''
+    const email = customer?.email || ''
+    const piva = customer?.partita_iva || ''
+    const cf = customer?.codice_fiscale || customer?.partita_iva || ''
+    const cfPiva = customer?.codice_fiscale || customer?.partita_iva || ''
+    const citta = customer?.citta_residenza || customer?.citta || ''
+    const prov = customer?.provincia_residenza || customer?.provincia || ''
+    const cap = customer?.codice_postale || customer?.cap || ''
+    const pec = customer?.pec || ''
+
+    // Per ogni campo concettuale, generiamo le varianti di nome possibili.
+    // Le chiavi qui DEVONO essere identiche ai nomi AcroForm del PDF.
+    const fields: Record<string, string> = {}
+
+    // RAGIONE SOCIALE — il template label dice "Regione sociale" (typo)
+    const ragioneNames = [
+        'CompanyName', 'Denominazione', 'RagioneSociale', 'Ragione_Sociale', 'ragione_sociale',
+        'RegioneSociale', 'Regione_Sociale', 'regione_sociale',
+        'RagioneSocialeAzienda', 'RegioneSocialeAzienda',
+        'NomeAzienda', 'nomeazienda', 'nome_azienda',
+        'Regione sociale', 'Ragione sociale', // letterali con spazio
+    ]
+    for (const k of ragioneNames) fields[k] = ragSoc || denom
+
+    // SEDE LEGALE / INDIRIZZO AZIENDA
+    const sedeNames = [
+        'CompanyAddress', 'IndirizzoAzienda', 'SedeLegale', 'Sede_Legale', 'sede_legale',
+        'SedeLegaleAzienda', 'IndirizzoSedeLegale',
+        'Sede legale', 'sede legale', // letterali con spazio
+    ]
+    for (const k of sedeNames) fields[k] = indir
+
+    // EMAIL AZIENDA (questo gia' funziona — manteniamo le varianti)
+    const emailNames = [
+        'CompanyEmail', 'EmailAzienda', 'EmailAziendale', 'email_aziendale',
+        'E mail aziendale', 'EmailAziendaLegale',
+    ]
+    for (const k of emailNames) fields[k] = email
+
+    // TELEFONO AZIENDA (gia' funziona)
+    const telNames = [
+        'CompanyPhone', 'TelefonoAzienda', 'TelefonoAziendale', 'telefono_azienda',
+        'Telefono Azienda',
+    ]
+    for (const k of telNames) fields[k] = tel
+
+    // P.IVA
+    const pivaNames = [
+        'CompanyVAT', 'PartitaIVAAzienda', 'PivaAzienda', 'partita_iva_azienda',
+        'PartitaIvaAzienda', 'PartitaIVA Azienda',
+    ]
+    for (const k of pivaNames) fields[k] = piva
+
+    // CF AZIENDA
+    const cfNames = [
+        'CompanyFiscalCode', 'CodiceFiscaleAzienda', 'CFAzienda', 'cf_azienda',
+        'CodiceFiscale Azienda', 'Codice Fiscale Azienda',
+    ]
+    for (const k of cfNames) fields[k] = cf
+
+    // CAMPO COMBINATO "Codice fiscale / partita iva"
+    const cfPivaNames = [
+        'CodiceFiscalePartitaIVA', 'CFPiva', 'CFPivaAzienda', 'cf_piva',
+        'codice_fiscale_partita_iva', 'CodiceFiscale_PartitaIVA',
+        'Codice fiscale / partita iva',
+        'CodiceFiscalePartitaIvaAzienda',
+    ]
+    for (const k of cfPivaNames) fields[k] = cfPiva
+
+    // CITTA / PROVINCIA / CAP AZIENDA
+    const cittaNames = ['CompanyCity', 'CittaAzienda', 'citta_azienda']
+    for (const k of cittaNames) fields[k] = citta
+    const provNames = ['CompanyProvince', 'ProvinciaAzienda', 'provincia_azienda']
+    for (const k of provNames) fields[k] = prov
+    const capNames = ['CompanyZipCode', 'CAPAzienda', 'cap_azienda']
+    for (const k of capNames) fields[k] = cap
+
+    // PEC
+    const pecNames = ['CompanyPEC', 'PECAzienda', 'pec_azienda']
+    for (const k of pecNames) fields[k] = pec
+
+    return fields
+}
+
 // Helper function to sanitize text for WinAnsi encoding
 // Transliterates Cyrillic and other non-Latin characters to Latin equivalents
 function sanitizeForPDF(text: string): string {
@@ -878,19 +975,17 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'TimeOfIssue': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }),
             'OrarioStipula': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }),
 
-            // Customer Info — use resolved values (booking top-level can be null for credit wallet bookings)
-            // Per AZIENDA / PUBBLICA AMMINISTRAZIONE: i dati cliente devono
-            // apparire SOLO nella sezione Azienda (Company*/RagioneSociale/
-            // PartitaIVAAzienda/ecc.), NON nel "1° Guidatore". Quindi
-            // svuotiamo i campi Customer*/NomeCognome/CodiceFiscale/Patente
-            // etc. quando tipo_cliente='azienda'. Il guidatore reale
-            // (persona fisica) andra' compilato manualmente o via
-            // booking_details.driver in un'iterazione futura.
+            // Customer Info — per AZIENDA tutti i campi del "1° Guidatore"
+            // (Customer*/Driver*/Nome*/CF/Indirizzo/Patente/etc) ritornano
+            // stringa vuota: i dati azienda vanno SOLO nella sezione Azienda
+            // sotto. PartitaIVA / CustomerVAT restano popolati anche per
+            // azienda perche' la P.IVA e' un campo che il template puo'
+            // riusare nella sezione azienda.
             'CustomerName': isAzienda ? '' : (clientName || ''),
             'NomeCognome': isAzienda ? '' : (clientName || ''),
-            'CustomerVAT': clientVat || '',  // P.IVA azienda — campo non-driver, OK
+            'CustomerVAT': clientVat || '',
             'CodiceFiscale': isAzienda ? '' : (clientVat || ''),
-            'PartitaIVA': clientVat || '',   // P.IVA: anche per azienda OK
+            'PartitaIVA': clientVat || '',
             'CustomerPhone': isAzienda ? '' : (customer?.telefono || resolvedPhone || ''),
             'Telefono': isAzienda ? '' : (customer?.telefono || resolvedPhone || ''),
             'CustomerEmail': isAzienda ? '' : (customer?.email || resolvedEmail || ''),
@@ -905,7 +1000,7 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'CAP': isAzienda ? '' : (customer?.codice_postale || ''),
             'DriverZipCode': isAzienda ? '' : (customer?.codice_postale || ''),
 
-            // Personal Details — azienda non ha data/luogo nascita/sesso
+            // Personal Details — azienda non ha
             'CustomerBirthDate': isAzienda ? '' : (customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : ''),
             'DataNascita': isAzienda ? '' : (customer?.data_nascita ? new Date(customer.data_nascita).toLocaleDateString('it-IT') : ''),
             'CustomerBirthPlace': isAzienda ? '' : (customer?.luogo_nascita || ''),
@@ -1083,35 +1178,17 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             // template usa label tipo "Regione/Ragione sociale", "Sede legale",
             // "Codice fiscale / partita iva" — i field name possono essere
             // CamelCase, snake_case o con spazi.
-            'CompanyName': isAzienda ? (customer?.denominazione || '') : '',
-            'Denominazione': isAzienda ? (customer?.denominazione || '') : '',
-            'RagioneSociale': isAzienda ? (customer?.denominazione || '') : '',
-            'Ragione_Sociale': isAzienda ? (customer?.denominazione || '') : '',
-            'RegioneSociale': isAzienda ? (customer?.denominazione || '') : '', // template typo variant
-            'RagioneSocialeAzienda': isAzienda ? (customer?.denominazione || '') : '',
-            'NomeAzienda': isAzienda ? (customer?.denominazione || '') : '',
-            'CompanyEmail': isAzienda ? (customer?.email || '') : '',
-            'EmailAzienda': isAzienda ? (customer?.email || '') : '',
-            'EmailAziendale': isAzienda ? (customer?.email || '') : '',
-            'CompanyAddress': isAzienda ? (customer?.indirizzo || '') : '',
-            'IndirizzoAzienda': isAzienda ? (customer?.indirizzo || '') : '',
-            'SedeLegale': isAzienda ? (customer?.indirizzo || '') : '',
-            'Sede_Legale': isAzienda ? (customer?.indirizzo || '') : '',
-            'SedeLegaleAzienda': isAzienda ? (customer?.indirizzo || '') : '',
-            'IndirizzoSedeLegale': isAzienda ? (customer?.indirizzo || '') : '',
-            'CompanyPhone': isAzienda ? (customer?.telefono || '') : '',
-            'TelefonoAzienda': isAzienda ? (customer?.telefono || '') : '',
-            'TelefonoAziendale': isAzienda ? (customer?.telefono || '') : '',
-            'CompanyVAT': isAzienda ? (customer?.partita_iva || '') : '',
-            'PartitaIVAAzienda': isAzienda ? (customer?.partita_iva || '') : '',
-            'PivaAzienda': isAzienda ? (customer?.partita_iva || '') : '',
-            'CompanyFiscalCode': isAzienda ? (customer?.codice_fiscale || customer?.partita_iva || '') : '',
-            'CodiceFiscaleAzienda': isAzienda ? (customer?.codice_fiscale || customer?.partita_iva || '') : '',
-            'CFAzienda': isAzienda ? (customer?.codice_fiscale || customer?.partita_iva || '') : '',
-            // Campo combinato "Codice fiscale / partita iva" (label nel PDF)
-            'CodiceFiscalePartitaIVA': isAzienda ? (customer?.codice_fiscale || customer?.partita_iva || '') : '',
-            'CFPiva': isAzienda ? (customer?.codice_fiscale || customer?.partita_iva || '') : '',
-            'CFPivaAzienda': isAzienda ? (customer?.codice_fiscale || customer?.partita_iva || '') : '',
+            // Company Data — TUTTE le varianti possibili per i campi AcroForm
+            // del template PDF. Includiamo:
+            //  - CamelCase: RagioneSociale, SedeLegale
+            //  - snake_case: ragione_sociale, sede_legale
+            //  - Con spazio (label literal): "Regione sociale", "Sede legale"
+            //  - Con suffisso Azienda: RagioneSocialeAzienda
+            //  - Lowercase: regionesociale
+            // EmailAzienda + TelefonoAzienda gia' funzionano nel template,
+            // gli altri sono empty → l'AcroForm usa nomi sconosciuti.
+            // Coprendo tutte le varianti, qualcuno deve matchare.
+            ...buildAziendaFields(customer, booking, isAzienda),
             'CompanyCity': customer?.tipo_cliente === 'azienda' ? (customer.citta_residenza || customer.citta || '') : '',
             'CittaAzienda': customer?.tipo_cliente === 'azienda' ? (customer.citta_residenza || customer.citta || '') : '',
             'CompanyProvince': customer?.tipo_cliente === 'azienda' ? (customer.provincia_residenza || customer.provincia || '') : '',
