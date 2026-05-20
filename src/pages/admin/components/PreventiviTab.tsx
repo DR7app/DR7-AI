@@ -409,7 +409,12 @@ async function getBossPhone(): Promise<string> {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking }: Props) {
-  const { adminEmail, hasRole } = useAdminRole()
+  const { adminEmail, hasRole, hasPermission } = useAdminRole()
+  // Collaboratore = ha solo `reservations-preventivi`, NON `reservations`.
+  // Per coerenza con "non puo' vedere le prenotazioni di altri", restringe
+  // anche la lista preventivi ai propri (created_by = adminEmail).
+  // Direzione / developer / operatori con `reservations` vedono tutto.
+  const isPreventivoOnly = !hasPermission('reservations') && hasPermission('reservations-preventivi')
   // Storica: solo Valerio. Ora gestita tramite `role:preventivi-admin`
   // (failsafe valerio/ilenia). Conserva la stessa semantica della whitelist.
   const isValerio = hasRole('preventivi-admin')
@@ -1207,10 +1212,18 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   async function loadPreventivi() {
     setLoading(true)
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('preventivi')
         .select('*')
         .order('created_at', { ascending: false })
+      // Restringi ai propri preventivi per i collaboratori. created_by
+      // viene salvato con adminEmail (linea 1650). Non si fa il filtro
+      // lato server per direzione/operatori standard: la query resta
+      // identica a prima per loro.
+      if (isPreventivoOnly && adminEmail) {
+        query = query.eq('created_by', adminEmail)
+      }
+      const { data, error } = await query
 
       if (error) throw error
 

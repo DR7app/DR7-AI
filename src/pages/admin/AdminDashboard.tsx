@@ -496,19 +496,21 @@ export default function AdminDashboard() {
               </svg>
             </button>
           </div>
-          <div className="flex items-center gap-2 mb-1">
-            <button
-              onClick={() => { setSidebarOpen(false); setShowMyOrari(true); }}
-              title="I miei orari — inserisci/modifica i tuoi orari di oggi"
-              className="flex-1 flex items-center justify-center gap-1.5 px-2 min-h-[36px] rounded-lg text-[10px] text-theme-text-secondary hover:text-amber-400 hover:bg-theme-bg-hover transition-colors"
-            >
-              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="9" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 2" />
-              </svg>
-              I miei orari
-            </button>
-          </div>
+          {hasPermission('rilevazione-orari') && (
+            <div className="flex items-center gap-2 mb-1">
+              <button
+                onClick={() => { setSidebarOpen(false); setShowMyOrari(true); }}
+                title="I miei orari — inserisci/modifica i tuoi orari di oggi"
+                className="flex-1 flex items-center justify-center gap-1.5 px-2 min-h-[36px] rounded-lg text-[10px] text-theme-text-secondary hover:text-amber-400 hover:bg-theme-bg-hover transition-colors"
+              >
+                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="9" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 2" />
+                </svg>
+                I miei orari
+              </button>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <button
               onClick={() => { setShowPasswordModal(true); setPasswordMsg(null); setNewPassword(''); setConfirmPassword(''); setPasswordVisible(false); }}
@@ -560,10 +562,16 @@ export default function AdminDashboard() {
               {(() => {
                 if (!sectionForActiveTab) return tabLabels[activeTab] || activeTab
                 // Match by tab AND subView when multiple entries point at the same tab.
-                const sameTabEntries = sectionForActiveTab.tabs.filter(t => t.tab === activeTab)
-                const subTab = sameTabEntries.length > 1
-                  ? sameTabEntries.find(t => t.subView === rentalSubView)
-                  : sameTabEntries[0]
+                // Filter out sub-tab entries the current user can't access so a
+                // limited user (e.g. only reservations-preventivi) never sees
+                // "Prenotazioni Noleggio" in the page title when they're
+                // actually looking at Preventivi.
+                const accessibleSameTab = sectionForActiveTab.tabs
+                  .filter(t => t.tab === activeTab)
+                  .filter(t => hasPermission(t.permKey || t.tab))
+                const subTab = accessibleSameTab.length > 1
+                  ? accessibleSameTab.find(t => t.subView === rentalSubView) || accessibleSameTab[0]
+                  : accessibleSameTab[0]
                 if (subTab) {
                   // Prefer the explicit titleLabel (e.g. Noleggio's bookings
                   // sub-view shows "Noleggio" in the bar but "Prenotazioni"
@@ -586,17 +594,19 @@ export default function AdminDashboard() {
             </h2>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowMyOrari(true)}
-              title="I miei orari — inserisci/modifica i tuoi orari di oggi"
-              className="flex items-center gap-2 px-4 py-2 rounded-full border border-dr7-gold/40 bg-dr7-gold/5 text-dr7-gold text-[13px] font-semibold hover:bg-dr7-gold/10 active:scale-95 transition-all"
-            >
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="9" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 2" />
-              </svg>
-              <span className="hidden sm:inline">I miei orari</span>
-            </button>
+            {hasPermission('rilevazione-orari') && (
+              <button
+                onClick={() => setShowMyOrari(true)}
+                title="I miei orari — inserisci/modifica i tuoi orari di oggi"
+                className="flex items-center gap-2 px-4 py-2 rounded-full border border-dr7-gold/40 bg-dr7-gold/5 text-dr7-gold text-[13px] font-semibold hover:bg-dr7-gold/10 active:scale-95 transition-all"
+              >
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="9" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 2" />
+                </svg>
+                <span className="hidden sm:inline">I miei orari</span>
+              </button>
+            )}
             <button
               onClick={toggleTheme}
               title={theme === 'dark' ? 'Passa al tema chiaro' : 'Passa al tema scuro'}
@@ -746,17 +756,22 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                     {/* I miei orari — quick access to the operator's own
-                        Rilevazione Orari tab. */}
-                    <button
-                      onClick={() => { setUserMenuOpen(false); setActiveTab('rilevazione-orari') }}
-                      className="w-full text-left px-3 py-3 hover:bg-theme-bg-tertiary text-theme-text-primary flex items-center gap-2 min-h-[44px]"
-                    >
-                      <svg className="w-4 h-4 text-dr7-gold shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      I miei orari
-                    </button>
-                    <div className="border-t border-theme-border my-1" />
+                        Rilevazione Orari tab. Nascosto per i collaboratori
+                        (chi non ha il permesso "rilevazione-orari"). */}
+                    {hasPermission('rilevazione-orari') && (
+                      <>
+                        <button
+                          onClick={() => { setUserMenuOpen(false); setActiveTab('rilevazione-orari') }}
+                          className="w-full text-left px-3 py-3 hover:bg-theme-bg-tertiary text-theme-text-primary flex items-center gap-2 min-h-[44px]"
+                        >
+                          <svg className="w-4 h-4 text-dr7-gold shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          I miei orari
+                        </button>
+                        <div className="border-t border-theme-border my-1" />
+                      </>
+                    )}
                     <button
                       onClick={() => { setUserMenuOpen(false); handleSignOut() }}
                       className="w-full text-left px-3 py-3 hover:bg-theme-bg-tertiary text-red-400 flex items-center gap-2 min-h-[44px]"
