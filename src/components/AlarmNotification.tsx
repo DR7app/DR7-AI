@@ -13,14 +13,19 @@ export default function AlarmNotification() {
     const { bookingId, vehicleName, returnTime, customerName, type } = alarmState.activeAlarm
     const isReturn = type === 'return'
     const isFleet = type === 'fleet_maintenance_km' || type === 'fleet_maintenance_date'
+    // 2026-05-20: includi sempre il tipo di manutenzione/scadenza nel
+    // titolo e nel banner "SCADUTO" — prima diceva solo "SCADUTO" senza
+    // specificare cosa fosse scaduto (Bollo? Revisione? Assicurazione?).
+    const maintenanceType = alarmState.activeAlarm.maintenanceType || ''
+    const mtSuffix = maintenanceType ? ` · ${maintenanceType}` : ''
 
     const meta = (() => {
         switch (type) {
             case 'deposit': return { title: 'Cauzione richiesta', accent: 'bg-yellow-500', accentText: 'text-yellow-700', timeLabel: 'Ritiro' }
             case 'unpaid_pickup': return { title: 'Da saldare prima del ritiro', accent: 'bg-red-500', accentText: 'text-red-700', timeLabel: 'Ritiro' }
             case 'car_wash': return { title: 'Lavaggio tra poco', accent: 'bg-blue-500', accentText: 'text-blue-700', timeLabel: 'Orario' }
-            case 'fleet_maintenance_km': return { title: alarmState.activeAlarm.urgent ? 'Manutenzione urgente' : 'Manutenzione richiesta', accent: 'bg-orange-500', accentText: 'text-orange-700', timeLabel: 'Scadenza' }
-            case 'fleet_maintenance_date': return { title: alarmState.activeAlarm.urgent ? 'Scadenza amministrativa' : 'Rinnovo richiesto', accent: 'bg-yellow-500', accentText: 'text-yellow-700', timeLabel: 'Scadenza' }
+            case 'fleet_maintenance_km': return { title: (alarmState.activeAlarm.urgent ? 'Manutenzione urgente' : 'Manutenzione richiesta') + mtSuffix, accent: 'bg-orange-500', accentText: 'text-orange-700', timeLabel: 'Scadenza' }
+            case 'fleet_maintenance_date': return { title: (alarmState.activeAlarm.urgent ? 'Scadenza amministrativa' : 'Rinnovo richiesto') + mtSuffix, accent: 'bg-yellow-500', accentText: 'text-yellow-700', timeLabel: 'Scadenza' }
             default: return { title: 'Rientro veicolo', accent: 'bg-red-500', accentText: 'text-red-700', timeLabel: 'Previsto' }
         }
     })()
@@ -110,6 +115,9 @@ export default function AlarmNotification() {
                             )}
                             <Row label={meta.timeLabel} value={returnTime} strong />
 
+                            {isFleet && maintenanceType && (
+                                <Row label="Tipo scadenza" value={maintenanceType} strong />
+                            )}
                             {isFleet && (
                                 <Row
                                     label={type === 'fleet_maintenance_km' ? 'KM attuali' : 'Data attuale'}
@@ -136,7 +144,7 @@ export default function AlarmNotification() {
                                     label="Stato"
                                     value={
                                         alarmState.activeAlarm.urgent
-                                            ? 'SCADUTO'
+                                            ? `SCADUTO${maintenanceType ? ` — ${maintenanceType}` : ''}`
                                             : type === 'fleet_maintenance_km'
                                                 ? `${alarmState.activeAlarm.remaining} km rimanenti`
                                                 : `${alarmState.activeAlarm.remaining} giorni rimanenti`
