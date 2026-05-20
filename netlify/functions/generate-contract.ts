@@ -12,19 +12,30 @@ console.log('[generate-contract] supabase keyType:', supabaseKeyType)
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 /**
- * Helper: ritorna un oggetto con TUTTE le varianti possibili di nome
- * AcroForm per la sezione "DATI AZIENDALI" del contratto.
- * Copre CamelCase, snake_case, con spazi, lowercase, con suffisso Azienda.
- * Un campo che resta vuoto significa che il PDF usa un naming ancora
- * diverso — basta aggiungerlo qui.
+ * Helper: popola i campi AcroForm "Azienda" del contratto.
+ * Nomi field VERIFICATI sul template master_contract.pdf (63 field totali).
+ *
+ * Sezione AZIENDA del template (9 field):
+ *   CompanyName                         → Regione sociale
+ *   CompanyEmail                        → E mail aziendale
+ *   CompanyAddress                      → Sede legale
+ *   CompanyPhone                        → Telefono
+ *   CompanyRepresentativeName           → Nome e cognome (rappresentante legale)
+ *   CompanyRepresentativeIDNumber       → Numero carta d'identita'
+ *   CompanyRepresentativeIDIssueDate    → Data rilascio
+ *   CompanyRepresentativeIDExpiryDate   → Data scadenza
+ *   CompanyRepresentativeIDIssuePlace   → Luogo rilascio
+ *
+ * NOTA: il template NON ha un field per "Codice fiscale / partita iva"
+ * dell'azienda — il box visibile e' solo testo statico, non compilabile.
+ * Per fixarlo definitivamente serve aggiornare il PDF aggiungendo un
+ * AcroForm text field chiamato `CompanyVAT` sopra il box.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildAziendaFields(customer: any, booking: any, isAzienda: boolean): Record<string, string> {
     if (!isAzienda) return {}
-    const denom = customer?.denominazione || customer?.ragione_sociale || booking?.customer_name || ''
     const ragSoc = customer?.ragione_sociale || customer?.denominazione || booking?.customer_name || ''
-    // Le aziende usano colonne dedicate: sede_legale + indirizzo_azienda.
-    // Fallback su indirizzo (per record vecchi/migrati) e su sede_operativa.
+    // Aziende: indirizzo in sede_legale (preferito) o indirizzo_azienda.
     const indir = customer?.sede_legale
         || customer?.indirizzo_azienda
         || customer?.indirizzo
@@ -33,97 +44,41 @@ function buildAziendaFields(customer: any, booking: any, isAzienda: boolean): Re
     const tel = customer?.telefono || ''
     const email = customer?.email || ''
     const piva = customer?.partita_iva || ''
-    const cf = customer?.codice_fiscale || customer?.partita_iva || ''
-    const cfPiva = customer?.codice_fiscale || customer?.partita_iva || ''
-    const citta = customer?.citta_residenza || customer?.citta || ''
-    const prov = customer?.provincia_residenza || customer?.provincia || ''
-    const cap = customer?.codice_postale || customer?.cap || ''
-    const pec = customer?.pec || ''
+    // Rappresentante legale (per ora opzionale — i dati sono in customer.metadata
+    // o in colonne dedicate se aggiunte).
+    const repName = customer?.rappresentante_legale_nome
+        || customer?.rappresentante_nome
+        || customer?.metadata?.rappresentante?.nome
+        || ''
+    const repIdNum = customer?.rappresentante_documento_numero
+        || customer?.metadata?.rappresentante?.documento_numero
+        || ''
+    const repIdIssueDate = customer?.rappresentante_documento_rilascio
+        || customer?.metadata?.rappresentante?.documento_rilascio
+        || ''
+    const repIdExpiryDate = customer?.rappresentante_documento_scadenza
+        || customer?.metadata?.rappresentante?.documento_scadenza
+        || ''
+    const repIdIssuePlace = customer?.rappresentante_documento_luogo
+        || customer?.metadata?.rappresentante?.documento_luogo
+        || ''
 
-    // Per ogni campo concettuale, generiamo le varianti di nome possibili.
-    // Le chiavi qui DEVONO essere identiche ai nomi AcroForm del PDF.
-    const fields: Record<string, string> = {}
-
-    // RAGIONE SOCIALE — il template label dice "Regione sociale" (typo)
-    const ragioneNames = [
-        'CompanyName', 'Denominazione', 'RagioneSociale', 'Ragione_Sociale', 'ragione_sociale',
-        'RegioneSociale', 'Regione_Sociale', 'regione_sociale',
-        'RagioneSocialeAzienda', 'RegioneSocialeAzienda',
-        'NomeAzienda', 'nomeazienda', 'nome_azienda',
-        'Regione sociale', 'Ragione sociale', // letterali con spazio
-    ]
-    for (const k of ragioneNames) fields[k] = ragSoc || denom
-
-    // SEDE LEGALE / INDIRIZZO AZIENDA
-    const sedeNames = [
-        'CompanyAddress', 'IndirizzoAzienda', 'SedeLegale', 'Sede_Legale', 'sede_legale',
-        'SedeLegaleAzienda', 'IndirizzoSedeLegale',
-        'Sede legale', 'sede legale', // letterali con spazio
-    ]
-    for (const k of sedeNames) fields[k] = indir
-
-    // EMAIL AZIENDA (questo gia' funziona — manteniamo le varianti)
-    const emailNames = [
-        'CompanyEmail', 'EmailAzienda', 'EmailAziendale', 'email_aziendale',
-        'E mail aziendale', 'EmailAziendaLegale',
-    ]
-    for (const k of emailNames) fields[k] = email
-
-    // TELEFONO AZIENDA (gia' funziona)
-    const telNames = [
-        'CompanyPhone', 'TelefonoAzienda', 'TelefonoAziendale', 'telefono_azienda',
-        'Telefono Azienda',
-    ]
-    for (const k of telNames) fields[k] = tel
-
-    // P.IVA — tutte le varianti TVA/IVA/VAT immaginabili
-    const pivaNames = [
-        // Italian
-        'CompanyVAT', 'PartitaIVAAzienda', 'PivaAzienda', 'partita_iva_azienda',
-        'PartitaIvaAzienda', 'PartitaIVA Azienda', 'PartitaIVA', 'PartitaIva',
-        'PIva', 'piva', 'p_iva', 'PartIVA', 'PartIva',
-        // English
-        'VAT', 'vat', 'CompanyVat', 'VATNumber', 'VatNumber', 'vat_number',
-        // French (in case PDF designer was bilingual)
-        'TVA', 'tva', 'NumeroTVA', 'numero_tva',
-        // Label literal
-        'Partita IVA', 'partita iva', 'P. IVA', 'P.IVA',
-    ]
-    for (const k of pivaNames) fields[k] = piva
-
-    // CF AZIENDA
-    const cfNames = [
-        'CompanyFiscalCode', 'CodiceFiscaleAzienda', 'CFAzienda', 'cf_azienda',
-        'CodiceFiscale Azienda', 'Codice Fiscale Azienda',
-    ]
-    for (const k of cfNames) fields[k] = cf
-
-    // CAMPO COMBINATO "Codice fiscale / partita iva"
-    const cfPivaNames = [
-        'CodiceFiscalePartitaIVA', 'CFPiva', 'CFPivaAzienda', 'cf_piva',
-        'codice_fiscale_partita_iva', 'CodiceFiscale_PartitaIVA',
-        'Codice fiscale / partita iva', 'Codice fiscale/partita iva',
-        'CodiceFiscalePartitaIvaAzienda',
-        'CodFiscPIva', 'cf_p_iva', 'Cod_Fiscale_Part_IVA',
-        'CodiceFiscalePartitaIva', 'codicefiscalepartitaiva',
-        // Letterali con underscore e variazioni
-        'codice_fiscale___partita_iva', 'CodiceFiscale___PartitaIVA',
-    ]
-    for (const k of cfPivaNames) fields[k] = cfPiva
-
-    // CITTA / PROVINCIA / CAP AZIENDA
-    const cittaNames = ['CompanyCity', 'CittaAzienda', 'citta_azienda']
-    for (const k of cittaNames) fields[k] = citta
-    const provNames = ['CompanyProvince', 'ProvinciaAzienda', 'provincia_azienda']
-    for (const k of provNames) fields[k] = prov
-    const capNames = ['CompanyZipCode', 'CAPAzienda', 'cap_azienda']
-    for (const k of capNames) fields[k] = cap
-
-    // PEC
-    const pecNames = ['CompanyPEC', 'PECAzienda', 'pec_azienda']
-    for (const k of pecNames) fields[k] = pec
-
-    return fields
+    return {
+        // Field PDF AcroForm veri (verificati)
+        CompanyName: ragSoc,
+        CompanyEmail: email,
+        CompanyAddress: indir,
+        CompanyPhone: tel,
+        CompanyRepresentativeName: repName,
+        CompanyRepresentativeIDNumber: repIdNum,
+        CompanyRepresentativeIDIssueDate: repIdIssueDate ? new Date(repIdIssueDate).toLocaleDateString('it-IT') : '',
+        CompanyRepresentativeIDExpiryDate: repIdExpiryDate ? new Date(repIdExpiryDate).toLocaleDateString('it-IT') : '',
+        CompanyRepresentativeIDIssuePlace: repIdIssuePlace,
+        // CompanyVAT non esiste nel template attuale: lo popoliamo comunque
+        // cosi' quando il template verra' aggiornato per includere il field,
+        // il valore arrivera' senza bisogno di tocco al codice.
+        CompanyVAT: piva,
+    }
 }
 
 // Helper function to sanitize text for WinAnsi encoding
@@ -1412,6 +1367,31 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                 const pageRef = fieldNameToPageRef.get(field.getName()) || firstPageRef
                 for (const widget of field.acroField.getWidgets()) {
                     widget.dict.set(PDFName.of('P'), pageRef)
+                }
+            }
+
+            // OVERLAY P.IVA azienda: il template master_contract.pdf NON ha
+            // un AcroForm field per il box "Codice fiscale / partita iva"
+            // nella sezione DATI AZIENDALI. Workaround: disegnamo il valore
+            // come testo sopra la pagina 0 a coordinate fisse.
+            // Coordinate determinate ispezionando il PDF (vedi list-contract-fields.ts):
+            //   - Row 3 della sezione Azienda e' a y=284
+            //   - Box CF/PIVA inizia dopo il label, x≈170
+            //   - PDF y-origin = bottom-left
+            if (isAzienda && customer?.partita_iva) {
+                try {
+                    const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
+                    const firstPage = pdfDoc.getPage(0)
+                    firstPage.drawText(String(customer.partita_iva), {
+                        x: 170,
+                        y: 286,
+                        size: 9,
+                        font: helvetica,
+                        color: rgb(0, 0, 0),
+                    })
+                    console.log('[generate-contract] Drew P.IVA overlay for azienda:', customer.partita_iva)
+                } catch (drawErr) {
+                    console.error('[generate-contract] Failed to draw P.IVA overlay:', drawErr)
                 }
             }
 
