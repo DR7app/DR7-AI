@@ -93,11 +93,20 @@ const PERMISSION_SECTIONS: { name: string; tabs: { key: string; label: string }[
     { key: 'role:sito-direzione', label: 'Sito CMS (no OTP per testi)' },
     { key: 'role:preventivi-admin', label: 'Preventivi Admin (flussi speciali)' },
   ]},
+  // hide:X — nasconde elementi UI specifici per QUESTO operatore. Non
+  // toglie permessi, toglie solo il bottone/pannello dalla sidebar/header.
+  // Utile per collaboratori esterni che non devono vedere allarmi
+  // operatore, "I miei orari" (tracciamento orari), ecc.
+  { name: 'Nascondi UI (solo per questo operatore)', tabs: [
+    { key: 'hide:allarmi', label: 'Nascondi blocco "Allarmi" in sidebar' },
+    { key: 'hide:miei-orari', label: 'Nascondi pulsante "I miei orari"' },
+    { key: 'hide:richieste-no-cauzione', label: 'Nascondi subtab "Richieste No Cauzione" in Preventivi' },
+  ]},
 ]
 
 const PRESETS: { name: string; permissions: string[] }[] = [
   { name: 'Solo Ore', permissions: ['rilevazione-orari'] },
-  { name: 'Calendario + Preventivi', permissions: ['calendar', 'reservations-preventivi'] },
+  { name: 'Calendario + Preventivi', permissions: ['calendar', 'reservations-preventivi', 'hide:allarmi', 'hide:miei-orari', 'hide:richieste-no-cauzione'] },
   { name: 'Direzione (full)', permissions: ['*', 'role:direzione', 'role:payment-manager', 'role:stipendio-editor', 'role:sito-direzione', 'role:preventivi-admin'] },
 ]
 

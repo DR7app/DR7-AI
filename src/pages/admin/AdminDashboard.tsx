@@ -138,7 +138,7 @@ export default function AdminDashboard() {
   const { alarmState, enableAudio } = useVehicleAlarm()
   const birthdayCount = useBirthdayCount()
   const scartataCount = useFatturaScartataCount()
-  const { role: adminRole, hasPermission, adminName, adminEmail, adminAvatar } = useAdminRole()
+  const { role: adminRole, hasPermission, adminName, adminEmail, adminAvatar, permissions } = useAdminRole()
   // 2026-05-19: isElevated rimosso (era declared but never read). Quando
   // serve in futuro, riaggiungerlo qui basato su:
   // adminRole === 'superadmin' || hasRole('direzione') || hasRole('developer')
@@ -153,12 +153,15 @@ export default function AdminDashboard() {
   const isTabRestricted = (tab: TabType) => !hasPermission(tab)
 
   // "Collaboratore" = utente esterno che ha SOLO accesso a creare
-  // preventivi, NON ha permesso sulle prenotazioni complete. Per questi
-  // utenti l'UI di gestione operatore (allarmi, miei orari) e i sotto-tab
-  // interni come "Richieste No Cauzione" non hanno senso. Direzione e
-  // operatori standard passano sempre il check `hasPermission('reservations')`
-  // (per bypass o per permesso esplicito) e mantengono l'UI intera.
+  // preventivi, NON ha permesso sulle prenotazioni complete.
   const isCollaboratore = hasPermission('reservations-preventivi') && !hasPermission('reservations')
+
+  // Hide-keys espliciti: spuntando un "hide:X" nella modale invito,
+  // l'elemento UI corrispondente sparisce per QUELL'operatore. Non
+  // toccano gli altri utenti perché si leggono direttamente da
+  // permissions[] (no bypass direzione/developer/`*`).
+  const isHidden = (key: 'miei-orari' | 'allarmi' | 'richieste-no-cauzione') =>
+    Array.isArray(permissions) && permissions.includes(`hide:${key}`)
 
   async function handleSignOut() {
     clearAdminCache()
@@ -472,9 +475,10 @@ export default function AdminDashboard() {
         <div className="px-3 py-3 border-t border-white/10 space-y-1">
           {/* Alarm row: bell button (Attiva Allarmi) + gear opens the inventory.
               The gear is always visible so admins can review what alarms exist
-              even after audio is enabled. Gated da `feature:allarmi` cosi'
-              i collaboratori (preventivi-only) non vedono il blocco. */}
-          {!isCollaboratore && (
+              even after audio is enabled. Nascosto per collaboratori
+              (heuristic) o quando admin imposta esplicitamente
+              `hide:allarmi` sul row dell'operatore. */}
+          {!isCollaboratore && !isHidden('allarmi') && (
           <div className="flex items-stretch gap-1">
             {!alarmState.audioEnabled ? (
               <button
@@ -507,7 +511,7 @@ export default function AdminDashboard() {
             </button>
           </div>
           )}
-          {!isCollaboratore && (
+          {!isCollaboratore && !isHidden('miei-orari') && (
             <div className="flex items-center gap-2 mb-1">
               <button
                 onClick={() => { setSidebarOpen(false); setShowMyOrari(true); }}
@@ -605,7 +609,7 @@ export default function AdminDashboard() {
             </h2>
           </div>
           <div className="flex items-center gap-3">
-            {!isCollaboratore && (
+            {!isCollaboratore && !isHidden('miei-orari') && (
               <button
                 onClick={() => setShowMyOrari(true)}
                 title="I miei orari — inserisci/modifica i tuoi orari di oggi"
@@ -767,9 +771,10 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                     {/* I miei orari — quick access to the operator's own
-                        Rilevazione Orari tab. Nascosto per i collaboratori
-                        (chi non ha il permesso "rilevazione-orari"). */}
-                    {!isCollaboratore && (
+                        Rilevazione Orari tab. Nascosto per collaboratori
+                        (heuristic) o quando admin imposta `hide:miei-orari`
+                        sul row dell'operatore. */}
+                    {!isCollaboratore && !isHidden('miei-orari') && (
                       <>
                         <button
                           onClick={() => { setUserMenuOpen(false); setActiveTab('rilevazione-orari') }}

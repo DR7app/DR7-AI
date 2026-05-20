@@ -409,12 +409,15 @@ async function getBossPhone(): Promise<string> {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking }: Props) {
-  const { adminEmail, hasRole, hasPermission } = useAdminRole()
+  const { adminEmail, hasRole, hasPermission, permissions } = useAdminRole()
   // Collaboratore = ha solo `reservations-preventivi`, NON `reservations`.
   // Per coerenza con "non puo' vedere le prenotazioni di altri", restringe
   // anche la lista preventivi ai propri (created_by = adminEmail).
   // Direzione / developer / operatori con `reservations` vedono tutto.
   const isPreventivoOnly = !hasPermission('reservations') && hasPermission('reservations-preventivi')
+  // Hide-key esplicito: admin puo' spuntare "Nascondi richieste no cauzione"
+  // nella modale invito per togliere il subtab anche a chi non e' collaboratore.
+  const hideRichiesteNoCauzione = Array.isArray(permissions) && permissions.includes('hide:richieste-no-cauzione')
   // Storica: solo Valerio. Ora gestita tramite `role:preventivi-admin`
   // (failsafe valerio/ilenia). Conserva la stessa semantica della whitelist.
   const isValerio = hasRole('preventivi-admin')
@@ -2901,10 +2904,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             )}
           </div>
         </div>
-        {/* Subtab Switch — nascosto per i collaboratori (hanno solo
-            `reservations-preventivi`): Richieste No Cauzione e' una
-            funzione admin sulle prenotazioni, non sui preventivi. */}
-        {!isPreventivoOnly && (() => {
+        {/* Subtab Switch — nascosto per collaboratori (hanno solo
+            `reservations-preventivi`) e quando admin ha spuntato
+            `hide:richieste-no-cauzione` per quell'operatore. */}
+        {!isPreventivoOnly && !hideRichiesteNoCauzione && (() => {
           const pendingCount = noCauzioneRequests.filter((b: any) => b.booking_details?.no_cauzione_status === 'pending').length
           return (
             <div className="flex gap-1 bg-theme-bg-tertiary rounded-lg p-1">
