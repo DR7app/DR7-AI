@@ -326,13 +326,21 @@ export default function AdminDashboard() {
   const sectionForActiveTab = SECTIONS.find(s => s.tabs.some(t => t.tab === activeTab)) || null
   const isSectionActive = (sectionName: string) => sectionForActiveTab?.name === sectionName
 
-  // Per i collaboratori (1 sola sezione visibile) la sidebar non serve:
-  // l'unica sezione e' gia' attiva di default e il sub-tab bar in alto
-  // mostra Preventivi + Calendario. Nascondiamo hamburger + drawer.
+  // Per i collaboratori la sidebar non serve: tutte le tab accessibili
+  // (potenzialmente sparpagliate fra sezioni — es. Preventivi + Calendario
+  // sotto Noleggio + Centralina Pro readonly) le mostriamo come barra
+  // piatta in alto. Tutti gli operatori standard mantengono sidebar +
+  // sezioni come prima.
   const visibleSectionCount = SECTIONS.filter(s =>
     s.tabs.some(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin'))
   ).length
-  const hideSidebar = visibleSectionCount <= 1
+  const hideSidebar = visibleSectionCount <= 1 || isCollaboratore
+  // Lista piatta di tutte le tab accessibili (per collaboratori). Tiene il
+  // primo entry per ogni (tab + permKey) cosi' Preventivi sotto Noleggio
+  // e Centralina Pro readonly compaiono nello stesso bar.
+  const collaboratoreFlatTabs = SECTIONS.flatMap(s => s.tabs).filter(t =>
+    hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin')
+  )
 
   // Mobile tab labels
   const tabLabels: Record<string, string> = {
@@ -830,15 +838,21 @@ export default function AdminDashboard() {
             non autorizzate durante il caricamento iniziale (hasPermission
             è ottimistico → torna true mentre carica → tutti i tab
             apparivano per ~500ms anche a collaboratori ristretti). */}
-        {!roleLoading && sectionForActiveTab && sectionForActiveTab.tabs.filter(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin')).length > 1 && (
+        {!roleLoading && (isCollaboratore
+          ? collaboratoreFlatTabs.length > 1
+          : sectionForActiveTab && sectionForActiveTab.tabs.filter(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin')).length > 1
+        ) && (
           <div className="bg-theme-bg-primary border-b border-theme-border overflow-x-auto scrollbar-thin sticky top-[60px] z-20">
             <div className="flex items-center gap-1 px-3 sm:px-6 lg:px-8">
-              {sectionForActiveTab.tabs
-                .filter(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin'))
+              {(isCollaboratore
+                ? collaboratoreFlatTabs
+                : (sectionForActiveTab?.tabs.filter(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin')) || [])
+              )
                 .map((t, idx) => {
                   const tabMatch = activeTab === t.tab
                   const subMatch = t.subView ? rentalSubView === t.subView : (t.tab !== 'reservations' || true)
-                  const sameTabEntries = sectionForActiveTab.tabs.filter(x => x.tab === t.tab)
+                  const sourceTabs = isCollaboratore ? collaboratoreFlatTabs : (sectionForActiveTab?.tabs || [])
+                  const sameTabEntries = sourceTabs.filter(x => x.tab === t.tab)
                   const isActive = sameTabEntries.length > 1
                     ? (tabMatch && t.subView === rentalSubView)
                     : tabMatch && subMatch
