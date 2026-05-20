@@ -487,10 +487,14 @@ export default function ReportsTab() {
                     </div>
                   )}
 
-                  {/* Ricavo mese (prorated revenue for the report month) */}
+                  {/* Ricavo mese: SOLO il noleggio proporzionato al mese di
+                      riferimento — coerente con la colonna "Ricavo Mese"
+                      della tabella desktop. Penali e danni restano colonne
+                      a sé sopra: il totale veicolo li somma a livello di riga
+                      veicolo, non di singola prenotazione. */}
                   <div className="flex justify-between pt-1.5 border-t border-theme-border/40">
                     <span className="text-theme-text-muted font-semibold">Ricavo Mese</span>
-                    <span className="text-dr7-gold font-bold">{formatCurrency(revInMonth + pen + dan)}</span>
+                    <span className="text-dr7-gold font-bold">{formatCurrency(revInMonth)}</span>
                   </div>
                 </div>
               )
