@@ -2,7 +2,6 @@ import { Fragment, useMemo, useState, useEffect, useCallback, useRef, lazy, Susp
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { formatAdminLog, formatEntityLabel } from '../../../utils/formatAdminLog'
-import OperatoriReportDashboard from './OperatoriReportDashboard'
 import OperatoriReportDashboardV2 from './OperatoriReportDashboardV2'
 import PayrollPeriodoView from './PayrollPeriodoView'
 import InviteOperatoreModal from './InviteOperatoreModal'
@@ -259,37 +258,9 @@ function OperatoriViewSwitch({ view, setView }: { view: OperatoriView; setView: 
   )
 }
 
-// 2026-05-18: piccolo toggle dentro la sub-view "Report Orari" per
-// scegliere fra il dashboard classico e quello nuovo (V2 all-in-one).
-// La preferenza e' salvata in localStorage cosi' la scelta dell'admin
-// persiste fra refresh.
+// 2026-05-20: V1 (OperatoriReportDashboard) rimossa. Resta solo V2.
 function DashboardToggle() {
-  const [mode, setMode] = useState<'classico' | 'nuovo'>(() => {
-    try {
-      const s = localStorage.getItem('operatori_dashboard_mode')
-      return s === 'nuovo' ? 'nuovo' : 'classico'
-    } catch { return 'classico' }
-  })
-  useEffect(() => {
-    try { localStorage.setItem('operatori_dashboard_mode', mode) } catch { /* ignore */ }
-  }, [mode])
-  return (
-    <div className="space-y-3">
-      <div className="flex justify-end">
-        <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-tertiary p-0.5 text-[11px]">
-          <button onClick={() => setMode('classico')}
-            className={`px-3 py-1 rounded-full ${mode === 'classico' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary'}`}>
-            Classico
-          </button>
-          <button onClick={() => setMode('nuovo')}
-            className={`px-3 py-1 rounded-full ${mode === 'nuovo' ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary'}`}>
-            Nuovo Design
-          </button>
-        </div>
-      </div>
-      {mode === 'nuovo' ? <OperatoriReportDashboardV2 /> : <OperatoriReportDashboard />}
-    </div>
-  )
+  return <OperatoriReportDashboardV2 />
 }
 
 export default function OperatoriTab() {
