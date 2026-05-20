@@ -64,7 +64,7 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-8 relative overflow-hidden bg-theme-bg-secondary">
+    <div className="min-h-screen flex items-center justify-center px-4 py-8 relative overflow-hidden bg-theme-bg-primary">
 
       <div className="w-full max-w-md relative z-10">
         {/* Box login: SEGUE il tema. Light = bianco con testo scuro,

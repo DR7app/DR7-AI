@@ -562,6 +562,9 @@ export default function GestioneOtpTab() {
             {/* Live active OTPs from limitation_overrides */}
             <ActiveOtpsSection />
 
+            {/* Full historical log of every OTP that was requested */}
+            <StoricoOtpSection />
+
             {/* Main 2-col grid */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 {/* Rules grid (2/3 width) */}
@@ -1405,6 +1408,212 @@ function ActiveOtpsSection() {
             <p className="text-[11px] text-theme-text-muted mt-3">
                 Mostra gli OTP generati nelle ultime 24 ore (tabella <code>limitation_overrides</code>). Aggiorna automaticamente in tempo reale e ogni 30 secondi. Clicca su un codice attivo per copiarlo.
             </p>
+        </div>
+    )
+}
+
+/**
+ * StoricoOtpSection — full history of every OTP that was requested.
+ * Date range + status + search filters, paginated, read-only.
+ * Lazy-loads when expanded (it can be a heavy table on big deployments).
+ */
+function StoricoOtpSection() {
+    const [expanded, setExpanded] = useState(false)
+    const [rows, setRows] = useState<ActiveOtp[]>([])
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+    const [filterStatus, setFilterStatus] = useState<'all' | 'verified' | 'expired' | 'cancelled' | 'pending'>('all')
+    const [fromDate, setFromDate] = useState<string>(() => {
+        const d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+        return d.toISOString().slice(0, 10)
+    })
+    const [toDate, setToDate] = useState<string>(() => new Date().toISOString().slice(0, 10))
+    const [search, setSearch] = useState('')
+    const [page, setPage] = useState(0)
+    const PAGE_SIZE = 25
+
+    async function loadHistory() {
+        setLoading(true)
+        setError(null)
+        try {
+            const fromIso = new Date(`${fromDate}T00:00:00`).toISOString()
+            const toIso = new Date(`${toDate}T23:59:59`).toISOString()
+            const { data, error: err } = await supabase
+                .from('limitation_overrides')
+                .select('id, limitation_code, action_context, otp_code, otp_verified, otp_expires_at, expires_at, status, created_at, metadata')
+                .gte('created_at', fromIso)
+                .lte('created_at', toIso)
+                .order('created_at', { ascending: false })
+                .limit(500)
+            if (err) throw err
+            setRows((data as ActiveOtp[]) || [])
+            setPage(0)
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e))
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    useEffect(() => {
+        if (expanded) loadHistory()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [expanded])
+
+    function classifyStatus(o: ActiveOtp): 'verified' | 'expired' | 'cancelled' | 'pending' {
+        if (o.status === 'cancelled') return 'cancelled'
+        if (o.otp_verified === true) return 'verified'
+        const exp = o.otp_expires_at ? new Date(o.otp_expires_at).getTime() : null
+        if (o.status === 'expired' || (exp && Date.now() > exp)) return 'expired'
+        return 'pending'
+    }
+    function statusPill(s: ReturnType<typeof classifyStatus>): { label: string; cls: string } {
+        switch (s) {
+            case 'verified':  return { label: 'Verificato', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' }
+            case 'expired':   return { label: 'Scaduto',    cls: 'bg-amber-500/15 text-amber-300 border-amber-500/30' }
+            case 'cancelled': return { label: 'Annullato',  cls: 'bg-red-500/15 text-red-300 border-red-500/30' }
+            default:          return { label: 'In attesa',  cls: 'bg-blue-500/15 text-blue-300 border-blue-500/30' }
+        }
+    }
+
+    const filtered = rows.filter(r => {
+        const status = classifyStatus(r)
+        if (filterStatus !== 'all' && status !== filterStatus) return false
+        if (search.trim()) {
+            const q = search.toLowerCase()
+            const haystack = `${r.limitation_code || ''} ${r.action_context || ''} ${r.otp_code || ''}`.toLowerCase()
+            if (!haystack.includes(q)) return false
+        }
+        return true
+    })
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+    const pageRows = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+    const counts = {
+        all: rows.length,
+        verified: rows.filter(r => classifyStatus(r) === 'verified').length,
+        expired: rows.filter(r => classifyStatus(r) === 'expired').length,
+        cancelled: rows.filter(r => classifyStatus(r) === 'cancelled').length,
+        pending: rows.filter(r => classifyStatus(r) === 'pending').length,
+    }
+
+    return (
+        <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 shadow-sm">
+            <button
+                type="button"
+                onClick={() => setExpanded(v => !v)}
+                className="w-full flex items-center justify-between gap-3 text-left"
+            >
+                <div className="flex items-center gap-2">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-theme-text-muted">
+                        <path d="M3 5h18M5 5v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V5"/>
+                        <path d="M9 9h6M9 13h6M9 17h4"/>
+                    </svg>
+                    <h3 className="text-base sm:text-lg font-semibold text-theme-text-primary">Storico OTP</h3>
+                    <span className="text-[11px] text-theme-text-muted">{expanded ? `${counts.all} richieste totali` : 'Tutti gli OTP richiesti'}</span>
+                </div>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={'text-theme-text-muted transition-transform ' + (expanded ? 'rotate-180' : '')}>
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
+            </button>
+
+            {expanded && (
+                <div className="mt-4 space-y-3">
+                    {/* Filters */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
+                        <label className="text-[11px] text-theme-text-muted">
+                            <span className="block mb-1">Da</span>
+                            <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
+                                className="w-full px-2 py-1.5 bg-theme-bg-primary border border-theme-border rounded text-xs text-theme-text-primary"/>
+                        </label>
+                        <label className="text-[11px] text-theme-text-muted">
+                            <span className="block mb-1">A</span>
+                            <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
+                                className="w-full px-2 py-1.5 bg-theme-bg-primary border border-theme-border rounded text-xs text-theme-text-primary"/>
+                        </label>
+                        <label className="text-[11px] text-theme-text-muted">
+                            <span className="block mb-1">Stato</span>
+                            <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value as 'all' | 'verified' | 'expired' | 'cancelled' | 'pending'); setPage(0) }}
+                                className="w-full px-2 py-1.5 bg-theme-bg-primary border border-theme-border rounded text-xs text-theme-text-primary">
+                                <option value="all">Tutti ({counts.all})</option>
+                                <option value="verified">Verificati ({counts.verified})</option>
+                                <option value="pending">In attesa ({counts.pending})</option>
+                                <option value="expired">Scaduti ({counts.expired})</option>
+                                <option value="cancelled">Annullati ({counts.cancelled})</option>
+                            </select>
+                        </label>
+                        <label className="text-[11px] text-theme-text-muted lg:col-span-2">
+                            <span className="block mb-1">Cerca</span>
+                            <input type="text" value={search} onChange={e => { setSearch(e.target.value); setPage(0) }} placeholder="azione, codice, contesto…"
+                                className="w-full px-2 py-1.5 bg-theme-bg-primary border border-theme-border rounded text-xs text-theme-text-primary placeholder:text-theme-text-muted"/>
+                        </label>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                        <button onClick={loadHistory} disabled={loading}
+                            className="px-3 py-1.5 rounded-lg bg-dr7-gold/15 text-dr7-gold text-xs font-semibold hover:bg-dr7-gold/25 disabled:opacity-50">
+                            {loading ? 'Caricamento…' : 'Aggiorna'}
+                        </button>
+                        <span className="text-[11px] text-theme-text-muted">
+                            {filtered.length} risultati · pag {page + 1}/{totalPages}
+                        </span>
+                    </div>
+
+                    {error && (
+                        <div className="rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-400">{error}</div>
+                    )}
+
+                    {/* Table */}
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-[11px]">
+                            <thead>
+                                <tr className="text-theme-text-muted uppercase tracking-wider text-[10px] border-b border-theme-border">
+                                    <th className="px-2 py-2 font-semibold">Data &amp; ora</th>
+                                    <th className="px-2 py-2 font-semibold">Azione</th>
+                                    <th className="px-2 py-2 font-semibold">Codice</th>
+                                    <th className="px-2 py-2 font-semibold">Contesto</th>
+                                    <th className="px-2 py-2 font-semibold">Stato</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {pageRows.length === 0 && !loading && (
+                                    <tr><td colSpan={5} className="px-2 py-6 text-center text-theme-text-muted italic">Nessun OTP nel periodo selezionato.</td></tr>
+                                )}
+                                {pageRows.map(o => {
+                                    const status = classifyStatus(o)
+                                    const pill = statusPill(status)
+                                    const fromCatalog = OTP_ACTION_CATALOG.find((a: OtpAction) => a.id === o.limitation_code)
+                                    const actionTxt = fromCatalog?.label || o.limitation_code
+                                    return (
+                                        <tr key={o.id} className="border-b border-theme-border hover:bg-theme-bg-hover/50">
+                                            <td className="px-2 py-1.5 text-theme-text-muted tabular-nums">{new Date(o.created_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                                            <td className="px-2 py-1.5 text-theme-text-primary">{actionTxt}</td>
+                                            <td className="px-2 py-1.5 font-mono text-theme-text-muted">{o.otp_code || '—'}</td>
+                                            <td className="px-2 py-1.5 text-theme-text-muted truncate max-w-[200px]" title={o.action_context || ''}>{o.action_context || '—'}</td>
+                                            <td className="px-2 py-1.5">
+                                                <span className={`inline-block px-2 py-0.5 rounded-full border text-[10px] uppercase tracking-wider ${pill.cls}`}>{pill.label}</span>
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                        <div className="flex items-center justify-center gap-2 pt-2">
+                            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+                                className="px-3 py-1 rounded-lg bg-theme-bg-primary border border-theme-border text-xs disabled:opacity-50">Precedente</button>
+                            <span className="text-[11px] text-theme-text-muted">{page + 1} / {totalPages}</span>
+                            <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+                                className="px-3 py-1 rounded-lg bg-theme-bg-primary border border-theme-border text-xs disabled:opacity-50">Successivo</button>
+                        </div>
+                    )}
+
+                    <p className="text-[11px] text-theme-text-muted">
+                        Storico completo da <code>limitation_overrides</code>. Limite di 500 record per query, restringi il range data se mancano risultati.
+                    </p>
+                </div>
+            )}
         </div>
     )
 }
