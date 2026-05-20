@@ -418,6 +418,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   // Hide-key esplicito: admin puo' spuntare "Nascondi richieste no cauzione"
   // nella modale invito per togliere il subtab anche a chi non e' collaboratore.
   const hideRichiesteNoCauzione = Array.isArray(permissions) && permissions.includes('hide:richieste-no-cauzione')
+  // 2026-05-20: collaboratori (es. Nicola Frongia) che devono solo poter
+  // copiare/incollare il template ma non gestire i coefficienti tecnici.
+  // Permission key: aggiungere `hide:invia-coefficienti` in admins.permissions.
+  const hideInviaCoefficienti = Array.isArray(permissions) && permissions.includes('hide:invia-coefficienti')
   // Storica: solo Valerio. Ora gestita tramite `role:preventivi-admin`
   // (failsafe valerio/ilenia). Conserva la stessa semantica della whitelist.
   const isValerio = hasRole('preventivi-admin')
@@ -3181,7 +3185,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                             )}
                             {/* "Invia coefficienti" — visible on EVERY row regardless
                                 of status. Pre-checks the box and pre-fills the
-                                preview with the coefficienti-only payload. */}
+                                preview with the coefficienti-only payload.
+                                Nascosta per operatori con `hide:invia-coefficienti`
+                                (es. Nicola Frongia — vede solo template invio). */}
+                            {!hideInviaCoefficienti && (
                             <button
                               onClick={async () => {
                                 setSelectedPreventivo(p)
@@ -3201,6 +3208,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                             >
                               Invia coefficienti
                             </button>
+                            )}
                             {(p.status === 'inviato' || p.status === 'bozza') && (
                               <button
                                 onClick={() => openAcceptModal(p)}
@@ -3330,7 +3338,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                           Invia
                         </button>
                       )}
-                      {/* "Invia coefficienti" — visible on EVERY card. */}
+                      {/* "Invia coefficienti" — visible on EVERY card.
+                          Nascosta per operatori con `hide:invia-coefficienti`. */}
+                      {!hideInviaCoefficienti && (
                       <button
                         type="button"
                         onClick={async () => {
@@ -3351,6 +3361,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                       >
                         Invia coefficienti
                       </button>
+                      )}
                       {canConvert && (
                         <button
                           type="button"
@@ -3451,7 +3462,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                   {/* Invia SOLO i coefficienti — sostituisce completamente
                       il messaggio normale con il solo blocco coefficienti.
                       Usato quando il cliente chiede esplicitamente la
-                      ripartizione dei coefficienti applicati. */}
+                      ripartizione dei coefficienti applicati.
+                      Nascosta per operatori con `hide:invia-coefficienti`. */}
+                  {!hideInviaCoefficienti && (
                   <label className="mt-3 flex items-start gap-2 cursor-pointer text-xs text-theme-text-secondary select-none">
                     <input
                       type="checkbox"
@@ -3478,6 +3491,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                       </span>
                     </span>
                   </label>
+                  )}
 
                   <label className="block text-sm font-medium text-theme-text-secondary mt-3 mb-1">Anteprima formattata</label>
                   <div

@@ -60,13 +60,27 @@ interface Booking {
 import { useAdminRole as useAdminRoleInternal } from '../../../hooks/useAdminRole'
 
 export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleId: string, date: Date) => void }) {
-  const { hasPermission: _calHasPerm } = useAdminRoleInternal()
+  const { hasPermission: _calHasPerm, permissions: _calPerms } = useAdminRoleInternal()
   // Collaboratore = vede solo "Riservato" sulle barre, niente click per
   // aprire i dettagli, niente tooltip con nome/dettagli cliente.
   const isCollaboratoreCal = _calHasPerm('reservations-preventivi') && !_calHasPerm('reservations')
   const { canViewFinancials } = useAdminRole()
   const [hideFinancials, setHideFinancials] = useState(false)
 
+  // 2026-05-20: per-operator vehicle hiding. Nasconde righe veicoli dal
+  // calendario quando l'admin assegna `hide:vehicle-plate:XXX` nelle
+  // permissions dell'operatore. Es. Nicola Frongia non vede TEST000/TEST002.
+  const hiddenPlates = useMemo(() => {
+    const set = new Set<string>()
+    if (Array.isArray(_calPerms)) {
+      for (const p of _calPerms) {
+        if (typeof p === 'string' && p.startsWith('hide:vehicle-plate:')) {
+          set.add(p.slice('hide:vehicle-plate:'.length).toUpperCase().replace(/\s+/g, ''))
+        }
+      }
+    }
+    return set
+  }, [_calPerms])
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
@@ -329,13 +343,23 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
     // Order rows by Centralina Pro category position (first = top of
     // calendar). Vehicles whose category isn't in the Pro list fall to
     // the bottom; ties broken alphabetically.
-    const orderedVehicles = [...vehicles].sort((a, b) => {
-      const ia = proCategories.findIndex(c => c.id === a.category)
-      const ib = proCategories.findIndex(c => c.id === b.category)
-      const ja = ia < 0 ? Number.POSITIVE_INFINITY : ia
-      const jb = ib < 0 ? Number.POSITIVE_INFINITY : ib
-      return ja - jb || a.display_name.localeCompare(b.display_name)
-    })
+    // 2026-05-20: filtra anche per `hide:vehicle-plate:XXX` nei
+    // permessi dell'operatore corrente. Es. Nicola Frongia con
+    // hide:vehicle-plate:TEST000 + hide:vehicle-plate:TEST002 non vede
+    // quelle due righe nel calendario.
+    const orderedVehicles = [...vehicles]
+      .filter(v => {
+        if (hiddenPlates.size === 0) return true
+        const plate = String(v.plate || '').toUpperCase().replace(/\s+/g, '')
+        return !hiddenPlates.has(plate)
+      })
+      .sort((a, b) => {
+        const ia = proCategories.findIndex(c => c.id === a.category)
+        const ib = proCategories.findIndex(c => c.id === b.category)
+        const ja = ia < 0 ? Number.POSITIVE_INFINITY : ia
+        const jb = ib < 0 ? Number.POSITIVE_INFINITY : ib
+        return ja - jb || a.display_name.localeCompare(b.display_name)
+      })
 
     orderedVehicles.forEach(vehicle => {
       const vehicleBookings = bookings.filter(b => bookingToVehicleId.get(b.id) === vehicle.id)

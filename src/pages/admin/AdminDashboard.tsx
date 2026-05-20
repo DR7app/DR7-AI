@@ -138,7 +138,7 @@ export default function AdminDashboard() {
   const { alarmState, enableAudio } = useVehicleAlarm()
   const birthdayCount = useBirthdayCount()
   const scartataCount = useFatturaScartataCount()
-  const { role: adminRole, hasPermission, adminName, adminEmail, adminAvatar, permissions } = useAdminRole()
+  const { role: adminRole, hasPermission, adminName, adminEmail, adminAvatar, permissions, loading: roleLoading } = useAdminRole()
   // 2026-05-19: isElevated rimosso (era declared but never read). Quando
   // serve in futuro, riaggiungerlo qui basato su:
   // adminRole === 'superadmin' || hasRole('direzione') || hasRole('developer')
@@ -825,8 +825,12 @@ export default function AdminDashboard() {
 
         {/* In-page horizontal sub-tab bar — lists all sub-tabs of the
             active section. Renders only if the section has more than one
-            sub-tab so single-tab sections don't get a one-button bar. */}
-        {sectionForActiveTab && sectionForActiveTab.tabs.filter(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin')).length > 1 && (
+            sub-tab so single-tab sections don't get a one-button bar.
+            2026-05-20: gate su !roleLoading per evitare flash di subtab
+            non autorizzate durante il caricamento iniziale (hasPermission
+            è ottimistico → torna true mentre carica → tutti i tab
+            apparivano per ~500ms anche a collaboratori ristretti). */}
+        {!roleLoading && sectionForActiveTab && sectionForActiveTab.tabs.filter(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin')).length > 1 && (
           <div className="bg-theme-bg-primary border-b border-theme-border overflow-x-auto scrollbar-thin sticky top-[60px] z-20">
             <div className="flex items-center gap-1 px-3 sm:px-6 lg:px-8">
               {sectionForActiveTab.tabs
