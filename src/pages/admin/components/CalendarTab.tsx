@@ -31,6 +31,7 @@ interface Vehicle {
     unavailable_from?: string
     unavailable_until?: string
     display_group?: string
+    image?: string | null
   }
 }
 
@@ -557,8 +558,26 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                 style={{ height: rowHeight }}
               >
                 {/* Left Sticky Column */}
-                <div className="sticky left-0 w-[300px] z-[30] bg-theme-bg-primary/95 group-hover:bg-theme-bg-secondary/95 border-r border-theme-border/30 flex items-center px-4 backdrop-blur-sm shrink-0 shadow-[4px_0_10px_-2px_var(--color-theme-shadow)]">
-                  <div className="flex flex-col overflow-hidden">
+                <div className="sticky left-0 w-[300px] z-[30] bg-theme-bg-primary/95 group-hover:bg-theme-bg-secondary/95 border-r border-theme-border/30 flex items-center gap-3 px-4 backdrop-blur-sm shrink-0 shadow-[4px_0_10px_-2px_var(--color-theme-shadow)]">
+                  {/* Vehicle image (from vehicles.metadata.image set in VehiclesTab).
+                      Fallback to a generic SVG car silhouette so the row layout stays
+                      consistent for vehicles that don't have an image uploaded yet. */}
+                  <div className="w-12 h-9 shrink-0 rounded-md bg-theme-bg-tertiary border border-theme-border/40 overflow-hidden flex items-center justify-center">
+                    {row.vehicle.metadata?.image ? (
+                      <img
+                        src={row.vehicle.metadata.image}
+                        alt={row.vehicle.display_name}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                      />
+                    ) : (
+                      <svg className="w-6 h-6 text-theme-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 17h14M5 17a2 2 0 1 1-4 0M5 17a2 2 0 1 0 4 0m10 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0 4 0M3 13l2-6h14l2 6M3 13v4h18v-4M3 13h18"/>
+                      </svg>
+                    )}
+                  </div>
+                  <div className="flex flex-col overflow-hidden min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm text-theme-text-primary truncate" title={row.vehicle.display_name}>{row.vehicle.display_name}</span>
                       {row.vehicle.category && (() => {
