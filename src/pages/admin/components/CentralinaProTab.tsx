@@ -3480,8 +3480,10 @@ function CauzioniSection({
         </p>
       </div>
 
-      {/* Category tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-theme-border -mb-px">
+      {/* Category tabs — pointer-events-auto cosi' restano cliccabili
+          anche quando un wrapper esterno imposta pointer-events:none
+          (modalita' "view-only" per i collaboratori). */}
+      <div className="flex flex-wrap gap-2 border-b border-theme-border -mb-px pointer-events-auto">
         {categoryList.map((c) => {
           const isActive = c.id === activeCategory
           return (
@@ -5481,8 +5483,10 @@ function FeeListEditor({
         </h3>
       </div>
 
-      {/* Category tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-theme-border -mb-px">
+      {/* Category tabs — pointer-events-auto cosi' restano cliccabili
+          anche quando un wrapper esterno imposta pointer-events:none
+          (modalita' "view-only" per i collaboratori). */}
+      <div className="flex flex-wrap gap-2 border-b border-theme-border -mb-px pointer-events-auto">
         {categoryList.map((c) => {
           const isActive = c.id === activeCategory
           return (
