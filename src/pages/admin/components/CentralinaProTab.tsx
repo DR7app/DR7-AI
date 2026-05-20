@@ -1377,12 +1377,13 @@ export default function CentralinaProTab() {
   // anche direzione/developer puo' essere messa in modalita' view se serve.
   const { permissions: _cpPerms } = useAdminRole()
   const isCauzioniViewOnly = Array.isArray(_cpPerms) && _cpPerms.includes('view-cauzioni-readonly')
-  // I 3 id categoria che il collaboratore puo' vedere. Post Path B i
-  // canonical id sono: exotic_cars, hypercar, supercar. Inseriamo anche
-  // alias legacy ('exotic', 'supercars') nel caso il DB non sia ancora
-  // stato migrato.
-  const CAUZIONI_VIEW_ALLOWED = useMemo(() => new Set([
-    'exotic_cars', 'hypercar', 'supercar', 'exotic', 'supercars',
+  // Le 3 categorie che il collaboratore puo' vedere. Matching su LABEL
+  // (case-insensitive) per essere robusti: gli id in centralina_pro_config
+  // possono essere quelli nuovi (exotic_cars/hypercar/supercar dopo Path B)
+  // o quelli legacy (supercars/urban/aziendali pre-migrazione). La label
+  // resta "Exotic Cars" / "Hypercar" / "Supercar" in entrambi i casi.
+  const CAUZIONI_VIEW_ALLOWED_LABELS = useMemo(() => new Set([
+    'exotic cars', 'hypercar', 'supercar',
   ]), [])
 
   const [section, setSection] = useState<SectionId>(isCauzioniViewOnly ? 'p4' : 'categorie-fascia')
@@ -1784,7 +1785,7 @@ export default function CentralinaProTab() {
                     deposits={deposits}
                     setDeposits={setDeposits}
                     fasce={fasce}
-                    categories={categories.filter(c => CAUZIONI_VIEW_ALLOWED.has(c.id))}
+                    categories={categories.filter(c => CAUZIONI_VIEW_ALLOWED_LABELS.has((c.label || '').trim().toLowerCase()))}
                   />
                 </div>
               ) : (
