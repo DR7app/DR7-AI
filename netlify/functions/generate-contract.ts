@@ -1086,8 +1086,33 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             // Insurance and Financial
             'Insurance': insuranceLabel,
             'Assicurazione': insuranceLabel,
-            'Deposit': booking.booking_details?.cauzione_auto ? (booking.booking_details?.cauzione_targa || '') : (booking.booking_details?.deposit || booking.booking_details?.cauzione || '0'),
-            'Cauzione': booking.booking_details?.cauzione_auto ? (booking.booking_details?.cauzione_targa || '') : (booking.booking_details?.deposit || booking.booking_details?.cauzione || '0'),
+            // Cauzione amount resolution.
+            // - cauzione_auto = true means the customer pledged THEIR OWN vehicle
+            //   as deposit; the field becomes the targa instead of an amount.
+            // - Otherwise, read in this priority:
+            //   1. booking_details.deposit / cauzione  (legacy admin-set fields)
+            //   2. booking_details.depositAmount       (alternate naming)
+            //   3. booking.deposit_amount              (top-level column — what
+            //      the website wizard actually writes for wallet/Nexi bookings)
+            //   Without the top-level fallback, every website booking that
+            //   only carried bookings.deposit_amount = 2000 showed "Cauzione: 0"
+            //   on the generated PDF (Massimo Runchina, 21-22 May case).
+            'Deposit': booking.booking_details?.cauzione_auto
+              ? (booking.booking_details?.cauzione_targa || '')
+              : (
+                  booking.booking_details?.deposit
+                  ?? booking.booking_details?.cauzione
+                  ?? booking.booking_details?.depositAmount
+                  ?? (booking.deposit_amount != null ? String(booking.deposit_amount) : '0')
+                ),
+            'Cauzione': booking.booking_details?.cauzione_auto
+              ? (booking.booking_details?.cauzione_targa || '')
+              : (
+                  booking.booking_details?.deposit
+                  ?? booking.booking_details?.cauzione
+                  ?? booking.booking_details?.depositAmount
+                  ?? (booking.deposit_amount != null ? String(booking.deposit_amount) : '0')
+                ),
             'TotalKM': kmLimitValue,
             'KMTotaliNoleggio': kmLimitValue,
 
