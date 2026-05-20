@@ -3995,14 +3995,14 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                             className="w-6 h-6 rounded-full bg-theme-bg-tertiary border border-theme-border text-theme-text-primary font-bold text-xs disabled:opacity-50">−</button>
                           <span className="text-sm font-bold text-theme-text-primary min-w-[1.25rem] text-center">{qty}</span>
                           <button type="button" disabled={isDisabled || qty >= maxQty} onClick={(e) => { e.stopPropagation(); setQty(qty + 1) }}
-                            className="w-6 h-6 rounded-full bg-dr7-gold text-white font-bold text-xs disabled:opacity-50">+</button>
+                            className="w-6 h-6 rounded-full bg-dr7-gold !text-white font-bold text-xs disabled:opacity-50">+</button>
                           <span className="text-sm font-bold text-dr7-gold ml-1.5">{formatEur(pkg.price * qty)}</span>
                         </div>
                       ) : (
                         <div className="flex items-center gap-1.5">
                           <span className="text-sm font-bold text-dr7-gold">{formatEur(pkg.price)}</span>
                           <button type="button" disabled={isDisabled} onClick={(e) => { e.stopPropagation(); setQty(1) }}
-                            className="w-6 h-6 rounded-full bg-dr7-gold text-white font-bold text-xs disabled:opacity-50">+</button>
+                            className="w-6 h-6 rounded-full bg-dr7-gold !text-white font-bold text-xs disabled:opacity-50">+</button>
                         </div>
                       )}
                     </div>

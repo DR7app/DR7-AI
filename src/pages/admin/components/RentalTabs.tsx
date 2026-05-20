@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import ReservationsTab from './ReservationsTab'
 import PreventiviTab from './PreventiviTab'
+import { useAdminRole } from '../../../hooks/useAdminRole'
 
 interface RentalTabsProps {
     initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string; fromPreventivo?: Record<string, unknown> } | null
@@ -13,9 +14,15 @@ interface RentalTabsProps {
 }
 
 export default function RentalTabs({ initialData: externalInitialData, onDataConsumed, activeSubView: externalSubView, onSubViewChange }: RentalTabsProps) {
+    const { hasPermission } = useAdminRole()
     const [internalSubTab, setInternalSubTab] = useState<'bookings' | 'preventivi'>('bookings')
     const isControlled = externalSubView !== undefined
-    const activeSubTab = isControlled ? externalSubView! : internalSubTab
+    const rawSubTab = isControlled ? externalSubView! : internalSubTab
+    // Final-line gate: a user with only `reservations-preventivi` (no
+    // `reservations`) must never land on the bookings sub-view, even if
+    // stale state tried to take them there.
+    const canSeeBookings = hasPermission('reservations')
+    const activeSubTab: 'bookings' | 'preventivi' = (!canSeeBookings && rawSubTab === 'bookings') ? 'preventivi' : rawSubTab
     const setActiveSubTab = (v: 'bookings' | 'preventivi') => {
         if (isControlled) onSubViewChange?.(v)
         else setInternalSubTab(v)

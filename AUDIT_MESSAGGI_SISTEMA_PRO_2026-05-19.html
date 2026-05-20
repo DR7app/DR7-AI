@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Audit Messaggi di Sistema Pro - 19 Maggio 2026</title>
+<style>
+@page { size: A4; margin: 1.5cm 1.5cm 2cm; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 10pt; line-height: 1.45; color: #111; max-width: 210mm; margin: 0 auto; padding: 0; }
+h1 { font-size: 22pt; border-bottom: 3px solid #d4af37; padding-bottom: 8px; margin-bottom: 4px; color: #000; }
+.subtitle { color: #666; font-size: 10pt; margin: 0 0 24px; }
+h2 { font-size: 14pt; margin-top: 28px; margin-bottom: 8px; padding: 6px 10px; border-radius: 4px; page-break-after: avoid; }
+h2.critico { background: #fee; color: #a00; border-left: 4px solid #c00; }
+h2.serio   { background: #fff5e0; color: #884400; border-left: 4px solid #d48800; }
+h2.cleanup { background: #f0f0f0; color: #444; border-left: 4px solid #888; }
+h3 { font-size: 11pt; margin-top: 16px; margin-bottom: 6px; color: #222; page-break-after: avoid; }
+table { border-collapse: collapse; width: 100%; margin: 8px 0 16px; font-size: 9pt; page-break-inside: auto; }
+th { background: #f5f5f5; text-align: left; padding: 6px 8px; border-bottom: 2px solid #ccc; font-weight: 600; }
+td { padding: 5px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+td.file { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5pt; color: #333; white-space: nowrap; }
+td.sev-r { color: #c00; font-weight: 600; }
+td.sev-y { color: #d48800; font-weight: 600; }
+td.sev-w { color: #666; }
+.finding { margin: 12px 0 16px; padding: 10px 14px; border-left: 4px solid #ccc; background: #fafafa; page-break-inside: avoid; }
+.finding.r { border-left-color: #c00; background: #fff5f5; }
+.finding.y { border-left-color: #d48800; background: #fffaf0; }
+.finding.w { border-left-color: #888; background: #f5f5f5; }
+.finding h4 { margin: 0 0 4px; font-size: 11pt; }
+.finding .meta { font-size: 9pt; color: #666; margin-bottom: 6px; }
+.finding .meta code { background: #fff; padding: 1px 5px; border: 1px solid #ddd; border-radius: 3px; font-size: 8.5pt; }
+code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9pt; }
+.note { font-size: 8.5pt; color: #555; font-style: italic; }
+.toc { background: #fafafa; padding: 14px 20px; border: 1px solid #e0e0e0; border-radius: 4px; margin: 16px 0 28px; }
+.toc h3 { margin: 0 0 8px; padding: 0; }
+.toc ul { margin: 0; padding-left: 18px; }
+.toc li { font-size: 10pt; padding: 2px 0; }
+.summary { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin: 14px 0 24px; }
+.summary div { padding: 12px; border-radius: 6px; text-align: center; }
+.summary .crit { background: #fee; border: 1px solid #fcc; }
+.summary .ser  { background: #fff5e0; border: 1px solid #f5d088; }
+.summary .clean { background: #f0f0f0; border: 1px solid #ccc; }
+.summary strong { display: block; font-size: 28pt; line-height: 1; margin-bottom: 4px; }
+.summary .crit strong { color: #c00; }
+.summary .ser strong  { color: #d48800; }
+.summary .clean strong { color: #555; }
+hr { border: none; border-top: 1px solid #ddd; margin: 24px 0; }
+.footer { margin-top: 36px; padding-top: 12px; border-top: 1px solid #ddd; color: #888; font-size: 8.5pt; text-align: center; }
+.page-break { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<h1>Audit "Messaggi di Sistema Pro"</h1>
+<p class="subtitle">DR7 Empire admin &middot; 19 Maggio 2026 &middot; Working dir: <code>/Users/opheliegiraud/DR7-empire-admin-temp/</code></p>
+
+<div class="summary">
+  <div class="crit"><strong>10</strong>Critici (cliente/admin non riceve)</div>
+  <div class="ser"><strong>4</strong>Seri (placeholder/inconsistenze)</div>
+  <div class="clean"><strong>2</strong>Cleanup</div>
+</div>
+
+<div class="toc">
+<h3>Sommario</h3>
+<ul>
+  <li>1. Panoramica</li>
+  <li>2. Findings critici (cliente o admin non riceve nulla)</li>
+  <li>3. Findings seri (placeholder leak, inconsistenze)</li>
+  <li>4. Findings cleanup</li>
+  <li>5. Tabella chiavi pro_*</li>
+  <li>6. Tabella chiavi legacy (mapping OLD_TO_PRO)</li>
+  <li>7. Tabella label hardcoded</li>
+  <li>8. Interventi suggeriti, ordine consigliato</li>
+</ul>
+</div>
+
+<hr>
+
+<h3>1. Panoramica</h3>
+<p>"Messaggi di Sistema Pro" e' il sistema centralizzato dove l'admin gestisce TUTTI i messaggi (WhatsApp + email) di DR7. Vive nella tabella Supabase <code>system_messages</code>. Lo schema rilevante:</p>
+<ul>
+<li><code>message_key</code>: chiave univoca (es. <code>pro_conferma_noleggio</code>)</li>
+<li><code>message_body</code>: corpo template con placeholder <code>{nome}</code>, <code>{vehicle_name}</code>, ecc.</li>
+<li><code>label</code>: etichetta visibile nell'UI</li>
+<li><code>is_enabled</code>: attivo/spento</li>
+<li><code>handled_events</code>: array di event-key legacy gestiti</li>
+<li><code>target_service_type</code>: rental / car_wash / mechanical / prime_wash</li>
+</ul>
+<p>Il render server-side passa per <code>netlify/functions/utils/messageTemplates.ts</code> (<code>renderTemplate</code>, <code>getMessageTemplate</code>) e il routing legacy→pro per <code>netlify/functions/utils/proTemplateRouting.ts</code> (<code>OLD_TO_PRO</code> map).</p>
+
+<h2 class="critico">2. Findings critici &mdash; cliente o admin non riceve nulla</h2>
+
+<div class="finding r">
+<h4>2.1 &mdash; 10 chiavi legacy mancanti in OLD_TO_PRO</h4>
+<p class="meta">Quando il sender chiama <code>renderTemplate('xxx')</code> con una chiave legacy che <strong>non</strong> e' presente in <code>OLD_TO_PRO</code>, il resolver torna <code>null</code> e l'invio salta in silenzio. Cliente o admin non riceve nulla.</p>
+<table>
+<thead><tr><th>Chiave legacy</th><th>File caller</th><th>Sintomo</th></tr></thead>
+<tbody>
+<tr><td><code>nexi_payment_received_admin</code></td><td class="file">nexi-payment-callback.ts:1086</td><td>Admin non riceve notifica pagamento Nexi confermato. <strong>Doppio bug:</strong> manca anche <code>notifyAdmin:true</code> nel body, quindi il guard <code>no_recipient_phone</code> blocca prima del resolver.</td></tr>
+<tr><td><code>checkin_reminder</code></td><td class="file">send-checkin-checkout-whatsapp.ts:72</td><td>Cliente non riceve promemoria check-in noleggio. Cron logga <code>nessun template Pro per checkin_reminder</code> per ogni booking.</td></tr>
+<tr><td><code>checkout_reminder</code></td><td class="file">send-checkin-checkout-whatsapp.ts:73</td><td>Cliente non riceve promemoria check-out. Stesso meccanismo.</td></tr>
+<tr><td><code>wallet_auto_recharge</code></td><td class="file">process-wallet-auto-recharges-cron.ts:162</td><td>La cron addebita la carta del cliente per auto-recharge wallet ma non manda conferma. Cliente vede addebito Nexi senza spiegazione.</td></tr>
+<tr><td><code>referral_otp_whatsapp</code></td><td class="file">referral-send-otp.ts:94</td><td>OTP del flow referral non arriva. Form bloccato lato cliente, non riesce a completare l'iscrizione.</td></tr>
+<tr><td><code>invoice_pdf_whatsapp</code></td><td class="file">generate-invoice-from-booking.ts:823, 1163</td><td>Caption del PDF fattura WhatsApp = stringa vuota. Il PDF arriva senza testo accompagnatorio.</td></tr>
+<tr><td><code>penalty_invoice_pdf_whatsapp</code></td><td class="file">generate-penalty-invoice.ts:372</td><td>Idem per fattura penali / danni. Cliente vede solo l'allegato senza spiegazione.</td></tr>
+<tr><td><code>prepaid_card_blocked_customer</code></td><td class="file">prepaid-card-guard.ts:244</td><td>Quando una carta prepagata viene rifiutata, il cliente non riceve spiegazione del perche'.</td></tr>
+<tr><td><code>prepaid_card_blocked_admin</code></td><td class="file">prepaid-card-guard.ts:259</td><td>Admin non viene avvisato dei rifiuti carta prepagata.</td></tr>
+<tr><td><code>admin_contract_signed_alert</code></td><td class="file">signature-complete.ts:573</td><td>Direzione non riceve alert quando un contratto viene firmato dal cliente.</td></tr>
+<tr><td><code>cancellation_admin_alert</code></td><td class="file">cancel-unpaid-nexi-bookings.ts:159</td><td>Direzione non sa quando una booking unpaid viene auto-cancellata.</td></tr>
+<tr><td><code>wallet_bonus_credit_admin</code></td><td class="file">nexi-payment-callback.ts:1350</td><td>Direzione non sa quando un bonus wallet (cashback) viene erogato.</td></tr>
+</tbody>
+</table>
+<p class="note">Fix: aggiungere queste chiavi a <code>OLD_TO_PRO</code> in <code>src/utils/proTemplateRouting.ts</code> mappandole a chiavi <code>pro_*</code> di destinazione + creare i record corrispondenti in <code>system_messages</code>.</p>
+</div>
+
+<div class="finding r">
+<h4>2.2 &mdash; Placeholder leak in pro_email_addebito</h4>
+<p class="meta">3 caller diversi chiamano lo stesso template con set di variabili diversi.</p>
+<table>
+<thead><tr><th>Caller</th><th>Vars passate</th><th>Vars mancanti</th></tr></thead>
+<tbody>
+<tr><td class="file">trigger-second-email.ts:52</td><td><code>customer_name, nome, contract_number, amount, importo, causale</code></td><td>OK</td></tr>
+<tr><td class="file">process-pending-addebiti.ts:113</td><td>Stesse 6 vars</td><td>OK</td></tr>
+<tr><td class="file">nexi-nuovo-addebito.ts:61</td><td><code>customer_name, contract_ref, amount, causale</code></td><td><strong>nome</strong>, <strong>importo</strong>, <strong>contract_number</strong></td></tr>
+</tbody>
+</table>
+<p>Sintomo: nella PRIMA email (da <code>nexi-nuovo-addebito</code>) se l'admin scrive nel template <code>{nome}</code>, <code>{importo}</code> o <code>{contract_number}</code>, escono letterali. Nella seconda (<code>trigger-second-email</code>) sono sostituiti correttamente.</p>
+</div>
+
+<div class="finding r">
+<h4>2.3 &mdash; Label hardcoded fragili</h4>
+<p class="meta">5 sender caricano template per <code>label</code> esatta. Se l'admin rinomina la label, l'invio salta in silenzio.</p>
+<table>
+<thead><tr><th>Label</th><th>File</th><th>Sintomo</th></tr></thead>
+<tbody>
+<tr><td><code>Promozione a ELITE</code></td><td class="file">CustomersTab.tsx:1378</td><td>Promozione tier ELITE non parte (warn in console).</td></tr>
+<tr><td><code>Promozione a MEMBER</code></td><td class="file">CustomersTab.tsx:1378</td><td>Idem MEMBER.</td></tr>
+<tr><td><code>Preventivo WhatsApp</code></td><td class="file">PreventiviTab.tsx:1897</td><td>Invio preventivo con sconto fallisce con toast errore.</td></tr>
+<tr><td><code>Preventivo senza sconto</code></td><td class="file">PreventiviTab.tsx:1897</td><td>Invio preventivo senza sconto fallisce.</td></tr>
+<tr><td><code>Richiesta prolungamento SUPERCAR</code></td><td class="file">rental-extension-supercar-cron.ts:24</td><td>Cron 18:00 di estensione supercar skippa silenziosamente.</td></tr>
+</tbody>
+</table>
+<p class="note">Fix: aggiungere fallback su <code>message_key</code> canonical (es. <code>pro_promozione_elite</code>, <code>pro_preventivo_*</code>, <code>pro_prolungamento_supercar</code>).</p>
+</div>
+
+<h2 class="serio">3. Findings seri &mdash; placeholder leak, inconsistenze</h2>
+
+<div class="finding y">
+<h4>3.1 &mdash; pro_email_contratto: minimal vars set</h4>
+<p class="meta">File: <code class="file">send-contract-email.ts:102-107</code></p>
+<p>Il sender passa solo 4 variabili: <code>customer_name</code>, <code>nome</code>, <code>vehicle_name</code>, <code>booking_id</code>. Se nel template (o nel subject) l'admin scrive <code>{pickup_date}</code>, <code>{dropoff_date}</code>, <code>{plate}</code>, <code>{contract_number}</code>, <code>{total}</code> &mdash; escono come testo letterale nel corpo email / nel subject.</p>
+</div>
+
+<div class="finding y">
+<h4>3.2 &mdash; ReservationsTab passa pro_* direttamente (inconsistenza)</h4>
+<p class="meta">File: <code class="file">ReservationsTab.tsx:2992</code></p>
+<p>Solo <code>pro_annullamento_cliente</code> passa la chiave canonical direttamente; tutti gli altri caller dello stesso file usano chiavi legacy (<code>payment_link_customer</code>, <code>signature_request_link</code>, <code>rental_new_customer</code>). Funziona grazie al reverse-lookup nel resolver, ma e' fragile: se in futuro il reverse-lookup viene rimosso o l'admin disabilita il canonical, questo unico invio diventa l'unico a saltare.</p>
+</div>
+
+<div class="finding y">
+<h4>3.3 &mdash; supercar_day_before / utilitaria_day_before fuori dal sistema Pro</h4>
+<p class="meta">File: <code class="file">trigger-reminders.ts:106</code>, <code class="file">send-booking-reminders.ts:246</code></p>
+<p>Questi <code>getTemplate(key)</code> leggono direttamente dalla mappa locale <code>messageTemplates[key]</code>, bypassando il resolver. Non rispettano <code>handled_events</code>, non rispettano <code>target_service_type</code>. L'admin che li modifica da MessaggiSistemaProTab li trova solo se la riga ha <code>message_key='supercar_day_before'</code> esatta (chiave NON pro_, anomala).</p>
+</div>
+
+<div class="finding y">
+<h4>3.4 &mdash; CustomersTab.tsx: custom send bypassa wrapper + altre vars</h4>
+<p class="meta">File: <code class="file">CustomersTab.tsx:1394-1404</code></p>
+<p>Invio promozione tier costruisce manualmente <code>tpl.message_body.replace(/\{nome\}/g, firstName)</code> e passa <code>customMessage</code> invece di <code>templateKey</code>. NON applica il wrapper header/footer anche se <code>include_header=true</code> sul template. Se l'admin scrive <code>{cliente}</code> o <code>{full_name}</code> nel template, restano letterali (solo <code>{nome}</code> e' sostituito).</p>
+</div>
+
+<h2 class="cleanup">4. Findings cleanup</h2>
+
+<div class="finding w">
+<h4>4.1 &mdash; pro_dr7_privilege_noleggio / lavaggio senza voce in EVENT_DESCRIPTIONS</h4>
+<p class="meta">File: <code class="file">netlify/functions/utils/dr7Privilege.ts:107</code></p>
+<p>L'UI Programmazione di MessaggiSistemaProTab non sa quando questi template partono perche' la mappa <code>getProKeyEventTriggers</code> non li copre. L'admin che modifica il template non capisce in che condizioni viene inviato.</p>
+</div>
+
+<div class="finding w">
+<h4>4.2 &mdash; include_header ignorato in 2 sender</h4>
+<p>File:
+<ul>
+<li><code class="file">send-checkin-checkout-whatsapp.ts:196</code></li>
+<li><code class="file">trigger-reminders.ts:28</code></li>
+</ul>
+</p>
+<p>Wrappano sempre header/footer anche se il template ha <code>include_header=false</code>. Inconsistente con il resto del sistema.</p>
+</div>
+
+<div class="page-break"></div>
+
+<h2>5. Tabella chiavi pro_*</h2>
+<table>
+<thead><tr><th>Chiave (message_key)</th><th>File caller principale</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td><code>pro_email_addebito</code></td><td class="file">trigger-second-email.ts:60<br>process-pending-addebiti.ts:113<br>nexi-nuovo-addebito.ts:67</td><td>hard-fail se assente</td></tr>
+<tr><td><code>pro_email_addebito_subject</code></td><td class="file">nexi-nuovo-addebito.ts:68</td><td>hard-fail se assente</td></tr>
+<tr><td><code>pro_email_contratto</code></td><td class="file">send-contract-email.ts:108</td><td>hard-fail se assente</td></tr>
+<tr><td><code>pro_email_contratto_subject</code></td><td class="file">send-contract-email.ts:109</td><td>fallback soft</td></tr>
+<tr><td><code>pro_richiesta_pagamento</code></td><td class="file">nexi-payment-callback.ts:253</td><td>+ usata via payment_link_customer</td></tr>
+<tr><td><code>pro_annullamento_cliente</code></td><td class="file">ReservationsTab.tsx:2992</td><td>passata come pro_*, anomalia</td></tr>
+<tr><td><code>pro_wrapper_header</code> / <code>pro_wrapper_footer</code></td><td class="file">messageTemplates.ts:347 + altri 5 caller</td><td>wrapper opzionale per header/footer</td></tr>
+<tr><td><code>pro_dr7_privilege_noleggio</code></td><td class="file">dr7Privilege.ts:107</td><td>nessuna voce EVENT_DESCRIPTIONS</td></tr>
+<tr><td><code>pro_dr7_privilege_lavaggio</code></td><td class="file">dr7Privilege.ts:107</td><td>idem</td></tr>
+</tbody>
+</table>
+
+<h2>6. Tabella chiavi legacy (mapping OLD_TO_PRO)</h2>
+<table>
+<thead><tr><th>Chiave legacy</th><th>In OLD_TO_PRO?</th><th>File caller</th></tr></thead>
+<tbody>
+<tr><td><code>rental_new_customer</code></td><td>OK</td><td class="file">ReservationsTab.tsx:5954, signature-complete.ts:533</td></tr>
+<tr><td><code>rental_modified</code> / <code>carwash_modified</code> / <code>mechanical_modified</code></td><td>OK</td><td class="file">send-whatsapp-notification.ts:366-370</td></tr>
+<tr><td><code>carwash_new_customer</code> / variants</td><td>OK</td><td class="file">CarWashBookingsTab.tsx:1801 + altri</td></tr>
+<tr><td><code>booking_confirmed_da_saldare</code></td><td>OK</td><td class="file">CarWashBookingsTab.tsx:1798, ReservationsTab.tsx:5951</td></tr>
+<tr><td><code>booking_paid_cash/card/...</code></td><td>OK</td><td class="file">CarWashBookingsTab.tsx:1868-72</td></tr>
+<tr><td><code>payment_link_customer</code></td><td>OK</td><td class="file">multi (Reservations, CarWash, Unpaid, Preventivi)</td></tr>
+<tr><td><code>signature_request_link</code></td><td>OK</td><td class="file">signature-init.ts:43</td></tr>
+<tr><td><code>signature_reminder_whatsapp</code></td><td>OK</td><td class="file">signature-reminder.ts:194</td></tr>
+<tr><td><code>signature_otp_whatsapp</code></td><td>OK</td><td class="file">signature-send-otp.ts:145</td></tr>
+<tr><td><code>document_signature_link</code></td><td>OK</td><td class="file">document-sign-init.ts:104</td></tr>
+<tr><td><code>booking_cancelled_whatsapp</code></td><td>OK</td><td class="file">cancel-unpaid-nexi-bookings.ts:144</td></tr>
+<tr><td><code>payment_received_extension</code> / <code>_damages</code> / <code>_admin</code></td><td>OK</td><td class="file">nexi-payment-callback.ts:445, 463, 599, 643</td></tr>
+<tr><td><code>deposit_return_iban</code></td><td>OK</td><td class="file">send-booking-reminders.ts:518</td></tr>
+<tr><td><code>deposit_request_customer</code></td><td>OK</td><td class="file">CauzioniTab.tsx:506, 591</td></tr>
+<tr><td><code>no_cauzione_approved/rejected</code></td><td>OK</td><td class="file">PreventiviTab.tsx:1292, 1348</td></tr>
+<tr><td><code>quote_discount_offered</code></td><td>OK</td><td class="file">PreventiviTab.tsx:2491</td></tr>
+<tr><td><code>review_request_whatsapp</code></td><td>OK</td><td class="file">review-send.ts:205, send-review-whatsapp.ts:124</td></tr>
+<tr><td><code>review_discount_code</code></td><td>OK</td><td class="file">ReviewManagementTab.tsx:547</td></tr>
+<tr><td><code>birthday_message</code></td><td>OK</td><td class="file">send-birthday-messages.ts:47, 207</td></tr>
+<tr><td><code>wallet_bonus_credit</code></td><td>OK</td><td class="file">nexi-payment-callback.ts:1332</td></tr>
+<tr><td><code>promo_incassi_whatsapp</code></td><td>OK</td><td class="file">promo-incassi-cron.ts:265</td></tr>
+<tr><td><code>maxi_promo_gap_whatsapp</code></td><td>OK</td><td class="file">maxi-promo-gap-cron.ts:355</td></tr>
+<tr><td><code>admin_contract_signed_alert</code></td><td class="sev-r"><strong>MANCA</strong></td><td class="file">signature-complete.ts:573</td></tr>
+<tr><td><code>cancellation_admin_alert</code></td><td class="sev-r"><strong>MANCA</strong></td><td class="file">cancel-unpaid-nexi-bookings.ts:159</td></tr>
+<tr><td><code>prepaid_card_blocked_customer</code></td><td class="sev-r"><strong>MANCA</strong></td><td class="file">prepaid-card-guard.ts:244</td></tr>
+<tr><td><code>prepaid_card_blocked_admin</code></td><td class="sev-r"><strong>MANCA</strong></td><td class="file">prepaid-card-guard.ts:259</td></tr>
+<tr><td><code>wallet_bonus_credit_admin</code></td><td class="sev-r"><strong>MANCA</strong></td><td class="file">nexi-payment-callback.ts:1350</td></tr>
+<tr><td><code>nexi_payment_received_admin</code></td><td class="sev-r"><strong>MANCA</strong></td><td class="file">nexi-payment-callback.ts:1086</td></tr>
+<tr><td><code>wallet_auto_recharge</code></td><td class="sev-r"><strong>MANCA</strong></td><td class="file">process-wallet-auto-recharges-cron.ts:162</td></tr>
+<tr><td><code>invoice_pdf_whatsapp</code></td><td class="sev-r"><strong>MANCA</strong></td><td class="file">generate-invoice-from-booking.ts:823, 1163</td></tr>
+<tr><td><code>penalty_invoice_pdf_whatsapp</code></td><td class="sev-r"><strong>MANCA</strong></td><td class="file">generate-penalty-invoice.ts:372</td></tr>
+<tr><td><code>referral_otp_whatsapp</code></td><td class="sev-r"><strong>MANCA</strong></td><td class="file">referral-send-otp.ts:94</td></tr>
+<tr><td><code>checkin_reminder</code> / <code>checkout_reminder</code></td><td class="sev-r"><strong>MANCANO</strong></td><td class="file">send-checkin-checkout-whatsapp.ts:72-73</td></tr>
+<tr><td><code>supercar_day_before</code> / <code>utilitaria_day_before</code></td><td class="sev-y">letti direttamente</td><td class="file">trigger-reminders.ts:106, send-booking-reminders.ts:246</td></tr>
+</tbody>
+</table>
+
+<h2>7. Tabella label hardcoded (case-sensitive)</h2>
+<table>
+<thead><tr><th>Label</th><th>File:linea</th><th>Sintomo se admin rinomina</th></tr></thead>
+<tbody>
+<tr><td><code>Preventivo WhatsApp</code></td><td class="file">PreventiviTab.tsx:1897</td><td>Invio preventivo con sconto: toast errore "template non trovato"</td></tr>
+<tr><td><code>Preventivo senza sconto</code></td><td class="file">PreventiviTab.tsx:1897</td><td>Idem senza sconto</td></tr>
+<tr><td><code>Promozione a ELITE</code></td><td class="file">CustomersTab.tsx:1378</td><td>Promozione tier ELITE silenziosa (warn console)</td></tr>
+<tr><td><code>Promozione a MEMBER</code></td><td class="file">CustomersTab.tsx:1378</td><td>Idem MEMBER</td></tr>
+<tr><td><code>Richiesta prolungamento SUPERCAR</code></td><td class="file">rental-extension-supercar-cron.ts:24</td><td>Cron 18:00 skip silenzioso</td></tr>
+<tr><td><code>compleanno</code> (substring match)</td><td class="file">BirthdaysTab.tsx:202</td><td>Fallback se canonical assente; tollerante</td></tr>
+</tbody>
+</table>
+
+<h2>8. Interventi suggeriti, ordine consigliato</h2>
+<ol>
+<li><strong>Aggiungere 12 chiavi mancanti a OLD_TO_PRO</strong> in <code>src/utils/proTemplateRouting.ts</code> e creare i record corrispondenti in <code>system_messages</code> (Messaggi di Sistema Pro). Definire anche <code>EVENT_DESCRIPTIONS</code> per ognuna cosi' la UI Programmazione le mostra.</li>
+<li><strong>Allineare <code>nexi-nuovo-addebito.ts:63</code></strong> a passare anche <code>contract_number</code> (non solo <code>contract_ref</code>), <code>nome</code>, <code>importo</code> per parita' con gli altri caller di <code>pro_email_addebito</code>.</li>
+<li><strong>Risolvere <code>nexi-payment-callback.ts:1086</code>:</strong> passare <code>notifyAdmin: true</code> (o <code>customPhone</code> admin esplicito) cosi' il guard <code>no_recipient_phone</code> non blocca prima del resolver.</li>
+<li><strong>Estendere vars <code>pro_email_contratto</code></strong> (<code>send-contract-email.ts:102</code>) con almeno <code>pickup_date</code>, <code>dropoff_date</code>, <code>plate</code>, <code>contract_number</code>, <code>total</code>.</li>
+<li><strong>Safety-net "strip remaining {var}"</strong>: oggi il cleanup degli placeholder non sostituiti vive solo in <code>send-whatsapp-notification.ts:290</code>. Estenderlo a tutti i sender che bypassano (in particolare email).</li>
+<li><strong>Fallback per le 5 label hardcoded</strong>: ricerca prima per <code>message_key</code> canonical (es. <code>pro_promozione_elite</code>), poi per label come backup.</li>
+<li><strong>Migrare <code>supercar_day_before</code> / <code>utilitaria_day_before</code></strong> a <code>pro_promemoria_estensione_*</code> per uniformita' con il resto del sistema (rispettare <code>handled_events</code>, <code>target_service_type</code>).</li>
+</ol>
+
+<div class="footer">
+Report generato il 19 maggio 2026 &middot; DR7 Empire admin audit &middot; messaggi di sistema pro
+</div>
+
+</body>
+</html>

@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Audit Trigger Messaggi - 19 Maggio 2026</title>
+<style>
+@page { size: A4; margin: 1.2cm 1.2cm 1.6cm; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 9pt; line-height: 1.4; color: #111; max-width: 210mm; margin: 0 auto; padding: 0; }
+h1 { font-size: 20pt; border-bottom: 3px solid #d4af37; padding-bottom: 6px; margin: 0 0 4px; color: #000; }
+.subtitle { color: #666; font-size: 9pt; margin: 0 0 18px; }
+h2 { font-size: 13pt; margin-top: 22px; margin-bottom: 6px; padding: 5px 10px; border-radius: 4px; page-break-after: avoid; }
+h2.sec { background: #1a1a1a; color: #d4af37; }
+h2.warn { background: #fee; color: #a00; border-left: 4px solid #c00; }
+h3 { font-size: 11pt; margin-top: 14px; margin-bottom: 4px; color: #222; page-break-after: avoid; }
+table { border-collapse: collapse; width: 100%; margin: 6px 0 12px; font-size: 8pt; page-break-inside: auto; }
+table.tight { font-size: 7.5pt; }
+th { background: #f5f5f5; text-align: left; padding: 5px 6px; border-bottom: 2px solid #ccc; font-weight: 600; }
+td { padding: 4px 6px; border-bottom: 1px solid #eee; vertical-align: top; }
+td.file { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7pt; color: #333; }
+.rosso { color: #c00; font-weight: 600; }
+.giallo { color: #b86700; font-weight: 600; }
+.bianco { color: #777; }
+.attivo { color: #0a0; font-weight: 600; }
+.spento { color: #c00; font-weight: 600; }
+.box { margin: 10px 0; padding: 10px 14px; border-left: 4px solid #ccc; background: #fafafa; page-break-inside: avoid; }
+.box.r { border-left-color: #c00; background: #fff5f5; }
+.box.y { border-left-color: #d48800; background: #fffaf0; }
+.box.g { border-left-color: #1a8; background: #f0faf6; }
+.box h4 { margin: 0 0 6px; font-size: 11pt; }
+code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8pt; background: #f5f5f5; padding: 1px 4px; border-radius: 2px; }
+.toc { background: #fafafa; padding: 10px 18px; border: 1px solid #e0e0e0; border-radius: 4px; margin: 12px 0 20px; font-size: 9pt; }
+.toc ul { margin: 0; padding-left: 18px; }
+.toc li { padding: 1px 0; }
+.summary { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin: 12px 0 20px; }
+.summary div { padding: 10px; border-radius: 6px; text-align: center; font-size: 9pt; }
+.summary .a { background: #f0faf6; border: 1px solid #b5e3cb; }
+.summary .b { background: #fee; border: 1px solid #fcc; }
+.summary .c { background: #fff5e0; border: 1px solid #f5d088; }
+.summary .d { background: #f0f0f0; border: 1px solid #ccc; }
+.summary strong { display: block; font-size: 22pt; line-height: 1; margin-bottom: 4px; }
+.summary .a strong { color: #0a0; }
+.summary .b strong { color: #c00; }
+.summary .c strong { color: #b86700; }
+.summary .d strong { color: #555; }
+.page-break { page-break-before: always; }
+hr { border: none; border-top: 1px solid #ddd; margin: 18px 0; }
+.footer { margin-top: 30px; padding-top: 10px; border-top: 1px solid #ddd; color: #888; font-size: 8pt; text-align: center; }
+.legend { font-size: 8.5pt; color: #555; margin: 6px 0 16px; }
+.legend span { margin-right: 14px; }
+</style>
+</head>
+<body>
+
+<h1>Audit Trigger Messaggi</h1>
+<p class="subtitle">QUANDO ogni messaggio parte &middot; DR7 Empire admin &middot; 19 Maggio 2026 &middot; <code>/Users/opheliegiraud/DR7-empire-admin-temp/</code></p>
+
+<div class="summary">
+  <div class="a"><strong>17</strong>Cron attivi</div>
+  <div class="b"><strong>3</strong>Cron spenti</div>
+  <div class="c"><strong>5</strong>Slot Pro condivisi</div>
+  <div class="d"><strong>14</strong>Categorie</div>
+</div>
+
+<div class="toc">
+<strong>Sommario</strong>
+<ul>
+  <li>1. Quattro punti critici da sapere subito</li>
+  <li>2. Trigger per categoria (A-L)</li>
+  <li>3. Eventi inline (trigger_event in tempo reale)</li>
+  <li>4. Eventi gestiti SOLO dal cron temporale (oggi offline)</li>
+  <li>5. Duplicati e collisioni di slot Pro</li>
+  <li>6. Trigger ignoti / template letti direttamente</li>
+  <li>7. Tabella riepilogo cron (orari Rome)</li>
+  <li>8. TL;DR per la direzione</li>
+</ul>
+</div>
+
+<div class="legend">
+<strong>Legenda:</strong>
+<span class="rosso">&#x1F534; rosso = problema serio</span>
+<span class="giallo">&#x1F7E1; giallo = attenzione</span>
+<span class="attivo">&#x25CF; attivo</span>
+<span class="spento">&#x25CF; spento</span>
+</div>
+
+<h2 class="warn">1. Quattro punti critici da sapere subito</h2>
+
+<div class="box r">
+<h4>&#x1F534; Il cron "process-scheduled-system-messages-cron" e' DISABILITATO</h4>
+<p>In <code>netlify.toml</code> alla riga 116-128 lo schedule e' commentato dopo l'incidente del 13 Maggio 2026 ("mille messaggi randomici alla direzione"). Conseguenze: tutti i template Pro con <code>trigger_event</code> di tipo <code>before_*</code>, <code>after_*</code>, <code>on_inactive_*</code>, <code>on_cauzione_due</code>, <code>on_cauzione_overdue</code>, <code>on_scadenza_*</code> <strong>oggi non partono</strong>. Restano attivi solo i trigger inline da callback Nexi, firma Trustera, post-booking-webhook, ecc.</p>
+</div>
+
+<div class="box r">
+<h4>&#x1F534; "dr7-privilege-cron" e' anch'esso DISABILITATO</h4>
+<p>Flag <code>DR7_PRIVILEGE_ENABLED=false</code> hard-coded. DR7 Privilege parte solo dai callback inline al momento del pagamento Nexi.</p>
+</div>
+
+<div class="box r">
+<h4>&#x1F534; "send-review-whatsapp" e' DISABILITATO dal 15 Maggio 2026</h4>
+<p>La richiesta recensione automatica 60-120 minuti dopo il dropoff non parte piu'. Le recensioni vengono richieste SOLO manualmente dal tab Recensioni admin.</p>
+</div>
+
+<div class="box g">
+<h4>&#x2713; Dedup garantita</h4>
+<p>Tabella <code>system_message_send_log</code> con vincolo UNIQUE (template_id, booking_id): dedup sia per il cron sia per i trigger inline. Un messaggio non parte mai due volte per la stessa coppia template+booking.</p>
+</div>
+
+<div class="page-break"></div>
+
+<h2 class="sec">2. Trigger per categoria</h2>
+
+<h3>A. Booking eventi (creazione, modifica, cancellazione)</h3>
+<table class="tight">
+<thead><tr><th>Trigger</th><th>Quando</th><th>Template</th><th>A chi</th><th>File:linea</th></tr></thead>
+<tbody>
+<tr><td>Admin clicca "Salva" su nuovo noleggio</td><td>Booking inserito, telefono presente</td><td><code>rental_new_customer</code> &rarr; <code>pro_conferma_noleggio</code></td><td>Cliente</td><td class="file">ReservationsTab.tsx:5970</td></tr>
+<tr><td>Admin clicca "Salva" nuovo noleggio</td><td>Sempre (notifyAdmin)</td><td><code>rental_new_admin</code> &rarr; <code>pro_conferma_noleggio</code></td><td>Admin direzione</td><td class="file">ReservationsTab.tsx:5734</td></tr>
+<tr><td>Admin spunta "Conferma Prenotazione" (stato pending)</td><td>Prima conferma "Da Saldare" — idempotenza via <code>booking_details.manually_confirmed</code></td><td><code>booking_confirmed_da_saldare</code> &rarr; <code>pro_conferma_da_saldare</code></td><td>Cliente</td><td class="file">ReservationsTab.tsx:5941</td></tr>
+<tr><td>Admin salva booking con payment_status='paid'</td><td>Pagamento registrato &mdash; 1 messaggio per metodo</td><td><code>booking_paid_{cash|card|bank_transfer|paypal|wallet}</code> tutti &rarr; <code>pro_conferma_da_saldare</code></td><td>Cliente</td><td class="file">ReservationsTab.tsx:5998</td></tr>
+<tr><td>post-booking-webhook (sito / Nexi / Trustera)</td><td>Booking creato &mdash; <code>on_booking</code> trigger inline</td><td>Tutti i template Pro con <code>trigger_event='on_booking'</code> + offset &le; 1h</td><td>Cliente</td><td class="file">post-booking-webhook.ts:127</td></tr>
+<tr><td>post-booking-webhook</td><td>Prima booking del cliente &mdash; <code>on_first_booking</code></td><td>Pro template con quell'evento</td><td>Cliente</td><td class="file">post-booking-webhook.ts:140</td></tr>
+<tr><td>Admin modifica noleggio</td><td>Edit di booking gia' confermato</td><td><code>rental_modified</code> &rarr; <code>pro_promemoria_appuntamento</code></td><td>Cliente</td><td class="file">ReservationsTab.tsx:3697</td></tr>
+<tr><td>Admin salva lavaggio</td><td>payment_status='paid' o confirmBooking=true</td><td><code>carwash_new_customer</code> &rarr; <code>pro_conferma_lavaggio</code></td><td>Cliente</td><td class="file">CarWashBookingsTab.tsx:1683</td></tr>
+<tr><td>Admin salva booking meccanica</td><td>Cliente con telefono + insert</td><td><code>mechanical_new_customer</code> &rarr; <code>pro_conferma_meccanica</code></td><td>Cliente</td><td class="file">MechanicalBookingForm.tsx:312</td></tr>
+<tr><td>Cron cancel-unpaid-nexi-bookings (ogni 5 min)</td><td>Booking pending + Nexi link, creato &gt; 1h fa</td><td><code>booking_cancelled_whatsapp</code> &rarr; <code>pro_annullamento_cliente</code></td><td>Cliente</td><td class="file">cancel-unpaid-nexi-bookings.ts:144</td></tr>
+<tr><td>Idem (cron)</td><td>Cancellazione automatica</td><td><span class="rosso"><code>cancellation_admin_alert</code> (LEGACY, no slot Pro)</span></td><td>Admin direzione</td><td class="file">cancel-unpaid-nexi-bookings.ts:159</td></tr>
+<tr><td>Idem (cron)</td><td>Stesso evento via Pro pipeline</td><td>Tutti i Pro con <code>on_payment_link_expired</code></td><td>Cliente</td><td class="file">cancel-unpaid-nexi-bookings.ts:191</td></tr>
+<tr><td>Admin clicca "Annulla prenotazione"</td><td>Manuale</td><td><code>pro_annullamento_cliente</code> (diretto)</td><td>Cliente</td><td class="file">ReservationsTab.tsx:2984</td></tr>
+</tbody>
+</table>
+
+<h3>B. Pagamenti</h3>
+<table class="tight">
+<thead><tr><th>Trigger</th><th>Quando</th><th>Template</th><th>A chi</th><th>File:linea</th></tr></thead>
+<tbody>
+<tr><td>Admin clicca "Genera Pay-by-Link" / "Reinvia link"</td><td>Link Nexi creato</td><td><code>payment_link_customer</code> &rarr; <code>pro_richiesta_pagamento</code></td><td>Cliente</td><td class="file">ReservationsTab.tsx:2610, 3836, 5612, 6281; PreventiviTab.tsx:2716</td></tr>
+<tr><td>Webhook nexi-payment-callback</td><td>SUCCESS senza paymentPurpose (saldo)</td><td>Resolver sceglie tramite service_type</td><td>Cliente</td><td class="file">nexi-payment-callback.ts:1060</td></tr>
+<tr><td>Webhook nexi-payment-callback</td><td>Stesso evento</td><td><span class="rosso"><code>nexi_payment_received_admin</code> (LEGACY hardcoded)</span></td><td>Admin direzione</td><td class="file">nexi-payment-callback.ts:1082</td></tr>
+<tr><td>Webhook nexi-payment-callback</td><td>Stesso evento</td><td>Tutti i Pro con <code>on_payment</code></td><td>Cliente</td><td class="file">nexi-payment-callback.ts:1072</td></tr>
+<tr><td>Webhook nexi-payment-callback</td><td>paymentPurpose='danni' / 'penali'</td><td><code>payment_received_damages</code> &rarr; <code>pro_conferma_da_saldare</code></td><td>Cliente</td><td class="file">nexi-payment-callback.ts:445</td></tr>
+<tr><td>Webhook nexi-payment-callback</td><td>Idem</td><td><code>payment_received_damages_admin</code></td><td>Admin direzione</td><td class="file">nexi-payment-callback.ts:463</td></tr>
+<tr><td>Webhook nexi-payment-callback</td><td>paymentPurpose='extension'</td><td><code>payment_received_extension</code> &rarr; <code>pro_conferma_da_saldare</code></td><td>Cliente</td><td class="file">nexi-payment-callback.ts:599</td></tr>
+<tr><td>Webhook nexi-payment-callback</td><td>Idem</td><td><code>payment_received_extension_admin</code></td><td>Admin direzione</td><td class="file">nexi-payment-callback.ts:643</td></tr>
+<tr><td>Webhook nexi-payment-callback</td><td>FAILURE / DECLINED</td><td>Tutti i Pro con <code>on_payment_failed</code></td><td>Cliente</td><td class="file">nexi-payment-callback.ts:317</td></tr>
+<tr><td>Webhook nexi-payment-callback</td><td>Cashback wallet (3% / 6%)</td><td><code>wallet_bonus_credit</code> &rarr; <code>pro_wallet_bonus_cliente</code></td><td>Cliente</td><td class="file">nexi-payment-callback.ts:1332</td></tr>
+<tr><td>Webhook nexi-payment-callback</td><td>Idem cashback</td><td><span class="rosso"><code>wallet_bonus_credit_admin</code> (LEGACY)</span></td><td>Admin direzione</td><td class="file">nexi-payment-callback.ts:1350</td></tr>
+<tr><td>Cron process-wallet-auto-recharges-cron (orario)</td><td>wallet_recurring.day == oggi e ora == Rome</td><td><span class="giallo"><code>wallet_auto_recharge</code> (no slot Pro)</span></td><td>Cliente</td><td class="file">process-wallet-auto-recharges-cron.ts:157</td></tr>
+<tr><td>Cron process-pending-addebiti (1 min)</td><td>pending_addebito.status='email_sent' + charge_after &le; now</td><td><code>pro_email_addebito</code> + <code>pro_email_addebito_subject</code> (EMAIL Resend)</td><td>Cliente (EMAIL)</td><td class="file">process-pending-addebiti.ts:113</td></tr>
+<tr><td>Admin crea "Nuovo addebito MIT"</td><td>DanniPenaliModal &rarr; pending_addebito + prima email</td><td><code>pro_email_addebito</code> (EMAIL)</td><td>Cliente (EMAIL)</td><td class="file">nexi-nuovo-addebito.ts:67</td></tr>
+</tbody>
+</table>
+
+<h3>C. Firma contratto (Trustera360)</h3>
+<table class="tight">
+<thead><tr><th>Trigger</th><th>Quando</th><th>Template</th><th>A chi</th><th>File:linea</th></tr></thead>
+<tbody>
+<tr><td>Admin clicca "Invia link firma"</td><td>signature-init crea signature_request</td><td><code>signature_request_link</code> &rarr; <code>pro_richiesta_firma</code></td><td>Cliente</td><td class="file">signature-init.ts:43</td></tr>
+<tr><td>Webhook nexi-payment-callback</td><td>Pagamento OK noleggio &rarr; genera contratto + link firma</td><td>Idem (via signature-init)</td><td>Cliente</td><td class="file">nexi-payment-callback.ts:~1121</td></tr>
+<tr><td>Cliente clicca "Invia OTP" su pagina firma</td><td>OTP a 6 cifre generato</td><td><code>signature_otp_whatsapp</code> &rarr; <code>pro_richiesta_otp</code></td><td>Cliente</td><td class="file">signature-send-otp.ts:145</td></tr>
+<tr><td>Cron signature-reminder (ogni 30 min)</td><td>Signature request pending/otp_sent, 6h fa, non gia' inviato</td><td><code>signature_reminder_whatsapp</code> &rarr; <code>pro_promemoria_firma</code></td><td>Cliente</td><td class="file">signature-reminder.ts:194</td></tr>
+<tr><td>Webhook Trustera signature-complete</td><td>Firma cliente completata</td><td>Tutti i Pro con <code>on_signature</code></td><td>Cliente</td><td class="file">signature-complete.ts:610</td></tr>
+<tr><td>Webhook signature-complete</td><td>Stesso evento</td><td><span class="rosso"><code>admin_contract_signed_alert</code> (LEGACY)</span></td><td>Admin direzione</td><td class="file">signature-complete.ts:573</td></tr>
+<tr><td>Webhook signature-complete</td><td>Se prima conferma noleggio non ancora inviata</td><td><code>rental_new_customer</code> &rarr; <code>pro_conferma_noleggio</code></td><td>Cliente</td><td class="file">signature-complete.ts:533</td></tr>
+<tr><td>Webhook signature-complete</td><td>Invia codice DR7 Privilege noleggio</td><td><code>pro_dr7_privilege_noleggio</code></td><td>Cliente</td><td class="file">utils/dr7Privilege.ts:107</td></tr>
+<tr><td>Admin clicca "Invia link firma documento"</td><td>document-sign-init</td><td><span class="rosso"><code>document_signature_link</code> &rarr; <code>pro_richiesta_firma</code> (slot condiviso!)</span></td><td>Cliente</td><td class="file">document-sign-init.ts:104</td></tr>
+</tbody>
+</table>
+
+<h3>D. Cauzioni / Deposit</h3>
+<table class="tight">
+<thead><tr><th>Trigger</th><th>Quando</th><th>Template</th><th>A chi</th><th>File:linea</th></tr></thead>
+<tbody>
+<tr><td>Admin clicca "Salva" su NuovaCauzioneModal</td><td>Cauzione inserita</td><td>Tutti i Pro con <code>on_cauzione_created</code></td><td>Cliente</td><td class="file">NuovaCauzioneModal.tsx:124</td></tr>
+<tr><td>Admin clicca "Invia link cauzione" in CauzioniTab</td><td>Link Nexi creato</td><td><code>deposit_request_customer</code> &rarr; <code>pro_richiesta_cauzione</code></td><td>Cliente</td><td class="file">CauzioniTab.tsx:498, 585</td></tr>
+<tr><td>Admin clicca "Marca incassata"</td><td>cauzione.stato='Incassata'</td><td>Pro <code>on_cauzione_collected</code></td><td>Cliente</td><td class="file">CauzioniTab.tsx:712, 782, 803</td></tr>
+<tr><td>Cattura parziale pre-auth Nexi</td><td>Importo &lt; totale cauzione</td><td>Pro <code>on_cauzione_partial_capture</code></td><td>Cliente</td><td class="file">CauzioniTab.tsx:780</td></tr>
+<tr><td>Admin clicca "Marca restituita" + nota</td><td>RPC mark_cauzione_restituita</td><td>Pro <code>on_cauzione_refunded</code></td><td>Cliente</td><td class="file">CauzioniTab.tsx:353</td></tr>
+<tr><td><span class="spento">Cron temporale Pro (SPENTO)</span></td><td>Cauzione con scadenza fra X giorni</td><td>Pro <code>on_cauzione_due</code> / <code>on_cauzione_overdue</code></td><td>Cliente</td><td class="file">process-scheduled-system-messages-cron.ts:269</td></tr>
+<tr><td>Cron check-deposit-expiration (09:00 UTC daily)</td><td>Cauzioni che scadono oggi</td><td><span class="giallo">EMAIL HTML hardcoded (NON Pro)</span></td><td>info@dr7.app</td><td class="file">check-deposit-expiration.ts:142</td></tr>
+<tr><td>Cron send-booking-reminders (2h, morning Rome 8-12)</td><td>Dropoff ieri + cauzione esistente</td><td><code>deposit_return_iban</code> &rarr; <code>pro_richiesta_iban</code></td><td>Cliente</td><td class="file">send-booking-reminders.ts:518</td></tr>
+</tbody>
+</table>
+
+<div class="page-break"></div>
+
+<h3>E. Reminder / Check-in / Check-out / Estensione</h3>
+<table class="tight">
+<thead><tr><th>Trigger</th><th>Quando</th><th>Template</th><th>A chi</th><th>File:linea</th></tr></thead>
+<tbody>
+<tr><td>Cron send-booking-reminders (2h, gated 8-12 Rome)</td><td>Dropoff domani, durata &gt; 24h, rental, categoria exotic / utilitaria</td><td><span class="giallo"><code>supercar_day_before</code> o <code>utilitaria_day_before</code> (letti diretti)</span></td><td>Cliente</td><td class="file">send-booking-reminders.ts:245</td></tr>
+<tr><td>Cron send-booking-reminders (any run)</td><td>Durata &le; 24h, pickup 30h fa, 4h dopo pickup</td><td>Idem &mdash; "buildExtensionMessage"</td><td>Cliente</td><td class="file">send-booking-reminders.ts:343</td></tr>
+<tr><td>Cron rental-extension-supercar-cron (18:00 Rome)</td><td>Veicolo exotic, durata &ge; 72h, dropoff domani</td><td><span class="rosso">Label <code>"Richiesta prolungamento SUPERCAR"</code> (per label!)</span></td><td>Cliente</td><td class="file">rental-extension-supercar-cron.ts:24</td></tr>
+<tr><td>Admin "Conferma check-in"</td><td>Pickup oggi</td><td><span class="rosso"><code>checkin_reminder</code> &rarr; no slot Pro (mancante in OLD_TO_PRO)</span></td><td>Cliente</td><td class="file">send-checkin-checkout-whatsapp.ts:72</td></tr>
+<tr><td>Admin "Conferma check-out"</td><td>Dropoff oggi</td><td><span class="rosso"><code>checkout_reminder</code> &rarr; no slot Pro</span></td><td>Cliente</td><td class="file">send-checkin-checkout-whatsapp.ts:73</td></tr>
+<tr><td><span class="spento">Cron temporale Pro (SPENTO)</span></td><td>before_pickup / after_pickup / before_dropoff / after_dropoff / before_signature / on_late_return / on_inactive_30d / on_inactive_90d</td><td>Tutti i Pro con quegli eventi</td><td>Cliente</td><td class="file">process-scheduled-system-messages-cron.ts:497-533</td></tr>
+</tbody>
+</table>
+
+<h3>F. Preventivi</h3>
+<table class="tight">
+<thead><tr><th>Trigger</th><th>Quando</th><th>Template</th><th>A chi</th><th>File:linea</th></tr></thead>
+<tbody>
+<tr><td>Admin clicca "Invia preventivo via WhatsApp"</td><td>Manuale dal tab Preventivi</td><td><span class="rosso">Label <code>"Preventivo WhatsApp"</code> o <code>"Preventivo senza sconto"</code> (per label!)</span></td><td>Cliente</td><td class="file">PreventiviTab.tsx:1287, 1343</td></tr>
+<tr><td>Admin clicca "Conferma preventivo"</td><td>Crea booking, pending &rarr; link pagamento</td><td><code>payment_link_customer</code> &rarr; <code>pro_richiesta_pagamento</code></td><td>Cliente</td><td class="file">PreventiviTab.tsx:2357, 2444</td></tr>
+<tr><td>Admin clicca "Approva No Cauzione"</td><td>Fascia B, no-cauzione approvato</td><td><code>no_cauzione_approved</code> &rarr; <code>pro_no_cauzione_approvato</code></td><td>Cliente</td><td class="file">PreventiviTab.tsx:2283</td></tr>
+<tr><td>Admin clicca "Rifiuta No Cauzione"</td><td>Rifiutato + codice sconto 5%</td><td><code>no_cauzione_rejected</code> &rarr; <code>pro_no_cauzione_rifiutato</code></td><td>Cliente</td><td class="file">PreventiviTab.tsx:2444</td></tr>
+<tr><td>Admin clicca "Concedi sconto preventivo"</td><td>Cliente rifiuta, admin offre 5%</td><td><code>quote_discount_offered</code> &rarr; <code>pro_sconto_concesso</code></td><td>Cliente</td><td class="file">PreventiviTab.tsx:2485</td></tr>
+<tr><td>Sito: cliente richiede preventivo</td><td>Webhook &rarr; alert admin</td><td><span class="rosso"><code>admin_new_website_quote</code> &rarr; <code>pro_richiesta_otp</code> (slot OTP riusato!)</span></td><td>Admin direzione</td><td class="file">proTemplateRouting.ts:79</td></tr>
+<tr><td>Sito: cliente Fascia B chiede no-cauzione</td><td>Webhook &rarr; alert admin</td><td><span class="rosso"><code>admin_no_cauzione_request</code> &rarr; stesso slot OTP</span></td><td>Admin direzione</td><td class="file">proTemplateRouting.ts:80</td></tr>
+</tbody>
+</table>
+
+<h3>G. Recensioni</h3>
+<table class="tight">
+<thead><tr><th>Trigger</th><th>Quando</th><th>Template</th><th>A chi</th><th>File:linea</th></tr></thead>
+<tbody>
+<tr><td>Admin clicca "Invia richiesta recensione"</td><td>ReviewManagementTab, manuale</td><td><code>review_request_whatsapp</code> &rarr; <code>pro_marketing_recensione</code></td><td>Cliente (WA + EMAIL)</td><td class="file">ReviewManagementTab.tsx:353, 594</td></tr>
+<tr><td>Admin clicca "Invia codice sconto post-review"</td><td>Cliente ha lasciato recensione</td><td><code>review_discount_code</code> &rarr; <code>pro_marketing_codice_sconto</code></td><td>Cliente</td><td class="file">ReviewManagementTab.tsx:541</td></tr>
+<tr><td><span class="spento">Cron send-review-whatsapp (SPENTO dal 15 Mag)</span></td><td>Dropoff 60-120 min fa, non gia' inviato</td><td><code>review_request_whatsapp</code></td><td>Cliente</td><td class="file">send-review-whatsapp.ts:124</td></tr>
+</tbody>
+</table>
+
+<h3>H. Marketing / Loyalty</h3>
+<table class="tight">
+<thead><tr><th>Trigger</th><th>Quando</th><th>Template</th><th>A chi</th><th>File:linea</th></tr></thead>
+<tbody>
+<tr><td>Cron send-birthday-messages (09:00 Rome daily)</td><td>Cliente con compleanno oggi</td><td><code>birthday_message</code> &rarr; <code>pro_marketing_compleanno</code></td><td>Cliente</td><td class="file">send-birthday-messages.ts:207</td></tr>
+<tr><td>Stesso cron</td><td>Stesso evento, trigger Pro inline</td><td><code>triggerSystemMessageEvent('before_birthday')</code></td><td>Cliente</td><td class="file">send-birthday-messages.ts:298</td></tr>
+<tr><td>Admin clicca "Invia auguri"</td><td>BirthdaysTab manuale</td><td>customMessage (no template)</td><td>Cliente</td><td class="file">BirthdaysTab.tsx:412, 487</td></tr>
+<tr><td>Cron maxi-promo-gap (10 min, gated 8-19)</td><td>Veicolo con gap 1 giorno</td><td><code>maxi_promo_gap_whatsapp</code> &rarr; <code>pro_maxi_promo_gap_1gg</code></td><td>Lista VIP</td><td class="file">maxi-promo-gap-cron.ts:349</td></tr>
+<tr><td>Cron promo-incassi (09:00 + 17:00 Rome)</td><td>Veicolo con incassi mensili sotto soglia</td><td><code>promo_incassi_whatsapp</code> &rarr; <code>pro_promo_incassi</code></td><td>Lista VIP</td><td class="file">promo-incassi-cron.ts:260</td></tr>
+<tr><td>Webhook nexi-payment-callback (lavaggio paid)</td><td>Pagamento OK car_wash</td><td><code>pro_dr7_privilege_lavaggio</code></td><td>Cliente</td><td class="file">nexi-payment-callback.ts:1107</td></tr>
+<tr><td>Webhook nexi-payment-callback (noleggio paid)</td><td>Pagamento OK rental</td><td><code>pro_dr7_privilege_noleggio</code></td><td>Cliente</td><td class="file">nexi-payment-callback.ts:1127</td></tr>
+<tr><td><span class="giallo">Promozione tier ELITE / MEMBER / Ingresso Club</span></td><td>Trigger NON automatico &mdash; admin manuale</td><td>Label <code>"Promozione a ELITE"</code> / <code>"Promozione a MEMBER"</code> / <code>"Ingresso DR7 Club"</code></td><td>Cliente</td><td>manuale</td></tr>
+</tbody>
+</table>
+
+<h3>I. Fatture</h3>
+<table class="tight">
+<thead><tr><th>Trigger</th><th>Quando</th><th>Template</th><th>A chi</th><th>File:linea</th></tr></thead>
+<tbody>
+<tr><td>Admin "Genera fattura" / auto post-payment</td><td>generate-invoice-from-booking produce PDF</td><td><span class="giallo"><code>invoice_pdf_whatsapp</code> caption (no slot Pro mappato)</span></td><td>Cliente (WA + PDF)</td><td class="file">generate-invoice-from-booking.ts:823, 1163</td></tr>
+<tr><td>Admin chiude DanniPenaliModal e genera fattura penali</td><td>generate-penalty-invoice</td><td><span class="giallo"><code>penalty_invoice_pdf_whatsapp</code> caption (no slot Pro)</span></td><td>Cliente (WA + PDF)</td><td class="file">generate-penalty-invoice.ts:372</td></tr>
+<tr><td>Admin clicca "Invia contratto via email"</td><td>send-contract-email con PDF allegato</td><td><code>pro_email_contratto</code> + <code>pro_email_contratto_subject</code></td><td>Cliente (EMAIL)</td><td class="file">send-contract-email.ts:108</td></tr>
+</tbody>
+</table>
+
+<h3>J. Documenti cliente</h3>
+<table class="tight">
+<thead><tr><th>Trigger</th><th>Quando</th><th>Template</th><th>A chi</th><th>File:linea</th></tr></thead>
+<tbody>
+<tr><td>Admin clicca "Invia link firma documento"</td><td>Documento creato + link</td><td><span class="rosso"><code>document_signature_link</code> &rarr; <code>pro_richiesta_firma</code> (slot condiviso!)</span></td><td>Cliente</td><td class="file">document-sign-init.ts:104</td></tr>
+<tr><td>Cliente / admin carica documento</td><td>Insert document &rarr; <code>on_doc_uploaded</code></td><td>Tutti i Pro con quell'evento</td><td>Cliente</td><td class="file">CustomerDocuments.tsx:258</td></tr>
+</tbody>
+</table>
+
+<h3>K. Carta / Wallet</h3>
+<table class="tight">
+<thead><tr><th>Trigger</th><th>Quando</th><th>Template</th><th>A chi</th><th>File:linea</th></tr></thead>
+<tbody>
+<tr><td>prepaid-card-guard (chiamato da Nexi callback)</td><td>Carta prepagata rifiutata</td><td><span class="rosso"><code>prepaid_card_blocked_customer</code> + <code>_admin</code> (LEGACY, no slot Pro)</span></td><td>Cliente + Admin</td><td class="file">prepaid-card-guard.ts:244, 259</td></tr>
+<tr><td>Endpoint referral-send-otp</td><td>Form referral richiede OTP</td><td><span class="rosso"><code>referral_otp_whatsapp</code> &rarr; no slot Pro</span></td><td>Referrer</td><td class="file">referral-send-otp.ts:94</td></tr>
+</tbody>
+</table>
+
+<h3>L. Operatori / direzione</h3>
+<table class="tight">
+<thead><tr><th>Trigger</th><th>Quando</th><th>Template</th><th>A chi</th><th>File:linea</th></tr></thead>
+<tbody>
+<tr><td>Webhook signature-complete</td><td>Cliente firma contratto</td><td><span class="rosso"><code>admin_contract_signed_alert</code> (LEGACY)</span></td><td>Admin direzione</td><td class="file">signature-complete.ts:573</td></tr>
+<tr><td>Cron cancel-unpaid-nexi-bookings (5 min)</td><td>Booking cancellato automaticamente</td><td><span class="rosso"><code>cancellation_admin_alert</code> (LEGACY)</span></td><td>Admin direzione</td><td class="file">cancel-unpaid-nexi-bookings.ts:159</td></tr>
+<tr><td>Webhook nexi-payment-callback</td><td>Pagamento Nexi ricevuto</td><td><span class="rosso"><code>nexi_payment_received_admin</code> (LEGACY hardcoded, manca anche <code>notifyAdmin</code>)</span></td><td>Admin direzione</td><td class="file">nexi-payment-callback.ts:1086</td></tr>
+<tr><td>OTP override limitation</td><td>Admin sblocca cliente</td><td>OTP via EMAIL Resend (no Pro template) &rarr; <code>valesaja91@icloud.com</code></td><td>Direzione (EMAIL)</td><td class="file">limitation-override-otp.ts:378</td></tr>
+<tr><td>Cron check-deposit-expiration (09:00 UTC)</td><td>Cauzioni che scadono oggi</td><td>EMAIL HTML hardcoded</td><td><code>info@dr7.app</code></td><td class="file">check-deposit-expiration.ts:142</td></tr>
+<tr><td><span class="spento">Cron temporale Pro (SPENTO)</span></td><td>on_scadenza_3d / on_scadenza_7d</td><td>Pro con quel trigger</td><td>Admin direzione</td><td class="file">process-scheduled-system-messages-cron.ts:354</td></tr>
+</tbody>
+</table>
+
+<div class="page-break"></div>
+
+<h2 class="sec">3. Eventi inline (trigger_event in tempo reale)</h2>
+<p>Eventi fired da <code>triggerSystemMessageEvent</code>. Tutti i template Pro che li dichiarano in <code>handled_events</code> partono.</p>
+<table class="tight">
+<thead><tr><th>Evento</th><th>Source</th><th>Quando</th></tr></thead>
+<tbody>
+<tr><td><code>on_booking</code></td><td class="file">post-booking-webhook.ts:128</td><td>Booking creato (sito)</td></tr>
+<tr><td><code>on_first_booking</code></td><td class="file">post-booking-webhook.ts:150</td><td>Prima booking del cliente</td></tr>
+<tr><td><code>on_payment</code></td><td class="file">post-booking-webhook.ts:161; nexi-payment-callback.ts:1073</td><td>Pagamento ricevuto</td></tr>
+<tr><td><code>on_payment_failed</code></td><td class="file">nexi-payment-callback.ts:318</td><td>Pagamento Nexi fallito</td></tr>
+<tr><td><code>on_payment_link_expired</code></td><td class="file">cancel-unpaid-nexi-bookings.ts:192</td><td>Booking unpaid cancellato dal cron</td></tr>
+<tr><td><code>on_signature</code></td><td class="file">signature-complete.ts:611</td><td>Firma cliente completata</td></tr>
+<tr><td><code>on_cauzione_created</code></td><td class="file">NuovaCauzioneModal.tsx:128</td><td>Admin crea cauzione</td></tr>
+<tr><td><code>on_cauzione_collected</code></td><td class="file">CauzioniTab.tsx:712, 782, 803</td><td>Admin marca incassata</td></tr>
+<tr><td><code>on_cauzione_partial_capture</code></td><td class="file">CauzioniTab.tsx:780</td><td>Cattura parziale Nexi</td></tr>
+<tr><td><code>on_cauzione_refunded</code></td><td class="file">CauzioniTab.tsx:353</td><td>Admin marca restituita</td></tr>
+<tr><td><code>before_birthday</code></td><td class="file">send-birthday-messages.ts:298</td><td>Compleanno oggi (cron 09:00 Rome)</td></tr>
+<tr><td><code>on_doc_uploaded</code></td><td class="file">CustomerDocuments.tsx:258</td><td>Cliente/admin carica documento</td></tr>
+<tr><td><code>on_promo_gap</code></td><td class="file">maxi-promo-gap-cron.ts:394</td><td>Gap 1gg rilevato (cron 10 min)</td></tr>
+<tr><td><span class="giallo"><code>on_doc_verified</code></span></td><td>dichiarato ma nessun caller trovato</td><td>&mdash;</td></tr>
+<tr><td><span class="giallo"><code>on_review_received</code></span></td><td>dichiarato ma nessun fire automatico</td><td>&mdash;</td></tr>
+</tbody>
+</table>
+
+<h2 class="sec">4. Eventi solo dal cron temporale (oggi OFFLINE)</h2>
+<p>Nessuno di questi parte oggi perche' il cron <code>process-scheduled-system-messages-cron</code> e' disabilitato:</p>
+<p><code>before_pickup</code> &middot; <code>after_pickup</code> &middot; <code>before_dropoff</code> &middot; <code>after_dropoff</code> &middot; <code>before_signature</code> &middot; <code>after_signature_review</code> &middot; <code>on_late_return</code> &middot; <code>on_cauzione_due</code> &middot; <code>on_cauzione_overdue</code> &middot; <code>on_inactive_30d</code> &middot; <code>on_inactive_90d</code> &middot; <code>on_scadenza_3d</code> &middot; <code>on_scadenza_7d</code></p>
+<p class="legend">Quando il cron sara' riattivato, skippera' automaticamente:
+- template con <code>message_key</code> ancora in OLD_TO_PRO (rifiuta i LEGACY)
+- template con eventi gia' gestiti da callback inline (per evitare doppi invii)
+</p>
+
+<h2 class="sec">5. Duplicati e collisioni di slot Pro</h2>
+<div class="box r">
+<h4>&#x1F534; 5.1 &mdash; <code>pro_conferma_da_saldare</code> ricicla 9 eventi diversi</h4>
+<p>Ricicla: <code>payment_received_extension</code>, <code>_admin</code>, <code>payment_received_damages</code>, <code>_admin</code>, <code>booking_confirmed_da_saldare</code>, <code>booking_paid_cash</code>, <code>_card</code>, <code>_bank_transfer</code>, <code>_paypal</code>, <code>_wallet</code>. Se piu' template Pro claimano lo stesso evento, il cliente puo' ricevere 2 messaggi back-to-back.</p>
+</div>
+<div class="box r">
+<h4>&#x1F534; 5.2 &mdash; <code>pro_richiesta_firma</code> condiviso tra firma contratto + firma documento</h4>
+<p>Sia <code>signature_request_link</code> sia <code>document_signature_link</code> finiscono nello stesso slot. Il body e' UNO solo, distinto solo dalle vars.</p>
+</div>
+<div class="box r">
+<h4>&#x1F534; 5.3 &mdash; <code>pro_richiesta_otp</code> mescola OTP cliente + alert admin</h4>
+<p>Ricicla: <code>signature_otp_whatsapp</code> (OTP firma cliente), <code>admin_new_website_quote</code> (alert preventivo direzione), <code>admin_no_cauzione_request</code> (alert no-cauzione direzione). Body unico mescola semantica cliente e admin.</p>
+</div>
+<div class="box y">
+<h4>&#x1F7E1; 5.4 &mdash; <code>pro_promemoria_pagamento</code> ricicla modifiche prenotazione</h4>
+<p>Ricicla <code>carwash_modified</code> + <code>mechanical_modified</code> (modifiche prenotazione, non pagamenti). Label fuorviante.</p>
+</div>
+
+<h2 class="sec">6. Trigger ignoti / template letti direttamente</h2>
+<table class="tight">
+<thead><tr><th>Chiave</th><th>Stato</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td><code>wallet_auto_recharge</code></td><td class="giallo">letta diretta da DB</td><td>Funziona solo se la riga esiste con quella message_key letterale</td></tr>
+<tr><td><code>invoice_pdf_whatsapp</code></td><td class="giallo">letta diretta</td><td>Idem &mdash; usata come caption PDF</td></tr>
+<tr><td><code>penalty_invoice_pdf_whatsapp</code></td><td class="giallo">letta diretta</td><td>Idem</td></tr>
+<tr><td><code>referral_otp_whatsapp</code></td><td class="giallo">letta diretta</td><td>Cliente non riceve OTP se la riga manca</td></tr>
+<tr><td><code>supercar_day_before</code> / <code>utilitaria_day_before</code></td><td class="giallo">letta diretta</td><td>Bypassano resolver + handled_events + target_service_type</td></tr>
+<tr><td><code>on_doc_verified</code></td><td class="giallo">evento dichiarato</td><td>Nessun caller trovato &mdash; verificare se fired</td></tr>
+<tr><td><code>on_review_received</code></td><td class="giallo">evento dichiarato</td><td>Nessun fire automatico in codice</td></tr>
+<tr><td>Promozione ELITE / MEMBER / Ingresso DR7 Club</td><td class="giallo">label-loaded</td><td>Caricate per label, trigger manuale admin</td></tr>
+</tbody>
+</table>
+
+<div class="page-break"></div>
+
+<h2 class="sec">7. Tabella riepilogo cron (orari Rome)</h2>
+<table>
+<thead><tr><th>Cron</th><th>Schedule (UTC)</th><th>Rome time</th><th>Funzione</th><th>Stato</th></tr></thead>
+<tbody>
+<tr><td>cancel-unpaid-nexi-bookings</td><td><code>*/5 * * * *</code></td><td>ogni 5 min</td><td>Cancellazione auto booking unpaid 1h+</td><td class="attivo">attivo</td></tr>
+<tr><td>accrue-club-wallet-interest</td><td><code>30 1 * * *</code></td><td>02:30/03:30</td><td>Interessi DR7 Club giornalieri</td><td class="attivo">attivo</td></tr>
+<tr><td>payout-club-wallet-interest</td><td><code>0 2 1 * *</code></td><td>giorno 1, 03:00/04:00</td><td>Payout mensile interessi</td><td class="attivo">attivo</td></tr>
+<tr><td>fornitori-alerts-cron</td><td><code>0 6 * * *</code></td><td>07:00/08:00</td><td>Scadenze fornitori (EMAIL)</td><td class="attivo">attivo</td></tr>
+<tr><td>fornitori-fatture-sync-cron</td><td><code>0 1 * * *</code></td><td>02:00/03:00</td><td>Sync fatture Aruba</td><td class="attivo">attivo</td></tr>
+<tr><td>rental-extension-supercar-cron</td><td><code>0 16,17 * * *</code></td><td>18:00 Rome</td><td>Supercar day-before extension</td><td class="attivo">attivo</td></tr>
+<tr><td>process-wallet-auto-recharges-cron</td><td><code>0 * * * *</code></td><td>ogni ora</td><td>Wallet ricarica ricorrente</td><td class="attivo">attivo</td></tr>
+<tr><td>nexi-preauth-refresh-cron</td><td><code>30 3 * * *</code></td><td>04:30/05:30</td><td>Refresh pre-auth Nexi 7gg</td><td class="attivo">attivo</td></tr>
+<tr><td>process-scheduled-campaigns-cron</td><td><code>*/2 * * * *</code></td><td>ogni 2 min</td><td>Campagne marketing</td><td class="attivo">attivo</td></tr>
+<tr><td><strong>process-scheduled-system-messages-cron</strong></td><td>(commentato)</td><td>&mdash;</td><td><strong>Messaggi Pro temporali</strong></td><td class="spento"><strong>SPENTO</strong></td></tr>
+<tr><td><strong>dr7-privilege-cron</strong></td><td>(no schedule)</td><td>&mdash;</td><td>DR7 Privilege catch-all</td><td class="spento"><strong>SPENTO</strong></td></tr>
+<tr><td><strong>send-review-whatsapp</strong></td><td>(commentato)</td><td>&mdash;</td><td>Review auto post-rental</td><td class="spento"><strong>SPENTO</strong></td></tr>
+<tr><td>send-birthday-messages</td><td><code>0 8 * * *</code></td><td>09:00/10:00 Rome</td><td>Compleanni clienti</td><td class="attivo">attivo</td></tr>
+<tr><td>check-birthdays</td><td><code>0 10 * * *</code></td><td>11:00/12:00 Rome</td><td>Flag UI BirthdaysTab (legacy)</td><td class="attivo">attivo</td></tr>
+<tr><td>send-booking-reminders</td><td><code>0 */2 * * *</code></td><td>ogni 2h (gated 8-12)</td><td>Estensione + IBAN reminders</td><td class="attivo">attivo</td></tr>
+<tr><td>signature-reminder</td><td><code>*/30 * * * *</code></td><td>ogni 30 min</td><td>Promemoria firma 6h</td><td class="attivo">attivo</td></tr>
+<tr><td>maxi-promo-gap-cron</td><td><code>*/10 * * * *</code></td><td>ogni 10 min (gated 8-19)</td><td>Promo gap 1gg veicoli</td><td class="attivo">attivo</td></tr>
+<tr><td>promo-incassi-cron</td><td><code>0 7,8,15,16 * * *</code></td><td>09:00 + 17:00 Rome</td><td>Promo incassi veicoli</td><td class="attivo">attivo</td></tr>
+<tr><td>process-pending-addebiti</td><td><code>* * * * *</code></td><td>ogni minuto</td><td>Seconda email addebito + charge</td><td class="attivo">attivo</td></tr>
+<tr><td>check-deposit-expiration</td><td><code>0 9 * * *</code></td><td>10:00/11:00 Rome</td><td>Cauzioni che scadono oggi</td><td class="attivo">attivo</td></tr>
+<tr><td>check-pre-rental-deposits</td><td><code>0 0 * * *</code></td><td>midnight</td><td>NOOP (stub disabilitato)</td><td class="giallo">NOOP</td></tr>
+<tr><td>cargos-retry-missed</td><td><code>*/30 * * * *</code></td><td>ogni 30 min</td><td>Retry CARGOS</td><td class="attivo">attivo</td></tr>
+<tr><td>check-sdi-statuses-cron</td><td><code>*/30 * * * *</code></td><td>ogni 30 min</td><td>Status SDI fatture</td><td class="attivo">attivo</td></tr>
+</tbody>
+</table>
+
+<h2 class="sec">8. TL;DR per la direzione</h2>
+
+<div class="box r">
+<h4>&#x1F534; Il cuore dei Messaggi Pro temporali e' SPENTO</h4>
+<p>Cron <code>process-scheduled-system-messages-cron</code> commentato. Tutti i template Pro con <code>trigger_event</code> temporale (before_pickup, before_dropoff, on_inactive, on_cauzione_due/overdue, on_scadenza, before_signature, after_signature_review, on_late_return) <strong>non partono</strong>. Solo gli eventi inline da callback sono attivi: <code>on_booking</code>, <code>on_payment</code>, <code>on_signature</code>, <code>on_cauzione_*</code>, <code>on_doc_uploaded</code>, <code>before_birthday</code>, <code>on_promo_gap</code>, <code>on_payment_failed</code>, <code>on_payment_link_expired</code>, <code>on_first_booking</code>.</p>
+</div>
+
+<div class="box r">
+<h4>&#x1F534; Review automatica spenta</h4>
+<p>Il cron <code>send-review-whatsapp</code> e' commentato dal 15 Maggio. La richiesta recensione parte SOLO manualmente dal tab Recensioni admin.</p>
+</div>
+
+<div class="box r">
+<h4>&#x1F534; DR7 Privilege cron spento</h4>
+<p>Il codice viene inviato real-time dal callback Nexi al pagamento. Se il pagamento fallisce / non passa da Nexi, il codice non parte.</p>
+</div>
+
+<div class="box y">
+<h4>&#x1F7E1; 5 slot Pro centralizzano oltre 20 eventi</h4>
+<p><code>pro_conferma_da_saldare</code>, <code>pro_richiesta_firma</code>, <code>pro_richiesta_otp</code>, <code>pro_promemoria_pagamento</code>, <code>pro_annullamento_cliente</code>: modificare il body di uno cambia il messaggio inviato per piu' trigger. Da gestire con attenzione.</p>
+</div>
+
+<div class="box y">
+<h4>&#x1F7E1; Template "lookup-per-label"</h4>
+<p>Preventivi (<code>"Preventivo WhatsApp"</code> / <code>"Preventivo senza sconto"</code>), Supercar day-before (<code>"Richiesta prolungamento SUPERCAR"</code>), Promozioni tier (<code>"Promozione a ELITE"</code> / <code>"Promozione a MEMBER"</code>). Rinominare la label rompe l'invio in silenzio.</p>
+</div>
+
+<div class="footer">
+Report generato il 19 maggio 2026 &middot; DR7 Empire admin audit &middot; trigger messaggi
+</div>
+
+</body>
+</html>

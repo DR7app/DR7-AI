@@ -9,7 +9,8 @@ import Input from './Input'
 // the sidebar after they accept the invite.
 const PERMISSION_SECTIONS: { name: string; tabs: { key: string; label: string }[] }[] = [
   { name: 'Noleggio', tabs: [
-    { key: 'reservations', label: 'Prenotazioni / Preventivi' },
+    { key: 'reservations', label: 'Prenotazioni (lista + pagamenti)' },
+    { key: 'reservations-preventivi', label: 'Preventivi (solo creazione, niente lista prenotazioni)' },
     { key: 'calendar', label: 'Calendario' },
     { key: 'contratto', label: 'Contratti' },
     { key: 'gestione-danni', label: 'Danni & Penali' },
@@ -96,6 +97,7 @@ const PERMISSION_SECTIONS: { name: string; tabs: { key: string; label: string }[
 
 const PRESETS: { name: string; permissions: string[] }[] = [
   { name: 'Solo Ore', permissions: ['rilevazione-orari'] },
+  { name: 'Calendario + Preventivi', permissions: ['calendar', 'reservations-preventivi'] },
   { name: 'Direzione (full)', permissions: ['*', 'role:direzione', 'role:payment-manager', 'role:stipendio-editor', 'role:sito-direzione', 'role:preventivi-admin'] },
 ]
 

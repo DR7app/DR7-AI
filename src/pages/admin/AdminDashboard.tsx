@@ -225,12 +225,15 @@ export default function AdminDashboard() {
   // `subView` (optional) lets a sub-tab redirect to the same admin tab as
   // another entry but switch an internal sub-view (used to expose
   // RentalTabs' Noleggio / Preventivi as separate section sub-tabs).
-  type SubTab = { tab: TabType; label: string; titleLabel?: string; superadminOnly?: boolean; subView?: 'bookings' | 'preventivi' }
+  // permKey overrides the default permission check (which uses `tab`).
+  // Used when two sub-tabs share the same TabType but need separate access
+  // grants — e.g. Preventivi vs Prenotazioni both target tab='reservations'.
+  type SubTab = { tab: TabType; label: string; titleLabel?: string; superadminOnly?: boolean; subView?: 'bookings' | 'preventivi'; permKey?: string }
   const [rentalSubView, setRentalSubView] = useState<'bookings' | 'preventivi'>('bookings')
   const SECTIONS: { name: string; tabs: SubTab[] }[] = [
     { name: 'Noleggio', tabs: [
       { tab: 'reservations', label: 'Noleggio', titleLabel: 'Prenotazioni', subView: 'bookings' },
-      { tab: 'reservations', label: 'Preventivi', subView: 'preventivi' },
+      { tab: 'reservations', label: 'Preventivi', subView: 'preventivi', permKey: 'reservations-preventivi' },
       { tab: 'calendar', label: 'Calendario' },
       { tab: 'contratto', label: 'Contratti' },
       { tab: 'gestione-danni', label: 'Danni & Penali' },
@@ -416,9 +419,10 @@ export default function AdminDashboard() {
             grosso vuoto sotto l'ultima voce. */}
         <nav className="flex-1 flex flex-col justify-evenly py-2 px-3 overflow-y-auto scrollbar-thin">
           {SECTIONS.map(section => {
-            const visibleTabs = section.tabs.filter(t => hasPermission(t.tab) && (!t.superadminOnly || adminRole === 'superadmin'))
+            const visibleTabs = section.tabs.filter(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin'))
             if (visibleTabs.length === 0) return null
-            const firstTab = visibleTabs[0].tab
+            const firstVisible = visibleTabs[0]
+            const firstTab = firstVisible.tab
             const sectionActive = isSectionActive(section.name)
             const showBirthdayBadge = section.name === 'Marketing' && birthdayCount > 0
             const showScartataBadge = section.name === 'Amministrazione' && scartataCount > 0
@@ -426,7 +430,13 @@ export default function AdminDashboard() {
               <button
                 key={section.name}
                 onClick={() => {
-                  if (!sectionActive) setActiveTab(firstTab)
+                  if (!sectionActive) {
+                    setActiveTab(firstTab)
+                    // Jump straight to the sub-view of the first visible
+                    // sub-tab so a user with only `reservations-preventivi`
+                    // lands on Preventivi (not the hidden Prenotazioni list).
+                    if (firstVisible.subView) setRentalSubView(firstVisible.subView)
+                  }
                   setSidebarOpen(false)
                 }}
                 // Full-width clickable row, but the active highlight only
@@ -766,11 +776,11 @@ export default function AdminDashboard() {
         {/* In-page horizontal sub-tab bar — lists all sub-tabs of the
             active section. Renders only if the section has more than one
             sub-tab so single-tab sections don't get a one-button bar. */}
-        {sectionForActiveTab && sectionForActiveTab.tabs.filter(t => hasPermission(t.tab) && (!t.superadminOnly || adminRole === 'superadmin')).length > 1 && (
+        {sectionForActiveTab && sectionForActiveTab.tabs.filter(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin')).length > 1 && (
           <div className="bg-theme-bg-primary border-b border-theme-border overflow-x-auto scrollbar-thin sticky top-[60px] z-20">
             <div className="flex items-center gap-1 px-3 sm:px-6 lg:px-8">
               {sectionForActiveTab.tabs
-                .filter(t => hasPermission(t.tab) && (!t.superadminOnly || adminRole === 'superadmin'))
+                .filter(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin'))
                 .map((t, idx) => {
                   const tabMatch = activeTab === t.tab
                   const subMatch = t.subView ? rentalSubView === t.subView : (t.tab !== 'reservations' || true)
