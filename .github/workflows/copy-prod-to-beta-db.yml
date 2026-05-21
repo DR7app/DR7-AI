@@ -1,0 +1,75 @@
+name: Copy PROD database → BETA database
+
+# Lancement manuel uniquement depuis l'interface GitHub (Actions tab).
+# Lit la base de prod, ecrit sur la base beta.
+# Production reste read-only — aucune modification de PROD.
+#
+# Setup une seule fois — ajouter 2 secrets dans:
+# https://github.com/bonaparks-dev/dr7-empire-admin/settings/secrets/actions
+#
+#   PROD_DB_URL  =  postgresql://postgres:<PROD_PASSWORD>@db.<PROD_REF>.supabase.co:5432/postgres
+#   BETA_DB_URL  =  postgresql://postgres:<BETA_PASSWORD>@db.<BETA_REF>.supabase.co:5432/postgres
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Tape "OUI" pour confirmer (la base BETA sera ECRASEE par la copie de PROD)'
+        required: true
+        default: 'NO'
+
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "OUI" ]; then
+            echo "::error::Confirmation manquante. Re-lance le workflow et tape OUI dans le champ."
+            exit 1
+          fi
+
+      - name: Verify secrets present
+        env:
+          PROD_DB_URL: ${{ secrets.PROD_DB_URL }}
+          BETA_DB_URL: ${{ secrets.BETA_DB_URL }}
+        run: |
+          if [ -z "$PROD_DB_URL" ]; then echo "::error::PROD_DB_URL secret manquant"; exit 1; fi
+          if [ -z "$BETA_DB_URL" ]; then echo "::error::BETA_DB_URL secret manquant"; exit 1; fi
+          # Garde-fou: refuse si les deux URLs sont identiques (ecraserait prod)
+          if [ "$PROD_DB_URL" = "$BETA_DB_URL" ]; then
+            echo "::error::PROD_DB_URL == BETA_DB_URL — refus de continuer pour ne pas ecraser prod"
+            exit 1
+          fi
+
+      - name: Install postgresql-client (pg_dump + psql)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
+          pg_dump --version
+          psql --version
+
+      - name: Dump PROD schema + data → restore on BETA
+        env:
+          PROD_DB_URL: ${{ secrets.PROD_DB_URL }}
+          BETA_DB_URL: ${{ secrets.BETA_DB_URL }}
+        run: |
+          # Streaming pipe — pas de fichier temporaire avec les donnees.
+          # Si la commande crash a mi-chemin, BETA est dans un etat partiel
+          # mais PROD reste 100% intacte (pg_dump est read-only).
+          set -o pipefail
+          pg_dump "$PROD_DB_URL" \
+            --no-owner \
+            --no-acl \
+            --schema=public \
+            --clean --if-exists \
+            | psql "$BETA_DB_URL" -v ON_ERROR_STOP=0
+          echo "Copie terminee."
+
+      - name: Verify BETA has tables
+        env:
+          BETA_DB_URL: ${{ secrets.BETA_DB_URL }}
+        run: |
+          psql "$BETA_DB_URL" -c "SELECT COUNT(*) AS table_count FROM information_schema.tables WHERE table_schema='public';"
+          psql "$BETA_DB_URL" -c "SELECT COUNT(*) AS bookings_count FROM bookings;" || true
+          psql "$BETA_DB_URL" -c "SELECT COUNT(*) AS vehicles_count FROM vehicles;" || true
