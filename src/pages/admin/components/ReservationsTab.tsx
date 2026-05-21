@@ -9,6 +9,7 @@ import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
 import {
   prorateRevenueForMonth,
   isReportableRentalBooking,
+  getOccupiedDaysInMonth,
   type MonthlyBookingLike,
 } from '../../../utils/monthlyBookingMath'
 
@@ -9661,12 +9662,29 @@ function ReservationsDashboardHeader({
 
     for (const b of bookings) {
       if (b.service_type && b.service_type !== 'rental') continue
-      total++
+
+      const mLike = b as unknown as MonthlyBookingLike
+      const reportable = isReportableRentalBooking(mLike)
+
+      // "Prenotazioni del mese" — stessa logica del Report Noleggio: una
+      // prenotazione conta nel mese se ha almeno un giorno di occupazione
+      // (pickup gia' nel mese, oppure giorno di permanenza nel mese per
+      // bookings cross-month). Stesso gate isReportableRentalBooking.
+      if (reportable && b.pickup_date && b.dropoff_date) {
+        const overlap = getOccupiedDaysInMonth(
+          b.pickup_date,
+          b.dropoff_date,
+          selMonth.year,
+          selMonth.month,
+          daysInSelMonth,
+        )
+        if (overlap > 0) total++
+      }
 
       // Fatturato mensile prorata — stessa formula del Report Noleggio.
-      if (isReportableRentalBooking(b as unknown as MonthlyBookingLike)) {
+      if (reportable) {
         revenueCents += prorateRevenueForMonth(
-          b as unknown as MonthlyBookingLike,
+          mLike,
           selMonth.year,
           selMonth.month,
           daysInSelMonth,
@@ -9730,7 +9748,7 @@ function ReservationsDashboardHeader({
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
-          label="Prenotazioni Totali"
+          label={`Prenotazioni ${selMonthLabel}`}
           value={stats.total.toLocaleString('it-IT')}
           icon={(
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -9739,7 +9757,7 @@ function ReservationsDashboardHeader({
             </svg>
           )}
           accent="cyan"
-          hint="storico noleggio (tutte)"
+          hint="auto noleggiate nel mese"
         />
         <KpiCard
           label="Noleggi Attivi"
