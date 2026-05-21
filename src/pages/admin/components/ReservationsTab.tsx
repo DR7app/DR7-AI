@@ -6,6 +6,11 @@ import { supabase } from '../../../supabaseClient'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import { isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
 import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
+import {
+  prorateRevenueForMonth,
+  isReportableRentalBooking,
+  type MonthlyBookingLike,
+} from '../../../utils/monthlyBookingMath'
 
 /**
  * Convert EUR string to integer cents using string parsing (no floating point).
@@ -9615,13 +9620,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
 /**
  * Premium dashboard header per Prenotazioni Noleggio.
- * 4 KPI cards calcolate dal solo state `bookings` (nessuna nuova fetch):
- *   - Prenotazioni Totali (count)
+ * 4 KPI calcolate dal solo state `bookings` (nessuna nuova fetch):
+ *   - Prenotazioni Totali (count rentals)
  *   - Noleggi Attivi (active/confirmed, non-cancelled, non-completed)
- *   - Fatturato (sum di price_total su prenotazioni pagate)
- *   - Scadenze (return previsto entro 24h o gia' scaduto, ancora aperto)
- * Layout: titolo + sottotitolo a sinistra, 2 azioni a destra. Sotto, 4 card.
- * Visivo only — non tocca il flusso di lettura/scrittura.
+ *   - Fatturato MENSILE: usa prorateRevenueForMonth (stessa formula di
+ *     Report Noleggio) cosi' i numeri qui combaciano con quelli del
+ *     report. Include credit_wallet (gate per status, non per payment).
+ *   - Scadenze (rientri oggi/scaduti ancora aperti, max 3gg passato)
+ * Visivo only — non tocca query/filtri/tabella/form.
  */
 function ReservationsDashboardHeader({
   bookings,
@@ -9630,40 +9636,59 @@ function ReservationsDashboardHeader({
   bookings: Booking[]
   onNewBooking: () => void
 }) {
+  // Default al mese corrente in Europe/Rome.
+  const nowRome = new Date()
+  const [selMonth, setSelMonth] = useState<{ year: number; month: number }>({
+    year: nowRome.getFullYear(),
+    month: nowRome.getMonth() + 1,
+  })
+
   const stats = useMemo(() => {
-    const paidValues = new Set(['paid', 'completed', 'succeeded'])
     const closedStatuses = new Set(['cancelled', 'annullata', 'completed', 'completata'])
     const now = Date.now()
     const in24h = now + 24 * 60 * 60 * 1000
+    // Scadenze: NON contare prenotazioni con dropoff piu' di 3 giorni nel
+    // passato — quasi sempre status "stale" (il cliente ha riconsegnato ma
+    // nessuno ha cambiato lo status). Cosi' il numero resta usabile invece
+    // di esplodere con tutti i vecchi confirmed mai chiusi.
+    const grace3d = now - 3 * 24 * 60 * 60 * 1000
 
+    const daysInSelMonth = new Date(selMonth.year, selMonth.month, 0).getDate()
     let total = 0
     let active = 0
-    let revenue = 0
+    let revenueCents = 0
     let scadenze = 0
 
     for (const b of bookings) {
-      // Solo noleggio nel conteggio
       if (b.service_type && b.service_type !== 'rental') continue
       total++
 
-      const status = String(b.status || '').toLowerCase()
-      const payment = String(b.payment_status || '').toLowerCase()
-      if (paidValues.has(payment)) {
-        revenue += Number(b.price_total) || 0
+      // Fatturato mensile prorata — stessa formula del Report Noleggio.
+      if (isReportableRentalBooking(b as unknown as MonthlyBookingLike)) {
+        revenueCents += prorateRevenueForMonth(
+          b as unknown as MonthlyBookingLike,
+          selMonth.year,
+          selMonth.month,
+          daysInSelMonth,
+        ) * 100 // prorateRevenueForMonth ritorna euro; riportiamo a cents poi /100 a fine
       }
+
+      const status = String(b.status || '').toLowerCase()
       const isClosed = closedStatuses.has(status)
       if (!isClosed) {
         active++
         const dropoffMs = b.dropoff_date ? new Date(b.dropoff_date).getTime() : NaN
-        if (Number.isFinite(dropoffMs) && dropoffMs <= in24h) {
+        if (Number.isFinite(dropoffMs) && dropoffMs <= in24h && dropoffMs >= grace3d) {
           scadenze++
         }
       }
     }
-    return { total, active, revenue, scadenze }
-  }, [bookings])
+    return { total, active, revenueEuro: revenueCents / 100, scadenze }
+  }, [bookings, selMonth])
 
   const fmtEur = (n: number) => n.toLocaleString('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
+  const monthsIt = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre']
+  const selMonthLabel = monthsIt[selMonth.month - 1]
 
   return (
     <div className="space-y-4 mb-2">
@@ -9719,15 +9744,13 @@ function ReservationsDashboardHeader({
           )}
           accent="blue"
         />
-        <KpiCard
-          label="Fatturato"
-          value={fmtEur(stats.revenue)}
-          icon={(
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v20M17 6H9a3 3 0 100 6h6a3 3 0 110 6H7" />
-            </svg>
-          )}
-          accent="green"
+        <FatturatoMonthCard
+          value={fmtEur(stats.revenueEuro)}
+          monthLabel={selMonthLabel}
+          year={selMonth.year}
+          month={selMonth.month}
+          monthsIt={monthsIt}
+          onChange={(y, m) => setSelMonth({ year: y, month: m })}
         />
         <KpiCard
           label="Scadenze"
@@ -9738,8 +9761,95 @@ function ReservationsDashboardHeader({
             </svg>
           )}
           accent="amber"
-          hint={stats.scadenze > 0 ? 'attenzione richiesta' : undefined}
+          hint={stats.scadenze > 0 ? 'auto da rientrare entro 24h' : 'nessun rientro imminente'}
         />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Card Fatturato con month picker inline. Label dinamica:
+ * "Fatturato Maggio", "Fatturato Giugno", ecc. Anno mostrato solo se != corrente.
+ * Source euro: prorateRevenueForMonth (Report Noleggio formula).
+ */
+function FatturatoMonthCard({
+  value,
+  monthLabel,
+  year,
+  month,
+  monthsIt,
+  onChange,
+}: {
+  value: string
+  monthLabel: string
+  year: number
+  month: number
+  monthsIt: string[]
+  onChange: (year: number, month: number) => void
+}) {
+  const currentYear = new Date().getFullYear()
+  const yearSuffix = year !== currentYear ? ` ${year}` : ''
+  return (
+    <div className="relative rounded-2xl border border-theme-border bg-theme-bg-secondary px-4 py-3.5 overflow-hidden">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-theme-text-muted truncate">
+          Fatturato {monthLabel}{yearSuffix}
+        </span>
+        <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 font-bold text-sm">€</span>
+      </div>
+      <div className="mt-2 text-2xl sm:text-[28px] font-bold text-theme-text-primary leading-tight tabular-nums">{value}</div>
+      <div className="mt-2 flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => {
+            const m = month === 1 ? 12 : month - 1
+            const y = month === 1 ? year - 1 : year
+            onChange(y, m)
+          }}
+          className="w-6 h-6 rounded-md border border-theme-border text-theme-text-muted hover:text-dr7-gold hover:border-dr7-gold transition-colors flex items-center justify-center"
+          aria-label="Mese precedente"
+          title="Mese precedente"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <select
+          value={`${year}-${month}`}
+          onChange={(e) => {
+            const [y, m] = e.target.value.split('-').map(Number)
+            onChange(y, m)
+          }}
+          className="flex-1 text-[11px] bg-theme-bg-tertiary border border-theme-border rounded-md px-2 py-1 text-theme-text-secondary focus:outline-none focus:border-dr7-gold cursor-pointer"
+        >
+          {(() => {
+            // 18 mesi (12 indietro + 6 avanti) per cambio anno facile.
+            const out: { label: string; year: number; month: number }[] = []
+            for (let i = -12; i <= 6; i++) {
+              const d = new Date(currentYear, new Date().getMonth() + i, 1)
+              out.push({ label: `${monthsIt[d.getMonth()]} ${d.getFullYear()}`, year: d.getFullYear(), month: d.getMonth() + 1 })
+            }
+            return out.map(o => (
+              <option key={`${o.year}-${o.month}`} value={`${o.year}-${o.month}`}>{o.label}</option>
+            ))
+          })()}
+        </select>
+        <button
+          type="button"
+          onClick={() => {
+            const m = month === 12 ? 1 : month + 1
+            const y = month === 12 ? year + 1 : year
+            onChange(y, m)
+          }}
+          className="w-6 h-6 rounded-md border border-theme-border text-theme-text-muted hover:text-dr7-gold hover:border-dr7-gold transition-colors flex items-center justify-center"
+          aria-label="Mese successivo"
+          title="Mese successivo"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
       </div>
     </div>
   )
