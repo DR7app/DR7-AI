@@ -82,17 +82,44 @@ export function BrandSedeProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      // 1. Load admin row to know brand_id + sede_id + permissions
-      const { data: admin } = await supabase
-        .from('admins')
-        .select('id, brand_id, sede_id, role, permissions')
-        .eq('user_id', user.id)
-        .maybeSingle()
+      // Phase 2 multi-tenant: brand_id/sede_id su admins + tabelle
+      // brands/sedi non sono ancora deployate. Le tre query qui sotto
+      // sono best-effort: se la colonna/tabella manca, prendiamo il
+      // fallback single-tenant DR7 invece di sporcare la console di 400/404.
+
+      // 1. admins row: prova select esteso, fallback al subset minimale.
+      type AdminRow = {
+        id?: string
+        brand_id?: string | null
+        sede_id?: string | null
+        role?: string | null
+        permissions?: unknown
+      }
+      let admin: AdminRow | null = null
+      {
+        const { data, error } = await supabase
+          .from('admins')
+          .select('id, brand_id, sede_id, role, permissions')
+          .eq('user_id', user.id)
+          .maybeSingle()
+        if (error) {
+          // Probabile: colonne brand_id/sede_id non ancora presenti.
+          // Riprova con i soli campi che esistono di sicuro.
+          const fallback = await supabase
+            .from('admins')
+            .select('id, role, permissions')
+            .eq('user_id', user.id)
+            .maybeSingle()
+          admin = (fallback.data as AdminRow) || null
+        } else {
+          admin = (data as AdminRow) || null
+        }
+      }
 
       const brandId = (admin?.brand_id as string) || 'dr7_empire'
       const sedeId = (admin?.sede_id as string) || null
-      const perms: string[] = Array.isArray((admin as { permissions?: unknown })?.permissions)
-        ? ((admin as { permissions?: unknown }).permissions as unknown[]).map(String)
+      const perms: string[] = Array.isArray(admin?.permissions)
+        ? (admin!.permissions as unknown[]).map(String)
         : []
       const role = (admin?.role as string) || 'admin'
 
@@ -106,24 +133,28 @@ export function BrandSedeProvider({ children }: { children: ReactNode }) {
       setIsBrandDirezione(isDirez)
       setIsPlatformOwner(isPlatform)
 
-      // 2. Load the brand row
-      const { data: brand } = await supabase
-        .from('brands')
-        .select('id, name, slug, owner_email, subdomain, is_active, settings')
-        .eq('id', brandId)
-        .maybeSingle()
+      // 2. brands row — silenzia 404 se la tabella non esiste.
+      try {
+        const { data: brand, error } = await supabase
+          .from('brands')
+          .select('id, name, slug, owner_email, subdomain, is_active, settings')
+          .eq('id', brandId)
+          .maybeSingle()
+        if (!error && brand) setCurrentBrand(brand as unknown as Brand)
+      } catch { /* tabella brands non esiste ancora */ }
 
-      if (brand) setCurrentBrand(brand as unknown as Brand)
+      // 3. sedi — stesso pattern.
+      let sediList: Sede[] = []
+      try {
+        const { data: sedi, error } = await supabase
+          .from('sedi')
+          .select('id, brand_id, name, address, city, phone, is_primary, is_active')
+          .eq('brand_id', brandId)
+          .order('is_primary', { ascending: false })
+          .order('name', { ascending: true })
+        if (!error && sedi) sediList = sedi as unknown as Sede[]
+      } catch { /* tabella sedi non esiste ancora */ }
 
-      // 3. Load every sede of this brand (for the picker)
-      const { data: sedi } = await supabase
-        .from('sedi')
-        .select('id, brand_id, name, address, city, phone, is_primary, is_active')
-        .eq('brand_id', brandId)
-        .order('is_primary', { ascending: false })
-        .order('name', { ascending: true })
-
-      const sediList = (sedi as unknown as Sede[]) || []
       setAvailableSedi(sediList)
       const home = sediList.find(s => s.id === sedeId) || sediList.find(s => s.is_primary) || sediList[0] || null
       setHomeSede(home)
