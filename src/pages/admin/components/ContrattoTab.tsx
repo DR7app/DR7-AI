@@ -276,8 +276,13 @@ export default function ContrattoTab() {
       toast.error('Il contratto non ha un PDF generato.')
       return
     }
-    if (!contract.customer_email) {
-      toast.error('Email cliente mancante.')
+    // BUG FIX 2026-05-21: il bottone si chiama "Firma via WhatsApp" e il
+    // backend (signature-init) invia il link via WhatsApp usando il
+    // telefono. L'email serve solo come fallback se il telefono manca.
+    // Prima qui bloccavamo su email mancante anche con telefono presente
+    // → "EMAIL MANCANTE" pure su clienti con telefono valido.
+    if (!contract.customer_phone && !contract.customer_email) {
+      toast.error('Cliente senza telefono nè email: impossibile inviare il contratto.')
       return
     }
 
