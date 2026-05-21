@@ -64,17 +64,17 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-8 relative overflow-hidden bg-white dark:bg-theme-bg-primary">
+    <div className="min-h-screen flex items-center justify-center px-4 py-8 relative overflow-hidden bg-theme-bg-primary">
 
       <div className="w-full max-w-md relative z-10">
-        {/* Box login: in light theme usa bianco puro per matchare lo
-            sfondo bianco del logo JPEG (niente piu' rettangolo grigio
-            attorno al logo). In dark resta il tema standard. */}
-        <div className="rounded-2xl px-6 sm:px-10 pt-10 pb-8 border border-dr7-gold/40 relative shadow-2xl shadow-dr7-gold/10 bg-white dark:bg-theme-bg-primary">
+        {/* Box login: lo stesso sfondo del page (theme-bg-primary) cosi' il
+            logo PNG trasparente si fonde col background. Niente piu'
+            forzature bianche o rettangolo nero attorno al logo. */}
+        <div className="rounded-2xl px-6 sm:px-10 pt-10 pb-8 border border-dr7-gold/40 relative shadow-2xl shadow-dr7-gold/10 bg-theme-bg-primary">
           {/* Logo */}
           <div className="flex justify-center mb-8">
             <img
-              src="/rentora-logo.jpeg"
+              src="/rentora-logo.png"
               alt="DR7 A.I."
               className="theme-aware-logo h-32 sm:h-36 w-auto max-w-full object-contain"
             />

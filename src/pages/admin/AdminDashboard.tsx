@@ -679,9 +679,9 @@ export default function AdminDashboard() {
               </button>
               {paletteMenuOpen && (
                 <>
-                  <div className="fixed inset-0 z-40 backdrop-blur-[2px]" onClick={() => setPaletteMenuOpen(false)} />
+                  <div className="fixed inset-0 z-[80] backdrop-blur-[2px]" onClick={() => setPaletteMenuOpen(false)} />
                   <div
-                    className="absolute right-0 mt-3 w-[340px] max-h-[85vh] overflow-y-auto rounded-2xl border border-theme-border bg-theme-bg-secondary z-50"
+                    className="fixed right-4 top-20 w-[340px] max-h-[85vh] overflow-y-auto rounded-2xl border border-theme-border bg-theme-bg-secondary z-[90]"
                     style={{ boxShadow: '0 24px 60px -12px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04)' }}
                   >
                     <div className="sticky top-0 z-10 bg-theme-bg-secondary/95 backdrop-blur px-4 pt-4 pb-3 border-b border-theme-border">
