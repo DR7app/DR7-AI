@@ -5616,20 +5616,11 @@ function FiscaleSection({
     setFiscal({ ...fiscal, payment_methods: methods.filter((_, i) => i !== index) })
   }
 
-  // Auto-merge: appena la sezione Fiscale si apre, se mancano metodi
-  // di default li accoda alla lista salvata. La save-bar segnala la
-  // modifica e la direzione decide se salvare o annullare.
-  // Guard con useRef cosi' non rifire ad ogni re-render.
-  const autoMergeDoneRef = useRef(false)
-  useEffect(() => {
-    if (autoMergeDoneRef.current) return
-    const existingKeys = new Set(methods.map(m => m.key))
-    const missing = DEFAULT_PAYMENT_METHODS.filter(d => !existingKeys.has(d.key))
-    if (missing.length === 0) return
-    autoMergeDoneRef.current = true
-    setFiscal({ ...fiscal, payment_methods: [...methods, ...missing] })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // 2026-05-21: auto-merge RIMOSSO. Prima rifiusava ogni metodo cancellato
+  // dall'admin perche' ad ogni open della sezione faceva merge dei
+  // DEFAULT_PAYMENT_METHODS mancanti → "cancello Bancomat, salvo, riapro,
+  // torna in fondo". Adesso l'admin gestisce la lista in autonomia.
+  // Se vuole ripristinare i default, c'e' il bottone "Aggiungi metodo".
 
   return (
     <div className="space-y-6">
