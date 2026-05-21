@@ -3111,6 +3111,20 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                       <div className="mt-1 text-[11px] text-theme-text-muted font-mono leading-relaxed bg-theme-bg-tertiary/50 rounded p-2 max-w-xs space-y-0.5">
                         <div>{p.vehicle_name}{p.vehicle_model_year ? ` · my ${p.vehicle_model_year}` : ''}</div>
                         <div>{p.rental_days}gg × {formatEur(p.base_daily_rate)}/g</div>
+                        {(() => {
+                          const isUnlimited = (p.unlimited_km_total || 0) > 0
+                          if (isUnlimited) {
+                            return <div>Km inclusi: <span className="text-theme-text-primary">Illimitati</span></div>
+                          }
+                          const km = resolveKmIncluded(p.vehicle_category, p.rental_days, proKm, rentalConfig)
+                          if (km === 'unlimited') {
+                            return <div>Km inclusi: <span className="text-theme-text-primary">Illimitati</span></div>
+                          }
+                          if (typeof km === 'number' && km > 0) {
+                            return <div>Km inclusi: <span className="text-theme-text-primary">{km.toLocaleString('it-IT')} km</span></div>
+                          }
+                          return null
+                        })()}
                         <div>Totale: <span className="text-theme-text-primary">{formatEur(p.total_final || p.subtotal)}</span></div>
                       </div>
                     </td>

@@ -1,4 +1,5 @@
 import { useState, useEffect, Suspense } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../supabaseClient'
 import { useNavigate } from 'react-router-dom'
 import { useVehicleAlarm } from '../../contexts/VehicleAlarmContext'
@@ -677,11 +678,11 @@ export default function AdminDashboard() {
                   <path d="M12 22a10 10 0 1 1 .01-20 7.5 7.5 0 0 1 5.3 12.79l-1.55 1.55a2 2 0 0 0 0 2.83 2 2 0 0 1-1.41 3.41A10 10 0 0 1 12 22z" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
-              {paletteMenuOpen && (
+              {paletteMenuOpen && createPortal(
                 <>
-                  <div className="fixed inset-0 z-[80] backdrop-blur-[2px]" onClick={() => setPaletteMenuOpen(false)} />
+                  <div className="fixed inset-0 z-[9990] backdrop-blur-[2px]" onClick={() => setPaletteMenuOpen(false)} />
                   <div
-                    className="fixed right-4 top-20 w-[340px] max-h-[85vh] overflow-y-auto rounded-2xl border border-theme-border bg-theme-bg-secondary z-[90]"
+                    className="fixed right-4 top-20 w-[340px] max-h-[85vh] overflow-y-auto rounded-2xl border border-theme-border bg-theme-bg-secondary z-[9991]"
                     style={{ boxShadow: '0 24px 60px -12px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04)' }}
                   >
                     <div className="sticky top-0 z-10 bg-theme-bg-secondary/95 backdrop-blur px-4 pt-4 pb-3 border-b border-theme-border">
@@ -731,7 +732,8 @@ export default function AdminDashboard() {
                       </p>
                     </div>
                   </div>
-                </>
+                </>,
+                document.body
               )}
             </div>
             <span className="text-sm text-theme-text-secondary hidden lg:block">
