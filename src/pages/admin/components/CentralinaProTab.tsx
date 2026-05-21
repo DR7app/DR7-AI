@@ -475,6 +475,11 @@ type FiscalPaymentMethod = {
   key: string
   label: string
   auto_invoice: boolean
+  // 2026-05-21: is_enabled controlla se il metodo appare nei dropdown
+  // (booking, preventivo, lavaggio, ecc.). I metodi disabilitati restano
+  // in DB come riferimento storico ma non sono selezionabili.
+  // Default true se non specificato (backwards compat).
+  is_enabled?: boolean
 }
 
 type FiscalConfig = {
@@ -5681,14 +5686,17 @@ function FiscaleSection({
           {/* Header */}
           <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-theme-bg-tertiary text-[11px] font-medium uppercase tracking-wide text-theme-text-muted">
             <div className="col-span-3">Codice (key)</div>
-            <div className="col-span-6">Etichetta visibile</div>
-            <div className="col-span-2 text-center">Fattura</div>
+            <div className="col-span-5">Etichetta visibile</div>
+            <div className="col-span-2 text-center" title="Se OFF, il metodo NON appare nei dropdown di booking/preventivo/lavaggio. Resta in DB come archivio storico.">Attivo</div>
+            <div className="col-span-1 text-center" title="Se ON, segnare un pagamento con questo metodo genera fattura automatica.">Fattura</div>
             <div className="col-span-1"></div>
           </div>
-          {methods.map((m, i) => (
+          {methods.map((m, i) => {
+            const enabled = m.is_enabled !== false
+            return (
             <div
               key={i}
-              className={`grid grid-cols-12 gap-2 px-4 py-2 items-center ${i < methods.length - 1 ? 'border-b border-theme-border' : ''}`}
+              className={`grid grid-cols-12 gap-2 px-4 py-2 items-center ${i < methods.length - 1 ? 'border-b border-theme-border' : ''} ${enabled ? '' : 'opacity-50'}`}
             >
               <input
                 type="text"
@@ -5700,9 +5708,17 @@ function FiscaleSection({
                 type="text"
                 value={m.label}
                 onChange={(e) => patchMethod(i, { label: e.target.value })}
-                className="col-span-6 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary"
+                className="col-span-5 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary"
               />
-              <label className="col-span-2 flex items-center justify-center gap-2 cursor-pointer">
+              <label className="col-span-2 flex items-center justify-center gap-2 cursor-pointer" title="Attiva/disattiva il metodo nei dropdown">
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  onChange={(e) => patchMethod(i, { is_enabled: e.target.checked })}
+                  className="w-4 h-4 accent-emerald-500"
+                />
+              </label>
+              <label className="col-span-1 flex items-center justify-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={m.auto_invoice}
@@ -5714,10 +5730,11 @@ function FiscaleSection({
                 type="button"
                 onClick={() => removeMethod(i)}
                 className="col-span-1 text-red-500 hover:bg-red-500/10 rounded-md py-1.5 text-sm"
-                title="Rimuovi metodo"
+                title="Rimuovi metodo dal DB definitivamente"
               >×</button>
             </div>
-          ))}
+            )
+          })}
         </div>
         <button
           type="button"

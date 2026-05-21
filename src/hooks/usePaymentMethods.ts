@@ -22,6 +22,9 @@ export interface PaymentMethod {
     key: string
     label: string
     auto_invoice: boolean
+    // 2026-05-21: opt-out per nascondere metodi dai dropdown senza
+    // cancellarli dal config. Default true (backwards compat).
+    is_enabled?: boolean
 }
 
 // Fallback mirror della lista DEFAULT_PAYMENT_METHODS di CentralinaProTab.
@@ -83,8 +86,12 @@ async function fetchOnce(): Promise<PaymentMethod[]> {
                         key: String(m.key || ''),
                         label: String(m.label || ''),
                         auto_invoice: m.auto_invoice !== false,
+                        is_enabled: m.is_enabled !== false,
                     }))
-                    .filter(m => m.key && m.label)
+                    // 2026-05-21: filtra is_enabled === false così i dropdown
+                    // mostrano solo i metodi attivi. I metodi disattivati
+                    // restano nel config per archivio storico.
+                    .filter(m => m.key && m.label && m.is_enabled !== false)
                 return CACHED
             }
         } catch (e) {
