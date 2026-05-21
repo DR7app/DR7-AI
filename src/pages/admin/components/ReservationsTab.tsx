@@ -9658,7 +9658,8 @@ function ReservationsDashboardHeader({
     let total = 0
     let active = 0
     let revenueCents = 0
-    let scadenze = 0
+    let scadenzeInRitardo = 0   // dropoff gia' passato (ultimi 3 gg), status aperto
+    let scadenzeImminenti = 0   // dropoff entro 24h nel futuro, status aperto
 
     for (const b of bookings) {
       if (b.service_type && b.service_type !== 'rental') continue
@@ -9703,12 +9704,23 @@ function ReservationsDashboardHeader({
         if (Number.isFinite(pickupMs) && Number.isFinite(dropoffMs) && pickupMs <= now && dropoffMs >= now) {
           active++
         }
-        if (Number.isFinite(dropoffMs) && dropoffMs <= in24h && dropoffMs >= grace3d) {
-          scadenze++
+        if (Number.isFinite(dropoffMs)) {
+          if (dropoffMs < now && dropoffMs >= grace3d) {
+            scadenzeInRitardo++
+          } else if (dropoffMs >= now && dropoffMs <= in24h) {
+            scadenzeImminenti++
+          }
         }
       }
     }
-    return { total, active, revenueEuro: revenueCents / 100, scadenze }
+    return {
+      total,
+      active,
+      revenueEuro: revenueCents / 100,
+      scadenzeInRitardo,
+      scadenzeImminenti,
+      scadenze: scadenzeInRitardo + scadenzeImminenti,
+    }
   }, [bookings, selMonth])
 
   const fmtEur = (n: number) => n.toLocaleString('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
@@ -9788,7 +9800,11 @@ function ReservationsDashboardHeader({
             </svg>
           )}
           accent="amber"
-          hint={stats.scadenze > 0 ? 'auto da rientrare entro 24h' : 'nessun rientro imminente'}
+          hint={
+            stats.scadenze === 0
+              ? 'nessun rientro imminente'
+              : `${stats.scadenzeInRitardo} in ritardo · ${stats.scadenzeImminenti} entro 24h`
+          }
         />
       </div>
     </div>
