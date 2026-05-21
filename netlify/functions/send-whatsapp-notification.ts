@@ -638,8 +638,14 @@ const handler: Handler = async (event) => {
         const depOption = booking.booking_details?.depositOption;
         const depStatus = booking.booking_details?.deposit_status;
         if (depOption === 'no_deposit') {
+          // 2026-05-21: rimosso il prefisso "+30%" hardcoded (legacy).
+          // Il surcharge "Senza cauzione" oggi e' calcolato per-giorno
+          // per-categoria da Centralina Pro Cauzioni (es. 50€/g × 2g = 100€),
+          // non e' una percentuale fissa.
           const surcharge = Number(booking.booking_details?.noDepositSurcharge ?? 0);
-          vars.deposit = `Senza cauzione (+30% = €${surcharge.toFixed(2)})`;
+          vars.deposit = surcharge > 0
+            ? `Senza cauzione (supplemento €${surcharge.toFixed(2)})`
+            : `Senza cauzione`;
         } else if (depAmount > 0) {
           const statusLbl = depStatus === 'incassata' ? 'Pagata' : 'Da saldare';
           vars.deposit = `€${depAmount.toFixed(2)} - ${statusLbl}`;

@@ -499,7 +499,9 @@ export const handler: Handler = async (event) => {
                         let depositLabel = '€0'
                         if (depOption === 'no_deposit') {
                             const surcharge = Number(fullBooking.booking_details?.noDepositSurcharge ?? 0)
-                            depositLabel = `Senza cauzione (+30% = €${surcharge.toFixed(2)})`
+                            depositLabel = surcharge > 0
+                                ? `Senza cauzione (supplemento €${surcharge.toFixed(2)})`
+                                : `Senza cauzione`
                         } else if (depAmount > 0) {
                             depositLabel = `€${depAmount.toFixed(2)}`
                         }
