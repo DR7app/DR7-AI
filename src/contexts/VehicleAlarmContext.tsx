@@ -656,7 +656,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
 
             const { data: pickups, error: pickupsError } = await supabase
                 .from('bookings')
-                .select('id, customer_name, vehicle_name, pickup_date, status, booking_details, service_type')
+                .select('id, customer_name, vehicle_name, pickup_date, status, booking_details, service_type, deposit_amount')
                 .in('status', ['confirmed', 'confermata', 'in_corso', 'active'])
                 .not('service_type', 'eq', 'car_wash')
                 .gte('pickup_date', now.toISOString())
@@ -666,7 +666,13 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 for (const booking of pickups) {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const details = booking.booking_details as any
-                    const deposit = details?.deposit ? Number(details.deposit) : 0
+                    // BUG FIX 2026-05-21: l'allarme leggeva SOLO details.deposit,
+                    // ma il sito (CarBookingWizard) e l'admin salvano la cauzione
+                    // in bookings.deposit_amount (colonna top-level). details
+                    // contiene solo depositOption ('no_deposit'/'cash'/...).
+                    // Risultato: l'allarme non scattava MAI. Adesso preferisce
+                    // deposit_amount, fallback al campo legacy details.deposit.
+                    const deposit = Number(booking.deposit_amount || details?.deposit || 0)
 
                     if (deposit <= 0) continue
 
