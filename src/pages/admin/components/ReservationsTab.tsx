@@ -9676,8 +9676,15 @@ function ReservationsDashboardHeader({
       const status = String(b.status || '').toLowerCase()
       const isClosed = closedStatuses.has(status)
       if (!isClosed) {
-        active++
+        // "Noleggi Attivi" = auto fuori in questo momento (pickup gia'
+        // avvenuto, dropoff non ancora scaduto). Cosi' il numero combacia
+        // con quante auto sono davvero noleggiate ORA, non con le righe
+        // confirmed dimenticate in DB.
+        const pickupMs = b.pickup_date ? new Date(b.pickup_date).getTime() : NaN
         const dropoffMs = b.dropoff_date ? new Date(b.dropoff_date).getTime() : NaN
+        if (Number.isFinite(pickupMs) && Number.isFinite(dropoffMs) && pickupMs <= now && dropoffMs >= now) {
+          active++
+        }
         if (Number.isFinite(dropoffMs) && dropoffMs <= in24h && dropoffMs >= grace3d) {
           scadenze++
         }
@@ -9732,6 +9739,7 @@ function ReservationsDashboardHeader({
             </svg>
           )}
           accent="cyan"
+          hint="storico noleggio (tutte)"
         />
         <KpiCard
           label="Noleggi Attivi"
@@ -9743,6 +9751,7 @@ function ReservationsDashboardHeader({
             </svg>
           )}
           accent="blue"
+          hint="auto fuori in questo momento"
         />
         <FatturatoMonthCard
           value={fmtEur(stats.revenueEuro)}
@@ -9870,11 +9879,11 @@ function KpiCard({
 }) {
   // Mappa accent -> classi Tailwind. Le pillole icona usano bg/text del
   // colore; il bordo della card resta neutro per non rumore visivo.
-  const accentMap: Record<string, { bg: string; text: string }> = {
-    cyan:  { bg: 'bg-cyan-500/10',  text: 'text-cyan-400'  },
-    blue:  { bg: 'bg-blue-500/10',  text: 'text-blue-400'  },
-    green: { bg: 'bg-emerald-500/10', text: 'text-emerald-400' },
-    amber: { bg: 'bg-amber-500/10', text: 'text-amber-400' },
+  const accentMap: Record<string, { bg: string; text: string; hintText: string }> = {
+    cyan:  { bg: 'bg-cyan-500/10',    text: 'text-cyan-400',    hintText: 'text-theme-text-muted' },
+    blue:  { bg: 'bg-blue-500/10',    text: 'text-blue-400',    hintText: 'text-theme-text-muted' },
+    green: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', hintText: 'text-theme-text-muted' },
+    amber: { bg: 'bg-amber-500/10',   text: 'text-amber-400',   hintText: 'text-amber-400' },
   }
   const c = accentMap[accent]
   return (
@@ -9884,7 +9893,7 @@ function KpiCard({
         <span className={`inline-flex items-center justify-center w-7 h-7 rounded-lg ${c.bg} ${c.text}`}>{icon}</span>
       </div>
       <div className="mt-2 text-2xl sm:text-[28px] font-bold text-theme-text-primary leading-tight tabular-nums">{value}</div>
-      {hint && <div className="mt-1 text-[11px] text-amber-400 font-medium">{hint}</div>}
+      {hint && <div className={`mt-1 text-[11px] ${c.hintText} font-medium`}>{hint}</div>}
     </div>
   )
 }
