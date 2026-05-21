@@ -5535,9 +5535,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       let insertedBooking
       if (editingId) {
         // Update existing booking - trigger will properly exclude current booking from conflict check
+        // IMPORTANT: stamp updated_at on every save. The bookings table doesn't
+        // have an auto-update trigger, so without this the column stays equal
+        // to booked_at and we can't tell which bookings have been modified.
         const { data, error: bookingError } = await supabase
           .from('bookings')
-          .update(bookingData)
+          .update({ ...bookingData, updated_at: new Date().toISOString() })
           .eq('id', editingId)
           .select()
           .single()
