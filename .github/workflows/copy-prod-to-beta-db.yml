@@ -42,10 +42,18 @@ jobs:
             exit 1
           fi
 
-      - name: Install postgresql-client (pg_dump + psql)
+      - name: Install postgresql-client 17 (match Supabase server version)
         run: |
+          # Supabase = PostgreSQL 17.x — Ubuntu ships pg_dump 16 which refuses
+          # to dump from a newer server. On installe pg_dump 17 depuis le repo
+          # officiel PostgreSQL APT pour matcher exactement.
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
           sudo apt-get update -qq
-          sudo apt-get install -y postgresql-client
+          sudo apt-get install -y postgresql-client-17
+          # Le binaire est dans /usr/lib/postgresql/17/bin — on l'ajoute au PATH
+          echo "/usr/lib/postgresql/17/bin" >> $GITHUB_PATH
+          export PATH="/usr/lib/postgresql/17/bin:$PATH"
           pg_dump --version
           psql --version
 
