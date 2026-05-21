@@ -2643,14 +2643,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     logger.log('[ReservationsTab] 🖱️ Generating contract for booking:', booking.id)
     if (!booking.id) {
       console.error('[ReservationsTab] ❌ No booking ID found')
+      toast.error('Errore: nessun ID prenotazione')
       return
     }
 
-    // Skip contract for non-rental bookings
+    // Skip contract for non-rental bookings — visible feedback invece di silent return
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const svcType = booking.service_type || (booking as any).booking_details?.service_type || ''
     if (svcType === 'car_wash' || svcType === 'mechanical_service' || svcType === 'mechanical') {
       logger.log(`[handleGenerateContract] Skipping — service_type=${svcType} is not a rental`)
+      toast(`Contratto non richiesto per ${svcType}`, { duration: 6000 })
       return
     }
 
@@ -2661,11 +2663,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     } catch (error: unknown) {
       const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('[handleGenerateContract] Validation error:', error)
-      alert(_errMsg)
+      toast.error('Validazione fallita: ' + _errMsg, { duration: 12000 })
       return
     }
 
-    if (missing.includes('__limitation_override_requested__')) return
+    // Limitation override: una condizione del cliente (patente scaduta,
+    // < 3 anni, driver blocked, Fascia B no_cauzione, no_cauzione+RCA) ha
+    // aperto il modal OTP. Mostriamo un toast cosi' l'admin sa perche'
+    // il bottone "non ha fatto nulla" — il modal e' aperto in un altro
+    // punto e richiede approvazione direzione.
+    if (missing.includes('__limitation_override_requested__')) {
+      toast('Richiesta OTP aperta — controlla il modal di approvazione direzione', { duration: 10000, icon: 'WARN' })
+      return
+    }
 
     if (missing.length > 0) {
       logger.warn('⚠️ Missing fields for contract:', missing)
