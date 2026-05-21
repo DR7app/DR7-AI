@@ -27,38 +27,11 @@ export interface PaymentMethod {
     is_enabled?: boolean
 }
 
-// Fallback mirror della lista DEFAULT_PAYMENT_METHODS di CentralinaProTab.
-// Quando la direzione non ha ancora salvato la lista in Fiscale, i dropdown
-// mostrano questo set completo (operativi + codici SDI).
-const DEFAULT_METHODS: PaymentMethod[] = [
-    { key: 'contanti',                label: 'Contanti',                         auto_invoice: true  },
-    { key: 'bancomat',                label: 'Carta di Credito / bancomat',      auto_invoice: true  },
-    { key: 'nexi_pay_by_link',        label: 'Nexi - Pay by Link',               auto_invoice: true  },
-    { key: 'bonifico',                label: 'Bonifico',                         auto_invoice: true  },
-    { key: 'bonifico_bancario',       label: 'Bonifico bancario',                auto_invoice: true  },
-    { key: 'credit_wallet',           label: 'Credit Wallet',                    auto_invoice: false },
-    { key: 'carta_punti',             label: 'Carta Punti',                      auto_invoice: false },
-    { key: 'paypal',                  label: 'Paypal',                           auto_invoice: true  },
-    { key: 'assegno',                 label: 'Assegno',                          auto_invoice: true  },
-    { key: 'assegno_circolare',       label: 'Assegno circolare',                auto_invoice: true  },
-    { key: 'riba',                    label: 'RIBA',                             auto_invoice: true  },
-    { key: 'rid',                     label: 'RID',                              auto_invoice: true  },
-    { key: 'rid_utenze',              label: 'RID utenze',                       auto_invoice: true  },
-    { key: 'rib_veloce',              label: 'RIB veloce',                       auto_invoice: true  },
-    { key: 'sepa_direct_debit',       label: 'SEPA Direct Debit',                auto_invoice: true  },
-    { key: 'sepa_direct_debit_core',  label: 'SEPA Direct Debit CORE',           auto_invoice: true  },
-    { key: 'sepa_direct_debit_b2b',   label: 'SEPA Direct Debit B2B',            auto_invoice: true  },
-    { key: 'domiciliazione_bancaria', label: 'Domiciliazione bancaria',          auto_invoice: true  },
-    { key: 'domiciliazione_postale',  label: 'Domiciliazione postale',           auto_invoice: true  },
-    { key: 'pagopa',                  label: 'PagoPA',                           auto_invoice: true  },
-    { key: 'bollettino_postale',      label: 'Bollettino postale',               auto_invoice: true  },
-    { key: 'bollettino_bancario',     label: 'Bollettino bancario',              auto_invoice: true  },
-    { key: 'contanti_tesoreria',      label: 'Contanti presso tesoreria',        auto_invoice: true  },
-    { key: 'vaglia_cambiario',        label: 'Vaglia cambiario',                 auto_invoice: true  },
-    { key: 'quietanza_erario',        label: 'Quietanza erario',                 auto_invoice: true  },
-    { key: 'giroconto_contabilita',   label: 'Giroconto su conti di contabilità', auto_invoice: true },
-    { key: 'trattenuta_riscosse',     label: 'Trattenuta su somme già riscosse', auto_invoice: true  },
-]
+// 2026-05-21: DEFAULT_METHODS hardcoded RIMOSSO. La direzione vuole che
+// la lista metodi venga ESCLUSIVAMENTE da Centralina Pro > Fiscale.
+// Se il config e' vuoto, i dropdown sono vuoti — l'admin deve aggiungere
+// i metodi dalla UI. Niente fallback "magico" che riempiva la lista con
+// 27 voci nascondendo il fatto che il config non era stato configurato.
 
 // Module-level cache so multiple components mounting in the same render don't
 // re-fetch. Refresh on save in Centralina Pro is handled by realtime; for
@@ -95,16 +68,18 @@ async function fetchOnce(): Promise<PaymentMethod[]> {
                 return CACHED
             }
         } catch (e) {
-            console.warn('[usePaymentMethods] config lookup failed, using default', e)
+            console.warn('[usePaymentMethods] config lookup failed', e)
         }
-        CACHED = DEFAULT_METHODS
+        // 2026-05-21: lista vuota se il config non e' configurato. L'admin
+        // configura i metodi da Centralina Pro > Fiscale.
+        CACHED = []
         return CACHED
     })()
     return PENDING
 }
 
 export function usePaymentMethods(): PaymentMethod[] {
-    const [methods, setMethods] = useState<PaymentMethod[]>(CACHED || DEFAULT_METHODS)
+    const [methods, setMethods] = useState<PaymentMethod[]>(CACHED || [])
     useEffect(() => {
         let cancelled = false
         fetchOnce().then(list => { if (!cancelled) setMethods(list) })
