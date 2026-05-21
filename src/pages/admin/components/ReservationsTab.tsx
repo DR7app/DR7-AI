@@ -3321,7 +3321,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       second_driver_license_issued_by: booking.booking_details?.second_driver?.license_issued_by || '',
       second_driver_license_issue_date: booking.booking_details?.second_driver?.license_issue_date || '',
       second_driver_license_expiry: booking.booking_details?.second_driver?.license_expiry || '',
-      insurance_option: booking.booking_details?.insuranceOption || 'KASKO_BASE',
+      // Insurance resolution:
+      // 1. booking.insurance_option (top-level column, written by RPC + admin)
+      // 2. booking_details.insuranceOption (camelCase, written by the website wizard)
+      // 3. Default KASKO_BASE only if both are missing.
+      // The legacy reader (insuranceOption only) defaulted to KASKO_BASE
+      // whenever the wizard hadn't written that nested field, so wallet
+      // bookings showed the wrong tier in admin (Massimo Runchina case).
+      insurance_option: (booking as { insurance_option?: string }).insurance_option
+        || booking.booking_details?.insuranceOption
+        || 'KASKO_BASE',
       // Cauzione amount + status — read in TWO shapes:
       //  • admin-shape (created via this form): booking_details.deposit + booking_details.deposit_status
       //  • website-shape (CarBookingWizard): top-level booking.deposit_amount
