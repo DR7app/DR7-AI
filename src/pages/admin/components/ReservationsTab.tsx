@@ -6645,17 +6645,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     <>
       <style>{scrollbarStyle}</style>
       <div className="space-y-4">
-        {/* Mobile-optimized header */}
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
-          {/* Main Title - Italian Translation verified */}
-          <h2 className="text-xl sm:text-2xl font-light text-dr7-gold tracking-[0.3em] uppercase">Noleggio</h2>
-          <div className="flex gap-2 sm:gap-3">
-            <Button onClick={() => { resetForm(); setEditingId(null); newSession('booking_create'); setShowForm(true) }} className="flex-1 sm:flex-none text-sm sm:text-base">
-              <span className="hidden sm:inline">+ Nuova Prenotazione</span>
-              <span className="sm:hidden">+ Nuova</span>
-            </Button>
-          </div>
-        </div>
+        {/* Premium dashboard header: title + KPI stat cards */}
+        <ReservationsDashboardHeader
+          bookings={bookings}
+          onNewBooking={() => { resetForm(); setEditingId(null); newSession('booking_create'); setShowForm(true) }}
+        />
 
         {/* Search Bar */}
         <div className="mb-4">
@@ -9619,4 +9613,168 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   )
 }
 
+/**
+ * Premium dashboard header per Prenotazioni Noleggio.
+ * 4 KPI cards calcolate dal solo state `bookings` (nessuna nuova fetch):
+ *   - Prenotazioni Totali (count)
+ *   - Noleggi Attivi (active/confirmed, non-cancelled, non-completed)
+ *   - Fatturato (sum di price_total su prenotazioni pagate)
+ *   - Scadenze (return previsto entro 24h o gia' scaduto, ancora aperto)
+ * Layout: titolo + sottotitolo a sinistra, 2 azioni a destra. Sotto, 4 card.
+ * Visivo only — non tocca il flusso di lettura/scrittura.
+ */
+function ReservationsDashboardHeader({
+  bookings,
+  onNewBooking,
+}: {
+  bookings: Booking[]
+  onNewBooking: () => void
+}) {
+  const stats = useMemo(() => {
+    const paidValues = new Set(['paid', 'completed', 'succeeded'])
+    const closedStatuses = new Set(['cancelled', 'annullata', 'completed', 'completata'])
+    const now = Date.now()
+    const in24h = now + 24 * 60 * 60 * 1000
 
+    let total = 0
+    let active = 0
+    let revenue = 0
+    let scadenze = 0
+
+    for (const b of bookings) {
+      // Solo noleggio nel conteggio
+      if (b.service_type && b.service_type !== 'rental') continue
+      total++
+
+      const status = String(b.status || '').toLowerCase()
+      const payment = String(b.payment_status || '').toLowerCase()
+      if (paidValues.has(payment)) {
+        revenue += Number(b.price_total) || 0
+      }
+      const isClosed = closedStatuses.has(status)
+      if (!isClosed) {
+        active++
+        const dropoffMs = b.dropoff_date ? new Date(b.dropoff_date).getTime() : NaN
+        if (Number.isFinite(dropoffMs) && dropoffMs <= in24h) {
+          scadenze++
+        }
+      }
+    }
+    return { total, active, revenue, scadenze }
+  }, [bookings])
+
+  const fmtEur = (n: number) => n.toLocaleString('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
+
+  return (
+    <div className="space-y-4 mb-2">
+      {/* Title row */}
+      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-semibold text-theme-text-primary tracking-tight">
+            Prenotazioni Noleggio
+            <span className="inline-block ml-2 w-2 h-2 rounded-full bg-green-500 align-middle animate-pulse" title="Real-time" />
+          </h2>
+          <p className="text-sm text-theme-text-muted mt-1">Gestisci e monitora tutte le prenotazioni</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <a
+            href="?tab=calendar"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-theme-border bg-theme-bg-secondary hover:bg-theme-bg-hover text-theme-text-primary text-sm font-medium transition-colors"
+          >
+            <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <rect x="3" y="4" width="18" height="18" rx="2" />
+              <path strokeLinecap="round" d="M3 10h18M8 2v4M16 2v4" />
+            </svg>
+            <span className="hidden sm:inline">Calendario Giornaliero</span>
+            <span className="sm:hidden">Calendario</span>
+          </a>
+          <Button onClick={onNewBooking} className="text-sm">
+            <span className="hidden sm:inline">+ Nuova Prenotazione</span>
+            <span className="sm:hidden">+ Nuova</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard
+          label="Prenotazioni Totali"
+          value={stats.total.toLocaleString('it-IT')}
+          icon={(
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <rect x="3" y="4" width="18" height="18" rx="2" />
+              <path strokeLinecap="round" d="M3 10h18M8 2v4M16 2v4" />
+            </svg>
+          )}
+          accent="cyan"
+        />
+        <KpiCard
+          label="Noleggi Attivi"
+          value={stats.active.toLocaleString('it-IT')}
+          icon={(
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <circle cx="12" cy="8" r="4" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 21c0-4 4-6 8-6s8 2 8 6" />
+            </svg>
+          )}
+          accent="blue"
+        />
+        <KpiCard
+          label="Fatturato"
+          value={fmtEur(stats.revenue)}
+          icon={(
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v20M17 6H9a3 3 0 100 6h6a3 3 0 110 6H7" />
+            </svg>
+          )}
+          accent="green"
+        />
+        <KpiCard
+          label="Scadenze"
+          value={stats.scadenze.toLocaleString('it-IT')}
+          icon={(
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86l-8.45 14.6A2 2 0 003.58 21h16.84a2 2 0 001.73-2.54l-8.45-14.6a2 2 0 00-3.46 0z" />
+            </svg>
+          )}
+          accent="amber"
+          hint={stats.scadenze > 0 ? 'attenzione richiesta' : undefined}
+        />
+      </div>
+    </div>
+  )
+}
+
+function KpiCard({
+  label,
+  value,
+  icon,
+  accent,
+  hint,
+}: {
+  label: string
+  value: string
+  icon: React.ReactNode
+  accent: 'cyan' | 'blue' | 'green' | 'amber'
+  hint?: string
+}) {
+  // Mappa accent -> classi Tailwind. Le pillole icona usano bg/text del
+  // colore; il bordo della card resta neutro per non rumore visivo.
+  const accentMap: Record<string, { bg: string; text: string }> = {
+    cyan:  { bg: 'bg-cyan-500/10',  text: 'text-cyan-400'  },
+    blue:  { bg: 'bg-blue-500/10',  text: 'text-blue-400'  },
+    green: { bg: 'bg-emerald-500/10', text: 'text-emerald-400' },
+    amber: { bg: 'bg-amber-500/10', text: 'text-amber-400' },
+  }
+  const c = accentMap[accent]
+  return (
+    <div className="relative rounded-2xl border border-theme-border bg-theme-bg-secondary px-4 py-3.5 overflow-hidden">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-theme-text-muted">{label}</span>
+        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-lg ${c.bg} ${c.text}`}>{icon}</span>
+      </div>
+      <div className="mt-2 text-2xl sm:text-[28px] font-bold text-theme-text-primary leading-tight tabular-nums">{value}</div>
+      {hint && <div className="mt-1 text-[11px] text-amber-400 font-medium">{hint}</div>}
+    </div>
+  )
+}
