@@ -5552,9 +5552,46 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
         insertedBooking = data
         logger.log('Booking updated successfully:', insertedBooking)
+
+        // Audit diff: capture every field that actually changed between the
+        // snapshot loaded into the form (editFormSnapshotRef) and the saved
+        // payload (bookingData / insertedBooking). Without this the
+        // edit_booking log was a post-edit snapshot only, so we couldn't tell
+        // which admin changed which field. Particularly important after the
+        // insurance dropdown bug — even though the form now ghosts the stored
+        // value, the diff lets us spot any future silent regression.
+        const beforeSnap = editFormSnapshotRef.current
+        const diff: Record<string, { from: any; to: any }> = {}
+        if (beforeSnap) {
+          const trackedFields = [
+            'pickup_date','pickup_time','return_date','return_time',
+            'pickup_location','dropoff_location',
+            'vehicle_id','vehicle_plate',
+            'customer_id','customer_name','customer_email','customer_phone',
+            'insurance_option','deposit','deposit_status','deposit_option_id',
+            'km_limit','km_overage_fee','unlimited_km',
+            'total_amount','amount_paid','payment_status','payment_method',
+            'has_second_driver','dr7_flex',
+            'notes','vehicle_name',
+          ] as const
+          for (const f of trackedFields) {
+            const beforeVal = (beforeSnap as Record<string, any>)[f]
+            const afterVal = (bookingData as Record<string, any>)[f]
+            // Coerce both to JSON-equivalent strings for stable comparison.
+            const a = beforeVal === undefined ? null : beforeVal
+            const b = afterVal === undefined ? null : afterVal
+            if (JSON.stringify(a) !== JSON.stringify(b)) {
+              diff[f] = { from: a, to: b }
+            }
+          }
+        }
+
         logAdminAction('edit_booking', 'booking', editingId, {
           ...buildBookingContext(insertedBooking),
           customer: insertedBooking?.customer_name || customerInfo?.full_name,
+          // Include the diff in the log so we can answer "who changed what"
+          // questions like Massimo Runchina's insurance going DR7 -> Base.
+          ...(Object.keys(diff).length > 0 ? { changes: diff, changes_count: Object.keys(diff).length } : {}),
         })
       } else {
         // Create new booking - direct insert
@@ -7666,11 +7703,33 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     {(() => {
                       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
                       const activeTier = customerTier?.tier;
-                      return getInsuranceOptions(selectedVehicle, activeTier, configOverlay, rentalConfig).map(opt => (
-                        <option key={opt.id} value={opt.id}>
-                          {opt.label} {opt.pricePerDay > 0 ? `(€${opt.pricePerDay}/giorno)` : '(inclusa)'}
-                        </option>
-                      ));
+                      const filtered = getInsuranceOptions(selectedVehicle, activeTier, configOverlay, rentalConfig)
+                      const currentId = formData.insurance_option
+                      const hasCurrent = !!filtered.find(o => o.id === currentId)
+                      // GHOST OPTION FIX: if the stored insurance UID isn't in
+                      // the filtered options (vehicle category / driver tier
+                      // mismatch, or the option was renamed in Centralina Pro)
+                      // we MUST still show it. Otherwise the select silently
+                      // defaults to the first option (Kasko Base) and the next
+                      // Save overwrites the customer's real choice. Lookup the
+                      // label across ALL Pro insurance options.
+                      const ghostLabel = !hasCurrent && currentId
+                        ? (getInsuranceNameById(rentalConfig as any, currentId) || currentId)
+                        : null
+                      return (
+                        <>
+                          {ghostLabel && (
+                            <option key={`__ghost__${currentId}`} value={currentId}>
+                              {ghostLabel} (salvata in prenotazione)
+                            </option>
+                          )}
+                          {filtered.map(opt => (
+                            <option key={opt.id} value={opt.id}>
+                              {opt.label} {opt.pricePerDay > 0 ? `(€${opt.pricePerDay}/giorno)` : '(inclusa)'}
+                            </option>
+                          ))}
+                        </>
+                      )
                     })()}
                   </select>
                   {formData.insurance_option === 'RCA' && (
