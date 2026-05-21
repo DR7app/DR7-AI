@@ -2683,15 +2683,26 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         body: JSON.stringify({ bookingId: booking.id })
       })
 
-      const data = await response.json()
+      const data = await response.json().catch(() => ({} as Record<string, unknown>))
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate contract')
+        throw new Error((data.error as string) || (data.message as string) || `HTTP ${response.status}`)
       }
 
-      // Open PDF in new tab
+      // Open PDF in new tab — show explicit feedback when there's nothing to open
+      // (skipped car_wash, success: false, missing url, etc.) so the button
+      // never silently does nothing.
       if (data.url) {
-        window.open(data.url, '_blank')
+        window.open(data.url as string, '_blank')
+        toast.success('Contratto generato')
+      } else if (data.skipped) {
+        toast.error('Contratto non generato: ' + ((data.reason as string) || 'Servizio non richiede contratto'), { duration: 10000 })
+      } else {
+        toast.error(
+          'Contratto non generato: backend ha risposto OK ma senza URL. Dettagli: ' + JSON.stringify(data).slice(0, 200),
+          { duration: 12000 }
+        )
+        console.error('[generate-contract] empty url response:', data)
       }
 
       logAdminAction('generate_contract', 'booking', booking.id, buildBookingContext(booking))
@@ -2701,7 +2712,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     } catch (error: unknown) {
       const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error generating contract:', error)
-      alert('Errore nella generazione del contratto: ' + _errMsg + '\n\nAssicurati di aver caricato "master_contract.pdf" in Supabase Storage > contracts > templates.')
+      toast.error('Errore generazione contratto: ' + _errMsg, { duration: 12000 })
     } finally {
       setGeneratingContract(false)
     }
