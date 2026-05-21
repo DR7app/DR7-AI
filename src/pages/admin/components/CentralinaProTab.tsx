@@ -3435,7 +3435,10 @@ function CauzioniSection({
           ...catCfg,
           [fid]: {
             ...cur,
-            [scope]: [...cur[scope], { id: uid(), label: 'Nuova opzione', amount: 0, surcharge_per_day: 0, is_active: true }],
+            // Default amount/surcharge a stringa vuota cosi' l'input non
+            // mostra "0" da cancellare prima di digitare. Il type supporta
+            // number | '' e canonicalizeDepositIds + save gestiscono '' come 0.
+            [scope]: [...cur[scope], { id: uid(), label: 'Nuova opzione', amount: '', surcharge_per_day: '', is_active: true }],
           },
         },
       }
