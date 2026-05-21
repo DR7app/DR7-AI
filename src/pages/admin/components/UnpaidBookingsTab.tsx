@@ -1919,7 +1919,14 @@ export default function UnpaidBookingsTab() {
   const getRemainingAmount = (booking: UnpaidBooking) => {
     let remaining = 0
 
-    if (booking.payment_status === 'pending' || booking.payment_status === 'unpaid') {
+    // 2026-05-21: aggiunto 'partial' ai pending. Booking parziale
+    // (es. €200 pagati su €689 → payment_status='partial') cadeva
+    // sull'else che gestisce solo extensions, quindi totalRemaining
+    // restava 0 e il card mostrava "€0,00 1 voce" — l'admin non
+    // vedeva il residuo da incassare.
+    if (booking.payment_status === 'pending'
+        || booking.payment_status === 'unpaid'
+        || booking.payment_status === 'partial') {
       const total = booking.price_total || 0
       const paid = booking.booking_details?.amountPaid || 0
       remaining += Math.max(0, total - paid)
