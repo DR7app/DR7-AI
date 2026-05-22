@@ -3023,34 +3023,97 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </button>
               </div>
 
-              {/* Service Dropdown Selector */}
+              {/* Service Card Grid — sostituisce la dropdown con cards
+                  selezionabili (uniform al wizard cliente sul sito).
+                  Raggruppato per categoria, mostra nome / prezzo / durata /
+                  features. La card selezionata e' evidenziata in oro. */}
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Servizio</label>
-                <select
-                  value={selectedService?.id || ''}
-                  onChange={(e) => {
-                    const allServices = Object.values(servicesByCategory).flat()
-                    const service = allServices.find(s => s.id === e.target.value) || null
-                    setSelectedService(service)
-                    setSelectedPriceOption(null)
-                    setCustomPrice('')
-                  }}
-                  className="w-full appearance-none bg-theme-bg-tertiary text-theme-text-primary rounded-lg px-4 py-3 pr-10 border border-theme-border focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
-                >
-                  <option value="">Seleziona servizio...</option>
-                  {Object.entries(servicesByCategory).map(([category, services]) => (
-                    <optgroup key={category} label={categoryLabels[category] || category.toUpperCase()}>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">
+                  Seleziona il servizio
+                </label>
+                {Object.entries(servicesByCategory).map(([category, services]) => (
+                  <div key={category} className="mb-4">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-theme-text-muted mb-2">
+                      {categoryLabels[category] || category.toUpperCase()}
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                       {services.map(service => {
                         const sn = getServiceNum(service.name)
+                        const isSelected = selectedService?.id === service.id
+                        const features = Array.isArray(service.features) ? service.features.slice(0, 5) : []
+                        const priceLabel = service.price_unit === 'custom'
+                          ? `Da € ${service.price.toFixed(2)}`
+                          : `€ ${service.price.toFixed(2)}`
                         return (
-                          <option key={service.id} value={service.id}>
-                            {sn ? `${sn}. ` : ''}{service.name} - {service.price_unit === 'custom' ? `Da EUR ${service.price.toFixed(2)}` : `EUR ${service.price.toFixed(2)}`} ({service.duration})
-                          </option>
+                          <button
+                            key={service.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedService(service)
+                              setSelectedPriceOption(null)
+                              setCustomPrice('')
+                            }}
+                            className={`relative text-left rounded-xl border p-4 transition-all ${
+                              isSelected
+                                ? 'border-dr7-gold bg-dr7-gold/10 shadow-[0_0_0_1px_var(--dr7-gold)]'
+                                : 'border-theme-border bg-theme-bg-tertiary/40 hover:border-dr7-gold/60 hover:bg-theme-bg-tertiary/60'
+                            }`}
+                          >
+                            {/* Header: name + checkmark when selected */}
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <h4 className={`text-sm font-bold leading-tight ${isSelected ? 'text-dr7-gold' : 'text-theme-text-primary'}`}>
+                                {sn ? `${sn}. ` : ''}{service.name}
+                              </h4>
+                              {isSelected && (
+                                <span className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full bg-dr7-gold text-white text-[12px] leading-none">
+                                  ✓
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Description */}
+                            {service.description && (
+                              <p className="text-[11px] text-theme-text-muted leading-snug mb-3 line-clamp-2">
+                                {service.description}
+                              </p>
+                            )}
+
+                            {/* Features (top 5) */}
+                            {features.length > 0 && (
+                              <ul className="space-y-1 mb-3">
+                                {features.map((f, i) => (
+                                  <li key={i} className="text-[11px] text-theme-text-secondary flex items-start gap-1.5 leading-snug">
+                                    <span className="text-emerald-400 shrink-0 mt-0.5">✓</span>
+                                    <span className="truncate">{f}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+
+                            {/* Footer: duration + price */}
+                            <div className="flex items-center justify-between pt-2 border-t border-theme-border/40">
+                              <span className="text-[11px] text-theme-text-muted inline-flex items-center gap-1">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                  <circle cx="12" cy="12" r="10" />
+                                  <path d="M12 6v6l4 2" />
+                                </svg>
+                                {service.duration || '—'}
+                              </span>
+                              <span className={`text-sm font-bold ${isSelected ? 'text-dr7-gold' : 'text-theme-text-primary'}`}>
+                                {priceLabel}
+                              </span>
+                            </div>
+                          </button>
                         )
                       })}
-                    </optgroup>
-                  ))}
-                </select>
+                    </div>
+                  </div>
+                ))}
+                {Object.keys(servicesByCategory).length === 0 && (
+                  <p className="text-xs text-theme-text-muted italic">
+                    Nessun servizio attivo in questa categoria. Aggiungili da Prime Wash &rarr; Catalogo.
+                  </p>
+                )}
               </div>
 
               {/* Price options (if service has variants) */}
