@@ -9744,6 +9744,76 @@ function ReservationsDashboardHeader({
     }
   }, [bookings, selMonth])
 
+  // Time series per i tre grafici del mese selezionato. Stessi filtri di
+  // Report Noleggio. Tutti i metodi di pagamento inclusi (anche wallet)
+  // perche' il gate e' per status, non per payment_status.
+  const timeSeries = useMemo(() => {
+    const daysInMonth = new Date(selMonth.year, selMonth.month, 0).getDate()
+    const dailyRevenue: number[] = new Array(daysInMonth).fill(0)
+    const dailyNewBookings: number[] = new Array(daysInMonth).fill(0)
+    // Per "Auto noleggiate per giorno" usiamo set di vehicle_id per
+    // contare auto distinte fuori in ciascun giorno (no double count se
+    // un'auto ha due booking nello stesso giorno).
+    const dailyVehicleSets: Set<string>[] = Array.from({ length: daysInMonth }, () => new Set<string>())
+
+    for (const b of bookings) {
+      if (b.service_type && b.service_type !== 'rental') continue
+      const mLike = b as unknown as MonthlyBookingLike
+      if (!isReportableRentalBooking(mLike)) continue
+      if (!b.pickup_date || !b.dropoff_date) continue
+
+      // Revenue per giorno = price_total / totalDays, distribuito sui
+      // giorni occupati nel mese.
+      const sTotalDays = (() => {
+        const a = b.pickup_date.substring(0, 10).split('-').map(Number)
+        const c = b.dropoff_date.substring(0, 10).split('-').map(Number)
+        const aMs = Date.UTC(a[0], a[1] - 1, a[2])
+        const cMs = Date.UTC(c[0], c[1] - 1, c[2])
+        const diff = Math.round((cMs - aMs) / 86400000)
+        return Math.max(1, diff)
+      })()
+      const totalCents = Number(b.price_total) || 0
+      const perDayEur = (totalCents / 100) / sTotalDays
+
+      const [pY, pM, pD] = b.pickup_date.substring(0, 10).split('-').map(Number)
+      const [dY, dM, dD] = b.dropoff_date.substring(0, 10).split('-').map(Number)
+      const pickupMs = Date.UTC(pY, pM - 1, pD)
+      const dropoffMs = Date.UTC(dY, dM - 1, dD)
+      const vehicleKey = String(b.vehicle_id || b.vehicle_plate || b.id)
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dayMs = Date.UTC(selMonth.year, selMonth.month - 1, day)
+        // Stessa regola del report: pickup day incluso, dropoff day escluso.
+        // Same-day bookings (pickup === dropoff): incluso il pickup day.
+        const sameDay = pickupMs === dropoffMs
+        const occupies = sameDay
+          ? dayMs === pickupMs
+          : dayMs >= pickupMs && dayMs < dropoffMs
+        if (occupies) {
+          dailyRevenue[day - 1] += perDayEur
+          dailyVehicleSets[day - 1].add(vehicleKey)
+        }
+      }
+
+      // Nuova prenotazione: si conta nel giorno in cui e' stata creata
+      // (booked_at se presente, altrimenti created_at).
+      const bookedRaw = (b as { booked_at?: string }).booked_at || b.created_at
+      if (bookedRaw) {
+        const bd = new Date(bookedRaw)
+        if (bd.getFullYear() === selMonth.year && bd.getMonth() + 1 === selMonth.month) {
+          dailyNewBookings[bd.getDate() - 1]++
+        }
+      }
+    }
+
+    return {
+      daysInMonth,
+      dailyRevenue,
+      dailyNewBookings,
+      dailyVehicles: dailyVehicleSets.map(s => s.size),
+    }
+  }, [bookings, selMonth])
+
   const fmtEur = (n: number) => n.toLocaleString('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
   const monthsIt = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre']
   const selMonthLabel = monthsIt[selMonth.month - 1]
@@ -9827,6 +9897,201 @@ function ReservationsDashboardHeader({
               : `${stats.scadenzeInRitardo} in ritardo · ${stats.scadenzeImminenti} entro 24h`
           }
         />
+      </div>
+
+      {/* Time series — tre grafici allineati al picker di mese */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <TimeSeriesChart
+          title={`Fatturato ${selMonthLabel}`}
+          values={timeSeries.dailyRevenue}
+          daysInMonth={timeSeries.daysInMonth}
+          monthIndex={selMonth.month - 1}
+          year={selMonth.year}
+          accent="emerald"
+          format={(v) => fmtEur(v)}
+          formatAxis={(v) => v >= 1000 ? `€${Math.round(v / 1000)}K` : `€${Math.round(v)}`}
+          ariaLabel="Fatturato giornaliero del mese"
+        />
+        <TimeSeriesChart
+          title={`Prenotazioni ${selMonthLabel}`}
+          values={timeSeries.dailyNewBookings}
+          daysInMonth={timeSeries.daysInMonth}
+          monthIndex={selMonth.month - 1}
+          year={selMonth.year}
+          accent="cyan"
+          format={(v) => `${Math.round(v)} prenotazioni`}
+          formatAxis={(v) => `${Math.round(v)}`}
+          ariaLabel="Nuove prenotazioni create per giorno"
+        />
+        <TimeSeriesChart
+          title={`Auto Fuori ${selMonthLabel}`}
+          values={timeSeries.dailyVehicles}
+          daysInMonth={timeSeries.daysInMonth}
+          monthIndex={selMonth.month - 1}
+          year={selMonth.year}
+          accent="amber"
+          format={(v) => `${Math.round(v)} auto`}
+          formatAxis={(v) => `${Math.round(v)}`}
+          ariaLabel="Auto distinte fuori per giorno"
+        />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Pure-SVG line+area chart. Niente librerie esterne. Hover su un punto
+ * mostra il tooltip con valore + data. Asse Y auto-scalato sul max della
+ * serie (con padding del 15% per non tagliare il picco). Asse X mostra
+ * 5 giorni equidistanti.
+ */
+function TimeSeriesChart({
+  title,
+  values,
+  daysInMonth,
+  monthIndex,
+  year,
+  accent,
+  format,
+  formatAxis,
+  ariaLabel,
+}: {
+  title: string
+  values: number[]
+  daysInMonth: number
+  monthIndex: number
+  year: number
+  accent: 'emerald' | 'cyan' | 'amber'
+  format: (v: number) => string
+  formatAxis: (v: number) => string
+  ariaLabel: string
+}) {
+  const [hover, setHover] = useState<number | null>(null)
+  const accentMap = {
+    emerald: { stroke: '#10b981', fill: 'url(#g-emerald)', text: 'text-emerald-400', glow: 'shadow-emerald-500/10' },
+    cyan:    { stroke: '#06b6d4', fill: 'url(#g-cyan)',    text: 'text-cyan-400',    glow: 'shadow-cyan-500/10' },
+    amber:   { stroke: '#f59e0b', fill: 'url(#g-amber)',   text: 'text-amber-400',   glow: 'shadow-amber-500/10' },
+  } as const
+  const c = accentMap[accent]
+
+  const W = 320
+  const H = 140
+  const padL = 40
+  const padR = 12
+  const padT = 14
+  const padB = 26
+  const innerW = W - padL - padR
+  const innerH = H - padT - padB
+
+  const max = Math.max(1, ...values) * 1.15
+  const x = (i: number) => padL + (daysInMonth <= 1 ? 0 : (i / (daysInMonth - 1)) * innerW)
+  const y = (v: number) => padT + (innerH - (v / max) * innerH)
+
+  const points = values.map((v, i) => `${x(i)},${y(v)}`).join(' ')
+  const areaPath = `M ${x(0)},${padT + innerH} L ${values.map((v, i) => `${x(i)},${y(v)}`).join(' L ')} L ${x(values.length - 1)},${padT + innerH} Z`
+
+  // X-axis labels: 5 punti equidistanti
+  const xTicks = [0, Math.floor(daysInMonth * 0.25) - 1, Math.floor(daysInMonth * 0.5) - 1, Math.floor(daysInMonth * 0.75) - 1, daysInMonth - 1]
+    .filter((v, i, arr) => v >= 0 && arr.indexOf(v) === i)
+  const monthShort = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'][monthIndex]
+
+  const total = values.reduce((a, b) => a + b, 0)
+  const totalLabel = format(total)
+
+  return (
+    <div className="relative rounded-2xl border border-theme-border bg-theme-bg-secondary p-4 overflow-hidden">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-[10px] uppercase tracking-[0.16em] font-semibold text-theme-text-muted truncate">{title}</div>
+        <div className={`text-xs font-semibold ${c.text}`}>{totalLabel}</div>
+      </div>
+      <div className="relative">
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          preserveAspectRatio="none"
+          width="100%"
+          height={H}
+          role="img"
+          aria-label={ariaLabel}
+          onMouseLeave={() => setHover(null)}
+        >
+          <defs>
+            <linearGradient id="g-emerald" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#10b981" stopOpacity="0.35" />
+              <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id="g-cyan" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.35" />
+              <stop offset="100%" stopColor="#06b6d4" stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id="g-amber" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.35" />
+              <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+
+          {/* y-axis grid (4 lines) */}
+          {[0, 0.25, 0.5, 0.75, 1].map((p, i) => {
+            const yPos = padT + innerH * (1 - p)
+            const label = formatAxis(max * p)
+            return (
+              <g key={i}>
+                <line x1={padL} x2={padL + innerW} y1={yPos} y2={yPos} stroke="currentColor" strokeOpacity="0.08" strokeWidth="1" />
+                <text x={padL - 6} y={yPos + 3} fontSize="9" textAnchor="end" fill="currentColor" opacity="0.4">{label}</text>
+              </g>
+            )
+          })}
+
+          {/* area + line */}
+          {values.length > 1 && (
+            <>
+              <path d={areaPath} fill={c.fill} />
+              <polyline points={points} fill="none" stroke={c.stroke} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+            </>
+          )}
+
+          {/* hover hit-areas (invisible) */}
+          {values.map((_, i) => (
+            <rect
+              key={i}
+              x={x(i) - (innerW / daysInMonth) / 2}
+              y={padT}
+              width={innerW / Math.max(1, daysInMonth)}
+              height={innerH}
+              fill="transparent"
+              onMouseEnter={() => setHover(i)}
+            />
+          ))}
+
+          {/* hover indicator */}
+          {hover !== null && (
+            <g>
+              <line x1={x(hover)} x2={x(hover)} y1={padT} y2={padT + innerH} stroke={c.stroke} strokeOpacity="0.4" strokeDasharray="2 3" />
+              <circle cx={x(hover)} cy={y(values[hover])} r="3.5" fill={c.stroke} stroke="var(--color-theme-bg-secondary, #111)" strokeWidth="2" />
+            </g>
+          )}
+
+          {/* x-axis labels */}
+          {xTicks.map(t => (
+            <text key={t} x={x(t)} y={H - 8} fontSize="9" textAnchor="middle" fill="currentColor" opacity="0.4">
+              {t + 1} {monthShort}
+            </text>
+          ))}
+        </svg>
+
+        {/* hover tooltip (HTML overlay) */}
+        {hover !== null && (
+          <div
+            className="absolute pointer-events-none px-2.5 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border text-[10px] shadow-lg whitespace-nowrap"
+            style={{
+              left: `${(x(hover) / W) * 100}%`,
+              top: `${(y(values[hover]) / H) * 100}%`,
+              transform: 'translate(-50%, calc(-100% - 8px))',
+            }}
+          >
+            <div className="text-theme-text-muted">{hover + 1} {monthShort} {year}</div>
+            <div className={`font-bold ${c.text}`}>{format(values[hover])}</div>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -53,6 +53,11 @@ interface Operatore {
     ruolo: string | null
     ore_target_giornaliere: number
     avatar_url: string | null
+    // 2026-05-22: effective daily target computed from the OPERATORE_CONTRATTO
+    // row (giornaliere || settimanali/5 || mensili/22) with fallback to the
+    // legacy operatori_persone.ore_target_giornaliere. Used by every "target"
+    // calculation in the dashboard so editing the contract reflects here.
+    _effective_target_daily?: number
 }
 
 interface DayRow {
@@ -225,7 +230,48 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                 .select('id, nome, cognome, email, ruolo, ore_target_giornaliere, avatar_url, attivo')
                 .eq('attivo', true)
                 .order('cognome', { ascending: true })
-            const opList = (ops || []) as Operatore[]
+            const opListRaw = (ops || []) as Operatore[]
+
+            // 2026-05-22: target ore proviene dal CONTRATTO attivo, non
+            // dal vecchio operatori_persone.ore_target_giornaliere.
+            // Bug riportato: admin elimina ore giornaliere dal contratto e
+            // mette 47h/settimana, ma il dashboard continua a mostrare 7h
+            // perche' legge il vecchio campo legacy. Adesso:
+            //   1. Per ogni operatore, carichiamo il contratto attivo.
+            //   2. effective_daily =
+            //        contract.ore_target_giornaliere
+            //        || contract.ore_target_settimanali / 5  (giorni lavorativi)
+            //        || contract.ore_target_mensili / 22     (giorni/mese)
+            //        || op.ore_target_giornaliere || 8       (fallback)
+            const opIds = opListRaw.map(o => o.id)
+            const contractsByOp = new Map<string, { giornaliere: number | null; settimanali: number | null; mensili: number | null }>()
+            if (opIds.length > 0) {
+                const { data: contracts } = await supabase
+                    .from('operatore_contratto')
+                    .select('operatore_id, ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, attivo')
+                    .in('operatore_id', opIds)
+                    .eq('attivo', true)
+                for (const c of (contracts || []) as Array<{ operatore_id: string; ore_target_giornaliere: number | null; ore_target_settimanali: number | null; ore_target_mensili: number | null }>) {
+                    contractsByOp.set(c.operatore_id, {
+                        giornaliere: c.ore_target_giornaliere,
+                        settimanali: c.ore_target_settimanali,
+                        mensili: c.ore_target_mensili,
+                    })
+                }
+            }
+            const computeEffectiveDaily = (op: Operatore): number => {
+                const c = contractsByOp.get(op.id)
+                if (c) {
+                    if (c.giornaliere && c.giornaliere > 0) return c.giornaliere
+                    if (c.settimanali && c.settimanali > 0) return Math.round((c.settimanali / 5) * 10) / 10
+                    if (c.mensili && c.mensili > 0) return Math.round((c.mensili / 22) * 10) / 10
+                }
+                return op.ore_target_giornaliere || 8
+            }
+            const opList: Operatore[] = opListRaw.map(o => ({
+                ...o,
+                _effective_target_daily: computeEffectiveDaily(o),
+            }))
             setOperatori(opList)
 
             // 2. Timesheet di oggi
@@ -354,13 +400,13 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                 const b = new Date(`${rangeTo}T00:00:00`).getTime()
                 return Math.max(1, Math.round((b - a) / 86400000) + 1)
             })()
-            const totTargetMin = opList.reduce((s, o) => s + Math.round((o.ore_target_giornaliere || 8) * 60), 0) * daysCount
+            const totTargetMin = opList.reduce((s, o) => s + Math.round((o._effective_target_daily ?? o.ore_target_giornaliere ?? 8) * 60), 0) * daysCount
             setKpi(prev => ({ ...prev, oreLavorate: totMinLav, oreTarget: totTargetMin }))
 
             // Top 5 per produttivita (ore lavorate / target)
             const topProd = opList.map(o => {
                 const m = perOpMin.get(o.id) || 0
-                const tgt = Math.round((o.ore_target_giornaliere || 8) * 60) * daysCount
+                const tgt = Math.round((o._effective_target_daily ?? o.ore_target_giornaliere ?? 8) * 60) * daysCount
                 const pct = tgt > 0 ? Math.round((m / tgt) * 100) : 0
                 return { name: `${o.nome} ${o.cognome || ''}`.trim(), value: pct, minuti: m }
             }).sort((a, b) => b.value - a.value).slice(0, 5)
@@ -497,7 +543,7 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                             <div className="space-y-1.5">
                                 {operatori.slice(0, 5).map((o) => {
                                     const m = todayRows.find(r => r.operatore.id === o.id)?.minuti_lavorati || 0
-                                    const tgt = Math.round((o.ore_target_giornaliere || 8) * 60)
+                                    const tgt = Math.round((o._effective_target_daily ?? o.ore_target_giornaliere ?? 8) * 60)
                                     const pct = tgt > 0 ? Math.min(100, Math.round((m / tgt) * 100)) : 0
                                     return (
                                         <div key={o.id}
@@ -558,7 +604,7 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                                     {todayRows.map(r => {
                                         const tone = avatarTone(r.operatore.email || r.operatore.id)
                                         const initials = `${(r.operatore.nome || '').charAt(0)}${(r.operatore.cognome || '').charAt(0)}`.toUpperCase()
-                                        const target = Math.round((r.operatore.ore_target_giornaliere || 8) * 60)
+                                        const target = Math.round((r.operatore._effective_target_daily ?? r.operatore.ore_target_giornaliere ?? 8) * 60)
                                         const straord = Math.max(0, r.minuti_lavorati - target)
                                         return (
                                             <tr key={r.operatore.id}
