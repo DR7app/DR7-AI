@@ -169,6 +169,12 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
 
   // Cauzione
   deposit_request_customer: 'Invio link pagamento cauzione al cliente (admin Cauzioni)',
+  // 2026-05-22: cauzione con VEICOLO come garanzia (Auto come Cauzione).
+  // Fire quando admin spunta "Cauzione Auto" su una prenotazione e salva.
+  cauzione_veicolo_created: 'Cauzione con VEICOLO come garanzia: dettagli targa/garante al cliente',
+  cauzione_veicolo_returned: 'Cauzione veicolo restituita al cliente (fine noleggio)',
+  // Promemoria garante: il garante riceve il riassunto della cauzione veicolo
+  cauzione_garante_notification: 'Notifica al GARANTE della cauzione veicolo (terzo intestatario)',
 
   // No Cauzione / Sconti preventivi
   no_cauzione_approved: 'Approvazione "No Cauzione": invio link pagamento al cliente',
@@ -177,6 +183,36 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
 
   // Website
   website_booking_cancelled_customer: 'Annullamento prenotazione effettuato dal cliente sul sito',
+
+  // 2026-05-22: eventi aggiuntivi richiesti da direzione per copertura completa
+  // Ciclo cliente
+  on_first_booking: 'Prima prenotazione di un nuovo cliente (welcome message)',
+  before_birthday: 'X giorni prima del compleanno del cliente (auguri anticipati)',
+  // Pagamento — eventi mancanti
+  on_payment_failed: 'Pagamento Nexi fallito (carta rifiutata / 3DS fallita)',
+  on_payment_link_expired: 'Link Nexi pay-by-link scaduto senza pagamento',
+  on_partial_payment_received: 'Pagamento parziale ricevuto (residuo da saldare)',
+  // Documenti cliente
+  on_doc_uploaded: 'Cliente ha caricato patente/CI sul sito',
+  on_doc_verified: 'Documenti del cliente verificati dall\'admin (ok per noleggio)',
+  on_doc_rejected: 'Documenti del cliente rifiutati dall\'admin (caricare di nuovo)',
+  // Pickup/Dropoff timing
+  on_late_pickup: 'Cliente in ritardo per il ritiro (oltre 30min dall\'orario)',
+  on_late_return: 'Cliente in ritardo per la riconsegna',
+  on_no_show: 'Cliente non si e\' presentato al ritiro',
+  // Recensioni
+  on_review_received: 'Recensione lasciata dal cliente (5 stelle → ringrazia / <3 → contatta)',
+  // Promozioni / Club
+  on_promo_gap: 'Veicolo libero per gap di 1 giorno tra prenotazioni',
+  on_club_subscription: 'Cliente acquista DR7 Club',
+  on_club_tier_promotion: 'Cliente promosso a tier superiore (Elite / Member / ecc.)',
+  on_club_renewal_due: 'Rinnovo membership DR7 Club in scadenza',
+  // Wallet
+  on_wallet_recharge: 'Wallet ricaricato dal cliente',
+  on_wallet_low_balance: 'Saldo wallet sotto soglia (es. <€20)',
+  // Extras / servizi premium
+  on_extra_added: 'Servizio extra aggiunto a una prenotazione esistente',
+  on_extension_requested: 'Cliente richiede estensione del noleggio',
 }
 
 /**

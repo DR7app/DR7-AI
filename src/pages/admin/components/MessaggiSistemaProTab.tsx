@@ -206,7 +206,11 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; servic
     color: 'amber',
     keys: [
       'deposit_return_iban',
-      'deposit_request_customer',       // 2026-05-19: admin invia link cauzione manuale
+      'deposit_request_customer',       // admin invia link cauzione manuale
+      // 2026-05-22: eventi per Cauzione Veicolo (auto come garanzia)
+      'cauzione_veicolo_created',
+      'cauzione_veicolo_returned',
+      'cauzione_garante_notification',
       'booking_cancelled_whatsapp',
       'website_booking_cancelled_customer',
     ],
@@ -220,11 +224,61 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; servic
     label: 'No Cauzione & Preventivi',
     color: 'orange',
     keys: [
-      // 2026-05-19: erano orfani — non comparivano in nessun gruppo, quindi
-      // l'admin non poteva assegnarli a nessun template via la UI.
       'no_cauzione_approved',
       'no_cauzione_rejected',
       'quote_discount_offered',
+    ],
+  },
+  {
+    label: 'Documenti Cliente',
+    color: 'teal',
+    keys: [
+      // 2026-05-22: caricamento + verifica patente/CI
+      'on_doc_uploaded',
+      'on_doc_verified',
+      'on_doc_rejected',
+    ],
+  },
+  {
+    label: 'Pickup / Dropoff Timing',
+    color: 'amber',
+    keys: [
+      // 2026-05-22: alert ritardo / no-show
+      'on_late_pickup',
+      'on_late_return',
+      'on_no_show',
+    ],
+  },
+  {
+    label: 'Pagamento (extra)',
+    color: 'emerald',
+    keys: [
+      // 2026-05-22: stati pagamento non standard
+      'on_payment_failed',
+      'on_payment_link_expired',
+      'on_partial_payment_received',
+    ],
+  },
+  {
+    label: 'Estensioni & Extras',
+    color: 'violet',
+    keys: [
+      'on_extra_added',
+      'on_extension_requested',
+    ],
+  },
+  {
+    label: 'DR7 Club / Fidelity Lifecycle',
+    color: 'pink',
+    keys: [
+      // 2026-05-22: lifecycle membership DR7 Club
+      'on_first_booking',
+      'on_club_subscription',
+      'on_club_tier_promotion',
+      'on_club_renewal_due',
+      'on_wallet_recharge',
+      'on_wallet_low_balance',
+      'before_birthday',
     ],
   },
   {
@@ -232,12 +286,14 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; servic
     color: 'pink',
     keys: [
       'review_request_whatsapp',
-      'review_discount_code',           // 2026-05-19: codice sconto post-recensione
+      'on_review_received',
+      'review_discount_code',
       'birthday_message',
       'wallet_bonus_credit',
       'fidelity_voucher_whatsapp',
-      'promo_incassi_whatsapp',         // 2026-05-19: cron mensile promo veicoli sotto soglia
-      'maxi_promo_gap_whatsapp',        // 2026-05-19: cron giornaliero gap 1 giorno
+      'promo_incassi_whatsapp',
+      'maxi_promo_gap_whatsapp',
+      'on_promo_gap',
     ],
   },
 ]
