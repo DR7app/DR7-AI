@@ -99,12 +99,16 @@ export default function PayrollPeriodoView() {
             const opList = (ops || []) as Operatore[]
 
             // 2. Contratti attivi
+            // 2026-05-22: include ore_target_giornaliere/settimanali/mensili
+            // del contratto. Servono per calcolare la soglia straordinari
+            // effettiva quando l'admin ha inserito SOLO 47h/settimana (es.):
+            //   soglia_giornaliera_implicita = settimanali/5 = 9.4h
             const { data: contracts } = await supabase
                 .from('operatore_contratto')
-                .select('operatore_id, stipendio_mensile_eur, stipendio_frequenza, paga_oraria_eur, paga_straordinario_eur, straordinario_abilitato, ore_soglia_straordinario, attivo')
+                .select('operatore_id, stipendio_mensile_eur, stipendio_frequenza, paga_oraria_eur, paga_straordinario_eur, straordinario_abilitato, ore_soglia_straordinario, ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, attivo')
                 .eq('attivo', true)
-            const contractByOp = new Map<string, Contratto>()
-            for (const c of (contracts || []) as Contratto[]) {
+            const contractByOp = new Map<string, Contratto & { ore_target_giornaliere?: number | null; ore_target_settimanali?: number | null; ore_target_mensili?: number | null }>()
+            for (const c of (contracts || []) as Array<Contratto & { ore_target_giornaliere?: number | null; ore_target_settimanali?: number | null; ore_target_mensili?: number | null }>) {
                 contractByOp.set(c.operatore_id, c)
             }
 
@@ -138,7 +142,21 @@ export default function PayrollPeriodoView() {
                 let minStraord = 0
                 const oraria = Number(c?.paga_oraria_eur || 0)
                 const straord = Number(c?.paga_straordinario_eur || 0)
-                const sogliaMin = Math.round((c?.ore_soglia_straordinario ?? op.ore_target_giornaliere ?? 8) * 60)
+                // 2026-05-22: soglia straordinari = priorita'
+                // 1) ore_soglia_straordinario esplicito sul contratto
+                // 2) ore_target_giornaliere del contratto
+                // 3) ore_target_settimanali / 5 (giorni lavorativi)
+                // 4) ore_target_mensili / 22
+                // 5) legacy op.ore_target_giornaliere
+                // 6) fallback 8h
+                const effectiveDailyHours = (() => {
+                    if (c?.ore_soglia_straordinario != null && c.ore_soglia_straordinario > 0) return c.ore_soglia_straordinario
+                    if (c?.ore_target_giornaliere != null && c.ore_target_giornaliere > 0) return c.ore_target_giornaliere
+                    if (c?.ore_target_settimanali != null && c.ore_target_settimanali > 0) return c.ore_target_settimanali / 5
+                    if (c?.ore_target_mensili != null && c.ore_target_mensili > 0) return c.ore_target_mensili / 22
+                    return op.ore_target_giornaliere || 8
+                })()
+                const sogliaMin = Math.round(effectiveDailyHours * 60)
                 const straordEnabled = c?.straordinario_abilitato !== false && straord > 0 && sogliaMin > 0
 
                 if (dayMap) {
