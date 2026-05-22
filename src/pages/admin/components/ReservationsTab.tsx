@@ -2551,6 +2551,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   }
 
   async function handleResendPaymentLink(booking: Booking) {
+    // 2026-05-22 SAFETY GATE: non generare link di pagamento per metodi
+    // non-Nexi (Contanti / Bonifico / Carta fisica). Il bottone era
+    // visibile su qualsiasi booking non pagato, e in piu' codepath chiamano
+    // questa funzione senza filtrare → cliente Contanti riceveva link.
+    if (!isNexiPayByLink(booking.payment_method)) {
+      toast.error(`Metodo di pagamento "${booking.payment_method || '—'}": niente link inviato. Cambia metodo a "Nexi - Pay by Link" se vuoi generarlo.`, { duration: 8000 })
+      return
+    }
     const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
     const custName = booking.booking_details?.customer?.fullName || booking.customer_name || 'Cliente'
     const custEmail = booking.customer_email || booking.booking_details?.customer?.email || ''
@@ -6324,8 +6332,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       //   • Originally pending + still pending          → handled by the
       //     earlier "new booking pending" branch (not this one)
       // In short: owedCents = newTotal − alreadyPaid.
-      // If owed > 0, fire a Nexi Pay by Link for owedCents.
-      if (editingId && insertedBooking) {
+      // If owed > 0 AND payment_method is Nexi Pay by Link, fire a link.
+      // 2026-05-22 BUG FIX: questa branch generava link anche per Contanti /
+      // Bonifico / Carta. La direzione confermava una prenotazione in
+      // contanti e il cliente riceveva un link WhatsApp confuso.
+      if (editingId && insertedBooking && isNexiPayByLink(formData.payment_method)) {
         try {
           const originalBooking = bookings.find(b => b.id === editingId)
           const newTotalCents = insertedBooking?.price_total || eurToCents(formData.total_amount || '0')
@@ -8886,7 +8897,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           {
                             label: booking.booking_details?.nexi_payment_link ? 'Rinvia Link Pagamento' : 'Genera Link Pagamento',
                             onClick: () => handleResendPaymentLink(booking),
-                            visible: !isPaid,
+                            visible: !isPaid && isNexiPayByLink(booking.payment_method),
                           },
                         ],
                       },
@@ -9058,7 +9069,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                                 {
                                   label: booking.booking_details?.nexi_payment_link ? 'Rinvia Link Pagamento' : 'Genera Link Pagamento',
                                   onClick: () => handleResendPaymentLink(booking),
-                                  visible: booking.status !== 'cancelled' && !isPaid,
+                                  visible: booking.status !== 'cancelled' && !isPaid && isNexiPayByLink(booking.payment_method),
                                 },
                               ],
                             },
