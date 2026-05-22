@@ -99,30 +99,37 @@ function rangeFromPreset(preset: RangePreset): { from: string; to: string } {
     return { from: to, to }
 }
 
-function KpiCard({ label, value, sub, accent, icon }: {
+function KpiCard({ label, value, sub, accent, icon, delta }: {
     label: string; value: string | number; sub?: string;
     accent?: 'gold' | 'emerald' | 'sky' | 'violet' | 'rose' | 'amber' | 'cyan' | 'lime'
     icon?: string
+    delta?: number  // % change vs previous period — green if positive, red if negative
 }) {
-    const ring: Record<NonNullable<typeof accent>, string> = {
-        gold: 'ring-amber-500/30 text-amber-400',
-        emerald: 'ring-emerald-500/30 text-emerald-400',
-        sky: 'ring-sky-500/30 text-sky-400',
-        violet: 'ring-violet-500/30 text-violet-400',
-        rose: 'ring-rose-500/30 text-rose-400',
-        amber: 'ring-amber-500/30 text-amber-400',
-        cyan: 'ring-cyan-500/30 text-cyan-400',
-        lime: 'ring-lime-500/30 text-lime-400',
+    const dotColor: Record<NonNullable<typeof accent>, string> = {
+        gold: 'bg-amber-400',
+        emerald: 'bg-emerald-400',
+        sky: 'bg-sky-400',
+        violet: 'bg-violet-400',
+        rose: 'bg-rose-400',
+        amber: 'bg-amber-400',
+        cyan: 'bg-cyan-400',
+        lime: 'bg-lime-400',
     }
-    const c = ring[accent || 'gold']
+    const dot = dotColor[accent || 'gold']
+    const deltaCls = delta == null ? '' : delta >= 0 ? 'text-emerald-400' : 'text-rose-400'
+    const deltaStr = delta == null ? null : `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%`
     return (
-        <div className={`bg-theme-bg-secondary border border-theme-border rounded-lg p-3 ring-1 ${c.split(' ')[0]}`}>
-            <div className="flex items-start justify-between mb-1.5">
+        <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-3">
+            <div className="flex items-center gap-1.5 mb-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
                 <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">{label}</span>
-                {icon && <span className={`text-xs ${c.split(' ')[1]}`}>{icon}</span>}
+                {icon && <span className="ml-auto text-xs text-theme-text-muted">{icon}</span>}
             </div>
             <div className="text-2xl font-bold text-theme-text-primary tabular-nums">{value}</div>
-            {sub && <div className="text-[10px] text-theme-text-muted mt-1">{sub}</div>}
+            <div className="flex items-center justify-between mt-1 gap-2">
+                {sub && <div className="text-[10px] text-theme-text-muted truncate">{sub}</div>}
+                {deltaStr && <div className={`text-[10px] font-semibold tabular-nums ${deltaCls}`}>{deltaStr}</div>}
+            </div>
         </div>
     )
 }
@@ -488,11 +495,14 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
 
     return (
         <div className="space-y-4">
-            {/* HEADER */}
+            {/* HEADER — 2026-05-22: redesign vicino al mockup */}
             <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h2 className="text-lg font-bold text-theme-text-primary">Report Operatori & Collaboratori</h2>
-                    <p className="text-xs text-theme-text-muted">Vista completa: performance del team, produttivita e rilevazione orari</p>
+                    <div className="flex items-center gap-2">
+                        <span className="w-1 h-6 rounded-full bg-rose-500" />
+                        <h2 className="text-xl font-bold text-theme-text-primary">Report Operatori &amp; Collaboratori</h2>
+                    </div>
+                    <p className="text-xs text-theme-text-muted mt-1">Analisi completa delle performance del team, produttivita e rilevazione orari</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     <input type="date" value={customFrom} max={customTo}
@@ -506,11 +516,20 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                         {(['oggi', '7gg', '30gg', 'quarter', 'anno', 'custom'] as RangePreset[]).map(p => (
                             <button key={p} onClick={() => setPreset(p)}
                                 className={`px-3 py-1 rounded-full ${preset === p ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}>
-                                {p === 'oggi' ? 'Oggi' : p === '7gg' ? '7gg' : p === '30gg' ? '30gg' : p === 'quarter' ? 'Quarter' : p === 'anno' ? 'Anno' : 'Custom'}
+                                {p === 'oggi' ? 'Oggi' : p === '7gg' ? '7 Giorni' : p === '30gg' ? '30 Giorni' : p === 'quarter' ? 'Questo Mese' : p === 'anno' ? 'Anno' : 'Custom'}
                             </button>
                         ))}
                     </div>
-                    <button className="px-3 py-1.5 rounded bg-dr7-gold text-black text-xs font-semibold hover:bg-amber-400">
+                    <button
+                        type="button"
+                        title="Confronta col periodo precedente (coming soon)"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-theme-border bg-theme-bg-tertiary text-xs font-medium text-theme-text-primary hover:bg-theme-bg-hover">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m-4 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                        Confronta
+                    </button>
+                    <button
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                         Genera Report
                     </button>
                 </div>
@@ -520,17 +539,25 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-4">
                 {/* MAIN COLUMN */}
                 <div className="space-y-4">
-                    {/* KPI ROW */}
+                    {/* KPI ROW — 2026-05-22 allineata al mockup: 8 cards con
+                        Pratiche Gestite al posto di Profitto, delta opzionali. */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-                        <KpiCard label="Operatori Totali" value={operatoriTotali} accent="emerald" icon="●" />
-                        <KpiCard label="Attivi Oggi" value={attiviOggi} sub={`di ${operatoriTotali}`} accent="lime" icon="●" />
-                        <KpiCard label="Fatturato Generale" value={isDirezione ? eur(kpi.fatturatoGenerale) : '—'} sub={`${kpi.bookingsCount} prenotazioni`} accent="gold" icon="€" />
-                        <KpiCard label="Profitto Stimato" value={isDirezione ? eur(profittoDiretto) : '—'} sub="65% margine medio" accent="amber" icon="↗" />
-                        <KpiCard label="Noleggi" value={isDirezione ? kpi.noleggiCount : '—'} accent="sky" icon="🚗" />
-                        <KpiCard label="Lavaggi & Meccanica" value={isDirezione ? kpi.lavaggiCount : '—'} accent="cyan" icon="💧" />
-                        <KpiCard label="Ore Lavorate" value={`${oreLavorateH}h`} sub={`Target: ${Math.round(kpi.oreTarget / 60)}h`} accent="violet" icon="⏱" />
-                        <KpiCard label="Produttivita Media" value={`${produttivitaMedia}%`} accent={produttivitaMedia >= 80 ? 'emerald' : 'rose'} icon="%" />
+                        <KpiCard label="Operatori Totali" value={operatoriTotali} sub={attiviOggi < operatoriTotali ? `${operatoriTotali - attiviOggi} non attivi` : 'tutti attivi'} accent="emerald" />
+                        <KpiCard label="Attivi Oggi" value={attiviOggi} sub={`di ${operatoriTotali}`} accent="lime" />
+                        <KpiCard label="Fatturato Generato" value={isDirezione ? eur(kpi.fatturatoGenerale) : '—'} sub={isDirezione ? `${kpi.bookingsCount} prenotazioni` : 'permesso richiesto'} accent="gold" />
+                        <KpiCard label="Pratiche Gestite" value={isDirezione ? kpi.bookingsCount : '—'} sub="noleggi + lavaggi" accent="amber" />
+                        <KpiCard label="Noleggi Gestiti" value={isDirezione ? kpi.noleggiCount : '—'} accent="sky" />
+                        <KpiCard label="Lavaggi Gestiti" value={isDirezione ? kpi.lavaggiCount : '—'} sub="& meccanica" accent="cyan" />
+                        <KpiCard label="Ore Lavorate" value={`${oreLavorateH}h`} sub={`Target: ${Math.round(kpi.oreTarget / 60)}h`} accent="violet" />
+                        <KpiCard label="Produttivita Media" value={`${produttivitaMedia}%`} accent={produttivitaMedia >= 80 ? 'emerald' : 'rose'} />
                     </div>
+                    {/* Profitto Stimato — riga separata per direzione, fuori dal mockup
+                        ma utile per chi gestisce i costi. Sopprimere se non serve. */}
+                    {isDirezione && profittoDiretto > 0 && (
+                        <div className="text-[10px] text-theme-text-muted -mt-2">
+                            Profitto stimato: <span className="text-emerald-400 font-semibold">{eur(profittoDiretto)}</span> · margine ~65%
+                        </div>
+                    )}
 
                     {/* 4 WIDGETS ROW */}
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
