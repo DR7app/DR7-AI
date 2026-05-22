@@ -1837,11 +1837,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         // template "Prenotazione Da Saldare Confermata", separato dalla
         // conferma lavaggio standard).
         const isPendingPayment = paymentStatus !== 'paid' && paymentStatus !== 'completed' && paymentStatus !== 'succeeded'
+        const isMech = confSvc === 'mechanical' || confSvc === 'mechanical_service'
+        // Per la conferma "da saldare" usiamo l'evento SPECIFICO al
+        // servizio (carwash_confirmed_da_saldare / mechanical_..) cosi'
+        // non collide piu' con "Conferma Noleggio" che claima
+        // booking_confirmed_da_saldare. Lavaggio confermata-pending va
+        // alla "Conferma Lavaggio", meccanica alla "Conferma Meccanica".
         const eventKey = (confirmBooking && isPendingPayment)
-          ? 'booking_confirmed_da_saldare'
-          : (confSvc === 'mechanical' || confSvc === 'mechanical_service'
-              ? 'mechanical_new_customer'
-              : 'carwash_new_customer')
+          ? (isMech ? 'mechanical_confirmed_da_saldare' : 'carwash_confirmed_da_saldare')
+          : (isMech ? 'mechanical_new_customer' : 'carwash_new_customer')
         // Extract templateVars once so the per-method block below can reuse them.
         const waTemplateVars = {
           // Customer
@@ -1907,12 +1911,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         // method by ticking the matching event in handled_events.
         if (confirmBooking && !isPendingPayment) {
           const pm = String(formData.payment_method || '').toLowerCase().trim()
+          // Prefisso eventi PER-METODO: carwash_paid_* o mechanical_paid_*
+          // invece di booking_paid_* (che sono "globali" e venivano
+          // intercettati da "Conferma Noleggio"). Cosi' il template
+          // sbagliato non puo' partire piu'.
+          const evtPrefix = isMech ? 'mechanical' : 'carwash'
           let methodEvent: string | null = null
-          if (pm.includes('contanti') || pm === 'cash' || pm === 'prepagata') methodEvent = 'booking_paid_cash'
-          else if (pm.includes('carta') || pm.includes('bancomat') || pm === 'pos') methodEvent = 'booking_paid_card'
-          else if (pm.includes('bonifico') || pm.includes('sepa')) methodEvent = 'booking_paid_bank_transfer'
-          else if (pm === 'paypal') methodEvent = 'booking_paid_paypal'
-          else if (pm.includes('wallet') || pm === 'credit wallet') methodEvent = 'booking_paid_wallet'
+          if (pm.includes('contanti') || pm === 'cash' || pm === 'prepagata') methodEvent = `${evtPrefix}_paid_cash`
+          else if (pm.includes('carta') || pm.includes('bancomat') || pm === 'pos') methodEvent = `${evtPrefix}_paid_card`
+          else if (pm.includes('bonifico') || pm.includes('sepa')) methodEvent = `${evtPrefix}_paid_bank_transfer`
+          else if (pm === 'paypal') methodEvent = `${evtPrefix}_paid_paypal`
+          else if (pm.includes('wallet') || pm === 'credit wallet') methodEvent = `${evtPrefix}_paid_wallet`
 
           if (methodEvent) {
             const finalMethodEvent = methodEvent

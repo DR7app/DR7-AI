@@ -74,6 +74,26 @@ export const OLD_TO_PRO: Record<string, string> = {
   booking_paid_paypal:        'pro_conferma_da_saldare',
   booking_paid_wallet:        'pro_conferma_da_saldare',
 
+  // Eventi specifici per LAVAGGIO — evitano che "Conferma Noleggio"
+  // (che tipicamente claima i booking_paid_*) intercetti i pagamenti di
+  // un car wash e mandi il testo di noleggio al cliente. Canonicamente
+  // mappano a pro_conferma_lavaggio cosi' "Conferma Lavaggio" puo'
+  // semplicemente claimare questi nuovi eventi nei suoi handled_events.
+  carwash_confirmed_da_saldare: 'pro_conferma_lavaggio',
+  carwash_paid_cash:            'pro_conferma_lavaggio',
+  carwash_paid_card:            'pro_conferma_lavaggio',
+  carwash_paid_bank_transfer:   'pro_conferma_lavaggio',
+  carwash_paid_paypal:          'pro_conferma_lavaggio',
+  carwash_paid_wallet:          'pro_conferma_lavaggio',
+
+  // Eventi specifici per MECCANICA — stessa logica del lavaggio.
+  mechanical_confirmed_da_saldare: 'pro_conferma_meccanica',
+  mechanical_paid_cash:            'pro_conferma_meccanica',
+  mechanical_paid_card:            'pro_conferma_meccanica',
+  mechanical_paid_bank_transfer:   'pro_conferma_meccanica',
+  mechanical_paid_paypal:          'pro_conferma_meccanica',
+  mechanical_paid_wallet:          'pro_conferma_meccanica',
+
   // Preventivi admin alert
   admin_new_website_quote: 'pro_richiesta_otp',
   admin_no_cauzione_request: 'pro_richiesta_otp',
@@ -143,12 +163,28 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
   payment_received_extension_admin: 'Conferma pagamento estensione (admin)',
   payment_received_damages: 'Conferma pagamento danni/penali (al cliente)',
   payment_received_damages_admin: 'Conferma pagamento danni/penali (admin)',
-  booking_confirmed_da_saldare: 'Prenotazione confermata ma ancora Da Saldare (admin spunta Conferma Prenotazione su booking pending)',
-  booking_paid_cash:          'Pagamento ricevuto in CONTANTI (admin crea booking con payment_method=Contanti + Conferma Prenotazione)',
-  booking_paid_card:          'Pagamento ricevuto via CARTA / BANCOMAT (admin crea booking con payment_method=Bancomat/POS + Conferma Prenotazione)',
-  booking_paid_bank_transfer: 'Pagamento ricevuto via BONIFICO (admin crea booking con payment_method=Bonifico + Conferma Prenotazione)',
-  booking_paid_paypal:        'Pagamento ricevuto via PAYPAL (admin crea booking con payment_method=Paypal + Conferma Prenotazione)',
-  booking_paid_wallet:        'Pagamento usando il WALLET / Credit Wallet (admin crea booking con payment_method=Credit Wallet + Conferma Prenotazione)',
+  booking_confirmed_da_saldare: 'NOLEGGIO: prenotazione confermata ma ancora Da Saldare (admin spunta Conferma su noleggio pending)',
+  booking_paid_cash:          'NOLEGGIO: pagamento ricevuto in CONTANTI (admin crea noleggio con payment_method=Contanti + Conferma Prenotazione)',
+  booking_paid_card:          'NOLEGGIO: pagamento ricevuto via CARTA / BANCOMAT (admin crea noleggio con payment_method=Bancomat/POS + Conferma)',
+  booking_paid_bank_transfer: 'NOLEGGIO: pagamento ricevuto via BONIFICO (admin crea noleggio con payment_method=Bonifico + Conferma)',
+  booking_paid_paypal:        'NOLEGGIO: pagamento ricevuto via PAYPAL (admin crea noleggio con payment_method=Paypal + Conferma)',
+  booking_paid_wallet:        'NOLEGGIO: pagamento usando il WALLET / Credit Wallet (admin crea noleggio con payment_method=Credit Wallet + Conferma)',
+
+  // Lavaggio — pagamento confermato (NON usati da noleggio)
+  carwash_confirmed_da_saldare: 'LAVAGGIO: prenotazione confermata ma ancora Da Saldare (admin spunta Conferma su lavaggio pending)',
+  carwash_paid_cash:            'LAVAGGIO: pagamento ricevuto in CONTANTI (admin crea lavaggio con payment_method=Contanti + Conferma)',
+  carwash_paid_card:            'LAVAGGIO: pagamento ricevuto via CARTA / BANCOMAT (admin crea lavaggio + Conferma)',
+  carwash_paid_bank_transfer:   'LAVAGGIO: pagamento ricevuto via BONIFICO (admin crea lavaggio + Conferma)',
+  carwash_paid_paypal:          'LAVAGGIO: pagamento ricevuto via PAYPAL (admin crea lavaggio + Conferma)',
+  carwash_paid_wallet:          'LAVAGGIO: pagamento usando il WALLET / Credit Wallet (admin crea lavaggio + Conferma)',
+
+  // Meccanica — pagamento confermato (NON usati da noleggio o lavaggio)
+  mechanical_confirmed_da_saldare: 'MECCANICA: prenotazione confermata ma ancora Da Saldare',
+  mechanical_paid_cash:            'MECCANICA: pagamento ricevuto in CONTANTI (admin crea meccanica + Conferma)',
+  mechanical_paid_card:            'MECCANICA: pagamento ricevuto via CARTA / BANCOMAT (admin crea meccanica + Conferma)',
+  mechanical_paid_bank_transfer:   'MECCANICA: pagamento ricevuto via BONIFICO (admin crea meccanica + Conferma)',
+  mechanical_paid_paypal:          'MECCANICA: pagamento ricevuto via PAYPAL (admin crea meccanica + Conferma)',
+  mechanical_paid_wallet:          'MECCANICA: pagamento usando il WALLET / Credit Wallet (admin crea meccanica + Conferma)',
 
   // Preventivi admin
   admin_new_website_quote: 'Alert admin: nuovo preventivo dal sito',
