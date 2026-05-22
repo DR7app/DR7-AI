@@ -19,6 +19,18 @@ function hhmmToMinutes(hhmm: string): number | null {
     return h * 60 + m
 }
 
+// 2026-05-22: auto-format text input into HH:MM mentre l'utente digita.
+// Accetta cifre + ":". Inserisce automaticamente ":" dopo 2 cifre.
+// Esempi: "1030" -> "10:30", "1" -> "1", "10" -> "10", "10:" -> "10:".
+// Permette stringa vuota per cancellare. Non valida il range — la
+// validazione 0-23/0-59 e' lasciata al consumer (gia' fatto da hhmmToMinutes).
+function formatHHMM(raw: string): string {
+    const digits = raw.replace(/[^0-9]/g, '').slice(0, 4)
+    if (digits.length === 0) return ''
+    if (digits.length <= 2) return digits
+    return digits.slice(0, 2) + ':' + digits.slice(2)
+}
+
 function fmtDuration(totalMin: number): string {
     if (totalMin <= 0) return '0h 00m'
     const h = Math.floor(totalMin / 60)
@@ -354,13 +366,30 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
                             <div className="grid grid-cols-2 gap-3">
                                 <label className="block">
                                     <span className="text-xs text-theme-text-secondary">Entrata</span>
-                                    <input type="time" lang="it-IT" step={60} value={entrata} onChange={e => setEntrata(e.target.value)}
-                                        className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary" />
+                                    {/* 2026-05-22: input "time" sostituito con text HH:MM perché
+                                        macOS Safari/Chrome ignora lang="it-IT" e mostra sempre AM/PM
+                                        in base al locale OS. Text input + pattern 24h forza il formato europeo. */}
+                                    <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        pattern="[0-2][0-9]:[0-5][0-9]"
+                                        maxLength={5}
+                                        placeholder="HH:MM"
+                                        value={entrata}
+                                        onChange={e => setEntrata(formatHHMM(e.target.value))}
+                                        className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary font-mono tabular-nums" />
                                 </label>
                                 <label className="block">
                                     <span className="text-xs text-theme-text-secondary">Uscita</span>
-                                    <input type="time" lang="it-IT" step={60} value={uscita} onChange={e => setUscita(e.target.value)}
-                                        className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary" />
+                                    <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        pattern="[0-2][0-9]:[0-5][0-9]"
+                                        maxLength={5}
+                                        placeholder="HH:MM"
+                                        value={uscita}
+                                        onChange={e => setUscita(formatHHMM(e.target.value))}
+                                        className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary font-mono tabular-nums" />
                                 </label>
                             </div>
 
@@ -377,19 +406,35 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
                                         <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
                                             <label className="block">
                                                 <span className="text-xs text-theme-text-muted">Inizio pausa {i + 1}</span>
-                                                <input type="time" lang="it-IT" step={60} value={p.pausa_inizio || ''} onChange={e => {
-                                                    const next = [...pause]
-                                                    next[i] = { ...next[i], pausa_inizio: e.target.value }
-                                                    setPause(next)
-                                                }} className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary" />
+                                                <input
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    pattern="[0-2][0-9]:[0-5][0-9]"
+                                                    maxLength={5}
+                                                    placeholder="HH:MM"
+                                                    value={p.pausa_inizio || ''}
+                                                    onChange={e => {
+                                                        const next = [...pause]
+                                                        next[i] = { ...next[i], pausa_inizio: formatHHMM(e.target.value) }
+                                                        setPause(next)
+                                                    }}
+                                                    className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary font-mono tabular-nums" />
                                             </label>
                                             <label className="block">
                                                 <span className="text-xs text-theme-text-muted">Fine pausa {i + 1}</span>
-                                                <input type="time" lang="it-IT" step={60} value={p.pausa_fine || ''} onChange={e => {
-                                                    const next = [...pause]
-                                                    next[i] = { ...next[i], pausa_fine: e.target.value }
-                                                    setPause(next)
-                                                }} className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary" />
+                                                <input
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    pattern="[0-2][0-9]:[0-5][0-9]"
+                                                    maxLength={5}
+                                                    placeholder="HH:MM"
+                                                    value={p.pausa_fine || ''}
+                                                    onChange={e => {
+                                                        const next = [...pause]
+                                                        next[i] = { ...next[i], pausa_fine: formatHHMM(e.target.value) }
+                                                        setPause(next)
+                                                    }}
+                                                    className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary font-mono tabular-nums" />
                                             </label>
                                             <button onClick={() => setPause(pause.filter((_, j) => j !== i))}
                                                 className="px-2 py-2 text-red-400 hover:text-red-300" title="Rimuovi">×</button>
