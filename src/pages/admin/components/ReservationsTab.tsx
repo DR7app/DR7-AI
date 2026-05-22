@@ -9902,7 +9902,6 @@ function ReservationsDashboardHeader({
           monthLabel={selMonthLabel}
           year={selMonth.year}
           month={selMonth.month}
-          monthsIt={monthsIt}
           onChange={(y, m) => setSelMonth({ year: y, month: m })}
         />
         <KpiCard
@@ -10130,23 +10129,21 @@ function TimeSeriesChart({
 }
 
 /**
- * Card Fatturato con month picker inline. Label dinamica:
- * "Fatturato Maggio", "Fatturato Giugno", ecc. Anno mostrato solo se != corrente.
- * Source euro: prorateRevenueForMonth (Report Noleggio formula).
+ * Card Fatturato. 2026-05-22: rimosso il dropdown squadrato; restano
+ * solo frecce ‹ › pulite per cambiare mese (la fattura del mese
+ * selezionato viene mostrata anche cambiando in mesi diversi).
  */
 function FatturatoMonthCard({
   value,
   monthLabel,
   year,
   month,
-  monthsIt,
   onChange,
 }: {
   value: string
   monthLabel: string
   year: number
   month: number
-  monthsIt: string[]
   onChange: (year: number, month: number) => void
 }) {
   const currentYear = new Date().getFullYear()
@@ -10160,7 +10157,7 @@ function FatturatoMonthCard({
         <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 font-bold text-sm">€</span>
       </div>
       <div className="mt-2 text-2xl sm:text-[28px] font-bold text-theme-text-primary leading-tight tabular-nums">{value}</div>
-      <div className="mt-2 flex items-center gap-1.5">
+      <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-theme-text-muted">
         <button
           type="button"
           onClick={() => {
@@ -10168,34 +10165,11 @@ function FatturatoMonthCard({
             const y = month === 1 ? year - 1 : year
             onChange(y, m)
           }}
-          className="w-6 h-6 rounded-md border border-theme-border text-theme-text-muted hover:text-dr7-gold hover:border-dr7-gold transition-colors flex items-center justify-center"
+          className="hover:text-dr7-gold transition-colors px-1"
           aria-label="Mese precedente"
           title="Mese precedente"
-        >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <select
-          value={`${year}-${month}`}
-          onChange={(e) => {
-            const [y, m] = e.target.value.split('-').map(Number)
-            onChange(y, m)
-          }}
-          className="flex-1 text-[11px] bg-theme-bg-tertiary border border-theme-border rounded-md px-2 py-1 text-theme-text-secondary focus:outline-none focus:border-dr7-gold cursor-pointer"
-        >
-          {(() => {
-            // 18 mesi (12 indietro + 6 avanti) per cambio anno facile.
-            const out: { label: string; year: number; month: number }[] = []
-            for (let i = -12; i <= 6; i++) {
-              const d = new Date(currentYear, new Date().getMonth() + i, 1)
-              out.push({ label: `${monthsIt[d.getMonth()]} ${d.getFullYear()}`, year: d.getFullYear(), month: d.getMonth() + 1 })
-            }
-            return out.map(o => (
-              <option key={`${o.year}-${o.month}`} value={`${o.year}-${o.month}`}>{o.label}</option>
-            ))
-          })()}
-        </select>
+        >‹</button>
+        <span className="font-medium text-theme-text-secondary">{monthLabel} {year}</span>
         <button
           type="button"
           onClick={() => {
@@ -10203,14 +10177,10 @@ function FatturatoMonthCard({
             const y = month === 12 ? year + 1 : year
             onChange(y, m)
           }}
-          className="w-6 h-6 rounded-md border border-theme-border text-theme-text-muted hover:text-dr7-gold hover:border-dr7-gold transition-colors flex items-center justify-center"
+          className="hover:text-dr7-gold transition-colors px-1"
           aria-label="Mese successivo"
           title="Mese successivo"
-        >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
+        >›</button>
       </div>
     </div>
   )
