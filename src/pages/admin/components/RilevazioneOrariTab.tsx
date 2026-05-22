@@ -434,7 +434,9 @@ export default function RilevazioneOrariTab() {
                             {(me.nome[0] || '?').toUpperCase()}{(me.cognome?.[0] || '').toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm text-theme-text-secondary">I tuoi orari di oggi — clicca per inserire/modificare</p>
+                            <p className="text-sm text-theme-text-secondary">
+                                I tuoi orari del {new Date(refDate).toLocaleDateString('it-IT', { timeZone: ROME_TZ, weekday: 'long', day: 'numeric', month: 'long' })} — clicca per inserire/modificare
+                            </p>
                             <p className="text-xl font-bold text-theme-text-primary">{me.nome} {me.cognome || ''}</p>
                             <div className="flex flex-wrap gap-3 mt-1 text-xs text-theme-text-muted">
                                 <span>Entrata: <strong className="font-mono text-theme-text-primary">{fmtTime(myRow?.entrata || null)}</strong></span>
