@@ -11,11 +11,12 @@
  * lavorati, minuti pausa), then renders the same visual language
  * already used in the team dashboard.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import { MyDayEditorModal } from './RilevazioneOrariTab'
 
 interface Operatore {
     id: string
@@ -87,6 +88,10 @@ export default function OperatorProfileModal({
     const [customTo, setCustomTo] = useState<string>(() => toRomeDate(new Date()))
     const [days, setDays] = useState<DayBreakdown[]>([])
     const [loading, setLoading] = useState(true)
+    // 2026-05-22: clicking a day OR "Aggiungi giornata" opens the
+    // MyDayEditorModal pre-loaded with that date. Reuses the editor from
+    // RilevazioneOrariTab — single source of truth for timesheet CRUD.
+    const [editingDay, setEditingDay] = useState<string | null>(null)
     // 2026-05-22: target ore letto dal contratto, RISPETTANDO la granularita'
     // entrata dall'admin. Niente "daily fake da weekly". Cioe':
     //  - se daily non inserito + weekly = 47, NON mostriamo 9.4h/giorno
@@ -179,58 +184,56 @@ export default function OperatorProfileModal({
         return { start: toRomeDate(start), end: toRomeDate(end), days: daysArr }
     }, [period, customFrom, customTo])
 
-    useEffect(() => {
-        let cancelled = false
-        ;(async () => {
-            setLoading(true)
-            const { data } = await supabase
-                .from('timesheet_entries')
-                .select('operatore_id, tipo, timestamp, data')
-                .eq('operatore_id', operatore.id)
-                .gte('data', range.start)
-                .lte('data', range.end)
-                .order('timestamp', { ascending: true })
-            if (cancelled) return
-            const entries = (data || []) as TimesheetEntry[]
+    // 2026-05-22: estratto in funzione richiamabile cosi' dopo l'edit
+    // di una giornata (via MyDayEditorModal) possiamo ri-caricare i dati
+    // senza ricreare l'effetto.
+    const loadDays = useCallback(async () => {
+        setLoading(true)
+        const { data } = await supabase
+            .from('timesheet_entries')
+            .select('operatore_id, tipo, timestamp, data')
+            .eq('operatore_id', operatore.id)
+            .gte('data', range.start)
+            .lte('data', range.end)
+            .order('timestamp', { ascending: true })
+        const entries = (data || []) as TimesheetEntry[]
 
-            // Group by day; rebuild pause windows + work minutes.
-            const byDay = new Map<string, TimesheetEntry[]>()
-            for (const e of entries) {
-                if (!byDay.has(e.data)) byDay.set(e.data, [])
-                byDay.get(e.data)!.push(e)
+        const byDay = new Map<string, TimesheetEntry[]>()
+        for (const e of entries) {
+            if (!byDay.has(e.data)) byDay.set(e.data, [])
+            byDay.get(e.data)!.push(e)
+        }
+        const breakdowns: DayBreakdown[] = range.days.map(d => {
+            const dayEntries = byDay.get(d) || []
+            let entrata: string | null = null
+            let uscita: string | null = null
+            const pauseStarts: string[] = []
+            const pauseEnds: string[] = []
+            for (const e of dayEntries) {
+                if (e.tipo === 'entrata') entrata = e.timestamp
+                else if (e.tipo === 'uscita') uscita = e.timestamp
+                else if (e.tipo === 'pausa_inizio') pauseStarts.push(e.timestamp)
+                else if (e.tipo === 'pausa_fine') pauseEnds.push(e.timestamp)
             }
-            const breakdowns: DayBreakdown[] = range.days.map(d => {
-                const dayEntries = byDay.get(d) || []
-                let entrata: string | null = null
-                let uscita: string | null = null
-                const pauseStarts: string[] = []
-                const pauseEnds: string[] = []
-                for (const e of dayEntries) {
-                    if (e.tipo === 'entrata') entrata = e.timestamp
-                    else if (e.tipo === 'uscita') uscita = e.timestamp
-                    else if (e.tipo === 'pausa_inizio') pauseStarts.push(e.timestamp)
-                    else if (e.tipo === 'pausa_fine') pauseEnds.push(e.timestamp)
-                }
-                const pauseWindows = pauseStarts.map((start, i) => {
-                    const end = pauseEnds[i] || null
-                    const durMin = end
-                        ? Math.max(0, Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 60000))
-                        : 0
-                    return { start, end, durMin }
-                })
-                const minutiPausa = pauseWindows.reduce((s, p) => s + p.durMin, 0)
-                let minutiLavorati = 0
-                if (entrata && uscita) {
-                    minutiLavorati = Math.max(0, Math.floor((new Date(uscita).getTime() - new Date(entrata).getTime()) / 60000) - minutiPausa)
-                }
-                return { data: d, entrata, uscita, pauseWindows, minutiLavorati, minutiPausa }
+            const pauseWindows = pauseStarts.map((start, i) => {
+                const end = pauseEnds[i] || null
+                const durMin = end
+                    ? Math.max(0, Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 60000))
+                    : 0
+                return { start, end, durMin }
             })
-            setDays(breakdowns)
-            setLoading(false)
-        })()
-        return () => { cancelled = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [operatore.id, range.start, range.end])
+            const minutiPausa = pauseWindows.reduce((s, p) => s + p.durMin, 0)
+            let minutiLavorati = 0
+            if (entrata && uscita) {
+                minutiLavorati = Math.max(0, Math.floor((new Date(uscita).getTime() - new Date(entrata).getTime()) / 60000) - minutiPausa)
+            }
+            return { data: d, entrata, uscita, pauseWindows, minutiLavorati, minutiPausa }
+        })
+        setDays(breakdowns)
+        setLoading(false)
+    }, [operatore.id, range.start, range.end, range.days])
+
+    useEffect(() => { loadDays() }, [loadDays])
 
     // Aggregate stats
     const stats = useMemo(() => {
@@ -402,17 +405,47 @@ export default function OperatorProfileModal({
 
                 {/* Per-day breakdown */}
                 <div className="px-4 sm:px-6 pb-6">
-                    <h3 className="text-sm font-semibold text-theme-text-primary mb-2 sm:mb-3">Dettaglio per giornata</h3>
+                    <div className="mb-2 sm:mb-3 flex items-baseline justify-between gap-3">
+                        <h3 className="text-sm font-semibold text-theme-text-primary">Dettaglio per giornata</h3>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                // Aggiungi giornata: chiede una data al volo (default oggi).
+                                const todayIso = toRomeDate(new Date())
+                                const input = window.prompt('Data della giornata da aggiungere (YYYY-MM-DD)', todayIso)
+                                if (!input) return
+                                const m = input.match(/^\d{4}-\d{2}-\d{2}$/)
+                                if (!m) {
+                                    toast.error('Formato data non valido. Usa YYYY-MM-DD')
+                                    return
+                                }
+                                setEditingDay(input)
+                            }}
+                            className="text-xs px-3 py-1.5 rounded-full bg-dr7-gold text-black font-semibold hover:opacity-90"
+                        >
+                            + Aggiungi giornata
+                        </button>
+                    </div>
                     {loading ? (
                         <p className="text-xs text-theme-text-muted py-8 text-center">Caricamento…</p>
                     ) : days.filter(d => d.entrata || d.uscita || d.pauseWindows.length > 0).length === 0 ? (
-                        <p className="text-xs text-theme-text-muted italic py-8 text-center">Nessuna attività registrata nel periodo.</p>
+                        <p className="text-xs text-theme-text-muted italic py-8 text-center">
+                            Nessuna attività registrata nel periodo. Usa "+ Aggiungi giornata" per inserire manualmente.
+                        </p>
                     ) : (
                         <div className="space-y-2">
                             {days.filter(d => d.entrata || d.uscita || d.pauseWindows.length > 0).reverse().map(d => (
-                                <div key={d.data} className="bg-theme-bg-tertiary/30 border border-theme-border rounded-lg p-3">
+                                <div
+                                    key={d.data}
+                                    onClick={() => setEditingDay(d.data)}
+                                    className="bg-theme-bg-tertiary/30 border border-theme-border rounded-lg p-3 cursor-pointer hover:border-dr7-gold/50 hover:bg-theme-bg-tertiary/50 transition-colors"
+                                    title="Click per modificare la giornata"
+                                >
                                     <div className="mb-2 flex items-baseline justify-between gap-3">
-                                        <div className="text-sm font-semibold text-theme-text-primary">{fmtDate(d.data)}</div>
+                                        <div className="text-sm font-semibold text-theme-text-primary flex items-center gap-2">
+                                            {fmtDate(d.data)}
+                                            <span className="text-[10px] font-normal text-dr7-gold/70">modifica</span>
+                                        </div>
                                         <div className="text-right">
                                             <div className="text-sm font-semibold text-emerald-400 leading-tight">{fmtMin(d.minutiLavorati)}</div>
                                             {d.minutiLavorati > 0 && (
@@ -439,6 +472,23 @@ export default function OperatorProfileModal({
                         </div>
                     )}
                 </div>
+
+                {/* Day editor modal — reuses MyDayEditorModal from
+                    RilevazioneOrariTab (single source of truth for
+                    timesheet_entries CRUD). On save, refresh the days
+                    so the totale and Calcola Paga update immediately. */}
+                {editingDay && (
+                    <MyDayEditorModal
+                        operatore={{ id: operatore.id, nome: operatore.nome, cognome: operatore.cognome }}
+                        data={editingDay}
+                        onClose={() => setEditingDay(null)}
+                        onSaved={() => {
+                            setEditingDay(null)
+                            loadDays()
+                            toast.success('Giornata aggiornata')
+                        }}
+                    />
+                )}
             </div>
         </div>
     )
