@@ -3147,113 +3147,371 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           )}
 
           {/* ===== STEP 2: Extras ===== */}
-          {currentStep === 2 && (
+          {currentStep === 2 && (() => {
+            const availableExtras = extraServices.filter(e => e.id !== selectedService?.id)
+            const recommendedExtras = availableExtras.slice(0, 2)
+            const bundleSum = availableExtras.reduce((s, e) => {
+              const opt = extraPriceOptions[e.id]
+              return s + (opt?.price ?? e.price)
+            }, 0)
+            const bundleDiscounted = bundleSum * 0.85
+            const allSelected = availableExtras.length > 0 && availableExtras.every(e => selectedExtras.some(x => x.id === e.id))
+
+            const selectRecommended = () => {
+              const toAdd = recommendedExtras.filter(e => !selectedExtras.some(x => x.id === e.id))
+              if (toAdd.length) setSelectedExtras(prev => [...prev, ...toAdd])
+            }
+            const selectAll = () => {
+              if (allSelected) {
+                setSelectedExtras([])
+                setExtraPriceOptions({})
+              } else {
+                const missing = availableExtras.filter(e => !selectedExtras.some(x => x.id === e.id))
+                setSelectedExtras(prev => [...prev, ...missing])
+              }
+            }
+
+            // Per-extra icon picker based on name keywords (visual only)
+            const iconFor = (name: string): React.ReactNode => {
+              const n = name.toLowerCase()
+              if (n.includes('cera')) return <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 3l1.9 5.9 6.1.1-4.9 3.7 1.8 6-4.9-3.5-4.9 3.5 1.8-6L4 9l6.1-.1z"/>
+              if (n.includes('cerchi') || n.includes('ruot')) return <><circle cx="12" cy="12" r="9" strokeWidth={1.8}/><circle cx="12" cy="12" r="3" strokeWidth={1.8}/></>
+              if (n.includes('nano') || n.includes('tratt')) return <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 2v6m0 0l-3-3m3 3l3-3M5 12a7 7 0 1014 0c0-3-2-5-7-10-5 5-7 7-7 10z"/>
+              if (n.includes('sanific') || n.includes('intern')) return <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+              if (n.includes('plastich')) return <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 10V3L4 14h7v7l9-11h-7z"/>
+              if (n.includes('tessut') || n.includes('sedi')) return <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+              if (n.includes('pet') || n.includes('animal')) return <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"/>
+              if (n.includes('profum')) return <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0016.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 002 8.5c0 2.29 1.51 4.04 3 5.5l7 7z"/>
+              if (n.includes('supercar') || n.includes('experience')) return <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5 12l4-7h6l4 7v6a1 1 0 01-1 1h-1a1 1 0 01-1-1v-1H8v1a1 1 0 01-1 1H6a1 1 0 01-1-1v-6z"/>
+              return <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+            }
+
+            return (
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-theme-text-primary">Servizi Extra (opzionale)</h3>
-
-              {extraServices.length === 0 ? (
-                <div className="p-4 bg-theme-bg-tertiary/50 rounded-lg text-center">
-                  <p className="text-theme-text-muted text-sm mb-3">Nessun extra disponibile per {selectedMainTab === 'lavaggio' ? 'Lavaggio' : 'Meccanica'}</p>
+              {/* Step banner */}
+              <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500/10 via-cyan-500/5 to-transparent border border-cyan-500/20">
+                <div className="flex items-center gap-2.5">
+                  <div className="grid w-7 h-7 place-items-center rounded-lg bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-theme-text-primary">Servizi Aggiuntivi</p>
+                    <p className="text-[11px] text-theme-text-muted">Aggiungi servizi extra opzionali per completare il lavaggio</p>
+                  </div>
                 </div>
-              ) : (
-                <div className="flex flex-wrap gap-3">
-                  {extraServices.filter(e => e.id !== selectedService?.id).map(extra => {
-                    const isToggled = selectedExtras.some(e => e.id === extra.id)
-                    const hasPriceOptions = extra.price_options && extra.price_options.length > 0
-                    const currentExtraOption = extraPriceOptions[extra.id]
+                <span className="text-[10px] font-mono font-bold px-2 py-1 rounded-md bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">PASSO 3 / 4</span>
+              </div>
 
-                    return (
-                      <div key={extra.id} className="flex flex-col gap-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (isToggled) {
-                              setSelectedExtras(prev => prev.filter(e => e.id !== extra.id))
-                              setExtraPriceOptions(prev => {
-                                const next = { ...prev }
-                                delete next[extra.id]
-                                return next
-                              })
-                            } else if (!hasPriceOptions) {
-                              setSelectedExtras(prev => [...prev, extra])
-                            } else {
-                              // For extras with price options, toggle on (user picks variant below)
-                              setSelectedExtras(prev => [...prev, extra])
-                            }
-                          }}
-                          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border flex items-center gap-2 ${
-                            isToggled
-                              ? 'bg-dr7-gold/20 border-dr7-gold text-dr7-gold'
-                              : 'bg-theme-bg-tertiary border-theme-border text-theme-text-primary hover:border-dr7-gold'
-                          }`}
-                        >
-                          <span className={`w-4 h-4 rounded border flex items-center justify-center text-xs ${
-                            isToggled ? 'bg-dr7-gold border-dr7-gold text-white' : 'border-theme-text-muted'
-                          }`}>
-                            {isToggled && '✓'}
-                          </span>
-                          {extra.name}
-                          {!hasPriceOptions && <span className="text-xs opacity-70">EUR {extra.price.toFixed(2)}</span>}
-                        </button>
-                        {/* Price option variants for this extra */}
-                        {isToggled && hasPriceOptions && (
-                          <div className="flex flex-wrap gap-1 ml-2">
-                            {extra.price_options!.map(opt => (
+              {/* Two-column layout */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* ──── LEFT: Extras grid (2/3 width) ──── */}
+                <div className="lg:col-span-2 space-y-3">
+                  {/* Consiglio per il cliente banner */}
+                  {recommendedExtras.length > 0 && (
+                    <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl bg-emerald-500/8 border border-emerald-500/30">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="grid w-7 h-7 place-items-center rounded-lg bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/40 shrink-0">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3l1.9 5.9 6.1.1-4.9 3.7 1.8 6-4.9-3.5-4.9 3.5 1.8-6L4 9l6.1-.1z"/></svg>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-bold text-emerald-300">Consiglio per il cliente</p>
+                          <p className="text-[10px] text-theme-text-muted truncate">Aggiungi un trattamento extra e proteggi la tua auto più a lungo</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={selectRecommended}
+                        className="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold hover:bg-emerald-500/25 transition-colors"
+                      >
+                        Seleziona consigliati
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Extras grid */}
+                  <div className="rounded-2xl border border-theme-border bg-theme-bg-tertiary/30 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-bold text-theme-text-primary">Servizi Extra (opzionali)</h4>
+                      <span className="text-[10px] text-theme-text-muted">
+                        {selectedExtras.length} di {availableExtras.length} selezionati
+                      </span>
+                    </div>
+
+                    {availableExtras.length === 0 ? (
+                      <div className="p-4 text-center text-theme-text-muted text-sm">
+                        Nessun extra disponibile per {selectedMainTab === 'lavaggio' ? 'Lavaggio' : 'Meccanica'}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+                        {availableExtras.map((extra, idx) => {
+                          const isToggled = selectedExtras.some(e => e.id === extra.id)
+                          const hasPriceOptions = !!(extra.price_options && extra.price_options.length > 0)
+                          const currentExtraOption = extraPriceOptions[extra.id]
+                          const displayPrice = currentExtraOption?.price ?? extra.price
+                          const recommended = idx < 2
+
+                          return (
+                            <div key={extra.id} className="space-y-1.5">
                               <button
-                                key={opt.label}
                                 type="button"
                                 onClick={() => {
-                                  setExtraPriceOptions(prev => ({ ...prev, [extra.id]: opt }))
+                                  if (isToggled) {
+                                    setSelectedExtras(prev => prev.filter(e => e.id !== extra.id))
+                                    setExtraPriceOptions(prev => {
+                                      const next = { ...prev }
+                                      delete next[extra.id]
+                                      return next
+                                    })
+                                  } else {
+                                    setSelectedExtras(prev => [...prev, extra])
+                                  }
                                 }}
-                                className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                                  currentExtraOption?.label === opt.label
-                                    ? 'bg-dr7-gold text-white border-dr7-gold font-bold'
-                                    : 'border-theme-border text-theme-text-secondary hover:border-dr7-gold'
+                                className={`relative w-full text-left p-3 rounded-xl border transition-all overflow-hidden ${
+                                  isToggled
+                                    ? 'border-emerald-500/60 bg-emerald-500/10 shadow-[0_0_20px_-8px_rgba(16,185,129,0.4)]'
+                                    : 'border-theme-border bg-theme-bg-primary hover:border-emerald-400/50 hover:bg-theme-bg-tertiary/40'
                                 }`}
                               >
-                                {opt.label} EUR {opt.price}
+                                {/* Recommended badge */}
+                                {recommended && (
+                                  <span className="absolute top-1.5 right-1.5 text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                                    Consigliato
+                                  </span>
+                                )}
+                                {/* Checkbox */}
+                                <div className="flex items-start justify-between mb-2">
+                                  <span className={`grid w-5 h-5 place-items-center rounded border-2 transition-all ${
+                                    isToggled
+                                      ? 'border-emerald-500 bg-emerald-500 text-white'
+                                      : 'border-theme-border bg-theme-bg-secondary'
+                                  }`}>
+                                    {isToggled && (
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.5} d="M5 13l4 4L19 7"/></svg>
+                                    )}
+                                  </span>
+                                  {/* Icon */}
+                                  <div className={`grid w-8 h-8 place-items-center rounded-lg ${
+                                    isToggled ? 'bg-emerald-500/20 text-emerald-300' : 'bg-theme-bg-tertiary text-theme-text-muted'
+                                  }`}>
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">{iconFor(extra.name)}</svg>
+                                  </div>
+                                </div>
+                                {/* Name + price */}
+                                <p className={`text-[12px] font-semibold leading-tight mb-0.5 ${isToggled ? 'text-emerald-100' : 'text-theme-text-primary'}`}>
+                                  {extra.name}
+                                </p>
+                                {extra.description && (
+                                  <p className="text-[10px] text-theme-text-muted leading-snug line-clamp-2 mb-1.5">{extra.description}</p>
+                                )}
+                                <p className={`text-[13px] font-bold tabular-nums ${isToggled ? 'text-emerald-300' : 'text-theme-text-primary'}`}>
+                                  € {displayPrice.toFixed(2)}
+                                </p>
                               </button>
-                            ))}
-                          </div>
-                        )}
-                        {/* Quantity selector for per-unit extras */}
-                        {isToggled && extra.price_unit && (
-                          <div className="flex items-center gap-2 ml-2">
-                            <span className="text-xs text-theme-text-muted">{extra.price_unit}:</span>
-                            <button
-                              type="button"
-                              onClick={() => setExtraQuantities(prev => ({ ...prev, [extra.id]: Math.max(1, (prev[extra.id] || 1) - 1) }))}
-                              className="w-7 h-7 rounded-full border border-theme-border text-theme-text-primary hover:border-dr7-gold flex items-center justify-center text-sm"
-                            >-</button>
-                            <span className="text-sm font-bold text-theme-text-primary w-6 text-center">{extraQuantities[extra.id] || 1}</span>
-                            <button
-                              type="button"
-                              onClick={() => setExtraQuantities(prev => ({ ...prev, [extra.id]: Math.min(10, (prev[extra.id] || 1) + 1) }))}
-                              className="w-7 h-7 rounded-full border border-theme-border text-theme-text-primary hover:border-dr7-gold flex items-center justify-center text-sm"
-                            >+</button>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
 
-              {/* Prime Flex */}
-              <div className="border border-theme-border rounded-lg p-4">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={primeFlex}
-                    onChange={(e) => setPrimeFlex(e.target.checked)}
-                    className="w-5 h-5 rounded border-theme-border accent-dr7-gold"
-                  />
-                  <div>
-                    <span className="text-sm font-semibold text-theme-text-primary">PRIME FLEX</span>
-                    <span className="text-xs text-dr7-gold ml-2">+EUR {PRIME_FLEX_PRICE.toFixed(2)}</span>
-                    <p className="text-xs text-theme-text-muted">Cancellazione gratuita — rimborso del 90% come credito DR7 Wallet</p>
+                              {/* Price option variants */}
+                              {isToggled && hasPriceOptions && (
+                                <div className="flex flex-wrap gap-1">
+                                  {extra.price_options!.map(opt => (
+                                    <button
+                                      key={opt.label}
+                                      type="button"
+                                      onClick={() => setExtraPriceOptions(prev => ({ ...prev, [extra.id]: opt }))}
+                                      className={`px-2 py-1 text-[10px] rounded-md border transition-colors ${
+                                        currentExtraOption?.label === opt.label
+                                          ? 'bg-emerald-500 text-white border-emerald-500 font-bold'
+                                          : 'border-theme-border text-theme-text-secondary hover:border-emerald-400'
+                                      }`}
+                                    >
+                                      {opt.label} · €{opt.price}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Quantity selector */}
+                              {isToggled && extra.price_unit && (
+                                <div className="flex items-center gap-1.5 justify-center">
+                                  <span className="text-[10px] text-theme-text-muted">{extra.price_unit}:</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setExtraQuantities(prev => ({ ...prev, [extra.id]: Math.max(1, (prev[extra.id] || 1) - 1) }))}
+                                    className="w-6 h-6 rounded-md border border-theme-border text-theme-text-primary hover:border-emerald-400 flex items-center justify-center text-xs"
+                                  >−</button>
+                                  <span className="text-xs font-bold text-theme-text-primary w-5 text-center tabular-nums">{extraQuantities[extra.id] || 1}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setExtraQuantities(prev => ({ ...prev, [extra.id]: Math.min(10, (prev[extra.id] || 1) + 1) }))}
+                                    className="w-6 h-6 rounded-md border border-theme-border text-theme-text-primary hover:border-emerald-400 flex items-center justify-center text-xs"
+                                  >+</button>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
-                </label>
+
+                  {/* Pacchetto Extra Completo CTA */}
+                  {availableExtras.length >= 3 && (
+                    <div className="rounded-xl border border-cyan-500/30 bg-gradient-to-r from-cyan-500/10 via-cyan-500/5 to-transparent p-3.5 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="grid w-8 h-8 place-items-center rounded-lg bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40 shrink-0">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-bold text-cyan-300">Pacchetto Extra Completo</p>
+                          <p className="text-[10px] text-theme-text-muted truncate">{allSelected ? 'Tutti gli extra sono già selezionati' : 'Aggiungi tutti gli extra al lavaggio'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <div className="text-right">
+                          <div className="text-[10px] text-theme-text-muted line-through tabular-nums">€{bundleSum.toFixed(2)}</div>
+                          <div className="text-[13px] font-bold text-cyan-300 tabular-nums">€{bundleDiscounted.toFixed(2)} <span className="text-[9px] text-emerald-400 font-mono">−15%</span></div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={selectAll}
+                          className="px-3 py-1.5 rounded-lg bg-cyan-500/20 text-cyan-200 border border-cyan-500/40 text-[11px] font-bold hover:bg-cyan-500/30 transition-colors whitespace-nowrap"
+                        >
+                          {allSelected ? 'Rimuovi tutti' : 'Aggiungi tutto'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Prime Flex */}
+                  <label className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-colors ${
+                    primeFlex ? 'border-emerald-500/50 bg-emerald-500/8' : 'border-theme-border bg-theme-bg-tertiary/30 hover:border-emerald-400/40'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={primeFlex}
+                      onChange={(e) => setPrimeFlex(e.target.checked)}
+                      className="w-5 h-5 rounded border-theme-border accent-emerald-500"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-theme-text-primary">PRIME FLEX</span>
+                        <span className="text-[11px] font-bold text-emerald-400">+ €{PRIME_FLEX_PRICE.toFixed(2)}</span>
+                      </div>
+                      <p className="text-[11px] text-theme-text-muted mt-0.5">Cancellazione gratuita — rimborso del 90% come credito DR7 Wallet</p>
+                    </div>
+                  </label>
+                </div>
+
+                {/* ──── RIGHT: Riepilogo Prenotazione ──── */}
+                <aside className="lg:col-span-1">
+                  <div className="rounded-2xl border border-theme-border bg-theme-bg-tertiary/30 p-4 lg:sticky lg:top-4">
+                    <div className="flex items-center gap-2 pb-3 border-b border-theme-border mb-3">
+                      <div className="grid w-6 h-6 place-items-center rounded-md bg-emerald-500/15 text-emerald-400">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                      </div>
+                      <h4 className="text-sm font-bold text-theme-text-primary">Riepilogo Prenotazione</h4>
+                    </div>
+
+                    {/* Veicolo */}
+                    {(vehicleMakeModel || vehiclePlate) && (
+                      <div className="pb-3 mb-3 border-b border-theme-border/60">
+                        <p className="text-[9px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1.5">Veicolo</p>
+                        <p className="text-sm font-bold text-theme-text-primary truncate">{vehicleMakeModel || '—'}</p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          {vehiclePlate && <span className="font-mono text-[10px] text-cyan-300 bg-cyan-500/10 px-1.5 py-0.5 rounded">{vehiclePlate}</span>}
+                          {vehicleCategory && (
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                              vehicleCategory === 'moto' ? 'bg-purple-500/20 text-purple-300'
+                                : vehicleCategory === 'urban' ? 'bg-blue-500/20 text-blue-300'
+                                : 'bg-orange-500/20 text-orange-300'
+                            }`}>
+                              {vehicleCategory === 'moto' ? 'MOTO' : vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Servizio selezionato */}
+                    {selectedService && (
+                      <div className="pb-3 mb-3 border-b border-theme-border/60">
+                        <p className="text-[9px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1.5">Servizio selezionato</p>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-theme-text-primary uppercase">{selectedService.name}</p>
+                            {selectedService.description && (
+                              <p className="text-[10px] text-theme-text-muted line-clamp-2 mt-0.5">{selectedService.description}</p>
+                            )}
+                          </div>
+                          <span className="text-sm font-bold text-emerald-300 tabular-nums shrink-0">
+                            €{selectedService.price_unit === 'custom'
+                              ? (parseFloat(customPrice) || 0).toFixed(2)
+                              : (selectedPriceOption?.price ?? selectedService?.price ?? 0).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Extra selezionati */}
+                    {selectedExtras.length > 0 && (
+                      <div className="pb-3 mb-3 border-b border-theme-border/60">
+                        <p className="text-[9px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1.5">
+                          Extra selezionati ({selectedExtras.length})
+                        </p>
+                        <div className="space-y-1">
+                          {selectedExtras.map(extra => {
+                            const ep = extraPriceOptions[extra.id]
+                            return (
+                              <div key={extra.id} className="flex items-center justify-between gap-2 text-[11px]">
+                                <span className="flex items-center gap-1.5 text-theme-text-secondary min-w-0">
+                                  <svg className="w-3 h-3 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
+                                  <span className="truncate">{extra.name}{ep ? ` (${ep.label})` : ''}</span>
+                                </span>
+                                <span className="font-mono text-emerald-300 tabular-nums shrink-0">€{(ep?.price ?? extra.price).toFixed(2)}</span>
+                              </div>
+                            )
+                          })}
+                          {primeFlex && (
+                            <div className="flex items-center justify-between gap-2 text-[11px]">
+                              <span className="flex items-center gap-1.5 text-theme-text-secondary">
+                                <svg className="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
+                                Prime Flex
+                              </span>
+                              <span className="font-mono text-emerald-300 tabular-nums">€{PRIME_FLEX_PRICE.toFixed(2)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Durata */}
+                    <div className="flex items-center justify-between text-[11px] mb-2">
+                      <span className="flex items-center gap-1.5 text-theme-text-muted">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" strokeWidth={1.8}/><path strokeWidth={1.8} strokeLinecap="round" d="M12 7v5l3 2"/></svg>
+                        Durata stimata
+                      </span>
+                      <span className="font-mono text-theme-text-primary tabular-nums">~ {getTotalDuration()} min</span>
+                    </div>
+
+                    {/* Totale */}
+                    <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-3 mb-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-emerald-300 uppercase tracking-wider">Totale</span>
+                        <span className="text-xl font-bold text-emerald-300 tabular-nums">€ {getTotal().toFixed(2)}</span>
+                      </div>
+                      <p className="text-[9px] text-theme-text-muted mt-0.5">IVA inclusa</p>
+                    </div>
+
+                    {/* Garanzia banner */}
+                    <div className="flex items-start gap-2 p-2.5 rounded-lg bg-theme-bg-secondary border border-theme-border">
+                      <div className="grid w-7 h-7 place-items-center rounded-lg bg-emerald-500/15 text-emerald-400 shrink-0">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-bold text-theme-text-primary">Soddisfatti o Rimborsati</p>
+                        <p className="text-[10px] text-theme-text-muted leading-snug">Garanzia Prime Wash su tutti i nostri servizi</p>
+                      </div>
+                    </div>
+                  </div>
+                </aside>
               </div>
 
               {/* ─── Supercar Experience picker (also rendered in step 3) ───
@@ -3367,19 +3625,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </div>
               )}
 
-              {/* Running total */}
-              <div className="p-3 bg-theme-bg-tertiary/50 rounded-lg flex justify-between items-center">
-                <span className="text-sm text-theme-text-muted">Durata: ~{getTotalDuration()} min</span>
-                <span className="text-lg font-bold text-dr7-gold">Totale: EUR {getTotal().toFixed(2)}</span>
-              </div>
-
               {/* Navigation */}
               <div className="flex justify-between items-center pt-4 border-t border-theme-border">
                 <button
                   type="button"
                   onClick={() => setCurrentStep(1)}
-                  className="px-4 py-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-semibold text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary transition-colors"
                 >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
                   Indietro
                 </button>
                 <div className="flex gap-2">
@@ -3388,24 +3641,26 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     onClick={() => {
                       setSelectedExtras([])
                       setExtraPriceOptions({})
-    setExtraQuantities({})
+                      setExtraQuantities({})
                       setCurrentStep(3)
                     }}
-                    className="px-4 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                    className="px-4 py-2.5 text-sm font-semibold text-theme-text-muted hover:text-theme-text-primary border border-theme-border rounded-lg hover:bg-theme-bg-tertiary transition-colors"
                   >
                     Salta Extra
                   </button>
                   <button
                     type="button"
                     onClick={() => setCurrentStep(3)}
-                    className="px-6 py-2 rounded-full font-semibold bg-dr7-gold hover:bg-[#0A8FA3] text-white transition-colors"
+                    className="flex items-center gap-1.5 px-6 py-2.5 rounded-lg font-bold text-sm bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-lg shadow-emerald-500/25 transition-all"
                   >
                     Avanti
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
                   </button>
                 </div>
               </div>
             </div>
-          )}
+            )
+          })()}
 
           {/* ===== STEP 3: Confirm & Book ===== */}
           {currentStep === 3 && (
@@ -3855,8 +4110,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           </div>
         ) : (
           <div className="rounded-lg overflow-hidden">
-            {/* Desktop table */}
-            <div className="block overflow-x-auto">
+            {/* Desktop table — nascosta sotto lg: su mobile mostriamo solo
+                le card sotto. Prima era "block overflow-x-auto" senza gate,
+                quindi su mobile uscivano ENTRAMBI (tabella + card) e la
+                tabella, con min-w-[700px], forzava lo scroll orizzontale. */}
+            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full min-w-[700px]">
                 <thead>
                   <tr>
