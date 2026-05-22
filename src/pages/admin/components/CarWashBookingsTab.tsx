@@ -3722,7 +3722,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         onChange={(e) => {
                           const method = e.target.value
                           const updates: Record<string, string> = { payment_method: method }
-                          if (isNexiPayByLink(method)) {
+                          // 2026-05-22: auto-reset a pending SOLO se non
+                          // gia' selezionato Pagato/Parziale. Cosi' admin
+                          // puo' marcare un lavaggio "Pagato" con Nexi Pay
+                          // by Link senza che il form forzi il pending.
+                          if (isNexiPayByLink(method)
+                              && formData.payment_status !== 'paid'
+                              && formData.payment_status !== 'partial') {
                             updates.payment_status = 'pending'
                             updates.amount_paid = '0'
                           }

@@ -8091,8 +8091,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     const method = e.target.value
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const updates: any = { payment_method: method }
-                    // Nexi Pay by Link = always pending until customer pays
-                    if (method === 'Nexi Pay by Link') {
+                    // 2026-05-22: auto-reset a pending SOLO se l'admin
+                    // non ha gia' selezionato un payment_status esplicito
+                    // diverso da pending. Cosi' "Pagato" + "Nexi Pay by
+                    // Link" (es. cliente ha gia' pagato via link manualmente
+                    // o via POS Nexi) NON forza il booking a pending.
+                    // Match anche label "Nexi - Pay by Link" via matcher
+                    // tollerante (era hardcoded a "Nexi Pay by Link" → mai matchava).
+                    if (isNexiPayByLink(method)
+                        && formData.payment_status !== 'paid'
+                        && formData.payment_status !== 'partial') {
                       updates.payment_status = 'pending'
                       updates.status = 'pending'
                       updates.amount_paid = '0'

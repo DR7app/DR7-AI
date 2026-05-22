@@ -123,9 +123,13 @@
 #     dedupe per entity scadenza/inactive falliva silenziosamente)
 #   - audit di quali template hanno is_enabled=true
 #   - test manuale con un sottoinsieme prima di riattivare
-# Lo schedule e' commentato cosi' Netlify NON registra il cron.
-# [functions."process-scheduled-system-messages-cron"]
-#   schedule = "*/2 * * * *"
+# 2026-05-22: cron RIATTIVATO. La direzione ha finalizzato il setup
+# Programmazione/handled_events di Messaggi di Sistema Pro e i fix anti
+# doppio-invio sono in produzione (commits 5493472f, ccb73b78). Gira
+# ogni 8 min — dedup via system_message_send_log evita re-send sullo
+# stesso (template, booking).
+[functions."process-scheduled-system-messages-cron"]
+  schedule = "*/8 * * * *"
 
 # DR7 Privilege — DISABILITATO dopo invio massivo non voluto.
 # Lo schedule è commentato così Netlify NON registra il cron.
