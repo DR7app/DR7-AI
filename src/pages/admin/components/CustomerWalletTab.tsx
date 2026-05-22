@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
+import WalletAnalytics from './WalletAnalytics'
 
 interface CustomerResult {
   id: string
@@ -96,95 +97,79 @@ export default function CustomerWalletTab() {
   async function loadAllWalletCustomers() {
     setLoadingAll(true)
     try {
-      // Load ALL customers
+      // Load ALL customers (admin-created + site-created) — used for phone /
+      // nome / cognome lookup later when stitching site users to a customer
+      // row.
       const response = await fetch('/.netlify/functions/list-customers')
       const result = await response.json()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const allCustomers: any[] = result.customers || []
 
-      // Load wallets via referral_participants → wallets chain
-      // 1. Get all referral participants with their phone
-      const { data: participants } = await supabase
-        .from('referral_participants')
-        .select('id, telefono')
-
-      // 2. Get all wallets with balance
-      const { data: wallets } = await supabase
-        .from('wallets')
-        .select('participant_id, balance_cents')
-
-      // Build phone → balance map
-      const phoneBalanceMap = new Map<string, number>()
-      if (participants && wallets) {
-        const participantMap = new Map<string, string>() // participant_id → telefono
-        for (const p of participants) {
-          if (p.telefono) participantMap.set(p.id, p.telefono)
-        }
-        for (const w of wallets) {
-          const phone = participantMap.get(w.participant_id)
-          if (phone && w.balance_cents > 0) {
-            phoneBalanceMap.set(phone, (phoneBalanceMap.get(phone) || 0) + w.balance_cents)
-          }
-        }
-      }
-
-      // Also load from user_credit_balance (website wallet — stores in EUR, not cents)
-      // Use service role via Netlify function to bypass RLS
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let creditBalances: any[] | null = null
+      // 2026-05-22: la vecchia logica leggeva da `wallets` (referral) +
+      // `user_credit_balance` (sito) ma "wallets" non esiste in questo
+      // schema e l'iterazione era SOLO su `customers_extended` (escludeva
+      // i 59 utenti auth con credito ma senza profilo customer → €730 di
+      // gap fra "Credit Wallet Clienti" e "Iscritti al Sito").
+      // Adesso: iteriamo gli UTENTI AUTH (via list-site-users, stessa
+      // sorgente di Iscritti al Sito) cosi' i due tab convergono sullo
+      // stesso totale. Customers senza user_id (admin-created, mai
+      // registrati al sito) restano in lista solo se hanno comunque
+      // un balance non-zero in qualche modo (oggi non succede; aggiungere
+      // qui in futuro se servisse).
+      let siteUsers: Array<{ id: string; email: string | null; balance: number; nome: string; cognome: string; telefono: string }> = []
       try {
         const token = (await supabase.auth.getSession()).data.session?.access_token
-        const cbRes = await fetch('/.netlify/functions/customer-wallet-admin', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ action: 'list_all_balances' })
+        const suRes = await fetch('/.netlify/functions/list-site-users', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
         })
-        const cbData = await cbRes.json()
-        if (cbData.success) creditBalances = cbData.balances
+        const suData = await suRes.json()
+        if (suData.success) siteUsers = suData.users || []
       } catch (e) {
-        logger.warn('Failed to load credit balances via function, trying direct:', e)
-      }
-      // Fallback: direct query
-      if (!creditBalances) {
-        const { data } = await supabase.from('user_credit_balance').select('user_id, balance')
-        creditBalances = data
+        logger.warn('Failed to load site users for wallet alignment:', e)
       }
 
-      // Build user_id → balance map (convert EUR to cents)
-      const userCreditMap = new Map<string, number>()
-      if (creditBalances) {
-        for (const cb of creditBalances) {
-          if (cb.balance && cb.balance > 0) {
-            userCreditMap.set(cb.user_id, Math.round(cb.balance * 100))
-          }
-        }
-      }
-
-      // Build user_id → customer_id map from customers_extended
-      const userIdToCustId = new Map<string, string>()
+      // Build user_id → customer_id map from customers_extended so the
+      // wallet row can link to a customer profile when one exists. Quando
+      // l'utente non ha customers_extended (caso orfano del €730 gap)
+      // usiamo l'auth user.id come "virtual customer id" — la riga del
+      // wallet appare comunque, l'admin puo' caricare il cliente in
+      // un secondo momento.
+      const userIdToCust = new Map<string, { id: string; nome?: string; cognome?: string; telefono?: string; email?: string; ragione_sociale?: string; denominazione?: string }>()
       for (const cust of allCustomers) {
-        if (cust.user_id) userIdToCustId.set(cust.user_id, cust.id)
+        if (cust.user_id) userIdToCust.set(cust.user_id, cust)
       }
 
-      // Map all customers with their wallet balance from BOTH systems
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mapped: CustomerResult[] = allCustomers.map((cust: any) => {
-        const phone = cust.telefono || null
-        // Referral wallet (by phone)
-        const referralBalance = phone ? (phoneBalanceMap.get(phone) || 0) : 0
-        // Website credit wallet (by user_id)
-        const creditBalance = cust.user_id ? (userCreditMap.get(cust.user_id) || 0) : 0
-        // Use the higher of the two (they shouldn't both have balance for same customer)
-        const totalBalance = referralBalance + creditBalance
+      const mapped: CustomerResult[] = siteUsers.map(u => {
+        const cust = userIdToCust.get(u.id)
+        const balanceEur = u.balance || 0
+        const balanceCents = Math.round(balanceEur * 100)
+        // Nome: customer profile first (real entered names), else fallback
+        // a auth row (nome/cognome/email come placeholder).
+        let fullName = ''
+        if (cust) {
+          fullName = (`${cust.nome || ''} ${cust.cognome || ''}`.trim()
+            || cust.ragione_sociale
+            || cust.denominazione
+            || cust.email
+            || 'N/A')
+        } else {
+          fullName = (`${u.nome || ''} ${u.cognome || ''}`.trim() || u.email || 'Utente senza profilo')
+        }
         return {
-          id: cust.id,
-          full_name: (`${cust.nome || ''} ${cust.cognome || ''}`.trim() || cust.ragione_sociale || cust.denominazione || 'N/A'),
-          email: cust.email || null,
-          phone,
-          balance_cents: totalBalance,
-          user_id: cust.user_id || null
+          id: cust?.id || u.id, // use customer id if available, else auth user id
+          full_name: fullName,
+          email: cust?.email || u.email || null,
+          phone: cust?.telefono || u.telefono || null,
+          balance_cents: balanceCents,
+          user_id: u.id,
         }
       })
+
+      // Add customers WITHOUT a user_id but with phone-based wallet credits.
+      // Today this is empty because the `wallets` table doesn't exist; kept
+      // as an explicit "no-op" placeholder so future referral-wallet code
+      // has a clear hook.
+      // (No additional rows added.)
 
       // Sort: customers with balance first, then alphabetical
       mapped.sort((a, b) => {
@@ -632,6 +617,14 @@ export default function CustomerWalletTab() {
           </div>
         </div>
       </div>
+
+      {/* Analytics: andamento ricariche & utilizzi + riepilogo wallet */}
+      <WalletAnalytics
+        totalBalanceCents={totalBalance}
+        customersCount={totalCount}
+        activeCount={activeCount}
+        inactiveCount={inactiveCount}
+      />
 
       {/* Search */}
       <div className="relative">
