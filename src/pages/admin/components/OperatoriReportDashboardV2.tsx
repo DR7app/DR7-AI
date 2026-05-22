@@ -233,6 +233,62 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
         try {
             const today = toRomeDate(new Date())
 
+            // 0. Backfill: ogni admin con stato='Attivo' (o null) DEVE avere
+            //    una riga operatori_persone, altrimenti non appare qui.
+            //    Pre-22/05/2026 invite-operator non scriveva su operatori_persone
+            //    e admin aggiunti in passato (es. primewash@dr7.app) restavano
+            //    invisibili nel report. Allineiamo anche `attivo` con admins.stato
+            //    cosi' chi e' Sospeso/Inattivo non riappare se gia' esisteva.
+            try {
+                const { data: adminsRaw } = await supabase
+                    .from('admins')
+                    .select('id, email, nome, stato')
+                const adminsList = (adminsRaw || []) as Array<{ id: string; email: string | null; nome: string | null; stato: string | null }>
+                const { data: existingOps } = await supabase
+                    .from('operatori_persone')
+                    .select('id, email, attivo')
+                const existingByEmail = new Map<string, { id: string; attivo: boolean }>()
+                for (const o of (existingOps || []) as Array<{ id: string; email: string | null; attivo: boolean }>) {
+                    if (o.email) existingByEmail.set(o.email.toLowerCase(), { id: o.id, attivo: o.attivo })
+                }
+                const inserts: Array<{ email: string; nome: string | null; cognome: null; ruolo: null; avatar_url: null; ore_target_giornaliere: number; attivo: boolean }> = []
+                const reactivates: string[] = []
+                const deactivates: string[] = []
+                for (const a of adminsList) {
+                    if (!a.email) continue
+                    const shouldBeActive = !a.stato || a.stato.toLowerCase() === 'attivo'
+                    const existing = existingByEmail.get(a.email.toLowerCase())
+                    if (!existing) {
+                        // Manca del tutto → backfill (solo se admin è Attivo)
+                        if (shouldBeActive) {
+                            inserts.push({
+                                email: a.email,
+                                nome: a.nome,
+                                cognome: null,
+                                ruolo: null,
+                                avatar_url: null,
+                                ore_target_giornaliere: 8,
+                                attivo: true,
+                            })
+                        }
+                    } else if (existing.attivo !== shouldBeActive) {
+                        if (shouldBeActive) reactivates.push(existing.id)
+                        else deactivates.push(existing.id)
+                    }
+                }
+                if (inserts.length > 0) {
+                    await supabase.from('operatori_persone').insert(inserts)
+                }
+                if (reactivates.length > 0) {
+                    await supabase.from('operatori_persone').update({ attivo: true }).in('id', reactivates)
+                }
+                if (deactivates.length > 0) {
+                    await supabase.from('operatori_persone').update({ attivo: false }).in('id', deactivates)
+                }
+            } catch (syncErr) {
+                console.warn('[OperatoriReport] admins→operatori_persone sync failed (non-fatal):', syncErr)
+            }
+
             // 1. Operatori attivi
             const { data: ops } = await supabase
                 .from('operatori_persone')

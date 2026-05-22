@@ -500,6 +500,22 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
       }
       setAdmins(prev => prev.map(a => a.id === adminId ? { ...a, [field]: value || null } : a))
       toast.success('Salvato')
+
+      // When `stato` changes, mirror it into operatori_persone.attivo so the
+      // Report Operatori dashboard (which reads operatori_persone, not admins)
+      // stays in sync. Before this, an admin set to "Inattivo" still appeared
+      // in the report — and an admin reactivated stayed hidden.
+      if (field === 'stato') {
+        const adminRow = admins.find(a => a.id === adminId)
+        const email = adminRow?.email
+        if (email) {
+          const isActive = (value || 'Attivo').toLowerCase() === 'attivo'
+          await supabase
+            .from('operatori_persone')
+            .update({ attivo: isActive })
+            .eq('email', email)
+        }
+      }
     } finally {
       updateFieldLockRef.current = false
     }
