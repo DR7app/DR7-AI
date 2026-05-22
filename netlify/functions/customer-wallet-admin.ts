@@ -370,6 +370,111 @@ const handler: Handler = async (event) => {
         };
       }
 
+      case 'wallet_stats': {
+        // Aggregate credit_transactions over the last 6 calendar months
+        // (Europe/Rome). Returns monthly buckets + per-user totals so the
+        // admin UI can render charts/columns without N+1 queries.
+        const svc = createClient(
+          process.env.VITE_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+
+        const sinceDate = new Date();
+        sinceDate.setMonth(sinceDate.getMonth() - 6);
+        sinceDate.setDate(1);
+        sinceDate.setHours(0, 0, 0, 0);
+
+        const allRows: any[] = [];
+        let from = 0;
+        const PAGE = 1000;
+        while (true) {
+          const { data, error } = await svc
+            .from('credit_transactions')
+            .select('user_id, amount, transaction_type, created_at')
+            .gte('created_at', sinceDate.toISOString())
+            .order('created_at', { ascending: false })
+            .range(from, from + PAGE - 1);
+          if (error) throw error;
+          if (!data || data.length === 0) break;
+          allRows.push(...data);
+          if (data.length < PAGE) break;
+          from += data.length;
+        }
+
+        const monthKey = (d: Date) =>
+          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+        const months: string[] = [];
+        const now = new Date();
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          months.push(monthKey(d));
+        }
+        const monthly: Record<string, { credits_cents: number; debits_cents: number }> = {};
+        for (const m of months) monthly[m] = { credits_cents: 0, debits_cents: 0 };
+
+        const perUser: Record<string, {
+          spent_cents: number;
+          recharged_cents: number;
+          last_used_at: string | null;
+          tx_count: number;
+        }> = {};
+
+        const nowMonthKey = monthKey(now);
+        let rechargedThisMonth = 0;
+        let totalRecharged = 0;
+        let totalSpent = 0;
+
+        for (const r of allRows) {
+          const amountCents = Math.round(Number(r.amount || 0) * 100);
+          const isCredit = r.transaction_type === 'credit' || amountCents > 0 && r.transaction_type !== 'debit';
+          const absCents = Math.abs(amountCents);
+          const d = new Date(r.created_at);
+          const mk = monthKey(d);
+
+          if (monthly[mk]) {
+            if (isCredit) monthly[mk].credits_cents += absCents;
+            else monthly[mk].debits_cents += absCents;
+          }
+
+          if (isCredit) {
+            totalRecharged += absCents;
+            if (mk === nowMonthKey) rechargedThisMonth += absCents;
+          } else {
+            totalSpent += absCents;
+          }
+
+          if (r.user_id) {
+            if (!perUser[r.user_id]) {
+              perUser[r.user_id] = { spent_cents: 0, recharged_cents: 0, last_used_at: null, tx_count: 0 };
+            }
+            const u = perUser[r.user_id];
+            u.tx_count += 1;
+            if (isCredit) u.recharged_cents += absCents;
+            else {
+              u.spent_cents += absCents;
+              if (!u.last_used_at || new Date(u.last_used_at) < d) u.last_used_at = r.created_at;
+            }
+          }
+        }
+
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: true,
+            months,
+            monthly,
+            per_user: perUser,
+            totals: {
+              recharged_cents: totalRecharged,
+              spent_cents: totalSpent,
+              recharged_this_month_cents: rechargedThisMonth,
+            },
+          }),
+        };
+      }
+
       default:
         return {
           statusCode: 400,
