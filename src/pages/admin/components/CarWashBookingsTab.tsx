@@ -2563,17 +2563,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         </div>
       </div>
 
-      {/* Sezione "Nuova Prenotazione Lavaggio" — visibile quando il wizard è attivo */}
-      {showForm && (
-        <div className="bg-theme-bg-secondary/50 rounded-2xl border border-theme-border p-4 lg:p-5">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h3 className="text-base lg:text-lg font-bold text-theme-text-primary">Nuova Prenotazione Lavaggio</h3>
-              <p className="text-xs lg:text-sm text-theme-text-muted mt-0.5">Crea una nuova prenotazione in pochi semplici passaggi</p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 2026-05-22: Sezione titolo "Nuova Prenotazione Lavaggio" RIMOSSA.
+          La hero header e' gia' renderizzata DENTRO il wizard (step 0,
+          line ~2622) — averla anche fuori produceva un titolo duplicato
+          come da feedback. */}
 
       {/* Search Bar — nascosta durante la creazione di una nuova prenotazione
           (serve solo per cercare nello storico delle prenotazioni esistenti). */}
@@ -2624,7 +2617,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             </div>
           )}
 
-          {/* Step Indicator — labels under sphere, green = current/done, ring on active */}
+          {/* Step Indicator — 2026-05-22: ricolorato a cyan come da mockup */}
           <div className="flex items-center justify-center mb-8">
             {[
               { step: 0 as const, label: 'Veicolo', sub: 'Dati del veicolo' },
@@ -2641,9 +2634,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 >
                   <div className={`relative w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
                     step === currentStep
-                      ? 'bg-emerald-500 text-white ring-4 ring-emerald-500/25 shadow-lg shadow-emerald-500/30'
+                      ? 'bg-cyan-500 text-white ring-4 ring-cyan-500/25 shadow-lg shadow-cyan-500/30'
                       : step < currentStep
-                        ? 'bg-emerald-500/80 text-white'
+                        ? 'bg-cyan-500/80 text-white'
                         : 'bg-theme-bg-tertiary text-theme-text-muted border border-theme-border'
                   }`}>
                     {step < currentStep ? '✓' : step + 1}
@@ -2656,7 +2649,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   </span>
                 </button>
                 {idx < 3 && (
-                  <div className={`w-12 sm:w-20 h-0.5 mx-2 mb-7 ${step < currentStep ? 'bg-emerald-500/60' : 'bg-theme-border'}`} />
+                  <div className={`w-12 sm:w-20 h-0.5 mx-2 mb-7 ${step < currentStep ? 'bg-cyan-500/60' : 'bg-theme-border'}`} />
                 )}
               </div>
             ))}
@@ -2672,7 +2665,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     <h3 className="text-lg font-bold text-theme-text-primary">Identificazione Veicolo</h3>
                     <p className="text-xs text-theme-text-muted mt-0.5">Inserisci la targa per identificare il veicolo.</p>
                   </div>
-                  <span className="text-[10px] uppercase tracking-wider text-emerald-400 font-semibold px-2 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30">
+                  <span className="text-[10px] uppercase tracking-wider text-cyan-400 font-semibold px-2 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 inline-flex items-center gap-1.5">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>
                     Riconoscimento automatico attivo
                   </span>
                 </div>
@@ -2707,8 +2701,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           }}
                           className={`px-4 py-3 rounded-xl font-semibold text-sm border transition-all ${
                             active
-                              ? 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-500/25'
-                              : 'bg-theme-bg-primary text-theme-text-secondary border-theme-border hover:border-emerald-400/60 hover:text-theme-text-primary'
+                              ? 'bg-cyan-500 text-white border-cyan-500 shadow-lg shadow-cyan-500/25'
+                              : 'bg-theme-bg-primary text-theme-text-secondary border-theme-border hover:border-cyan-400/60 hover:text-theme-text-primary'
                           }`}
                         >
                           {t.label}
@@ -2731,7 +2725,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         value={vehiclePlate}
                         onChange={(e) => setVehiclePlate(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
                         placeholder="Es. AB123CD"
-                        className="w-full pl-11 pr-4 py-3.5 bg-theme-bg-primary border border-theme-border rounded-xl text-theme-text-primary font-mono text-base tracking-widest uppercase placeholder:text-theme-text-muted/60 placeholder:tracking-normal focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/20 transition-colors"
+                        className="w-full pl-11 pr-4 py-3.5 bg-theme-bg-primary border border-theme-border rounded-xl text-theme-text-primary font-mono text-base tracking-widest uppercase placeholder:text-theme-text-muted/60 placeholder:tracking-normal focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/20 transition-colors"
                         maxLength={10}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && vehiclePlate.length >= 5 && !lookingUpTarga) {
@@ -2749,7 +2743,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       className={`px-6 py-3.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${
                         vehiclePlate.length < 5 || lookingUpTarga
                           ? 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
-                          : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25 active:scale-[0.98]'
+                          : 'bg-cyan-500 hover:bg-cyan-600 text-white shadow-lg shadow-cyan-500/25 active:scale-[0.98]'
                       }`}
                     >
                       {lookingUpTarga ? 'Ricerca...' : '⊛ Riconosci Veicolo'}
@@ -2977,7 +2971,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   }}
                   className={`px-7 py-3 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${
                     targaVehicleInfo
-                      ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25 active:scale-[0.98]'
+                      ? 'bg-cyan-500 hover:bg-cyan-600 text-white shadow-lg shadow-cyan-500/25 active:scale-[0.98]'
                       : 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
                   }`}
                 >
@@ -2985,11 +2979,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </button>
               </div>
 
-              {/* Feature trust cards (visibili sullo step 0) */}
+              {/* Feature trust cards (visibili sullo step 0) — 2026-05-22
+                  riarmonizzate con palette cyan/emerald/violet del mockup. */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3">
                 <div className="rounded-xl border border-theme-border bg-theme-bg-tertiary/30 p-4">
-                  <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-3">
-                    <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                  <div className="w-9 h-9 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center mb-3">
+                    <svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                   </div>
                   <h4 className="text-sm font-bold text-theme-text-primary">Riconoscimento Automatico</h4>
                   <p className="text-xs text-theme-text-muted mt-1">Inserisci la targa e recupereremo tutti i dati del veicolo in automatico.</p>
@@ -3002,8 +2997,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   <p className="text-xs text-theme-text-muted mt-1">I tuoi dati e quelli del cliente sono protetti. La prenotazione richiede pochi secondi.</p>
                 </div>
                 <div className="rounded-xl border border-theme-border bg-theme-bg-tertiary/30 p-4">
-                  <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-3">
-                    <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  <div className="w-9 h-9 rounded-lg bg-violet-500/10 border border-violet-500/30 flex items-center justify-center mb-3">
+                    <svg className="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                   </div>
                   <h4 className="text-sm font-bold text-theme-text-primary">Storico Prenotazioni</h4>
                   <p className="text-xs text-theme-text-muted mt-1">Tutte le tue prenotazioni saranno salvate nello storico per consultazioni future.</p>
