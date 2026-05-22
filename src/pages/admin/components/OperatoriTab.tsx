@@ -4,7 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import { formatAdminLog, formatEntityLabel } from '../../../utils/formatAdminLog'
 import OperatoriReportDashboardV2 from './OperatoriReportDashboardV2'
 import PayrollPeriodoView from './PayrollPeriodoView'
-import InviteOperatoreModal from './InviteOperatoreModal'
+import InviteOperatoreModal, { PERMISSION_SECTIONS } from './InviteOperatoreModal'
 import ContrattiOperatoreView from './ContrattiOperatoreView'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 
@@ -724,6 +724,49 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
                       )
                     })}
                   </div>
+
+                  {/* 2026-05-22: Editor accesso tab (catalogo identico a quello
+                      della modale "Aggiungi Operatore"). Riusa toggleAdminRole
+                      perché scrive sullo stesso array permissions[]. Cosi'
+                      l'admin puo' allargare/restringere gli accessi di un
+                      operatore esistente senza ricrearlo. */}
+                  <h4 className="text-sm font-semibold text-theme-text-primary mt-5 mb-1">Accesso alle Tab</h4>
+                  <p className="text-[12px] text-theme-text-muted mb-3">
+                    Tab dell&apos;admin a cui questo operatore può accedere. Spunta = visibile in sidebar.
+                    Stesso catalogo della modale di invito. Salvataggio automatico.
+                  </p>
+                  {(() => {
+                    const currentPerms = Array.isArray(selected.permissions) ? selected.permissions : []
+                    const hasWildcard = currentPerms.includes('*')
+                    if (hasWildcard) {
+                      return (
+                        <div className="text-[12px] text-amber-500 bg-amber-500/5 border border-amber-500/20 rounded-md px-3 py-2 mb-3">
+                          Questo operatore ha il wildcard <code>*</code> (accesso completo). Per limitarlo, rimuovi prima il wildcard editando la riga in Supabase.
+                        </div>
+                      )
+                    }
+                    return PERMISSION_SECTIONS.map(section => (
+                      <div key={section.name} className="mb-4">
+                        <div className="text-[11px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1.5">{section.name}</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                          {section.tabs.map(t => {
+                            const checked = currentPerms.includes(t.key)
+                            return (
+                              <label key={t.key} className="flex items-start gap-2 px-2.5 py-1.5 rounded-md border border-theme-border bg-theme-bg-primary cursor-pointer hover:border-dr7-gold/40 transition-colors">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleAdminRole(selected, t.key)}
+                                  className="mt-0.5"
+                                />
+                                <span className="text-[12px] text-theme-text-primary leading-snug">{t.label}</span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))
+                  })()}
 
                   {/* Nascondi UI — toggle per togliere singoli elementi UI a
                       questo operatore SENZA modificare i suoi permessi reali.

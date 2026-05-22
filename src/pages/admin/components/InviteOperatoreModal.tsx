@@ -7,7 +7,7 @@ import Input from './Input'
 // Permission catalog grouped by section. Mirrors the navigation structure
 // in AdminDashboard.tsx so the toggles match what the operator will see in
 // the sidebar after they accept the invite.
-const PERMISSION_SECTIONS: { name: string; tabs: { key: string; label: string }[] }[] = [
+export const PERMISSION_SECTIONS: { name: string; tabs: { key: string; label: string }[] }[] = [
   { name: 'Noleggio', tabs: [
     { key: 'reservations', label: 'Prenotazioni (lista + pagamenti)' },
     { key: 'reservations-preventivi', label: 'Preventivi (solo creazione, niente lista prenotazioni)' },
