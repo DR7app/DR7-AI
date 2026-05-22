@@ -435,9 +435,15 @@ export default function ReportsTab() {
               const badge = getPaymentBadge(b.payment_status, b.payment_method)
               const pen = b.penalty_amount || 0
               const dan = b.danni_amount || 0
-              const revInMonth = b.billable_days > 0
-                ? Math.round((b.total_price / b.billable_days) * b.days_in_month * 100) / 100
+              // 2026-05-22: Ricavo Mese = noleggio proporzionato + penali + danni.
+              // Prima sommavamo solo il noleggio: l'admin vedeva €1579 invece di
+              // €1579+€880 di penali = €2459. Penali/danni sono one-time charges,
+              // si sommano interi (no proration) — coerente con il totale veicolo
+              // che gia' include penaltyRevenue + danniRevenue sul backend.
+              const rentalInMonth = b.billable_days > 0
+                ? (b.total_price / b.billable_days) * b.days_in_month
                 : b.total_price
+              const revInMonth = Math.round((rentalInMonth + pen + dan) * 100) / 100
               return (
                 <div
                   key={b.booking_id}
@@ -589,7 +595,10 @@ export default function ReportsTab() {
                           {dan > 0 ? formatCurrency(dan) : '—'}
                         </td>
                         <td className="text-right py-1 px-2 text-dr7-gold">
-                          {formatCurrency(b.billable_days > 0 ? (b.total_price / b.billable_days) * b.days_in_month : 0)}
+                          {formatCurrency(
+                            (b.billable_days > 0 ? (b.total_price / b.billable_days) * b.days_in_month : b.total_price)
+                            + pen + dan
+                          )}
                         </td>
                       </tr>
                     )
