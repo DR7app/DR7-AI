@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { formatRomeDate } from '../../../utils/timezoneUtils'
@@ -109,9 +110,15 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
   const dropoffDate = new Date(booking.dropoff_date)
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-theme-overlay backdrop-blur-sm" onClick={onClose}>
-      <div
-        className="bg-theme-bg-secondary border border-theme-border rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4"
+    // 2026-05-22: pannello dettagli ANCORATO a destra (slide-in da destra)
+    // invece che modale centrata. Click sull'overlay continua a chiudere.
+    <div className="fixed inset-0 z-[200] flex justify-end bg-theme-overlay/60 backdrop-blur-sm" onClick={onClose}>
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+        className="bg-theme-bg-secondary border-l border-theme-border shadow-[-10px_0_30px_-10px_rgba(0,0,0,0.5)] w-full max-w-md h-full overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -392,7 +399,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
             )}
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   )
 }
