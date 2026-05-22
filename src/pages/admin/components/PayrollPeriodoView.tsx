@@ -140,7 +140,28 @@ export default function PayrollPeriodoView() {
                 let totalMinLav = 0
                 let minOrdinari = 0
                 let minStraord = 0
-                const oraria = Number(c?.paga_oraria_eur || 0)
+                // 2026-05-22: paga oraria DERIVATA dal pacchetto contrattuale
+                // se non c'e' paga_oraria_eur esplicita. Es. contratto
+                // €1000/sett + 47h/sett → derived = 21.28€/h.
+                const oraExplicit = Number(c?.paga_oraria_eur || 0)
+                const stipendio = Number(c?.stipendio_mensile_eur || 0)
+                const freq = c?.stipendio_frequenza
+                const orariaDerived = (() => {
+                    if (oraExplicit > 0) return 0
+                    if (stipendio <= 0) return 0
+                    const settH = Number(c?.ore_target_settimanali || 0)
+                    const mensH = Number(c?.ore_target_mensili || 0)
+                    const giornH = Number(c?.ore_target_giornaliere || 0)
+                    if (freq === 'settimanale' && settH > 0) return stipendio / settH
+                    if (freq === 'mensile' && mensH > 0) return stipendio / mensH
+                    if (freq === 'mensile' && settH > 0) return stipendio / (settH * 4.33)
+                    if (freq === 'mensile' && giornH > 0) return stipendio / (giornH * 22)
+                    if (settH > 0) return stipendio / settH
+                    if (mensH > 0) return stipendio / mensH
+                    if (giornH > 0) return stipendio / (giornH * 22)
+                    return 0
+                })()
+                const oraria = oraExplicit > 0 ? oraExplicit : orariaDerived
                 const straord = Number(c?.paga_straordinario_eur || 0)
                 // 2026-05-22: soglia straordinari = priorita'
                 // 1) ore_soglia_straordinario esplicito sul contratto

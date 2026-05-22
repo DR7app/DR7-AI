@@ -1100,6 +1100,14 @@ interface CalcolaPagaContract {
     paga_straordinario_eur: number | null
     straordinario_abilitato: boolean
     ore_soglia_straordinario: number | null
+    // 2026-05-22: target ore per derivare la paga oraria proporzionale
+    // se admin ha inserito solo lo stipendio settimanale/mensile + le ore
+    // settimanali/mensili (senza specificare paga_oraria_eur):
+    //   weekly:  hourly_derived = stipendio / ore_target_settimanali
+    //   mensile: hourly_derived = stipendio / ore_target_mensili
+    ore_target_giornaliere: number | null
+    ore_target_settimanali: number | null
+    ore_target_mensili: number | null
 }
 
 function CalcolaPagaSection({
@@ -1128,7 +1136,7 @@ function CalcolaPagaSection({
             setLoading(true)
             const [{ data: cData }, { data: oData }] = await Promise.all([
                 supabase.from('operatore_contratto')
-                    .select('stipendio_mensile_eur, stipendio_frequenza, paga_oraria_eur, paga_straordinario_eur, straordinario_abilitato, ore_soglia_straordinario')
+                    .select('stipendio_mensile_eur, stipendio_frequenza, paga_oraria_eur, paga_straordinario_eur, straordinario_abilitato, ore_soglia_straordinario, ore_target_giornaliere, ore_target_settimanali, ore_target_mensili')
                     .eq('operatore_id', operatoreId)
                     .eq('attivo', true)
                     .maybeSingle(),
@@ -1149,7 +1157,34 @@ function CalcolaPagaSection({
 
     const calc = useMemo(() => {
         const sogliaMin = Math.round((contract?.ore_soglia_straordinario ?? oreTargetGiornaliere) * 60)
-        const oraria = Number(contract?.paga_oraria_eur || 0)
+        // 2026-05-22: paga oraria DERIVATA proporzionalmente dal pacchetto
+        // contrattuale se l'admin non ha inserito un valore esplicito.
+        //   Esempio: contratto 47h/sett, €1000/sett → €21.28/h derivato.
+        //   Cosi' il paycheck del range = ore_lavorate × hourly_derived.
+        // L'admin puo' SEMPRE sovrascrivere mettendo paga_oraria_eur
+        // diretto: ha priorita' su quello derivato.
+        const stipendio = Number(contract?.stipendio_mensile_eur || 0)
+        const freq = contract?.stipendio_frequenza
+        const oraExplicit = Number(contract?.paga_oraria_eur || 0)
+        const orariaDerived = (() => {
+            if (oraExplicit > 0) return 0  // priorita' al valore esplicito
+            if (stipendio <= 0) return 0
+            const settH = Number(contract?.ore_target_settimanali || 0)
+            const mensH = Number(contract?.ore_target_mensili || 0)
+            const giornH = Number(contract?.ore_target_giornaliere || 0)
+            // Se freq è esplicita usa quella; altrimenti deduci dal field non-zero.
+            if (freq === 'settimanale' && settH > 0) return stipendio / settH
+            if (freq === 'mensile' && mensH > 0) return stipendio / mensH
+            if (freq === 'mensile' && settH > 0) return stipendio / (settH * 4.33)
+            if (freq === 'mensile' && giornH > 0) return stipendio / (giornH * 22)
+            if (settH > 0) return stipendio / settH
+            if (mensH > 0) return stipendio / mensH
+            if (giornH > 0) return stipendio / (giornH * 22)
+            return 0
+        })()
+        const oraria = oraExplicit > 0 ? oraExplicit : orariaDerived
+        const oraSource: 'explicit' | 'derived' | 'none' =
+            oraExplicit > 0 ? 'explicit' : (orariaDerived > 0 ? 'derived' : 'none')
         const straord = Number(contract?.paga_straordinario_eur || 0)
         // 2026-05-18: straordinari calcolati AUTOMATICAMENTE se il contratto
         // ha sia paga_straordinario_eur > 0 sia ore_soglia_straordinario > 0.
@@ -1179,7 +1214,7 @@ function CalcolaPagaSection({
         const pagaStraord = (minStraord / 60) * straord
         const correzione = -(oreRecMin / 60) * oraria // recuperare = decurta
         const totale = pagaOrd + pagaStraord + correzione
-        return { sogliaMin, minOrdinari, minStraord, pagaOrd, pagaStraord, correzione, totale, straordEnabled, oraria, straord }
+        return { sogliaMin, minOrdinari, minStraord, pagaOrd, pagaStraord, correzione, totale, straordEnabled, oraria, oraSource, straord }
     }, [days, contract, oreRecMin, oreTargetGiornaliere])
 
     async function saveOreRecuperare() {
@@ -1201,6 +1236,9 @@ function CalcolaPagaSection({
     if (!isDirezione) return null
     if (loading) return <p className="text-[11px] text-theme-text-muted py-2">Caricamento Calcola Paga…</p>
 
+    // Niente contratto = niente paga_oraria esplicita E niente stipendio
+    // (ne mensile ne settimanale). Con stipendio + ore target, riusciamo
+    // a derivare l'oraria proporzionalmente.
     const noContract = !contract || (!contract.paga_oraria_eur && !contract.stipendio_mensile_eur)
     const eur = (n: number) => `€${n.toFixed(2)}`
 
@@ -1222,6 +1260,9 @@ function CalcolaPagaSection({
                     <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-theme-text-muted">
                         <span className="px-2 py-0.5 rounded bg-theme-bg-secondary border border-theme-border">
                             Ordinaria: <strong className="text-theme-text-primary">€{calc.oraria.toFixed(2)}/h</strong>
+                            {calc.oraSource === 'derived' && (
+                                <span className="ml-1 text-amber-400" title={`Derivata da stipendio ${contract?.stipendio_frequenza ?? ''} €${contract?.stipendio_mensile_eur} / ore target`}>(derivata)</span>
+                            )}
                         </span>
                         {calc.straordEnabled && (
                             <>
