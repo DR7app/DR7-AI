@@ -3954,20 +3954,47 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         placeholder="0"
       />
 
-      {/* Insurance */}
+      {/* Insurance — 2026-05-22: convertito da dropdown a lista di radio
+          card visibili sempre. Prima era un Select e veniva saltato spesso
+          (l'operatore non lo apriva e il preventivo partiva senza assicurazione). */}
       {insuranceOptions.length > 0 && (
-        <Select
-          label="Assicurazione"
-          value={form.insurance_option}
-          onChange={(e) => setForm(prev => ({ ...prev, insurance_option: e.target.value }))}
-          options={[
-            { value: '', label: 'Nessuna assicurazione' },
-            ...insuranceOptions.map(i => ({
-              value: i.id,
-              label: `${i.label} (${formatEur(i.pricePerDay)}/giorno)`
-            }))
-          ]}
-        />
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-theme-text-primary">Assicurazione</p>
+            {!form.insurance_option && (
+              <span className="text-[11px] text-amber-400 font-medium">⚠ Nessuna assicurazione selezionata</span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <label className={`flex items-center gap-3 cursor-pointer p-2 rounded-lg border transition-colors ${form.insurance_option === '' ? 'border-amber-400/60 bg-amber-500/5' : 'border-theme-border/50 hover:bg-theme-bg-tertiary/30'}`}>
+              <input
+                type="radio"
+                name="insurance_option"
+                checked={form.insurance_option === ''}
+                onChange={() => setForm(prev => ({ ...prev, insurance_option: '' }))}
+                className="w-4 h-4 accent-dr7-gold"
+              />
+              <span className="text-sm text-theme-text-primary">Nessuna assicurazione</span>
+            </label>
+            {insuranceOptions.map(i => {
+              const checked = form.insurance_option === i.id
+              return (
+                <label key={i.id} className={`flex items-center gap-3 cursor-pointer p-2 rounded-lg border transition-colors ${checked ? 'border-dr7-gold/60 bg-dr7-gold/5' : 'border-theme-border/50 hover:bg-theme-bg-tertiary/30'}`}>
+                  <input
+                    type="radio"
+                    name="insurance_option"
+                    checked={checked}
+                    onChange={() => setForm(prev => ({ ...prev, insurance_option: i.id }))}
+                    className="w-4 h-4 accent-dr7-gold"
+                  />
+                  <span className="text-sm text-theme-text-primary">
+                    {i.label} <span className="text-theme-text-muted">({formatEur(i.pricePerDay)}/giorno)</span>
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+        </div>
       )}
 
       {/* Extras Toggles */}
