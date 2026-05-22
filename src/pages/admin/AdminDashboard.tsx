@@ -153,6 +153,28 @@ export default function AdminDashboard() {
   // while loading so we don't flash "Accesso non autorizzato" on mount.
   const isTabRestricted = (tab: TabType) => !hasPermission(tab)
 
+  // 2026-05-22: dopo il caricamento di useAdminRole, se l'activeTab
+  // (default 'reservations' o quello salvato in sessionStorage) non e'
+  // accessibile a questo operatore, redirigi alla PRIMA tab autorizzata.
+  // Cosi' un utente con solo carwash + customers non atterra mai sulla
+  // pagina Noleggio "vuota".
+  useEffect(() => {
+    if (roleLoading) return
+    if (hasPermission(activeTab)) return
+    // Trova la prima tab nel menu per cui l'operatore ha permesso.
+    for (const s of SECTIONS) {
+      for (const t of s.tabs) {
+        if (t.superadminOnly && adminRole !== 'superadmin') continue
+        if (hasPermission(t.permKey || t.tab)) {
+          _setActiveTab(t.tab)
+          try { sessionStorage.setItem(ACTIVE_TAB_KEY, t.tab) } catch { /* ignore */ }
+          return
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roleLoading])
+
   // "Collaboratore" = utente esterno che ha SOLO accesso a creare
   // preventivi, NON ha permesso sulle prenotazioni complete.
   const isCollaboratore = hasPermission('reservations-preventivi') && !hasPermission('reservations')
@@ -335,7 +357,12 @@ export default function AdminDashboard() {
   const visibleSectionCount = SECTIONS.filter(s =>
     s.tabs.some(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin'))
   ).length
-  const hideSidebar = visibleSectionCount <= 1 || isCollaboratore
+  // 2026-05-22: nascondi la sidebar anche con 2-3 sezioni visibili.
+  // Operatori con 'Prime Wash + Clienti' (caso tipico per receptionist
+  // lavaggio) vedevano la sidebar verticale meta' vuota; meglio una
+  // barra orizzontale di tab piatta in alto. Superadmin/direzione
+  // conservano la sidebar perche' hanno tutte le sezioni.
+  const hideSidebar = visibleSectionCount <= 3 || isCollaboratore
   // Lista piatta di tutte le tab accessibili (per collaboratori). Tiene il
   // primo entry per ogni (tab + permKey) cosi' Preventivi sotto Noleggio
   // e Centralina Pro readonly compaiono nello stesso bar. Label di
