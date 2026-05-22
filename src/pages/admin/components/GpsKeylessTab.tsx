@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { motion } from 'framer-motion'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts'
 import { supabase } from '../../../supabaseClient'
 import { useTheme } from '../../../contexts/ThemeContext'
@@ -143,7 +144,9 @@ function StatusDot({ status, size = 8 }: { status: VehicleStatus; size?: number 
 
 function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-zinc-200 bg-white dark:border-cyan-500/10 dark:bg-zinc-950/70 backdrop-blur-sm shadow-[0_1px_0_rgba(255,255,255,0.04)_inset] ${className}`}>
+    <div
+      className={`relative rounded-xl backdrop-blur-xl bg-white/95 ring-1 ring-zinc-200/70 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-12px_rgba(15,23,42,0.08)] dark:bg-gradient-to-b dark:from-zinc-900/70 dark:via-zinc-950/60 dark:to-zinc-950/80 dark:ring-cyan-400/5 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_8px_32px_-16px_rgba(0,0,0,0.8),0_0_40px_-20px_rgba(34,211,238,0.25)] ${className}`}
+    >
       {children}
     </div>
   )
@@ -160,22 +163,31 @@ const KPI_COLORS = {
 
 type KpiColor = keyof typeof KPI_COLORS
 
-function KpiCard({ label, value, sub, icon, color = 'cyan' }: {
-  label: string; value: string; sub?: string; icon: React.ReactNode; color?: KpiColor
+function KpiCard({ label, value, sub, icon, color = 'cyan', index = 0 }: {
+  label: string; value: string; sub?: string; icon: React.ReactNode; color?: KpiColor; index?: number
 }) {
   const c = KPI_COLORS[color]
   return (
-    <div className={`relative overflow-hidden rounded-xl ring-1 ${c.ring} bg-gradient-to-br from-white via-white to-zinc-50 dark:from-zinc-950/80 dark:via-zinc-950/60 dark:to-zinc-900/40 px-3 py-2.5 transition-all hover:ring-2 hover:scale-[1.01] hover:shadow-lg hover:shadow-cyan-500/5`}>
-      <div className={`absolute -top-4 -right-4 w-16 h-16 ${c.glow} rounded-full blur-2xl pointer-events-none`}/>
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: index * 0.04, ease: [0.16, 1, 0.3, 1] }}
+      whileHover={{ y: -2 }}
+      className={`group relative overflow-hidden rounded-xl ring-1 ${c.ring} bg-gradient-to-b from-white to-zinc-50/80 backdrop-blur-xl dark:from-zinc-900/80 dark:via-zinc-950/70 dark:to-black/60 px-3 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_0_24px_-12px_rgba(34,211,238,0.4)] transition-shadow hover:shadow-[0_8px_24px_-12px_rgba(34,211,238,0.3)] dark:hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_40px_-12px_rgba(34,211,238,0.5)]`}
+    >
+      {/* Ambient glow */}
+      <div className={`absolute -top-8 -right-8 w-24 h-24 ${c.glow} rounded-full blur-3xl pointer-events-none opacity-70 group-hover:opacity-100 transition-opacity`}/>
+      {/* Top edge highlight */}
+      <div className="absolute inset-x-3 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/20 to-transparent opacity-0 dark:opacity-100 pointer-events-none"/>
       <div className="relative flex items-center gap-2.5">
-        <div className={`grid h-8 w-8 place-items-center rounded-lg ring-1 ${c.ic} shrink-0`}>{icon}</div>
+        <div className={`grid h-8 w-8 place-items-center rounded-lg ring-1 ${c.ic} shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]`}>{icon}</div>
         <div className="min-w-0">
-          <div className={`text-[9px] uppercase tracking-[0.14em] font-bold ${c.text} truncate`}>{label}</div>
-          <div className={`text-base sm:text-lg font-bold leading-tight ${c.val} tabular-nums`}>{value}</div>
-          {sub && <div className="text-[10px] text-zinc-500 dark:text-zinc-500 truncate mt-0.5">{sub}</div>}
+          <div className={`text-[8.5px] uppercase tracking-[0.18em] font-bold ${c.text} truncate`}>{label}</div>
+          <div className={`text-lg sm:text-xl font-bold leading-none mt-0.5 ${c.val} tabular-nums tracking-tight`}>{value}</div>
+          {sub && <div className="text-[9.5px] text-zinc-500 dark:text-zinc-500 truncate mt-1 font-mono">{sub}</div>}
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -223,9 +235,11 @@ function VehicleListItem({ v, selected, onSelect }: { v: SfVehicle; selected: bo
 
 function SectionTitle({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-zinc-200 dark:border-cyan-500/10 shrink-0">
-      <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-700 dark:text-cyan-200/90 truncate">{children}</h3>
+    <div className="flex items-center justify-between gap-2 px-3 py-2 shrink-0 relative">
+      <h3 className="text-[9px] font-bold uppercase tracking-[0.18em] text-zinc-500 dark:text-cyan-300/70 truncate">{children}</h3>
       {right}
+      {/* Subtle bottom separator with gradient */}
+      <div className="absolute inset-x-3 bottom-0 h-px bg-gradient-to-r from-transparent via-zinc-200 to-transparent dark:via-cyan-500/10 pointer-events-none"/>
     </div>
   )
 }
@@ -387,22 +401,31 @@ export default function GpsKeylessTab() {
 
   return (
     <div
-      className="text-zinc-900 dark:text-white -mx-3 -my-3 sm:-mx-6 sm:-my-6 lg:-mx-8 lg:-my-8 px-2 py-2 sm:px-3 sm:py-3 flex flex-col gap-2 overflow-hidden"
+      className="relative text-zinc-900 dark:text-white -mx-3 -my-3 sm:-mx-6 sm:-my-6 lg:-mx-8 lg:-my-8 px-2 py-2 sm:px-3 sm:py-3 flex flex-col gap-2 overflow-hidden"
       style={{
         height: 'calc(100vh - 110px)',
         background: theme === 'dark'
-          ? 'linear-gradient(135deg, #000000 0%, #09090b 50%, #18181b 100%)'
-          : '#ffffff',
+          ? 'radial-gradient(ellipse 1200px 600px at 20% 0%, rgba(8,47,73,0.45), transparent 60%), radial-gradient(ellipse 900px 500px at 100% 100%, rgba(76,29,149,0.18), transparent 55%), linear-gradient(135deg, #000000 0%, #050507 50%, #0a0a0d 100%)'
+          : 'radial-gradient(ellipse 1000px 500px at 0% 0%, rgba(14,116,144,0.04), transparent 60%), radial-gradient(ellipse 900px 500px at 100% 100%, rgba(124,58,237,0.03), transparent 55%), #ffffff',
       }}
     >
       <style>{`
         @keyframes sf-pulse{0%{transform:scale(.6);opacity:.5}100%{transform:scale(2);opacity:0}}
         @keyframes sf-scan{0%,100%{opacity:.15}50%{opacity:.4}}
+        @keyframes sf-ambient{0%,100%{opacity:.6}50%{opacity:.9}}
         .sf-scrollbar::-webkit-scrollbar{width:4px;height:4px}
         .sf-scrollbar::-webkit-scrollbar-thumb{background:rgba(34,211,238,0.25);border-radius:9999px}
+        .sf-scrollbar::-webkit-scrollbar-thumb:hover{background:rgba(34,211,238,0.4)}
         .sf-scrollbar::-webkit-scrollbar-track{background:transparent}
-        .sf-grid-bg{background-image:linear-gradient(rgba(34,211,238,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(34,211,238,0.04) 1px,transparent 1px);background-size:32px 32px}
+        .sf-grid-bg{background-image:linear-gradient(rgba(34,211,238,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(34,211,238,0.05) 1px,transparent 1px);background-size:40px 40px}
+        .sf-map-vignette{box-shadow:inset 0 0 80px rgba(0,0,0,0.5),inset 0 0 200px rgba(8,47,73,0.4)}
+        .sf-map-vignette-light{box-shadow:inset 0 0 60px rgba(15,23,42,0.08)}
       `}</style>
+      {/* Ambient atmosphere — dark mode only */}
+      <div className="absolute inset-0 pointer-events-none opacity-0 dark:opacity-100">
+        <div className="absolute top-0 left-1/4 w-[500px] h-[300px] bg-cyan-500/[0.04] blur-[120px] rounded-full" style={{ animation: 'sf-ambient 8s ease-in-out infinite' }}/>
+        <div className="absolute bottom-0 right-1/3 w-[400px] h-[250px] bg-violet-500/[0.03] blur-[100px] rounded-full" style={{ animation: 'sf-ambient 10s ease-in-out infinite 2s' }}/>
+      </div>
 
       {/* Header — compact */}
       <div className="flex items-center justify-between gap-3 px-1 shrink-0">
@@ -462,32 +485,32 @@ export default function GpsKeylessTab() {
       {/* KPI strip — 6 cards, compact */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 shrink-0">
         <KpiCard
-          label="Online" color="emerald"
+          index={0} label="Online" color="emerald"
           value={String(kpis.online)} sub={`${kpis.onlinePct}% flotta`}
           icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>}
         />
         <KpiCard
-          label="Offline" color="violet"
+          index={1} label="Offline" color="violet"
           value={String(kpis.offline)} sub={`${kpis.offlinePct}% flotta`}
           icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>}
         />
         <KpiCard
-          label="Allarmi Attivi" color="rose"
+          index={2} label="Allarmi Attivi" color="rose"
           value={String(kpis.alarmCount)} sub={kpis.alarmCount ? 'da gestire' : 'nessuno'}
           icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>}
         />
         <KpiCard
-          label="Bloccati Attivi" color="amber"
+          index={3} label="Bloccati Attivi" color="amber"
           value={String(kpis.blocked)} sub={kpis.blocked ? `${kpis.blocked} immob.` : 'nessuno'}
           icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>}
         />
         <KpiCard
-          label="Velocità Media" color="sky"
+          index={4} label="Velocità Media" color="sky"
           value={`${kpis.avgSpeed}`} sub="km/h · in movimento"
           icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>}
         />
         <KpiCard
-          label="Carburante Medio" color="cyan"
+          index={5} label="Carburante Medio" color="cyan"
           value={`${kpis.avgFuel}%`} sub="livello flotta"
           icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="3" y1="22" x2="15" y2="22"/><line x1="4" y1="9" x2="14" y2="9"/><path d="M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18"/><path d="M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2 2 2 0 0 0 2-2V9.83a2 2 0 0 0-.59-1.42L18 5"/></svg>}
         />
@@ -537,7 +560,7 @@ export default function GpsKeylessTab() {
           >
             Posizione in tempo reale
           </SectionTitle>
-          <div className="relative flex-1 min-h-0 sf-grid-bg">
+          <div className="relative flex-1 min-h-0 sf-grid-bg overflow-hidden rounded-b-xl">
             <div className="absolute inset-0">
               <MapContainer
                 center={[39.2130, 9.1370]}
@@ -578,9 +601,22 @@ export default function GpsKeylessTab() {
                 )}
               </MapContainer>
             </div>
+            {/* Cinematic vignette */}
+            <div className={`absolute inset-0 pointer-events-none z-[400] ${theme === 'dark' ? 'sf-map-vignette' : 'sf-map-vignette-light'}`}/>
+            {/* Subtle cyan scanline edges — dark mode only */}
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent opacity-0 dark:opacity-100 pointer-events-none z-[401]"/>
+            <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-cyan-400/30 to-transparent opacity-0 dark:opacity-100 pointer-events-none z-[401]"/>
             {/* Corner telemetry overlay */}
-            <div className="absolute bottom-2 left-2 z-[400] flex items-center gap-2 px-2 py-1 rounded-md bg-white/85 backdrop-blur ring-1 ring-cyan-500/30 text-[10px] font-mono text-cyan-800 pointer-events-none dark:bg-black/60 dark:ring-cyan-500/20 dark:text-cyan-200">
-              <span className="text-cyan-500 dark:text-cyan-400">●</span> tracking · {vehicles.filter(v => v.status === 'moving').length} mov · {vehicles.filter(v => v.status === 'idle').length} idle
+            <div className="absolute bottom-2.5 left-2.5 z-[402] flex items-center gap-2 px-2.5 py-1 rounded-md bg-white/90 backdrop-blur ring-1 ring-cyan-500/30 text-[10px] font-mono text-cyan-800 pointer-events-none dark:bg-black/70 dark:ring-cyan-500/30 dark:text-cyan-200 dark:shadow-[0_0_24px_rgba(34,211,238,0.2)]">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-60 animate-ping"/>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-400"/>
+              </span>
+              <span className="tracking-wider">TRACKING</span>
+              <span className="text-cyan-500/60 dark:text-cyan-400/60">·</span>
+              <span>{vehicles.filter(v => v.status === 'moving').length} mov</span>
+              <span className="text-cyan-500/60 dark:text-cyan-400/60">·</span>
+              <span>{vehicles.filter(v => v.status === 'idle').length} idle</span>
             </div>
           </div>
         </Card>

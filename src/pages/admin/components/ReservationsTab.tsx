@@ -9674,14 +9674,13 @@ function ReservationsDashboardHeader({
   })
 
   const stats = useMemo(() => {
-    const closedStatuses = new Set(['cancelled', 'annullata', 'completed', 'completata'])
     const now = Date.now()
     const in24h = now + 24 * 60 * 60 * 1000
-    // Scadenze: NON contare prenotazioni con dropoff piu' di 3 giorni nel
-    // passato — quasi sempre status "stale" (il cliente ha riconsegnato ma
-    // nessuno ha cambiato lo status). Cosi' il numero resta usabile invece
-    // di esplodere con tutti i vecchi confirmed mai chiusi.
-    const grace3d = now - 3 * 24 * 60 * 60 * 1000
+    // Scadenze: 2026-05-22 finestra stretta a 24h nel passato (prima era 3gg).
+    // Oltre 24h da dropoff = quasi certo status "stale" (cliente ha riconsegnato
+    // ma admin non ha messo completed); contarli come "in ritardo" gonfia il KPI
+    // con falsi positivi. 24h tiene solo i veri ritardi attuali.
+    const grace1d = now - 24 * 60 * 60 * 1000
 
     const daysInSelMonth = new Date(selMonth.year, selMonth.month, 0).getDate()
     let total = 0
@@ -9722,19 +9721,21 @@ function ReservationsDashboardHeader({
       }
 
       const status = String(b.status || '').toLowerCase()
-      const isClosed = closedStatuses.has(status)
-      if (!isClosed) {
-        // "Noleggi Attivi" = auto fuori in questo momento (pickup gia'
-        // avvenuto, dropoff non ancora scaduto). Cosi' il numero combacia
-        // con quante auto sono davvero noleggiate ORA, non con le righe
-        // confirmed dimenticate in DB.
+      // 2026-05-22: "Noleggi Attivi" e "Scadenze" applicano lo stesso gate
+      // del Report Noleggio (escludono test plates, internal, admin,
+      // service_type non-rental). Senza questo gate il KPI conteggiava
+      // anche TEST000/internal/admin@dr7.app gonfiando il numero.
+      // Status strict: solo confirmed/confermata/in_corso/active sono
+      // "auto fuori". Pending = richiesta non confermata, non auto fuori.
+      const activeStatuses = new Set(['confirmed', 'confermata', 'in_corso', 'active'])
+      if (reportable && activeStatuses.has(status)) {
         const pickupMs = b.pickup_date ? new Date(b.pickup_date).getTime() : NaN
         const dropoffMs = b.dropoff_date ? new Date(b.dropoff_date).getTime() : NaN
         if (Number.isFinite(pickupMs) && Number.isFinite(dropoffMs) && pickupMs <= now && dropoffMs >= now) {
           active++
         }
         if (Number.isFinite(dropoffMs)) {
-          if (dropoffMs < now && dropoffMs >= grace3d) {
+          if (dropoffMs < now && dropoffMs >= grace1d) {
             scadenzeInRitardo++
           } else if (dropoffMs >= now && dropoffMs <= in24h) {
             scadenzeImminenti++
@@ -9814,11 +9815,18 @@ function ReservationsDashboardHeader({
       }
     }
 
+    // 2026-05-22: auto UNICHE del mese (non somma auto-giorni).
+    // La somma giornaliera dà numeri assurdi (es. 129 auto in flotta di ~12).
+    const monthlyUniqueVehicles = new Set<string>()
+    for (const set of dailyVehicleSets) {
+      for (const v of set) monthlyUniqueVehicles.add(v)
+    }
     return {
       daysInMonth,
       dailyRevenue,
       dailyNewBookings,
       dailyVehicles: dailyVehicleSets.map(s => s.size),
+      monthlyUniqueVehicles: monthlyUniqueVehicles.size,
     }
   }, [bookings, selMonth])
 
@@ -9941,6 +9949,8 @@ function ReservationsDashboardHeader({
           format={(v) => `${Math.round(v)} auto`}
           formatAxis={(v) => `${Math.round(v)}`}
           ariaLabel="Auto distinte fuori per giorno"
+          totalOverride={timeSeries.monthlyUniqueVehicles}
+          totalLabel={`${timeSeries.monthlyUniqueVehicles} auto distinte`}
         />
       </div>
     </div>
@@ -9963,6 +9973,8 @@ function TimeSeriesChart({
   format,
   formatAxis,
   ariaLabel,
+  totalOverride,
+  totalLabel: totalLabelOverride,
 }: {
   title: string
   values: number[]
@@ -9973,6 +9985,8 @@ function TimeSeriesChart({
   format: (v: number) => string
   formatAxis: (v: number) => string
   ariaLabel: string
+  totalOverride?: number
+  totalLabel?: string
 }) {
   const [hover, setHover] = useState<number | null>(null)
   const accentMap = {
@@ -10003,8 +10017,11 @@ function TimeSeriesChart({
     .filter((v, i, arr) => v >= 0 && arr.indexOf(v) === i)
   const monthShort = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'][monthIndex]
 
-  const total = values.reduce((a, b) => a + b, 0)
-  const totalLabel = format(total)
+  // 2026-05-22: totalOverride permette di sostituire il default
+  // (sommare values) con un valore semanticamente piu' corretto, es. auto
+  // uniche del mese invece di somma auto-giorni.
+  const total = typeof totalOverride === 'number' ? totalOverride : values.reduce((a, b) => a + b, 0)
+  const totalLabel = totalLabelOverride ?? format(total)
 
   return (
     <div className="relative rounded-2xl border border-theme-border bg-theme-bg-secondary p-4 overflow-hidden">
