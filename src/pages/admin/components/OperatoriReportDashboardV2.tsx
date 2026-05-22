@@ -53,11 +53,13 @@ interface Operatore {
     ruolo: string | null
     ore_target_giornaliere: number
     avatar_url: string | null
-    // 2026-05-22: effective daily target computed from the OPERATORE_CONTRATTO
-    // row (giornaliere || settimanali/5 || mensili/22) with fallback to the
-    // legacy operatori_persone.ore_target_giornaliere. Used by every "target"
-    // calculation in the dashboard so editing the contract reflects here.
-    _effective_target_daily?: number
+    // 2026-05-22: target ore con granularita' esplicita dal contratto.
+    // gran = 'giornaliera' | 'settimanale' | 'mensile' | 'none'
+    // value = ore (intere) della granularita' scelta dall'admin.
+    // Se admin entra SOLO weekly = 47, gran='settimanale', value=47,
+    // NON inventiamo un daily fake.
+    _target_gran?: 'giornaliera' | 'settimanale' | 'mensile' | 'none'
+    _target_value_h?: number
 }
 
 interface DayRow {
@@ -259,19 +261,24 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                     })
                 }
             }
-            const computeEffectiveDaily = (op: Operatore): number => {
+            const computeTarget = (op: Operatore): { gran: 'giornaliera' | 'settimanale' | 'mensile' | 'none'; value: number } => {
                 const c = contractsByOp.get(op.id)
                 if (c) {
-                    if (c.giornaliere && c.giornaliere > 0) return c.giornaliere
-                    if (c.settimanali && c.settimanali > 0) return Math.round((c.settimanali / 5) * 10) / 10
-                    if (c.mensili && c.mensili > 0) return Math.round((c.mensili / 22) * 10) / 10
+                    if (c.giornaliere && c.giornaliere > 0) return { gran: 'giornaliera', value: c.giornaliere }
+                    if (c.settimanali && c.settimanali > 0) return { gran: 'settimanale', value: c.settimanali }
+                    if (c.mensili && c.mensili > 0) return { gran: 'mensile', value: c.mensili }
                 }
-                return op.ore_target_giornaliere || 8
+                // Legacy fallback solo se l'operatori_persone ha un valore
+                // non-zero. Se l'admin ha azzerato tutto, niente target.
+                if (op.ore_target_giornaliere && op.ore_target_giornaliere > 0) {
+                    return { gran: 'giornaliera', value: op.ore_target_giornaliere }
+                }
+                return { gran: 'none', value: 0 }
             }
-            const opList: Operatore[] = opListRaw.map(o => ({
-                ...o,
-                _effective_target_daily: computeEffectiveDaily(o),
-            }))
+            const opList: Operatore[] = opListRaw.map(o => {
+                const t = computeTarget(o)
+                return { ...o, _target_gran: t.gran, _target_value_h: t.value }
+            })
             setOperatori(opList)
 
             // 2. Timesheet di oggi
@@ -394,19 +401,32 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                 perOpMin.set(opId, opTot)
                 totMinLav += opTot
             })
-            // Target = days × ore_target_giornaliere × 60
+            // 2026-05-22: target rispetta la granularita' entrata dall'admin.
+            //   giornaliera → value × N
+            //   settimanale → value × (N/7)
+            //   mensile     → value × (N/30)
+            //   none        → 0 (no target)
+            // Niente "daily fake" se admin ha inserito solo weekly.
             const daysCount = (() => {
                 const a = new Date(`${rangeFrom}T00:00:00`).getTime()
                 const b = new Date(`${rangeTo}T00:00:00`).getTime()
                 return Math.max(1, Math.round((b - a) / 86400000) + 1)
             })()
-            const totTargetMin = opList.reduce((s, o) => s + Math.round((o._effective_target_daily ?? o.ore_target_giornaliere ?? 8) * 60), 0) * daysCount
+            const targetMinForOp = (op: Operatore, days: number): number => {
+                const v = (op._target_value_h || 0) * 60
+                if (op._target_gran === 'giornaliera') return Math.round(v * days)
+                if (op._target_gran === 'settimanale') return Math.round(v * (days / 7))
+                if (op._target_gran === 'mensile') return Math.round(v * (days / 30))
+                return 0
+            }
+            const totTargetMin = opList.reduce((s, o) => s + targetMinForOp(o, daysCount), 0)
             setKpi(prev => ({ ...prev, oreLavorate: totMinLav, oreTarget: totTargetMin }))
 
-            // Top 5 per produttivita (ore lavorate / target)
+            // Top 5 per produttivita (ore lavorate / target). Salta i veicoli
+            // senza target — non hanno una base di confronto, pct = N/A.
             const topProd = opList.map(o => {
                 const m = perOpMin.get(o.id) || 0
-                const tgt = Math.round((o._effective_target_daily ?? o.ore_target_giornaliere ?? 8) * 60) * daysCount
+                const tgt = targetMinForOp(o, daysCount)
                 const pct = tgt > 0 ? Math.round((m / tgt) * 100) : 0
                 return { name: `${o.nome} ${o.cognome || ''}`.trim(), value: pct, minuti: m }
             }).sort((a, b) => b.value - a.value).slice(0, 5)
@@ -543,7 +563,17 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                             <div className="space-y-1.5">
                                 {operatori.slice(0, 5).map((o) => {
                                     const m = todayRows.find(r => r.operatore.id === o.id)?.minuti_lavorati || 0
-                                    const tgt = Math.round((o._effective_target_daily ?? o.ore_target_giornaliere ?? 8) * 60)
+                                    // Per "oggi" usiamo ratio giornaliera dal contratto.
+                                    // Se gran='settimanale' → target oggi = value/7
+                                    // Se gran='mensile' → target oggi = value/30
+                                    // Se gran='none' → tgt=0 (no comparazione possibile)
+                                    const tgtH = (() => {
+                                        if (o._target_gran === 'giornaliera') return o._target_value_h || 0
+                                        if (o._target_gran === 'settimanale') return (o._target_value_h || 0) / 7
+                                        if (o._target_gran === 'mensile') return (o._target_value_h || 0) / 30
+                                        return 0
+                                    })()
+                                    const tgt = Math.round(tgtH * 60)
                                     const pct = tgt > 0 ? Math.min(100, Math.round((m / tgt) * 100)) : 0
                                     return (
                                         <div key={o.id}
@@ -604,8 +634,15 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                                     {todayRows.map(r => {
                                         const tone = avatarTone(r.operatore.email || r.operatore.id)
                                         const initials = `${(r.operatore.nome || '').charAt(0)}${(r.operatore.cognome || '').charAt(0)}`.toUpperCase()
-                                        const target = Math.round((r.operatore._effective_target_daily ?? r.operatore.ore_target_giornaliere ?? 8) * 60)
-                                        const straord = Math.max(0, r.minuti_lavorati - target)
+                                        // Straord indicator: solo se gran=giornaliera (l'admin
+                                        // ha esplicitamente fissato un target di giornata).
+                                        // Niente "daily fake" da weekly/mensile — quel calcolo
+                                        // appartiene alla soglia in Buste Paga, non a questo
+                                        // banner informativo per-riga.
+                                        const target = r.operatore._target_gran === 'giornaliera'
+                                            ? Math.round((r.operatore._target_value_h || 0) * 60)
+                                            : 0
+                                        const straord = target > 0 ? Math.max(0, r.minuti_lavorati - target) : 0
                                         return (
                                             <tr key={r.operatore.id}
                                                 onClick={() => setProfileOp(r.operatore)}

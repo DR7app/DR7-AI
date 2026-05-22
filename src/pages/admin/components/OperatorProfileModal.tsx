@@ -87,13 +87,14 @@ export default function OperatorProfileModal({
     const [customTo, setCustomTo] = useState<string>(() => toRomeDate(new Date()))
     const [days, setDays] = useState<DayBreakdown[]>([])
     const [loading, setLoading] = useState(true)
-    // 2026-05-22: effective daily hours = contract priority, then legacy.
-    // Bug fix: deleting daily hours and setting weekly=47 wasn't reflected
-    // in the dashboard because target was read from operatori_persone
-    // (legacy) and ignored the contract.
-    const [effectiveDailyHours, setEffectiveDailyHours] = useState<number>(
-        operatore.ore_target_giornaliere || 8
-    )
+    // 2026-05-22: target ore letto dal contratto, RISPETTANDO la granularita'
+    // entrata dall'admin. Niente "daily fake da weekly". Cioe':
+    //  - se daily non inserito + weekly = 47, NON mostriamo 9.4h/giorno
+    //  - mostriamo "47h / sett." nel header e calcoliamo target per range
+    //    proporzionale (N giorni × weekly/7).
+    type TargetGranularita = 'giornaliera' | 'settimanale' | 'mensile' | 'none'
+    const [targetGran, setTargetGran] = useState<TargetGranularita>('none')
+    const [targetValueHours, setTargetValueHours] = useState<number>(0)
     useEffect(() => {
         let cancelled = false
         ;(async () => {
@@ -106,17 +107,56 @@ export default function OperatorProfileModal({
             if (cancelled) return
             const c = data as { ore_target_giornaliere?: number | null; ore_target_settimanali?: number | null; ore_target_mensili?: number | null } | null
             if (c?.ore_target_giornaliere && c.ore_target_giornaliere > 0) {
-                setEffectiveDailyHours(c.ore_target_giornaliere)
+                setTargetGran('giornaliera')
+                setTargetValueHours(c.ore_target_giornaliere)
             } else if (c?.ore_target_settimanali && c.ore_target_settimanali > 0) {
-                setEffectiveDailyHours(Math.round((c.ore_target_settimanali / 5) * 10) / 10)
+                setTargetGran('settimanale')
+                setTargetValueHours(c.ore_target_settimanali)
             } else if (c?.ore_target_mensili && c.ore_target_mensili > 0) {
-                setEffectiveDailyHours(Math.round((c.ore_target_mensili / 22) * 10) / 10)
+                setTargetGran('mensile')
+                setTargetValueHours(c.ore_target_mensili)
+            } else if (operatore.ore_target_giornaliere && operatore.ore_target_giornaliere > 0) {
+                // Legacy fallback: solo se il record operatori_persone ha un
+                // valore. Se l'admin ha azzerato anche quello, granularita' = 'none'.
+                setTargetGran('giornaliera')
+                setTargetValueHours(operatore.ore_target_giornaliere)
             } else {
-                setEffectiveDailyHours(operatore.ore_target_giornaliere || 8)
+                setTargetGran('none')
+                setTargetValueHours(0)
             }
         })()
         return () => { cancelled = true }
     }, [operatore.id, operatore.ore_target_giornaliere])
+
+    // Calcola target minuti per il range selezionato rispettando granularita':
+    //  giornaliera → value × N
+    //  settimanale → value × (N/7)
+    //  mensile     → value × (N/30)
+    //  none        → 0 (no target)
+    function targetMinFor(daysCount: number): number {
+        const v = targetValueHours * 60
+        if (targetGran === 'giornaliera') return Math.round(v * daysCount)
+        if (targetGran === 'settimanale') return Math.round(v * (daysCount / 7))
+        if (targetGran === 'mensile') return Math.round(v * (daysCount / 30))
+        return 0
+    }
+    function targetLabel(): string {
+        if (targetGran === 'giornaliera') return `${targetValueHours}h / giorno`
+        if (targetGran === 'settimanale') return `${targetValueHours}h / sett.`
+        if (targetGran === 'mensile') return `${targetValueHours}h / mese`
+        return '— (nessun target impostato)'
+    }
+    // Backward-compat per il CalcolaPagaSection: serve un "daily equivalent"
+    // come soglia straordinari quando il contratto non specifica
+    // ore_soglia_straordinario. Manteniamo la stessa formula del fix
+    // precedente — qui SI puo' derivare un daily perche' lo straord e'
+    // intrinsecamente per-giorno.
+    const dailyHoursForOvertime = (() => {
+        if (targetGran === 'giornaliera') return targetValueHours
+        if (targetGran === 'settimanale') return Math.round((targetValueHours / 5) * 10) / 10
+        if (targetGran === 'mensile') return Math.round((targetValueHours / 22) * 10) / 10
+        return operatore.ore_target_giornaliere || 8
+    })()
 
     const range = useMemo(() => {
         const end = new Date()
@@ -198,7 +238,9 @@ export default function OperatorProfileModal({
         const totMinPausa = days.reduce((s, d) => s + d.minutiPausa, 0)
         const totPause = days.reduce((s, d) => s + d.pauseWindows.length, 0)
         const giorniAttivi = days.filter(d => d.minutiLavorati > 0).length
-        const targetMin = Math.round(effectiveDailyHours * 60) * giorniAttivi
+        // Target rispettando la granularita' del contratto. Se l'admin ha
+        // entrato weekly, target = weekly × (giorniAttivi/7) — niente daily fake.
+        const targetMin = targetMinFor(giorniAttivi)
         const completion = targetMin > 0 ? Math.round((totMinLavorati / targetMin) * 100) : 0
         const avgPausa = totPause > 0 ? Math.round(totMinPausa / totPause) : 0
         const maxPausa = days.flatMap(d => d.pauseWindows).reduce((m, p) => Math.max(m, p.durMin), 0)
@@ -214,7 +256,7 @@ export default function OperatorProfileModal({
             maxPausa,
             giornoMaxPause,
         }
-    }, [days, effectiveDailyHours])
+    }, [days, targetGran, targetValueHours])
 
     // Chart data
     const trendData = useMemo(() => days.map(d => ({
@@ -252,7 +294,7 @@ export default function OperatorProfileModal({
                         <div className="min-w-0">
                             <h2 className="text-lg sm:text-2xl font-bold text-theme-text-primary truncate">{operatore.nome} {operatore.cognome || ''}</h2>
                             <p className="text-xs sm:text-sm text-theme-text-muted truncate">{operatore.ruolo || 'Operatore'} · {operatore.email}</p>
-                            <p className="text-[10px] sm:text-xs text-theme-text-muted mt-0.5">Target: {effectiveDailyHours}h / giorno</p>
+                            <p className="text-[10px] sm:text-xs text-theme-text-muted mt-0.5">Target: {targetLabel()}</p>
                         </div>
                     </div>
                     <button
@@ -305,7 +347,7 @@ export default function OperatorProfileModal({
                 <div className="px-4 sm:px-6 pt-3">
                     <CalcolaPagaSection
                         operatoreId={operatore.id}
-                        oreTargetGiornaliere={effectiveDailyHours}
+                        oreTargetGiornaliere={dailyHoursForOvertime}
                         days={days}
                         rangeLabel={`${fmtDate(range.start)} → ${fmtDate(range.end)}`}
                     />
