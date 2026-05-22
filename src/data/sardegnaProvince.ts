@@ -1,3 +1,5 @@
+import { getProvinciaByCityName } from '../utils/codiceFiscale'
+
 export interface Provincia {
   code: string
   name: string
@@ -144,38 +146,25 @@ export function isResidentByCity(cityName: string): boolean {
   return false
 }
 
-// Reverse lookup: given a city name, return its province code (with fuzzy matching)
+// Reverse lookup: given a city name, return its province code.
+// 2026-05-22 FIX: il fuzzy match cross-comune Sardegna restituiva falsi
+// positivi (es. "Roma" → "Romana" SS → provincia "SS" invece di "RM").
+// Strategia adesso:
+//   1) Match esatto fra i comuni Sardegna
+//   2) Fallback alla tabella nazionale CITY_TO_PROVINCIA (Roma, Milano, ecc.)
+//   3) (fuzzy rimosso: troppo rumore — meglio nessun match che match sbagliato)
 export function getProvinciaByCity(cityName?: string): string | null {
   if (!cityName) return null
   const normalized = cityName.trim().toLowerCase()
 
-  // Exact match
   for (const prov of SARDEGNA_PROVINCE) {
     if (prov.comuni.some(c => c.toLowerCase() === normalized)) {
       return prov.code
     }
   }
 
-  // Starts-with match
-  for (const prov of SARDEGNA_PROVINCE) {
-    if (prov.comuni.some(c => c.toLowerCase().startsWith(normalized) || normalized.startsWith(c.toLowerCase()))) {
-      return prov.code
-    }
-  }
-
-  // Fuzzy match
-  let bestScore = 0
-  let bestProv: string | null = null
-  for (const prov of SARDEGNA_PROVINCE) {
-    for (const comune of prov.comuni) {
-      const score = similarity(cityName.trim(), comune)
-      if (score > bestScore) {
-        bestScore = score
-        bestProv = prov.code
-      }
-    }
-  }
-  if (bestScore >= 0.6 && bestProv) return bestProv
+  const national = getProvinciaByCityName(cityName)
+  if (national) return national
 
   return null
 }
