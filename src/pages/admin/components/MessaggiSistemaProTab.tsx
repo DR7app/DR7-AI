@@ -171,25 +171,20 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; servic
     keys: ['rental_new_customer', 'rental_new', 'rental_new_admin', 'rental_modified', 'rental_da_saldare_customer'],
   },
   {
-    label: 'Lavaggio / Prime Wash',
+    // Prime Wash = lavaggi + meccanica (stesso umbrella nel sistema:
+    // non c'e' una sezione "Meccanica" separata in admin). Tutti gli
+    // eventi delle due famiglie raggruppati qui sotto un'unica voce.
+    label: 'Prime Wash',
     color: 'cyan',
     service: 'car_wash',
     keys: [
+      // Lavaggio
       'carwash_new_customer', 'carwash_new', 'carwash_new_admin', 'carwash_modified',
-      // Eventi pagamento SPECIFICI lavaggio — separati dai booking_paid_*
-      // generici (che restano lato noleggio) per evitare cross-talk.
       'carwash_confirmed_da_saldare',
       'carwash_paid_cash', 'carwash_paid_card', 'carwash_paid_bank_transfer',
       'carwash_paid_paypal', 'carwash_paid_wallet',
-    ],
-  },
-  {
-    label: 'Meccanica',
-    color: 'teal',
-    service: 'mechanical',
-    keys: [
+      // Meccanica (stessa famiglia Prime Wash)
       'mechanical_new_customer', 'mechanical_new', 'mechanical_new_admin', 'mechanical_modified',
-      // Eventi pagamento SPECIFICI meccanica.
       'mechanical_confirmed_da_saldare',
       'mechanical_paid_cash', 'mechanical_paid_card', 'mechanical_paid_bank_transfer',
       'mechanical_paid_paypal', 'mechanical_paid_wallet',
