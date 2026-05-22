@@ -1838,14 +1838,21 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         // conferma lavaggio standard).
         const isPendingPayment = paymentStatus !== 'paid' && paymentStatus !== 'completed' && paymentStatus !== 'succeeded'
         const isMech = confSvc === 'mechanical' || confSvc === 'mechanical_service'
+        const isNexiPbLPath = formData.payment_status === 'pending' && isNexiPayByLink(formData.payment_method)
         // Un solo template "Conferma Lavaggio" / "Conferma Meccanica" gestisce
         // sia il caso "pagato" sia "da saldare" tramite il placeholder
-        // {payment_info} (rende "Pagato" o "Da saldare" in automatico).
-        // Quindi qui usiamo SEMPRE carwash_new_customer / mechanical_new_customer.
-        // L'unica eccezione: pending + Conferma OFF -> niente messaggio
-        // (booking ancora bozza, mandare conferma sarebbe fuorviante).
+        // {payment_info}.
+        // Eccezioni:
+        //  - pending + Conferma OFF       -> niente messaggio (booking bozza)
+        //  - pending + Nexi Pay by Link   -> niente conferma qui: il blocco
+        //    isNexiPending sotto invia il "Link Pagamento" con l'URL reale.
+        //    Mandare anche la conferma significherebbe doppio messaggio
+        //    (uno con {payment_link} non sostituito perche' qui non
+        //    passiamo l'URL nei templateVars).
         let eventKey: string | null
         if (isPendingPayment && !confirmBooking) {
+          eventKey = null
+        } else if (isNexiPbLPath) {
           eventKey = null
         } else {
           eventKey = isMech ? 'mechanical_new_customer' : 'carwash_new_customer'
