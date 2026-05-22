@@ -1237,14 +1237,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               if (!totalAmountManuallyOverriddenRef.current) {
                 updates.total_amount = total.toFixed(2)
               }
-              if (!prev.unlimited_km) {
+              // BUG FIX 2026-05-22: in modalita' Modifica NON sovrascriviamo
+              // km_limit con il valore calcolato dal config: la booking salvata
+              // ha gia' un km_limit deciso al momento della prenotazione e
+              // ricalcolarlo dopo (anche solo per re-render dello useEffect)
+              // fa "cambiare i km" silenziosamente — bug riportato 2026-05-22.
+              // Solo per booking nuove (editingId null) auto-popoliamo da config.
+              if (!prev.unlimited_km && !editingId) {
                 const vehCategory = selectedVehicle?.category || ''
                 const kmCat = vehCategory === 'urban' ? 'urban' : (vehCategory || '_global')
                 const kmIncluded = getKmIncluded(rentalConfig, data.rentalDays, kmCat)
-                // Only overwrite km_limit when the config returns a real, positive
-                // number. If kmIncluded is 0 it means the config is missing/empty for
-                // this category — in that case, leave formData.km_limit as-is so the
-                // admin's previously-saved value survives a re-render.
                 if (kmIncluded !== 'unlimited' && typeof kmIncluded === 'number' && kmIncluded > 0) {
                   updates.km_limit = String(kmIncluded)
                 }
@@ -6047,11 +6049,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // segnale corretto "abbiamo ricevuto il tuo pagamento".
           const prevSnap = editFormSnapshotRef.current
           const wasConfirmedAtLoad = prevSnap?._wasConfirmedAtLoad === true
-          // 2026-05-19: Pay-by-Link "Da Saldare" deve sempre mandare la
-          // conferma automaticamente, anche senza la checkbox Conferma
-          // Prenotazione spuntata. Il cliente DEVE sapere che il booking
-          // e' registrato + ricevere il link separato per pagare.
-          const isPayByLinkPending = isNexiPayByLink(formData.payment_method) && isPending
 
           let templateKey: string | null
           if (editingId && wasConfirmedAtLoad) {
@@ -6060,17 +6057,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             // (da saldare -> paid, cambio data, aggiunta nota, ecc.).
             logger.log('[Save] Booking gia\' confermato in precedenza — salto reinvio conferma.')
             templateKey = null
-          } else if ((confirmBooking && isPending) || isPayByLinkPending) {
-            // Prima conferma "Da Saldare" — checkbox Conferma OPPURE
-            // Pay-by-Link automatica (deve sempre confermare il booking
-            // cliente, il link pagamento parte separato dopo).
+          } else if (isPending) {
+            // 2026-05-22 BUG FIX: la conferma "Da Saldare" parte SEMPRE
+            // quando si salva un booking pending — qualunque sia il metodo
+            // (Contanti, Carta, Bonifico, Pay-by-Link, Wallet). Prima il
+            // gate richiedeva confirmBooking=true OR isPayByLink, quindi
+            // una booking Contanti + Da Saldare non spediva il messaggio
+            // e il cliente non sapeva che la prenotazione era registrata.
+            // Il template booking_confirmed_da_saldare contiene il dettaglio
+            // del metodo via {payment_info}.
             templateKey = 'booking_confirmed_da_saldare'
           } else if (confirmBooking) {
             // Prima conferma con pagamento gia' registrato.
             templateKey = 'rental_new_customer'
-          } else if (isPending) {
-            logger.log('[Save] Booking pending senza Conferma Prenotazione — niente conferma WhatsApp.')
-            templateKey = null
           } else if (editingId) {
             // Edit di booking gia' pagato ma MAI confermato in precedenza
             // (es. l'admin aveva creato senza spuntare Conferma e ora la
