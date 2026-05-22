@@ -840,7 +840,12 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                         <div className="space-y-1.5 text-[11px]">
                             <div className="text-theme-text-primary">
                                 <strong className="text-amber-400">Top performer</strong>
-                                <div className="text-theme-text-muted">{operatori[0] ? `${operatori[0].nome} ${operatori[0].cognome || ''}` : '—'}</div>
+                                {/* Bug 2026-05-22: prima mostrava operatori[0] cioe'
+                                    il primo alfabetico per cognome (Michele Collu)
+                                    a prescindere dalle ore lavorate. Adesso usa la
+                                    classifica gia' calcolata in topFatturato (top
+                                    per ore lavorate nel range, con filtro >0). */}
+                                <div className="text-theme-text-muted">{topFatturato[0]?.name || '—'}</div>
                             </div>
                             <div className="text-theme-text-primary pt-1 border-t border-theme-border">
                                 <strong className="text-sky-400">Media ore/giorno</strong>

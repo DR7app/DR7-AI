@@ -768,35 +768,14 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
                     ))
                   })()}
 
-                  {/* Nascondi UI — toggle per togliere singoli elementi UI a
-                      questo operatore SENZA modificare i suoi permessi reali.
-                      Letti direttamente da permissions[], funzionano anche
-                      sopra direzione/developer/`*`. */}
-                  <h4 className="text-sm font-semibold text-theme-text-primary mt-5 mb-1">Nascondi UI</h4>
-                  <p className="text-[12px] text-theme-text-muted mb-3">
-                    Toglie elementi dall&apos;interfaccia di questo operatore (non tocca i permessi).
-                    Utile per i collaboratori che non devono vedere pannelli interni operatore.
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {HIDE_KEY_OPTIONS.map(opt => {
-                      const currentPerms = Array.isArray(selected.permissions) ? selected.permissions : []
-                      const checked = currentPerms.includes(opt.tag)
-                      return (
-                        <label key={opt.tag} className="flex items-start gap-2 px-3 py-2 rounded-md border border-theme-border bg-theme-bg-primary cursor-pointer hover:border-dr7-gold/40 transition-colors">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleAdminRole(selected, opt.tag)}
-                            className="mt-0.5"
-                          />
-                          <div className="min-w-0">
-                            <div className="text-[13px] font-medium text-theme-text-primary">{opt.label}</div>
-                            <div className="text-[11px] text-theme-text-muted">{opt.hint}</div>
-                          </div>
-                        </label>
-                      )
-                    })}
-                  </div>
+                  {/* Sezione "Nascondi UI" rimossa 2026-05-22: l'utente
+                      l'ha bollata come "bullshit" / "non funziona". Le 3
+                      chiavi hide:X esistono ancora in InviteOperatoreModal
+                      come parte del preset "Calendario + Preventivi" (cosi'
+                      i nuovi collaboratori esterni nascono gia' senza
+                      pannelli interni) e nel HIDE_KEY_OPTIONS di questo
+                      file per non rompere riferimenti — semplicemente non
+                      le esponiamo piu' come checkbox separati qui. */}
                 </div>
               )}
             </Section>
