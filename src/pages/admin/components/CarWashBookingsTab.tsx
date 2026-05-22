@@ -1687,8 +1687,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       }
     }
 
-    // Handle Nexi Pay by Link
-    const isNexiPending = formData.payment_status === 'pending' && isNexiPayByLink(formData.payment_method)
+    // Handle Nexi Pay by Link.
+    // REGOLA UI: il link parte SOLO se Conferma Prenotazione e' OFF.
+    // Se l'admin ha spuntato Conferma, vince la conferma lavaggio (il
+    // cliente non deve ricevere anche il link, sarebbe doppio messaggio
+    // contraddittorio: "prenotazione confermata" + "completa il pagamento
+    // per confermare").
+    const isNexiPending = formData.payment_status === 'pending'
+      && isNexiPayByLink(formData.payment_method)
+      && !confirmBooking
     if (isNexiPending && data) {
       try {
         const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
