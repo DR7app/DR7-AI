@@ -2048,18 +2048,21 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       if (!selectedService) {
         toast.error('Seleziona almeno un servizio')
         setSubmitting(false)
+        submitLockRef.current = false
         return
       }
 
       if (!formData.customer_id) {
         toast.error('Seleziona un cliente')
         setSubmitting(false)
+        submitLockRef.current = false
         return
       }
 
       if (!formData.appointment_time) {
         toast.error('Seleziona un orario')
         setSubmitting(false)
+        submitLockRef.current = false
         return
       }
 
@@ -2120,6 +2123,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
         toast.error(errorMessage, { duration: 8000 })
         setSubmitting(false)
+        submitLockRef.current = false
         return
       }
 
@@ -4195,6 +4199,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       e.stopPropagation()
                       return
                     }
+                    // Race-condition fix: prendi il lock SINCRONAMENTE qui
+                    // nel click handler, PRIMA di chiamare handleSubmit.
+                    // Senza, due click rapidi possono entrambi passare il
+                    // check sopra perche' handleSubmit setta il ref solo
+                    // dopo qualche line di codice — quel gap basta a far
+                    // partire DUE save paralleli (doppio messaggio cliente).
+                    submitLockRef.current = true
                     handleSubmit()
                   }}
                   className={`px-8 py-3 rounded-full font-bold text-base transition-colors ${
