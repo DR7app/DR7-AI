@@ -1838,21 +1838,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         // conferma lavaggio standard).
         const isPendingPayment = paymentStatus !== 'paid' && paymentStatus !== 'completed' && paymentStatus !== 'succeeded'
         const isMech = confSvc === 'mechanical' || confSvc === 'mechanical_service'
-        const isNexiPbLPath = formData.payment_status === 'pending' && isNexiPayByLink(formData.payment_method)
         // Un solo template "Conferma Lavaggio" / "Conferma Meccanica" gestisce
         // sia il caso "pagato" sia "da saldare" tramite il placeholder
-        // {payment_info}.
-        // Eccezioni:
-        //  - pending + Conferma OFF       -> niente messaggio (booking bozza)
-        //  - pending + Nexi Pay by Link   -> niente conferma qui: il blocco
-        //    isNexiPending sotto invia il "Link Pagamento" con l'URL reale.
-        //    Mandare anche la conferma significherebbe doppio messaggio
-        //    (uno con {payment_link} non sostituito perche' qui non
-        //    passiamo l'URL nei templateVars).
+        // {payment_info}. Per il caso Nexi PbL + Da Saldare + Conferma ON
+        // si vuole che partano DUE messaggi (la conferma + il link), quindi
+        // qui mandiamo sempre la conferma e il blocco isNexiPending sotto
+        // si occupa del link.
+        // Eccezione unica: pending + Conferma OFF -> nessun messaggio
+        // (la booking e' ancora bozza, mandare conferma e' fuorviante).
         let eventKey: string | null
         if (isPendingPayment && !confirmBooking) {
-          eventKey = null
-        } else if (isNexiPbLPath) {
           eventKey = null
         } else {
           eventKey = isMech ? 'mechanical_new_customer' : 'carwash_new_customer'
@@ -2042,8 +2037,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   }
 
   async function handleSubmit() {
-    // Sync ref guard prima del setSubmitting (state e' async).
-    if (submitLockRef.current || submitting || formSubmittedRef.current) return
+    // Re-entry guard. Il click handler nel bottone Salva ha gia' preso
+    // submitLockRef SINCRONAMENTE prima di chiamarci, quindi qui controlliamo
+    // solo `submitting` e `formSubmittedRef` (no submitLockRef check —
+    // sarebbe sempre true e bloccherebbe il flusso).
+    if (submitting || formSubmittedRef.current) {
+      submitLockRef.current = false // libera il lock se rientriamo per errore
+      return
+    }
+    // Assicura che il lock sia preso anche per call site che non passano
+    // dal click handler (programmatic invocations, retry interni).
     submitLockRef.current = true
     // flushSync forza React a renderizzare il pulsante come disabled
     // IMMEDIATAMENTE (sync). Senza, React 18 batcha lo state update e
