@@ -1838,18 +1838,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         // conferma lavaggio standard).
         const isPendingPayment = paymentStatus !== 'paid' && paymentStatus !== 'completed' && paymentStatus !== 'succeeded'
         const isMech = confSvc === 'mechanical' || confSvc === 'mechanical_service'
-        // Regola allineata al noleggio (ReservationsTab):
-        //  - Conferma ON + Da Saldare   -> carwash_confirmed_da_saldare
-        //  - Conferma ON + Pagata        -> carwash_new_customer (conferma standard)
-        //  - Edit + Pagata               -> carwash_new_customer
-        //  - Da Saldare SENZA Conferma  -> NESSUN messaggio (il cliente
-        //    non ha ancora pagato e l'admin non ha bloccato il booking,
-        //    inviare conferma adesso e' fuorviante).
-        //  - Nuovo + Pagato (no Conferma) -> carwash_new_customer
+        // Un solo template "Conferma Lavaggio" / "Conferma Meccanica" gestisce
+        // sia il caso "pagato" sia "da saldare" tramite il placeholder
+        // {payment_info} (rende "Pagato" o "Da saldare" in automatico).
+        // Quindi qui usiamo SEMPRE carwash_new_customer / mechanical_new_customer.
+        // L'unica eccezione: pending + Conferma OFF -> niente messaggio
+        // (booking ancora bozza, mandare conferma sarebbe fuorviante).
         let eventKey: string | null
-        if (confirmBooking && isPendingPayment) {
-          eventKey = isMech ? 'mechanical_confirmed_da_saldare' : 'carwash_confirmed_da_saldare'
-        } else if (isPendingPayment && !confirmBooking) {
+        if (isPendingPayment && !confirmBooking) {
           eventKey = null
         } else {
           eventKey = isMech ? 'mechanical_new_customer' : 'carwash_new_customer'
