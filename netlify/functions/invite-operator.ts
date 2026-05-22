@@ -164,6 +164,29 @@ const handler: Handler = async (event) => {
     }
   }
 
+  // 2026-05-22: la dashboard V2 (OperatoriReportDashboardV2) legge da
+  // operatori_persone, NON da admins. Senza una riga qui, il nuovo
+  // operatore non appare mai nella lista anche se puo' fare login.
+  // Inserisco un record minimo: la dashboard usa SOLO i campi qui sotto
+  // (nome/cognome/email/ruolo/avatar/attivo/ore_target_giornaliere).
+  const { error: opErr } = await supabase
+    .from('operatori_persone')
+    .insert({
+      user_id: newUserId,
+      email,
+      nome,
+      cognome: null,
+      ruolo: null,
+      avatar_url: null,
+      ore_target_giornaliere: 8,
+      attivo: true,
+    })
+  if (opErr) {
+    // Non fallisco la creazione: admin esiste gia', l'operatore puo'
+    // loggare. Loggo l'errore cosi' lo vediamo nei function logs.
+    console.error('[invite-operator] operatori_persone insert failed', opErr)
+  }
+
   return {
     statusCode: 200,
     headers,

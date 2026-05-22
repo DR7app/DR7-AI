@@ -353,6 +353,10 @@ export default function OperatorProfileModal({
                         oreTargetGiornaliere={dailyHoursForOvertime}
                         days={days}
                         rangeLabel={`${fmtDate(range.start)} → ${fmtDate(range.end)}`}
+                        customFrom={customFrom}
+                        customTo={customTo}
+                        onChangeFrom={(iso) => { setPeriod('custom'); setCustomFrom(iso) }}
+                        onChangeTo={(iso) => { setPeriod('custom'); setCustomTo(iso) }}
                     />
                 </div>
 
@@ -1165,11 +1169,23 @@ function CalcolaPagaSection({
     oreTargetGiornaliere,
     days,
     rangeLabel,
+    customFrom,
+    customTo,
+    onChangeFrom,
+    onChangeTo,
 }: {
     operatoreId: string
     oreTargetGiornaliere: number
     days: DayBreakdown[]
     rangeLabel: string
+    /** 2026-05-22: per rendere le date editabili direttamente sulla
+     *  card Calcola Paga, il parent passa le date custom + setter. Cosi'
+     *  bastano due input qui dentro per cambiare il periodo senza
+     *  scrollare fino alle pillole in cima al modal. */
+    customFrom: string
+    customTo: string
+    onChangeFrom: (iso: string) => void
+    onChangeTo: (iso: string) => void
 }) {
     const { hasRole } = useAdminRole()
     const isDirezione = hasRole('direzione') || hasRole('developer')
@@ -1294,9 +1310,27 @@ function CalcolaPagaSection({
 
     return (
         <div className="rounded-xl border border-theme-border bg-theme-bg-tertiary/30 p-4">
-            <div className="mb-3 flex items-baseline justify-between gap-2 flex-wrap">
+            <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
                 <h3 className="text-sm font-semibold text-theme-text-primary">Calcola Paga</h3>
-                <span className="text-[10px] text-theme-text-muted">{rangeLabel}</span>
+                {/* 2026-05-22: date inline editabili — niente piu' label
+                    read-only "12 apr → 22 mag". Cambiando una delle due
+                    date il parent forza period='custom'. rangeLabel resta
+                    come fallback per accessibility / debug. */}
+                <div className="flex items-center gap-1.5" aria-label={rangeLabel}>
+                    <input
+                        type="date"
+                        value={customFrom}
+                        onChange={(e) => onChangeFrom(e.target.value)}
+                        className="bg-theme-bg-secondary border border-theme-border rounded px-2 py-1 text-[11px] text-theme-text-primary"
+                    />
+                    <span className="text-[11px] text-theme-text-muted">→</span>
+                    <input
+                        type="date"
+                        value={customTo}
+                        onChange={(e) => onChangeTo(e.target.value)}
+                        className="bg-theme-bg-secondary border border-theme-border rounded px-2 py-1 text-[11px] text-theme-text-primary"
+                    />
+                </div>
             </div>
 
             {noContract ? (
