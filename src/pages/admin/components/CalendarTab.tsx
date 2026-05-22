@@ -88,8 +88,12 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
   const [currentDate, setCurrentDate] = useState(new Date())
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
-  // Canonical monthly fatturato — same number Report Noleggio + Dashboard show
+  // Canonical monthly fatturato + bookings count — same numbers Report Noleggio
+  // + Dashboard show (source: /.netlify/functions/monthly-report). Client-side
+  // counting from the loaded bookings list can miss rows when the list is
+  // paginated / partially loaded, so we prefer the server-side count.
   const [canonicalFatturato, setCanonicalFatturato] = useState<number | null>(null)
+  const [canonicalBookings, setCanonicalBookings] = useState<number | null>(null)
   // Centralina Pro categories — used to colour the small "AZIENDALE / SUPERCARS"
   // pill next to each row's vehicle name. Same source the Veicoli tab uses, so
   // the palette stays in sync between the two screens.
@@ -263,15 +267,16 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
         const yyyymm = `${currentRomeComponents.year}-${String(currentRomeComponents.month + 1).padStart(2, '0')}`
         const res = await authFetch(`/.netlify/functions/monthly-report?type=vehicles&month=${yyyymm}`)
         if (!res.ok) {
-          if (!cancelled) setCanonicalFatturato(null)
+          if (!cancelled) { setCanonicalFatturato(null); setCanonicalBookings(null) }
           return
         }
         const json = await res.json()
         if (!cancelled) {
           setCanonicalFatturato(typeof json.totalRevenue === 'number' ? json.totalRevenue : null)
+          setCanonicalBookings(typeof json.totalBookingsFound === 'number' ? json.totalBookingsFound : null)
         }
       } catch {
-        if (!cancelled) setCanonicalFatturato(null)
+        if (!cancelled) { setCanonicalFatturato(null); setCanonicalBookings(null) }
       }
     }
     loadCanonical()
@@ -476,7 +481,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
               <>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-theme-text-muted">Questo Mese:</span>
-                  <span className="text-dr7-gold font-bold text-sm">{activeInMonth.length} noleggi</span>
+                  <span className="text-dr7-gold font-bold text-sm">{canonicalBookings !== null ? canonicalBookings : activeInMonth.length} noleggi</span>
                 </div>
                 {canViewFinancials && !hideFinancials && (
                   <div className="flex items-center gap-1.5">
