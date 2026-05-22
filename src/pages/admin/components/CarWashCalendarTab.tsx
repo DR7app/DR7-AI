@@ -557,7 +557,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       <motion.div
         whileHover={{ y: -2 }}
         transition={{ type: 'spring', stiffness: 320, damping: 22 }}
-        className="group relative flex-1 min-w-[160px] flex items-center gap-3 rounded-xl p-3 overflow-hidden bg-[linear-gradient(135deg,rgba(20,28,45,0.85)_0%,rgba(10,15,25,0.85)_100%)] border border-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_8px_24px_-12px_rgba(0,0,0,0.6)] backdrop-blur-md hover:border-cyan-400/30 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_28px_-10px_rgba(34,211,238,0.25)] transition-all"
+        className="group relative flex-1 min-w-[160px] flex items-center gap-3 rounded-xl p-3 overflow-hidden bg-theme-bg-tertiary dark:bg-[linear-gradient(135deg,rgba(20,28,45,0.85)_0%,rgba(10,15,25,0.85)_100%)] border border-theme-border shadow-[0_8px_24px_-12px_rgba(0,0,0,0.15)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_8px_24px_-12px_rgba(0,0,0,0.6)] backdrop-blur-md hover:border-cyan-400/30 transition-all"
       >
         {/* sheen on hover */}
         <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -590,7 +590,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   return (
     <div
       style={TELEMETRY_VARS}
-      className="relative flex flex-col h-[calc(100vh-240px)] sm:h-[calc(100vh-200px)] rounded-2xl border border-cyan-400/10 shadow-[0_0_60px_-10px_rgba(34,211,238,0.18)] overflow-hidden bg-[radial-gradient(ellipse_at_top,_rgba(34,211,238,0.07)_0%,_transparent_55%),linear-gradient(180deg,#0a0d14_0%,#070a10_100%)]"
+      className="relative flex flex-col h-[calc(100vh-240px)] sm:h-[calc(100vh-200px)] rounded-2xl border border-theme-border dark:border-cyan-400/10 shadow-[0_0_60px_-10px_rgba(34,211,238,0.10)] overflow-hidden bg-theme-bg-primary dark:bg-[radial-gradient(ellipse_at_top,_rgba(34,211,238,0.07)_0%,_transparent_55%),linear-gradient(180deg,#0a0d14_0%,#070a10_100%)]"
     >
       {/* Ambient cyan glow — decorative, sits behind everything */}
       <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
@@ -599,7 +599,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       </div>
 
       {/* 0. KPI Strip — telemetry widgets row */}
-      <div className="relative z-10 flex flex-wrap gap-2 sm:gap-3 p-3 sm:p-4 border-b border-white/[0.06] bg-black/20 backdrop-blur-md">
+      <div className="relative z-10 flex flex-wrap gap-2 sm:gap-3 p-3 sm:p-4 border-b border-theme-border bg-theme-bg-secondary dark:bg-black/20 backdrop-blur-md">
         <KpiCard icon="cars" accent="emerald" label="Lavaggi Oggi" value={String(kpis.lavaggi)} delta={kpis.lavaggiDelta} />
         <KpiCard icon="clock" accent="blue" label="Slot Occupati" value={`${kpis.occ}%`} delta={kpis.occDelta} sub={`${formatDuration(kpis.bookedMin)} / ${formatDuration(kpis.openMin)}`} />
         <KpiCard icon="slot" accent="cyan" label="Slot Liberi" value={String(kpis.freeSlots)} sub={`${formatDuration(kpis.freeMin)} disp.`} />
@@ -609,7 +609,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       </div>
 
       {/* View tabs + date display + Oggi button — dark pill row, cyan accent. */}
-      <div className="relative z-10 flex flex-wrap items-center gap-3 px-3 sm:px-4 py-2.5 border-b border-white/[0.06] bg-black/20 backdrop-blur-md">
+      <div className="relative z-10 flex flex-wrap items-center gap-3 px-3 sm:px-4 py-2.5 border-b border-theme-border bg-theme-bg-secondary dark:bg-black/20 backdrop-blur-md">
         <div className="flex items-center gap-2 bg-theme-bg-primary/30 rounded-full p-1 border border-theme-border/40">
           {(['giorno', 'settimana', 'mese'] as const).map(v => (
             <button
@@ -673,7 +673,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       </div>
 
       {/* 1. Control Bar */}
-      <div className="relative z-10 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-3 sm:p-4 bg-black/25 backdrop-blur-md border-b border-white/[0.06] shadow-sm">
+      <div className="relative z-10 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-3 sm:p-4 bg-theme-bg-secondary dark:bg-black/25 backdrop-blur-md border-b border-theme-border shadow-sm">
         <div className="flex items-center gap-3 sm:gap-4">
           <h2 className="text-base sm:text-xl font-light text-theme-text-primary capitalize w-32 sm:w-48">
             {currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
@@ -755,7 +755,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
 
       {/* Compact legend — same colour codes used by the booking cards in the
           grid below. Wraps on small screens, no fixed sidebar. */}
-      <div className="relative z-10 hidden md:flex items-center gap-3 px-3 sm:px-4 py-2 bg-black/20 backdrop-blur-md border-b border-white/[0.06] text-[11px] flex-wrap">
+      <div className="relative z-10 hidden md:flex items-center gap-3 px-3 sm:px-4 py-2 bg-theme-bg-secondary dark:bg-black/20 backdrop-blur-md border-b border-theme-border text-[11px] flex-wrap">
         <span className="text-theme-text-muted uppercase tracking-wider font-semibold">Legenda</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /><span className="text-theme-text-primary">Pagato</span></span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-amber-500" /><span className="text-theme-text-primary">Link Nexi inviato</span></span>
@@ -769,7 +769,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       <div className="flex-1 flex overflow-hidden">
 
       {/* 2A. Scrollable Calendar Area */}
-      <div className="relative z-10 flex-1 overflow-auto flex flex-col w-full bg-[linear-gradient(180deg,#0a0d14_0%,#070a10_100%)]">
+      <div className="relative z-10 flex-1 overflow-auto flex flex-col w-full bg-theme-bg-primary dark:bg-[linear-gradient(180deg,#0a0d14_0%,#070a10_100%)]">
 
         {/* A. Sticky Header Row - Days */}
         <div className={`flex sticky top-0 z-[40] bg-theme-bg-primary shadow-lg border-b border-theme-border/50 ${stretchCols ? 'w-full' : 'min-w-max'}`}>
@@ -1040,7 +1040,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       </div>
 
       {/* 2B. Right sidebar — telemetry intelligence panel. */}
-      <aside className="relative z-10 hidden lg:flex flex-col w-72 shrink-0 border-l border-white/[0.06] bg-black/30 backdrop-blur-md p-4 gap-4 overflow-auto">
+      <aside className="relative z-10 hidden lg:flex flex-col w-72 shrink-0 border-l border-theme-border bg-theme-bg-secondary dark:bg-black/30 backdrop-blur-md p-4 gap-4 overflow-auto">
         {/* Mini month calendar — click a day to jump to it */}
         <div>
           <div className="flex items-center justify-between mb-2">
