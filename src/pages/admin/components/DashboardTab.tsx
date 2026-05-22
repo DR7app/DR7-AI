@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
+import DashboardOverview from './DashboardOverview'
 
 interface DashboardData {
   period: { month: string; daysInMonth: number; daysElapsed: number }
@@ -423,6 +424,9 @@ export default function DashboardTab() {
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
+
+      {/* ========== OVERVIEW (KPI strip + charts) ========== */}
+      <DashboardOverview />
 
       {/* ========== HEADER ========== */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2">
