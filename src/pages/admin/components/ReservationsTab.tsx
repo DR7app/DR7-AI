@@ -9673,6 +9673,34 @@ function ReservationsDashboardHeader({
     month: nowRome.getMonth() + 1,
   })
 
+  // 2026-05-22: leggi il fatturato CANONICO dal monthly-report endpoint
+  // (stesso source di Report Noleggio + Calendario), cosi' i tre numeri
+  // combaciano sempre. Local prorate resta come fallback se l'endpoint
+  // non risponde.
+  const [canonicalFatturato, setCanonicalFatturato] = useState<number | null>(null)
+  const [canonicalBookings, setCanonicalBookings] = useState<number | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const yyyymm = `${selMonth.year}-${String(selMonth.month).padStart(2, '0')}`
+        const res = await authFetch(`/.netlify/functions/monthly-report?type=vehicles&month=${yyyymm}`)
+        if (!res.ok) {
+          if (!cancelled) { setCanonicalFatturato(null); setCanonicalBookings(null) }
+          return
+        }
+        const json = await res.json()
+        if (!cancelled) {
+          setCanonicalFatturato(typeof json.totalRevenue === 'number' ? json.totalRevenue : null)
+          setCanonicalBookings(typeof json.totalBookingsFound === 'number' ? json.totalBookingsFound : null)
+        }
+      } catch {
+        if (!cancelled) { setCanonicalFatturato(null); setCanonicalBookings(null) }
+      }
+    })()
+    return () => { cancelled = true }
+  }, [selMonth.year, selMonth.month])
+
   const stats = useMemo(() => {
     const now = Date.now()
     const in24h = now + 24 * 60 * 60 * 1000
@@ -9875,7 +9903,7 @@ function ReservationsDashboardHeader({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
           label={`Prenotazioni ${selMonthLabel}`}
-          value={stats.total.toLocaleString('it-IT')}
+          value={(canonicalBookings !== null ? canonicalBookings : stats.total).toLocaleString('it-IT')}
           icon={(
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -9898,7 +9926,7 @@ function ReservationsDashboardHeader({
           hint="auto fuori in questo momento"
         />
         <FatturatoMonthCard
-          value={fmtEur(stats.revenueEuro)}
+          value={fmtEur(canonicalFatturato !== null ? canonicalFatturato : stats.revenueEuro)}
           monthLabel={selMonthLabel}
           year={selMonth.year}
           month={selMonth.month}
@@ -9933,6 +9961,7 @@ function ReservationsDashboardHeader({
           format={(v) => fmtEur(v)}
           formatAxis={(v) => v >= 1000 ? `€${Math.round(v / 1000)}K` : `€${Math.round(v)}`}
           ariaLabel="Fatturato giornaliero del mese"
+          totalOverride={canonicalFatturato !== null ? canonicalFatturato : undefined}
         />
         <TimeSeriesChart
           title={`Nuove Prenotazioni ${selMonthLabel}`}
