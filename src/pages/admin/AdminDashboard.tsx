@@ -357,12 +357,7 @@ export default function AdminDashboard() {
   const visibleSectionCount = SECTIONS.filter(s =>
     s.tabs.some(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin'))
   ).length
-  // 2026-05-22: nascondi la sidebar anche con 2-3 sezioni visibili.
-  // Operatori con 'Prime Wash + Clienti' (caso tipico per receptionist
-  // lavaggio) vedevano la sidebar verticale meta' vuota; meglio una
-  // barra orizzontale di tab piatta in alto. Superadmin/direzione
-  // conservano la sidebar perche' hanno tutte le sezioni.
-  const hideSidebar = visibleSectionCount <= 3 || isCollaboratore
+  const hideSidebar = visibleSectionCount <= 1 || isCollaboratore
   // Lista piatta di tutte le tab accessibili (per collaboratori). Tiene il
   // primo entry per ogni (tab + permKey) cosi' Preventivi sotto Noleggio
   // e Centralina Pro readonly compaiono nello stesso bar. Label di
