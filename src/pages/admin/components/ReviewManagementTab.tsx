@@ -884,13 +884,48 @@ export default function ReviewManagementTab() {
     }).length,
   }
 
+  // 2026-05-22 redesign: derived metrics for KPI strip + sidebar — all
+  // computed from existing candidates state, no new queries.
+  const totalCandidates = visibleCandidates.length
+  const responseRate = totalCandidates > 0
+    ? Math.round((liveStats.sent / totalCandidates) * 1000) / 10
+    : 0
+  // Suggerimenti intelligenti — derivati dai dati reali (no AI mock).
+  const aiSuggestions: { color: 'emerald' | 'amber' | 'red'; text: string }[] = []
+  if (liveStats.to_send > 0) {
+    aiSuggestions.push({ color: 'emerald', text: `${liveStats.to_send} client${liveStats.to_send === 1 ? 'e' : 'i'} pront${liveStats.to_send === 1 ? 'o' : 'i'} per ricevere la richiesta` })
+  }
+  if (liveStats.to_review > 0) {
+    aiSuggestions.push({ color: 'amber', text: `${liveStats.to_review} caso${liveStats.to_review === 1 ? '' : 'i'} da verificare manualmente prima dell'invio` })
+  }
+  if (liveStats.failed > 0) {
+    aiSuggestions.push({ color: 'red', text: `${liveStats.failed} invio${liveStats.failed === 1 ? '' : 'i'} fallit${liveStats.failed === 1 ? 'o' : 'i'} — riprova` })
+  }
+  if (aiSuggestions.length === 0) {
+    aiSuggestions.push({ color: 'emerald', text: 'Tutto a posto — nessuna azione richiesta al momento' })
+  }
+  // Orario migliore: distribuzione invii per fascia oraria (Europe/Rome).
+  const bestSendWindow = (() => {
+    const byHour: Record<number, number> = {}
+    for (const c of visibleCandidates) {
+      if (c.send_status !== 'SENT') continue
+      const h = new Date(c.updated_at).getHours()
+      byHour[h] = (byHour[h] || 0) + 1
+    }
+    const entries = Object.entries(byHour).map(([h, n]) => ({ h: Number(h), n }))
+    if (entries.length === 0) return { label: '18:00 - 20:00', rate: 0 }
+    entries.sort((a, b) => b.n - a.n)
+    const top = entries[0]
+    return { label: `${String(top.h).padStart(2, '0')}:00 - ${String((top.h + 1) % 24).padStart(2, '0')}:00`, rate: totalCandidates > 0 ? Math.round((top.n / totalCandidates) * 1000) / 10 : 0 }
+  })()
+
   return (
-    <div className="p-3 sm:p-6 max-w-7xl mx-auto">
+    <div className="p-3 sm:p-6">
       {/* Header — title + action buttons (top-right) */}
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-[22px] font-semibold text-theme-text-primary tracking-tight">Gestione Recensioni</h2>
-          <p className="text-sm text-theme-text-secondary mt-0.5">Invia richieste di recensione ai clienti idonei</p>
+          <h2 className="text-[22px] font-semibold text-theme-text-primary tracking-tight">Recensioni Marketing</h2>
+          <p className="text-sm text-theme-text-secondary mt-0.5">Sistema automatico di richiesta di recensione ai clienti</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button
@@ -946,8 +981,18 @@ export default function ReviewManagementTab() {
       </div>
 
       {/* Stats overview — clickable cards, each filters the list below.
-          Click the same card again to clear the filter (back to ALL). */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+          Click the same card again to clear the filter (back to ALL).
+          2026-05-22: aggiunto "Tasso di Risposta" come 7th card. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 mb-4">
+        {/* Tasso di Risposta — non-clickable info card */}
+        <div className="text-left bg-theme-bg-secondary border border-theme-border rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <span className="text-xs text-theme-text-secondary">Tasso di Risposta</span>
+          </div>
+          <div className="mt-1 text-2xl font-semibold text-theme-text-primary">{responseRate}%</div>
+          <div className="text-[10px] text-theme-text-secondary/70 mt-0.5">{liveStats.sent} / {totalCandidates || 0}</div>
+        </div>
         {([
           { key: 'ELIGIBLE', label: 'Idonei', value: liveStats.eligible, dot: 'bg-blue-500' },
           { key: 'TO_REVIEW', label: 'Da Verificare', value: liveStats.to_review, dot: 'bg-yellow-500' },
@@ -976,6 +1021,12 @@ export default function ReviewManagementTab() {
           )
         })}
       </div>
+
+      {/* 2026-05-22 redesign: 2-column layout (main + sidebar on lg+).
+          Sidebar shows Suggerimenti AI, Automazioni Attive, Statistiche
+          Piattaforma, Orario migliore — tutti dati reali, no mock. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-4">
+      <div className="min-w-0">
 
       {/* Top filter bar — Tipo Servizio / Stato Recensione / Search / Page size */}
       <div className="bg-theme-bg-secondary border border-theme-border rounded-2xl p-3 mb-4 flex flex-wrap items-center gap-3">
@@ -1448,6 +1499,125 @@ export default function ReviewManagementTab() {
           </>
         )
       })()}
+
+      </div>{/* /main column */}
+
+      {/* ── Sidebar (lg+ only) ─────────────────────────────────────────── */}
+      <aside className="space-y-3">
+        {/* Suggerimenti Intelligenti — derivati dai dati reali */}
+        <div className="bg-theme-bg-secondary border border-theme-border rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z" />
+            </svg>
+            <h3 className="text-sm font-semibold text-theme-text-primary">Suggerimenti Intelligenti</h3>
+          </div>
+          <div className="space-y-2">
+            {aiSuggestions.map((s, i) => {
+              const dotCls = s.color === 'emerald' ? 'bg-emerald-500' : s.color === 'amber' ? 'bg-amber-500' : 'bg-red-500'
+              return (
+                <div key={i} className="flex items-start gap-2 p-2 rounded-lg bg-theme-bg-primary border border-theme-border">
+                  <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${dotCls}`} />
+                  <span className="text-xs text-theme-text-secondary leading-relaxed">{s.text}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Automazioni Attive — toggles wired to settingsDraft */}
+        <div className="bg-theme-bg-secondary border border-theme-border rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <h3 className="text-sm font-semibold text-theme-text-primary">Automazioni Attive</h3>
+          </div>
+          <div className="space-y-2 text-xs">
+            {[
+              { label: 'Invio auto Noleggio', on: settingsDraft.auto_send_rental, key: 'auto_send_rental' as const },
+              { label: 'Invio auto Lavaggio', on: settingsDraft.auto_send_wash, key: 'auto_send_wash' as const },
+              { label: 'Conferma manuale casi gialli', on: settingsDraft.require_manual_confirm_yellow, key: 'require_manual_confirm_yellow' as const },
+            ].map(item => (
+              <label key={item.key} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-theme-bg-primary border border-theme-border cursor-pointer">
+                <span className="text-theme-text-primary">{item.label}</span>
+                <input
+                  type="checkbox"
+                  checked={item.on}
+                  onChange={e => setSettingsDraft({ ...settingsDraft, [item.key]: e.target.checked })}
+                  className="w-9 h-5 rounded-full appearance-none bg-theme-bg-tertiary checked:bg-emerald-500 relative cursor-pointer before:content-[''] before:absolute before:top-0.5 before:left-0.5 before:w-4 before:h-4 before:rounded-full before:bg-white before:transition-transform checked:before:translate-x-4"
+                />
+              </label>
+            ))}
+          </div>
+          <button
+            onClick={handleSaveSettings}
+            disabled={savingSettings}
+            className="mt-3 w-full text-[11px] text-cyan-400 hover:text-cyan-300 font-medium disabled:opacity-50"
+          >
+            {savingSettings ? 'Salvataggio…' : 'Salva automazioni'}
+          </button>
+        </div>
+
+        {/* Statistiche per Piattaforma — conteggio reale invii per canale */}
+        <div className="bg-theme-bg-secondary border border-theme-border rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            <h3 className="text-sm font-semibold text-theme-text-primary">Statistiche per Canale</h3>
+          </div>
+          <div className="space-y-2.5 text-xs">
+            {(() => {
+              const emailCount = visibleCandidates.filter(c => c.send_status === 'SENT' && c.contact_available_email).length
+              const waCount = visibleCandidates.filter(c => c.send_status === 'SENT' && c.contact_available_whatsapp).length
+              const max = Math.max(emailCount, waCount, 1)
+              return (
+                <>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-theme-text-primary">WhatsApp</span>
+                      <span className="text-theme-text-secondary tabular-nums">{waCount}</span>
+                    </div>
+                    <div className="h-1.5 bg-theme-bg-primary rounded-full overflow-hidden">
+                      <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${(waCount / max) * 100}%` }} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-theme-text-primary">Email</span>
+                      <span className="text-theme-text-secondary tabular-nums">{emailCount}</span>
+                    </div>
+                    <div className="h-1.5 bg-theme-bg-primary rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${(emailCount / max) * 100}%` }} />
+                    </div>
+                  </div>
+                </>
+              )
+            })()}
+          </div>
+        </div>
+
+        {/* Orario Migliore per Invio */}
+        <div className="bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/30 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h3 className="text-sm font-semibold text-theme-text-primary">Orario Migliore per Invio</h3>
+          </div>
+          <div className="text-3xl font-bold text-amber-600 dark:text-amber-400 tabular-nums">
+            {bestSendWindow.label}
+          </div>
+          <div className="text-[11px] text-theme-text-secondary mt-1">
+            {bestSendWindow.rate > 0
+              ? `${bestSendWindow.rate}% degli invii in questa fascia`
+              : 'Fascia consigliata (nessun dato storico)'}
+          </div>
+        </div>
+      </aside>
+
+      </div>{/* /2-col grid */}
 
     </div>
   )
