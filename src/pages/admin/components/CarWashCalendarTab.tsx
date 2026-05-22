@@ -1396,7 +1396,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Ora</label>
-                  <input type="time" value={editingBooking.appointment_time}
+                  <input type="time" lang="it-IT" value={editingBooking.appointment_time}
                     onChange={(e) => setEditingBooking({ ...editingBooking, appointment_time: e.target.value })}
                     className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary" />
                 </div>

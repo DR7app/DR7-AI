@@ -904,7 +904,7 @@ export default function CampagnaMarketingTab() {
                                     <div>
                                         <label className="block text-xs font-medium text-theme-text-secondary mb-1">Orario (Europe/Rome)</label>
                                         <input
-                                            type="time"
+                                            type="time" lang="it-IT"
                                             value={scheduleTime}
                                             onChange={(e) => setScheduleTime(e.target.value)}
                                             className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
@@ -1293,7 +1293,7 @@ export default function CampagnaMarketingTab() {
                             <div>
                                 <label className="block text-xs font-medium text-theme-text-secondary mb-1">Orario</label>
                                 <input
-                                    type="time"
+                                    type="time" lang="it-IT"
                                     value={editTime}
                                     onChange={(e) => setEditTime(e.target.value)}
                                     className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"

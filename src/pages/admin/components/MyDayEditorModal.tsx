@@ -354,12 +354,12 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
                             <div className="grid grid-cols-2 gap-3">
                                 <label className="block">
                                     <span className="text-xs text-theme-text-secondary">Entrata</span>
-                                    <input type="time" step={60} value={entrata} onChange={e => setEntrata(e.target.value)}
+                                    <input type="time" lang="it-IT" step={60} value={entrata} onChange={e => setEntrata(e.target.value)}
                                         className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary" />
                                 </label>
                                 <label className="block">
                                     <span className="text-xs text-theme-text-secondary">Uscita</span>
-                                    <input type="time" step={60} value={uscita} onChange={e => setUscita(e.target.value)}
+                                    <input type="time" lang="it-IT" step={60} value={uscita} onChange={e => setUscita(e.target.value)}
                                         className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary" />
                                 </label>
                             </div>
@@ -377,7 +377,7 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
                                         <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
                                             <label className="block">
                                                 <span className="text-xs text-theme-text-muted">Inizio pausa {i + 1}</span>
-                                                <input type="time" step={60} value={p.pausa_inizio || ''} onChange={e => {
+                                                <input type="time" lang="it-IT" step={60} value={p.pausa_inizio || ''} onChange={e => {
                                                     const next = [...pause]
                                                     next[i] = { ...next[i], pausa_inizio: e.target.value }
                                                     setPause(next)
@@ -385,7 +385,7 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
                                             </label>
                                             <label className="block">
                                                 <span className="text-xs text-theme-text-muted">Fine pausa {i + 1}</span>
-                                                <input type="time" step={60} value={p.pausa_fine || ''} onChange={e => {
+                                                <input type="time" lang="it-IT" step={60} value={p.pausa_fine || ''} onChange={e => {
                                                     const next = [...pause]
                                                     next[i] = { ...next[i], pausa_fine: e.target.value }
                                                     setPause(next)

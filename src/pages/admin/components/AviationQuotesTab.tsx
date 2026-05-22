@@ -326,6 +326,7 @@ export default function AviationQuotesTab() {
                   <Input
                     label="Orario Ritorno"
                     type="time"
+                    lang="it-IT"
                     value={formData.return_time}
                     onChange={(e) => setFormData({ ...formData, return_time: e.target.value })}
                   />

@@ -4589,7 +4589,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   <div>
                     <label className="block text-sm font-medium text-theme-text-secondary mb-2">Ora</label>
                     <input
-                      type="time"
+                      type="time" lang="it-IT"
                       value={(() => {
                         // Prefer appointment_time (TIME col "HH:MM:SS") sliced to HH:MM.
                         // Fallback: estrai HH:MM dall'appointment_date ISO (formattato in

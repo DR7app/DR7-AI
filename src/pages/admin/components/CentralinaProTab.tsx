@@ -6470,14 +6470,14 @@ function OrariLavaggioSection({
                     {day.windows.map((w, i) => (
                       <div key={i} className="flex items-center gap-2 group">
                         <input
-                          type="time"
+                          type="time" lang="it-IT"
                           value={w.start}
                           onChange={(e) => patchWindow(d, i, { start: e.target.value })}
                           className="bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                         />
                         <span className="text-[12px] text-theme-text-muted">→</span>
                         <input
-                          type="time"
+                          type="time" lang="it-IT"
                           value={w.end}
                           onChange={(e) => patchWindow(d, i, { end: e.target.value })}
                           className="bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
@@ -6628,14 +6628,14 @@ function NoleggioWeekHoursEditor({
                 {day.windows.map((w, i) => (
                   <div key={i} className="flex items-center gap-2 group">
                     <input
-                      type="time"
+                      type="time" lang="it-IT"
                       value={w.start}
                       onChange={(e) => patchWindow(d, i, { start: e.target.value })}
                       className="bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2"
                     />
                     <span className="text-[12px] text-theme-text-muted">→</span>
                     <input
-                      type="time"
+                      type="time" lang="it-IT"
                       value={w.end}
                       onChange={(e) => patchWindow(d, i, { end: e.target.value })}
                       className="bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2"

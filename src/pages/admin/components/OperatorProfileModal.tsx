@@ -416,16 +416,23 @@ export default function OperatorProfileModal({
                         <button
                             type="button"
                             onClick={() => {
-                                // Aggiungi giornata: chiede una data al volo (default oggi).
+                                // Aggiungi giornata: chiede una data al volo (default
+                                // oggi). Formato europeo GG/MM/AAAA — l'utente non
+                                // deve mai vedere YYYY-MM-DD (ordine americano).
+                                // Internamente convertiamo a ISO prima di passarla
+                                // a setEditingDay che si aspetta il formato del DB.
                                 const todayIso = toRomeDate(new Date())
-                                const input = window.prompt('Data della giornata da aggiungere (YYYY-MM-DD)', todayIso)
+                                const [ty, tm, td] = todayIso.split('-')
+                                const todayEu = `${td}/${tm}/${ty}`
+                                const input = window.prompt('Data della giornata da aggiungere (GG/MM/AAAA)', todayEu)
                                 if (!input) return
-                                const m = input.match(/^\d{4}-\d{2}-\d{2}$/)
+                                const m = input.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
                                 if (!m) {
-                                    toast.error('Formato data non valido. Usa YYYY-MM-DD')
+                                    toast.error('Formato data non valido. Usa GG/MM/AAAA (es. 22/05/2026)')
                                     return
                                 }
-                                setEditingDay(input)
+                                const [, dd, mm, yyyy] = m
+                                setEditingDay(`${yyyy}-${mm}-${dd}`)
                             }}
                             className="text-xs px-3 py-1.5 rounded-full bg-dr7-gold text-black font-semibold hover:opacity-90"
                         >
