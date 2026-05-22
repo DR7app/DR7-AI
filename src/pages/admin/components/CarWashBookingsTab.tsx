@@ -3041,9 +3041,26 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   Raggruppato per categoria, mostra nome / prezzo / durata /
                   features. La card selezionata e' evidenziata in oro. */}
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-2">
-                  Seleziona il servizio
-                </label>
+                <div className="flex items-end justify-between mb-2 gap-3 flex-wrap">
+                  <label className="block text-sm font-medium text-theme-text-secondary">
+                    Seleziona il servizio
+                    <span className="ml-2 text-[11px] font-normal text-theme-text-muted">
+                      (puoi selezionare più di un servizio — il primo è il principale, gli altri vengono aggiunti come extra)
+                    </span>
+                  </label>
+                  {(selectedService || selectedExtras.length > 0) && (
+                    <span className="text-[11px] text-theme-text-muted">
+                      <span className="font-semibold text-dr7-gold">1</span> principale
+                      {selectedExtras.length > 0 && (
+                        <> · <span className="font-semibold text-emerald-400">{selectedExtras.length}</span> extra</>
+                      )}
+                    </span>
+                  )}
+                </div>
+                {/* 2026-05-22: multi-select. Il primo click set selectedService
+                    (main, usato per nome/durata/prezzo base). Click successivi
+                    aggiungono a selectedExtras. Click su un servizio gia'
+                    selezionato lo rimuove. */}
                 {Object.entries(servicesByCategory).map(([category, services]) => (
                   <div key={category} className="mb-4">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-theme-text-muted mb-2">
@@ -3052,7 +3069,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                       {services.map(service => {
                         const sn = getServiceNum(service.name)
-                        const isSelected = selectedService?.id === service.id
+                        const isMain = selectedService?.id === service.id
+                        const isExtra = selectedExtras.some(e => e.id === service.id)
+                        const isSelected = isMain || isExtra
                         const features = Array.isArray(service.features) ? service.features.slice(0, 5) : []
                         const priceLabel = service.price_unit === 'custom'
                           ? `Da € ${service.price.toFixed(2)}`
@@ -3062,23 +3081,46 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             key={service.id}
                             type="button"
                             onClick={() => {
-                              setSelectedService(service)
-                              setSelectedPriceOption(null)
-                              setCustomPrice('')
+                              if (isMain) {
+                                // Rimuovi il main: promuovi il primo extra a main, se esiste
+                                if (selectedExtras.length > 0) {
+                                  const [promoted, ...rest] = selectedExtras
+                                  setSelectedService(promoted)
+                                  setSelectedExtras(rest)
+                                } else {
+                                  setSelectedService(null)
+                                }
+                                setSelectedPriceOption(null)
+                                setCustomPrice('')
+                              } else if (isExtra) {
+                                // Rimuovi dall'extras
+                                setSelectedExtras(prev => prev.filter(e => e.id !== service.id))
+                              } else if (!selectedService) {
+                                // Primo click: diventa il main
+                                setSelectedService(service)
+                                setSelectedPriceOption(null)
+                                setCustomPrice('')
+                              } else {
+                                // Click successivo: aggiungi agli extras
+                                setSelectedExtras(prev => [...prev, service])
+                              }
                             }}
                             className={`relative text-left rounded-xl border p-4 transition-all ${
-                              isSelected
+                              isMain
                                 ? 'border-dr7-gold bg-dr7-gold/10 shadow-[0_0_0_1px_var(--dr7-gold)]'
-                                : 'border-theme-border bg-theme-bg-tertiary/40 hover:border-dr7-gold/60 hover:bg-theme-bg-tertiary/60'
+                                : isExtra
+                                  ? 'border-emerald-500 bg-emerald-500/10 shadow-[0_0_0_1px_rgb(16,185,129)]'
+                                  : 'border-theme-border bg-theme-bg-tertiary/40 hover:border-dr7-gold/60 hover:bg-theme-bg-tertiary/60'
                             }`}
                           >
                             {/* Header: name + checkmark when selected */}
                             <div className="flex items-start justify-between gap-2 mb-2">
-                              <h4 className={`text-sm font-bold leading-tight ${isSelected ? 'text-dr7-gold' : 'text-theme-text-primary'}`}>
+                              <h4 className={`text-sm font-bold leading-tight ${isMain ? 'text-dr7-gold' : isExtra ? 'text-emerald-400' : 'text-theme-text-primary'}`}>
                                 {sn ? `${sn}. ` : ''}{service.name}
+                                {isExtra && <span className="ml-1.5 text-[10px] font-semibold uppercase text-emerald-400/80">+extra</span>}
                               </h4>
                               {isSelected && (
-                                <span className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full bg-dr7-gold text-white text-[12px] leading-none">
+                                <span className={`shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full text-white text-[12px] leading-none ${isMain ? 'bg-dr7-gold' : 'bg-emerald-500'}`}>
                                   ✓
                                 </span>
                               )}
