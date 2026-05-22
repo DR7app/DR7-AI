@@ -55,14 +55,8 @@ const ROLE_TAG_OPTIONS: { tag: string; label: string; hint: string }[] = [
   { tag: 'role:preventivi-admin',  label: 'Preventivi Admin',   hint: 'Flussi speciali preventivi' },
 ]
 
-// hide:X keys per nascondere singoli elementi UI a un operatore.
-// Letti direttamente da permissions[] (no bypass direzione/developer/`*`),
-// quindi funzionano anche se l'utente ha permessi pieni.
-const HIDE_KEY_OPTIONS: { tag: string; label: string; hint: string }[] = [
-  { tag: 'hide:allarmi',                 label: 'Nascondi Allarmi',           hint: 'Toglie il blocco "Attiva Allarmi" + gear nella sidebar' },
-  { tag: 'hide:miei-orari',              label: 'Nascondi "I miei orari"',    hint: 'Toglie il pulsante (sidebar, header, menu profilo)' },
-  { tag: 'hide:richieste-no-cauzione',   label: 'Nascondi "Richieste No Cauzione"', hint: 'Toglie il sub-tab nella pagina Preventivi' },
-]
+// hide:X keys: rimossi 2026-05-22 (commit d3423982 ha tolto l'unico
+// call site). Git history mantiene la definizione se servisse rimetterli.
 
 interface LogEntry {
   id: string

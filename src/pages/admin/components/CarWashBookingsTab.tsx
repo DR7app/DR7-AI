@@ -1838,14 +1838,22 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         // conferma lavaggio standard).
         const isPendingPayment = paymentStatus !== 'paid' && paymentStatus !== 'completed' && paymentStatus !== 'succeeded'
         const isMech = confSvc === 'mechanical' || confSvc === 'mechanical_service'
-        // Per la conferma "da saldare" usiamo l'evento SPECIFICO al
-        // servizio (carwash_confirmed_da_saldare / mechanical_..) cosi'
-        // non collide piu' con "Conferma Noleggio" che claima
-        // booking_confirmed_da_saldare. Lavaggio confermata-pending va
-        // alla "Conferma Lavaggio", meccanica alla "Conferma Meccanica".
-        const eventKey = (confirmBooking && isPendingPayment)
-          ? (isMech ? 'mechanical_confirmed_da_saldare' : 'carwash_confirmed_da_saldare')
-          : (isMech ? 'mechanical_new_customer' : 'carwash_new_customer')
+        // Regola allineata al noleggio (ReservationsTab):
+        //  - Conferma ON + Da Saldare   -> carwash_confirmed_da_saldare
+        //  - Conferma ON + Pagata        -> carwash_new_customer (conferma standard)
+        //  - Edit + Pagata               -> carwash_new_customer
+        //  - Da Saldare SENZA Conferma  -> NESSUN messaggio (il cliente
+        //    non ha ancora pagato e l'admin non ha bloccato il booking,
+        //    inviare conferma adesso e' fuorviante).
+        //  - Nuovo + Pagato (no Conferma) -> carwash_new_customer
+        let eventKey: string | null
+        if (confirmBooking && isPendingPayment) {
+          eventKey = isMech ? 'mechanical_confirmed_da_saldare' : 'carwash_confirmed_da_saldare'
+        } else if (isPendingPayment && !confirmBooking) {
+          eventKey = null
+        } else {
+          eventKey = isMech ? 'mechanical_new_customer' : 'carwash_new_customer'
+        }
         // Extract templateVars once so the per-method block below can reuse them.
         const waTemplateVars = {
           // Customer
@@ -1882,24 +1890,24 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           notes: formData.notes || '',
           note: formData.notes || '',
         }
-        const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
+        // eventKey può essere null quando booking pending + Conferma OFF
+        // (l'admin non vuole far partire niente fino al pagamento o al
+        // tick di Conferma). In quel caso saltiamo SILENZIOSAMENTE il send.
+        const waResp = eventKey ? await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customPhone: customerPhone,
-            // BUG FIX 2026-05-13: era hardcoded 'pro_conferma_lavaggio' →
-            // bypassava handled_events. Adesso legacy event key derivata
-            // dal service_type, così il resolver instrada via
-            // handled_events + service-type ranking. Custom Prime Wash
-            // templates vincono sul canonical.
             templateKey: eventKey,
             booking: { service_type: confSvc },
             templateVars: waTemplateVars,
             skipHeader: true,
           })
-        })
-        const waResult = await waResp.json().catch(() => ({}))
-        if (!waResp.ok || waResult?.skipped) {
+        }) : null
+        const waResult = waResp ? await waResp.json().catch(() => ({})) : null
+        if (!eventKey) {
+          logger.log('[Save] Carwash/Meccanica pending senza Conferma — nessun WhatsApp inviato')
+        } else if (!waResp?.ok || waResult?.skipped) {
           toast.error('Template mancante in Messaggi di Sistema Pro: pro_conferma_lavaggio')
         } else {
           logger.log('✅ WhatsApp customer confirmation sent to', customerPhone)
