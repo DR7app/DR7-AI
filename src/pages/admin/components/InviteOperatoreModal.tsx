@@ -24,7 +24,8 @@ export const PERMISSION_SECTIONS: { name: string; tabs: { key: string; label: st
   ]},
   { name: 'Flotta', tabs: [
     { key: 'vehicles', label: 'Veicoli' },
-    { key: 'fleet', label: 'Gestione Flotta' },
+    // 'fleet' permission rimosso 2026-05-22: la tab Gestione Flotta
+    // e' stata eliminata, niente da concedere.
     { key: 'gps-keyless', label: 'GPS Flotta' },
   ]},
   { name: 'Clienti', tabs: [

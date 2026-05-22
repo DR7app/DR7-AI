@@ -35,7 +35,8 @@ const GestioneMulteTab = lazyWithRetry(() => import('./components/GestioneMulteT
 const CauzioniTab = lazyWithRetry(() => import('./components/CauzioniTab'))
 const NexiTab = lazyWithRetry(() => import('./components/NexiTab'))
 const BirthdaysTab = lazyWithRetry(() => import('./components/BirthdaysTab'))
-const FleetManagementTab = lazyWithRetry(() => import('./components/FleetManagementTab'))
+// FleetManagementTab rimosso 2026-05-22: la tab "Gestione Flotta" e'
+// stata eliminata perche' duplicato di "Veicoli".
 const FleetInventory = lazyWithRetry(() => import('./components/FleetInventory'))
 const ScadenzeTab = lazyWithRetry(() => import('./components/ScadenzeTab'))
 const ReportsTab = lazyWithRetry(() => import('./components/ReportsTab'))
@@ -70,7 +71,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'fleet' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'maxi-promo-gap' | 'promo-incassi' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'com-email' | 'com-pec' | 'com-whatsapp' | 'com-sms' | 'com-chiamate' | 'com-chatgpt' | 'com-aruba' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'maxi-promo-gap' | 'promo-incassi' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -280,7 +281,9 @@ export default function AdminDashboard() {
       { tab: 'carwash-catalog', label: 'Catalogo' },
     ] },
     { name: 'Flotta', tabs: [
-      { tab: 'fleet', label: 'Gestione Flotta' },
+      // 'fleet' (Gestione Flotta) rimosso 2026-05-22: duplicato di
+      // Veicoli, che gia' copre il caso d'uso. La tab restava solo a
+      // confondere l'utente.
       { tab: 'vehicles', label: 'Veicoli' },
       { tab: 'magazzino', label: 'Magazzino' },
       { tab: 'gps-keyless', label: 'GPS Flotta' },
@@ -388,7 +391,6 @@ export default function AdminDashboard() {
     'carwash-calendar': 'Calendario Prime Wash',
     'carwash-catalog': 'Catalogo Prime Wash',
     'vehicles': 'Veicoli',
-    'fleet': 'Gestione Flotta',
     'gps-keyless': 'GPS Flotta',
     'unpaid': 'In attesa di pagamento',
     'customers': 'Lead',
@@ -956,7 +958,7 @@ export default function AdminDashboard() {
           {activeTab === 'marketing-pro' && <MessaggiSistemaProTab />}
           {activeTab === 'campagna-marketing' && <CampagnaMarketingTab />}
           {activeTab === 'social-links' && <SocialLinksTab />}
-          {activeTab === 'fleet' && <FleetManagementTab />}
+          {/* 'fleet' route eliminata 2026-05-22 — vedi nota sulla sidebar. */}
           {activeTab === 'magazzino' && <FleetInventory />}
           {activeTab === 'nexi' && (isTabRestricted('nexi') ? <PlaceholderTab title="Accesso non autorizzato" /> : <NexiTab />)}
           {activeTab === 'scadenze' && <ScadenzeTab />}
