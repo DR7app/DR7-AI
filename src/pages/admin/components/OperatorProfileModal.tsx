@@ -591,14 +591,8 @@ function emptyContratto(): Contratto {
     }
 }
 
-const HIDE_KEY_OPTIONS: { tag: string; label: string; hint: string }[] = [
-    { tag: 'hide:allarmi',               label: 'Nascondi Allarmi',                hint: 'Toglie il blocco "Attiva Allarmi" + gear in sidebar' },
-    { tag: 'hide:miei-orari',            label: 'Nascondi "I miei orari"',         hint: 'Toglie il pulsante (sidebar, header, menu profilo)' },
-    { tag: 'hide:richieste-no-cauzione', label: 'Nascondi "Richieste No Cauzione"', hint: 'Toglie il sub-tab dentro Preventivi' },
-]
-
-// 2026-05-22: HideUiSection rimosso (commit d3423982 ha tolto il suo
-// call site). Mantenibile in git history se servisse rimetterlo.
+// 2026-05-22: HIDE_KEY_OPTIONS + HideUiSection rimossi (commit d3423982
+// ha tolto il call site). Git history conserva il codice se servisse rimetterlo.
 
 function ContrattoSection({ operatoreId }: { operatoreId: string }) {
     const { hasRole } = useAdminRole()
