@@ -9683,22 +9683,30 @@ function ReservationsDashboardHeader({
     const grace1d = now - 24 * 60 * 60 * 1000
 
     const daysInSelMonth = new Date(selMonth.year, selMonth.month, 0).getDate()
-    let total = 0
-    let active = 0
     let revenueCents = 0
-    let scadenzeInRitardo = 0   // dropoff gia' passato (ultimi 3 gg), status aperto
-    let scadenzeImminenti = 0   // dropoff entro 24h nel futuro, status aperto
+    // 2026-05-22: tutti i KPI in modalita' UNIQUE.
+    // - total: booking unici (per id) attivi nel mese
+    // - active: VEICOLI unici fuori in questo momento (non righe booking)
+    // - scadenze: VEICOLI unici con rientro imminente / in ritardo
+    // Se piu' righe booking puntano allo stesso veicolo (duplicati, errori),
+    // contano una sola volta.
+    const seenBookingIds = new Set<string>()
+    const totalBookingIds = new Set<string>()
+    const activeVehicles = new Set<string>()
+    const ritardoVehicles = new Set<string>()
+    const imminentiVehicles = new Set<string>()
+    const activeStatuses = new Set(['confirmed', 'confermata', 'in_corso', 'active'])
 
     for (const b of bookings) {
       if (b.service_type && b.service_type !== 'rental') continue
 
+      const bookingId = String(b.id || `${b.pickup_date}|${b.dropoff_date}|${b.vehicle_id || b.vehicle_plate}`)
+      if (seenBookingIds.has(bookingId)) continue
+      seenBookingIds.add(bookingId)
+
       const mLike = b as unknown as MonthlyBookingLike
       const reportable = isReportableRentalBooking(mLike)
 
-      // "Prenotazioni del mese" — stessa logica del Report Noleggio: una
-      // prenotazione conta nel mese se ha almeno un giorno di occupazione
-      // (pickup gia' nel mese, oppure giorno di permanenza nel mese per
-      // bookings cross-month). Stesso gate isReportableRentalBooking.
       if (reportable && b.pickup_date && b.dropoff_date) {
         const overlap = getOccupiedDaysInMonth(
           b.pickup_date,
@@ -9707,42 +9715,41 @@ function ReservationsDashboardHeader({
           selMonth.month,
           daysInSelMonth,
         )
-        if (overlap > 0) total++
+        if (overlap > 0) totalBookingIds.add(bookingId)
       }
 
-      // Fatturato mensile prorata — stessa formula del Report Noleggio.
       if (reportable) {
         revenueCents += prorateRevenueForMonth(
           mLike,
           selMonth.year,
           selMonth.month,
           daysInSelMonth,
-        ) * 100 // prorateRevenueForMonth ritorna euro; riportiamo a cents poi /100 a fine
+        ) * 100
       }
 
       const status = String(b.status || '').toLowerCase()
-      // 2026-05-22: "Noleggi Attivi" e "Scadenze" applicano lo stesso gate
-      // del Report Noleggio (escludono test plates, internal, admin,
-      // service_type non-rental). Senza questo gate il KPI conteggiava
-      // anche TEST000/internal/admin@dr7.app gonfiando il numero.
-      // Status strict: solo confirmed/confermata/in_corso/active sono
-      // "auto fuori". Pending = richiesta non confermata, non auto fuori.
-      const activeStatuses = new Set(['confirmed', 'confermata', 'in_corso', 'active'])
       if (reportable && activeStatuses.has(status)) {
         const pickupMs = b.pickup_date ? new Date(b.pickup_date).getTime() : NaN
         const dropoffMs = b.dropoff_date ? new Date(b.dropoff_date).getTime() : NaN
-        if (Number.isFinite(pickupMs) && Number.isFinite(dropoffMs) && pickupMs <= now && dropoffMs >= now) {
-          active++
-        }
-        if (Number.isFinite(dropoffMs)) {
-          if (dropoffMs < now && dropoffMs >= grace1d) {
-            scadenzeInRitardo++
-          } else if (dropoffMs >= now && dropoffMs <= in24h) {
-            scadenzeImminenti++
+        const vehicleKey = String(b.vehicle_id || b.vehicle_plate || b.id || '')
+        if (vehicleKey) {
+          if (Number.isFinite(pickupMs) && Number.isFinite(dropoffMs) && pickupMs <= now && dropoffMs >= now) {
+            activeVehicles.add(vehicleKey)
+          }
+          if (Number.isFinite(dropoffMs)) {
+            if (dropoffMs < now && dropoffMs >= grace1d) {
+              ritardoVehicles.add(vehicleKey)
+            } else if (dropoffMs >= now && dropoffMs <= in24h) {
+              imminentiVehicles.add(vehicleKey)
+            }
           }
         }
       }
     }
+    const total = totalBookingIds.size
+    const active = activeVehicles.size
+    const scadenzeInRitardo = ritardoVehicles.size
+    const scadenzeImminenti = imminentiVehicles.size
     return {
       total,
       active,
@@ -9929,7 +9936,7 @@ function ReservationsDashboardHeader({
           ariaLabel="Fatturato giornaliero del mese"
         />
         <TimeSeriesChart
-          title={`Prenotazioni ${selMonthLabel}`}
+          title={`Nuove Prenotazioni ${selMonthLabel}`}
           values={timeSeries.dailyNewBookings}
           daysInMonth={timeSeries.daysInMonth}
           monthIndex={selMonth.month - 1}
