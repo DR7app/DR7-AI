@@ -248,7 +248,7 @@ function OperatoriViewSwitch({ view, setView }: { view: OperatoriView; setView: 
     rilevazione: 'Rilevazione Orari',
     payroll: 'Buste Paga',
     contratti: 'Contratti',
-    audit: 'Audit log',
+    audit: 'Gestione & Permessi',
   }
   return (
     <div className="flex justify-end">
