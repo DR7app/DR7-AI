@@ -422,15 +422,21 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
             const totTargetMin = opList.reduce((s, o) => s + targetMinForOp(o, daysCount), 0)
             setKpi(prev => ({ ...prev, oreLavorate: totMinLav, oreTarget: totTargetMin }))
 
-            // Top 5 per produttivita (ore lavorate / target). Salta i veicoli
-            // senza target — non hanno una base di confronto, pct = N/A.
+            // Top 5 per Ore Lavorate — il widget si chiama "Top 5 per Ore
+            // Lavorate" quindi DEVE ordinare per minuti lavorati nel periodo,
+            // non per pct produttivita. Bug 2026-05-22: prima ordinava per
+            // pct ma mostrava i minuti, e siccome chi non ha mai timbrato
+            // ha pct=0 con sort stabile usciva primo alfabeticamente
+            // (Michele) anche con 0 minuti reali. Escludo anche chi ha 0
+            // minuti per non riempire la classifica di gente che non ha
+            // mai lavorato nel range.
             const topProd = opList.map(o => {
                 const m = perOpMin.get(o.id) || 0
-                const tgt = targetMinForOp(o, daysCount)
-                const pct = tgt > 0 ? Math.round((m / tgt) * 100) : 0
-                return { name: `${o.nome} ${o.cognome || ''}`.trim(), value: pct, minuti: m }
-            }).sort((a, b) => b.value - a.value).slice(0, 5)
-            setTopFatturato(topProd.map(t => ({ name: t.name, value: t.minuti }))) // riusa per top fatturato (= ore lavorate per ora)
+                return { name: `${o.nome} ${o.cognome || ''}`.trim(), value: m }
+            }).filter(t => t.value > 0)
+              .sort((a, b) => b.value - a.value)
+              .slice(0, 5)
+            setTopFatturato(topProd)
 
             // 5. Costi personale dai contratti attivi
             const { data: contratti } = await supabase

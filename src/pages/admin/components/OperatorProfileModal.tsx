@@ -341,10 +341,12 @@ export default function OperatorProfileModal({
                     <ContrattoSection operatoreId={operatore.id} />
                 </div>
 
-                {/* Nascondi UI — toggle hide:X keys direttamente dal profilo */}
-                <div className="px-4 sm:px-6 pt-3">
-                    <HideUiSection operatoreId={operatore.id} />
-                </div>
+                {/* Nascondi UI rimosso 2026-05-22: l'utente l'ha
+                    bollato come "bullshit" nel suo flusso. Le toggle
+                    hide:X esistono ancora in InviteOperatoreModal e in
+                    OperatoriTab (sezione Permessi & Ruoli) dove sono
+                    piu' al loro posto. HideUiSection resta definita
+                    sotto per evitare di toccare il resto del file. */}
 
                 {/* Calcola Paga — usa contratto + ore lavorate nel periodo */}
                 <div className="px-4 sm:px-6 pt-3">
