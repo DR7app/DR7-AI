@@ -241,9 +241,14 @@ export default function OperatorProfileModal({
         const totMinPausa = days.reduce((s, d) => s + d.minutiPausa, 0)
         const totPause = days.reduce((s, d) => s + d.pauseWindows.length, 0)
         const giorniAttivi = days.filter(d => d.minutiLavorati > 0).length
-        // Target rispettando la granularita' del contratto. Se l'admin ha
-        // entrato weekly, target = weekly × (giorniAttivi/7) — niente daily fake.
-        const targetMin = targetMinFor(giorniAttivi)
+        // 2026-05-22: target proporzionato all'INTERO range selezionato,
+        // non ai soli "giorni attivi". L'utente entra "42h/sett" e per un
+        // mese si aspetta 42 × 30/7 ≈ 180h target, non 42 × 17/7 = 102h
+        // basato sui soli giorni in cui ha timbrato. La completion poi
+        // riflette davvero "quanto ho lavorato vs quanto ci si aspettava
+        // nel periodo" — assenze incluse.
+        const rangeDays = days.length || 1
+        const targetMin = targetMinFor(rangeDays)
         const completion = targetMin > 0 ? Math.round((totMinLavorati / targetMin) * 100) : 0
         const avgPausa = totPause > 0 ? Math.round(totMinPausa / totPause) : 0
         const maxPausa = days.flatMap(d => d.pauseWindows).reduce((m, p) => Math.max(m, p.durMin), 0)
@@ -365,7 +370,11 @@ export default function OperatorProfileModal({
                 {/* KPI cards */}
                 <div className="px-4 sm:px-6 py-3 sm:py-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
                     <KpiCard label="Ore Lavorate" value={fmtMin(stats.totMinLavorati)} tone="emerald" />
-                    <KpiCard label="Target" value={fmtMin(stats.targetMin)} sub={`${stats.giorniAttivi} giorni attivi`} tone="sky" />
+                    {/* Target Periodo: prorato sulla durata del range,
+                        non sui soli giorni timbrati. Sub mostra la base
+                        contrattuale ("42h / sett.") cosi' l'admin capisce
+                        da dove esce il numero. */}
+                    <KpiCard label="Target Periodo" value={fmtMin(stats.targetMin)} sub={targetLabel()} tone="sky" />
                     <KpiCard label="Completamento" value={`${stats.completion}%`} tone={stats.completion >= 100 ? 'emerald' : stats.completion >= 75 ? 'amber' : 'rose'} />
                     <KpiCard label="Pause Totali" value={fmtMin(stats.totMinPausa)} sub={`${stats.totPause} pause`} tone="amber" />
                     <KpiCard label="Pausa Media" value={stats.avgPausa > 0 ? `${stats.avgPausa} min` : '—'} tone="muted" />
