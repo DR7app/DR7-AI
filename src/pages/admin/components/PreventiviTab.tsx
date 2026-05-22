@@ -3956,26 +3956,17 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
 
       {/* Insurance — 2026-05-22: convertito da dropdown a lista di radio
           card visibili sempre. Prima era un Select e veniva saltato spesso
-          (l'operatore non lo apriva e il preventivo partiva senza assicurazione). */}
+          (l'operatore non lo apriva e il preventivo partiva senza assicurazione).
+          'Nessuna assicurazione' rimossa: ogni preventivo deve avere copertura. */}
       {insuranceOptions.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-theme-text-primary">Assicurazione</p>
             {!form.insurance_option && (
-              <span className="text-[11px] text-amber-400 font-medium">⚠ Nessuna assicurazione selezionata</span>
+              <span className="text-[11px] text-amber-400 font-medium">⚠ Seleziona un'assicurazione</span>
             )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <label className={`flex items-center gap-3 cursor-pointer p-2 rounded-lg border transition-colors ${form.insurance_option === '' ? 'border-amber-400/60 bg-amber-500/5' : 'border-theme-border/50 hover:bg-theme-bg-tertiary/30'}`}>
-              <input
-                type="radio"
-                name="insurance_option"
-                checked={form.insurance_option === ''}
-                onChange={() => setForm(prev => ({ ...prev, insurance_option: '' }))}
-                className="w-4 h-4 accent-dr7-gold"
-              />
-              <span className="text-sm text-theme-text-primary">Nessuna assicurazione</span>
-            </label>
             {insuranceOptions.map(i => {
               const checked = form.insurance_option === i.id
               return (
