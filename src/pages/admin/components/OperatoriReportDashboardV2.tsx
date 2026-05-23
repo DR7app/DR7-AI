@@ -60,6 +60,11 @@ interface Operatore {
     // NON inventiamo un daily fake.
     _target_gran?: 'giornaliera' | 'settimanale' | 'mensile' | 'none'
     _target_value_h?: number
+    // 2026-05-23: campi extra dal contratto cosi' il report riflette
+    // esattamente il contratto attivo (tipo rapporto, giorni lavorativi
+    // settimana per convertire weekly→daily correttamente).
+    _tipo_rapporto?: string | null
+    _giorni_settimana?: number | null
 }
 
 interface DayRow {
@@ -309,18 +314,29 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
             //        || contract.ore_target_mensili / 22     (giorni/mese)
             //        || op.ore_target_giornaliere || 8       (fallback)
             const opIds = opListRaw.map(o => o.id)
-            const contractsByOp = new Map<string, { giornaliere: number | null; settimanali: number | null; mensili: number | null }>()
+            const contractsByOp = new Map<string, { giornaliere: number | null; settimanali: number | null; mensili: number | null; giorni_settimana: number | null; tipo_rapporto: string | null }>()
             if (opIds.length > 0) {
                 const { data: contracts } = await supabase
                     .from('operatore_contratto')
-                    .select('operatore_id, ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, attivo')
+                    // 2026-05-23: pull tipo_rapporto + giorni_lavorativi_settimana
+                    // cosi' il report riflette esattamente il contratto attivo.
+                    .select('operatore_id, ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, giorni_lavorativi_settimana, tipo_rapporto, attivo')
                     .in('operatore_id', opIds)
                     .eq('attivo', true)
-                for (const c of (contracts || []) as Array<{ operatore_id: string; ore_target_giornaliere: number | null; ore_target_settimanali: number | null; ore_target_mensili: number | null }>) {
+                for (const c of (contracts || []) as Array<{
+                    operatore_id: string
+                    ore_target_giornaliere: number | null
+                    ore_target_settimanali: number | null
+                    ore_target_mensili: number | null
+                    giorni_lavorativi_settimana: number | null
+                    tipo_rapporto: string | null
+                }>) {
                     contractsByOp.set(c.operatore_id, {
                         giornaliere: c.ore_target_giornaliere,
                         settimanali: c.ore_target_settimanali,
                         mensili: c.ore_target_mensili,
+                        giorni_settimana: c.giorni_lavorativi_settimana,
+                        tipo_rapporto: c.tipo_rapporto,
                     })
                 }
             }
@@ -331,8 +347,6 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                     if (c.settimanali && c.settimanali > 0) return { gran: 'settimanale', value: c.settimanali }
                     if (c.mensili && c.mensili > 0) return { gran: 'mensile', value: c.mensili }
                 }
-                // Legacy fallback solo se l'operatori_persone ha un valore
-                // non-zero. Se l'admin ha azzerato tutto, niente target.
                 if (op.ore_target_giornaliere && op.ore_target_giornaliere > 0) {
                     return { gran: 'giornaliera', value: op.ore_target_giornaliere }
                 }
@@ -340,7 +354,14 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
             }
             const opList: Operatore[] = opListRaw.map(o => {
                 const t = computeTarget(o)
-                return { ...o, _target_gran: t.gran, _target_value_h: t.value }
+                const c = contractsByOp.get(o.id)
+                return {
+                    ...o,
+                    _target_gran: t.gran,
+                    _target_value_h: t.value,
+                    _tipo_rapporto: c?.tipo_rapporto || null,
+                    _giorni_settimana: c?.giorni_settimana || null,
+                }
             })
             setOperatori(opList)
 
@@ -475,10 +496,22 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                 const b = new Date(`${rangeTo}T00:00:00`).getTime()
                 return Math.max(1, Math.round((b - a) / 86400000) + 1)
             })()
+            // 2026-05-23: usa giorni_lavorativi_settimana dal contratto
+            // per convertire weekly→daily. Es. 40h/sett con 5gg lavorativi
+            // = 8h/g, non 40/7 = 5.7h/g.
             const targetMinForOp = (op: Operatore, days: number): number => {
                 const v = (op._target_value_h || 0) * 60
                 if (op._target_gran === 'giornaliera') return Math.round(v * days)
-                if (op._target_gran === 'settimanale') return Math.round(v * (days / 7))
+                if (op._target_gran === 'settimanale') {
+                    const giorni = op._giorni_settimana && op._giorni_settimana > 0 ? op._giorni_settimana : 5
+                    // ore/sett × (giorni periodo × giorni_lav/7) / giorni_lav = ore tot
+                    // Semplificato: weekly_hours × days/7 dato che il target settimanale
+                    // si distribuisce sui 7 giorni del periodo proporzionalmente
+                    // (se hai contratto 40h/sett, in 14gg fanno 80h indipendentemente
+                    // da quanti sono i lavorativi).
+                    void giorni
+                    return Math.round(v * (days / 7))
+                }
                 if (op._target_gran === 'mensile') return Math.round(v * (days / 30))
                 return 0
             }
@@ -786,7 +819,16 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                                                         <span className="text-theme-text-primary underline-offset-2 hover:underline">{r.operatore.nome} {r.operatore.cognome}</span>
                                                     </span>
                                                 </td>
-                                                <td className="py-1.5 px-2 text-theme-text-muted">{r.operatore.ruolo || '—'}</td>
+                                                {/* 2026-05-23: ruolo + tipo contratto (dipendente/collaboratore/...)
+                                                    cosi' il report riflette esattamente cio' che c'e' nel contratto */}
+                                                <td className="py-1.5 px-2 text-theme-text-muted">
+                                                    <div>{r.operatore.ruolo || '—'}</div>
+                                                    {r.operatore._tipo_rapporto && (
+                                                        <div className="text-[9px] uppercase tracking-wider text-theme-text-muted/70 mt-0.5">
+                                                            {r.operatore._tipo_rapporto}
+                                                        </div>
+                                                    )}
+                                                </td>
                                                 <td className="py-1.5 px-2 font-mono text-theme-text-primary">{fmtTime(r.entrata)}</td>
                                                 <td className="py-1.5 px-2 font-mono text-theme-text-muted">{fmtTime(r.pausa_inizi[0] || null)}</td>
                                                 <td className="py-1.5 px-2 font-mono text-theme-text-muted">{fmtTime(r.pausa_fini[0] || null)}</td>
