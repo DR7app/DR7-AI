@@ -1172,8 +1172,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               if (prev.unlimited_km) {
                 unlimitedKmSurcharge = getUnlimitedKmPriceRes(selectedVehicle, activeTier) * data.rentalDays
               }
+              // 2026-05-23: Secondo guidatore = TARIFFA FISSA (una tantum), non per giorno.
               const secondDriverFee = prev.has_second_driver
-                ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1) * data.rentalDays
+                ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1)
                 : 0
               const experienceCost = calculateExperienceCost(prev.experience_services, data.rentalDays)
               const flexCost = prev.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * data.rentalDays : 0
@@ -1317,8 +1318,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (formData.unlimited_km) {
         unlimitedKmSurcharge = getUnlimitedKmPriceRes(selectedVehicle, activeTier) * revenueSuggestion.rentalDays
       }
+      // 2026-05-23: Secondo guidatore = TARIFFA FISSA (una tantum), non per giorno.
       const secondDriverFee = formData.has_second_driver
-        ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1) * revenueSuggestion.rentalDays
+        ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1)
         : 0
       const experienceCost = calculateExperienceCost(formData.experience_services, revenueSuggestion.rentalDays)
       const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * revenueSuggestion.rentalDays : 0
@@ -4299,8 +4301,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           if (!newCustomerData.citta) missing.push('citta')
         }
 
-        // Common
-        if (!newCustomerData.email) missing.push('email')
+        // Common — WhatsApp è il canale primario, quindi richiediamo SOLO
+        // il telefono. L'email rimane opzionale: contratto, fattura e
+        // notifiche usano già il telefono come fallback (vedi
+        // signature-init.ts che sintetizza un placeholder email quando
+        // serve). Prima richiedevamo entrambi e gli admin venivano bloccati
+        // su clienti azienda senza email anche se avevano il numero.
         if (!newCustomerData.telefono) missing.push('telefono')
 
         // CRITICAL FIX: Generate UUID for new customer to ensure modal has valid ID
@@ -4536,7 +4542,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             // Patente not required for azienda
             missing = ['nome', 'cognome', 'codice_fiscale', 'data_nascita', 'luogo_nascita', 'indirizzo', 'citta_residenza']
             if (tempCustData.tipo_cliente !== 'azienda') missing.push('patente')
-            if (!tempCustData.email) missing.push('email')
+            // Email opzionale: WhatsApp è il canale primario di consegna
+            // (contratto, fattura, notifiche). Richiediamo solo telefono.
             if (!tempCustData.telefono) missing.push('telefono')
 
             logger.log('[processBookingSubmission] Customer exists in bookings but not in customers_extended. Will create new profile with missing fields:', missing)

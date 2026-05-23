@@ -998,8 +998,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     const unlimitedKmDaily = form.include_unlimited_km ? proUnlimitedKmDaily : 0
     const unlimitedKmTotal = Math.round(unlimitedKmDaily * rentalDays * 100) / 100
 
+    // 2026-05-23: Secondo guidatore = TARIFFA FISSA (una tantum), non per
+    // giorno. Il valore Centralina Pro (es. €30) viene applicato UNA volta
+    // sola indipendentemente dalla durata del noleggio. La variabile
+    // secondDriverDaily resta nominalmente per back-compat ma e' di fatto
+    // il prezzo flat.
     const secondDriverDaily = form.include_second_driver ? proSecondDriverDaily : 0
-    const secondDriverTotal = Math.round(secondDriverDaily * rentalDays * 100) / 100
+    const secondDriverTotal = secondDriverDaily // flat: no × rentalDays
 
     const dr7FlexDaily = form.include_dr7_flex ? proDr7FlexDaily : 0
     const dr7FlexTotal = Math.round(dr7FlexDaily * rentalDays * 100) / 100
@@ -2043,8 +2048,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           // quando ha esplicitamente scelto km illimitati.
           return ''
         })()
+        // 2026-05-23: Secondo guidatore = una tantum (non per giorno)
         const lineSecondDriver = p.second_driver_total > 0
-          ? `Secondo guidatore = ${formatEur(p.second_driver_total)}` : ''
+          ? `Secondo guidatore (una tantum) = ${formatEur(p.second_driver_total)}` : ''
         const lineDr7Flex = (extras?.dr7_flex_total && Number(extras.dr7_flex_total) > 0)
           ? `DR7 Flex = ${formatEur(Number(extras.dr7_flex_total))}` : ''
         const lineCauzioneVeicoli = (extras?.cauzione_veicoli_total && Number(extras.cauzione_veicoli_total) > 0)
