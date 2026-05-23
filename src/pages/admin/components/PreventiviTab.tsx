@@ -2694,10 +2694,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       amount_paid: paidCents,
       service_type: 'rental',
       booking_source: 'admin',
-      // 2026-05-23: km top-level cosi' ReservationsTab / contract /
-      // fattura leggono lo stesso km che il cliente ha visto sul quote.
-      km_limit: preventivoUnlimited ? null : (typeof p.km_limit === 'number' ? p.km_limit : null),
-      unlimited_km: preventivoUnlimited,
+      // 2026-05-23: NON aggiungere km_limit/unlimited_km al top-level
+      // della insert su bookings — quelle colonne NON esistono nello
+      // schema (PostgREST: "Could not find the 'km_limit' column of
+      // 'bookings' in the schema cache"). Il dato resta dentro
+      // booking_details (vedi qui sotto), che e' la source of truth
+      // per ReservationsTab / generate-contract / generate-invoice.
       customer_name: customerName,
       customer_email: customerEmail,
       customer_phone: customerPhone,
