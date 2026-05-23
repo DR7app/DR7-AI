@@ -216,22 +216,38 @@ export async function resolveKeyForContext(key: string, _context?: RenderContext
     if (ranked.length > 0) return ranked[0].t.message_key
   }
 
-  // 2026-05-19: NO MORE HARDCODED FALLBACK.
+  // 2026-05-23: SAFE CANONICAL FALLBACK per chiavi legacy.
   //
-  // Prima qui c'era un fallback su OLD_TO_PRO + LABEL_FALLBACKS che faceva
-  // partire il template canonical (es. pro_conferma_da_saldare per
-  // payment_received_damages) anche quando l'admin aveva tolto quell'evento
-  // dalla Programmazione del template. Ignorava completamente le scelte
-  // della direzione.
+  // Storia:
+  //  - prima del 19/05 c'era un fallback su OLD_TO_PRO + LABEL_FALLBACKS
+  //    fuzzy che faceva partire template anche se l'admin li aveva tolti
+  //    dalla Programmazione.
+  //  - il 19/05 abbiamo rimosso TUTTO il fallback → "solo handled_events".
+  //    Risultato: se l'admin ha il template canonical (es. message_key
+  //    `pro_richiesta_pagamento`) ma senza handled_events compilato, ogni
+  //    send con templateKey legacy (`payment_link_customer`) veniva
+  //    skippato con "template mancante". Bug riportato: link generato,
+  //    WhatsApp non partito.
   //
-  // Adesso: SOLO i template con handled_events che include l'evento
-  // possono fire. Se la direzione vuole che un template gestisca un
-  // evento, lo seleziona in Messaggi di Sistema Pro > Programmazione.
-  // Se nessun template lo gestisce → nessun messaggio (silent skip + log).
+  // Adesso (23/05): se nessun template ha claimato l'evento via
+  // handled_events, ricadi sul canonical pro_* ricavato da OLD_TO_PRO
+  // — MA solo se quel template esiste, è abilitato e ha body. Niente
+  // fuzzy match, niente label fallback. È l'equivalente del fallback
+  // canonical che già esisteva per le chiavi pro_* (vedi righe 155-158).
   //
-  // Log esplicito così, se qualcosa NON parte, l'admin vede in console
-  // / Netlify logs quale evento è "orfano" e può assegnarlo.
-  console.warn(`[resolveKeyForContext] No Pro template has "${key}" in handled_events — message skipped. Assegna l'evento a un pro_* in Messaggi di Sistema Pro > Programmazione se vuoi che parta.`)
+  // L'admin può ancora restringere il routing: se vuole che un template
+  // NON gestisca un evento, basta che NON sia il canonical pro_* mappato.
+  // Cioè se rinomina message_key o crea un custom pro_custom_*, il
+  // canonical legacy non parte più.
+  const proKeyFromLegacy = OLD_TO_PRO[key]
+  if (proKeyFromLegacy) {
+    const canonical = templates.find(t => t.message_key === proKeyFromLegacy)
+    if (canonical && canonical.is_enabled && canonical.message_body) {
+      return proKeyFromLegacy
+    }
+  }
+
+  console.warn(`[resolveKeyForContext] No Pro template handles "${key}" — message skipped. Configura handled_events su un pro_* in Messaggi di Sistema Pro > Programmazione, oppure popola il body del canonical (${proKeyFromLegacy || 'nessuno mappato'}).`)
   return null
 }
 
