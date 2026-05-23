@@ -4065,7 +4065,7 @@ function ServiziSection({
                     className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-10 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">
-                    {servizi.second_driver_billing === 'flat' ? 'fisso' : '/g'}
+                    {(servizi.second_driver_billing || 'flat') === 'flat' ? 'fisso' : '/g'}
                   </span>
                 </div>
               </div>
