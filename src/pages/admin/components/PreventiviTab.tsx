@@ -2051,15 +2051,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           // quando ha esplicitamente scelto km illimitati.
           return ''
         })()
-        // 2026-05-23: Secondo guidatore — label cambia in base al config
-        // ('flat' = una tantum, 'per_day' = al giorno). La label viene
-        // letta sempre dal config corrente, non snapshot del preventivo,
-        // cosi' se admin cambia la modalita' i preventivi gia' inviati
-        // ri-renderizzano con la label nuova.
-        const sdBillingMode = (proServizi?.second_driver_billing || 'flat')
-        const sdSuffix = sdBillingMode === 'flat' ? '(una tantum)' : '(al giorno)'
+        // 2026-05-23: Solo "Secondo guidatore = €X" — niente suffisso
+        // (una tantum / al giorno) nella riga WhatsApp, su richiesta utente.
         const lineSecondDriver = p.second_driver_total > 0
-          ? `Secondo guidatore ${sdSuffix} = ${formatEur(p.second_driver_total)}` : ''
+          ? `Secondo guidatore = ${formatEur(p.second_driver_total)}` : ''
         const lineDr7Flex = (extras?.dr7_flex_total && Number(extras.dr7_flex_total) > 0)
           ? `DR7 Flex = ${formatEur(Number(extras.dr7_flex_total))}` : ''
         const lineCauzioneVeicoli = (extras?.cauzione_veicoli_total && Number(extras.cauzione_veicoli_total) > 0)

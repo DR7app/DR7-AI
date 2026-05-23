@@ -883,7 +883,7 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
             { key: 'lavaggio_line', description: 'Riga lavaggio finale (se incluso)', example: 'Lavaggio Finale = €9,90' },
             { key: 'no_cauzione_line', description: 'Riga No Cauzione (se richiesta)', example: 'No cauzione = €147,00' },
             { key: 'km_line', description: 'Riga km inclusi o illimitati', example: 'Km inclusi: 360 Km' },
-            { key: 'second_driver_line', description: 'Riga secondo guidatore (suffisso "una tantum" o "al giorno" in base a Centralina Pro > Servizi). Vuoto se non aggiunto.', example: 'Secondo guidatore (una tantum) = €30,00' },
+            { key: 'second_driver_line', description: 'Riga secondo guidatore. Vuoto se non aggiunto al preventivo.', example: 'Secondo guidatore = €30,00' },
             { key: 'second_driver_total', description: 'Solo importo totale secondo guidatore. Vuoto se non aggiunto.', example: '€30,00' },
             { key: 'second_driver_daily', description: 'Solo tariffa unitaria (€/giorno se per_day, € fisso se flat). Vuoto se non aggiunto.', example: '€30,00' },
             { key: 'dr7_flex_line', description: 'Riga DR7 Flex', example: 'DR7 Flex = €54,00' },
