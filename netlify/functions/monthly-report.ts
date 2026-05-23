@@ -121,43 +121,72 @@ export const handler: Handler = async (event) => {
   const params = event.queryStringParameters || {}
   const reportType = params.type
   const month = params.month
+  const fromParam = params.from
+  const toParam = params.to
   const debug = params.debug === 'true'
 
-  if (!reportType || !month) {
+  // 2026-05-23: supportiamo entrambi i formati:
+  // 1. month=YYYY-MM (legacy, intero mese)
+  // 2. from=YYYY-MM-DD & to=YYYY-MM-DD (nuovo, range arbitrario per
+  //    7gg / 30gg / anno / custom). Frontend nuovo manda from+to.
+  if (!reportType || (!month && (!fromParam || !toParam))) {
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: 'Missing required params: type and month (YYYY-MM)' })
+      body: JSON.stringify({ error: 'Missing required params: type AND (month=YYYY-MM OR from+to=YYYY-MM-DD)' })
     }
   }
 
-  const [yearStr, monthStr] = month.split('-')
-  const year = parseInt(yearStr)
-  const monthNum = parseInt(monthStr)
+  let monthStart: Date
+  let monthEnd: Date
+  let monthStartISO: string
+  let monthEndISO: string
+  let daysInMonth: number  // actually "days in period" — variable name kept for diff size
+  let year = 0
+  let monthNum = 0
 
-  if (!year || !monthNum || monthNum < 1 || monthNum > 12) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: 'Invalid month format. Use YYYY-MM' })
+  if (fromParam && toParam) {
+    // Range arbitrario
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fromParam) || !/^\d{4}-\d{2}-\d{2}$/.test(toParam)) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'Invalid from/to format. Use YYYY-MM-DD' }) }
     }
+    monthStartISO = fromParam
+    monthEndISO = toParam
+    const [fy, fm, fd] = fromParam.split('-').map(Number)
+    const [ty, tm, td] = toParam.split('-').map(Number)
+    monthStart = new Date(fy, fm - 1, fd, 0, 0, 0)
+    monthEnd = new Date(ty, tm - 1, td, 23, 59, 59)
+    if (monthEnd < monthStart) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'to must be >= from' }) }
+    }
+    daysInMonth = Math.round((monthEnd.getTime() - monthStart.getTime()) / 86400000) + 1
+    year = fy
+    monthNum = fm
+  } else {
+    // Legacy: mese pieno
+    const [yearStr, monthStr] = month!.split('-')
+    year = parseInt(yearStr)
+    monthNum = parseInt(monthStr)
+    if (!year || !monthNum || monthNum < 1 || monthNum > 12) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'Invalid month format. Use YYYY-MM' }) }
+    }
+    daysInMonth = getDaysInMonth(year, monthNum)
+    monthStart = new Date(year, monthNum - 1, 1, 0, 0, 0)
+    monthEnd = new Date(year, monthNum - 1, daysInMonth, 23, 59, 59)
+    monthStartISO = `${year}-${String(monthNum).padStart(2, '0')}-01`
+    monthEndISO = `${year}-${String(monthNum).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
   }
-
-  const daysInMonth = getDaysInMonth(year, monthNum)
-  const monthStart = new Date(year, monthNum - 1, 1, 0, 0, 0)
-  const monthEnd = new Date(year, monthNum - 1, daysInMonth, 23, 59, 59)
-  const monthStartISO = `${year}-${String(monthNum).padStart(2, '0')}-01`
-  const monthEndISO = `${year}-${String(monthNum).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
+  const periodLabel = fromParam && toParam ? `${monthStartISO}_${monthEndISO}` : month!
 
   try {
     if (reportType === 'vehicles') {
-      return await generateVehicleReport(year, monthNum, daysInMonth, monthStart, monthEnd, monthStartISO, monthEndISO, month, debug)
+      return await generateVehicleReport(year, monthNum, daysInMonth, monthStart, monthEnd, monthStartISO, monthEndISO, periodLabel, debug)
     } else if (reportType === 'washes') {
-      return await generateWashReport(monthStartISO, monthEndISO, month, daysInMonth)
+      return await generateWashReport(monthStartISO, monthEndISO, periodLabel, daysInMonth)
     } else if (reportType === 'cauzioni') {
-      return await generateCauzioniReport(monthStartISO, monthEndISO, month)
+      return await generateCauzioniReport(monthStartISO, monthEndISO, periodLabel)
     } else if (reportType === 'diagnose') {
-      // Diagnostic mode - show raw data for a specific plate
       const plate = params.plate?.toUpperCase().replace(/\s/g, '')
-      return await runDiagnostics(plate, monthStartISO, monthEndISO, month)
+      return await runDiagnostics(plate, monthStartISO, monthEndISO, periodLabel)
     } else {
       return {
         statusCode: 400,
@@ -545,7 +574,19 @@ async function generateVehicleReport(
     const rentedCount = rentedDaysTotal
     const maintenanceCount = finalMaintenanceDays.size
     const uniqueRentedDays = finalRentedDays.size
-    const idleCount = daysInMonth - uniqueRentedDays - maintenanceCount
+
+    // 2026-05-23: utilizzo reale = rented / GIORNI TRASCORSI nel periodo
+    // (non giorni TOTALI del periodo). Se siamo a meta' mese, denominatore
+    // = giorni passati, non l'intero mese, cosi' un veicolo noleggiato
+    // tutti i giorni elapsed = 100% anche se il mese non e' finito.
+    // Per periodi interamente nel passato, elapsed = period totale.
+    const todayMs = Date.now()
+    const elapsedEndMs = Math.min(todayMs, monthEnd.getTime())
+    const elapsedDaysRaw = elapsedEndMs >= monthStart.getTime()
+      ? Math.round((elapsedEndMs - monthStart.getTime()) / 86400000) + 1
+      : 0
+    const elapsedDays = Math.max(1, Math.min(daysInMonth, elapsedDaysRaw))
+    const idleCount = elapsedDays - uniqueRentedDays - maintenanceCount
 
     const report: any = {
       vehicleId: vehicle.id,
@@ -556,9 +597,12 @@ async function generateVehicleReport(
       rentedDays: rentedCount,
       maintenanceDays: maintenanceCount,
       idleDays: Math.max(0, idleCount),
-      utilizationRate: Math.round((uniqueRentedDays / daysInMonth) * 100) / 100,
-      downtimeRate: Math.round((maintenanceCount / daysInMonth) * 100) / 100,
-      idleRate: Math.round((Math.max(0, idleCount) / daysInMonth) * 100) / 100,
+      // utilizationRate ora basato su giorni trascorsi reali del periodo
+      utilizationRate: Math.min(1, Math.round((uniqueRentedDays / elapsedDays) * 100) / 100),
+      downtimeRate: Math.min(1, Math.round((maintenanceCount / elapsedDays) * 100) / 100),
+      idleRate: Math.min(1, Math.round((Math.max(0, idleCount) / elapsedDays) * 100) / 100),
+      elapsedDays,
+      periodTotalDays: daysInMonth,
       bookingsCount: vehicleBookings.length,
       rentalRevenue: Math.round(rentalRevenue * 100) / 100,
       penaltyRevenue: Math.round(penaltyRevenue * 100) / 100,

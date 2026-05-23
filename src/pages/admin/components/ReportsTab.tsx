@@ -31,6 +31,11 @@ interface VehicleReport {
   utilizationRate: number
   downtimeRate: number
   idleRate: number
+  // 2026-05-23: nuovo schema. elapsedDays = giorni trascorsi del periodo
+  // (denominatore vero usato per utilizationRate). periodTotalDays = giorni
+  // totali del periodo (mostrato come "su X giorni" in tooltip/sub).
+  elapsedDays?: number
+  periodTotalDays?: number
   bookingsCount: number
   rentalRevenue: number
   penaltyRevenue: number
@@ -132,6 +137,46 @@ export default function ReportsTab() {
 
   const [selectedMonth, setSelectedMonth] = useState(currentMonth)
   const [activeReport, setActiveReport] = useState<'vehicles' | 'washes' | 'cauzioni'>('vehicles')
+
+  // 2026-05-23: range picker (oggi, 7gg, 30gg, mese corrente, anno, custom).
+  // Backend ora accetta from+to oltre al legacy month=YYYY-MM. Quando preset
+  // === 'mese' uso il legacy `month` per non rompere chi ha link bookmarkati.
+  type RangePreset = 'oggi' | '7gg' | '30gg' | 'mese' | 'anno' | 'custom'
+  const [rangePreset, setRangePreset] = useState<RangePreset>('mese')
+  const todayISO = now.toISOString().slice(0, 10)
+  function calcRange(preset: RangePreset): { from: string; to: string } {
+    const today = new Date()
+    const to = today.toISOString().slice(0, 10)
+    if (preset === 'oggi') return { from: to, to }
+    if (preset === '7gg') {
+      const d = new Date(); d.setDate(d.getDate() - 6)
+      return { from: d.toISOString().slice(0, 10), to }
+    }
+    if (preset === '30gg') {
+      const d = new Date(); d.setDate(d.getDate() - 29)
+      return { from: d.toISOString().slice(0, 10), to }
+    }
+    if (preset === 'anno') {
+      const d = new Date(today.getFullYear(), 0, 1)
+      return { from: d.toISOString().slice(0, 10), to }
+    }
+    // 'mese' → primo del mese corrente
+    if (preset === 'mese') {
+      const d = new Date(today.getFullYear(), today.getMonth(), 1)
+      return { from: d.toISOString().slice(0, 10), to }
+    }
+    return { from: to, to }
+  }
+  const initRange = calcRange('mese')
+  const [customFrom, setCustomFrom] = useState(initRange.from)
+  const [customTo, setCustomTo] = useState(initRange.to)
+  useEffect(() => {
+    if (rangePreset !== 'custom') {
+      const r = calcRange(rangePreset)
+      setCustomFrom(r.from)
+      setCustomTo(r.to)
+    }
+  }, [rangePreset])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -183,11 +228,11 @@ export default function ReportsTab() {
     return m
   }, [proCategories])
 
-  // Auto-load report on mount and when month/report type changes
+  // Auto-load report on mount and when range / report type changes
   useEffect(() => {
     fetchReport()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedMonth, activeReport])
+  }, [activeReport, rangePreset, customFrom, customTo])
 
   const [plateSearch, setPlateSearch] = useState('')
   const [sortField, setSortField] = useState<keyof VehicleReport>('utilizationRate')
@@ -198,7 +243,10 @@ export default function ReportsTab() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/.netlify/functions/monthly-report?type=${activeReport}&month=${selectedMonth}`)
+      // Backend supporta sia month=YYYY-MM (legacy) che from+to=YYYY-MM-DD.
+      // Custom range / preset 7gg / 30gg / anno / oggi → mandiamo from+to.
+      const url = `/.netlify/functions/monthly-report?type=${activeReport}&from=${customFrom}&to=${customTo}`
+      const res = await fetch(url)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Errore nel caricamento')
       if (activeReport === 'vehicles') {
@@ -375,9 +423,16 @@ export default function ReportsTab() {
             </p>
             <p className="text-xs text-theme-text-muted">{v.plate}</p>
           </div>
-          <span className={`text-lg font-bold ${getUtilizationColor(v.utilizationRate)}`}>
-            {formatPercent(v.utilizationRate)}
-          </span>
+          <div className="text-right">
+            <span className={`text-lg font-bold ${getUtilizationColor(v.utilizationRate)}`}>
+              {formatPercent(v.utilizationRate)}
+            </span>
+            {v.elapsedDays != null && v.periodTotalDays != null && (
+              <div className="text-[10px] text-theme-text-muted mt-0.5" title={`Calcolato su ${v.elapsedDays} giorni trascorsi del periodo (totale ${v.periodTotalDays}gg)`}>
+                {v.rentedDays}/{v.elapsedDays}gg trascorsi
+              </div>
+            )}
+          </div>
         </div>
         {/* Progress bar */}
         <div className="w-full h-2 bg-theme-bg-tertiary rounded-full mb-3">
@@ -649,15 +704,50 @@ export default function ReportsTab() {
             </div>
           </div>
 
-          {/* Month Selector */}
+          {/* Range Selector — 2026-05-23: sostituito month picker singolo
+              con preset (oggi / 7gg / 30gg / mese / anno / custom) + date
+              from/to per range arbitrari. Tutti i preset settano custom*
+              automaticamente; quando preset='custom' i date input sono
+              modificabili a mano. */}
           <div>
-            <label className="block text-xs text-theme-text-muted mb-1">Mese</label>
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm"
-            />
+            <label className="block text-xs text-theme-text-muted mb-1">Periodo</label>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex rounded-md border border-theme-border bg-theme-bg-tertiary p-0.5 text-xs">
+                {([
+                  { key: 'oggi', label: 'Oggi' },
+                  { key: 'mese', label: 'Mese' },
+                  { key: '7gg', label: '7gg' },
+                  { key: '30gg', label: '30gg' },
+                  { key: 'anno', label: 'Anno' },
+                  { key: 'custom', label: 'Custom' },
+                ] as { key: RangePreset; label: string }[]).map(p => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    onClick={() => setRangePreset(p.key)}
+                    className={`px-3 py-1 rounded ${rangePreset === p.key ? 'bg-dr7-gold text-white font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="date"
+                value={customFrom}
+                max={customTo || todayISO}
+                onChange={(e) => { setRangePreset('custom'); setCustomFrom(e.target.value) }}
+                className="px-2 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs"
+              />
+              <span className="text-theme-text-muted text-xs">→</span>
+              <input
+                type="date"
+                value={customTo}
+                min={customFrom}
+                max={todayISO}
+                onChange={(e) => { setRangePreset('custom'); setCustomTo(e.target.value) }}
+                className="px-2 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs"
+              />
+            </div>
           </div>
 
           {/* Generate Button */}
@@ -666,7 +756,7 @@ export default function ReportsTab() {
             disabled={loading}
             className="px-6 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#0A8FA3] transition-colors disabled:opacity-50"
           >
-            {loading ? 'Caricamento...' : 'Genera Report'}
+            {loading ? 'Caricamento...' : 'Aggiorna'}
           </button>
         </div>
       </div>
