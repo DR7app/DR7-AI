@@ -131,6 +131,36 @@ const CATEGORY_PALETTE = [
 ]
 const FALLBACK_STYLE = { container: 'border-theme-border/50 bg-theme-bg-hover/5', badge: 'bg-theme-bg-hover/20 text-theme-text-muted' }
 
+// 2026-05-23: helpers per gestire date in formato europeo DD/MM/YYYY
+// dentro text input, evitando il <input type="date"> che segue il
+// locale OS (su Mac US mostra MM/DD/YYYY → confusione).
+// Internamente lo state resta YYYY-MM-DD (formato API/Supabase).
+function isoToEU(iso: string): string {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return ''
+  const [y, m, d] = iso.split('-')
+  return `${d}/${m}/${y}`
+}
+function euToIso(eu: string): string | null {
+  // Accetta "DD/MM/YYYY" o "D/M/YY[YY]"
+  const m = eu.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/)
+  if (!m) return null
+  const d = m[1].padStart(2, '0')
+  const mo = m[2].padStart(2, '0')
+  let y = m[3]
+  if (y.length === 2) y = (parseInt(y, 10) > 50 ? '19' : '20') + y
+  // validate
+  const dt = new Date(`${y}-${mo}-${d}T00:00:00`)
+  if (Number.isNaN(dt.getTime())) return null
+  return `${y}-${mo}-${d}`
+}
+function formatEUInput(raw: string): string {
+  // Auto-inserisce "/" mentre l'utente digita.
+  const digits = raw.replace(/[^0-9]/g, '').slice(0, 8)
+  if (digits.length <= 2) return digits
+  if (digits.length <= 4) return digits.slice(0, 2) + '/' + digits.slice(2)
+  return digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4)
+}
+
 export default function ReportsTab() {
   const now = new Date()
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -144,7 +174,7 @@ export default function ReportsTab() {
   // === 'mese' uso il legacy `month` per non rompere chi ha link bookmarkati.
   type RangePreset = 'oggi' | '7gg' | '30gg' | 'mese' | 'anno' | 'custom'
   const [rangePreset, setRangePreset] = useState<RangePreset>('mese')
-  const todayISO = now.toISOString().slice(0, 10)
+  void now // anchor variabile, todayISO non piu' usato dopo text input
   function calcRange(preset: RangePreset): { from: string; to: string } {
     const today = new Date()
     const to = today.toISOString().slice(0, 10)
@@ -171,11 +201,18 @@ export default function ReportsTab() {
   const initRange = calcRange('mese')
   const [customFrom, setCustomFrom] = useState(initRange.from)
   const [customTo, setCustomTo] = useState(initRange.to)
+  // Draft string per i text input formato europeo. Sync su customFrom/To
+  // quando il valore parsato e' valido. L'utente puo' digitare liberamente
+  // senza che il valore canonico ISO cambi finche' la data non e' completa.
+  const [fromDraft, setFromDraft] = useState(isoToEU(initRange.from))
+  const [toDraft, setToDraft] = useState(isoToEU(initRange.to))
   useEffect(() => {
     if (rangePreset !== 'custom') {
       const r = calcRange(rangePreset)
       setCustomFrom(r.from)
       setCustomTo(r.to)
+      setFromDraft(isoToEU(r.from))
+      setToDraft(isoToEU(r.to))
     }
   }, [rangePreset])
   const [loading, setLoading] = useState(false)
@@ -732,21 +769,42 @@ export default function ReportsTab() {
                   </button>
                 ))}
               </div>
+              {/* 2026-05-23: text input DD/MM/YYYY (formato europeo) invece
+                  di <input type="date"> che segue il locale OS. Auto-formatta
+                  con "/" mentre l'utente digita. Sincronizza customFrom/To
+                  (ISO) solo quando la data parsata e' valida. */}
               <input
-                type="date"
-                value={customFrom}
-                max={customTo || todayISO}
-                onChange={(e) => { setRangePreset('custom'); setCustomFrom(e.target.value) }}
-                className="px-2 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs"
+                type="text"
+                inputMode="numeric"
+                placeholder="GG/MM/AAAA"
+                maxLength={10}
+                value={fromDraft}
+                onChange={(e) => {
+                  const formatted = formatEUInput(e.target.value)
+                  setFromDraft(formatted)
+                  setRangePreset('custom')
+                  const iso = euToIso(formatted)
+                  if (iso) setCustomFrom(iso)
+                }}
+                onBlur={() => { setFromDraft(isoToEU(customFrom)) }}
+                className="px-2 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs font-mono tabular-nums w-28"
               />
               <span className="text-theme-text-muted text-xs">→</span>
               <input
-                type="date"
-                value={customTo}
-                min={customFrom}
-                max={todayISO}
-                onChange={(e) => { setRangePreset('custom'); setCustomTo(e.target.value) }}
-                className="px-2 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs"
+                type="text"
+                inputMode="numeric"
+                placeholder="GG/MM/AAAA"
+                maxLength={10}
+                value={toDraft}
+                onChange={(e) => {
+                  const formatted = formatEUInput(e.target.value)
+                  setToDraft(formatted)
+                  setRangePreset('custom')
+                  const iso = euToIso(formatted)
+                  if (iso) setCustomTo(iso)
+                }}
+                onBlur={() => { setToDraft(isoToEU(customTo)) }}
+                className="px-2 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs font-mono tabular-nums w-28"
               />
             </div>
           </div>
