@@ -2124,6 +2124,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           no_cauzione_line: lineNoCauzione,
           km_line: lineKm,
           second_driver_line: lineSecondDriver,
+          // 2026-05-23: placeholder granulari per il secondo guidatore,
+          // cosi' l'admin puo' comporre la riga come preferisce. Tutti
+          // VUOTI quando second_driver_total = 0 → la riga collassa.
+          second_driver_total: p.second_driver_total > 0 ? formatEur(p.second_driver_total) : '',
+          second_driver_daily: p.second_driver_total > 0 ? formatEur(p.second_driver_daily) : '',
           dr7_flex_line: lineDr7Flex,
           cauzione_veicoli_line: lineCauzioneVeicoli,
           delivery_line: lineDelivery,
