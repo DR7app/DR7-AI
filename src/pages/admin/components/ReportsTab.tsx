@@ -135,7 +135,8 @@ export default function ReportsTab() {
   const now = new Date()
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth)
+  // 2026-05-23: selectedMonth rimosso — sostituito da rangePreset + customFrom/To
+  void currentMonth // kept var declaration but no longer used
   const [activeReport, setActiveReport] = useState<'vehicles' | 'washes' | 'cauzioni'>('vehicles')
 
   // 2026-05-23: range picker (oggi, 7gg, 30gg, mese corrente, anno, custom).
