@@ -165,6 +165,11 @@ interface Preventivo {
   no_cauzione_total: number
   unlimited_km_daily: number
   unlimited_km_total: number
+  // 2026-05-23: km_limit + unlimited_km esistono come colonne sul DB
+  // (vedi save line 1656). Tipizzati qui cosi' la conversion in booking
+  // puo' preservare il km esatto che il cliente ha visto sul preventivo.
+  km_limit?: number | null
+  unlimited_km?: boolean | null
   second_driver_daily: number
   second_driver_total: number
   subtotal: number
@@ -429,6 +434,17 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   const isValerio = hasRole('preventivi-admin')
   const [view, setView] = useState<'list' | 'form'>('list')
   const [editingId, setEditingId] = useState<string | null>(null)
+  // Pagination for the list view (10/page, matches the redesign screenshot).
+  const [listPage, setListPage] = useState(1)
+  const LIST_PAGE_SIZE = 10
+  // Side detail panel (clicking a row opens it on the left; icon buttons keep
+  // working via stopPropagation).
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null)
+  // No Cauzione subtab — own filter / pagination / row selection state to
+  // mirror the executive look of the main Preventivi list.
+  const [ncSubFilter, setNcSubFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
+  const [ncPage, setNcPage] = useState(1)
+  const [ncSelectedId, setNcSelectedId] = useState<string | null>(null)
   const [preventivi, setPreventivi] = useState<Preventivo[]>([])
   // Snapshot dei valori inviati dal cliente quando il preventivo arriva
   // dal sito (source='website*'). Usato per mostrare un pannello
@@ -2650,6 +2666,17 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     const isPaid = (PAID_STATUSES as readonly string[]).includes(String(payment_status))
     const paidCents = isPaid ? totalCents : eurToCents(amount_paid_eur)
 
+    // 2026-05-23: preserva il km che il cliente ha visto sul preventivo.
+    // Il preventivo ha km_limit + unlimited_km gia' calcolati dalla
+    // pagina Preventivi (line 1641-1643, include pacchetti KM extra).
+    // Se non e' presente sul row, fallback a 0 — meglio che ricalcolare
+    // con la config corrente (che potrebbe essere cambiata dal momento
+    // del quote).
+    const preventivoKmLimit = p.unlimited_km
+      ? 'Illimitati'
+      : (typeof p.km_limit === 'number' && p.km_limit > 0 ? p.km_limit : 0)
+    const preventivoUnlimited = !!p.unlimited_km || (p.unlimited_km_total || 0) > 0
+
     const bookingPayload = {
       // user_id satisfies the bookings_user_or_guest_check constraint
       // (existing ConvertPreventivoModal does the same).
@@ -2667,6 +2694,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       amount_paid: paidCents,
       service_type: 'rental',
       booking_source: 'admin',
+      // 2026-05-23: km top-level cosi' ReservationsTab / contract /
+      // fattura leggono lo stesso km che il cliente ha visto sul quote.
+      km_limit: preventivoUnlimited ? null : (typeof p.km_limit === 'number' ? p.km_limit : null),
+      unlimited_km: preventivoUnlimited,
       customer_name: customerName,
       customer_email: customerEmail,
       customer_phone: customerPhone,
@@ -2683,7 +2714,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         amountPaid: paidCents,
         insurance_option: p.insurance_option,
         rental_days: p.rental_days,
-        unlimited_km: (p.unlimited_km_total || 0) > 0,
+        km_limit: preventivoKmLimit,
+        unlimited_km: preventivoUnlimited,
+        // Preserva i pacchetti km eventualmente selezionati al quote
+        km_packages: (p.extras_detail as { km_packages?: Record<string, number> } | null)?.km_packages || undefined,
         no_cauzione: (p.no_cauzione_total || 0) > 0,
         include_lavaggio: (p.lavaggio_fee || 0) > 0,
         driver_tier: p.driver_tier,
@@ -2976,78 +3010,510 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         })()}
 
         {/* ═══ NO CAUZIONE SUBTAB ═══ */}
-        {statusFilter === '__no_cauzione__' && (
-          <div className="space-y-3">
-            {noCauzioneLoading ? (
-              <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-dr7-gold"></div></div>
-            ) : noCauzioneRequests.length === 0 ? (
-              <p className="text-theme-text-muted text-center py-8">Nessuna richiesta No Cauzione</p>
-            ) : (
-              noCauzioneRequests.map((b: any) => {
-                const status = b.booking_details?.no_cauzione_status || 'pending'
-                const custName = b.customer_name || b.booking_details?.customer?.fullName || 'N/A'
-                const custPhone = b.customer_phone || b.booking_details?.customer?.phone || ''
-                const totalEur = (b.price_total / 100).toFixed(2)
-                const pickup = b.pickup_date ? new Date(b.pickup_date).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }) : '-'
-                const dropoff = b.dropoff_date ? new Date(b.dropoff_date).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }) : '-'
-                const createdAt = b.created_at ? new Date(b.created_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''
-                return (
-                  <div key={b.id} className={`rounded-lg border p-4 ${status === 'pending' ? 'border-yellow-500/30 bg-yellow-900/10' : status === 'approved' ? 'border-green-500/30 bg-green-900/10' : 'border-red-500/30 bg-red-900/10'}`}>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' : status === 'approved' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                            {status === 'pending' ? 'In attesa' : status === 'approved' ? 'Approvata' : 'Rifiutata'}
-                          </span>
-                          <span className="font-semibold text-theme-text-primary">{custName}</span>
-                          {custPhone && <span className="text-sm text-theme-text-muted">{custPhone}</span>}
+        {statusFilter === '__no_cauzione__' && (() => {
+          const ncStatusOf = (b: any) => (b.booking_details?.no_cauzione_status || 'pending') as 'pending' | 'approved' | 'rejected'
+          const ncFiltered = noCauzioneRequests.filter((b: any) =>
+            ncSubFilter === 'all' ? true : ncStatusOf(b) === ncSubFilter
+          )
+          const ncTotal = noCauzioneRequests.length
+          const ncPending = noCauzioneRequests.filter((b: any) => ncStatusOf(b) === 'pending').length
+          const ncApproved = noCauzioneRequests.filter((b: any) => ncStatusOf(b) === 'approved').length
+          const ncRejected = noCauzioneRequests.filter((b: any) => ncStatusOf(b) === 'rejected').length
+          const pct = (n: number) => ncTotal > 0 ? `${(n / ncTotal * 100).toFixed(1).replace('.', ',')}% del totale` : '—'
+
+          const ncPages = Math.max(1, Math.ceil(ncFiltered.length / LIST_PAGE_SIZE))
+          const ncSafePage = Math.min(ncPage, ncPages)
+          const ncRows = ncFiltered.slice((ncSafePage - 1) * LIST_PAGE_SIZE, ncSafePage * LIST_PAGE_SIZE)
+
+          const initials = (name?: string | null) => {
+            if (!name) return '??'
+            const parts = name.trim().split(/\s+/).filter(Boolean)
+            if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+            return name.slice(0, 2).toUpperCase()
+          }
+          const avatarPalettes = [
+            'bg-rose-500/20 text-rose-300 ring-rose-500/40',
+            'bg-amber-500/20 text-amber-300 ring-amber-500/40',
+            'bg-blue-500/20 text-blue-300 ring-blue-500/40',
+            'bg-emerald-500/20 text-emerald-300 ring-emerald-500/40',
+            'bg-purple-500/20 text-purple-300 ring-purple-500/40',
+            'bg-cyan-500/20 text-cyan-300 ring-cyan-500/40',
+          ]
+          const colorFor = (key: string) => {
+            let h = 0
+            for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0
+            return avatarPalettes[Math.abs(h) % avatarPalettes.length]
+          }
+          const vehicleById = new Map(vehicles.map(v => [v.id, v]))
+          const vehicleByName = new Map(vehicles.map(v => [v.display_name?.toLowerCase()?.trim() || '', v]))
+          const resolveVehicle = (b: any) => {
+            const vid = b.vehicle_id || b.booking_details?.vehicle_id || b.booking_details?.vehicle?.id
+            if (vid && vehicleById.has(vid)) return vehicleById.get(vid)
+            const vname = (b.vehicle_name || b.booking_details?.vehicle?.makeModel || '').toLowerCase().trim()
+            return vname ? vehicleByName.get(vname) : undefined
+          }
+          const toneFor = (s: 'pending' | 'approved' | 'rejected') => {
+            if (s === 'pending')  return { bg: 'bg-amber-500/15 text-amber-300 ring-amber-500/40', label: 'In attesa', sub: 'Da approvare', subColor: 'text-amber-300/80' }
+            if (s === 'approved') return { bg: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/40', label: 'Approvata', sub: 'Cauzione esonerata', subColor: 'text-emerald-300/80' }
+            return { bg: 'bg-rose-500/15 text-rose-300 ring-rose-500/40', label: 'Rifiutata', sub: 'Con sconto 5%', subColor: 'text-rose-300/80' }
+          }
+
+          const ncKpiCards: { key: 'all' | 'pending' | 'approved' | 'rejected'; label: string; value: number; sub: string; tone: string; iconBg: string; iconColor: string; ring: string; svg: React.ReactNode }[] = [
+            { key: 'all', label: 'Tutte le Richieste', value: ncTotal, sub: 'Totale dal sito', tone: 'text-cyan-300', iconBg: 'bg-cyan-500/15', iconColor: 'text-cyan-300', ring: 'ring-cyan-500/30',
+              svg: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/> },
+            { key: 'pending', label: 'In Attesa', value: ncPending, sub: pct(ncPending), tone: 'text-amber-300', iconBg: 'bg-amber-500/15', iconColor: 'text-amber-300', ring: 'ring-amber-500/30',
+              svg: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/> },
+            { key: 'approved', label: 'Approvate', value: ncApproved, sub: pct(ncApproved), tone: 'text-emerald-300', iconBg: 'bg-emerald-500/15', iconColor: 'text-emerald-300', ring: 'ring-emerald-500/30',
+              svg: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M5 13l4 4L19 7"/> },
+            { key: 'rejected', label: 'Rifiutate', value: ncRejected, sub: pct(ncRejected), tone: 'text-rose-300', iconBg: 'bg-rose-500/15', iconColor: 'text-rose-300', ring: 'ring-rose-500/30',
+              svg: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12"/> },
+          ]
+
+          const ncSel: any = ncSelectedId ? noCauzioneRequests.find((b: any) => b.id === ncSelectedId) : null
+
+          return (
+            <div className="space-y-4">
+              {/* Panoramica */}
+              <div className="space-y-3">
+                <h3 className="text-base font-bold text-theme-text-primary">Panoramica Richieste No Cauzione</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                  {ncKpiCards.map(c => {
+                    const active = ncSubFilter === c.key
+                    return (
+                      <button
+                        key={c.key}
+                        type="button"
+                        onClick={() => { setNcSubFilter(c.key); setNcPage(1) }}
+                        className={`relative overflow-hidden text-left rounded-xl p-3 ring-1 transition-all bg-gradient-to-b from-theme-bg-secondary to-theme-bg-secondary/40 backdrop-blur-sm hover:-translate-y-0.5 ${
+                          active ? `${c.ring} ring-2 shadow-[0_0_24px_-12px_rgba(34,211,238,0.4)]` : `ring-theme-border ${c.ring.replace('/30', '/10')}`
+                        }`}
+                      >
+                        <div className={`absolute -top-6 -right-6 w-20 h-20 ${c.iconBg} rounded-full blur-2xl pointer-events-none opacity-60`}/>
+                        <div className="relative flex items-center justify-between mb-2">
+                          <div className={`grid w-7 h-7 place-items-center rounded-md ring-1 ${c.iconBg} ${c.iconColor} ${c.ring}`}>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">{c.svg}</svg>
+                          </div>
                         </div>
-                        <div className="text-sm text-theme-text-muted mt-1">
-                          <span className="font-medium text-theme-text-primary">{b.vehicle_name}</span>
-                          <span className="mx-2">•</span>{pickup} → {dropoff}
-                          <span className="mx-2">•</span><span className="font-bold text-dr7-gold">€{totalEur}</span>
+                        <p className={`text-[10px] uppercase tracking-[0.14em] font-bold ${c.tone}`}>{c.label}</p>
+                        <p className="text-2xl font-bold text-theme-text-primary tabular-nums leading-tight mt-0.5">{c.value}</p>
+                        <p className="text-[10px] text-theme-text-muted mt-0.5 font-mono truncate">{c.sub}</p>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Filter pills */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {(['all', 'pending', 'approved', 'rejected'] as const).map(s => {
+                  const count = s === 'all' ? ncTotal : s === 'pending' ? ncPending : s === 'approved' ? ncApproved : ncRejected
+                  const labelMap = { all: 'Tutte', pending: 'In attesa', approved: 'Approvate', rejected: 'Rifiutate' }
+                  const active = ncSubFilter === s
+                  return (
+                    <button
+                      key={s}
+                      onClick={() => { setNcSubFilter(s); setNcPage(1) }}
+                      className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ring-1 ${
+                        active
+                          ? 'bg-cyan-500/15 text-cyan-200 ring-cyan-500/40'
+                          : 'bg-theme-bg-tertiary text-theme-text-muted ring-transparent hover:text-theme-text-primary hover:ring-theme-border'
+                      }`}
+                    >
+                      {labelMap[s]} <span className="opacity-60 font-mono ml-1">({count})</span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* List + side panel */}
+              {noCauzioneLoading ? (
+                <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-dr7-gold"></div></div>
+              ) : ncFiltered.length === 0 ? (
+                <p className="text-theme-text-muted text-center py-8">Nessuna richiesta No Cauzione</p>
+              ) : (
+                <div className={ncSelectedId ? 'lg:flex lg:gap-3 lg:items-start' : ''}>
+                  {/* Side panel */}
+                  {ncSel && (() => {
+                    const status = ncStatusOf(ncSel)
+                    const t = toneFor(status)
+                    const v = resolveVehicle(ncSel)
+                    const img = (v?.metadata && (v.metadata.image as string | undefined)) || null
+                    const custName = ncSel.customer_name || ncSel.booking_details?.customer?.fullName || 'N/A'
+                    const custPhone = ncSel.customer_phone || ncSel.booking_details?.customer?.phone || ''
+                    const custEmail = ncSel.customer_email || ncSel.booking_details?.customer?.email || ''
+                    const totalEur = (ncSel.price_total / 100).toFixed(2)
+                    return (
+                      <aside className="lg:w-[340px] lg:flex-shrink-0 lg:sticky lg:top-4 mb-3 lg:mb-0">
+                        <div className="rounded-2xl bg-theme-bg-secondary/60 ring-1 ring-theme-border overflow-hidden">
+                          <div className="relative h-32 bg-gradient-to-br from-theme-bg-tertiary to-theme-bg-secondary">
+                            {img ? (
+                              <img src={img} alt={ncSel.vehicle_name} className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}/>
+                            ) : (
+                              <div className="w-full h-full grid place-items-center text-theme-text-muted">
+                                <svg className="w-12 h-12 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.2} d="M3 13l1-3a4 4 0 014-3h8a4 4 0 014 3l1 3v5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-1H7v1a1 1 0 01-1 1H4a1 1 0 01-1-1v-5z"/></svg>
+                              </div>
+                            )}
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3">
+                              <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-orange-600 text-white">No Cauzione</span>
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-blue-500/30 text-blue-200 ring-1 ring-blue-500/40">SITO</span>
+                              </div>
+                              <p className="text-sm font-bold text-white truncate drop-shadow">{ncSel.vehicle_name}</p>
+                              {ncSel.vehicle_plate && <p className="text-[10px] font-mono text-white/80">{ncSel.vehicle_plate}</p>}
+                            </div>
+                            <button type="button" onClick={() => setNcSelectedId(null)} title="Chiudi" className="absolute top-2 right-2 grid w-7 h-7 place-items-center rounded-full bg-black/60 backdrop-blur text-white hover:bg-black/80 transition-colors">
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                          </div>
+
+                          <div className="p-3 space-y-3 max-h-[calc(100vh-280px)] overflow-y-auto">
+                            <div className="flex items-center justify-between">
+                              <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ring-1 ${t.bg}`}>{t.label}</span>
+                              <span className="text-[10px] text-theme-text-muted font-mono">#{String(ncSel.id).slice(0, 8)}</span>
+                            </div>
+
+                            <div className="flex items-center gap-2.5 p-2.5 rounded-lg bg-theme-bg-tertiary/40 ring-1 ring-theme-border">
+                              <div className={`grid w-9 h-9 place-items-center rounded-full text-[11px] font-bold ring-1 shrink-0 ${colorFor(custName || custPhone || ncSel.id)}`}>
+                                {initials(custName)}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[12px] font-semibold text-theme-text-primary truncate">{custName}</p>
+                                {custPhone && <p className="text-[10px] font-mono text-theme-text-muted truncate">{custPhone}</p>}
+                                {custEmail && <p className="text-[10px] text-theme-text-muted truncate">{custEmail}</p>}
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="p-2.5 rounded-lg bg-theme-bg-tertiary/40 ring-1 ring-theme-border">
+                                <p className="text-[9px] uppercase tracking-wider text-theme-text-muted font-bold">Pickup</p>
+                                <p className="text-[12px] font-semibold text-theme-text-primary mt-0.5">
+                                  {ncSel.pickup_date ? new Date(ncSel.pickup_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' }) : '—'}
+                                </p>
+                              </div>
+                              <div className="p-2.5 rounded-lg bg-theme-bg-tertiary/40 ring-1 ring-theme-border">
+                                <p className="text-[9px] uppercase tracking-wider text-theme-text-muted font-bold">Dropoff</p>
+                                <p className="text-[12px] font-semibold text-theme-text-primary mt-0.5">
+                                  {ncSel.dropoff_date ? new Date(ncSel.dropoff_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' }) : '—'}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="p-2.5 rounded-lg bg-theme-bg-tertiary/40 ring-1 ring-theme-border">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] uppercase tracking-wider text-cyan-300 font-bold">Totale richiesta</span>
+                                <span className="font-mono text-base text-cyan-300 font-bold tabular-nums">€ {totalEur}</span>
+                              </div>
+                              <p className="text-[10px] text-theme-text-muted mt-0.5">Cauzione esonerata se approvata</p>
+                            </div>
+
+                            {ncSel.booking_details?.rejection_discount_code && (
+                              <div className="p-2.5 rounded-lg bg-rose-500/10 ring-1 ring-rose-500/30">
+                                <p className="text-[9px] uppercase tracking-wider text-rose-300 font-bold">Codice sconto generato</p>
+                                <p className="text-[12px] font-mono text-rose-200 mt-0.5">{ncSel.booking_details.rejection_discount_code}</p>
+                              </div>
+                            )}
+
+                            <div className="text-[10px] text-theme-text-muted/80">
+                              Richiesta {ncSel.created_at ? new Date(ncSel.created_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                            </div>
+                          </div>
+
+                          {status === 'pending' && (
+                            <div className="p-2.5 border-t border-theme-border bg-theme-bg-primary/40 grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleApproveNoCauzione(ncSel)}
+                                disabled={processingId === ncSel.id}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold text-emerald-200 bg-emerald-500/15 ring-1 ring-emerald-500/40 hover:bg-emerald-500/25 transition-colors disabled:opacity-50"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M5 13l4 4L19 7"/></svg>
+                                {processingId === ncSel.id ? '…' : 'Approva'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRejectNoCauzione(ncSel)}
+                                disabled={processingId === ncSel.id}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold text-rose-200 bg-rose-500/10 ring-1 ring-rose-500/30 hover:bg-rose-500/20 transition-colors disabled:opacity-50"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12"/></svg>
+                                {processingId === ncSel.id ? '…' : 'Rifiuta'}
+                              </button>
+                            </div>
+                          )}
                         </div>
-                        <div className="text-xs text-theme-text-muted mt-1">
-                          Richiesta: {createdAt}
-                          {b.booking_details?.rejection_discount_code && <span className="ml-2 text-red-400">Codice: {b.booking_details.rejection_discount_code}</span>}
-                        </div>
+                      </aside>
+                    )
+                  })()}
+
+                  {/* Executive table */}
+                  <div className={`bg-theme-bg-secondary/40 rounded-2xl ring-1 ring-theme-border overflow-hidden ${ncSelectedId ? 'lg:flex-1 lg:min-w-0' : 'w-full'}`}>
+                    <div className="grid grid-cols-[2.4fr_2.2fr_1.6fr_1.1fr_1.1fr_72px] gap-2 px-4 py-3 border-b border-theme-border text-[10px] font-bold uppercase tracking-[0.14em] text-theme-text-muted">
+                      <span>Veicolo</span>
+                      <span>Cliente</span>
+                      <span>Data Noleggio</span>
+                      <span className="text-right">Totale</span>
+                      <span>Stato</span>
+                      <span className="text-right">Azioni</span>
+                    </div>
+
+                    <div className="divide-y divide-theme-border/50">
+                      {ncRows.map((b: any) => {
+                        const status = ncStatusOf(b)
+                        const t = toneFor(status)
+                        const v = resolveVehicle(b)
+                        const img = (v?.metadata && (v.metadata.image as string | undefined)) || null
+                        const custName = b.customer_name || b.booking_details?.customer?.fullName || 'N/A'
+                        const custPhone = b.customer_phone || b.booking_details?.customer?.phone || ''
+                        const totalEur = (b.price_total / 100).toFixed(2)
+                        return (
+                          <div
+                            key={b.id}
+                            onClick={() => setNcSelectedId(prev => prev === b.id ? null : b.id)}
+                            className={`grid grid-cols-[2.4fr_2.2fr_1.6fr_1.1fr_1.1fr_72px] gap-2 px-4 py-3 items-center cursor-pointer transition-colors ${
+                              ncSelectedId === b.id
+                                ? 'bg-cyan-500/10 ring-1 ring-inset ring-cyan-500/40'
+                                : 'hover:bg-theme-bg-tertiary/30'
+                            }`}
+                          >
+                            {/* Veicolo */}
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="relative shrink-0">
+                                {img ? (
+                                  <img src={img} alt={b.vehicle_name} className="w-14 h-10 rounded-md object-cover ring-1 ring-theme-border bg-theme-bg-tertiary" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}/>
+                                ) : (
+                                  <div className="w-14 h-10 rounded-md ring-1 ring-theme-border bg-gradient-to-br from-theme-bg-tertiary to-theme-bg-secondary grid place-items-center text-theme-text-muted">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 13l1-3a4 4 0 014-3h8a4 4 0 014 3l1 3v5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-1H7v1a1 1 0 01-1 1H4a1 1 0 01-1-1v-5z"/></svg>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[13px] font-bold text-theme-text-primary truncate max-w-[180px]">{b.vehicle_name}</span>
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-orange-600 text-white">No Cauzione</span>
+                                </div>
+                                {b.vehicle_plate && <div className="text-[10px] font-mono text-theme-text-muted truncate">{b.vehicle_plate}</div>}
+                                <div className="text-[9px] text-theme-text-muted/70 truncate">
+                                  Richiesta {b.created_at ? new Date(b.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'Europe/Rome' }) : '—'}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Cliente */}
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className={`grid w-8 h-8 place-items-center rounded-full ring-1 text-[10px] font-bold shrink-0 ${colorFor(custName || custPhone || b.id)}`}>
+                                {initials(custName)}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-[12px] font-semibold text-theme-text-primary truncate">{custName}</div>
+                                {custPhone && <div className="text-[10px] font-mono text-theme-text-muted truncate">{custPhone}</div>}
+                              </div>
+                            </div>
+
+                            {/* Date */}
+                            <div className="text-[11px] text-theme-text-secondary leading-tight">
+                              <div className="font-medium">{b.pickup_date ? new Date(b.pickup_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' }) : '—'}</div>
+                              <div className="text-theme-text-muted">{b.dropoff_date ? new Date(b.dropoff_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' }) : '—'}</div>
+                            </div>
+
+                            {/* Totale */}
+                            <div className="text-right">
+                              <div className="text-[13px] font-bold text-theme-text-primary tabular-nums">€ {totalEur}</div>
+                              <div className="text-[9px] text-theme-text-muted">cauzione esclusa</div>
+                            </div>
+
+                            {/* Stato */}
+                            <div className="min-w-0">
+                              <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ring-1 ${t.bg}`}>{t.label}</span>
+                              <div className={`text-[10px] mt-0.5 truncate ${t.subColor}`}>{t.sub}</div>
+                            </div>
+
+                            {/* Azioni */}
+                            <div className="flex items-center justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
+                              {status === 'pending' && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApproveNoCauzione(b)}
+                                    disabled={processingId === b.id}
+                                    title="Approva"
+                                    className="grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M5 13l4 4L19 7"/></svg>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRejectNoCauzione(b)}
+                                    disabled={processingId === b.id}
+                                    title="Rifiuta"
+                                    className="grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-rose-300 hover:bg-rose-500/10 transition-colors disabled:opacity-50"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12"/></svg>
+                                  </button>
+                                </>
+                              )}
+                              {status !== 'pending' && (
+                                <button
+                                  type="button"
+                                  onClick={() => setNcSelectedId(b.id)}
+                                  title="Visualizza dettagli"
+                                  className="grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-cyan-300 hover:bg-cyan-500/10 transition-colors"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* Pagination */}
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-theme-border text-[11px] text-theme-text-muted">
+                      <span>Mostra <strong className="text-theme-text-primary font-mono">{ncRows.length}</strong> di <strong className="text-theme-text-primary font-mono">{ncFiltered.length}</strong> risultati per pagina</span>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => setNcPage(1)} disabled={ncSafePage === 1} className="w-7 h-7 grid place-items-center rounded-md text-theme-text-secondary hover:bg-theme-bg-tertiary disabled:opacity-30">«</button>
+                        <button onClick={() => setNcPage(p => Math.max(1, p - 1))} disabled={ncSafePage === 1} className="w-7 h-7 grid place-items-center rounded-md text-theme-text-secondary hover:bg-theme-bg-tertiary disabled:opacity-30">‹</button>
+                        {Array.from({ length: Math.min(5, ncPages) }, (_, i) => {
+                          let n = i + 1
+                          if (ncPages > 5) {
+                            if (ncSafePage <= 3) n = i + 1
+                            else if (ncSafePage >= ncPages - 2) n = ncPages - 4 + i
+                            else n = ncSafePage - 2 + i
+                          }
+                          return (
+                            <button key={n} onClick={() => setNcPage(n)} className={`w-7 h-7 grid place-items-center rounded-md text-[11px] font-semibold ${n === ncSafePage ? 'bg-cyan-500/20 text-cyan-200 ring-1 ring-cyan-500/40' : 'text-theme-text-secondary hover:bg-theme-bg-tertiary'}`}>{n}</button>
+                          )
+                        })}
+                        {ncPages > 5 && ncSafePage < ncPages - 2 && <span className="text-theme-text-muted px-1">…</span>}
+                        {ncPages > 5 && ncSafePage < ncPages - 2 && (
+                          <button onClick={() => setNcPage(ncPages)} className="w-7 h-7 grid place-items-center rounded-md text-[11px] font-semibold text-theme-text-secondary hover:bg-theme-bg-tertiary">{ncPages}</button>
+                        )}
+                        <button onClick={() => setNcPage(p => Math.min(ncPages, p + 1))} disabled={ncSafePage === ncPages} className="w-7 h-7 grid place-items-center rounded-md text-theme-text-secondary hover:bg-theme-bg-tertiary disabled:opacity-30">›</button>
+                        <button onClick={() => setNcPage(ncPages)} disabled={ncSafePage === ncPages} className="w-7 h-7 grid place-items-center rounded-md text-theme-text-secondary hover:bg-theme-bg-tertiary disabled:opacity-30">»</button>
                       </div>
-                      {status === 'pending' && (
-                        <div className="flex gap-2">
-                          <button onClick={() => handleApproveNoCauzione(b)} disabled={processingId === b.id}
-                            className="px-4 py-2 text-sm rounded-lg bg-green-600 hover:bg-green-500 text-white font-medium disabled:opacity-50 transition-colors">
-                            {processingId === b.id ? '...' : 'Approva'}
-                          </button>
-                          <button onClick={() => handleRejectNoCauzione(b)} disabled={processingId === b.id}
-                            className="px-4 py-2 text-sm rounded-lg bg-red-600 hover:bg-red-500 text-white font-medium disabled:opacity-50 transition-colors">
-                            {processingId === b.id ? '...' : 'Rifiuta'}
-                          </button>
-                        </div>
-                      )}
                     </div>
                   </div>
-                )
-              })
-            )}
-          </div>
-        )}
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* ═══ PREVENTIVI LIST ═══ */}
         {statusFilter !== '__no_cauzione__' && <>
-        <div className="flex flex-wrap gap-2">
-          {['all', 'bozza', 'inviato', 'accettato', 'rifiutato', 'scaduto'].map(s => (
+
+        {/* ─── Panoramica Preventivi: section title + 6 KPI cards ─── */}
+        {(() => {
+          const total = preventivi.length
+          const bozzaCount = preventivi.filter(p => p.status === 'bozza').length
+          const inviatoCount = preventivi.filter(p => p.status === 'inviato').length
+          const accettatoCount = preventivi.filter(p => p.status === 'accettato').length
+          const rifiutatoCount = preventivi.filter(p => p.status === 'rifiutato').length
+          const scadutoCount = preventivi.filter(p => p.status === 'scaduto').length
+          const pct = (n: number) => total > 0 ? `${(n / total * 100).toFixed(1).replace('.', ',')}% del totale` : '—'
+          type KpiKey = 'all' | 'bozza' | 'inviato' | 'accettato' | 'rifiutato' | 'scaduto'
+          const cards: { key: KpiKey; label: string; value: number; sub: string; tone: string; iconBg: string; iconColor: string; ring: string; svg: React.ReactNode }[] = [
+            { key: 'all', label: 'Tutti i Preventivi', value: total, sub: 'Totale', tone: 'text-cyan-300', iconBg: 'bg-cyan-500/15', iconColor: 'text-cyan-300', ring: 'ring-cyan-500/30',
+              svg: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/> },
+            { key: 'bozza', label: 'Bozza', value: bozzaCount, sub: pct(bozzaCount), tone: 'text-slate-300', iconBg: 'bg-slate-500/15', iconColor: 'text-slate-300', ring: 'ring-slate-500/30',
+              svg: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/> },
+            { key: 'inviato', label: 'Inviati', value: inviatoCount, sub: pct(inviatoCount), tone: 'text-blue-300', iconBg: 'bg-blue-500/15', iconColor: 'text-blue-300', ring: 'ring-blue-500/30',
+              svg: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/> },
+            { key: 'accettato', label: 'Accettati', value: accettatoCount, sub: pct(accettatoCount), tone: 'text-emerald-300', iconBg: 'bg-emerald-500/15', iconColor: 'text-emerald-300', ring: 'ring-emerald-500/30',
+              svg: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M5 13l4 4L19 7"/> },
+            { key: 'rifiutato', label: 'Rifiutati', value: rifiutatoCount, sub: pct(rifiutatoCount), tone: 'text-rose-300', iconBg: 'bg-rose-500/15', iconColor: 'text-rose-300', ring: 'ring-rose-500/30',
+              svg: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12"/> },
+            { key: 'scaduto', label: 'Scaduti', value: scadutoCount, sub: pct(scadutoCount), tone: 'text-amber-300', iconBg: 'bg-amber-500/15', iconColor: 'text-amber-300', ring: 'ring-amber-500/30',
+              svg: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/> },
+          ]
+          return (
+            <div className="space-y-3">
+              <h3 className="text-base font-bold text-theme-text-primary">Panoramica Preventivi</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                {cards.map(c => {
+                  const active = statusFilter === c.key
+                  return (
+                    <button
+                      key={c.key}
+                      type="button"
+                      onClick={() => { setStatusFilter(c.key); setListPage(1) }}
+                      className={`relative overflow-hidden text-left rounded-xl p-3 ring-1 transition-all bg-gradient-to-b from-theme-bg-secondary to-theme-bg-secondary/40 backdrop-blur-sm hover:-translate-y-0.5 ${
+                        active
+                          ? `${c.ring} ring-2 shadow-[0_0_24px_-12px_rgba(34,211,238,0.4)]`
+                          : `ring-theme-border ${c.ring.replace('/30', '/10')}`
+                      }`}
+                    >
+                      <div className={`absolute -top-6 -right-6 w-20 h-20 ${c.iconBg} rounded-full blur-2xl pointer-events-none opacity-60`}/>
+                      <div className="relative flex items-center justify-between mb-2">
+                        <div className={`grid w-7 h-7 place-items-center rounded-md ring-1 ${c.iconBg} ${c.iconColor} ${c.ring}`}>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">{c.svg}</svg>
+                        </div>
+                      </div>
+                      <p className={`text-[10px] uppercase tracking-[0.14em] font-bold ${c.tone}`}>{c.label}</p>
+                      <p className="text-2xl font-bold text-theme-text-primary tabular-nums leading-tight mt-0.5">{c.value}</p>
+                      <p className="text-[10px] text-theme-text-muted mt-0.5 font-mono truncate">{c.sub}</p>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* Filter pills + actions row */}
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          {(['all', 'bozza', 'inviato', 'accettato', 'rifiutato', 'scaduto'] as const).map(s => {
+            const count = s === 'all' ? preventivi.length : preventivi.filter(p => p.status === s).length
+            const active = statusFilter === s
+            return (
+              <button
+                key={s}
+                onClick={() => { setStatusFilter(s); setListPage(1) }}
+                className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ring-1 ${
+                  active
+                    ? 'bg-cyan-500/15 text-cyan-200 ring-cyan-500/40'
+                    : 'bg-theme-bg-tertiary text-theme-text-muted ring-transparent hover:text-theme-text-primary hover:ring-theme-border'
+                }`}
+              >
+                {s === 'all' ? 'Tutti' : STATUS_LABELS[s]} <span className="opacity-60 font-mono ml-1">({count})</span>
+              </button>
+            )
+          })}
+          <div className="ml-auto flex items-center gap-2">
             <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                statusFilter === s
-                  ? 'bg-dr7-gold text-white'
-                  : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'
-              }`}
+              type="button"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-theme-text-secondary bg-theme-bg-tertiary ring-1 ring-transparent hover:ring-theme-border hover:text-theme-text-primary transition-colors"
             >
-              {s === 'all' ? 'Tutti' : STATUS_LABELS[s]} ({s === 'all' ? preventivi.length : preventivi.filter(p => p.status === s).length})
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+              Filtri
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={() => {
+                // Lightweight CSV export of the filtered preventivi.
+                const rows = [['Veicolo', 'Targa', 'Cliente', 'Telefono', 'Pickup', 'Dropoff', 'Giorni', 'Subtotale', 'Totale', 'Stato']]
+                filtered.forEach(p => rows.push([
+                  p.vehicle_name, p.vehicle_plate || '',
+                  p.customer_name || '', p.customer_phone || '',
+                  p.pickup_date, p.dropoff_date, String(p.rental_days),
+                  String(p.subtotal), String(p.total_final || p.subtotal),
+                  STATUS_LABELS[p.status] || p.status,
+                ]))
+                const csv = rows.map(r => r.map(c => `"${(c || '').replace(/"/g, '""')}"`).join(',')).join('\n')
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `preventivi-${new Date().toISOString().slice(0, 10)}.csv`
+                a.click()
+                URL.revokeObjectURL(url)
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-cyan-200 bg-cyan-500/10 ring-1 ring-cyan-500/30 hover:bg-cyan-500/20 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              Esporta
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -3057,19 +3523,524 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         ) : filtered.length === 0 ? (
           <p className="text-theme-text-muted text-center py-8">Nessun preventivo</p>
         ) : (
-          <div className="hidden sm:block overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className={selectedRowId ? 'lg:flex lg:gap-3 lg:items-start' : ''}>
+            {/* ─── Side details panel (left) — opens on row click ─── */}
+            {selectedRowId && (() => {
+              const sel = preventivi.find(p => p.id === selectedRowId)
+              if (!sel) return null
+              const v = vehicles.find(x => x.id === sel.vehicle_id)
+              const img = (v?.metadata && (v.metadata.image as string | undefined)) || null
+              const tone: Record<string, string> = {
+                bozza:     'bg-slate-500/15 text-slate-300 ring-slate-500/40',
+                inviato:   'bg-blue-500/15 text-blue-300 ring-blue-500/40',
+                accettato: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/40',
+                rifiutato: 'bg-rose-500/15 text-rose-300 ring-rose-500/40',
+                scaduto:   'bg-amber-500/15 text-amber-300 ring-amber-500/40',
+              }
+              const canEdit = sel.status === 'bozza' || sel.status === 'inviato' || sel.status === 'accettato'
+              const canSend = sel.status === 'bozza' || sel.status === 'inviato'
+              const canAccept = (sel.source?.startsWith('website') && sel.status !== 'rifiutato') || sel.status === 'bozza' || sel.status === 'inviato'
+              const canReject = canSend || sel.status === 'accettato' || sel.status === 'scaduto'
+              const isNoCauzione = sel.source === 'website_no_cauzione'
+              const openSend = async () => {
+                setSelectedPreventivo(sel)
+                setWhatsappPhone(sel.customer_phone || '')
+                setPreviewMessage('')
+                setIncludeCoefficienti(false)
+                const preview = await formatWhatsAppMessage(sel, { includeCoefficienti: false })
+                if (!preview) {
+                  const which = (sel.sconto || 0) > 0 ? '"Preventivo WhatsApp"' : '"Preventivo senza sconto"'
+                  toast.error(`Template ${which} vuoto o disattivato in Messaggi di Sistema Pro. Compilalo prima di inviare.`)
+                  return
+                }
+                setPreviewMessage(preview)
+                setShowPhoneModal(true)
+              }
+              const initials = (name?: string | null) => {
+                if (!name) return '??'
+                const parts = name.trim().split(/\s+/).filter(Boolean)
+                if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+                return name.slice(0, 2).toUpperCase()
+              }
+              return (
+                <aside className="lg:w-[340px] lg:flex-shrink-0 lg:sticky lg:top-4 mb-3 lg:mb-0">
+                  <div className="rounded-2xl bg-theme-bg-secondary/60 ring-1 ring-theme-border overflow-hidden">
+                    {/* Header with vehicle image as hero */}
+                    <div className="relative h-32 bg-gradient-to-br from-theme-bg-tertiary to-theme-bg-secondary">
+                      {img ? (
+                        <img src={img} alt={sel.vehicle_name} className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}/>
+                      ) : (
+                        <div className="w-full h-full grid place-items-center text-theme-text-muted">
+                          <svg className="w-12 h-12 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.2} d="M3 13l1-3a4 4 0 014-3h8a4 4 0 014 3l1 3v5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-1H7v1a1 1 0 01-1 1H4a1 1 0 01-1-1v-5z"/></svg>
+                        </div>
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3">
+                        <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                          {isNoCauzione && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-orange-600 text-white">No Cauzione</span>}
+                          {sel.source === 'website' && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-blue-500/30 text-blue-200 ring-1 ring-blue-500/40">SITO</span>}
+                        </div>
+                        <p className="text-sm font-bold text-white truncate drop-shadow">{sel.vehicle_name}</p>
+                        {sel.vehicle_plate && <p className="text-[10px] font-mono text-white/80">{sel.vehicle_plate}</p>}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRowId(null)}
+                        title="Chiudi"
+                        className="absolute top-2 right-2 grid w-7 h-7 place-items-center rounded-full bg-black/60 backdrop-blur text-white hover:bg-black/80 transition-colors"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12"/></svg>
+                      </button>
+                    </div>
+
+                    {/* Body */}
+                    <div className="p-3 space-y-3 max-h-[calc(100vh-280px)] overflow-y-auto">
+                      {/* Status */}
+                      <div className="flex items-center justify-between">
+                        <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ring-1 ${tone[sel.status] || 'bg-gray-500/15 text-gray-300 ring-gray-500/40'}`}>
+                          {STATUS_LABELS[sel.status] || sel.status}
+                        </span>
+                        <span className="text-[10px] text-theme-text-muted font-mono">
+                          #{sel.id.slice(0, 8)}
+                        </span>
+                      </div>
+
+                      {/* Customer */}
+                      {(sel.customer_name || sel.customer_phone) && (
+                        <div className="flex items-center gap-2.5 p-2.5 rounded-lg bg-theme-bg-tertiary/40 ring-1 ring-theme-border">
+                          <div className="grid w-9 h-9 place-items-center rounded-full text-[11px] font-bold bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40 shrink-0">
+                            {initials(sel.customer_name || sel.customer_phone)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[12px] font-semibold text-theme-text-primary truncate">{sel.customer_name || '—'}</p>
+                            {sel.customer_phone && <p className="text-[10px] font-mono text-theme-text-muted truncate">{sel.customer_phone}</p>}
+                          </div>
+                          <ClientStatusBadge phone={sel.customer_phone} />
+                        </div>
+                      )}
+
+                      {/* Date + duration */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="p-2.5 rounded-lg bg-theme-bg-tertiary/40 ring-1 ring-theme-border">
+                          <p className="text-[9px] uppercase tracking-wider text-theme-text-muted font-bold">Pickup</p>
+                          <p className="text-[12px] font-semibold text-theme-text-primary mt-0.5">
+                            {new Date(sel.pickup_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })}
+                          </p>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-theme-bg-tertiary/40 ring-1 ring-theme-border">
+                          <p className="text-[9px] uppercase tracking-wider text-theme-text-muted font-bold">Dropoff</p>
+                          <p className="text-[12px] font-semibold text-theme-text-primary mt-0.5">
+                            {new Date(sel.dropoff_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Price breakdown */}
+                      <div className="p-2.5 rounded-lg bg-theme-bg-tertiary/40 ring-1 ring-theme-border space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-theme-text-muted">Durata</span>
+                          <span className="font-mono text-theme-text-primary tabular-nums">{sel.rental_days}gg × €{formatEur(sel.base_daily_rate)}/g</span>
+                        </div>
+                        {sel.insurance_total > 0 && (
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-theme-text-muted">Assicurazione</span>
+                            <span className="font-mono text-theme-text-primary tabular-nums">€{formatEur(sel.insurance_total)}</span>
+                          </div>
+                        )}
+                        {sel.lavaggio_fee > 0 && (
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-theme-text-muted">Lavaggio</span>
+                            <span className="font-mono text-theme-text-primary tabular-nums">€{formatEur(sel.lavaggio_fee)}</span>
+                          </div>
+                        )}
+                        {sel.no_cauzione_total > 0 && (
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-theme-text-muted">No Cauzione</span>
+                            <span className="font-mono text-theme-text-primary tabular-nums">€{formatEur(sel.no_cauzione_total)}</span>
+                          </div>
+                        )}
+                        {sel.unlimited_km_total > 0 && (
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-theme-text-muted">Km illimitati</span>
+                            <span className="font-mono text-theme-text-primary tabular-nums">€{formatEur(sel.unlimited_km_total)}</span>
+                          </div>
+                        )}
+                        {sel.second_driver_total > 0 && (
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-theme-text-muted">2° guidatore</span>
+                            <span className="font-mono text-theme-text-primary tabular-nums">€{formatEur(sel.second_driver_total)}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-theme-border/60">
+                          <span className="text-theme-text-muted">Subtotale</span>
+                          <span className="font-mono text-theme-text-primary tabular-nums">€{formatEur(sel.subtotal)}</span>
+                        </div>
+                        {sel.sconto > 0 && (
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-emerald-300">Sconto applicato</span>
+                            <span className="font-mono text-emerald-300 tabular-nums">−€{formatEur(sel.subtotal - sel.total_final)}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between pt-1.5 border-t border-theme-border/60">
+                          <span className="text-[10px] uppercase tracking-wider text-cyan-300 font-bold">Totale</span>
+                          <span className="font-mono text-base text-cyan-300 font-bold tabular-nums">€ {formatEur(sel.total_final || sel.subtotal)}</span>
+                        </div>
+                      </div>
+
+                      {/* Motivo rifiuto */}
+                      {sel.status === 'rifiutato' && sel.motivo_rifiuto && (
+                        <div className="p-2.5 rounded-lg bg-rose-500/10 ring-1 ring-rose-500/30">
+                          <p className="text-[9px] uppercase tracking-wider text-rose-300 font-bold">Motivo rifiuto</p>
+                          <p className="text-[11px] text-theme-text-secondary mt-0.5">{sel.motivo_rifiuto}</p>
+                          {sel.motivo_rifiuto_note && <p className="text-[10px] text-theme-text-muted mt-1">{sel.motivo_rifiuto_note}</p>}
+                        </div>
+                      )}
+
+                      {/* Created / sent meta */}
+                      <div className="text-[10px] text-theme-text-muted/80 space-y-0.5">
+                        <div>Creato {sel.created_by ? `da ${sel.created_by} ` : ''}il {new Date(sel.created_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}</div>
+                        {sel.whatsapp_sent_at && (
+                          <div className="text-emerald-400/80">Inviato {sel.sent_by ? `da ${sel.sent_by} ` : ''}· {new Date(sel.whatsapp_sent_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })}</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Footer actions */}
+                    <div className="p-2.5 border-t border-theme-border bg-theme-bg-primary/40 grid grid-cols-2 gap-2">
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(sel)}
+                          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold text-blue-200 bg-blue-500/10 ring-1 ring-blue-500/30 hover:bg-blue-500/20 transition-colors"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                          Modifica
+                        </button>
+                      )}
+                      {canSend && (
+                        <button
+                          type="button"
+                          onClick={openSend}
+                          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold text-emerald-200 bg-emerald-500/10 ring-1 ring-emerald-500/30 hover:bg-emerald-500/20 transition-colors"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                          {sel.status === 'bozza' ? 'Invia' : 'Reinvia'}
+                        </button>
+                      )}
+                      {canAccept && (
+                        <button
+                          type="button"
+                          onClick={() => openAcceptModal(sel)}
+                          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold text-emerald-200 bg-emerald-500/15 ring-1 ring-emerald-500/40 hover:bg-emerald-500/25 transition-colors"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M5 13l4 4L19 7"/></svg>
+                          Accetta
+                        </button>
+                      )}
+                      {canReject && (
+                        <button
+                          type="button"
+                          onClick={() => isNoCauzione ? handleRejectNoCauzionePreventivo(sel) : openRejectModal(sel)}
+                          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-bold text-rose-200 bg-rose-500/10 ring-1 ring-rose-500/30 hover:bg-rose-500/20 transition-colors"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12"/></svg>
+                          {isNoCauzione ? 'Rifiuta +5%' : 'Rifiuta'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </aside>
+              )
+            })()}
+
+            {/* List card (right) */}
+            <div className={`hidden sm:block bg-theme-bg-secondary/40 rounded-2xl ring-1 ring-theme-border overflow-hidden ${selectedRowId ? 'lg:flex-1 lg:min-w-0' : ''}`}>
+            {/* Header row */}
+            <div className="grid grid-cols-[2.4fr_2.2fr_1.6fr_0.8fr_1.1fr_1.1fr_88px] gap-2 px-4 py-3 border-b border-theme-border text-[10px] font-bold uppercase tracking-[0.14em] text-theme-text-muted">
+              <button onClick={() => toggleSort('created_at')} className="text-left hover:text-theme-text-primary cursor-pointer">Preventivo{sortArrow('created_at')}</button>
+              <span>Cliente</span>
+              <button onClick={() => toggleSort('pickup_date')} className="text-left hover:text-theme-text-primary cursor-pointer">Data Noleggio{sortArrow('pickup_date')}</button>
+              <button onClick={() => toggleSort('rental_days')} className="text-left hover:text-theme-text-primary cursor-pointer">Durata{sortArrow('rental_days')}</button>
+              <button onClick={() => toggleSort('total_final')} className="text-right hover:text-theme-text-primary cursor-pointer">Totale{sortArrow('total_final')}</button>
+              <span>Stato</span>
+              <span className="text-right">Azioni</span>
+            </div>
+
+            {/* Pagination slice */}
+            {(() => {
+              const totalPages = Math.max(1, Math.ceil(filtered.length / LIST_PAGE_SIZE))
+              const safePage = Math.min(listPage, totalPages)
+              const pageRows = filtered.slice((safePage - 1) * LIST_PAGE_SIZE, safePage * LIST_PAGE_SIZE)
+              const vehicleById = new Map(vehicles.map(v => [v.id, v]))
+
+              const initials = (name?: string | null) => {
+                if (!name) return '??'
+                const parts = name.trim().split(/\s+/).filter(Boolean)
+                if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+                return name.slice(0, 2).toUpperCase()
+              }
+              const avatarPalettes = [
+                'bg-rose-500/20 text-rose-300 ring-rose-500/40',
+                'bg-amber-500/20 text-amber-300 ring-amber-500/40',
+                'bg-blue-500/20 text-blue-300 ring-blue-500/40',
+                'bg-emerald-500/20 text-emerald-300 ring-emerald-500/40',
+                'bg-purple-500/20 text-purple-300 ring-purple-500/40',
+                'bg-cyan-500/20 text-cyan-300 ring-cyan-500/40',
+                'bg-orange-500/20 text-orange-300 ring-orange-500/40',
+              ]
+              const colorFor = (key: string) => {
+                let h = 0
+                for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0
+                return avatarPalettes[Math.abs(h) % avatarPalettes.length]
+              }
+
+              const statusBadgeFor = (p: Preventivo) => {
+                switch (p.status) {
+                  case 'bozza':     return { bg: 'bg-slate-500/15 text-slate-300 ring-slate-500/40', sub: 'In attesa', subColor: 'text-slate-400' }
+                  case 'inviato':   return { bg: 'bg-blue-500/15 text-blue-300 ring-blue-500/40', sub: 'In attesa risposta', subColor: 'text-blue-300/80' }
+                  case 'accettato': return { bg: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/40', sub: p.booking_id ? 'Confermata' : 'Convertibile', subColor: 'text-emerald-300/80' }
+                  case 'rifiutato': return { bg: 'bg-rose-500/15 text-rose-300 ring-rose-500/40', sub: 'Non accettata', subColor: 'text-rose-300/80' }
+                  case 'scaduto':   return { bg: 'bg-amber-500/15 text-amber-300 ring-amber-500/40', sub: 'Nessuna risposta', subColor: 'text-amber-300/80' }
+                  default:          return { bg: 'bg-gray-500/15 text-gray-300 ring-gray-500/40', sub: '', subColor: 'text-theme-text-muted' }
+                }
+              }
+
+              return (
+                <>
+                  <div className="divide-y divide-theme-border/50">
+                    {pageRows.map(p => {
+                      const v = vehicleById.get(p.vehicle_id)
+                      const img = (v?.metadata && (v.metadata.image as string | undefined)) || null
+                      const sb = statusBadgeFor(p)
+                      const canEdit = p.status === 'bozza' || p.status === 'inviato' || p.status === 'accettato'
+                      const canSend = p.status === 'bozza' || p.status === 'inviato'
+                      const canAccept = (p.source?.startsWith('website') && p.status !== 'rifiutato') || p.status === 'bozza' || p.status === 'inviato'
+                      const canReject = canSend || p.status === 'accettato' || p.status === 'scaduto'
+                      const isNoCauzione = p.source === 'website_no_cauzione'
+
+                      const openSendModal = async () => {
+                        setSelectedPreventivo(p)
+                        setWhatsappPhone(p.customer_phone || '')
+                        setPreviewMessage('')
+                        setIncludeCoefficienti(false)
+                        const preview = await formatWhatsAppMessage(p, { includeCoefficienti: false })
+                        if (!preview) {
+                          const which = (p.sconto || 0) > 0 ? '"Preventivo WhatsApp"' : '"Preventivo senza sconto"'
+                          toast.error(`Template ${which} vuoto o disattivato in Messaggi di Sistema Pro. Compilalo prima di inviare.`)
+                          return
+                        }
+                        setPreviewMessage(preview)
+                        setShowPhoneModal(true)
+                      }
+
+                      return (
+                        <div
+                          key={p.id}
+                          onClick={() => setSelectedRowId(prev => prev === p.id ? null : p.id)}
+                          className={`grid grid-cols-[2.4fr_2.2fr_1.6fr_0.8fr_1.1fr_1.1fr_88px] gap-2 px-4 py-3 items-center cursor-pointer transition-colors ${
+                            selectedRowId === p.id
+                              ? 'bg-cyan-500/10 ring-1 ring-inset ring-cyan-500/40'
+                              : 'hover:bg-theme-bg-tertiary/30'
+                          }`}
+                        >
+                          {/* Preventivo (vehicle image + name + plate + badge) */}
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="relative shrink-0">
+                              {img ? (
+                                <img
+                                  src={img} alt={p.vehicle_name}
+                                  className="w-14 h-10 rounded-md object-cover ring-1 ring-theme-border bg-theme-bg-tertiary"
+                                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                                />
+                              ) : (
+                                <div className="w-14 h-10 rounded-md ring-1 ring-theme-border bg-gradient-to-br from-theme-bg-tertiary to-theme-bg-secondary grid place-items-center text-theme-text-muted">
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 13l1-3a4 4 0 014-3h8a4 4 0 014 3l1 3v5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-1H7v1a1 1 0 01-1 1H4a1 1 0 01-1-1v-5z"/></svg>
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[13px] font-bold text-theme-text-primary truncate max-w-[180px]">{p.vehicle_name}</span>
+                                {isNoCauzione && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-orange-600 text-white">No Cauzione</span>}
+                                {p.source === 'website' && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/40">SITO</span>}
+                              </div>
+                              {p.vehicle_plate && <div className="text-[10px] font-mono text-theme-text-muted truncate">{p.vehicle_plate}</div>}
+                              <div className="text-[9px] text-theme-text-muted/70 truncate">
+                                Creato {new Date(p.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'Europe/Rome' })}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Cliente (avatar + name + email + phone) */}
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {p.customer_name || p.customer_phone ? (
+                              <>
+                                <div className={`grid w-8 h-8 place-items-center rounded-full ring-1 text-[10px] font-bold shrink-0 ${colorFor(p.customer_name || p.customer_phone || p.id)}`}>
+                                  {initials(p.customer_name || p.customer_phone)}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-[12px] font-semibold text-theme-text-primary truncate flex items-center gap-1.5">
+                                    {p.customer_name || '—'}
+                                    <ClientStatusBadge phone={p.customer_phone} />
+                                  </div>
+                                  {p.customer_phone && <div className="text-[10px] font-mono text-theme-text-muted truncate">{p.customer_phone}</div>}
+                                </div>
+                              </>
+                            ) : (
+                              <span className="text-[11px] text-theme-text-muted italic">Nessun cliente</span>
+                            )}
+                          </div>
+
+                          {/* Date noleggio */}
+                          <div className="text-[11px] text-theme-text-secondary leading-tight">
+                            <div className="font-medium">{new Date(p.pickup_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })}</div>
+                            <div className="text-theme-text-muted">{new Date(p.dropoff_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })}</div>
+                          </div>
+
+                          {/* Durata */}
+                          <div className="text-[12px] font-mono text-theme-text-primary tabular-nums">{p.rental_days}gg</div>
+
+                          {/* Totale */}
+                          <div className="text-right">
+                            <div className="text-[13px] font-bold text-theme-text-primary tabular-nums">€ {formatEur(p.total_final || p.subtotal)}</div>
+                            <div className="text-[9px] text-theme-text-muted">IVA inclusa</div>
+                          </div>
+
+                          {/* Stato */}
+                          <div className="min-w-0">
+                            <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ring-1 ${sb.bg}`}>
+                              {STATUS_LABELS[p.status] || p.status}
+                            </span>
+                            {sb.sub && <div className={`text-[10px] mt-0.5 truncate ${sb.subColor}`}>{sb.sub}</div>}
+                          </div>
+
+                          {/* Azioni — compact icon buttons */}
+                          <div className="flex items-center justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => handleEdit(p)}
+                              title="Visualizza dettagli"
+                              className="grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-cyan-300 hover:bg-cyan-500/10 transition-colors"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                            </button>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => handleEdit(p)}
+                                title="Modifica"
+                                className="grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-blue-300 hover:bg-blue-500/10 transition-colors"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                              </button>
+                            )}
+                            {canSend && (
+                              <button
+                                type="button"
+                                onClick={openSendModal}
+                                title={p.status === 'bozza' ? 'Invia preventivo' : 'Reinvia'}
+                                className="grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                              </button>
+                            )}
+                            {canAccept && (
+                              <button
+                                type="button"
+                                onClick={() => openAcceptModal(p)}
+                                title="Accetta"
+                                className="grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M5 13l4 4L19 7"/></svg>
+                              </button>
+                            )}
+                            {canReject && (
+                              <button
+                                type="button"
+                                onClick={() => isNoCauzione ? handleRejectNoCauzionePreventivo(p) : openRejectModal(p)}
+                                title={isNoCauzione ? 'Rifiuta + Sconto 5%' : 'Rifiuta'}
+                                className="grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12"/></svg>
+                              </button>
+                            )}
+                            {p.status === 'rifiutato' && (
+                              <button
+                                type="button"
+                                onClick={() => openRejectModal(p)}
+                                title={p.motivo_rifiuto ? `Motivo: ${p.motivo_rifiuto}` : 'Imposta motivo rifiuto'}
+                                className="grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-amber-300 hover:bg-amber-500/10 transition-colors"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 9v2m0 4h.01M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/></svg>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Pagination footer */}
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-theme-border text-[11px] text-theme-text-muted">
+                    <div className="flex items-center gap-2">
+                      <span>Mostra <strong className="text-theme-text-primary font-mono">{pageRows.length}</strong> di <strong className="text-theme-text-primary font-mono">{filtered.length}</strong> risultati per pagina</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setListPage(1)}
+                        disabled={safePage === 1}
+                        className="w-7 h-7 grid place-items-center rounded-md text-theme-text-secondary hover:bg-theme-bg-tertiary disabled:opacity-30"
+                      >«</button>
+                      <button
+                        onClick={() => setListPage(p => Math.max(1, p - 1))}
+                        disabled={safePage === 1}
+                        className="w-7 h-7 grid place-items-center rounded-md text-theme-text-secondary hover:bg-theme-bg-tertiary disabled:opacity-30"
+                      >‹</button>
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let n = i + 1
+                        if (totalPages > 5) {
+                          if (safePage <= 3) n = i + 1
+                          else if (safePage >= totalPages - 2) n = totalPages - 4 + i
+                          else n = safePage - 2 + i
+                        }
+                        return (
+                          <button
+                            key={n}
+                            onClick={() => setListPage(n)}
+                            className={`w-7 h-7 grid place-items-center rounded-md text-[11px] font-semibold ${
+                              n === safePage
+                                ? 'bg-cyan-500/20 text-cyan-200 ring-1 ring-cyan-500/40'
+                                : 'text-theme-text-secondary hover:bg-theme-bg-tertiary'
+                            }`}
+                          >{n}</button>
+                        )
+                      })}
+                      {totalPages > 5 && safePage < totalPages - 2 && <span className="text-theme-text-muted px-1">…</span>}
+                      {totalPages > 5 && safePage < totalPages - 2 && (
+                        <button
+                          onClick={() => setListPage(totalPages)}
+                          className="w-7 h-7 grid place-items-center rounded-md text-[11px] font-semibold text-theme-text-secondary hover:bg-theme-bg-tertiary"
+                        >{totalPages}</button>
+                      )}
+                      <button
+                        onClick={() => setListPage(p => Math.min(totalPages, p + 1))}
+                        disabled={safePage === totalPages}
+                        className="w-7 h-7 grid place-items-center rounded-md text-theme-text-secondary hover:bg-theme-bg-tertiary disabled:opacity-30"
+                      >›</button>
+                      <button
+                        onClick={() => setListPage(totalPages)}
+                        disabled={safePage === totalPages}
+                        className="w-7 h-7 grid place-items-center rounded-md text-theme-text-secondary hover:bg-theme-bg-tertiary disabled:opacity-30"
+                      >»</button>
+                    </div>
+                  </div>
+                </>
+              )
+            })()}
+
+            {/* Hidden legacy table below — kept for accessibility / fallback */}
+            <table className="hidden">
               <thead>
-                <tr className="border-b border-theme-border text-left text-theme-text-muted">
-                  <th className="py-2 px-3">Veicolo</th>
-                  <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('created_at')}>Creato il{sortArrow('created_at')}</th>
-                  <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('pickup_date')}>Date Noleggio{sortArrow('pickup_date')}</th>
-                  <th className="py-2 px-3 cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('rental_days')}>Giorni{sortArrow('rental_days')}</th>
-                  <th className="py-2 px-3 text-right">Subtotale</th>
-                  <th className="py-2 px-3 text-right cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('total_final')}>Prezzo Scontato{sortArrow('total_final')}</th>
-                  <th className="py-2 px-3">Stato</th>
-                  <th className="py-2 px-3">Azioni</th>
-                </tr>
+                <tr><th /></tr>
               </thead>
               <tbody>
                 {filtered.map(p => (
@@ -3261,6 +4232,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                 ))}
               </tbody>
             </table>
+          </div>
           </div>
         )}
 

@@ -77,6 +77,11 @@ export default function ConvertPreventivoModal({ isOpen, preventivo, customers, 
         pickup_address: preventivo.pickup_enabled ? { street: preventivo.pickup_street || '', city: preventivo.pickup_city || '', zip: preventivo.pickup_zip || '', province: preventivo.pickup_province || '', notes: preventivo.pickup_notes || '' } : null,
         pickup_fee: eurToCents(preventivo.pickup_fee || 0),
         deposit_amount: eurToCents(preventivo.deposit_amount || 0),
+        // 2026-05-23: preserva km esatto del preventivo. Top-level cosi'
+        // ReservationsTab / contract / fattura non ricalcolano da config
+        // (che potrebbe essere cambiata dopo il quote).
+        km_limit: preventivo.unlimited_km ? null : (typeof preventivo.km_limit === 'number' ? preventivo.km_limit : null),
+        unlimited_km: !!preventivo.unlimited_km,
         booking_details: {
           customer: {
             fullName: selectedCustomer.full_name,
