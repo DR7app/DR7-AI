@@ -501,17 +501,59 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
               .slice(0, 5)
             setTopFatturato(topProd)
 
-            // 5. Costi personale dai contratti attivi
+            // 5. Costi del personale — dai contratti REALI di ogni operatore.
+            //    Schema corretto (vedi 20260511_operatore_contratto.sql):
+            //      - attivo BOOLEAN (NON "stato='attivo'")
+            //      - stipendio_mensile_eur (mensilita' fissa)
+            //      - paga_oraria_eur (tariffa oraria per chi non e' a stipendio)
+            //      - straordinario_abilitato + paga_straordinario_eur + ore_soglia_straordinario
+            //    Vecchia versione leggeva 'stipendio_lordo' / 'contributi_inps'
+            //    che NON ESISTONO -> totale sempre 0. Adesso:
+            //      stipendi = sum(stipendio_mensile × daysCount/30)            (prorated)
+            //               + sum(paga_oraria × ore_lavorate_periodo)         (orari)
+            //               + sum(paga_straord × ore_oltre_soglia)            (overtime)
+            //      contributi = stipendi × 30% (stima INPS+IRAP, etichettata come stima)
             const { data: contratti } = await supabase
                 .from('operatore_contratto')
-                .select('stipendio_lordo, contributi_inps, stato')
-                .eq('stato', 'attivo')
-            let stipendiTot = 0, contribTot = 0
-            for (const c of (contratti || []) as Array<{ stipendio_lordo: number | null; contributi_inps: number | null }>) {
-                stipendiTot += Number(c.stipendio_lordo) || 0
-                contribTot += Number(c.contributi_inps) || 0
+                .select('operatore_id, stipendio_mensile_eur, paga_oraria_eur, paga_straordinario_eur, straordinario_abilitato, ore_soglia_straordinario, ore_target_giornaliere')
+                .eq('attivo', true)
+                .in('operatore_id', opIds.length ? opIds : ['00000000-0000-0000-0000-000000000000'])
+
+            let stipendiTot = 0
+            for (const c of (contratti || []) as Array<{
+                operatore_id: string
+                stipendio_mensile_eur: number | null
+                paga_oraria_eur: number | null
+                paga_straordinario_eur: number | null
+                straordinario_abilitato: boolean | null
+                ore_soglia_straordinario: number | null
+                ore_target_giornaliere: number | null
+            }>) {
+                // Mensile: prorata al range selezionato.
+                const monthly = Number(c.stipendio_mensile_eur) || 0
+                if (monthly > 0) stipendiTot += monthly * (daysCount / 30)
+
+                // Orario: tariffa × ore effettivamente lavorate nel range.
+                const hourly = Number(c.paga_oraria_eur) || 0
+                if (hourly > 0) {
+                    const minWorked = perOpMin.get(c.operatore_id) || 0
+                    stipendiTot += hourly * (minWorked / 60)
+                }
+
+                // Straordinario: ore oltre la soglia × paga_straordinario.
+                if (c.straordinario_abilitato && c.paga_straordinario_eur) {
+                    const sogliaH = Number(c.ore_soglia_straordinario) || Number(c.ore_target_giornaliere) || 8
+                    const sogliaMinPeriodo = sogliaH * 60 * daysCount
+                    const minWorked = perOpMin.get(c.operatore_id) || 0
+                    const straordMin = Math.max(0, minWorked - sogliaMinPeriodo)
+                    stipendiTot += Number(c.paga_straordinario_eur) * (straordMin / 60)
+                }
             }
-            setCostiPersonale({ totale: stipendiTot + contribTot, stipendi: stipendiTot, contributi: contribTot })
+
+            // Contributi: stima approssimativa 30% del lordo (INPS + IRAP).
+            // L'etichetta UI segnala che e' una stima, non un valore reale.
+            const contribTot = stipendiTot * 0.30
+            setCostiPersonale({ totale: stipendiTot + contribTot, stipendi: Math.round(stipendiTot * 100) / 100, contributi: Math.round(contribTot * 100) / 100 })
         } catch (err) {
             console.error('[OperatoriReportDashboardV2] load error', err)
         } finally {
@@ -840,10 +882,10 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                             <div className="text-xs uppercase tracking-wider text-theme-text-muted mb-2">Costi del Personale</div>
                             {isDirezione ? (
                                 <div className="space-y-1 text-[11px] mt-2">
-                                    <div className="flex justify-between"><span className="text-theme-text-muted">Stipendi (mensili)</span><span className="text-theme-text-primary tabular-nums">{eur(costiPersonale.stipendi)}</span></div>
-                                    <div className="flex justify-between"><span className="text-theme-text-muted">Contributi INPS</span><span className="text-theme-text-primary tabular-nums">{eur(costiPersonale.contributi)}</span></div>
+                                    <div className="flex justify-between"><span className="text-theme-text-muted">Stipendi (lordi periodo)</span><span className="text-theme-text-primary tabular-nums">{eur(costiPersonale.stipendi)}</span></div>
+                                    <div className="flex justify-between"><span className="text-theme-text-muted">Contributi (stima 30%)</span><span className="text-theme-text-primary tabular-nums">{eur(costiPersonale.contributi)}</span></div>
                                     <div className="flex justify-between pt-1 border-t border-theme-border"><span className="text-theme-text-primary font-semibold">Totale</span><span className="text-amber-400 font-bold tabular-nums">{eur(costiPersonale.totale)}</span></div>
-                                    <div className="text-[10px] text-theme-text-muted mt-1">Da contratti attivi</div>
+                                    <div className="text-[10px] text-theme-text-muted mt-1">Da contratti attivi · mensile prorata + orario × ore lavorate + straordinario</div>
                                 </div>
                             ) : <div className="text-[11px] text-theme-text-muted mt-2">Accesso riservato direzione</div>}
                         </div>
