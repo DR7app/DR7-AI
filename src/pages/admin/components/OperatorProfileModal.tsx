@@ -1155,7 +1155,46 @@ function CalcolaPagaSection({
     }, [operatoreId, isDirezione])
 
     const calc = useMemo(() => {
-        const sogliaMin = Math.round((contract?.ore_soglia_straordinario ?? oreTargetGiornaliere) * 60)
+        // 2026-05-23: SOGLIA STRAORD per-PERIODO, non piu' solo per-giorno.
+        // Bug riportato: contratto Salvatore = 40h/sett. Se faceva 10h un
+        // giorno e 6h gli altri giorni della settimana, il sistema gli
+        // assegnava 2h di straord (10-8) anche se il totale settimanale
+        // era < 40h. Sbagliato: la soglia straord segue la granularita'
+        // del TARGET. 40h/sett = soglia settimanale.
+        //
+        // Regola:
+        //   - Se contract.ore_soglia_straordinario e' esplicito → per giorno.
+        //   - Else, segue la granularita' del target:
+        //       giornaliera → soglia per giorno (= ore_target_giornaliere)
+        //       settimanale → soglia per settimana ISO (= ore_target_settimanali)
+        //       mensile     → soglia per mese (= ore_target_mensili)
+        const sogliaMode: 'giornaliera' | 'settimanale' | 'mensile' =
+            contract?.ore_soglia_straordinario != null && contract.ore_soglia_straordinario > 0
+                ? 'giornaliera'
+                : contract?.ore_target_settimanali != null && contract.ore_target_settimanali > 0
+                    ? 'settimanale'
+                    : contract?.ore_target_mensili != null && contract.ore_target_mensili > 0
+                        ? 'mensile'
+                        : 'giornaliera'
+        const sogliaMin = (() => {
+            if (sogliaMode === 'giornaliera') {
+                return Math.round((contract?.ore_soglia_straordinario ?? contract?.ore_target_giornaliere ?? oreTargetGiornaliere) * 60)
+            }
+            if (sogliaMode === 'settimanale') {
+                return Math.round((contract?.ore_target_settimanali ?? 0) * 60)
+            }
+            return Math.round((contract?.ore_target_mensili ?? 0) * 60)
+        })()
+        // ISO week key (YYYY-Www) per raggruppare giorni nella stessa settimana
+        // lavorativa lun-dom anche a cavallo di mesi/anni.
+        const isoWeekKey = (dateStr: string): string => {
+            const d = new Date(dateStr + 'T12:00:00Z')
+            const day = d.getUTCDay() || 7
+            d.setUTCDate(d.getUTCDate() + 4 - day)
+            const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+            const weekNum = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+            return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`
+        }
         // 2026-05-22: paga oraria DERIVATA proporzionalmente dal pacchetto
         // contrattuale se l'admin non ha inserito un valore esplicito.
         //   Esempio: contratto 47h/sett, €1000/sett → €21.28/h derivato.
@@ -1195,25 +1234,36 @@ function CalcolaPagaSection({
             contract?.straordinario_abilitato !== false
             && straord > 0
             && sogliaMin > 0
-        let minOrdinari = 0
-        let minStraord = 0
+        // Raggruppo i minuti per il "periodo soglia" (giorno / settimana ISO /
+        // mese YYYY-MM) e applico la regola "fino a soglia = ord, oltre = str"
+        // su ciascun gruppo. Cosi' se una settimana ha totale ≤ 40h
+        // niente straord anche se ci sono stati giorni > 8h.
+        const periodKey = (dateStr: string): string => {
+            if (sogliaMode === 'giornaliera') return dateStr
+            if (sogliaMode === 'settimanale') return isoWeekKey(dateStr)
+            return dateStr.slice(0, 7) // YYYY-MM
+        }
+        const periodMin = new Map<string, number>()
         for (const d of days) {
             if (d.minutiLavorati <= 0) continue
-            if (straordEnabled && d.minutiLavorati > sogliaMin) {
-                // Oltre la soglia giornaliera, il surplus va a paga straordinario.
-                // Es. contratto: soglia 8h, paga ord 10€/h, paga str 15€/h
-                // Giorno con 10h lavorate → 8h × 10€ = 80€ + 2h × 15€ = 30€
+            const k = periodKey(d.data)
+            periodMin.set(k, (periodMin.get(k) || 0) + d.minutiLavorati)
+        }
+        let minOrdinari = 0
+        let minStraord = 0
+        for (const total of periodMin.values()) {
+            if (straordEnabled && total > sogliaMin) {
                 minOrdinari += sogliaMin
-                minStraord += d.minutiLavorati - sogliaMin
+                minStraord += total - sogliaMin
             } else {
-                minOrdinari += d.minutiLavorati
+                minOrdinari += total
             }
         }
         const pagaOrd = (minOrdinari / 60) * oraria
         const pagaStraord = (minStraord / 60) * straord
         const correzione = -(oreRecMin / 60) * oraria // recuperare = decurta
         const totale = pagaOrd + pagaStraord + correzione
-        return { sogliaMin, minOrdinari, minStraord, pagaOrd, pagaStraord, correzione, totale, straordEnabled, oraria, oraSource, straord }
+        return { sogliaMin, sogliaMode, minOrdinari, minStraord, pagaOrd, pagaStraord, correzione, totale, straordEnabled, oraria, oraSource, straord }
     }, [days, contract, oreRecMin, oreTargetGiornaliere])
 
     async function saveOreRecuperare() {
@@ -1287,7 +1337,9 @@ function CalcolaPagaSection({
                                     Straordinario: <strong className="text-sky-400">€{calc.straord.toFixed(2)}/h</strong>
                                 </span>
                                 <span className="px-2 py-0.5 rounded bg-theme-bg-secondary border border-theme-border">
-                                    Soglia: <strong className="text-theme-text-primary">{Math.round(calc.sogliaMin / 60 * 10) / 10}h/giorno</strong>
+                                    Soglia: <strong className="text-theme-text-primary">
+                                        {Math.round(calc.sogliaMin / 60 * 10) / 10}h/{calc.sogliaMode === 'settimanale' ? 'settimana' : calc.sogliaMode === 'mensile' ? 'mese' : 'giorno'}
+                                    </strong>
                                 </span>
                             </>
                         )}
