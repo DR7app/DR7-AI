@@ -193,7 +193,7 @@ export default function ReportPreventiviTab() {
           .order('created_at', { ascending: false }),
         supabase
           .from('preventivi')
-          .select('id, status, motivo_rifiuto, motivo_rifiuto_note, total_final, total_amount, subtotal, whatsapp_sent_at, customer_name, customer_id, created_at')
+          .select('id, status, motivo_rifiuto, motivo_rifiuto_note, total_final, total_amount, subtotal, whatsapp_sent_at, customer_name, customer_id, created_at, created_by')
           .gte('created_at', prevStartDate)
           .lte('created_at', prevEndDate),
       ])
@@ -201,8 +201,17 @@ export default function ReportPreventiviTab() {
       if (dbError) throw new Error(dbError.message)
       if (prevDbError) throw new Error(prevDbError.message)
 
-      setPreventivi(data || [])
-      setPrevMonthData(prevData || [])
+      // 2026-05-23: escludiamo preventivi creati dall'account TEST
+      // (ophe@dr7.app) cosi' i numeri del report (conversion rate,
+      // totale, valore medio) non sono falsati dalle prove direzione.
+      // Filtro JS-side per evitare la sintassi PostgREST `.or().not.in()`
+      // che fa errori difficili da debuggare. Aggiungere altre email
+      // di test all'array se ne nascono.
+      const TEST_CREATOR_EMAILS = new Set(['ophe@dr7.app'])
+      const isNotTest = (p: { created_by?: string | null }) =>
+        !p.created_by || !TEST_CREATOR_EMAILS.has(String(p.created_by).toLowerCase().trim())
+      setPreventivi((data || []).filter(isNotTest))
+      setPrevMonthData((prevData || []).filter(isNotTest))
       setLoaded(true)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Errore sconosciuto')
