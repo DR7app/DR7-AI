@@ -2215,7 +2215,7 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
       const sdKeys = new Set([...Object.keys(saved.servizi.second_driver), ...Object.keys(current.servizi.second_driver)])
       sdKeys.forEach((k) => {
         if (saved.servizi.second_driver[k] !== current.servizi.second_driver[k]) {
-          out.push(`Secondo Guidatore (${k}): €${saved.servizi.second_driver[k] ?? 0} → €${current.servizi.second_driver[k] ?? 0}/g`)
+          out.push(`Secondo Guidatore (${k}): €${saved.servizi.second_driver[k] ?? 0} → €${current.servizi.second_driver[k] ?? 0} (una tantum)`)
         }
       })
     }
@@ -4043,9 +4043,10 @@ function ServiziSection({
                         second_driver: { ...servizi.second_driver, [f.id]: v === '' ? '' : Number(v) },
                       })
                     }}
-                    className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-10 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                    className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-20 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">/g</span>
+                  {/* 2026-05-23: Secondo guidatore = una tantum (non /giorno) */}
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-wider text-theme-text-muted pointer-events-none">una tantum</span>
                 </div>
               </div>
             ))}
