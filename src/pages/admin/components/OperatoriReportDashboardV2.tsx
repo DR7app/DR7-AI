@@ -548,22 +548,55 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
             //      contributi = stipendi × 30% (stima INPS+IRAP, etichettata come stima)
             const { data: contratti } = await supabase
                 .from('operatore_contratto')
-                .select('operatore_id, stipendio_mensile_eur, paga_oraria_eur, paga_straordinario_eur, straordinario_abilitato, ore_soglia_straordinario, ore_target_giornaliere, ore_target_settimanali, ore_target_mensili')
+                .select('operatore_id, stipendio_mensile_eur, paga_oraria_eur, paga_straordinario_eur, straordinario_abilitato, ore_soglia_straordinario, ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, giorni_lavorativi_settimana')
                 .eq('attivo', true)
                 .in('operatore_id', opIds.length ? opIds : ['00000000-0000-0000-0000-000000000000'])
 
-            // Helper: dato un valore soglia e la sua granularita', restituisce
-            // il numero TOTALE di ore-soglia per l'intero range selezionato.
-            //   giornaliera × daysCount
-            //   settimanale × (daysCount / 7)
-            //   mensile     × (daysCount / 30)
-            // Se l'admin imposta 40h/settimana, calcoliamo correttamente
-            // "ore prima dello straordinario" = 40 × (giorni/7), non 40 × giorni.
-            const sogliaForRange = (value: number, gran: 'giornaliera' | 'settimanale' | 'mensile'): number => {
-                if (!value || value <= 0) return 0
-                if (gran === 'giornaliera') return value * daysCount
-                if (gran === 'settimanale') return value * (daysCount / 7)
-                return value * (daysCount / 30)
+            // Soglia DAILY in ore per ogni operatore. La logica e' la stessa
+            // di "Calcola Paga" nel profilo operatore: lo straordinario si
+            // calcola per-giorno (ore oltre la soglia in quel giorno), NON
+            // sul totale del periodo. Esempio: 40h/settimana su 6 giorni =
+            // soglia giornaliera 40/6 ≈ 6.67h. Se l'operatore lavora 8h in
+            // un giorno, 6.67h sono ordinarie e 1.33h straordinario, anche
+            // se la sua settimana e' sotto le 40h.
+            //
+            // Priorita' per derivare la soglia giornaliera:
+            //   1. ore_soglia_straordinario (esplicita)
+            //   2. ore_target_giornaliere
+            //   3. ore_target_settimanali / giorni_lavorativi_settimana (default 5)
+            //   4. ore_target_mensili / (avg 22 giorni lavorativi/mese)
+            const dailySoglia = (c: {
+                ore_soglia_straordinario: number | null
+                ore_target_giornaliere: number | null
+                ore_target_settimanali: number | null
+                ore_target_mensili: number | null
+                giorni_lavorativi_settimana: number | null
+            }): number => {
+                if (c.ore_soglia_straordinario && c.ore_soglia_straordinario > 0) return Number(c.ore_soglia_straordinario)
+                if (c.ore_target_giornaliere && c.ore_target_giornaliere > 0) return Number(c.ore_target_giornaliere)
+                if (c.ore_target_settimanali && c.ore_target_settimanali > 0) {
+                    const gg = Number(c.giorni_lavorativi_settimana) || 5
+                    return Number(c.ore_target_settimanali) / Math.max(1, gg)
+                }
+                if (c.ore_target_mensili && c.ore_target_mensili > 0) {
+                    return Number(c.ore_target_mensili) / 22
+                }
+                return 0
+            }
+
+            // Minuti lavorati per (operatore, giorno) — riutilizziamo byOpDay
+            // gia' calcolato sopra invece di rifare la query timesheet.
+            const minOnDay = (opId: string, day: string): number => {
+                const dayEntries = byOpDay.get(opId)?.get(day)
+                if (!dayEntries?.entrata) return 0
+                const end = dayEntries.uscita ? new Date(dayEntries.uscita).getTime() : new Date(dayEntries.entrata).getTime()
+                let m = Math.max(0, Math.round((end - new Date(dayEntries.entrata).getTime()) / 60000))
+                for (let i = 0; i < dayEntries.pi.length; i++) {
+                    const start = new Date(dayEntries.pi[i]).getTime()
+                    const fin = dayEntries.pf[i] ? new Date(dayEntries.pf[i]).getTime() : start
+                    m -= Math.max(0, Math.round((fin - start) / 60000))
+                }
+                return Math.max(0, m)
             }
 
             let stipendiTot = 0
@@ -577,48 +610,37 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                 ore_target_giornaliere: number | null
                 ore_target_settimanali: number | null
                 ore_target_mensili: number | null
+                giorni_lavorativi_settimana: number | null
             }>) {
                 // Mensile: prorata al range selezionato.
                 const monthly = Number(c.stipendio_mensile_eur) || 0
                 if (monthly > 0) stipendiTot += monthly * (daysCount / 30)
 
-                // Orario: split ordinarie vs straordinarie (NO double-count).
-                //   ore_ordinarie  = min(ore_lavorate, soglia)
-                //   ore_straord    = max(0, ore_lavorate - soglia)
-                //   costo          = ore_ordinarie × paga_oraria
-                //                  + ore_straord    × paga_straordinario
-                // Stesso calcolo di "Calcola Paga" nel profilo operatore.
+                // Orario: split per-giorno tra ordinarie e straord, come
+                // Calcola Paga. La soglia e' SEMPRE giornaliera (derivata
+                // dalla granularita' del contratto).
                 const hourly = Number(c.paga_oraria_eur) || 0
                 if (hourly > 0) {
-                    const hWorked = (perOpMin.get(c.operatore_id) || 0) / 60
-
-                    // Soglia per il range nella granularita' giusta.
-                    // Priorita': ore_soglia_straordinario (sempre giornaliera)
-                    //          → ore_target_giornaliere (giornaliera)
-                    //          → ore_target_settimanali (settimanale)
-                    //          → ore_target_mensili (mensile)
-                    let sogliaH = 0
-                    if (c.ore_soglia_straordinario && c.ore_soglia_straordinario > 0) {
-                        sogliaH = sogliaForRange(Number(c.ore_soglia_straordinario), 'giornaliera')
-                    } else if (c.ore_target_giornaliere && c.ore_target_giornaliere > 0) {
-                        sogliaH = sogliaForRange(Number(c.ore_target_giornaliere), 'giornaliera')
-                    } else if (c.ore_target_settimanali && c.ore_target_settimanali > 0) {
-                        sogliaH = sogliaForRange(Number(c.ore_target_settimanali), 'settimanale')
-                    } else if (c.ore_target_mensili && c.ore_target_mensili > 0) {
-                        sogliaH = sogliaForRange(Number(c.ore_target_mensili), 'mensile')
-                    }
-
+                    const sogliaHDay = dailySoglia(c)
+                    const sogliaMinDay = sogliaHDay * 60
                     const straordOn = !!c.straordinario_abilitato && (Number(c.paga_straordinario_eur) || 0) > 0
+                    const dayMap = byOpDay.get(c.operatore_id)
+                    if (!dayMap) continue
 
-                    if (!straordOn || sogliaH <= 0) {
-                        // Niente straordinario configurato → tutte le ore alla base.
-                        stipendiTot += hourly * hWorked
-                    } else {
-                        const hOrd = Math.min(hWorked, sogliaH)
-                        const hStr = Math.max(0, hWorked - sogliaH)
-                        stipendiTot += hourly * hOrd
-                        stipendiTot += Number(c.paga_straordinario_eur) * hStr
-                    }
+                    let ordMin = 0
+                    let strMin = 0
+                    dayMap.forEach((_t, day) => {
+                        const m = minOnDay(c.operatore_id, day)
+                        if (m <= 0) return
+                        if (!straordOn || sogliaMinDay <= 0) {
+                            ordMin += m
+                        } else {
+                            ordMin += Math.min(m, sogliaMinDay)
+                            strMin += Math.max(0, m - sogliaMinDay)
+                        }
+                    })
+                    stipendiTot += hourly * (ordMin / 60)
+                    stipendiTot += (Number(c.paga_straordinario_eur) || 0) * (strMin / 60)
                 }
             }
 
