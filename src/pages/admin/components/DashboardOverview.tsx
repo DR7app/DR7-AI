@@ -50,7 +50,7 @@ interface TopVehicle { name: string; plate: string; bookings: number; image_url?
 
 const fmtInt = (n: number) => new Intl.NumberFormat('it-IT').format(Math.round(n))
 const fmtEur = (n: number) => new Intl.NumberFormat('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(n))
-const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`
+// fmtPct rimosso 2026-05-23: era dichiarato ma mai usato, blocca tsc strict.
 
 const CHANNEL_COLORS = ['#E1306C', '#4285F4', '#1877F2', '#000000', '#25D366', '#9CA3AF']
 

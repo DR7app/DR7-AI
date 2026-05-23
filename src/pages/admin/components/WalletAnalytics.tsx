@@ -135,7 +135,7 @@ export default function WalletAnalytics({ totalBalanceCents, activeCount, inacti
               <YAxis stroke="#9ca3af" tick={{ fontSize: 10 }} />
               <Tooltip
                 contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#fff' }}
-                formatter={(v: number) => `€${fmtEur(v)}`}
+                formatter={(v) => `€${fmtEur(Number(v) || 0)}`}
               />
               <Area type="monotone" dataKey="ricariche" stroke="#10b981" strokeWidth={2} fill="url(#wallet-in)" />
               <Area type="monotone" dataKey="utilizzi" stroke="#22d3ee" strokeWidth={2} fill="url(#wallet-out)" />
@@ -170,9 +170,10 @@ export default function WalletAnalytics({ totalBalanceCents, activeCount, inacti
               </Pie>
               <Tooltip
                 contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#fff' }}
-                formatter={(v: number, name: string) => {
+                formatter={(v, name) => {
+                  const num = Number(v) || 0
                   const isCount = name === 'Clienti inattivi'
-                  return isCount ? `${v} clienti` : `€${fmtEur(v)}`
+                  return isCount ? `${num} clienti` : `€${fmtEur(num)}`
                 }}
               />
               <Legend
