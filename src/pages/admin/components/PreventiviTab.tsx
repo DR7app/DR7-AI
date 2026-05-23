@@ -2025,7 +2025,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         // unused line collapses cleanly. The legacy {pricing_lines} placeholder
         // joins all non-empty lines with \n for templates that still use it.
         const giornoLabel = p.rental_days === 1 ? 'giorno' : 'giorni'
-        const lineRental = `${p.rental_days} ${giornoLabel} — ${formatEur(p.base_daily_rate)}/giorno = ${formatEur((p.base_daily_rate) * p.rental_days)}`
+        // 2026-05-23: formato semplificato — solo "N giorno/i = TOT", senza il
+        // "/giorno" intermedio. Richiesta utente: meno confuso da leggere su WhatsApp.
+        const lineRental = `${p.rental_days} ${giornoLabel} = ${formatEur((p.base_daily_rate) * p.rental_days)}`
         const lineInsurance = (p.insurance_option && p.insurance_total >= 0)
           ? `${resolveInsLabel()} = ${formatEur(p.insurance_total)}` : ''
         const lineLavaggio = p.lavaggio_fee > 0 ? `Lavaggio Finale = ${formatEur(p.lavaggio_fee)}` : ''
