@@ -1172,9 +1172,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               if (prev.unlimited_km) {
                 unlimitedKmSurcharge = getUnlimitedKmPriceRes(selectedVehicle, activeTier) * data.rentalDays
               }
-              // 2026-05-23: Secondo guidatore = TARIFFA FISSA (una tantum), non per giorno.
+              // 2026-05-23: Secondo guidatore — modalita' admin-editabile in
+              // Centralina Pro > Servizi (campo second_driver_billing).
+              const sdRate = activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const sdMode = ((rentalConfig as any)?.servizi?.second_driver_billing as 'flat' | 'per_day' | undefined) || 'flat'
               const secondDriverFee = prev.has_second_driver
-                ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1)
+                ? (sdMode === 'flat' ? sdRate : sdRate * data.rentalDays)
                 : 0
               const experienceCost = calculateExperienceCost(prev.experience_services, data.rentalDays)
               const flexCost = prev.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * data.rentalDays : 0
@@ -1318,9 +1322,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (formData.unlimited_km) {
         unlimitedKmSurcharge = getUnlimitedKmPriceRes(selectedVehicle, activeTier) * revenueSuggestion.rentalDays
       }
-      // 2026-05-23: Secondo guidatore = TARIFFA FISSA (una tantum), non per giorno.
+      // 2026-05-23: Secondo guidatore — modalita' admin-editabile in
+      // Centralina Pro > Servizi (campo second_driver_billing).
+      // 'flat' = una tantum, 'per_day' = × giorni.
+      const sdRate = activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sdMode = ((rentalConfig as any)?.servizi?.second_driver_billing as 'flat' | 'per_day' | undefined) || 'flat'
       const secondDriverFee = formData.has_second_driver
-        ? (activeTier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1)
+        ? (sdMode === 'flat' ? sdRate : sdRate * revenueSuggestion.rentalDays)
         : 0
       const experienceCost = calculateExperienceCost(formData.experience_services, revenueSuggestion.rentalDays)
       const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * revenueSuggestion.rentalDays : 0

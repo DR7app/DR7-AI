@@ -122,6 +122,10 @@ type ServiziConfig = {
   lavaggio_title?: string
   delivery_title?: string
   second_driver_title?: string
+  // 2026-05-23: modalita' di fatturazione del secondo guidatore.
+  // 'flat' = una tantum (default nuovo, valore applicato 1 sola volta)
+  // 'per_day' = legacy (valore × giorni di noleggio)
+  second_driver_billing?: 'flat' | 'per_day'
   pickup_locations_title?: string
   experience: ExperienceService[]
   dr7_flex: {
@@ -163,6 +167,7 @@ const INITIAL_SERVIZI: ServiziConfig = {
   lavaggio: { fee: 9.9, mandatory: true },
   delivery: { price_per_km: 3 },
   second_driver: { A: 10, B: 20 },
+  second_driver_billing: 'flat',
   pickup_locations: [
     { id: 'cagliari_airport', label: 'Aeroporto Cagliari Elmas', km: 9, is_active: true },
     { id: 'alghero_airport', label: 'Aeroporto Alghero Fertilia', km: 250, is_active: true },
@@ -4026,6 +4031,20 @@ function ServiziSection({
             className="w-full bg-transparent outline-none text-[15px] font-semibold text-theme-text-primary mb-3 focus:bg-theme-bg-primary rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
             placeholder="Titolo"
           />
+          {/* 2026-05-23: Dropdown modalita' fatturazione. 'flat' = una tantum,
+              'per_day' = × giorni di noleggio. Salvato in servizi.second_driver_billing
+              e letto da admin Preventivi/Reservations + sito CarBookingWizard. */}
+          <div className="mb-3">
+            <label className="block text-[11px] uppercase tracking-wider text-theme-text-muted mb-1">Modalita' fatturazione</label>
+            <select
+              value={servizi.second_driver_billing || 'flat'}
+              onChange={(e) => setServizi({ ...servizi, second_driver_billing: e.target.value as 'flat' | 'per_day' })}
+              className="w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+            >
+              <option value="flat">Una tantum (prezzo fisso, applicato 1 volta)</option>
+              <option value="per_day">Al giorno (× giorni di noleggio)</option>
+            </select>
+          </div>
           <div className="space-y-2">
             {fasce.map((f) => (
               <div key={f.id} className="flex items-center gap-3">
@@ -4043,10 +4062,11 @@ function ServiziSection({
                         second_driver: { ...servizi.second_driver, [f.id]: v === '' ? '' : Number(v) },
                       })
                     }}
-                    className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-20 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                    className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-10 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                   />
-                  {/* 2026-05-23: Secondo guidatore = una tantum (non /giorno) */}
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-wider text-theme-text-muted pointer-events-none">una tantum</span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">
+                    {servizi.second_driver_billing === 'flat' ? 'fisso' : '/g'}
+                  </span>
                 </div>
               </div>
             ))}

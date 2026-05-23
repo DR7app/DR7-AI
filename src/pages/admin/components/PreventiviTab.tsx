@@ -694,6 +694,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   const [proServizi, setProServizi] = useState<{
     lavaggio?: { fee?: number | string; mandatory?: boolean }
     second_driver?: Record<string, number | string>
+    second_driver_billing?: 'flat' | 'per_day'  // 2026-05-23: toggle
     dr7_flex?: { daily_price?: number | string; refund_percent?: number | string; tier_restriction?: string }
   } | null>(null)
   const [proKm, setProKm] = useState<Array<{
@@ -998,13 +999,15 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     const unlimitedKmDaily = form.include_unlimited_km ? proUnlimitedKmDaily : 0
     const unlimitedKmTotal = Math.round(unlimitedKmDaily * rentalDays * 100) / 100
 
-    // 2026-05-23: Secondo guidatore = TARIFFA FISSA (una tantum), non per
-    // giorno. Il valore Centralina Pro (es. €30) viene applicato UNA volta
-    // sola indipendentemente dalla durata del noleggio. La variabile
-    // secondDriverDaily resta nominalmente per back-compat ma e' di fatto
-    // il prezzo flat.
+    // 2026-05-23: Secondo guidatore — modalita' di fatturazione admin-editabile
+    // da Centralina Pro > Servizi (campo second_driver_billing).
+    // 'flat' (default) = una tantum (valore × 1)
+    // 'per_day' = legacy (valore × giorni di noleggio)
     const secondDriverDaily = form.include_second_driver ? proSecondDriverDaily : 0
-    const secondDriverTotal = secondDriverDaily // flat: no × rentalDays
+    const secondDriverIsFlat = (proServizi?.second_driver_billing || 'flat') === 'flat'
+    const secondDriverTotal = secondDriverIsFlat
+      ? secondDriverDaily
+      : Math.round(secondDriverDaily * rentalDays * 100) / 100
 
     const dr7FlexDaily = form.include_dr7_flex ? proDr7FlexDaily : 0
     const dr7FlexTotal = Math.round(dr7FlexDaily * rentalDays * 100) / 100
@@ -2048,9 +2051,15 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           // quando ha esplicitamente scelto km illimitati.
           return ''
         })()
-        // 2026-05-23: Secondo guidatore = una tantum (non per giorno)
+        // 2026-05-23: Secondo guidatore — label cambia in base al config
+        // ('flat' = una tantum, 'per_day' = al giorno). La label viene
+        // letta sempre dal config corrente, non snapshot del preventivo,
+        // cosi' se admin cambia la modalita' i preventivi gia' inviati
+        // ri-renderizzano con la label nuova.
+        const sdBillingMode = (proServizi?.second_driver_billing || 'flat')
+        const sdSuffix = sdBillingMode === 'flat' ? '(una tantum)' : '(al giorno)'
         const lineSecondDriver = p.second_driver_total > 0
-          ? `Secondo guidatore (una tantum) = ${formatEur(p.second_driver_total)}` : ''
+          ? `Secondo guidatore ${sdSuffix} = ${formatEur(p.second_driver_total)}` : ''
         const lineDr7Flex = (extras?.dr7_flex_total && Number(extras.dr7_flex_total) > 0)
           ? `DR7 Flex = ${formatEur(Number(extras.dr7_flex_total))}` : ''
         const lineCauzioneVeicoli = (extras?.cauzione_veicoli_total && Number(extras.cauzione_veicoli_total) > 0)
