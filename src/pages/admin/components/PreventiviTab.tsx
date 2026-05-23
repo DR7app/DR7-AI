@@ -2821,6 +2821,18 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   customPhone: customerPhone,
+                  // 2026-05-23: era 'payment_link_customer' SENZA booking
+                  // context. Risultato: il resolver non trovava nessun
+                  // pro_* con handled_events corretti + service_type
+                  // ranking, e tornava skipped. ReservationsTab (linea
+                  // 5730) passa esattamente lo stesso shape e funziona,
+                  // quindi qui replichiamo: booking con service_type +
+                  // templateKey legacy che il resolver alias-a a
+                  // pro_richiesta_pagamento.
+                  booking: {
+                    id: inserted.id,
+                    service_type: 'car_rental',
+                  },
                   templateKey: 'payment_link_customer',
                   templateVars: {
                     '{customer_name}': customerName,
@@ -2839,7 +2851,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
               const waJson = await waRes.json().catch(() => ({} as Record<string, unknown>))
               const skipped = (waJson as { skipped?: boolean }).skipped
               if (skipped) {
-                toast.error('Link creato ma template "payment_link_customer" mancante in Messaggi di Sistema Pro — non inviato.', { duration: 10000 })
+                toast.error('Link creato ma template "pro_richiesta_pagamento" mancante o disattivato in Messaggi di Sistema Pro — non inviato.', { duration: 10000 })
               } else if (!waRes.ok) {
                 toast.error(`Link creato ma invio WhatsApp fallito: ${(waJson as { message?: string }).message || waRes.status}`, { duration: 10000 })
               } else {
@@ -2937,9 +2949,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   // ═══ LIST VIEW ═══
   if (view === 'list') {
     return (
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <h2 className="text-2xl font-bold text-theme-text-primary">Preventivi</h2>
+      <div className="space-y-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <h2 className="text-lg font-bold text-theme-text-primary">Preventivi</h2>
           <Button onClick={() => { resetForm(); setEditingId(null); setView('form') }}>+ Nuovo Preventivo</Button>
         </div>
 
@@ -2997,13 +3009,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         {!isPreventivoOnly && !hideRichiesteNoCauzione && (() => {
           const pendingCount = noCauzioneRequests.filter((b: any) => b.booking_details?.no_cauzione_status === 'pending').length
           return (
-            <div className="flex gap-1 bg-theme-bg-tertiary rounded-lg p-1">
-              <button onClick={() => setStatusFilter('all')} className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${statusFilter !== '__no_cauzione__' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}>
-                Preventivi ({preventivi.length})
+            <div className="flex gap-1 bg-theme-bg-tertiary rounded-lg p-0.5">
+              <button onClick={() => setStatusFilter('all')} className={`flex-1 py-1.5 px-3 rounded-md text-[12px] font-semibold transition-colors ${statusFilter !== '__no_cauzione__' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}>
+                Preventivi <span className="opacity-70 font-mono ml-0.5">({preventivi.length})</span>
               </button>
-              <button onClick={() => setStatusFilter('__no_cauzione__')} className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors relative ${statusFilter === '__no_cauzione__' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}>
+              <button onClick={() => setStatusFilter('__no_cauzione__')} className={`flex-1 py-1.5 px-3 rounded-md text-[12px] font-semibold transition-colors relative ${statusFilter === '__no_cauzione__' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}>
                 Richieste No Cauzione
-                {pendingCount > 0 && <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-red-500 text-white font-bold">{pendingCount}</span>}
+                {pendingCount > 0 && <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-red-500 text-white font-bold">{pendingCount}</span>}
               </button>
             </div>
           )
@@ -3072,35 +3084,34 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           const ncSel: any = ncSelectedId ? noCauzioneRequests.find((b: any) => b.id === ncSelectedId) : null
 
           return (
-            <div className="space-y-4">
+            <div className="space-y-2">
               {/* Panoramica */}
-              <div className="space-y-3">
-                <h3 className="text-base font-bold text-theme-text-primary">Panoramica Richieste No Cauzione</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-                  {ncKpiCards.map(c => {
-                    const active = ncSubFilter === c.key
-                    return (
-                      <button
-                        key={c.key}
-                        type="button"
-                        onClick={() => { setNcSubFilter(c.key); setNcPage(1) }}
-                        className={`relative overflow-hidden text-left rounded-xl p-3 ring-1 transition-all bg-gradient-to-b from-theme-bg-secondary to-theme-bg-secondary/40 backdrop-blur-sm hover:-translate-y-0.5 ${
-                          active ? `${c.ring} ring-2 shadow-[0_0_24px_-12px_rgba(34,211,238,0.4)]` : `ring-theme-border ${c.ring.replace('/30', '/10')}`
-                        }`}
-                      >
-                        <div className={`absolute -top-6 -right-6 w-20 h-20 ${c.iconBg} rounded-full blur-2xl pointer-events-none opacity-60`}/>
-                        <div className="relative flex items-center justify-between mb-2">
-                          <div className={`grid w-7 h-7 place-items-center rounded-md ring-1 ${c.iconBg} ${c.iconColor} ${c.ring}`}>
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">{c.svg}</svg>
-                          </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
+                {ncKpiCards.map(c => {
+                  const active = ncSubFilter === c.key
+                  return (
+                    <button
+                      key={c.key}
+                      type="button"
+                      onClick={() => { setNcSubFilter(c.key); setNcPage(1) }}
+                      className={`relative overflow-hidden text-left rounded-lg px-2.5 py-1.5 ring-1 transition-all bg-gradient-to-b from-theme-bg-secondary to-theme-bg-secondary/40 backdrop-blur-sm ${
+                        active ? `${c.ring} ring-2 shadow-[0_0_18px_-10px_rgba(34,211,238,0.4)]` : `ring-theme-border ${c.ring.replace('/30', '/10')}`
+                      }`}
+                    >
+                      <div className={`absolute -top-4 -right-4 w-14 h-14 ${c.iconBg} rounded-full blur-2xl pointer-events-none opacity-50`}/>
+                      <div className="relative flex items-center gap-2">
+                        <div className={`grid w-6 h-6 place-items-center rounded-md ring-1 ${c.iconBg} ${c.iconColor} ${c.ring} shrink-0`}>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">{c.svg}</svg>
                         </div>
-                        <p className={`text-[10px] uppercase tracking-[0.14em] font-bold ${c.tone}`}>{c.label}</p>
-                        <p className="text-2xl font-bold text-theme-text-primary tabular-nums leading-tight mt-0.5">{c.value}</p>
-                        <p className="text-[10px] text-theme-text-muted mt-0.5 font-mono truncate">{c.sub}</p>
-                      </button>
-                    )
-                  })}
-                </div>
+                        <div className="min-w-0 flex-1">
+                          <p className={`text-[9px] uppercase tracking-[0.12em] font-bold ${c.tone} truncate leading-none`}>{c.label}</p>
+                          <p className="text-base font-bold text-theme-text-primary tabular-nums leading-tight">{c.value}</p>
+                        </div>
+                      </div>
+                      <p className="text-[9px] text-theme-text-muted/80 font-mono truncate relative mt-0.5">{c.sub}</p>
+                    </button>
+                  )
+                })}
               </div>
 
               {/* Filter pills */}
@@ -3427,41 +3438,40 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
               svg: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/> },
           ]
           return (
-            <div className="space-y-3">
-              <h3 className="text-base font-bold text-theme-text-primary">Panoramica Preventivi</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
-                {cards.map(c => {
-                  const active = statusFilter === c.key
-                  return (
-                    <button
-                      key={c.key}
-                      type="button"
-                      onClick={() => { setStatusFilter(c.key); setListPage(1) }}
-                      className={`relative overflow-hidden text-left rounded-xl p-3 ring-1 transition-all bg-gradient-to-b from-theme-bg-secondary to-theme-bg-secondary/40 backdrop-blur-sm hover:-translate-y-0.5 ${
-                        active
-                          ? `${c.ring} ring-2 shadow-[0_0_24px_-12px_rgba(34,211,238,0.4)]`
-                          : `ring-theme-border ${c.ring.replace('/30', '/10')}`
-                      }`}
-                    >
-                      <div className={`absolute -top-6 -right-6 w-20 h-20 ${c.iconBg} rounded-full blur-2xl pointer-events-none opacity-60`}/>
-                      <div className="relative flex items-center justify-between mb-2">
-                        <div className={`grid w-7 h-7 place-items-center rounded-md ring-1 ${c.iconBg} ${c.iconColor} ${c.ring}`}>
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">{c.svg}</svg>
-                        </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-1.5">
+              {cards.map(c => {
+                const active = statusFilter === c.key
+                return (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => { setStatusFilter(c.key); setListPage(1) }}
+                    className={`relative overflow-hidden text-left rounded-lg px-2.5 py-1.5 ring-1 transition-all bg-gradient-to-b from-theme-bg-secondary to-theme-bg-secondary/40 backdrop-blur-sm ${
+                      active
+                        ? `${c.ring} ring-2 shadow-[0_0_18px_-10px_rgba(34,211,238,0.4)]`
+                        : `ring-theme-border ${c.ring.replace('/30', '/10')}`
+                    }`}
+                  >
+                    <div className={`absolute -top-4 -right-4 w-14 h-14 ${c.iconBg} rounded-full blur-2xl pointer-events-none opacity-50`}/>
+                    <div className="relative flex items-center gap-2">
+                      <div className={`grid w-6 h-6 place-items-center rounded-md ring-1 ${c.iconBg} ${c.iconColor} ${c.ring} shrink-0`}>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">{c.svg}</svg>
                       </div>
-                      <p className={`text-[10px] uppercase tracking-[0.14em] font-bold ${c.tone}`}>{c.label}</p>
-                      <p className="text-2xl font-bold text-theme-text-primary tabular-nums leading-tight mt-0.5">{c.value}</p>
-                      <p className="text-[10px] text-theme-text-muted mt-0.5 font-mono truncate">{c.sub}</p>
-                    </button>
-                  )
-                })}
-              </div>
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-[9px] uppercase tracking-[0.12em] font-bold ${c.tone} truncate leading-none`}>{c.label}</p>
+                        <p className="text-base font-bold text-theme-text-primary tabular-nums leading-tight">{c.value}</p>
+                      </div>
+                    </div>
+                    <p className="text-[9px] text-theme-text-muted/80 font-mono truncate relative mt-0.5">{c.sub}</p>
+                  </button>
+                )
+              })}
             </div>
           )
         })()}
 
         {/* Filter pills + actions row */}
-        <div className="flex flex-wrap items-center gap-2 pt-1">
+        <div className="flex flex-wrap items-center gap-1.5">
           {(['all', 'bozza', 'inviato', 'accettato', 'rifiutato', 'scaduto'] as const).map(s => {
             const count = s === 'all' ? preventivi.length : preventivi.filter(p => p.status === s).length
             const active = statusFilter === s
@@ -3640,6 +3650,23 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                           <span className="text-theme-text-muted">Durata</span>
                           <span className="font-mono text-theme-text-primary tabular-nums">{sel.rental_days}gg × €{formatEur(sel.base_daily_rate)}/g</span>
                         </div>
+                        {(() => {
+                          const isUnlimited = (sel.unlimited_km_total || 0) > 0
+                          let kmLabel = ''
+                          if (isUnlimited) kmLabel = 'Illimitati'
+                          else {
+                            const km = resolveKmIncluded(sel.vehicle_category, sel.rental_days, proKm, rentalConfig)
+                            if (km === 'unlimited') kmLabel = 'Illimitati'
+                            else if (typeof km === 'number' && km > 0) kmLabel = `${km.toLocaleString('it-IT')} km`
+                          }
+                          if (!kmLabel) return null
+                          return (
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-theme-text-muted">Km inclusi</span>
+                              <span className={`font-mono tabular-nums ${kmLabel === 'Illimitati' ? 'text-emerald-300' : 'text-theme-text-primary'}`}>{kmLabel}</span>
+                            </div>
+                          )
+                        })()}
                         {sel.insurance_total > 0 && (
                           <div className="flex items-center justify-between text-[11px]">
                             <span className="text-theme-text-muted">Assicurazione</span>
@@ -3917,9 +3944,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                           <div className="flex items-center justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
                             <button
                               type="button"
-                              onClick={() => handleEdit(p)}
-                              title="Visualizza dettagli"
-                              className="grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-cyan-300 hover:bg-cyan-500/10 transition-colors"
+                              onClick={() => setSelectedRowId(prev => prev === p.id ? null : p.id)}
+                              title={selectedRowId === p.id ? 'Chiudi dettagli' : 'Visualizza dettagli'}
+                              className={`grid w-7 h-7 place-items-center rounded-md transition-colors ${
+                                selectedRowId === p.id
+                                  ? 'text-cyan-300 bg-cyan-500/15'
+                                  : 'text-theme-text-muted hover:text-cyan-300 hover:bg-cyan-500/10'
+                              }`}
                             >
                               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                             </button>
