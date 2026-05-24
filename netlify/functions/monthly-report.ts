@@ -291,10 +291,28 @@ async function generateVehicleReport(
     if (details.internal === true) return false
     if (details.createdBy === 'automatic_system') return false
 
-    // Must overlap with the report month
+    // Must overlap with the report month OR be a paid-anticipo candidate
+    // 2026-05-24 FIX: prima escludevamo booking con pickup > monthEnd.
+    // Cosi' venivano TAGLIATE FUORI le anticipate (paid in periodo per
+    // rental futuro) PRIMA che la logica anticipo potesse classificarle.
+    // Ora le teniamo SE sono pagate (saranno classificate come anticipo
+    // dal loop principale che ha gia' il check pickup > monthEnd).
     const pickupDate = b.pickup_date.substring(0, 10)
     const dropoffDate = b.dropoff_date.substring(0, 10)
-    if (pickupDate > monthEndISO || dropoffDate < monthStartISO) return false
+    if (dropoffDate < monthStartISO) return false  // rental gia' chiuso prima del periodo → esclude
+    if (pickupDate > monthEndISO) {
+      // Pickup nel futuro: tieni SOLO se pagata e la data pagamento e' nel periodo (anticipo)
+      const isPaid = ['paid', 'completed', 'succeeded'].includes(String(b.payment_status || '').toLowerCase())
+      if (!isPaid) return false
+      const paidAtISO = (b.booking_details?.nexi_paid_at as string | undefined)
+        || (b.updated_at as string | undefined)
+        || (b.created_at as string | undefined)
+        || ''
+      if (!paidAtISO) return false
+      const paidAt = new Date(paidAtISO)
+      // Mantieni se la data pagamento cade dentro il periodo report
+      return paidAt >= monthStart && paidAt <= monthEnd
+    }
 
     return true
   })
