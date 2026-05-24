@@ -116,79 +116,43 @@ export default function CustomerWalletTab() {
       // registrati al sito) restano in lista solo se hanno comunque
       // un balance non-zero in qualche modo (oggi non succede; aggiungere
       // qui in futuro se servisse).
-      let siteUsers: Array<{ id: string; email: string | null; balance: number; nome: string; cognome: string; telefono: string }> = []
-      let siteUsersError: string | null = null
-      try {
-        const token = (await supabase.auth.getSession()).data.session?.access_token
-        if (!token) {
-          siteUsersError = 'Nessuna sessione admin — fai logout/login e riprova.'
-          logger.warn('[CustomerWalletTab] no session token')
-        } else {
-          const suRes = await fetch('/.netlify/functions/list-site-users', {
-            headers: { Authorization: `Bearer ${token}` },
-          })
-          const suData = await suRes.json().catch(() => ({}))
-          if (!suRes.ok) {
-            siteUsersError = `list-site-users HTTP ${suRes.status}: ${suData?.error || 'errore sconosciuto'}`
-            logger.error('[CustomerWalletTab]', siteUsersError)
-          } else if (suData.success === false) {
-            siteUsersError = `list-site-users failed: ${suData.error || 'errore sconosciuto'}`
-            logger.error('[CustomerWalletTab]', siteUsersError)
-          } else {
-            siteUsers = suData.users || []
-            logger.log('[CustomerWalletTab] loaded site users:', siteUsers.length)
-          }
-        }
-      } catch (e) {
-        siteUsersError = `Fetch error: ${e instanceof Error ? e.message : String(e)}`
-        logger.warn('Failed to load site users for wallet alignment:', e)
-      }
-
-      // 2026-05-24: FALLBACK quando list-site-users fallisce (auth, RLS,
-      // 500, ecc.) — leggiamo direttamente user_credit_balance per non
-      // mostrare "0 clienti" all'admin. Surface l'errore in console
-      // cosi' debuggabile, ma la pagina resta utile.
-      if (siteUsers.length === 0) {
-        try {
-          const { data: balances, error: balErr } = await supabase
-            .from('user_credit_balance')
-            .select('user_id, balance')
-          if (balErr) {
-            logger.error('[CustomerWalletTab] fallback user_credit_balance error:', balErr.message)
-          } else if (balances && balances.length > 0) {
-            siteUsers = balances.map((b: { user_id: string; balance: number | null }) => {
-              const cust = allCustomers.find(c => c.user_id === b.user_id)
-              return {
-                id: b.user_id,
-                email: cust?.email || null,
-                balance: Number(b.balance) || 0,
-                nome: cust?.nome || '',
-                cognome: cust?.cognome || '',
-                telefono: cust?.telefono || '',
-              }
-            })
-            logger.log('[CustomerWalletTab] fallback loaded balances:', siteUsers.length, 'errore list-site-users:', siteUsersError)
-            // Toast non-blocking visibility
-            if (siteUsersError) {
-              toast(`Wallet caricato in modalità fallback — risolvi: ${siteUsersError}`, { icon: 'WARN', duration: 8000 })
-            }
-          } else if (siteUsersError) {
-            toast.error(`Wallet vuoto. ${siteUsersError}`, { duration: 10000 })
-          }
-        } catch (e) {
-          logger.error('[CustomerWalletTab] fallback failed:', e)
-        }
-      }
-
       // Build user_id → customer_id map from customers_extended so the
-      // wallet row can link to a customer profile when one exists. Quando
-      // l'utente non ha customers_extended (caso orfano del €730 gap)
-      // usiamo l'auth user.id come "virtual customer id" — la riga del
-      // wallet appare comunque, l'admin puo' caricare il cliente in
-      // un secondo momento.
+      // wallet row can link to a customer profile when one exists.
       const userIdToCust = new Map<string, { id: string; nome?: string; cognome?: string; telefono?: string; email?: string; ragione_sociale?: string; denominazione?: string }>()
       for (const cust of allCustomers) {
         if (cust.user_id) userIdToCust.set(cust.user_id, cust)
+      }
+
+      // 2026-05-24 PERF: prima la pagina iniziava da list-site-users che
+      // paginava migliaia di utenti auth → 5-15s di caricamento, timeout
+      // su mobile. Adesso il path PRIMARIO e' user_credit_balance (fast,
+      // ridotto a chi ha effettivamente un saldo). Enrich names da
+      // customers_extended via userIdToCust costruito sopra.
+      let siteUsers: Array<{ id: string; email: string | null; balance: number; nome: string; cognome: string; telefono: string }> = []
+      try {
+        const { data: balances, error: balErr } = await supabase
+          .from('user_credit_balance')
+          .select('user_id, balance')
+        if (balErr) {
+          logger.error('[CustomerWalletTab] user_credit_balance error:', balErr.message)
+          toast.error(`Errore caricamento wallet: ${balErr.message}`, { duration: 10000 })
+        } else if (balances) {
+          siteUsers = balances.map((b: { user_id: string; balance: number | null }) => {
+            const cust = userIdToCust.get(b.user_id)
+            return {
+              id: b.user_id,
+              email: cust?.email || null,
+              balance: Number(b.balance) || 0,
+              nome: cust?.nome || '',
+              cognome: cust?.cognome || '',
+              telefono: cust?.telefono || '',
+            }
+          })
+          logger.log('[CustomerWalletTab] loaded balances:', siteUsers.length)
+        }
+      } catch (e) {
+        logger.error('[CustomerWalletTab] balance fetch failed:', e)
+        toast.error(`Errore di rete: ${e instanceof Error ? e.message : String(e)}`, { duration: 10000 })
       }
 
       const mapped: CustomerResult[] = siteUsers.map(u => {
