@@ -903,15 +903,14 @@ export default function ReportsTab() {
               <p className="text-xs text-theme-text-muted">Ricavo TOTALE</p>
               <p className="text-2xl font-bold text-dr7-gold">{formatCurrency(vehicleData.totalRevenue)}</p>
             </div>
-            {/* 2026-05-24: Incassi anticipati — separati dal ricavo totale
-                attribuito ai mesi del rental. Vedi anche tabella sotto. */}
-            {(vehicleData.totalAnticipatedRevenue ?? 0) > 0 && (
-              <div className="bg-theme-bg-secondary/50 rounded-xl border border-cyan-500/30 p-4">
-                <p className="text-xs text-theme-text-muted">Incassi Anticipati</p>
-                <p className="text-2xl font-bold text-cyan-400">{formatCurrency(vehicleData.totalAnticipatedRevenue || 0)}</p>
-                <p className="text-[10px] text-theme-text-muted mt-0.5">{vehicleData.anticipatedBookingsCount || 0} prenotazioni — rental futuro</p>
-              </div>
-            )}
+            {/* 2026-05-24: Incassi anticipati SEMPRE visibile cosi' l'admin
+                vede chiaramente il valore anche quando e' 0 (e capisce che
+                la metrica viene calcolata). */}
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-cyan-500/30 p-4">
+              <p className="text-xs text-theme-text-muted">Incassi Anticipati</p>
+              <p className="text-2xl font-bold text-cyan-400">{formatCurrency(vehicleData.totalAnticipatedRevenue || 0)}</p>
+              <p className="text-[10px] text-theme-text-muted mt-0.5">{vehicleData.anticipatedBookingsCount || 0} prenotazioni — rental futuro</p>
+            </div>
           </div>
 
           {/* 2026-05-24: Tabella dettaglio incassi anticipati — solo se ce ne sono */}

@@ -233,7 +233,7 @@ async function generateVehicleReport(
   // into the JS filter below so NULLs are kept.
   const { data: allBookings, error: bookingsError } = await supabase
     .from('bookings')
-    .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, appointment_date, payment_status, payment_method, customer_name, customer_email')
+    .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, appointment_date, payment_status, payment_method, customer_name, customer_email, created_at, updated_at')
     .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active'])
     .or('customer_email.is.null,customer_email.neq.admin@dr7.app')
 
