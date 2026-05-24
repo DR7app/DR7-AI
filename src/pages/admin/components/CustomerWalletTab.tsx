@@ -117,15 +117,67 @@ export default function CustomerWalletTab() {
       // un balance non-zero in qualche modo (oggi non succede; aggiungere
       // qui in futuro se servisse).
       let siteUsers: Array<{ id: string; email: string | null; balance: number; nome: string; cognome: string; telefono: string }> = []
+      let siteUsersError: string | null = null
       try {
         const token = (await supabase.auth.getSession()).data.session?.access_token
-        const suRes = await fetch('/.netlify/functions/list-site-users', {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        })
-        const suData = await suRes.json()
-        if (suData.success) siteUsers = suData.users || []
+        if (!token) {
+          siteUsersError = 'Nessuna sessione admin — fai logout/login e riprova.'
+          logger.warn('[CustomerWalletTab] no session token')
+        } else {
+          const suRes = await fetch('/.netlify/functions/list-site-users', {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          const suData = await suRes.json().catch(() => ({}))
+          if (!suRes.ok) {
+            siteUsersError = `list-site-users HTTP ${suRes.status}: ${suData?.error || 'errore sconosciuto'}`
+            logger.error('[CustomerWalletTab]', siteUsersError)
+          } else if (suData.success === false) {
+            siteUsersError = `list-site-users failed: ${suData.error || 'errore sconosciuto'}`
+            logger.error('[CustomerWalletTab]', siteUsersError)
+          } else {
+            siteUsers = suData.users || []
+            logger.log('[CustomerWalletTab] loaded site users:', siteUsers.length)
+          }
+        }
       } catch (e) {
+        siteUsersError = `Fetch error: ${e instanceof Error ? e.message : String(e)}`
         logger.warn('Failed to load site users for wallet alignment:', e)
+      }
+
+      // 2026-05-24: FALLBACK quando list-site-users fallisce (auth, RLS,
+      // 500, ecc.) — leggiamo direttamente user_credit_balance per non
+      // mostrare "0 clienti" all'admin. Surface l'errore in console
+      // cosi' debuggabile, ma la pagina resta utile.
+      if (siteUsers.length === 0) {
+        try {
+          const { data: balances, error: balErr } = await supabase
+            .from('user_credit_balance')
+            .select('user_id, balance')
+          if (balErr) {
+            logger.error('[CustomerWalletTab] fallback user_credit_balance error:', balErr.message)
+          } else if (balances && balances.length > 0) {
+            siteUsers = balances.map((b: { user_id: string; balance: number | null }) => {
+              const cust = allCustomers.find(c => c.user_id === b.user_id)
+              return {
+                id: b.user_id,
+                email: cust?.email || null,
+                balance: Number(b.balance) || 0,
+                nome: cust?.nome || '',
+                cognome: cust?.cognome || '',
+                telefono: cust?.telefono || '',
+              }
+            })
+            logger.log('[CustomerWalletTab] fallback loaded balances:', siteUsers.length, 'errore list-site-users:', siteUsersError)
+            // Toast non-blocking visibility
+            if (siteUsersError) {
+              toast(`Wallet caricato in modalità fallback — risolvi: ${siteUsersError}`, { icon: 'WARN', duration: 8000 })
+            }
+          } else if (siteUsersError) {
+            toast.error(`Wallet vuoto. ${siteUsersError}`, { duration: 10000 })
+          }
+        } catch (e) {
+          logger.error('[CustomerWalletTab] fallback failed:', e)
+        }
       }
 
       // Build user_id → customer_id map from customers_extended so the
