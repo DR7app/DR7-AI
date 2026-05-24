@@ -205,14 +205,23 @@ export default function ReportsTab() {
       const d = new Date(); d.setDate(d.getDate() - 29)
       return { from: d.toISOString().slice(0, 10), to }
     }
+    // 2026-05-24: Anno = SEMPRE da 1 gennaio a 31 dicembre. Prima si
+    // fermava a today (es. 1 gen → 24 mag) — non rappresentava l'anno
+    // intero e gli anticipi futuri sparivano. Adesso copre tutto.
     if (preset === 'anno') {
-      const d = new Date(today.getFullYear(), 0, 1)
-      return { from: d.toISOString().slice(0, 10), to }
+      const from = new Date(today.getFullYear(), 0, 1).toISOString().slice(0, 10)
+      const toYear = new Date(today.getFullYear(), 11, 31).toISOString().slice(0, 10)
+      return { from, to: toYear }
     }
-    // 'mese' → primo del mese corrente
+    // 2026-05-24: Mese = SEMPRE dal 1° all'ULTIMO giorno del mese corrente.
+    // Prima si fermava a today (es. 1 mag → 24 mag) — nascondeva noleggi
+    // confermati per la fine del mese + anticipi della fine periodo.
+    // Adesso copre l'intero mese cosi' la voce "Mese" e' coerente.
     if (preset === 'mese') {
-      const d = new Date(today.getFullYear(), today.getMonth(), 1)
-      return { from: d.toISOString().slice(0, 10), to }
+      const from = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10)
+      // day 0 del mese successivo = ultimo giorno del mese corrente
+      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10)
+      return { from, to: lastDay }
     }
     return { from: to, to }
   }
