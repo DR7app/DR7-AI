@@ -923,8 +923,8 @@ export default function ReportsTab() {
                         <tr key={ab.booking_id} className="border-b border-theme-border/30">
                           <td className="px-2 py-1.5 text-theme-text-primary">{v.label} <span className="text-theme-text-muted">({ab.targa})</span></td>
                           <td className="px-2 py-1.5 text-theme-text-primary">{ab.customer_name}</td>
-                          <td className="px-2 py-1.5 text-theme-text-muted tabular-nums">{formatDate(ab.pickup_date)} → {formatDate(ab.dropoff_date)}</td>
-                          <td className="px-2 py-1.5 text-cyan-400 tabular-nums">{ab.paid_at ? formatDate(ab.paid_at) : '—'}</td>
+                          <td className="px-2 py-1.5 text-theme-text-muted tabular-nums">{formatDateIT(ab.pickup_date)} → {formatDateIT(ab.dropoff_date)}</td>
+                          <td className="px-2 py-1.5 text-cyan-400 tabular-nums">{ab.paid_at ? formatDateIT(ab.paid_at) : '—'}</td>
                           <td className="px-2 py-1.5 text-theme-text-muted">{ab.payment_method}</td>
                           <td className="px-2 py-1.5 text-right font-bold text-cyan-400 tabular-nums">{formatCurrency(ab.total_price)}</td>
                         </tr>
