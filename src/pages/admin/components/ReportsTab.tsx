@@ -41,6 +41,10 @@ interface VehicleReport {
   penaltyRevenue: number
   danniRevenue: number
   totalRevenue: number
+  // 2026-05-24: incassi anticipati per veicolo
+  anticipatedRevenue?: number
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  anticipatedBookings?: AnticipatedBooking[]
   bookings?: BookingDetail[]
 }
 
@@ -49,6 +53,17 @@ interface UnmatchedBooking {
   vehicle_name: string
   vehicle_plate: string
   vehicle_id: string
+}
+
+interface AnticipatedBooking {
+  booking_id: string
+  customer_name: string
+  targa: string
+  pickup_date: string
+  dropoff_date: string
+  total_price: number
+  paid_at: string
+  payment_method: string
 }
 
 interface VehicleReportData {
@@ -61,6 +76,9 @@ interface VehicleReportData {
   totalPenaltyRevenue: number
   totalDanniRevenue: number
   totalRevenue: number
+  // 2026-05-24: incassi anticipati = pagati nel periodo ma rental futuro
+  totalAnticipatedRevenue?: number
+  anticipatedBookingsCount?: number
   avgUtilizationRate: number
   vehicles: VehicleReport[]
 }
@@ -564,33 +582,30 @@ export default function ReportsTab() {
                     <span className="text-green-400 font-medium">{b.days_in_month}g</span>
                   </div>
 
-                  {/* Totale */}
+                  {/* Ricavo noleggio (prorated to the month if cross-month) */}
                   <div className="flex justify-between mb-1.5">
-                    <span className="text-theme-text-muted">Totale</span>
-                    <span className="text-theme-text-primary font-semibold">{formatCurrency(b.total_price)}</span>
+                    <span className="text-theme-text-muted">Ricavo noleggio</span>
+                    <span className="text-theme-text-primary font-semibold">{formatCurrency(rentalInMonth)}</span>
                   </div>
 
-                  {/* Penali (only if > 0) */}
+                  {/* Ricavo penale (only if > 0) */}
                   {pen > 0 && (
                     <div className="flex justify-between mb-1.5">
-                      <span className="text-theme-text-muted">Penali</span>
+                      <span className="text-theme-text-muted">Ricavo penale</span>
                       <span className="text-yellow-400 font-semibold">{formatCurrency(pen)}</span>
                     </div>
                   )}
 
-                  {/* Danni (only if > 0) */}
+                  {/* Ricavo danni (only if > 0) */}
                   {dan > 0 && (
                     <div className="flex justify-between mb-1.5">
-                      <span className="text-theme-text-muted">Danni</span>
+                      <span className="text-theme-text-muted">Ricavo danni</span>
                       <span className="text-red-400 font-semibold">{formatCurrency(dan)}</span>
                     </div>
                   )}
 
-                  {/* Ricavo mese: SOLO il noleggio proporzionato al mese di
-                      riferimento — coerente con la colonna "Ricavo Mese"
-                      della tabella desktop. Penali e danni restano colonne
-                      a sé sopra: il totale veicolo li somma a livello di riga
-                      veicolo, non di singola prenotazione. */}
+                  {/* Ricavo Mese — somma di noleggio (prorato) + penale + danni.
+                      Coerente con la colonna "Ricavo Mese" della tabella desktop. */}
                   <div className="flex justify-between pt-1.5 border-t border-theme-border/40">
                     <span className="text-theme-text-muted font-semibold">Ricavo Mese</span>
                     <span className="text-dr7-gold font-bold">{formatCurrency(revInMonth)}</span>
@@ -869,7 +884,57 @@ export default function ReportsTab() {
               <p className="text-xs text-theme-text-muted">Ricavo TOTALE</p>
               <p className="text-2xl font-bold text-dr7-gold">{formatCurrency(vehicleData.totalRevenue)}</p>
             </div>
+            {/* 2026-05-24: Incassi anticipati — separati dal ricavo totale
+                attribuito ai mesi del rental. Vedi anche tabella sotto. */}
+            {(vehicleData.totalAnticipatedRevenue ?? 0) > 0 && (
+              <div className="bg-theme-bg-secondary/50 rounded-xl border border-cyan-500/30 p-4">
+                <p className="text-xs text-theme-text-muted">Incassi Anticipati</p>
+                <p className="text-2xl font-bold text-cyan-400">{formatCurrency(vehicleData.totalAnticipatedRevenue || 0)}</p>
+                <p className="text-[10px] text-theme-text-muted mt-0.5">{vehicleData.anticipatedBookingsCount || 0} prenotazioni — rental futuro</p>
+              </div>
+            )}
           </div>
+
+          {/* 2026-05-24: Tabella dettaglio incassi anticipati — solo se ce ne sono */}
+          {(vehicleData.totalAnticipatedRevenue ?? 0) > 0 && (
+            <div className="bg-theme-bg-secondary/30 border border-cyan-500/30 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-cyan-400">Incassi Anticipati nel Periodo</h3>
+                  <p className="text-[11px] text-theme-text-muted">Pagati nel periodo selezionato — il noleggio sarà in un mese futuro. Conteggiati a parte dal Ricavo TOTALE per non gonfiare il fatturato del mese.</p>
+                </div>
+                <span className="text-xl font-bold text-cyan-400 tabular-nums">{formatCurrency(vehicleData.totalAnticipatedRevenue || 0)}</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-theme-text-muted border-b border-theme-border">
+                      <th className="text-left px-2 py-1.5 font-medium">Veicolo</th>
+                      <th className="text-left px-2 py-1.5 font-medium">Cliente</th>
+                      <th className="text-left px-2 py-1.5 font-medium">Ritiro → Riconsegna</th>
+                      <th className="text-left px-2 py-1.5 font-medium">Pagato il</th>
+                      <th className="text-left px-2 py-1.5 font-medium">Metodo</th>
+                      <th className="text-right px-2 py-1.5 font-medium">Importo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vehicleData.vehicles.flatMap(v =>
+                      (v.anticipatedBookings || []).map(ab => (
+                        <tr key={ab.booking_id} className="border-b border-theme-border/30">
+                          <td className="px-2 py-1.5 text-theme-text-primary">{v.label} <span className="text-theme-text-muted">({ab.targa})</span></td>
+                          <td className="px-2 py-1.5 text-theme-text-primary">{ab.customer_name}</td>
+                          <td className="px-2 py-1.5 text-theme-text-muted tabular-nums">{formatDate(ab.pickup_date)} → {formatDate(ab.dropoff_date)}</td>
+                          <td className="px-2 py-1.5 text-cyan-400 tabular-nums">{ab.paid_at ? formatDate(ab.paid_at) : '—'}</td>
+                          <td className="px-2 py-1.5 text-theme-text-muted">{ab.payment_method}</td>
+                          <td className="px-2 py-1.5 text-right font-bold text-cyan-400 tabular-nums">{formatCurrency(ab.total_price)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Plate Search */}
           <div className="flex items-center gap-3">

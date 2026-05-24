@@ -378,6 +378,13 @@ async function generateVehicleReport(
     let rentalRevenue = 0
     let penaltyRevenue = 0
     let danniRevenue = 0
+    // 2026-05-24: Incassi anticipati — booking pagati nel periodo report
+    // ma con rental in un mese FUTURO. Permettono all'admin di vedere il
+    // cash-in reale del mese, separato dal fatturato attribuito alle date
+    // di noleggio.
+    let anticipatedRevenue = 0
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const anticipatedBookings: any[] = []
     const matchedBookingDetails: any[] = []
     const bookingDetailsList: any[] = []
 
@@ -417,9 +424,43 @@ async function generateVehicleReport(
         // Pickup is in this month
         startDay = pDay
       } else {
-        // Pickup is after this month - skip this booking
-        if (debug || vPlate === 'GT006DG') {
-          console.log(`  SKIPPED: pickup (${pYear}-${pMonth}) is after report month (${year}-${monthNum})`)
+        // 2026-05-24: Pickup is AFTER this month. Prima skippavamo del tutto.
+        // Adesso check: se la booking e' stata PAGATA nel periodo report,
+        // la classifichiamo come "incasso anticipato" cosi' l'admin vede
+        // l'income reale del periodo (pagato in maggio ma rental in luglio).
+        // Il booking apparira' anche normalmente nel report del mese rental.
+        const isPaid = ['paid', 'completed', 'succeeded'].includes(String(booking.payment_status || '').toLowerCase())
+        if (isPaid) {
+          // Estraggo data pagamento: priorita' nexi_paid_at (esatta),
+          // poi updated_at (admin "Segna Pagato" o callback Nexi), poi
+          // created_at come ultimo fallback.
+          const paidAtISO = (booking.booking_details?.nexi_paid_at as string | undefined)
+            || (booking.updated_at as string | undefined)
+            || (booking.created_at as string | undefined)
+            || ''
+          const paidAt = paidAtISO ? new Date(paidAtISO) : null
+          if (paidAt && paidAt >= monthStart && paidAt <= monthEnd) {
+            const rawPriceAnt = booking.price_total
+            const anticipoEur = (typeof rawPriceAnt === 'string' ? parseFloat(rawPriceAnt) : (rawPriceAnt || 0)) / 100
+            anticipatedRevenue += anticipoEur
+            anticipatedBookings.push({
+              booking_id: booking.id,
+              customer_name: booking.customer_name || booking.booking_details?.customer?.fullName || '-',
+              targa: vPlate || (booking.vehicle_plate || '').replace(/\s/g, '').toUpperCase() || '-',
+              pickup_date: pickupDateRaw,
+              dropoff_date: dropoffDateRaw,
+              total_price: anticipoEur,
+              paid_at: paidAtISO,
+              payment_method: booking.payment_method || '-',
+            })
+            if (debug || vPlate === 'GT006DG') {
+              console.log(`  ANTICIPO: pagato ${paidAtISO}, pickup ${pYear}-${pMonth}, €${anticipoEur}`)
+            }
+          } else if (debug || vPlate === 'GT006DG') {
+            console.log(`  SKIPPED: pickup futuro + pagamento fuori periodo (paid ${paidAtISO})`)
+          }
+        } else if (debug || vPlate === 'GT006DG') {
+          console.log(`  SKIPPED: pickup futuro + non pagato (status=${booking.payment_status})`)
         }
         return
       }
@@ -608,6 +649,9 @@ async function generateVehicleReport(
       penaltyRevenue: Math.round(penaltyRevenue * 100) / 100,
       danniRevenue: Math.round(danniRevenue * 100) / 100,
       totalRevenue: Math.round((rentalRevenue + penaltyRevenue + danniRevenue) * 100) / 100,
+      // 2026-05-24: incassi anticipati (booking pagati nel periodo ma rental in mese futuro)
+      anticipatedRevenue: Math.round(anticipatedRevenue * 100) / 100,
+      anticipatedBookings: anticipatedBookings,
       bookings: bookingDetailsList,
       _bookingIds: vehicleBookings.map(b => b.id)
     }
@@ -668,6 +712,11 @@ async function generateVehicleReport(
       totalPenaltyRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + v.penaltyRevenue, 0) * 100) / 100,
       totalDanniRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + v.danniRevenue, 0) * 100) / 100,
       totalRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + v.totalRevenue, 0) * 100) / 100,
+      // 2026-05-24: somma di tutti gli incassi anticipati del periodo,
+      // tracciati a parte dal totalRevenue (che resta attribuito ai mesi
+      // del rental). Visualizzato come voce separata nella UI.
+      totalAnticipatedRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + (v.anticipatedRevenue || 0), 0) * 100) / 100,
+      anticipatedBookingsCount: cleanReports.reduce((sum: number, v: any) => sum + (v.anticipatedBookings?.length || 0), 0),
       avgUtilizationRate: Math.round((cleanReports.reduce((sum: number, v: any) => sum + v.utilizationRate, 0) / Math.max(1, cleanReports.length)) * 100) / 100,
       vehicles: cleanReports
     })
