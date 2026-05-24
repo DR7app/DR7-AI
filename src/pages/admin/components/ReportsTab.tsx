@@ -497,8 +497,10 @@ export default function ReportsTab() {
             style={{ width: `${Math.round(v.utilizationRate * 100)}%` }}
           />
         </div>
-        {/* Stats grid */}
-        <div className="grid grid-cols-3 gap-2 text-center text-xs mb-3">
+        {/* Stats grid — 2026-05-24: 4° colonna "Anticipi" mostrata SOLO
+            quando il veicolo ha pagamenti anticipati nel periodo,
+            cosi' la riga non si affolla per chi non ne ha. */}
+        <div className={`grid ${(v.anticipatedBookings?.length || 0) > 0 ? 'grid-cols-4' : 'grid-cols-3'} gap-2 text-center text-xs mb-3`}>
           <div>
             <p className="text-green-400 font-bold">{v.rentedDays}g</p>
             <p className="text-theme-text-muted">Noleggio</p>
@@ -511,28 +513,45 @@ export default function ReportsTab() {
             <p className="text-theme-text-primary font-bold">{v.bookingsCount}</p>
             <p className="text-theme-text-muted">Pren.</p>
           </div>
+          {(v.anticipatedBookings?.length || 0) > 0 && (
+            <div>
+              <p className="text-cyan-400 font-bold">{v.anticipatedBookings?.length || 0}</p>
+              <p className="text-theme-text-muted">Anticipi</p>
+            </div>
+          )}
         </div>
-        {/* Revenue breakdown */}
+        {/* Revenue breakdown — 2026-05-24: ordine come da richiesta utente:
+            1. Ricavo noleggio del mese
+            2. Ricavo noleggio anticipato (se > 0)
+            3. Ricavo penale (se > 0)
+            4. Ricavo danni (se > 0)
+            5. Ricavo TOTALE */}
         <div className="space-y-1 text-xs">
           <div className="flex justify-between">
-            <span className="text-theme-text-muted">Ricavo Noleggio</span>
+            <span className="text-theme-text-muted">Ricavo noleggio del mese</span>
             <span className="text-theme-text-primary font-semibold">{formatCurrency(v.rentalRevenue)}</span>
           </div>
+          {(v.anticipatedRevenue ?? 0) > 0 && (
+            <div className="flex justify-between">
+              <span className="text-theme-text-muted">Ricavo noleggio anticipato</span>
+              <span className="text-cyan-400 font-semibold">{formatCurrency(v.anticipatedRevenue || 0)}</span>
+            </div>
+          )}
           {v.penaltyRevenue > 0 && (
             <div className="flex justify-between">
-              <span className="text-theme-text-muted">Ricavo Penale</span>
+              <span className="text-theme-text-muted">Ricavo penale</span>
               <span className="text-yellow-400 font-semibold">{formatCurrency(v.penaltyRevenue)}</span>
             </div>
           )}
           {v.danniRevenue > 0 && (
             <div className="flex justify-between">
-              <span className="text-theme-text-muted">Ricavo Danni</span>
+              <span className="text-theme-text-muted">Ricavo danni</span>
               <span className="text-red-400 font-semibold">{formatCurrency(v.danniRevenue)}</span>
             </div>
           )}
           <div className="flex justify-between pt-1 border-t border-theme-border/50">
             <span className="text-theme-text-muted font-bold">Ricavo TOTALE</span>
-            <span className="text-dr7-gold font-bold">{formatCurrency(v.totalRevenue)}</span>
+            <span className="text-dr7-gold font-bold">{formatCurrency(v.totalRevenue + (v.anticipatedRevenue || 0))}</span>
           </div>
         </div>
         {/* Expanded booking details — same data as the desktop expanded
