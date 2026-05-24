@@ -449,110 +449,21 @@ export default function VehiclesTab() {
   }
 
   async function deleteVehicleLogic(id: string, vehicleName: string) {
-    logger.log(`Starting deletion for vehicle: ${vehicleName} (ID: ${id})`)
-
-    // Delete from reservations
-    logger.log('  Deleting reservations...')
-    const { data: deletedReservations, error: resError } = await supabase
-      .from('reservations')
-      .delete()
-      .eq('vehicle_id', id)
-      .select()
-
-    if (resError) {
-      console.error('  Error deleting reservations:', resError)
-      throw new Error(`Failed to delete reservations: ${resError.message}`)
-    }
-    logger.log(`  Deleted ${deletedReservations?.length || 0} reservations`)
-
-    // Get booking IDs first so we can delete dependent records.
-    // Match BOTH on vehicle_id (authoritative FK) AND vehicle_name (string fallback
-    // for legacy bookings that never had vehicle_id populated). Prima bug: solo
-    // vehicle_name → prenotazioni rimanevano orfane dopo delete del veicolo.
-    logger.log('  Fetching booking IDs...')
-    const { data: bookingsToDelete, error: fetchError } = await supabase
-      .from('bookings')
-      .select('id')
-      .or(`vehicle_id.eq.${id},vehicle_name.eq.${vehicleName}`)
-
-    if (fetchError) {
-      console.error('  Error fetching bookings:', fetchError)
-      throw new Error(`Failed to fetch bookings: ${fetchError.message}`)
-    }
-
-    const bookingIds = (bookingsToDelete || []).map(b => b.id)
-    logger.log(`  Found ${bookingIds.length} bookings to delete (matched by vehicle_id or vehicle_name)`)
-
-    if (bookingIds.length > 0) {
-      // Delete contracts referencing these bookings (FK: contracts_booking_id_fkey)
-      logger.log('  Deleting contracts...')
-      const { error: contractError } = await supabase
-        .from('contracts')
-        .delete()
-        .in('booking_id', bookingIds)
-
-      if (contractError) {
-        console.error('  Error deleting contracts:', contractError)
-        throw new Error(`Failed to delete contracts: ${contractError.message}`)
-      }
-
-      // Delete fatture (invoices) referencing these bookings
-      logger.log('  Deleting fatture...')
-      const { error: fattureError } = await supabase
-        .from('fatture')
-        .delete()
-        .in('booking_id', bookingIds)
-
-      if (fattureError) {
-        console.error('  Error deleting fatture:', fattureError)
-        throw new Error(`Failed to delete fatture: ${fattureError.message}`)
-      }
-    }
-
-    // Delete from bookings — same OR match so niente prenotazioni orfane
-    logger.log('  Deleting bookings...')
-    const { data: deletedBookings, error: bookError } = await supabase
-      .from('bookings')
-      .delete()
-      .or(`vehicle_id.eq.${id},vehicle_name.eq.${vehicleName}`)
-      .select()
-
-    if (bookError) {
-      console.error('  Error deleting bookings:', bookError)
-      throw new Error(`Failed to delete bookings: ${bookError.message}`)
-    }
-    logger.log(`  Deleted ${deletedBookings?.length || 0} bookings`)
-
-    // Delete cauzioni (security deposits) referencing this vehicle
-    logger.log('  Deleting cauzioni...')
-    const { error: cauzioniError } = await supabase
-      .from('cauzioni')
-      .delete()
-      .eq('veicolo_id', id)
-
-    if (cauzioniError) {
-      console.error('  Error deleting cauzioni:', cauzioniError)
-      throw new Error(`Failed to delete cauzioni: ${cauzioniError.message}`)
-    }
-
-    // Nullify preventivi.vehicle_id (FK preventivi_vehicle_id_fkey) so the
-    // vehicle delete doesn't trip the constraint. Preventivi history stays.
-    logger.log('  Clearing preventivi.vehicle_id references...')
-    const { error: preventiviError } = await supabase
-      .from('preventivi')
-      .update({ vehicle_id: null })
-      .eq('vehicle_id', id)
-
-    if (preventiviError) {
-      console.error('  Error clearing preventivi vehicle_id:', preventiviError)
-      throw new Error(`Failed to clear preventivi vehicle_id: ${preventiviError.message}`)
-    }
-
-    // Finally, delete the vehicle itself
-    logger.log('  Deleting vehicle record...')
+    // 2026-05-24 REFACTOR: prima questo era un HARD DELETE catastrofico
+    // che cancellava: reservations + bookings + contracts + fatture +
+    // cauzioni + nulla preventivi.vehicle_id. Risultato: l'admin perdeva
+    // TUTTA la storia (anche i pagamenti incassati!) e i clienti
+    // sparivano dal calendario.
+    //
+    // Adesso SOFT DELETE: settiamo status='retired' sul veicolo. Tutta
+    // la storia (bookings/contratti/fatture/cauzioni) resta intatta e
+    // visibile in calendar/Da Saldare/Report. Il veicolo non appare
+    // piu' nelle dropdown di nuova prenotazione (gia' filtrate altrove).
+    // Per riattivarlo: cambiare status='available' in admin Veicoli.
+    logger.log(`Soft-delete vehicle: ${vehicleName} (ID: ${id}) → status=retired`)
     const { data: deletedVehicle, error: vehicleError } = await supabase
       .from('vehicles')
-      .delete()
+      .update({ status: 'retired', updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
 
@@ -573,38 +484,34 @@ export default function VehiclesTab() {
     const vehicle = vehicles.find(v => v.id === id)
     if (!vehicle) return
 
+    // 2026-05-24 REFACTOR: prima questo nullava vehicle_id su bookings/
+    // preventivi/cauzioni + hard-delete del vehicle. Le bookings restavano
+    // ma con vehicle_id=NULL → sparivano da Calendario (raggruppato per
+    // veicolo) e da Report Noleggio (che matcha per id+plate+name).
+    // Adesso SOFT DELETE: status='retired'. Tutto integrato resta visibile.
     const confirmed = confirm(
-      `Sei sicuro di voler eliminare ${vehicle.display_name}?\n\nTutte le prenotazioni, contratti, fatture e cauzioni resteranno intatte.`
+      `Confermi di voler archiviare ${vehicle.display_name}?\n\nIl veicolo verrà nascosto dalle nuove prenotazioni ma TUTTE le prenotazioni, contratti, fatture e cauzioni esistenti resteranno visibili nel calendario e nei report.\n\nPer riattivarlo: cambia lo stato in "Disponibile" da admin Veicoli.`
     )
     if (!confirmed) return
 
     try {
-      // Nullify FK references (UUID only) — keep all records intact
-      // vehicle_name and vehicle_plate are text fields on bookings, they stay untouched
-      await supabase.from('cauzioni').update({ veicolo_id: null }).eq('veicolo_id', id)
-      await supabase.from('bookings').update({ vehicle_id: null }).eq('vehicle_id', id)
-      await supabase.from('preventivi').update({ vehicle_id: null }).eq('vehicle_id', id)
-      await supabase.from('reservations').delete().eq('vehicle_id', id)
-
-      // Now delete the vehicle record
-      const { data: deletedVehicle, error: vehicleError } = await supabase
+      const { data: updated, error: vehicleError } = await supabase
         .from('vehicles')
-        .delete()
+        .update({ status: 'retired', updated_at: new Date().toISOString() })
         .eq('id', id)
         .select()
 
-      if (vehicleError) throw new Error(`Failed to delete vehicle: ${vehicleError.message}`)
-
-      if (!deletedVehicle || deletedVehicle.length === 0) {
-        throw new Error('Il veicolo non è stato eliminato. Potresti non avere i permessi necessari.')
+      if (vehicleError) throw new Error(`Archiviazione fallita: ${vehicleError.message}`)
+      if (!updated || updated.length === 0) {
+        throw new Error('Il veicolo non è stato archiviato. Forse non hai i permessi.')
       }
 
       await loadVehicles()
-      alert('Veicolo eliminato con successo! Prenotazioni e documenti sono stati conservati.')
+      alert(`${vehicle.display_name} archiviato. Storia intatta — per riattivarlo cambia stato a "Disponibile".`)
     } catch (error: unknown) {
       const _errMsg = error instanceof Error ? error.message : String(error)
-      console.error('Failed to delete vehicle:', error)
-      alert('Errore durante l\'eliminazione: ' + _errMsg)
+      console.error('Failed to archive vehicle:', error)
+      alert('Errore: ' + _errMsg)
     }
   }
 
