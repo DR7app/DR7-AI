@@ -424,11 +424,29 @@ async function generateVehicleReport(
         // Pickup is in this month
         startDay = pDay
       } else {
-        // 2026-05-24: Pickup is AFTER this month. Prima skippavamo del tutto.
-        // Adesso check: se la booking e' stata PAGATA nel periodo report,
-        // la classifichiamo come "incasso anticipato" cosi' l'admin vede
-        // l'income reale del periodo (pagato in maggio ma rental in luglio).
-        // Il booking apparira' anche normalmente nel report del mese rental.
+        // 2026-05-24: Pickup e' DOPO questo mese. La logica originale
+        // confrontava pYear/pMonth vs year/monthNum del periodo. Per
+        // range custom (es. 1mag → 31lug) monthNum = mese FROM = 5,
+        // quindi una booking con pickup giugno (pMonth=6) entrava qui
+        // erroneamente. Adesso usiamo monthEnd come confine assoluto:
+        // anticipo SOLO se pickupDate > monthEnd reale del periodo.
+        // 2026-05-24: ANTICIPO = pagato nel periodo + rental in mese FUTURO
+        // rispetto alla fine del periodo. Esempio: report di MAGGIO + booking
+        // pagata 23 mag con pickup 5 lug → anticipo. Booking pagata 23 mag
+        // con pickup 30 mag → NON anticipo (e' un rental del mese).
+        const pickupAbs = new Date(`${pickupDateRaw.slice(0, 10)}T00:00:00`)
+        const isPickupAfterPeriod = pickupAbs > monthEnd
+        if (!isPickupAfterPeriod) {
+          // Pickup e' DENTRO il periodo o uguale al monthEnd — niente anticipo,
+          // il booking verra' processato dai mesi successivi del loop.
+          // Per il mese corrente, il booking dovrebbe essere gia' stato
+          // processato dal ramo if precedente. Se finiamo qui significa
+          // logica di fall-through inattesa — log e skip.
+          if (debug || vPlate === 'GT006DG') {
+            console.log(`  SKIPPED (no anticipo): pickup ${pickupDateRaw} dentro periodo [${monthStartISO} → ${monthEndISO}]`)
+          }
+          return
+        }
         const isPaid = ['paid', 'completed', 'succeeded'].includes(String(booking.payment_status || '').toLowerCase())
         if (isPaid) {
           // Estraggo data pagamento: priorita' nexi_paid_at (esatta),
@@ -439,6 +457,7 @@ async function generateVehicleReport(
             || (booking.created_at as string | undefined)
             || ''
           const paidAt = paidAtISO ? new Date(paidAtISO) : null
+          // Anticipo VALIDO solo se: paid e' nel periodo report E pickup e' DOPO la fine del periodo.
           if (paidAt && paidAt >= monthStart && paidAt <= monthEnd) {
             const rawPriceAnt = booking.price_total
             const anticipoEur = (typeof rawPriceAnt === 'string' ? parseFloat(rawPriceAnt) : (rawPriceAnt || 0)) / 100
@@ -454,13 +473,13 @@ async function generateVehicleReport(
               payment_method: booking.payment_method || '-',
             })
             if (debug || vPlate === 'GT006DG') {
-              console.log(`  ANTICIPO: pagato ${paidAtISO}, pickup ${pYear}-${pMonth}, €${anticipoEur}`)
+              console.log(`  ANTICIPO: pagato ${paidAtISO} (periodo ${monthStartISO}→${monthEndISO}), pickup ${pickupDateRaw} (futuro), €${anticipoEur}`)
             }
           } else if (debug || vPlate === 'GT006DG') {
-            console.log(`  SKIPPED: pickup futuro + pagamento fuori periodo (paid ${paidAtISO})`)
+            console.log(`  SKIPPED (no anticipo): pickup futuro ma pagamento fuori periodo (paid ${paidAtISO})`)
           }
         } else if (debug || vPlate === 'GT006DG') {
-          console.log(`  SKIPPED: pickup futuro + non pagato (status=${booking.payment_status})`)
+          console.log(`  SKIPPED (no anticipo): pickup futuro + non pagato (status=${booking.payment_status})`)
         }
         return
       }
