@@ -806,7 +806,21 @@ export default function ReportsTab() {
                   <button
                     key={p.key}
                     type="button"
-                    onClick={() => setRangePreset(p.key)}
+                    onClick={() => {
+                      // 2026-05-25: ricalcola SEMPRE le date al click, anche se il
+                      // preset e' gia' attivo. Prima il setState non scattava se
+                      // il valore era invariato e l'useEffect non fireva, lasciando
+                      // date stale (es. "Mese" mostrava 30/04-30/05 dal vecchio
+                      // bug timezone, click su "Mese" non resettava).
+                      setRangePreset(p.key)
+                      if (p.key !== 'custom') {
+                        const r = calcRange(p.key)
+                        setCustomFrom(r.from)
+                        setCustomTo(r.to)
+                        setFromDraft(isoToEU(r.from))
+                        setToDraft(isoToEU(r.to))
+                      }
+                    }}
                     className={`px-3 py-1 rounded ${rangePreset === p.key ? 'bg-dr7-gold text-white font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}
                   >
                     {p.label}
