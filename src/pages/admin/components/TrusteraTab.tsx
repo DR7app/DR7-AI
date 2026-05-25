@@ -454,66 +454,61 @@ function DocumentiSubTab() {
           </div>
 
           {/* Signers — 2026-05-25: lista dinamica multi-firmatari.
-              + Aggiungi crea un nuovo slot vuoto. X rimuove (min 1).
-              Cliccando un cliente dalla search, popola il primo slot
-              vuoto oppure aggiunge in coda. */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
+              Mobile-friendly: card compatta, label inline col counter,
+              bottone "+ Aggiungi" piccolo per non distrarre dal CTA. */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
               <label className="text-sm font-medium text-theme-text-secondary">
-                Firmatari ({formData.signers.length})
+                Firmatari <span className="text-theme-text-muted text-xs">({formData.signers.length})</span>
               </label>
               <button
                 type="button"
                 onClick={addSigner}
-                className="text-sm px-3 py-1 rounded-full border border-dr7-gold/60 text-dr7-gold hover:bg-dr7-gold/10 transition-colors"
+                title="Aggiungi un altro firmatario"
+                className="text-[11px] px-2 py-1 rounded-md border border-theme-border text-theme-text-secondary hover:border-dr7-gold hover:text-dr7-gold transition-colors inline-flex items-center gap-1"
               >
-                + Aggiungi firmatario
+                <span className="text-sm leading-none">+</span> Aggiungi
               </button>
             </div>
             {formData.signers.map((s, idx) => (
-              <div key={idx} className="bg-theme-bg-tertiary/30 border border-theme-border rounded-lg p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs uppercase tracking-wider text-theme-text-muted">Firmatario {idx + 1}</span>
-                  {formData.signers.length > 1 && (
+              <div key={idx} className="bg-theme-bg-tertiary/30 border border-theme-border rounded-lg p-3 sm:p-2.5">
+                {formData.signers.length > 1 && (
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">Firmatario {idx + 1}</span>
                     <button
                       type="button"
                       onClick={() => removeSigner(idx)}
                       title="Rimuovi firmatario"
-                      className="w-6 h-6 rounded-full bg-red-500/20 hover:bg-red-500/40 text-red-300 text-sm leading-none"
+                      aria-label="Rimuovi firmatario"
+                      className="w-5 h-5 rounded-full bg-red-500/20 hover:bg-red-500/40 text-red-300 text-xs leading-none flex items-center justify-center"
                     >
                       ×
                     </button>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs text-theme-text-muted mb-1">Nome *</label>
-                    <input
-                      type="text"
-                      value={s.name}
-                      onChange={(e) => updateSigner(idx, { name: e.target.value })}
-                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
-                    />
                   </div>
-                  <div>
-                    <label className="block text-xs text-theme-text-muted mb-1">Email *</label>
-                    <input
-                      type="email"
-                      value={s.email}
-                      onChange={(e) => updateSigner(idx, { email: e.target.value })}
-                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-theme-text-muted mb-1">Telefono (WhatsApp) *</label>
-                    <input
-                      type="tel"
-                      value={s.phone}
-                      onChange={(e) => updateSigner(idx, { phone: e.target.value })}
-                      placeholder="+39 3XX XXX XXXX"
-                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
-                    />
-                  </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input
+                    type="text"
+                    value={s.name}
+                    onChange={(e) => updateSigner(idx, { name: e.target.value })}
+                    placeholder="Nome *"
+                    className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
+                  />
+                  <input
+                    type="email"
+                    value={s.email}
+                    onChange={(e) => updateSigner(idx, { email: e.target.value })}
+                    placeholder="Email *"
+                    className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
+                  />
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    value={s.phone}
+                    onChange={(e) => updateSigner(idx, { phone: e.target.value })}
+                    placeholder="+39 3XX XXX XXXX *"
+                    className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
+                  />
                 </div>
               </div>
             ))}
