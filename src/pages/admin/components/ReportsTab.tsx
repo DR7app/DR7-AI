@@ -193,34 +193,39 @@ export default function ReportsTab() {
   type RangePreset = 'oggi' | '7gg' | '30gg' | 'mese' | 'anno' | 'custom'
   const [rangePreset, setRangePreset] = useState<RangePreset>('mese')
   void now // anchor variabile, todayISO non piu' usato dopo text input
+  // 2026-05-24 (fix): formato LOCALE YYYY-MM-DD, NON via toISOString()
+  // che convertendo in UTC sposta -1 giorno (Europe/Rome = UTC+1/+2).
+  // Bug osservato: "Mese" mostrava 30-aprile → 30-maggio invece di
+  // 1-maggio → 31-maggio.
+  function fmtLocal(d: Date): string {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
   function calcRange(preset: RangePreset): { from: string; to: string } {
     const today = new Date()
-    const to = today.toISOString().slice(0, 10)
+    const to = fmtLocal(today)
     if (preset === 'oggi') return { from: to, to }
     if (preset === '7gg') {
       const d = new Date(); d.setDate(d.getDate() - 6)
-      return { from: d.toISOString().slice(0, 10), to }
+      return { from: fmtLocal(d), to }
     }
     if (preset === '30gg') {
       const d = new Date(); d.setDate(d.getDate() - 29)
-      return { from: d.toISOString().slice(0, 10), to }
+      return { from: fmtLocal(d), to }
     }
-    // 2026-05-24: Anno = SEMPRE da 1 gennaio a 31 dicembre. Prima si
-    // fermava a today (es. 1 gen → 24 mag) — non rappresentava l'anno
-    // intero e gli anticipi futuri sparivano. Adesso copre tutto.
+    // 2026-05-24: Anno = SEMPRE da 1 gennaio a 31 dicembre.
     if (preset === 'anno') {
-      const from = new Date(today.getFullYear(), 0, 1).toISOString().slice(0, 10)
-      const toYear = new Date(today.getFullYear(), 11, 31).toISOString().slice(0, 10)
+      const from = fmtLocal(new Date(today.getFullYear(), 0, 1))
+      const toYear = fmtLocal(new Date(today.getFullYear(), 11, 31))
       return { from, to: toYear }
     }
     // 2026-05-24: Mese = SEMPRE dal 1° all'ULTIMO giorno del mese corrente.
-    // Prima si fermava a today (es. 1 mag → 24 mag) — nascondeva noleggi
-    // confermati per la fine del mese + anticipi della fine periodo.
-    // Adesso copre l'intero mese cosi' la voce "Mese" e' coerente.
     if (preset === 'mese') {
-      const from = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10)
+      const from = fmtLocal(new Date(today.getFullYear(), today.getMonth(), 1))
       // day 0 del mese successivo = ultimo giorno del mese corrente
-      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10)
+      const lastDay = fmtLocal(new Date(today.getFullYear(), today.getMonth() + 1, 0))
       return { from, to: lastDay }
     }
     return { from: to, to }
@@ -529,35 +534,31 @@ export default function ReportsTab() {
             </div>
           )}
         </div>
-        {/* Revenue breakdown — 2026-05-24: ordine come da richiesta utente:
+        {/* Revenue breakdown — 2026-05-24: ordine fissato dalla direzione,
+            tutte e 5 le righe SEMPRE visibili (anche se a 0) per dare
+            sempre la stessa struttura nella card mobile:
             1. Ricavo noleggio del mese
-            2. Ricavo noleggio anticipato (se > 0)
-            3. Ricavo penale (se > 0)
-            4. Ricavo danni (se > 0)
+            2. Ricavo noleggio anticipato
+            3. Ricavo penale
+            4. Ricavo Danni
             5. Ricavo TOTALE */}
         <div className="space-y-1 text-xs">
           <div className="flex justify-between">
             <span className="text-theme-text-muted">Ricavo noleggio del mese</span>
             <span className="text-theme-text-primary font-semibold">{formatCurrency(v.rentalRevenue)}</span>
           </div>
-          {(v.anticipatedRevenue ?? 0) > 0 && (
-            <div className="flex justify-between">
-              <span className="text-theme-text-muted">Ricavo noleggio anticipato</span>
-              <span className="text-cyan-400 font-semibold">{formatCurrency(v.anticipatedRevenue || 0)}</span>
-            </div>
-          )}
-          {v.penaltyRevenue > 0 && (
-            <div className="flex justify-between">
-              <span className="text-theme-text-muted">Ricavo penale</span>
-              <span className="text-yellow-400 font-semibold">{formatCurrency(v.penaltyRevenue)}</span>
-            </div>
-          )}
-          {v.danniRevenue > 0 && (
-            <div className="flex justify-between">
-              <span className="text-theme-text-muted">Ricavo danni</span>
-              <span className="text-red-400 font-semibold">{formatCurrency(v.danniRevenue)}</span>
-            </div>
-          )}
+          <div className="flex justify-between">
+            <span className="text-theme-text-muted">Ricavo noleggio anticipato</span>
+            <span className="text-cyan-400 font-semibold">{formatCurrency(v.anticipatedRevenue || 0)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-theme-text-muted">Ricavo penale</span>
+            <span className="text-yellow-400 font-semibold">{formatCurrency(v.penaltyRevenue)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-theme-text-muted">Ricavo Danni</span>
+            <span className="text-red-400 font-semibold">{formatCurrency(v.danniRevenue)}</span>
+          </div>
           <div className="flex justify-between pt-1 border-t border-theme-border/50">
             <span className="text-theme-text-muted font-bold">Ricavo TOTALE</span>
             <span className="text-dr7-gold font-bold">{formatCurrency(v.totalRevenue + (v.anticipatedRevenue || 0))}</span>
