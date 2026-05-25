@@ -2320,8 +2320,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           customer_email: customerEmail,
           customer_phone: customerPhone,
           // Veicolo & Servizio — alias documentati nella legenda common.
-          plate: p.vehicle_plate || '',
-          targa: p.vehicle_plate || '',
+          // 2026-05-25: live-join fallback su `vehicles.plate` (via pVehicle)
+          // perche' preventivi creati prima di assegnare la targa al
+          // veicolo nel tab Veicoli hanno preventivi.vehicle_plate = NULL.
+          // Senza fallback il placeholder collassava e il template si
+          // svuotava sulla riga "{vehicle_name} {plate}".
+          plate: p.vehicle_plate || pVehicle?.plate || '',
+          targa: p.vehicle_plate || pVehicle?.plate || '',
           // Preventivi noleggio non hanno un service_name (riservato a lavaggio/meccanica).
           service_name: '',
           servizio: '',
