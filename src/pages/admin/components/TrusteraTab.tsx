@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
-import { logger } from '../../../utils/logger'
 
 type SubTab = 'documenti' | 'marketing'
 
