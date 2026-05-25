@@ -73,11 +73,16 @@ function DocumentiSubTab() {
   const [sending, setSending] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [formData, setFormData] = useState({
+  // 2026-05-25: supporto multi-firmatari. Lista di {name, email, phone}.
+  // Il backend document-sign-init accetta un firmatario per chiamata,
+  // quindi handleSend cicla l'array. Almeno un firmatario richiesto.
+  interface Signer { name: string; email: string; phone: string }
+  const [formData, setFormData] = useState<{
+    documentName: string
+    signers: Signer[]
+  }>({
     documentName: '',
-    signerName: '',
-    signerEmail: '',
-    signerPhone: '',
+    signers: [{ name: '', email: '', phone: '' }],
   })
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null)
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null)
@@ -156,14 +161,36 @@ function DocumentiSubTab() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function selectCustomer(customer: any) {
     const name = customer.denominazione || [customer.nome, customer.cognome].filter(Boolean).join(' ')
-    setFormData({
-      ...formData,
-      signerName: name,
-      signerEmail: customer.email || '',
-      signerPhone: customer.telefono || '',
+    const newSigner: Signer = { name, email: customer.email || '', phone: customer.telefono || '' }
+    setFormData(prev => {
+      // Se il primo firmatario e' vuoto lo riempi, altrimenti aggiungi in coda.
+      // Cosi' il primo click su un cliente popola lo slot 1, click successivi
+      // aggiungono firmatari 2, 3, ecc.
+      const first = prev.signers[0]
+      const firstEmpty = !first || (!first.name && !first.email && !first.phone)
+      const nextSigners = firstEmpty
+        ? [newSigner, ...prev.signers.slice(1)]
+        : [...prev.signers, newSigner]
+      return { ...prev, signers: nextSigners }
     })
-    setCustomerSearch(name)
+    setCustomerSearch('')
     setShowCustomerDropdown(false)
+  }
+
+  function updateSigner(idx: number, patch: Partial<Signer>) {
+    setFormData(prev => ({
+      ...prev,
+      signers: prev.signers.map((s, i) => i === idx ? { ...s, ...patch } : s),
+    }))
+  }
+  function addSigner() {
+    setFormData(prev => ({ ...prev, signers: [...prev.signers, { name: '', email: '', phone: '' }] }))
+  }
+  function removeSigner(idx: number) {
+    setFormData(prev => ({
+      ...prev,
+      signers: prev.signers.length <= 1 ? prev.signers : prev.signers.filter((_, i) => i !== idx),
+    }))
   }
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -228,44 +255,68 @@ function DocumentiSubTab() {
       toast.error('Carica un documento PDF prima')
       return
     }
-    if (!formData.signerName || !formData.signerEmail || !formData.signerPhone) {
-      toast.error('Compila tutti i campi del firmatario')
+    // Filtra firmatari completi (tutti e 3 i campi). Almeno uno richiesto.
+    const validSigners = formData.signers.filter(s => s.name.trim() && s.email.trim() && s.phone.trim())
+    if (validSigners.length === 0) {
+      toast.error('Compila almeno un firmatario completo (nome, email, telefono)')
       return
+    }
+    if (validSigners.length < formData.signers.length) {
+      const incomplete = formData.signers.length - validSigners.length
+      const ok = confirm(`${incomplete} firmatari incompleti verranno ignorati. Procedere con ${validSigners.length}?`)
+      if (!ok) return
     }
 
     setSending(true)
+    let successCount = 0
+    let failCount = 0
+    const errors: string[] = []
     try {
-      const res = await fetch('/.netlify/functions/document-sign-init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          documentUrl: uploadedUrl,
-          documentName: formData.documentName || 'Documento',
-          signerName: formData.signerName,
-          signerEmail: formData.signerEmail,
-          signerPhone: formData.signerPhone,
-        })
-      })
+      // Cicla un firmatario alla volta — il backend gestisce 1 per chiamata.
+      for (let i = 0; i < validSigners.length; i++) {
+        const s = validSigners[i]
+        try {
+          const res = await fetch('/.netlify/functions/document-sign-init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              documentUrl: uploadedUrl,
+              documentName: formData.documentName || 'Documento',
+              signerName: s.name,
+              signerEmail: s.email,
+              signerPhone: s.phone,
+            })
+          })
+          const data = await res.json()
+          if (res.ok) {
+            successCount++
+            logAdminAction('send_trustera_document', 'signature', data.requestId, {
+              document: formData.documentName,
+              signer: s.name,
+              email: s.email,
+              phone: s.phone,
+              of_total: validSigners.length,
+            }).catch(() => { /* non-blocking */ })
+          } else {
+            failCount++
+            errors.push(`${s.name}: ${data.error || 'errore sconosciuto'}`)
+          }
+        } catch (err) {
+          failCount++
+          errors.push(`${s.name}: ${err instanceof Error ? err.message : String(err)}`)
+        }
+      }
 
-      const data = await res.json()
-      logger.log('[TRUSTERA] Response:', res.status, res.ok, data)
-      if (res.ok) {
-        toast.success(data.message || 'Link di firma inviato via WhatsApp')
-        logger.log('[TRUSTERA] About to log action, requestId:', data.requestId)
-        logAdminAction('send_trustera_document', 'signature', data.requestId, {
-          document: formData.documentName,
-          signer: formData.signerName,
-          email: formData.signerEmail,
-          phone: formData.signerPhone,
-        })
-          .then(() => logger.log('[TRUSTERA] logAdminAction completed'))
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .catch((err: any) => console.error('[TRUSTERA] logAdminAction FAILED:', err))
+      if (successCount > 0 && failCount === 0) {
+        toast.success(`${successCount} link di firma inviati via WhatsApp`)
         setShowUpload(false)
         resetForm()
         loadRequests()
+      } else if (successCount > 0 && failCount > 0) {
+        toast.error(`${successCount} inviati, ${failCount} falliti:\n${errors.join('\n')}`, { duration: 12000 })
+        loadRequests()
       } else {
-        toast.error(data.error || 'Errore nell\'invio')
+        toast.error(`Invio fallito:\n${errors.join('\n')}`, { duration: 12000 })
       }
     } catch (err: unknown) {
       const _errMsg = err instanceof Error ? err.message : String(err)
@@ -277,7 +328,7 @@ function DocumentiSubTab() {
   }
 
   function resetForm() {
-    setFormData({ documentName: '', signerName: '', signerEmail: '', signerPhone: '' })
+    setFormData({ documentName: '', signers: [{ name: '', email: '', phone: '' }] })
     setUploadedUrl(null)
     setUploadedFileName(null)
     setCustomerSearch('')
@@ -402,36 +453,70 @@ function DocumentiSubTab() {
             )}
           </div>
 
-          {/* Signer Details */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-2">Nome Firmatario *</label>
-              <input
-                type="text"
-                value={formData.signerName}
-                onChange={(e) => setFormData({ ...formData, signerName: e.target.value })}
-                className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
-              />
+          {/* Signers — 2026-05-25: lista dinamica multi-firmatari.
+              + Aggiungi crea un nuovo slot vuoto. X rimuove (min 1).
+              Cliccando un cliente dalla search, popola il primo slot
+              vuoto oppure aggiunge in coda. */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-theme-text-secondary">
+                Firmatari ({formData.signers.length})
+              </label>
+              <button
+                type="button"
+                onClick={addSigner}
+                className="text-sm px-3 py-1 rounded-full border border-dr7-gold/60 text-dr7-gold hover:bg-dr7-gold/10 transition-colors"
+              >
+                + Aggiungi firmatario
+              </button>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-2">Email *</label>
-              <input
-                type="email"
-                value={formData.signerEmail}
-                onChange={(e) => setFormData({ ...formData, signerEmail: e.target.value })}
-                className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-2">Telefono (WhatsApp) *</label>
-              <input
-                type="tel"
-                value={formData.signerPhone}
-                onChange={(e) => setFormData({ ...formData, signerPhone: e.target.value })}
-                placeholder="+39 3XX XXX XXXX"
-                className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
-              />
-            </div>
+            {formData.signers.map((s, idx) => (
+              <div key={idx} className="bg-theme-bg-tertiary/30 border border-theme-border rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs uppercase tracking-wider text-theme-text-muted">Firmatario {idx + 1}</span>
+                  {formData.signers.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeSigner(idx)}
+                      title="Rimuovi firmatario"
+                      className="w-6 h-6 rounded-full bg-red-500/20 hover:bg-red-500/40 text-red-300 text-sm leading-none"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Nome *</label>
+                    <input
+                      type="text"
+                      value={s.name}
+                      onChange={(e) => updateSigner(idx, { name: e.target.value })}
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Email *</label>
+                    <input
+                      type="email"
+                      value={s.email}
+                      onChange={(e) => updateSigner(idx, { email: e.target.value })}
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-theme-text-muted mb-1">Telefono (WhatsApp) *</label>
+                    <input
+                      type="tel"
+                      value={s.phone}
+                      onChange={(e) => updateSigner(idx, { phone: e.target.value })}
+                      placeholder="+39 3XX XXX XXXX"
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* Send Button */}
