@@ -534,20 +534,29 @@ export default function ReportsTab() {
             </div>
           )}
         </div>
-        {/* Revenue breakdown — 2026-05-26: direzione vuole solo 3 righe
-            nella card per veicolo. Penali e danni restano nel TOTALE
-            (che li include) ma non si mostrano come riga separata.
-            1. Ricavo noleggio
+        {/* Revenue breakdown — 2026-05-26: tutte le 5 righe SEMPRE visibili
+            nell'ordine fissato dalla direzione:
+            1. Ricavo noleggio del mese
             2. Ricavo noleggio anticipato
-            3. Ricavo TOTALE */}
+            3. Ricavo penale
+            4. Ricavo danni
+            5. Ricavo TOTALE */}
         <div className="space-y-1 text-xs">
           <div className="flex justify-between">
-            <span className="text-theme-text-muted">Ricavo noleggio</span>
+            <span className="text-theme-text-muted">Ricavo noleggio del mese</span>
             <span className="text-theme-text-primary font-semibold">{formatCurrency(v.rentalRevenue)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-theme-text-muted">Ricavo noleggio anticipato</span>
             <span className="text-cyan-400 font-semibold">{formatCurrency(v.anticipatedRevenue || 0)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-theme-text-muted">Ricavo penale</span>
+            <span className="text-yellow-400 font-semibold">{formatCurrency(v.penaltyRevenue)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-theme-text-muted">Ricavo danni</span>
+            <span className="text-red-400 font-semibold">{formatCurrency(v.danniRevenue)}</span>
           </div>
           <div className="flex justify-between pt-1 border-t border-theme-border/50">
             <span className="text-theme-text-muted font-bold">Ricavo TOTALE</span>
@@ -632,6 +641,41 @@ export default function ReportsTab() {
                 </div>
               )
             })}
+          </div>
+        )}
+        {/* Dettaglio Anticipi per veicolo — bookings pagati nel periodo
+            ma con pickup futuro. Mostra cliente, range date, importo,
+            pagato il. Stessa logica del riepilogo globale ma per veicolo. */}
+        {isExpanded && (v.anticipatedBookings?.length || 0) > 0 && (
+          <div className="mt-3 pt-3 border-t border-theme-border space-y-2">
+            <p className="text-xs font-semibold text-cyan-400 mb-1">Dettaglio Anticipi:</p>
+            {(v.anticipatedBookings || []).map((ab) => (
+              <div
+                key={`ant-${ab.booking_id}`}
+                className="bg-cyan-500/5 border border-cyan-500/20 rounded p-2 text-xs"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="font-medium text-theme-text-primary truncate">{ab.customer_name}</span>
+                  <span className="shrink-0 ml-2 px-2 py-0.5 rounded-full font-semibold bg-cyan-500/20 text-cyan-300">Anticipato</span>
+                </div>
+                <div className="text-theme-text-muted mb-1.5">
+                  <span>{formatDateIT(ab.pickup_date)} → {formatDateIT(ab.dropoff_date)}</span>
+                </div>
+                <div className="flex justify-between text-theme-text-muted mb-1.5">
+                  <span>Pagato il</span>
+                  <span className="text-theme-text-primary">{formatDateIT(ab.paid_at)}</span>
+                </div>
+                <div className="flex justify-between text-theme-text-muted mb-1.5">
+                  <span>Metodo</span>
+                  <span className="text-theme-text-primary">{ab.payment_method || '—'}</span>
+                </div>
+                <div className="flex justify-between pt-1.5 border-t border-theme-border/40">
+                  <span className="text-theme-text-muted font-semibold">Totale</span>
+                  <span className="text-cyan-400 font-bold">{formatCurrency(ab.total_price)}</span>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -732,6 +776,40 @@ export default function ReportsTab() {
                   })}
                 </tbody>
               </table>
+              {/* Anticipi per veicolo — bookings pagati nel periodo ma con
+                  pickup futuro. Sotto la tabella principale, con header
+                  cyan per distinguerli dai noleggi del mese. */}
+              {(v.anticipatedBookings?.length || 0) > 0 && (
+                <div className="mt-3 pt-3 border-t border-cyan-500/20">
+                  <p className="text-xs font-semibold text-cyan-400 mb-2">
+                    Anticipi ({v.anticipatedBookings?.length || 0}) — pagati nel periodo, noleggio futuro
+                  </p>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-theme-text-muted">
+                        <th className="text-left py-1 px-2">Cliente</th>
+                        <th className="text-left py-1 px-2">Ritiro</th>
+                        <th className="text-left py-1 px-2">Riconsegna</th>
+                        <th className="text-left py-1 px-2">Pagato il</th>
+                        <th className="text-center py-1 px-2">Metodo</th>
+                        <th className="text-right py-1 px-2">Totale</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(v.anticipatedBookings || []).map((ab) => (
+                        <tr key={`ant-${ab.booking_id}`} className="border-t border-theme-border/30 bg-cyan-500/5">
+                          <td className="py-1 px-2 text-theme-text-primary font-medium">{ab.customer_name}</td>
+                          <td className="py-1 px-2 text-theme-text-muted">{formatDateIT(ab.pickup_date)}</td>
+                          <td className="py-1 px-2 text-theme-text-muted">{formatDateIT(ab.dropoff_date)}</td>
+                          <td className="py-1 px-2 text-theme-text-muted">{formatDateIT(ab.paid_at)}</td>
+                          <td className="text-center py-1 px-2 text-theme-text-primary">{ab.payment_method || '—'}</td>
+                          <td className="text-right py-1 px-2 text-cyan-400 font-semibold">{formatCurrency(ab.total_price)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </td>
           </tr>
         )}
