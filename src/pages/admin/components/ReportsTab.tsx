@@ -534,30 +534,20 @@ export default function ReportsTab() {
             </div>
           )}
         </div>
-        {/* Revenue breakdown — 2026-05-24: ordine fissato dalla direzione,
-            tutte e 5 le righe SEMPRE visibili (anche se a 0) per dare
-            sempre la stessa struttura nella card mobile:
-            1. Ricavo noleggio del mese
+        {/* Revenue breakdown — 2026-05-26: direzione vuole solo 3 righe
+            nella card per veicolo. Penali e danni restano nel TOTALE
+            (che li include) ma non si mostrano come riga separata.
+            1. Ricavo noleggio
             2. Ricavo noleggio anticipato
-            3. Ricavo penale
-            4. Ricavo Danni
-            5. Ricavo TOTALE */}
+            3. Ricavo TOTALE */}
         <div className="space-y-1 text-xs">
           <div className="flex justify-between">
-            <span className="text-theme-text-muted">Ricavo noleggio del mese</span>
+            <span className="text-theme-text-muted">Ricavo noleggio</span>
             <span className="text-theme-text-primary font-semibold">{formatCurrency(v.rentalRevenue)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-theme-text-muted">Ricavo noleggio anticipato</span>
             <span className="text-cyan-400 font-semibold">{formatCurrency(v.anticipatedRevenue || 0)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-theme-text-muted">Ricavo penale</span>
-            <span className="text-yellow-400 font-semibold">{formatCurrency(v.penaltyRevenue)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-theme-text-muted">Ricavo Danni</span>
-            <span className="text-red-400 font-semibold">{formatCurrency(v.danniRevenue)}</span>
           </div>
           <div className="flex justify-between pt-1 border-t border-theme-border/50">
             <span className="text-theme-text-muted font-bold">Ricavo TOTALE</span>
