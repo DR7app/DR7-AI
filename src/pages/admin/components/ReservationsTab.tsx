@@ -1211,16 +1211,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const splitX = (amt: number, on: boolean) => on ? { inC: amt, at: 0 } : { inC: 0, at: amt }
               const sIns = splitX(insuranceTotal,         coeffFlags.insurance)
               const sLav = splitX(CFG_LAVAGGIO_FEE,       coeffFlags.lavaggio)
-              // 2026-05-18: No Cauzione passa SEMPRE a listino (vedi PreventiviTab).
-              // Era dentro extrasInCoeff e veniva mangiato dal max clamp / scalato
-              // dal coefficiente → l'admin aggiungeva "No Cauzione" e il totale
-              // cresceva di pochi euro invece dei €49 × giorni attesi.
-              const sNoC = { inC: 0, at: noCauzioneSurcharge }
+              // 2026-05-26: TUTTI i 7 toggle di Centralina Pro > Automazioni >
+              // Inclusione Coefficiente ora rispettati. Prima no_cauzione era
+              // hardcoded ad atList ignorando la scelta admin. Allineato a
+              // CarBookingWizard (sito) e PreventiviTab (admin preventivi).
+              const sNoC = splitX(noCauzioneSurcharge,    coeffFlags.no_cauzione)
               const sKm  = splitX(unlimitedKmSurcharge,   coeffFlags.unlimited_km)
               const sSec = splitX(secondDriverFee,        coeffFlags.second_driver)
               const sFlx = splitX(flexCost,               coeffFlags.dr7_flex)
-              const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC
-              const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at
+              // Pacchetti KM seguono unlimited_km (vedi PreventiviTab / sito).
+              const sPkg = splitX(kmPackagesCost,         coeffFlags.unlimited_km)
+              const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC + sPkg.inC
+              const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at  + sPkg.at
               const listSubtotalNoExp = listRentalTotal + extrasInCoeff
               // Combined coefficient from revenue engine
               const combinedCoeff = (data.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
@@ -1233,8 +1235,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
               if (maxTotal != null && afterRevenueNoExp > maxTotal) afterRevenueNoExp = maxTotal
               if (minTotal != null && afterRevenueNoExp < minTotal) afterRevenueNoExp = minTotal
-              // Experience + location fees + extras-at-list + pacchetti KM stay at LIST PRICE — no coefficient, no clamp.
-              const subtotal = Math.round((afterRevenueNoExp + experienceCost + deliveryFees + extrasAtList + kmPackagesCost) * 100) / 100
+              // kmPackages ora dentro extrasAtList/extrasInCoeff via sPkg.
+              // Resta extra: experience + location fees (sempre a listino).
+              const subtotal = Math.round((afterRevenueNoExp + experienceCost + deliveryFees + extrasAtList) * 100) / 100
               const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
               // Auto-calculate KM limit from rental days (only if not unlimited)
               // 2026-05-18: salta total_amount se l'admin l'ha gia' modificato a mano.
@@ -1357,13 +1360,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const splitX = (amt: number, on: boolean) => on ? { inC: amt, at: 0 } : { inC: 0, at: amt }
       const sIns = splitX(insuranceTotal,         coeffFlags.insurance)
       const sLav = splitX(CFG_LAVAGGIO_FEE,       coeffFlags.lavaggio)
-      // 2026-05-18: No Cauzione SEMPRE a listino — coerente con auto_apply.
-      const sNoC = { inC: 0, at: noCauzioneSurcharge }
+      // 2026-05-26: TUTTI i toggle Centralina Pro rispettati anche qui
+      // (revenueSuggestion path). Allineato ad auto_apply + sito + Preventivi.
+      const sNoC = splitX(noCauzioneSurcharge,    coeffFlags.no_cauzione)
       const sKm  = splitX(unlimitedKmSurcharge,   coeffFlags.unlimited_km)
       const sSec = splitX(secondDriverFee,        coeffFlags.second_driver)
       const sFlx = splitX(flexCost,               coeffFlags.dr7_flex)
-      const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC
-      const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at
+      const sPkg = splitX(kmPackagesCost,         coeffFlags.unlimited_km)
+      const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC + sPkg.inC
+      const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at  + sPkg.at
       const listSubtotalNoExp = listRentalTotal + extrasInCoeff
       const combinedCoeff = (revenueSuggestion.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
       const minDaily = typeof revenueSuggestion.minPrice === 'number' ? revenueSuggestion.minPrice : null
@@ -1373,8 +1378,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
       if (maxTotal != null && afterRevenueNoExp > maxTotal) afterRevenueNoExp = maxTotal
       if (minTotal != null && afterRevenueNoExp < minTotal) afterRevenueNoExp = minTotal
-      // Experience + location fees + extras-at-list + pacchetti KM stay at LIST PRICE — no coefficient, no clamp.
-      const subtotal = Math.round((afterRevenueNoExp + experienceCost + deliveryFees + extrasAtList + kmPackagesCost) * 100) / 100
+      // kmPackages ora dentro extrasAtList/extrasInCoeff via sPkg.
+      const subtotal = Math.round((afterRevenueNoExp + experienceCost + deliveryFees + extrasAtList) * 100) / 100
       const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
       // 2026-05-18: salta total_amount se l'admin l'ha gia' modificato a mano.
       const updates: Record<string, string> = {}

@@ -1076,20 +1076,28 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     const splitUnlimitedKm    = pick(unlimitedKmTotal,    coeffFlags.unlimited_km)
     const splitInsurance      = pick(insuranceTotal,      coeffFlags.insurance)
     const splitLavaggio       = pick(lavaggioFee,         coeffFlags.lavaggio)
-    // 2026-05-18: No Cauzione e Cauzione Veicolo passano SEMPRE a listino,
-    // come Experience / location fees. Sono surcharge fissi per la scelta
-    // della cauzione: non devono scalare col coefficiente dinamico ne'
-    // essere mangiati dal clamp max. Prima erano dentro extrasInCoeff e,
-    // se il preventivo era gia' al max del clamp, aggiungere "No Cauzione"
-    // cambiava il totale di solo pochi euro (€4 invece di €49 × giorni).
-    const splitNoCauzione     = { inCoeff: 0, atList: noCauzioneTotal }
+    // 2026-05-26: TUTTI i 7 toggle di Centralina Pro > Automazioni >
+    // Inclusione Coefficiente ora rispettati anche qui (allineato a
+    // CarBookingWizard sito). Prima 2 toggle (no_cauzione,
+    // cauzione_veicoli) erano hardcoded ad atList ignorando la scelta
+    // dell'admin. La nota storica era: "non devono scalare col
+    // coefficiente, ne' essere mangiati dal clamp max" — pero' la UI
+    // mostrava comunque il toggle come configurabile. Adesso il toggle
+    // funziona davvero: ON = nel subtotale clamp-eligible (default),
+    // OFF = sommato a listino dopo (vecchio comportamento hardcoded).
+    const splitNoCauzione     = pick(noCauzioneTotal,     coeffFlags.no_cauzione)
     const splitSecondDriver   = pick(secondDriverTotal,   coeffFlags.second_driver)
     const splitDr7Flex        = pick(dr7FlexTotal,        coeffFlags.dr7_flex)
-    const splitCauzioneVeic   = { inCoeff: 0, atList: cauzioneVeicoliTotal }
-    const extrasInCoeff = splitInsurance.inCoeff + splitLavaggio.inCoeff + splitNoCauzione.inCoeff + splitUnlimitedKm.inCoeff + splitSecondDriver.inCoeff + splitDr7Flex.inCoeff + splitCauzioneVeic.inCoeff
-    const extrasAtList  = splitInsurance.atList  + splitLavaggio.atList  + splitNoCauzione.atList  + splitUnlimitedKm.atList  + splitSecondDriver.atList  + splitDr7Flex.atList  + splitCauzioneVeic.atList
+    const splitCauzioneVeic   = pick(cauzioneVeicoliTotal, coeffFlags.cauzione_veicoli)
+    // Pacchetti KM seguono il toggle unlimited_km per coerenza col sito
+    // (vedi CarBookingWizard riga ~2069 "unlimited_km copre anche i
+    // pacchetti km"). Prima erano sempre atList anche se l'admin
+    // attivava il toggle.
+    const splitKmPackages     = pick(kmPackagesTotal,     coeffFlags.unlimited_km)
+    const extrasInCoeff = splitInsurance.inCoeff + splitLavaggio.inCoeff + splitNoCauzione.inCoeff + splitUnlimitedKm.inCoeff + splitSecondDriver.inCoeff + splitDr7Flex.inCoeff + splitCauzioneVeic.inCoeff + splitKmPackages.inCoeff
+    const extrasAtList  = splitInsurance.atList  + splitLavaggio.atList  + splitNoCauzione.atList  + splitUnlimitedKm.atList  + splitSecondDriver.atList  + splitDr7Flex.atList  + splitCauzioneVeic.atList  + splitKmPackages.atList
     const listSubtotalNoExp = listRentalTotal + extrasInCoeff
-    const listSubtotal = listSubtotalNoExp + experienceCost + locationFees + extrasAtList + kmPackagesTotal
+    const listSubtotal = listSubtotalNoExp + experienceCost + locationFees + extrasAtList
 
     // Apply revenue coefficients ONLY to the clamp-eligible portion.
     // Experience + location fees stay at LIST PRICE — no coefficient, no
