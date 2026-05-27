@@ -1136,8 +1136,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     // Real (uncapped) subtotal for display purposes — this is the "Subtotale"
     // line the admin sees, reflecting what the engine would ask for without
     // limits. The clamp lines below show how it's been capped.
-    const subtotalDisplay = Math.round((rawAfterRevenueNoExp + experienceAfterCoeff + locationFees + extrasAtList + kmPackagesTotal) * 100) / 100
-    const subtotalClamped = Math.round((afterRevenueTotalNoExp + experienceAfterCoeff + locationFees + extrasAtList + kmPackagesTotal) * 100) / 100
+    // BUG FIX 2026-05-27: rimosso "+ kmPackagesTotal" qui — i pacchetti km
+    // sono gia' contati in extrasInCoeff (se toggle ON) o extrasAtList
+    // (se toggle OFF) via splitKmPackages. Aggiungerli di nuovo qui li
+    // raddoppia, rendendo il toggle inefficace (la riga km appare sempre
+    // a listino indipendentemente dallo switch).
+    const subtotalDisplay = Math.round((rawAfterRevenueNoExp + experienceAfterCoeff + locationFees + extrasAtList) * 100) / 100
+    const subtotalClamped = Math.round((afterRevenueTotalNoExp + experienceAfterCoeff + locationFees + extrasAtList) * 100) / 100
     // Keep the legacy `afterRevenue` alias = the clamped subtotal used for all
     // downstream math (markup, sconto, totale finale).
     const afterRevenue = subtotalClamped
