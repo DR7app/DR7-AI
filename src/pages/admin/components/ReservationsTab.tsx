@@ -8787,9 +8787,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             // Search filter
             if (!bookingSearchQuery) return true
             const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
-            const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
-            const customerEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase()
-            const customerPhone = (booking.customer_phone || booking.booking_details?.customer?.phone || '').toLowerCase()
+            // Coverage estesa per "campi nome": alcune prenotazioni hanno
+            // fullName, altre nome+cognome separati, altre solo first_name/
+            // last_name in booking_details.customer. Senza questa lista la
+            // ricerca per nome ometteva booking validi (es. Andrea Testa).
+            const cust = booking.booking_details?.customer || {}
+            const nameParts = [
+              cust.fullName, cust.full_name, cust.name,
+              cust.first_name, cust.last_name,
+              cust.firstName, cust.lastName,
+              cust.nome, cust.cognome,
+              booking.customer_name,
+            ].filter(Boolean).join(' ')
+            const customerName = nameParts.toLowerCase()
+            const customerEmail = (booking.customer_email || cust.email || '').toLowerCase()
+            const customerPhone = (booking.customer_phone || cust.phone || cust.telefono || '').toLowerCase()
             const vehicleName = (booking.vehicle_name || '').toLowerCase()
             const vehiclePlate = (booking.vehicle_plate || '').toLowerCase()
             const bookingId = String(booking.id || '').toLowerCase()
@@ -8809,9 +8821,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             // Search filter
             if (!bookingSearchQuery) return true
             const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
-            const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
-            const customerEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase()
-            const customerPhone = (booking.customer_phone || booking.booking_details?.customer?.phone || '').toLowerCase()
+            // Coverage estesa per "campi nome": alcune prenotazioni hanno
+            // fullName, altre nome+cognome separati, altre solo first_name/
+            // last_name in booking_details.customer. Senza questa lista la
+            // ricerca per nome ometteva booking validi (es. Andrea Testa).
+            const cust = booking.booking_details?.customer || {}
+            const nameParts = [
+              cust.fullName, cust.full_name, cust.name,
+              cust.first_name, cust.last_name,
+              cust.firstName, cust.lastName,
+              cust.nome, cust.cognome,
+              booking.customer_name,
+            ].filter(Boolean).join(' ')
+            const customerName = nameParts.toLowerCase()
+            const customerEmail = (booking.customer_email || cust.email || '').toLowerCase()
+            const customerPhone = (booking.customer_phone || cust.phone || cust.telefono || '').toLowerCase()
             const vehicleName = (booking.vehicle_name || '').toLowerCase()
             const vehiclePlate = (booking.vehicle_plate || '').toLowerCase()
             const bookingId = String(booking.id || '').toLowerCase()
@@ -8959,9 +8983,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   // Search filter
                   if (!bookingSearchQuery) return true
                   const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
-                  const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
-                  const customerEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase()
-                  const customerPhone = (booking.customer_phone || booking.booking_details?.customer?.phone || '').toLowerCase()
+                  const cust = booking.booking_details?.customer || {}
+                  const nameParts = [
+                    cust.fullName, cust.full_name, cust.name,
+                    cust.first_name, cust.last_name,
+                    cust.firstName, cust.lastName,
+                    cust.nome, cust.cognome,
+                    booking.customer_name,
+                  ].filter(Boolean).join(' ')
+                  const customerName = nameParts.toLowerCase()
+                  const customerEmail = (booking.customer_email || cust.email || '').toLowerCase()
+                  const customerPhone = (booking.customer_phone || cust.phone || cust.telefono || '').toLowerCase()
                   const vehicleName = (booking.vehicle_name || '').toLowerCase()
                   const vehiclePlate = (booking.vehicle_plate || '').toLowerCase()
                   const bookingId = String(booking.id || '').toLowerCase()
@@ -9114,9 +9146,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   // Search filter
                   if (!bookingSearchQuery) return true
                   const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
-                  const customerName = (booking.booking_details?.customer?.fullName || booking.customer_name || '').toLowerCase()
-                  const customerEmail = (booking.customer_email || booking.booking_details?.customer?.email || '').toLowerCase()
-                  const customerPhone = (booking.customer_phone || booking.booking_details?.customer?.phone || '').toLowerCase()
+                  const cust = booking.booking_details?.customer || {}
+                  const nameParts = [
+                    cust.fullName, cust.full_name, cust.name,
+                    cust.first_name, cust.last_name,
+                    cust.firstName, cust.lastName,
+                    cust.nome, cust.cognome,
+                    booking.customer_name,
+                  ].filter(Boolean).join(' ')
+                  const customerName = nameParts.toLowerCase()
+                  const customerEmail = (booking.customer_email || cust.email || '').toLowerCase()
+                  const customerPhone = (booking.customer_phone || cust.phone || cust.telefono || '').toLowerCase()
                   const vehicleName = (booking.vehicle_name || '').toLowerCase()
                   const vehiclePlate = (booking.vehicle_plate || '').toLowerCase()
                   const bookingId = String(booking.id || '').toLowerCase()
