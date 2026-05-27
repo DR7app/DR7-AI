@@ -1499,7 +1499,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       prime_flex_price: primeFlex ? PRIME_FLEX_PRICE : 0,
       // "Conferma Prenotazione" anche se Da Saldare — il calendario / lista
       // lo usano per non mostrare la riga in stato "in attesa pagamento".
-      manual_confirmation: confirmBooking,
+      // 2026-05-27: BUG FIX — il cron cancel-unpaid-nexi-bookings legge
+      // booking_details.manually_confirmed (allineato a ReservationsTab +
+      // CalendarTab). Prima qui scrivevamo "manual_confirmation" che
+      // nessuno leggeva, e il cron cancellava lavaggi confermati Nexi
+      // pay-by-link dopo 1 ora.
+      manually_confirmed: confirmBooking,
+      ...(confirmBooking ? { manually_confirmed_at: new Date().toISOString() } : {}),
       ...(vehicleCategory && { vehicleCategory }),
       ...(vehicleMakeModel && { vehicleMakeModel }),
       ...(classificationSource && { classificationSource }),
@@ -1541,8 +1547,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       dropoff_location: 'DR7 Empire - Car Wash',
       price_total: Math.round(totalPrice * 100),
       currency: 'EUR',
-      // Pay by Link: pending status + Nexi method so cron auto-cancels after 1h
-      status: (formData.payment_status === 'pending' && isNexiPayByLink(formData.payment_method)) ? 'pending' : (formData.payment_status === 'paid' ? 'confirmed' : 'confirmed'),
+      // Pay by Link: pending status + Nexi method so cron auto-cancels after 1h.
+      // 2026-05-27 FIX: se l'admin ha spuntato Conferma Prenotazione vince
+      // la conferma — status='confirmed' anche con Nexi pay-by-link (prima
+      // restava 'pending' e veniva cancellato dal cron dopo 1h, anche se
+      // manually_confirmed era TRUE). payment_status resta 'pending' per
+      // far vedere "Da saldare" finche' il cliente non paga il link.
+      status: confirmBooking
+        ? 'confirmed'
+        : ((formData.payment_status === 'pending' && isNexiPayByLink(formData.payment_method)) ? 'pending' : 'confirmed'),
       payment_status: (formData.payment_status === 'pending' && isNexiPayByLink(formData.payment_method)) ? 'pending' : formData.payment_status,
       payment_method: formData.payment_method || null,
       booking_details: bookingDetails
@@ -1688,14 +1701,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
 
     // Handle Nexi Pay by Link.
-    // REGOLA UI: il link parte SOLO se Conferma Prenotazione e' OFF.
-    // Se l'admin ha spuntato Conferma, vince la conferma lavaggio (il
-    // cliente non deve ricevere anche il link, sarebbe doppio messaggio
-    // contraddittorio: "prenotazione confermata" + "completa il pagamento
-    // per confermare").
+    // 2026-05-27 FIX: il link parte SEMPRE quando l'admin sceglie Nexi
+    // pay-by-link + Da saldare, anche con Conferma Prenotazione attiva.
+    // Prima il gate !confirmBooking saltava il link quando direzione
+    // confermava il lavaggio + sceglieva pagamento online, lasciando
+    // il cliente senza link per pagare.
     const isNexiPending = formData.payment_status === 'pending'
       && isNexiPayByLink(formData.payment_method)
-      && !confirmBooking
     if (isNexiPending && data) {
       try {
         const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
