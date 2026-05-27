@@ -3,17 +3,17 @@ import { motion } from 'framer-motion'
 import { supabase } from '../../../supabaseClient'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import { useTheme } from '../../../contexts/ThemeContext'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
 
 // 2026-05-22: Premium telemetry restyle scoped to this page only.
-// The theme tokens (theme-bg-primary, theme-text-primary, ecc.) resolve
-// via CSS variables in tailwind.config.js. We override those variables
-// on this component's root so the whole calendar adopts the dark
-// cinematic look regardless of the user's global light/dark setting,
-// without touching any business logic or shared styling.
-const TELEMETRY_VARS: React.CSSProperties = {
+// 2026-05-27: gated to dark mode only — overriding theme vars in light
+// mode broke CLAUDE.md rule "Always preserve dark mode AND light mode".
+// Dark-mode override gives the cinematic look; light mode falls through
+// to the normal theme tokens (white/off-white surfaces, ink text).
+const TELEMETRY_VARS_DARK: React.CSSProperties = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ...({
     '--color-theme-bg-primary': '#0a0d14',
@@ -145,6 +145,8 @@ interface CarWashService {
 
 export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabProps) {
   const { canViewFinancials } = useAdminRole()
+  const { theme } = useTheme()
+  const TELEMETRY_VARS: React.CSSProperties = theme === 'dark' ? TELEMETRY_VARS_DARK : {}
   const [hideFinancials, setHideFinancials] = useState(false)
   const [bookings, setBookings] = useState<CarWashBooking[]>([])
   const [loading, setLoading] = useState(true)
@@ -791,7 +793,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                   key={day}
                   className={`
                     flex flex-col items-center justify-center border-r border-theme-border/30 relative transition-colors
-                    ${(isHol || isSun) ? 'bg-red-950/20' : ''}
+                    ${(isHol || isSun) ? 'bg-rose-100 dark:bg-red-950/20' : ''}
                     ${isToday ? 'bg-gradient-to-b from-[#22d3ee]/45 to-[#22d3ee]/15 border-l-2 border-r-2 border-[#22d3ee] shadow-[inset_0_-3px_0_0_#22d3ee]' : ''}
                   `}
                   style={headerCellStyle}
@@ -882,8 +884,8 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                         className={`
                           relative border-r border-theme-border/20 transition-all
                           ${isToday ? 'bg-[#22d3ee]/12 border-l border-r border-[#22d3ee]/40' : ''}
-                          ${!isToday && !slotBooking && !isRedDay ? 'bg-green-600/15 hover:bg-green-600/25 cursor-pointer' : ''}
-                          ${!isToday && !slotBooking && isRedDay ? 'bg-red-950/10 hover:bg-red-950/20' : ''}
+                          ${!isToday && !slotBooking && !isRedDay ? 'bg-emerald-50 hover:bg-emerald-100 dark:bg-green-600/15 dark:hover:bg-green-600/25 cursor-pointer' : ''}
+                          ${!isToday && !slotBooking && isRedDay ? 'bg-rose-50 hover:bg-rose-100 dark:bg-red-950/10 dark:hover:bg-red-950/20' : ''}
                           ${slotBooking && !isBookingStart ? 'bg-transparent' : ''}
                         `}
                         style={dayCellStyle}
@@ -908,12 +910,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                           // Gradient + soft shadow + hover lift for a polished look (mockup style).
                           const isPendingLink = !isRientro && isPendingPaymentLink(startEvt.booking)
                           const bgColor = isRientro
-                            ? 'bg-gradient-to-br from-blue-700 to-blue-900 border-blue-500/40 shadow-blue-900/30'
+                            ? 'bg-gradient-to-br from-blue-400 to-blue-600 dark:from-blue-700 dark:to-blue-900 border-blue-400/40 dark:border-blue-500/40 shadow-blue-500/20 dark:shadow-blue-900/30'
                             : isPaid
-                              ? 'bg-gradient-to-br from-emerald-500 to-emerald-700 border-emerald-300/40 shadow-emerald-900/30'
+                              ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 dark:from-emerald-500 dark:to-emerald-700 border-emerald-300/50 dark:border-emerald-300/40 shadow-emerald-500/20 dark:shadow-emerald-900/30'
                               : isPendingLink
-                                ? 'bg-gradient-to-br from-amber-500 to-amber-700 border-amber-300/40 shadow-amber-900/30'
-                                : 'bg-gradient-to-br from-red-700 to-red-900 border-red-500/40 shadow-red-900/30'
+                                ? 'bg-gradient-to-br from-amber-400 to-amber-600 dark:from-amber-500 dark:to-amber-700 border-amber-300/50 dark:border-amber-300/40 shadow-amber-500/20 dark:shadow-amber-900/30'
+                                : 'bg-gradient-to-br from-red-500 to-red-700 dark:from-red-700 dark:to-red-900 border-red-400/50 dark:border-red-500/40 shadow-red-500/20 dark:shadow-red-900/30'
 
                           return (
                           <div
