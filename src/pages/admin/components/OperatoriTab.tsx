@@ -49,12 +49,15 @@ interface Admin {
 const ROLE_TAG_OPTIONS: { tag: string; label: string; hint: string }[] = [
   { tag: 'role:direzione',         label: 'Direzione',          hint: 'Superuser, sblocca tutto' },
   { tag: 'role:developer',         label: 'Developer',          hint: 'Bypass OTP Gestione OTP' },
-  { tag: 'role:bypass-otp',        label: 'Bypass OTP (tutto)', hint: 'Operatore non riceve mai richieste OTP — usare con cautela' },
   { tag: 'role:payment-manager',   label: 'Payment Manager',    hint: 'Segna fatture pagate' },
   { tag: 'role:stipendio-editor',  label: 'Stipendio Editor',   hint: 'Modifica stipendi Lavaggio' },
   { tag: 'role:sito-direzione',    label: 'Sito CMS',           hint: 'Modifica testi senza OTP' },
   { tag: 'role:preventivi-admin',  label: 'Preventivi Admin',   hint: 'Flussi speciali preventivi' },
 ]
+// 2026-05-27: tag separato dal grid checkbox. Renderizzato come toggle
+// dedicato ON/OFF nella sezione "OTP per Operatore" (sotto). Default
+// safe: nessun bypass = OTP attivo.
+const OTP_BYPASS_TAG = 'role:bypass-otp'
 
 // hide:X keys: rimossi 2026-05-22 (commit d3423982 ha tolto l'unico
 // call site). Git history mantiene la definizione se servisse rimetterli.
@@ -707,8 +710,46 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
               </div>
 
               {/* Permessi & Ruoli — editabile solo dalla direzione */}
-              {canEditOperators && (
+              {canEditOperators && (() => {
+                const currentPerms = Array.isArray(selected.permissions) ? selected.permissions : []
+                // 2026-05-27: semantica invertita per chiarezza UI.
+                // - otpEnabled=true (verde, default safe) = operatore deve fare OTP
+                // - otpEnabled=false (grigio)            = operatore bypassa OTP
+                // Internamente: bypass = role:bypass-otp NEL array permissions.
+                const otpBypass = currentPerms.includes(OTP_BYPASS_TAG)
+                const otpEnabled = !otpBypass
+                return (
                 <div className="mt-6 border-t border-theme-border pt-5">
+                  {/* OTP per-operator toggle — sezione dedicata, separata dai
+                      checkbox ruoli sotto. Su richiesta direzione (toggle ON/OFF
+                      visibile per revoca rapida). */}
+                  <div className="mb-5 rounded-xl border border-theme-border bg-theme-bg-primary px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold text-theme-text-primary flex items-center gap-2">
+                          OTP per Operatore
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${otpEnabled ? 'bg-emerald-500/15 text-emerald-500' : 'bg-rose-500/15 text-rose-500'}`}>
+                            {otpEnabled ? 'ATTIVO' : 'DISABILITATO'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-theme-text-muted mt-0.5">
+                          {otpEnabled
+                            ? 'L\'operatore riceve la richiesta OTP per le azioni protette (comportamento normale).'
+                            : 'L\'operatore bypassa SEMPRE l\'OTP per qualsiasi azione — usare con cautela.'}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleAdminRole(selected, OTP_BYPASS_TAG)}
+                        className={`relative inline-flex flex-shrink-0 items-center w-12 h-6 rounded-full transition-colors ${otpEnabled ? 'bg-emerald-500' : 'bg-rose-500/40 border border-rose-500/30'}`}
+                        aria-pressed={otpEnabled}
+                        aria-label={otpEnabled ? 'Disabilita OTP per questo operatore' : 'Attiva OTP per questo operatore'}
+                      >
+                        <span className={`inline-block w-5 h-5 rounded-full bg-white shadow transform transition-transform ${otpEnabled ? 'translate-x-6' : 'translate-x-0.5'}`} />
+                      </button>
+                    </div>
+                  </div>
+
                   <h4 className="text-sm font-semibold text-theme-text-primary mb-1">Permessi & Ruoli</h4>
                   <p className="text-[12px] text-theme-text-muted mb-3">
                     Assegna i ruoli speciali a questo operatore. I gate nel resto dell&apos;admin
@@ -717,7 +758,6 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {ROLE_TAG_OPTIONS.map(opt => {
-                      const currentPerms = Array.isArray(selected.permissions) ? selected.permissions : []
                       const checked = currentPerms.includes(opt.tag)
                       return (
                         <label key={opt.tag} className="flex items-start gap-2 px-3 py-2 rounded-md border border-theme-border bg-theme-bg-primary cursor-pointer hover:border-dr7-gold/40 transition-colors">
@@ -788,7 +828,8 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
                       file per non rompere riferimenti — semplicemente non
                       le esponiamo piu' come checkbox separati qui. */}
                 </div>
-              )}
+                )
+              })()}
             </Section>
 
             {/* SECTION 2 — KPI PRINCIPALI */}
