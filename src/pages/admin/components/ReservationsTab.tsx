@@ -1173,8 +1173,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               // delivery_enabled / pickup_location). Se vale 0 non
               // influisce; se vale > 0 e' perche' admin l'ha messo,
               // quindi va contato.
-              const deliveryFees = (parseFloat(prev.delivery_fee || '0') || 0)
-                + (parseFloat(prev.pickup_fee || '0') || 0)
+              // 2026-05-27: consegna e ritiro vengono tenuti separati cosi'
+              // i toggle coefficient_delivery e coefficient_pickup possono
+              // funzionare in modo indipendente come in PreventiviTab e
+              // CarBookingWizard.
+              const deliveryFee = parseFloat(prev.delivery_fee || '0') || 0
+              const pickupFee   = parseFloat(prev.pickup_fee   || '0') || 0
               // Surcharge per day comes from the Pro option the admin picked.
               // For backwards compat, when status='no_cauzione' but no specific
               // option was chosen, fall back to the configured no-cauzione daily.
@@ -1235,11 +1239,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               // 2026-05-27: pacchetti KM con toggle proprio (prima condividevano unlimited_km).
               const sPkg = splitX(kmPackagesCost,         coeffFlags.km_packages)
               const sExp = splitX(experienceCost,         coeffFlags.experience)
-              const sDel = splitX(deliveryFees,           coeffFlags.delivery)
-              // (cauzione_veicoli + pickup non hanno fee separate in ReservationsTab,
-              //  i toggle non hanno effetto qui — restano per coerenza UI.)
-              const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC + sPkg.inC + sExp.inC + sDel.inC
-              const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at  + sPkg.at  + sExp.at  + sDel.at
+              const sDel = splitX(deliveryFee,            coeffFlags.delivery)
+              const sPck = splitX(pickupFee,              coeffFlags.pickup)
+              // (cauzione_veicoli non ha una fee separata in ReservationsTab —
+              //  toggle no-op qui, attivo in Preventivi dove la fee esiste.)
+              const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC + sPkg.inC + sExp.inC + sDel.inC + sPck.inC
+              const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at  + sPkg.at  + sExp.at  + sDel.at  + sPck.at
               const listSubtotalNoExp = listRentalTotal + extrasInCoeff
               // Combined coefficient from revenue engine
               const combinedCoeff = (data.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
@@ -1331,8 +1336,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // ogni volta che ha un valore > 0, senza dipendere da checkbox
       // o dal valore del dropdown pickup_location. Admin ha digitato
       // il fee → admin vuole che sia nel totale.
-      const deliveryFees = (parseFloat(formData.delivery_fee || '0') || 0)
-        + (parseFloat(formData.pickup_fee || '0') || 0)
+      // 2026-05-27: consegna e ritiro separati — vedi nota sopra (path
+      // auto_apply). Permette ai toggle delivery e pickup di funzionare
+      // indipendentemente.
+      const deliveryFee = parseFloat(formData.delivery_fee || '0') || 0
+      const pickupFee   = parseFloat(formData.pickup_fee   || '0') || 0
       // Surcharge from the Pro option the admin picked, falling back to the
       // legacy no-cauzione daily for older records.
       const surchargePerDay = selectedDepositSurchargePerDay
@@ -1385,9 +1393,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const sFlx = splitX(flexCost,               coeffFlags.dr7_flex)
       const sPkg = splitX(kmPackagesCost,         coeffFlags.km_packages)
       const sExp = splitX(experienceCost,         coeffFlags.experience)
-      const sDel = splitX(deliveryFees,           coeffFlags.delivery)
-      const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC + sPkg.inC + sExp.inC + sDel.inC
-      const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at  + sPkg.at  + sExp.at  + sDel.at
+      const sDel = splitX(deliveryFee,            coeffFlags.delivery)
+      const sPck = splitX(pickupFee,              coeffFlags.pickup)
+      const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC + sPkg.inC + sExp.inC + sDel.inC + sPck.inC
+      const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at  + sPkg.at  + sExp.at  + sDel.at  + sPck.at
       const listSubtotalNoExp = listRentalTotal + extrasInCoeff
       const combinedCoeff = (revenueSuggestion.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
       const minDaily = typeof revenueSuggestion.minPrice === 'number' ? revenueSuggestion.minPrice : null
