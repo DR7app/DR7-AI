@@ -551,12 +551,22 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
     const current = Array.isArray(admin.permissions) ? admin.permissions : []
     const willAdd = !current.includes(tag)
     const next = willAdd ? [...current, tag] : current.filter(t => t !== tag)
-    const { error } = await supabase
+    // 2026-05-28: .select() per intercettare RLS silenziosi. Senza, una
+    // policy che blocca la UPDATE ritorna success ma 0 righe modificate.
+    // L'utente vede il toggle flippare in UI poi tornare indietro al refresh.
+    const { data: updated, error } = await supabase
       .from('admins')
       .update({ permissions: next })
       .eq('id', admin.id)
+      .select('id, permissions')
     if (error) {
       toast.error(`Salvataggio fallito: ${error.message}`)
+      return
+    }
+    if (!updated || updated.length === 0) {
+      toast.error('Salvataggio fallito: nessuna riga modificata (probabile RLS). Permissions invariate.')
+      // eslint-disable-next-line no-console
+      console.error('[toggleAdminRole] UPDATE returned 0 rows', { admin_id: admin.id, tag, attempted: next })
       return
     }
     setAdmins(prev => prev.map(a => a.id === admin.id ? { ...a, permissions: next } : a))
