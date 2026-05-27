@@ -1628,6 +1628,14 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       }
     }
 
+    // 2026-05-27: per-operator bypass. Se l'operatore loggato ha il tag
+    // role:bypass-otp (toggle "OTP DISABILITATO" in OperatoriTab), saltiamo
+    // TUTTI i gate qui — niente modal, niente email a direzione, override
+    // ids sintetici settati cosi' il save procede subito. Stessa semantica
+    // del bypass globale di useLimitationOverride, ma applicato al custom
+    // OTP flow di PreventiviTab (che non passa per requestOverride).
+    const operatorBypassesOtp = permissions.includes('role:bypass-otp')
+
     // Filtro per Gestione OTP: se un codice è disattivato in
     // system_otp_overrides (is_required=false) lo bypassiamo SILENZIOSAMENTE
     // qui — niente modal, niente email a direzione, override id sintetico
@@ -1642,6 +1650,18 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     const filteredTripped: TrippedCode[] = []
     trippedCodes.forEach((code, i) => {
       const dbCode = TRIP_CODE_TO_DB[code]
+      // Bypass per-operatore: salta sempre (no modal) se il toggle e' OFF
+      // (= tag role:bypass-otp presente) per questo admin.
+      if (operatorBypassesOtp) {
+        const bypassId = `bypass_role_${dbCode}_${Date.now()}_${i}`
+        if (code === 'out_of_hours') setOutOfHoursOverrideId(bypassId)
+        if (code === 'no_cauzione') setNoCauzioneOverrideId(bypassId)
+        if (code === 'slot') {
+          setSlotOverrideId(bypassId)
+          setSlotUnavailableWarning('')
+        }
+        return
+      }
       if (!isOtpRequired(dbCode)) {
         // Auto-bypass: marca l'override id locale e non includere nel modal
         const bypassId = `bypass_${dbCode}_${Date.now()}_${i}`
