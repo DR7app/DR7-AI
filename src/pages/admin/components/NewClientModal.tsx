@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { getResidenceStatus, getProvinciaByCity, getCAPByCity } from '../../../data/sardegnaProvince'
 import toast from 'react-hot-toast'
@@ -744,24 +744,86 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
   if (!isOpen) return null
 
+  // ── New layout helpers (2026-05-22 redesign) ────────────────────────────
+  // Section anchors for the top progress strip + Indietro/Avanti footer nav.
+  // Sezione 4 ("Documenti") e' incollata alla sezione 3 nello stesso row del
+  // grid principale, quindi non ha un id separato per scrollare — il click
+  // su step 4 scorre direttamente alla card documenti.
+  const SECTIONS: Array<{ id: string; label: string }> = [
+    { id: 'sec-identificazione', label: 'Identificazione' },
+    { id: 'sec-dati', label: 'Dati Personali' },
+    { id: 'sec-contatti', label: 'Contatti & Indirizzo' },
+    { id: 'sec-documenti', label: 'Documenti' },
+    { id: 'sec-pagamenti', label: 'Pagamenti & IBAN' },
+    { id: 'sec-profilo', label: 'Profilo & Preferenze' },
+    { id: 'sec-note', label: 'Note & Rischio' },
+  ]
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id)
+    if (el && scrollContainerRef.current) {
+      const container = scrollContainerRef.current
+      const top = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop - 90
+      container.scrollTo({ top, behavior: 'smooth' })
+    }
+  }
+  // Live preview/score for the right-hand sidebar. NON persiste — solo
+  // contatori derivati dai campi gia' compilati per dare un'idea di
+  // completezza prima del salvataggio.
+  const previewName = formData.tipo_cliente === 'persona_fisica'
+    ? `${formData.nome} ${formData.cognome}`.trim()
+    : formData.tipo_cliente === 'azienda' ? formData.denominazione : formData.ente_ufficio
+  const filledScore = useMemo(() => {
+    const required: Array<string> = formData.tipo_cliente === 'persona_fisica'
+      ? [formData.nome, formData.cognome, formData.codice_fiscale, formData.data_nascita, formData.indirizzo, formData.citta_residenza, formData.codice_postale, formData.email, formData.telefono, formData.patente_numero]
+      : formData.tipo_cliente === 'azienda'
+        ? [formData.denominazione, formData.partita_iva, formData.sede_legale, formData.email, formData.telefono, formData.rappresentante_nome, formData.rappresentante_cognome, formData.rappresentante_cf, formData.rappresentante_doc_numero]
+        : [formData.ente_ufficio, formData.codice_univoco, formData.cf_pa, formData.citta, formData.email, formData.telefono]
+    const filled = required.filter(v => v && v.trim().length > 0).length
+    return Math.round((filled / required.length) * 100)
+  }, [formData])
+  const docsCount = [driversLicenseFront, identityFront, codiceFiscaleFront].filter(Boolean).length
+  const docsTotal = formData.tipo_cliente === 'persona_fisica' ? 3 : 1
+  const scoreLabel = filledScore >= 80 ? 'Eccellente' : filledScore >= 60 ? 'Buono' : filledScore >= 30 ? 'In corso' : 'Da compilare'
+  const scoreColor = filledScore >= 80 ? 'text-emerald-600' : filledScore >= 60 ? 'text-amber-600' : filledScore >= 30 ? 'text-orange-600' : 'text-rose-600'
+  const scoreRing = filledScore >= 80 ? 'stroke-emerald-500' : filledScore >= 60 ? 'stroke-amber-500' : filledScore >= 30 ? 'stroke-orange-500' : 'stroke-rose-500'
+
   return (
-    <div className="fixed inset-0 bg-theme-bg-primary/80 flex items-center justify-center z-50 p-0 sm:p-4">
-      <div ref={scrollContainerRef} className="bg-theme-bg-secondary border border-theme-border rounded-none sm:rounded-lg w-full sm:max-w-3xl h-full sm:h-auto sm:max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
-        {/* Header */}
-        <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border p-4 sm:p-6 flex justify-between items-center z-10 flex-shrink-0">
-          <h2 className="text-xl sm:text-2xl font-bold text-theme-text-primary">{initialData ? 'Modifica Cliente' : 'Nuovo Cliente'}</h2>
-          <button onClick={handleClose} className="text-theme-text-muted hover:text-theme-text-primary text-3xl leading-none min-h-[44px] min-w-[44px] flex items-center justify-center">&times;</button>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4">
+      <div ref={scrollContainerRef} className="bg-theme-bg-secondary border border-theme-border rounded-none sm:rounded-2xl w-full sm:max-w-[1400px] h-full sm:h-auto sm:max-h-[95vh] overflow-y-auto shadow-2xl flex flex-col">
+        {/* ── Sticky header: breadcrumb + 7-step progress strip ────────── */}
+        <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border z-20">
+          <div className="flex items-center justify-between px-5 py-3">
+            <div className="flex items-center gap-2 text-sm min-w-0">
+              <span className="text-theme-text-muted hidden sm:inline">Lead & Clienti</span>
+              <span className="text-theme-text-muted hidden sm:inline">/</span>
+              <span className="font-bold text-theme-text-primary truncate">{initialData ? 'Modifica Cliente' : 'Nuovo Cliente'}</span>
+              {!initialData && (
+                <span className="px-2 py-0.5 rounded-full bg-dr7-gold/15 text-dr7-gold text-[10px] font-semibold uppercase tracking-wide shrink-0">Nuovo</span>
+              )}
+            </div>
+            <button onClick={handleClose} className="text-theme-text-muted hover:text-theme-text-primary text-2xl leading-none w-10 h-10 flex items-center justify-center rounded-full hover:bg-theme-bg-hover">&times;</button>
+          </div>
+          <div className="px-5 pb-3 flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
+            {SECTIONS.map((s, i) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => scrollToSection(s.id)}
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition-colors text-theme-text-muted hover:bg-theme-bg-hover hover:text-theme-text-primary"
+              >
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-theme-bg-tertiary text-[10px] font-bold text-theme-text-primary">{i + 1}</span>
+                {s.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="p-4 sm:p-6 space-y-6 sm:space-y-8 flex-1">
+        {/* ── Body ─────────────────────────────────────────────────────── */}
+        <div className="p-5 space-y-4 flex-1">
 
-          {/* Banner riassuntivo post-Compila — mostra ESATTAMENTE cosa
-              ha letto Claude dai documenti e in quali campi e' finito,
-              cosi' l'admin verifica senza dover scorrere tutti i campi
-              uno per uno. Il modal non si chiude da solo: il banner
-              resta finche' l'admin clicca x. */}
+          {/* Compila banner — unchanged behaviour from previous version */}
           {lastExtracted && lastExtracted.length > 0 && (
-            <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-4">
+            <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-4">
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div className="flex items-center gap-2">
                   <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -771,12 +833,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     Dati estratti dai documenti — verifica:
                   </h4>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setLastExtracted(null)}
-                  className="text-theme-text-muted hover:text-theme-text-primary text-xl leading-none"
-                  aria-label="Nascondi riassunto"
-                >&times;</button>
+                <button type="button" onClick={() => setLastExtracted(null)} className="text-theme-text-muted hover:text-theme-text-primary text-xl leading-none" aria-label="Nascondi riassunto">&times;</button>
               </div>
               <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-theme-text-primary">
                 {lastExtracted.map((line, i) => (
@@ -786,882 +843,701 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   </li>
                 ))}
               </ul>
-              <p className="text-[11px] text-theme-text-muted mt-2">
-                Controlla che i valori nei campi qui sotto corrispondano. Se qualcosa non e' corretto, correggi a mano prima di salvare.
-              </p>
             </div>
           )}
 
-          {/* 1. TIPO CLIENTE SELECTION */}
-          <div>
-            <label className="block text-sm font-bold text-theme-text-secondary mb-3 uppercase tracking-wider">
-              1. Tipo Cliente
-            </label>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div
-                onClick={() => setFormData({ ...formData, tipo_cliente: 'persona_fisica' })}
-                className={`cursor-pointer border rounded-lg p-4 flex flex-col items-center justify-center gap-2 transition-all ${formData.tipo_cliente === 'persona_fisica'
-                  ? 'bg-blue-600/20 border-blue-500 text-blue-400 ring-1 ring-blue-500'
-                  : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:bg-theme-bg-hover'
-                  }`}
-              >
-                <span className="font-semibold">Persona Fisica</span>
+          {/* ── Row 1: Identificazione Rapida | Anteprima | Riepilogo ─── */}
+          <div id="sec-identificazione" className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+
+            {/* ── Identificazione Rapida ───────────────────────────── */}
+            <div className="bg-theme-bg-primary border border-theme-border rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-dr7-gold/15 text-dr7-gold text-[10px] font-bold">1</span>
+                <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wide">Identificazione Rapida</h3>
               </div>
 
-              <div
-                onClick={() => setFormData({ ...formData, tipo_cliente: 'azienda' })}
-                className={`cursor-pointer border rounded-lg p-4 flex flex-col items-center justify-center gap-2 transition-all ${formData.tipo_cliente === 'azienda'
-                  ? 'bg-purple-600/20 border-purple-500 text-purple-400 ring-1 ring-purple-500'
-                  : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:bg-theme-bg-hover'
-                  }`}
-              >
-                <span className="font-semibold">Azienda</span>
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <button type="button" onClick={() => setFormData({ ...formData, tipo_cliente: 'persona_fisica' })}
+                  className={`px-2 py-2 rounded-lg text-xs font-semibold border transition-colors ${formData.tipo_cliente === 'persona_fisica' ? 'bg-dr7-gold/15 border-dr7-gold text-dr7-gold' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover'}`}>
+                  Persona Fisica
+                </button>
+                <button type="button" onClick={() => setFormData({ ...formData, tipo_cliente: 'azienda' })}
+                  className={`px-2 py-2 rounded-lg text-xs font-semibold border transition-colors ${formData.tipo_cliente === 'azienda' ? 'bg-dr7-gold/15 border-dr7-gold text-dr7-gold' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover'}`}>
+                  Azienda
+                </button>
+                <button type="button" onClick={() => setFormData({ ...formData, tipo_cliente: 'pubblica_amministrazione' })}
+                  className={`px-2 py-2 rounded-lg text-xs font-semibold border transition-colors ${formData.tipo_cliente === 'pubblica_amministrazione' ? 'bg-dr7-gold/15 border-dr7-gold text-dr7-gold' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover'}`}>
+                  Pubblica Amm.
+                </button>
               </div>
 
-              <div
-                onClick={() => setFormData({ ...formData, tipo_cliente: 'pubblica_amministrazione' })}
-                className={`cursor-pointer border rounded-lg p-4 flex flex-col items-center justify-center gap-2 transition-all ${formData.tipo_cliente === 'pubblica_amministrazione'
-                  ? 'bg-green-600/20 border-green-500 text-green-400 ring-1 ring-green-500'
-                  : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:bg-theme-bg-hover'
-                  }`}
-              >
-                <span className="font-semibold">Pubblica Amm.</span>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Telefono</label>
+                  <input type="tel" value={formData.telefono} onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                    placeholder="+39 333 123 4567"
+                    className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Email</label>
+                  <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="cliente@email.com"
+                    className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                  {errors.email && <p className="text-red-500 text-[11px] mt-1">{errors.email}</p>}
+                </div>
+                <div className="pt-2 border-t border-theme-border">
+                  <p className="text-[11px] text-theme-text-muted">Sezione documenti in basso supporta auto-compilazione tramite Compila — bastano patente / carta d'identita' scansionate.</p>
+                </div>
               </div>
             </div>
+
+            {/* ── Anteprima Cliente ───────────────────────────────── */}
+            <div className="bg-theme-bg-primary border border-theme-border rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wide">Anteprima Cliente</h3>
+                {previewName && <span className="px-2 py-0.5 rounded-full bg-dr7-gold/15 text-dr7-gold text-[10px] font-bold uppercase">VIP</span>}
+              </div>
+              <div className="flex flex-col items-center text-center py-2">
+                <div className="w-16 h-16 rounded-full bg-theme-bg-tertiary flex items-center justify-center text-2xl font-bold text-theme-text-muted mb-2">
+                  {(previewName || '?').split(/\s+/).slice(0, 2).map(p => p[0]?.toUpperCase()).join('') || '?'}
+                </div>
+                <div className="font-bold text-theme-text-primary truncate w-full">{previewName || 'Nuovo cliente'}</div>
+                <div className="text-xs text-theme-text-muted mt-0.5 truncate w-full">{formData.telefono || '—'}</div>
+                <div className="text-xs text-theme-text-muted truncate w-full">{formData.email || '—'}</div>
+                <div className="mt-3 text-[11px] text-theme-text-muted px-2">
+                  L'anteprima riflette in tempo reale i dati inseriti nel form.
+                </div>
+              </div>
+            </div>
+
+            {/* ── Riepilogo Cliente ───────────────────────────────── */}
+            <div className="bg-theme-bg-primary border border-theme-border rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wide">Riepilogo Cliente</h3>
+                <span className="text-[10px] text-theme-text-muted">Score compilazione</span>
+              </div>
+              <div className="flex items-center gap-4">
+                {/* Donut score */}
+                <div className="relative w-20 h-20 shrink-0">
+                  <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="currentColor" strokeWidth="3" className="text-theme-bg-tertiary" />
+                    <circle cx="18" cy="18" r="15.915" fill="none" strokeWidth="3" strokeDasharray={`${filledScore}, 100`} strokeLinecap="round" className={scoreRing} />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-lg font-bold text-theme-text-primary leading-none">{filledScore}</span>
+                    <span className={`text-[9px] font-semibold ${scoreColor} uppercase`}>{scoreLabel}</span>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0 space-y-1 text-[11px]">
+                  <div className="flex items-center justify-between"><span className="text-theme-text-muted">Stato</span><span className="font-semibold text-emerald-600">Attivo</span></div>
+                  <div className="flex items-center justify-between"><span className="text-theme-text-muted">Rischio</span><span className="font-semibold text-emerald-600">Basso</span></div>
+                  <div className="flex items-center justify-between"><span className="text-theme-text-muted">Documenti</span><span className="font-semibold text-theme-text-primary">{docsCount}/{docsTotal}</span></div>
+                  <div className="flex items-center justify-between"><span className="text-theme-text-muted">Wallet</span><span className="font-semibold text-theme-text-primary">€ 0,00</span></div>
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-theme-border">
+                <div className="text-[10px] text-theme-text-muted">Data inserimento</div>
+                <div className="text-xs font-semibold text-theme-text-primary">{new Date().toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+              </div>
+            </div>
+
           </div>
 
-          <hr className="border-theme-border" />
+          {/* ── Row 2: 4-column main form (adapts per tipo_cliente) ───── */}
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
 
-          {/* 2. FORM FIELDS BASED ON TYPE */}
-          <div className="space-y-6">
+            {/* ── COLUMN 1: Dati Personali / Azienda / PA ──────────── */}
+            <div id="sec-dati" className="bg-theme-bg-primary border border-theme-border rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-dr7-gold/15 text-dr7-gold text-[10px] font-bold">2</span>
+                <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wide">
+                  {formData.tipo_cliente === 'persona_fisica' ? 'Dati Personali' : formData.tipo_cliente === 'azienda' ? 'Dati Azienda' : 'Dati Ente'}
+                </h3>
+              </div>
 
-            {/* --- PERSONA FISICA --- */}
-            {formData.tipo_cliente === 'persona_fisica' && (
-              <div className="animate-fadeIn space-y-6">
-                <div>
-                  <h3 className="text-lg font-medium text-theme-text-primary mb-4">Dati Anagrafici</h3>
-
-                  {/* Nome & Cognome First */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {formData.tipo_cliente === 'persona_fisica' && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Nome</label>
-                      <input
-                        type="text"
-                        value={formData.nome}
-                        onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
-                        placeholder="Mario"
-                      />
-                      {errors.nome && <p className="text-red-500 text-xs mt-1">{errors.nome}</p>}
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Nome*</label>
+                      <input type="text" value={formData.nome} onChange={(e) => setFormData({ ...formData, nome: e.target.value })} placeholder="Mario"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Cognome</label>
-                      <input
-                        type="text"
-                        value={formData.cognome}
-                        onChange={(e) => setFormData({ ...formData, cognome: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
-                        placeholder="Rossi"
-                      />
-                      {errors.cognome && <p className="text-red-500 text-xs mt-1">{errors.cognome}</p>}
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Cognome*</label>
+                      <input type="text" value={formData.cognome} onChange={(e) => setFormData({ ...formData, cognome: e.target.value })} placeholder="Rossi"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Codice Fiscale</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={formData.codice_fiscale}
-                          onChange={(e) => setFormData({ ...formData, codice_fiscale: e.target.value.toUpperCase() })}
-                          maxLength={16}
-                          className="flex-1 bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase font-mono"
-                        />
-                        <CalcolaCFButton config={{
-                          getCognome: () => formData.cognome,
-                          getNome: () => formData.nome,
-                          getDataNascita: () => formData.data_nascita,
-                          getSesso: () => formData.sesso,
-                          getLuogoNascita: () => formData.luogo_nascita,
-                          getCodiceFiscale: () => formData.codice_fiscale,
-                          setCodiceFiscale: (v) => setFormData(p => ({ ...p, codice_fiscale: v })),
-                          setSesso: (v) => setFormData(p => ({ ...p, sesso: v as typeof p.sesso })),
-                          setDataNascita: (v) => setFormData(p => ({ ...p, data_nascita: v })),
-                          setLuogoNascita: (v) => setFormData(p => ({ ...p, luogo_nascita: v })),
-                          setProvinciaNascita: (v) => setFormData(p => ({ ...p, provincia_nascita: v })),
-                        }} />
-                      </div>
-                      {errors.codice_fiscale && <p className="text-red-500 text-xs mt-1">{errors.codice_fiscale}</p>}
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Data Nascita*</label>
+                      <input type="date" lang="it" value={formData.data_nascita || ''} onChange={(e) => setFormData({ ...formData, data_nascita: e.target.value })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Sesso</label>
-                      <select
-                        value={formData.sesso}
-                        onChange={(e) => setFormData({ ...formData, sesso: e.target.value as typeof formData.sesso })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      >
-                        {!formData.sesso && <option value="">Seleziona...</option>}
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Sesso</label>
+                      <select value={formData.sesso} onChange={(e) => setFormData({ ...formData, sesso: e.target.value as typeof formData.sesso })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold outline-none">
+                        {!formData.sesso && <option value="">Seleziona…</option>}
                         <option value="M">Maschio</option>
                         <option value="F">Femmina</option>
                       </select>
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Data Nascita</label>
-                      <input
-                        type="date"
-                        lang="it"
-                        value={formData.data_nascita || ''}
-                        onChange={(e) => setFormData({ ...formData, data_nascita: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Luogo Nascita</label>
-                      <input
-                        type="text"
-                        value={formData.luogo_nascita}
-                        onChange={(e) => {
-                          const city = e.target.value
-                          const prov = getProvinciaByCity(city)
-                          setFormData({ ...formData, luogo_nascita: city, ...(prov ? { provincia_nascita: prov } : {}) })
-                        }}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                        placeholder="es. Cagliari, Torino..."
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Provincia</label>
-                      <input
-                        type="text"
-                        value={formData.provincia_nascita}
-                        onChange={(e) => setFormData({ ...formData, provincia_nascita: e.target.value.toUpperCase() })}
-                        maxLength={2}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase"
-                        placeholder="es. CA, TO, MI..."
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-medium text-theme-text-primary mb-4 border-t border-theme-border pt-4">Residenza</h3>
-                  <div className="flex gap-4">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Indirizzo</label>
-                      <input
-                        type="text"
-                        value={formData.indirizzo}
-                        onChange={(e) => setFormData({ ...formData, indirizzo: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      />
-                      {errors.indirizzo && <p className="text-red-500 text-xs mt-1">{errors.indirizzo}</p>}
-                    </div>
-                    <div className="w-24">
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Civico</label>
-                      <input
-                        type="text"
-                        value={formData.numero_civico}
-                        onChange={(e) => setFormData({ ...formData, numero_civico: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Città</label>
-                      <input
-                        type="text"
-                        value={formData.citta_residenza}
-                        onChange={(e) => {
-                          const city = e.target.value
-                          const prov = getProvinciaByCity(city)
-                          const cap = getCAPByCity(city)
-                          setFormData({ ...formData, citta_residenza: city, ...(prov ? { provincia_residenza: prov } : {}), ...(cap ? { codice_postale: cap } : {}) })
-                        }}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                        placeholder="es. Cagliari, Torino..."
-                      />
-                      {errors.citta_residenza && <p className="text-red-500 text-xs mt-1">{errors.citta_residenza}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Provincia</label>
-                      <input
-                        type="text"
-                        value={formData.provincia_residenza}
-                        onChange={(e) => setFormData({ ...formData, provincia_residenza: e.target.value.toUpperCase() })}
-                        maxLength={2}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase"
-                        placeholder="es. CA, TO, MI..."
-                      />
-                      {errors.provincia_residenza && <p className="text-red-500 text-xs mt-1">{errors.provincia_residenza}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">CAP</label>
-                      <input
-                        type="text"
-                        value={formData.codice_postale}
-                        onChange={(e) => setFormData({ ...formData, codice_postale: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-medium text-theme-text-primary mb-4 border-t border-theme-border pt-4">Contatti</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Email</label>
-                      <input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      />
-                      {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Telefono</label>
-                      <input
-                        type="text"
-                        value={formData.telefono}
-                        onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      />
-                      {errors.telefono && <p className="text-red-500 text-xs mt-1">{errors.telefono}</p>}
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-theme-text-muted mb-1">PEC (Opzionale)</label>
-                    <input
-                      type="email"
-                      value={formData.pec_persona}
-                      onChange={(e) => setFormData({ ...formData, pec_persona: e.target.value })}
-                      className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-medium text-theme-text-primary mb-4 border-t border-theme-border pt-4">Patente</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Numero Patente</label>
-                      <input
-                        type="text"
-                        value={formData.patente_numero}
-                        onChange={(e) => setFormData({ ...formData, patente_numero: e.target.value.toUpperCase() })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Categoria</label>
-                      <input
-                        type="text"
-                        value={formData.patente_tipo}
-                        onChange={(e) => setFormData({ ...formData, patente_tipo: e.target.value.toUpperCase() })}
-                        placeholder="es. B, AM, A"
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Emessa da (Ente)</label>
-                      <input
-                        type="text"
-                        value={formData.patente_ente}
-                        onChange={(e) => setFormData({ ...formData, patente_ente: e.target.value })}
-                        placeholder="es. MIT-UCO o Comune"
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Data Rilascio</label>
-                      <input
-                        type="date"
-                        lang="it"
-                        value={formData.patente_rilascio || ''}
-                        onChange={(e) => setFormData({ ...formData, patente_rilascio: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Scadenza</label>
-                      <input
-                        type="date"
-                        lang="it"
-                        value={formData.patente_scadenza || ''}
-                        onChange={(e) => setFormData({ ...formData, patente_scadenza: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* --- AZIENDA --- */}
-            {formData.tipo_cliente === 'azienda' && (
-              <div className="animate-fadeIn space-y-6">
-                <div>
-                  <h3 className="text-lg font-medium text-theme-text-primary mb-4">Dati Aziendali</h3>
                   <div>
-                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Ragione Sociale</label>
-                    <input
-                      type="text"
-                      value={formData.denominazione}
-                      onChange={(e) => setFormData({ ...formData, denominazione: e.target.value })}
-                      className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                    />
-                    {errors.denominazione && <p className="text-red-500 text-xs mt-1">{errors.denominazione}</p>}
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Codice Fiscale*</label>
+                    <div className="flex gap-1.5">
+                      <input type="text" value={formData.codice_fiscale} onChange={(e) => setFormData({ ...formData, codice_fiscale: e.target.value.toUpperCase() })} maxLength={16}
+                        className="flex-1 bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase font-mono" />
+                      <CalcolaCFButton config={{
+                        getCognome: () => formData.cognome, getNome: () => formData.nome,
+                        getDataNascita: () => formData.data_nascita, getSesso: () => formData.sesso,
+                        getLuogoNascita: () => formData.luogo_nascita, getCodiceFiscale: () => formData.codice_fiscale,
+                        setCodiceFiscale: (v) => setFormData(p => ({ ...p, codice_fiscale: v })),
+                        setSesso: (v) => setFormData(p => ({ ...p, sesso: v as typeof p.sesso })),
+                        setDataNascita: (v) => setFormData(p => ({ ...p, data_nascita: v })),
+                        setLuogoNascita: (v) => setFormData(p => ({ ...p, luogo_nascita: v })),
+                        setProvinciaNascita: (v) => setFormData(p => ({ ...p, provincia_nascita: v })),
+                      }} />
+                    </div>
+                    {errors.codice_fiscale && <p className="text-red-500 text-[11px] mt-1">{errors.codice_fiscale}</p>}
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Partita IVA</label>
-                      <input
-                        type="text"
-                        value={formData.partita_iva}
-                        onChange={(e) => setFormData({ ...formData, partita_iva: e.target.value })}
-                        maxLength={11}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none font-mono"
-                      />
-                      {errors.partita_iva && <p className="text-red-500 text-xs mt-1">{errors.partita_iva}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Codice Fiscale</label>
-                      <input
-                        type="text"
-                        value={formData.cf_azienda}
-                        onChange={(e) => setFormData({ ...formData, cf_azienda: e.target.value.toUpperCase() })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none font-mono uppercase"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Sede Legale</label>
-                    <input
-                      type="text"
-                      value={formData.sede_legale}
-                      onChange={(e) => setFormData({ ...formData, sede_legale: e.target.value })}
-                      className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                    />
-                    {errors.sede_legale && <p className="text-red-500 text-xs mt-1">{errors.sede_legale}</p>}
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-medium text-theme-text-primary mb-4 border-t border-theme-border pt-4">Contatti Azienda</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Email</label>
-                      <input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Telefono</label>
-                      <input
-                        type="text"
-                        value={formData.telefono}
-                        onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-medium text-theme-text-primary mb-4 border-t border-theme-border pt-4">Rappresentante Legale</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Nome</label>
-                      <input
-                        type="text"
-                        value={formData.rappresentante_nome}
-                        onChange={(e) => setFormData({ ...formData, rappresentante_nome: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Cognome</label>
-                      <input
-                        type="text"
-                        value={formData.rappresentante_cognome}
-                        onChange={(e) => setFormData({ ...formData, rappresentante_cognome: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Codice Fiscale Rappresentante</label>
-                    <input
-                      type="text"
-                      value={formData.rappresentante_cf}
-                      onChange={(e) => setFormData({ ...formData, rappresentante_cf: e.target.value.toUpperCase() })}
-                      className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase font-mono"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Data di Nascita</label>
-                      <input
-                        type="date"
-                        value={formData.rappresentante_data_nascita}
-                        onChange={(e) => setFormData({ ...formData, rappresentante_data_nascita: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Luogo di Nascita</label>
-                      <input
-                        type="text"
-                        value={formData.rappresentante_luogo_nascita}
-                        onChange={(e) => setFormData({ ...formData, rappresentante_luogo_nascita: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                        placeholder="es. Cagliari"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    <h4 className="text-sm font-medium text-theme-text-secondary mb-3">Documento Rappresentante</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-theme-text-muted mb-1">Tipo Documento</label>
-                        <select
-                          value={formData.rappresentante_doc_tipo}
-                          onChange={(e) => setFormData({ ...formData, rappresentante_doc_tipo: e.target.value })}
-                          className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                        >
-                          <option value="">Seleziona...</option>
-                          <option value="Carta d'Identità">Carta d'Identità</option>
-                          <option value="Patente">Patente</option>
-                          <option value="Passaporto">Passaporto</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-theme-text-muted mb-1">Numero Documento</label>
-                        <input
-                          type="text"
-                          value={formData.rappresentante_doc_numero}
-                          onChange={(e) => setFormData({ ...formData, rappresentante_doc_numero: e.target.value.toUpperCase() })}
-                          className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase"
-                          placeholder="es. CA12345AB"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-theme-text-muted mb-1">Data Rilascio</label>
-                        <input
-                          type="date"
-                          value={formData.rappresentante_doc_rilascio}
-                          onChange={(e) => setFormData({ ...formData, rappresentante_doc_rilascio: e.target.value })}
-                          className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-theme-text-muted mb-1">Data Scadenza</label>
-                        <input
-                          type="date"
-                          value={formData.rappresentante_doc_scadenza}
-                          onChange={(e) => setFormData({ ...formData, rappresentante_doc_scadenza: e.target.value })}
-                          className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                        />
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-theme-text-muted mb-1">Luogo Rilascio</label>
-                        <input
-                          type="text"
-                          value={formData.rappresentante_doc_luogo}
-                          onChange={(e) => setFormData({ ...formData, rappresentante_doc_luogo: e.target.value })}
-                          className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                          placeholder="es. Comune di Roma"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    <h4 className="text-sm font-medium text-theme-text-secondary mb-3">Patente Rappresentante</h4>
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Numero Patente</label>
-                      <input
-                        type="text"
-                        value={formData.rappresentante_patente}
-                        onChange={(e) => setFormData({ ...formData, rappresentante_patente: e.target.value.toUpperCase() })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase font-mono"
-                        placeholder="es. CA1234567X"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* --- PUBBLICA AMMINISTRAZIONE --- */}
-            {formData.tipo_cliente === 'pubblica_amministrazione' && (
-              <div className="animate-fadeIn space-y-6">
-                <div>
-                  <h3 className="text-lg font-medium text-theme-text-primary mb-4">Dati PA</h3>
                   <div>
-                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Ente / Ufficio</label>
-                    <input
-                      type="text"
-                      value={formData.ente_ufficio}
-                      onChange={(e) => setFormData({ ...formData, ente_ufficio: e.target.value })}
-                      className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                    />
-                    {errors.ente_ufficio && <p className="text-red-500 text-xs mt-1">{errors.ente_ufficio}</p>}
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Nazione*</label>
+                    <input type="text" value={formData.nazione} onChange={(e) => setFormData({ ...formData, nazione: e.target.value })}
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Codice Univoco</label>
-                      <input
-                        type="text"
-                        value={formData.codice_univoco}
-                        onChange={(e) => setFormData({ ...formData, codice_univoco: e.target.value.toUpperCase() })}
-                        maxLength={7}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase font-mono"
-                      />
-                      {errors.codice_univoco && <p className="text-red-500 text-xs mt-1">{errors.codice_univoco}</p>}
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Luogo Nascita*</label>
+                      <input type="text" value={formData.luogo_nascita} onChange={(e) => {
+                        const city = e.target.value
+                        const prov = getProvinciaByCity(city)
+                        setFormData({ ...formData, luogo_nascita: city, ...(prov ? { provincia_nascita: prov } : {}) })
+                      }} placeholder="es. Cagliari"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">CF / P.IVA Ente</label>
-                      <input
-                        type="text"
-                        value={formData.cf_pa}
-                        onChange={(e) => setFormData({ ...formData, cf_pa: e.target.value.toUpperCase() })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none uppercase font-mono"
-                      />
-                      {errors.cf_pa && <p className="text-red-500 text-xs mt-1">{errors.cf_pa}</p>}
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Provincia</label>
+                      <input type="text" value={formData.provincia_nascita} onChange={(e) => setFormData({ ...formData, provincia_nascita: e.target.value.toUpperCase() })} maxLength={2} placeholder="CA"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase" />
                     </div>
-                  </div>
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-theme-text-muted mb-1">Città</label>
-                    <input
-                      type="text"
-                      value={formData.citta}
-                      onChange={(e) => setFormData({ ...formData, citta: e.target.value })}
-                      className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                    />
-                    {errors.citta && <p className="text-red-500 text-xs mt-1">{errors.citta}</p>}
                   </div>
                 </div>
+              )}
 
-                <div>
-                  <h3 className="text-lg font-medium text-theme-text-primary mb-4 border-t border-theme-border pt-4">Contatti PA</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {formData.tipo_cliente === 'azienda' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Ragione Sociale*</label>
+                    <input type="text" value={formData.denominazione} onChange={(e) => setFormData({ ...formData, denominazione: e.target.value })}
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Email / PEC</label>
-                      <input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      />
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Partita IVA*</label>
+                      <input type="text" value={formData.partita_iva} onChange={(e) => setFormData({ ...formData, partita_iva: e.target.value })} maxLength={11}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none font-mono" />
+                      {errors.partita_iva && <p className="text-red-500 text-[11px] mt-1">{errors.partita_iva}</p>}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-muted mb-1">Telefono</label>
-                      <input
-                        type="text"
-                        value={formData.telefono}
-                        onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none"
-                      />
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Codice Fiscale</label>
+                      <input type="text" value={formData.cf_azienda} onChange={(e) => setFormData({ ...formData, cf_azienda: e.target.value.toUpperCase() })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none font-mono uppercase" />
                     </div>
                   </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Sede Legale*</label>
+                    <input type="text" value={formData.sede_legale} onChange={(e) => setFormData({ ...formData, sede_legale: e.target.value })}
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Sede Operativa</label>
+                    <input type="text" value={formData.sede_operativa} onChange={(e) => setFormData({ ...formData, sede_operativa: e.target.value })}
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Codice Destinatario</label>
+                      <input type="text" value={formData.codice_destinatario} onChange={(e) => setFormData({ ...formData, codice_destinatario: e.target.value })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none font-mono" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">PEC</label>
+                      <input type="email" value={formData.pec_azienda} onChange={(e) => setFormData({ ...formData, pec_azienda: e.target.value })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Indirizzo DDT</label>
+                    <input type="text" value={formData.indirizzo_ddt} onChange={(e) => setFormData({ ...formData, indirizzo_ddt: e.target.value })}
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                  </div>
                 </div>
+              )}
+
+              {formData.tipo_cliente === 'pubblica_amministrazione' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Ente / Ufficio*</label>
+                    <input type="text" value={formData.ente_ufficio} onChange={(e) => setFormData({ ...formData, ente_ufficio: e.target.value })}
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Codice Univoco*</label>
+                      <input type="text" value={formData.codice_univoco} onChange={(e) => setFormData({ ...formData, codice_univoco: e.target.value.toUpperCase() })} maxLength={7}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase font-mono" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">CF / P.IVA*</label>
+                      <input type="text" value={formData.cf_pa} onChange={(e) => setFormData({ ...formData, cf_pa: e.target.value.toUpperCase() })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase font-mono" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Città*</label>
+                    <input type="text" value={formData.citta} onChange={(e) => setFormData({ ...formData, citta: e.target.value })}
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">PEC</label>
+                    <input type="email" value={formData.pec_pa} onChange={(e) => setFormData({ ...formData, pec_pa: e.target.value })}
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ── COLUMN 2: Contatti & Indirizzo (or Rappresentante per azienda) ─ */}
+            <div id="sec-contatti" className="bg-theme-bg-primary border border-theme-border rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-dr7-gold/15 text-dr7-gold text-[10px] font-bold">3</span>
+                <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wide">
+                  {formData.tipo_cliente === 'azienda' ? 'Rappresentante Legale' : 'Contatti & Indirizzo'}
+                </h3>
               </div>
-            )}
+
+              {formData.tipo_cliente === 'persona_fisica' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Indirizzo</label>
+                    <div className="flex gap-1.5">
+                      <input type="text" value={formData.indirizzo} onChange={(e) => setFormData({ ...formData, indirizzo: e.target.value })} placeholder="Via..."
+                        className="flex-1 bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                      <input type="text" value={formData.numero_civico} onChange={(e) => setFormData({ ...formData, numero_civico: e.target.value })} placeholder="N."
+                        className="w-16 bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">CAP</label>
+                      <input type="text" value={formData.codice_postale} onChange={(e) => setFormData({ ...formData, codice_postale: e.target.value })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Provincia</label>
+                      <input type="text" value={formData.provincia_residenza} onChange={(e) => setFormData({ ...formData, provincia_residenza: e.target.value.toUpperCase() })} maxLength={2}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Città</label>
+                    <input type="text" value={formData.citta_residenza} onChange={(e) => {
+                      const city = e.target.value
+                      const prov = getProvinciaByCity(city)
+                      const cap = getCAPByCity(city)
+                      setFormData({ ...formData, citta_residenza: city, ...(prov ? { provincia_residenza: prov } : {}), ...(cap ? { codice_postale: cap } : {}) })
+                    }} placeholder="es. Cagliari"
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">PEC (opzionale)</label>
+                    <input type="email" value={formData.pec_persona} onChange={(e) => setFormData({ ...formData, pec_persona: e.target.value })}
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                  </div>
+                </div>
+              )}
+
+              {formData.tipo_cliente === 'azienda' && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Nome</label>
+                      <input type="text" value={formData.rappresentante_nome} onChange={(e) => setFormData({ ...formData, rappresentante_nome: e.target.value })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Cognome</label>
+                      <input type="text" value={formData.rappresentante_cognome} onChange={(e) => setFormData({ ...formData, rappresentante_cognome: e.target.value })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Codice Fiscale</label>
+                    <input type="text" value={formData.rappresentante_cf} onChange={(e) => setFormData({ ...formData, rappresentante_cf: e.target.value.toUpperCase() })}
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase font-mono" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Data Nascita</label>
+                      <input type="date" value={formData.rappresentante_data_nascita} onChange={(e) => setFormData({ ...formData, rappresentante_data_nascita: e.target.value })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Luogo Nascita</label>
+                      <input type="text" value={formData.rappresentante_luogo_nascita} onChange={(e) => setFormData({ ...formData, rappresentante_luogo_nascita: e.target.value })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Ruolo</label>
+                    <input type="text" value={formData.rappresentante_ruolo} onChange={(e) => setFormData({ ...formData, rappresentante_ruolo: e.target.value })}
+                      placeholder="es. Amministratore Unico"
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Patente</label>
+                    <input type="text" value={formData.rappresentante_patente} onChange={(e) => setFormData({ ...formData, rappresentante_patente: e.target.value.toUpperCase() })}
+                      placeholder="es. CA1234567X"
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase font-mono" />
+                  </div>
+                </div>
+              )}
+
+              {formData.tipo_cliente === 'pubblica_amministrazione' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">P.IVA aggiuntiva</label>
+                    <input type="text" value={formData.partita_iva_pa} onChange={(e) => setFormData({ ...formData, partita_iva_pa: e.target.value })}
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none font-mono" />
+                  </div>
+                  <p className="text-[11px] text-theme-text-muted">Per gli enti pubblici la sezione contatti coincide con i dati principali. Telefono ed email rimangono quelli inseriti in Identificazione Rapida.</p>
+                </div>
+              )}
+            </div>
+
+            {/* ── COLUMN 3: Documenti Obbligatori (or Documento Rappresentante per azienda) ─ */}
+            <div id="sec-documenti" className="bg-theme-bg-primary border border-theme-border rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-dr7-gold/15 text-dr7-gold text-[10px] font-bold">4</span>
+                <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wide">
+                  {formData.tipo_cliente === 'azienda' ? 'Documento Rappresentante' : 'Documenti Obbligatori'}
+                </h3>
+              </div>
+
+              {formData.tipo_cliente === 'persona_fisica' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Patente n.*</label>
+                    <input type="text" value={formData.patente_numero} onChange={(e) => setFormData({ ...formData, patente_numero: e.target.value.toUpperCase() })}
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase font-mono" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Categoria</label>
+                      <input type="text" value={formData.patente_tipo} onChange={(e) => setFormData({ ...formData, patente_tipo: e.target.value.toUpperCase() })} placeholder="B"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Emessa da</label>
+                      <input type="text" value={formData.patente_ente} onChange={(e) => setFormData({ ...formData, patente_ente: e.target.value })} placeholder="MIT-UCO"
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Data rilascio</label>
+                      <input type="date" lang="it" value={formData.patente_rilascio || ''} onChange={(e) => setFormData({ ...formData, patente_rilascio: e.target.value })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Scadenza</label>
+                      <input type="date" lang="it" value={formData.patente_scadenza || ''} onChange={(e) => setFormData({ ...formData, patente_scadenza: e.target.value })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                    </div>
+                  </div>
+
+                  {/* Toggle uploads */}
+                  <button type="button" onClick={() => setShowDocumentSection(!showDocumentSection)}
+                    className="w-full inline-flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover text-xs font-medium text-theme-text-secondary mt-2">
+                    <span className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                      Upload scansioni
+                    </span>
+                    <svg className={`w-4 h-4 transition-transform ${showDocumentSection ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+
+                  {showDocumentSection && (
+                    <div className="space-y-3 mt-2">
+                      <DocUploadGroup label="Patente">
+                        <DocFileInput value={driversLicenseFront} onChange={setDriversLicenseFront} placeholder="Fronte" />
+                        <DocFileInput value={driversLicenseBack} onChange={setDriversLicenseBack} placeholder="Retro" />
+                      </DocUploadGroup>
+                      <DocUploadGroup label="Carta d'identità">
+                        <DocFileInput value={identityFront} onChange={setIdentityFront} placeholder="Fronte" />
+                        <DocFileInput value={identityBack} onChange={setIdentityBack} placeholder="Retro" />
+                      </DocUploadGroup>
+                      <DocUploadGroup label="Codice Fiscale">
+                        <DocFileInput value={codiceFiscaleFront} onChange={setCodiceFiscaleFront} placeholder="Fronte" />
+                        <DocFileInput value={codiceFiscaleBack} onChange={setCodiceFiscaleBack} placeholder="Retro" />
+                      </DocUploadGroup>
+
+                      {(driversLicenseFront || driversLicenseBack || identityFront || identityBack || codiceFiscaleFront || codiceFiscaleBack) && (
+                        <div className="pt-2">
+                          <CompilaButton
+                            documents={[
+                              { file: driversLicenseFront, label: 'Patente Fronte' },
+                              { file: driversLicenseBack, label: 'Patente Retro' },
+                              { file: identityFront, label: 'Carta Identità Fronte' },
+                              { file: identityBack, label: 'Carta Identità Retro' },
+                              { file: codiceFiscaleFront, label: 'Codice Fiscale Fronte' },
+                              { file: codiceFiscaleBack, label: 'Codice Fiscale Retro' },
+                            ]}
+                            currentData={formData as unknown as Record<string, string | undefined | null>}
+                            onDataExtracted={(data: ExtractedData, _conflicts: DataConflict[]) => {
+                              const FIELD_LABELS: Record<string, string> = {
+                                nome: 'Nome', cognome: 'Cognome', sesso: 'Sesso',
+                                data_nascita: 'Data di nascita', luogo_nascita: 'Luogo di nascita',
+                                provincia_nascita: 'Provincia nascita', codice_fiscale: 'Codice fiscale',
+                                indirizzo: 'Indirizzo', numero_civico: 'N. civico', codice_postale: 'CAP',
+                                citta_residenza: 'Citta residenza', provincia_residenza: 'Provincia residenza',
+                                patente_numero: 'N. patente', patente_tipo: 'Tipo patente',
+                                patente_rilascio: 'Rilascio patente', patente_scadenza: 'Scadenza patente',
+                                patente_ente: 'Ente patente',
+                              }
+                              const filled: string[] = []
+                              const pushIf = (key: keyof typeof FIELD_LABELS, value: string | undefined) => {
+                                if (value) filled.push(`${FIELD_LABELS[key as string]}: ${value}`)
+                              }
+                              pushIf('nome', data.nome); pushIf('cognome', data.cognome); pushIf('sesso', data.sesso)
+                              pushIf('data_nascita', data.data_nascita); pushIf('luogo_nascita', data.luogo_nascita); pushIf('provincia_nascita', data.provincia_nascita)
+                              pushIf('codice_fiscale', data.codice_fiscale); pushIf('indirizzo', data.indirizzo); pushIf('numero_civico', data.numero_civico)
+                              pushIf('codice_postale', data.codice_postale); pushIf('citta_residenza', data.citta_residenza); pushIf('provincia_residenza', data.provincia_residenza)
+                              pushIf('patente_numero', data.patente_numero); pushIf('patente_tipo', data.patente_tipo)
+                              pushIf('patente_rilascio', data.patente_rilascio); pushIf('patente_scadenza', data.patente_scadenza); pushIf('patente_ente', data.patente_ente)
+                              setFormData(prev => ({
+                                ...prev,
+                                ...(data.nome && { nome: data.nome }),
+                                ...(data.cognome && { cognome: data.cognome }),
+                                ...(data.sesso && { sesso: data.sesso as 'M' | 'F' | 'Altro' | '' }),
+                                ...(data.data_nascita && { data_nascita: data.data_nascita }),
+                                ...(data.luogo_nascita && { luogo_nascita: data.luogo_nascita }),
+                                ...(data.provincia_nascita && { provincia_nascita: data.provincia_nascita }),
+                                ...(data.codice_fiscale && { codice_fiscale: data.codice_fiscale }),
+                                ...(data.indirizzo && { indirizzo: data.indirizzo }),
+                                ...(data.numero_civico && { numero_civico: data.numero_civico }),
+                                ...(data.codice_postale && { codice_postale: data.codice_postale }),
+                                ...(data.citta_residenza && { citta_residenza: data.citta_residenza }),
+                                ...(data.provincia_residenza && { provincia_residenza: data.provincia_residenza }),
+                                ...(data.patente_numero && { patente_numero: data.patente_numero }),
+                                ...(data.patente_tipo && { patente_tipo: data.patente_tipo }),
+                                ...(data.patente_rilascio && { patente_rilascio: data.patente_rilascio }),
+                                ...(data.patente_scadenza && { patente_scadenza: data.patente_scadenza }),
+                                ...(data.patente_ente && { patente_ente: data.patente_ente }),
+                              }))
+                              setLastExtracted(filled.length > 0 ? filled : ['Nessun dato leggibile estratto'])
+                              try { scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' }) } catch { /* ignore */ }
+                              toast.success(`${filled.length} campi compilati dai documenti — verifica in cima al form`)
+                            }}
+                            onError={(err: string) => toast.error(err)}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {formData.tipo_cliente === 'azienda' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Tipo documento</label>
+                    <select value={formData.rappresentante_doc_tipo} onChange={(e) => setFormData({ ...formData, rappresentante_doc_tipo: e.target.value })}
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold outline-none">
+                      <option value="">Seleziona…</option>
+                      <option value="Carta d'Identità">Carta d'Identità</option>
+                      <option value="Patente">Patente</option>
+                      <option value="Passaporto">Passaporto</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Numero documento</label>
+                    <input type="text" value={formData.rappresentante_doc_numero} onChange={(e) => setFormData({ ...formData, rappresentante_doc_numero: e.target.value.toUpperCase() })}
+                      placeholder="CA12345AB"
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Rilascio</label>
+                      <input type="date" value={formData.rappresentante_doc_rilascio} onChange={(e) => setFormData({ ...formData, rappresentante_doc_rilascio: e.target.value })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Scadenza</label>
+                      <input type="date" value={formData.rappresentante_doc_scadenza} onChange={(e) => setFormData({ ...formData, rappresentante_doc_scadenza: e.target.value })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Luogo rilascio</label>
+                    <input type="text" value={formData.rappresentante_doc_luogo} onChange={(e) => setFormData({ ...formData, rappresentante_doc_luogo: e.target.value })}
+                      placeholder="es. Comune di Roma"
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                  </div>
+                </div>
+              )}
+
+              {formData.tipo_cliente === 'pubblica_amministrazione' && (
+                <div className="space-y-3">
+                  <p className="text-[11px] text-theme-text-muted">Per la PA non sono richiesti documenti aggiuntivi. La documentazione fiscale segue il flusso SDI / Codice Univoco.</p>
+                  <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-[11px] text-emerald-700">
+                    Codice Univoco: <strong>{formData.codice_univoco || 'da inserire'}</strong>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ── COLUMN 4: Dopo il Salvataggio (static checklist + tip) ─── */}
+            <div className="space-y-4">
+              <div className="bg-theme-bg-primary border border-theme-border rounded-2xl p-5">
+                <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wide mb-3">Dopo il salvataggio</h3>
+                <ul className="space-y-2">
+                  {[
+                    'Apertura scheda cliente completa',
+                    'Generazione Client Score',
+                    'Verifica documenti e scadenze',
+                    'Attivazione Wallet',
+                    'Cronologia prenotazioni',
+                  ].map(item => (
+                    <li key={item} className="flex items-start gap-2 text-xs text-theme-text-secondary">
+                      <svg className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  <h4 className="text-xs font-bold text-amber-800 uppercase">Suggerimenti</h4>
+                </div>
+                <p className="text-[11px] text-amber-700">Clienti con documenti verificati hanno l'85% di prenotazioni in più rispetto alla media. Carica patente e identità in fase di creazione per attivare l'auto-compilazione contratti.</p>
+              </div>
+            </div>
 
           </div>
 
+          {/* ── Row 3: Pagamenti & IBAN | Profilo & Preferenze | Note & Rischio ─ */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
 
+            {/* Pagamenti — placeholder (gestito dalla scheda cliente dopo creazione) */}
+            <div id="sec-pagamenti" className="bg-theme-bg-primary border border-theme-border rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-dr7-gold/15 text-dr7-gold text-[10px] font-bold">5</span>
+                  <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wide">Pagamenti & IBAN</h3>
+                </div>
+                <span className="text-[10px] text-theme-text-muted bg-theme-bg-tertiary px-2 py-0.5 rounded-full">Disponibile dopo creazione</span>
+              </div>
+              <div className="rounded-xl border border-dashed border-theme-border p-4 flex flex-col items-center justify-center text-center gap-2 min-h-[160px]">
+                <svg className="w-8 h-8 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M5 6h14a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2z" /></svg>
+                <p className="text-xs text-theme-text-secondary">Carte registrate, IBAN e ricarica wallet</p>
+                <p className="text-[11px] text-theme-text-muted">Configurabili dalla scheda cliente dopo il salvataggio.</p>
+              </div>
+            </div>
 
-          {/* Note Field - GLOBAL */}
-          <div>
-            <label className="block text-sm font-medium text-theme-text-muted mb-1">Note</label>
-            <textarea
-              value={formData.note}
-              onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-              rows={3}
-              className="w-full bg-theme-bg-tertiary border border-theme-border-light rounded p-2.5 text-theme-text-primary focus:border-dr7-gold outline-none resize-none"
-              placeholder="Note interne sul cliente..."
-            />
-          </div>
+            {/* Profilo & Preferenze — placeholder */}
+            <div id="sec-profilo" className="bg-theme-bg-primary border border-theme-border rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-dr7-gold/15 text-dr7-gold text-[10px] font-bold">6</span>
+                  <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wide">Profilo & Preferenze</h3>
+                </div>
+                <span className="text-[10px] text-theme-text-muted bg-theme-bg-tertiary px-2 py-0.5 rounded-full">Disponibile dopo creazione</span>
+              </div>
+              <div className="rounded-xl border border-dashed border-theme-border p-4 flex flex-col items-center justify-center text-center gap-2 min-h-[160px]">
+                <svg className="w-8 h-8 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                <p className="text-xs text-theme-text-secondary">Segmentazione, servizi preferiti, spesa attesa</p>
+                <p className="text-[11px] text-theme-text-muted">Configurabili dalla scheda cliente.</p>
+              </div>
+            </div>
 
-          {/* OPTIONAL DOCUMENT UPLOAD SECTION */}
-          <div className="border-t border-theme-border pt-6">
-            <button
-              type="button"
-              onClick={() => setShowDocumentSection(!showDocumentSection)}
-              className="w-full flex items-center justify-between p-4 bg-theme-bg-tertiary hover:bg-theme-bg-hover rounded-full transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <svg className="w-6 h-6 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                </svg>
-                <div className="text-left">
-                  <h3 className="text-lg font-medium text-theme-text-primary">Documenti (Opzionale)</h3>
-                  <p className="text-sm text-theme-text-muted">Carica patente e documento d'identità se disponibili (Fronte/Retro)</p>
+            {/* Note & Rischio — wires existing formData.note */}
+            <div id="sec-note" className="bg-theme-bg-primary border border-theme-border rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-dr7-gold/15 text-dr7-gold text-[10px] font-bold">7</span>
+                <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wide">Note & Controllo Rischio</h3>
+              </div>
+              <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Note interne</label>
+              <textarea value={formData.note} onChange={(e) => setFormData({ ...formData, note: e.target.value })} rows={5}
+                placeholder="Note operative, segnalazioni, restrizioni..."
+                className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg p-3 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none resize-none" />
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <div className="text-center rounded-lg bg-emerald-50 border border-emerald-200 py-2">
+                  <div className="text-[10px] text-emerald-700 uppercase font-bold">Basso</div>
+                  <div className="text-[11px] text-emerald-700/80">consigliato</div>
+                </div>
+                <div className="text-center rounded-lg bg-theme-bg-tertiary border border-theme-border py-2">
+                  <div className="text-[10px] text-theme-text-muted uppercase font-bold">Medio</div>
+                  <div className="text-[11px] text-theme-text-muted">monitor.</div>
+                </div>
+                <div className="text-center rounded-lg bg-theme-bg-tertiary border border-theme-border py-2">
+                  <div className="text-[10px] text-theme-text-muted uppercase font-bold">Alto</div>
+                  <div className="text-[11px] text-theme-text-muted">limita</div>
                 </div>
               </div>
-              <svg
-                className={`w-5 h-5 text-theme-text-muted transition-transform ${showDocumentSection ? 'rotate-180' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+            </div>
 
-            {showDocumentSection && (
-              <div className="mt-4 space-y-4 animate-fadeIn">
-
-                {/* Driver's License Upload */}
-                <div className="bg-theme-bg-tertiary border border-theme-border rounded-full p-4">
-                  <h4 className="text-sm font-medium text-theme-text-secondary mb-3 flex items-center gap-2">
-                    <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                    </svg>
-                    Patente di Guida
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs text-theme-text-muted mb-1">Fronte</label>
-                      <input
-                        type="file"
-                        onChange={(e) => setDriversLicenseFront(e.target.files?.[0] || null)}
-                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
-                          file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
-                          hover:file:bg-[#0A8FA3] file:cursor-pointer"
-                        accept="image/*,.pdf"
-                      />
-                      {driversLicenseFront && (
-                        <p className="text-xs text-green-400 mt-1 truncate">{driversLicenseFront.name}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-xs text-theme-text-muted mb-1">Retro</label>
-                      <input
-                        type="file"
-                        onChange={(e) => setDriversLicenseBack(e.target.files?.[0] || null)}
-                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
-                          file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
-                          hover:file:bg-[#0A8FA3] file:cursor-pointer"
-                        accept="image/*,.pdf"
-                      />
-                      {driversLicenseBack && (
-                        <p className="text-xs text-green-400 mt-1 truncate">{driversLicenseBack.name}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Identity Document Upload */}
-                <div className="bg-theme-bg-tertiary border border-theme-border rounded-full p-4">
-                  <h4 className="text-sm font-medium text-theme-text-secondary mb-3 flex items-center gap-2">
-                    <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
-                    </svg>
-                    Documento d'Identità
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs text-theme-text-muted mb-1">Fronte</label>
-                      <input
-                        type="file"
-                        onChange={(e) => setIdentityFront(e.target.files?.[0] || null)}
-                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
-                          file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
-                          hover:file:bg-[#0A8FA3] file:cursor-pointer"
-                        accept="image/*,.pdf"
-                      />
-                      {identityFront && (
-                        <p className="text-xs text-green-400 mt-1 truncate">{identityFront.name}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-xs text-theme-text-muted mb-1">Retro</label>
-                      <input
-                        type="file"
-                        onChange={(e) => setIdentityBack(e.target.files?.[0] || null)}
-                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
-                          file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
-                          hover:file:bg-[#0A8FA3] file:cursor-pointer"
-                        accept="image/*,.pdf"
-                      />
-                      {identityBack && (
-                        <p className="text-xs text-green-400 mt-1 truncate">{identityBack.name}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Codice Fiscale Upload */}
-                <div className="bg-theme-bg-tertiary border border-theme-border rounded-full p-4">
-                  <h4 className="text-sm font-medium text-theme-text-secondary mb-3 flex items-center gap-2">
-                    <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Codice Fiscale
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs text-theme-text-muted mb-1">Fronte</label>
-                      <input
-                        type="file"
-                        onChange={(e) => setCodiceFiscaleFront(e.target.files?.[0] || null)}
-                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
-                          file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
-                          hover:file:bg-[#0A8FA3] file:cursor-pointer"
-                        accept="image/*,.pdf"
-                      />
-                      {codiceFiscaleFront && (
-                        <p className="text-xs text-green-400 mt-1 truncate">{codiceFiscaleFront.name}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-xs text-theme-text-muted mb-1">Retro</label>
-                      <input
-                        type="file"
-                        onChange={(e) => setCodiceFiscaleBack(e.target.files?.[0] || null)}
-                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs
-                          file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-                          file:text-xs file:font-semibold file:bg-dr7-gold file:text-white
-                          hover:file:bg-[#0A8FA3] file:cursor-pointer"
-                        accept="image/*,.pdf"
-                      />
-                      {codiceFiscaleBack && (
-                        <p className="text-xs text-green-400 mt-1 truncate">{codiceFiscaleBack.name}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {(driversLicenseFront || driversLicenseBack || identityFront || identityBack || codiceFiscaleFront || codiceFiscaleBack) && (
-                  <div className="space-y-3">
-                    <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3">
-                      <p className="text-sm text-green-300 flex items-center gap-2">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        Documenti selezionati verranno caricati al salvataggio.
-                      </p>
-                    </div>
-                    <CompilaButton
-                      documents={[
-                        { file: driversLicenseFront, label: 'Patente Fronte' },
-                        { file: driversLicenseBack, label: 'Patente Retro' },
-                        { file: identityFront, label: 'Carta Identità Fronte' },
-                        { file: identityBack, label: 'Carta Identità Retro' },
-                        { file: codiceFiscaleFront, label: 'Codice Fiscale Fronte' },
-                        { file: codiceFiscaleBack, label: 'Codice Fiscale Retro' },
-                      ]}
-                      currentData={formData as unknown as Record<string, string | undefined | null>}
-                      onDataExtracted={(data: ExtractedData, _conflicts: DataConflict[]) => {
-                        const FIELD_LABELS: Record<string, string> = {
-                          nome: 'Nome', cognome: 'Cognome', sesso: 'Sesso',
-                          data_nascita: 'Data di nascita', luogo_nascita: 'Luogo di nascita',
-                          provincia_nascita: 'Provincia nascita', codice_fiscale: 'Codice fiscale',
-                          indirizzo: 'Indirizzo', numero_civico: 'N. civico', codice_postale: 'CAP',
-                          citta_residenza: 'Citta residenza', provincia_residenza: 'Provincia residenza',
-                          patente_numero: 'N. patente', patente_tipo: 'Tipo patente',
-                          patente_rilascio: 'Rilascio patente', patente_scadenza: 'Scadenza patente',
-                          patente_ente: 'Ente patente',
-                        }
-                        const filled: string[] = []
-                        const pushIf = (key: keyof typeof FIELD_LABELS, value: string | undefined) => {
-                          if (value) filled.push(`${FIELD_LABELS[key as string]}: ${value}`)
-                        }
-                        pushIf('nome', data.nome)
-                        pushIf('cognome', data.cognome)
-                        pushIf('sesso', data.sesso)
-                        pushIf('data_nascita', data.data_nascita)
-                        pushIf('luogo_nascita', data.luogo_nascita)
-                        pushIf('provincia_nascita', data.provincia_nascita)
-                        pushIf('codice_fiscale', data.codice_fiscale)
-                        pushIf('indirizzo', data.indirizzo)
-                        pushIf('numero_civico', data.numero_civico)
-                        pushIf('codice_postale', data.codice_postale)
-                        pushIf('citta_residenza', data.citta_residenza)
-                        pushIf('provincia_residenza', data.provincia_residenza)
-                        pushIf('patente_numero', data.patente_numero)
-                        pushIf('patente_tipo', data.patente_tipo)
-                        pushIf('patente_rilascio', data.patente_rilascio)
-                        pushIf('patente_scadenza', data.patente_scadenza)
-                        pushIf('patente_ente', data.patente_ente)
-                        setFormData(prev => ({
-                          ...prev,
-                          ...(data.nome && { nome: data.nome }),
-                          ...(data.cognome && { cognome: data.cognome }),
-                          ...(data.sesso && { sesso: data.sesso as 'M' | 'F' | 'Altro' | '' }),
-                          ...(data.data_nascita && { data_nascita: data.data_nascita }),
-                          ...(data.luogo_nascita && { luogo_nascita: data.luogo_nascita }),
-                          ...(data.provincia_nascita && { provincia_nascita: data.provincia_nascita }),
-                          ...(data.codice_fiscale && { codice_fiscale: data.codice_fiscale }),
-                          ...(data.indirizzo && { indirizzo: data.indirizzo }),
-                          ...(data.numero_civico && { numero_civico: data.numero_civico }),
-                          ...(data.codice_postale && { codice_postale: data.codice_postale }),
-                          ...(data.citta_residenza && { citta_residenza: data.citta_residenza }),
-                          ...(data.provincia_residenza && { provincia_residenza: data.provincia_residenza }),
-                          ...(data.patente_numero && { patente_numero: data.patente_numero }),
-                          ...(data.patente_tipo && { patente_tipo: data.patente_tipo }),
-                          ...(data.patente_rilascio && { patente_rilascio: data.patente_rilascio }),
-                          ...(data.patente_scadenza && { patente_scadenza: data.patente_scadenza }),
-                          ...(data.patente_ente && { patente_ente: data.patente_ente }),
-                        }))
-                        setLastExtracted(filled.length > 0 ? filled : ['Nessun dato leggibile estratto'])
-                        // Scroll in cima cosi' vedi subito i campi compilati
-                        // — il modal e' un singolo contenitore scrollabile,
-                        // quindi muoviamo lo scroll a 0 (con behavior smooth).
-                        try {
-                          scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
-                        } catch { /* ignore */ }
-                        toast.success(`${filled.length} campi compilati dai documenti — verifica in cima al form`)
-                      }}
-                      onError={(err: string) => toast.error(err)}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* FOOTER ACTIONS */}
-          <div className="sticky bottom-0 bg-theme-bg-secondary flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-4 sm:pt-6 border-t border-theme-border flex-shrink-0">
-            <button
-              onClick={handleClose}
-              disabled={isSaving}
-              className="px-6 py-3 sm:py-2.5 min-h-[44px] rounded-full text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-tertiary transition-colors"
-            >
-              Annulla
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="px-8 py-3 sm:py-2.5 min-h-[44px] rounded-full bg-dr7-gold text-white font-bold hover:bg-[#0A8FA3] transition-colors shadow-lg disabled:opacity-50"
-            >
-              {isSaving ? 'Salvataggio...' : (initialData ? 'Aggiorna Cliente' : 'Crea Cliente')}
-            </button>
           </div>
 
         </div>
+
+        {/* ── Sticky footer ───────────────────────────────────────────── */}
+        <div className="sticky bottom-0 bg-theme-bg-secondary border-t border-theme-border p-4 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 z-10">
+          <button onClick={handleClose} disabled={isSaving}
+            className="px-5 py-2.5 min-h-[44px] rounded-full text-sm text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-hover transition-colors">
+            Annulla
+          </button>
+          <div className="flex items-center gap-2">
+            <button type="button" disabled
+              title="Funzione bozza in arrivo — per ora il salvataggio crea direttamente il cliente"
+              className="hidden sm:inline-flex px-4 py-2 min-h-[44px] rounded-full text-sm text-theme-text-muted bg-theme-bg-tertiary opacity-60 cursor-not-allowed">
+              Salva Bozza
+            </button>
+            <button onClick={handleSave} disabled={isSaving}
+              className="px-6 py-2.5 min-h-[44px] rounded-full bg-dr7-gold text-white text-sm font-bold hover:opacity-90 transition-opacity shadow-sm disabled:opacity-50">
+              {isSaving ? 'Salvataggio…' : (initialData ? 'Aggiorna Cliente' : 'Salva e Apri Scheda Cliente')}
+            </button>
+          </div>
+        </div>
+
       </div>
-    </div >
+    </div>
+  )
+}
+
+// ── Layout helpers (used only in this file) ─────────────────────────────────
+function DocUploadGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl bg-theme-bg-tertiary border border-theme-border p-3">
+      <div className="text-[10px] uppercase tracking-wide font-bold text-theme-text-secondary mb-2">{label}</div>
+      <div className="grid grid-cols-2 gap-2">{children}</div>
+    </div>
+  )
+}
+
+function DocFileInput({ value, onChange, placeholder }: { value: File | null; onChange: (f: File | null) => void; placeholder: string }) {
+  return (
+    <label className="block">
+      <span className="text-[10px] text-theme-text-muted">{placeholder}</span>
+      <input type="file" accept="image/*,.pdf" onChange={(e) => onChange(e.target.files?.[0] || null)}
+        className="mt-1 block w-full text-[10px] text-theme-text-secondary
+          file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
+          file:text-[10px] file:font-semibold file:bg-dr7-gold/15 file:text-dr7-gold
+          hover:file:bg-dr7-gold/25 file:cursor-pointer" />
+      {value && <p className="text-[10px] text-emerald-600 mt-0.5 truncate" title={value.name}>{value.name}</p>}
+    </label>
   )
 }

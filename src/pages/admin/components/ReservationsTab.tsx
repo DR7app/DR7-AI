@@ -951,6 +951,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     coefficient_second_driver?: boolean
     coefficient_dr7_flex?: boolean
     coefficient_cauzione_veicoli?: boolean
+    // 2026-05-27: nuovi toggle per voci prima sempre-escluse.
+    coefficient_km_packages?: boolean
+    coefficient_experience?: boolean
+    coefficient_delivery?: boolean
+    coefficient_pickup?: boolean
   }
   type CoeffFlags = {
     unlimited_km: boolean
@@ -960,6 +965,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     second_driver: boolean
     dr7_flex: boolean
     cauzione_veicoli: boolean
+    km_packages: boolean
+    experience: boolean
+    delivery: boolean
+    pickup: boolean
   }
   const buildCoeffFlags = (a: ProAutomations | undefined): CoeffFlags => ({
     unlimited_km:     !!a?.coefficient_unlimited_km,
@@ -969,6 +978,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     second_driver:    a?.coefficient_second_driver !== false,
     dr7_flex:         a?.coefficient_dr7_flex !== false,
     cauzione_veicoli: a?.coefficient_cauzione_veicoli !== false,
+    km_packages:      !!a?.coefficient_km_packages,
+    experience:       !!a?.coefficient_experience,
+    delivery:         !!a?.coefficient_delivery,
+    pickup:           !!a?.coefficient_pickup,
   })
   const [coeffFlags, setCoeffFlags] = useState<CoeffFlags>(buildCoeffFlags(undefined))
   useEffect(() => {
@@ -1219,10 +1232,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const sKm  = splitX(unlimitedKmSurcharge,   coeffFlags.unlimited_km)
               const sSec = splitX(secondDriverFee,        coeffFlags.second_driver)
               const sFlx = splitX(flexCost,               coeffFlags.dr7_flex)
-              // Pacchetti KM seguono unlimited_km (vedi PreventiviTab / sito).
-              const sPkg = splitX(kmPackagesCost,         coeffFlags.unlimited_km)
-              const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC + sPkg.inC
-              const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at  + sPkg.at
+              // 2026-05-27: pacchetti KM con toggle proprio (prima condividevano unlimited_km).
+              const sPkg = splitX(kmPackagesCost,         coeffFlags.km_packages)
+              const sExp = splitX(experienceCost,         coeffFlags.experience)
+              const sDel = splitX(deliveryFees,           coeffFlags.delivery)
+              // (cauzione_veicoli + pickup non hanno fee separate in ReservationsTab,
+              //  i toggle non hanno effetto qui — restano per coerenza UI.)
+              const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC + sPkg.inC + sExp.inC + sDel.inC
+              const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at  + sPkg.at  + sExp.at  + sDel.at
               const listSubtotalNoExp = listRentalTotal + extrasInCoeff
               // Combined coefficient from revenue engine
               const combinedCoeff = (data.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
@@ -1235,9 +1252,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
               if (maxTotal != null && afterRevenueNoExp > maxTotal) afterRevenueNoExp = maxTotal
               if (minTotal != null && afterRevenueNoExp < minTotal) afterRevenueNoExp = minTotal
-              // kmPackages ora dentro extrasAtList/extrasInCoeff via sPkg.
-              // Resta extra: experience + location fees (sempre a listino).
-              const subtotal = Math.round((afterRevenueNoExp + experienceCost + deliveryFees + extrasAtList) * 100) / 100
+              // 2026-05-27: experience + deliveryFees ora dentro extrasAtList/inCoeff
+              // via sExp/sDel. Non aggiungerli di nuovo qui (double-count bug).
+              const subtotal = Math.round((afterRevenueNoExp + extrasAtList) * 100) / 100
               const total = prev.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
               // Auto-calculate KM limit from rental days (only if not unlimited)
               // 2026-05-18: salta total_amount se l'admin l'ha gia' modificato a mano.
@@ -1366,9 +1383,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const sKm  = splitX(unlimitedKmSurcharge,   coeffFlags.unlimited_km)
       const sSec = splitX(secondDriverFee,        coeffFlags.second_driver)
       const sFlx = splitX(flexCost,               coeffFlags.dr7_flex)
-      const sPkg = splitX(kmPackagesCost,         coeffFlags.unlimited_km)
-      const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC + sPkg.inC
-      const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at  + sPkg.at
+      const sPkg = splitX(kmPackagesCost,         coeffFlags.km_packages)
+      const sExp = splitX(experienceCost,         coeffFlags.experience)
+      const sDel = splitX(deliveryFees,           coeffFlags.delivery)
+      const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC + sPkg.inC + sExp.inC + sDel.inC
+      const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at  + sPkg.at  + sExp.at  + sDel.at
       const listSubtotalNoExp = listRentalTotal + extrasInCoeff
       const combinedCoeff = (revenueSuggestion.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
       const minDaily = typeof revenueSuggestion.minPrice === 'number' ? revenueSuggestion.minPrice : null
@@ -1378,8 +1397,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
       if (maxTotal != null && afterRevenueNoExp > maxTotal) afterRevenueNoExp = maxTotal
       if (minTotal != null && afterRevenueNoExp < minTotal) afterRevenueNoExp = minTotal
-      // kmPackages ora dentro extrasAtList/extrasInCoeff via sPkg.
-      const subtotal = Math.round((afterRevenueNoExp + experienceCost + deliveryFees + extrasAtList) * 100) / 100
+      // 2026-05-27: experience + deliveryFees ora in extrasAtList/InCoeff via sExp/sDel.
+      const subtotal = Math.round((afterRevenueNoExp + extrasAtList) * 100) / 100
       const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
       // 2026-05-18: salta total_amount se l'admin l'ha gia' modificato a mano.
       const updates: Record<string, string> = {}

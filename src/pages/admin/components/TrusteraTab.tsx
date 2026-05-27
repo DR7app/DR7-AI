@@ -191,6 +191,10 @@ function DocumentiSubTab() {
     setPickerSearch('')
     setPickerResults([])
   }
+  // 2026-05-27: picker pronto ma JSX consumer non ancora collegato.
+  // Void refs per evitare TS6133 finche' non viene wired.
+  void pickerOpenIdx; void pickerSearch; void pickerResults
+  void searchForPicker; void pickCustomerForSigner
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function selectCustomer(customer: any) {

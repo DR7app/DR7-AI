@@ -1,11 +1,26 @@
 import { useState, useEffect, useMemo } from 'react'
+import {
+  ResponsiveContainer,
+  AreaChart, Area,
+  BarChart, Bar,
+  PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+} from 'recharts'
 
-interface VehicleEntry {
+// ─── Types matching netlify/functions/report-danni.ts response ────────────────
+interface Entry {
+  id: string
+  date: string | null
+  type: 'danni' | 'penali'
+  category: string
+  customerName: string
   vehicleName: string
   vehiclePlate: string
-  customerName: string
-  count: number
-  totalAmount: number
+  description: string
+  amount: number
+  status: 'paid' | 'pending' | 'cancelled' | 'blocked'
+  serviceType: 'noleggio' | 'lavaggio' | 'meccanica' | 'altro'
+  source: 'fattura' | 'pending' | 'cauzione'
 }
 
 interface ReportData {
@@ -13,24 +28,33 @@ interface ReportData {
   totalVehicles: number
   totalCount: number
   totalAmount: number
-  vehicles: VehicleEntry[]
+  vehicles: Array<{
+    vehicleName: string
+    vehiclePlate: string
+    customerName: string
+    count: number
+    totalAmount: number
+  }>
+  entries?: Entry[]
 }
 
-type Filter = 'both' | 'penali' | 'danni'
-type TypedEntry = VehicleEntry & { type: 'penali' | 'danni' }
+type RangePreset = '7' | '30' | '90' | '365' | 'all'
+type TableFilter = 'all' | 'danni' | 'penali'
 
-function formatCurrency(amount: number): string {
-  return `€ ${amount.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+// ─── Formatters ──────────────────────────────────────────────────────────────
+const fmtEur = (n: number): string =>
+  `€ ${n.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+const fmtEur2 = (n: number): string =>
+  `€ ${n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const fmtDate = (s: string | null): string => {
+  if (!s) return '—'
+  const d = new Date(s)
+  if (isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
-
-function formatCurrencyDecimal(amount: number): string {
-  return `€ ${amount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-function initials(name: string): string {
+const initials = (name: string): string => {
   if (!name) return '?'
-  const parts = name.trim().split(/\s+/).slice(0, 2)
-  return parts.map(p => p[0]?.toUpperCase() || '').join('') || '?'
+  return name.trim().split(/\s+/).slice(0, 2).map(p => p[0]?.toUpperCase() || '').join('') || '?'
 }
 
 const AVATAR_COLORS = [
@@ -41,24 +65,52 @@ const AVATAR_COLORS = [
   'bg-violet-100 text-violet-700',
   'bg-orange-100 text-orange-700',
 ]
-function avatarColor(seed: string): string {
+const avatarColor = (seed: string): string => {
   let h = 0
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
   return AVATAR_COLORS[h % AVATAR_COLORS.length]
 }
 
+// Tipo & stato chips
+const TYPE_STYLES = {
+  danni: 'bg-rose-50 text-rose-700 border-rose-200',
+  penali: 'bg-orange-50 text-orange-700 border-orange-200',
+}
+const STATUS_STYLES: Record<Entry['status'], { label: string; cls: string }> = {
+  paid: { label: 'Pagata', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  pending: { label: 'In sospeso', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  blocked: { label: 'Cauzione', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+  cancelled: { label: 'Annullata', cls: 'bg-zinc-100 text-zinc-600 border-zinc-200' },
+}
+
+const COLORS = {
+  rose: '#e11d48',
+  orange: '#f97316',
+  amber: '#f59e0b',
+  gold: '#c5a046',
+  emerald: '#10b981',
+  sky: '#0ea5e9',
+  violet: '#8b5cf6',
+  zinc: '#71717a',
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 export default function ReportPenaliDanniTab() {
-  const [filter, setFilter] = useState<Filter>('both')
   const [penaliData, setPenaliData] = useState<ReportData | null>(null)
   const [danniData, setDanniData] = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [sortField, setSortField] = useState<'totalAmount' | 'count'>('totalAmount')
+
+  // Filters
+  const [rangePreset, setRangePreset] = useState<RangePreset>('30')
+  const [tableFilter, setTableFilter] = useState<TableFilter>('all')
+
+  // Pagination for detail table
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 8
 
   useEffect(() => { fetchReports() }, [])
-  useEffect(() => { setPage(1) }, [filter, sortField])
+  useEffect(() => { setPage(1) }, [tableFilter, rangePreset])
 
   async function fetchReports() {
     setLoading(true)
@@ -80,79 +132,279 @@ export default function ReportPenaliDanniTab() {
     }
   }
 
-  // ── Derived data ────────────────────────────────────────────────────────────
-  const merged: TypedEntry[] = useMemo(() => {
-    const out: TypedEntry[] = []
-    if (filter !== 'danni' && penaliData?.vehicles) penaliData.vehicles.forEach(v => out.push({ ...v, type: 'penali' }))
-    if (filter !== 'penali' && danniData?.vehicles) danniData.vehicles.forEach(v => out.push({ ...v, type: 'danni' }))
-    return out.sort((a, b) => sortField === 'totalAmount' ? b.totalAmount - a.totalAmount : b.count - a.count)
-  }, [penaliData, danniData, filter, sortField])
+  // ── Cutoff & filtered entries ─────────────────────────────────────────────
+  const cutoff = useMemo(() => {
+    if (rangePreset === 'all') return null
+    const days = parseInt(rangePreset, 10)
+    const d = new Date()
+    d.setDate(d.getDate() - days)
+    return d
+  }, [rangePreset])
 
-  const danniCount = danniData?.totalCount || 0
-  const danniAmount = danniData?.totalAmount || 0
-  const penaliCount = penaliData?.totalCount || 0
-  const penaliAmount = penaliData?.totalAmount || 0
-  const combinedAmount = danniAmount + penaliAmount
-  const combinedCount = danniCount + penaliCount
+  const allEntries: Entry[] = useMemo(() => {
+    const e: Entry[] = []
+    if (penaliData?.entries) e.push(...penaliData.entries)
+    if (danniData?.entries) e.push(...danniData.entries)
+    return e
+  }, [penaliData, danniData])
 
-  // Top vehicles (cross both types, by total amount)
-  const topVehicles = useMemo(() => {
-    const map = new Map<string, { name: string; plate: string; total: number; count: number }>()
-    const allVehicles = [
-      ...(danniData?.vehicles || []).map(v => ({ ...v, type: 'danni' as const })),
-      ...(penaliData?.vehicles || []).map(v => ({ ...v, type: 'penali' as const })),
-    ]
-    for (const v of allVehicles) {
-      const key = v.vehiclePlate || v.vehicleName
-      const cur = map.get(key) || { name: v.vehicleName, plate: v.vehiclePlate, total: 0, count: 0 }
-      cur.total += v.totalAmount
-      cur.count += v.count
+  const filteredEntries: Entry[] = useMemo(() => {
+    return allEntries.filter(e => {
+      if (cutoff && e.date) {
+        const d = new Date(e.date)
+        if (!isNaN(d.getTime()) && d < cutoff) return false
+      }
+      return true
+    })
+  }, [allEntries, cutoff])
+
+  // ── KPIs (7 cards) ────────────────────────────────────────────────────────
+  const kpi = useMemo(() => {
+    const sum = (filter: (e: Entry) => boolean): number =>
+      filteredEntries.filter(filter).reduce((s, e) => s + e.amount, 0)
+    const dannitTot = sum(e => e.type === 'danni')
+    const penaliTot = sum(e => e.type === 'penali')
+    return {
+      danniTot: dannitTot,
+      penaliTot,
+      contenziosoTot: dannitTot + penaliTot,
+      danniNoleggio: sum(e => e.type === 'danni' && e.serviceType === 'noleggio'),
+      penaliNoleggio: sum(e => e.type === 'penali' && e.serviceType === 'noleggio'),
+      danniLavaggio: sum(e => e.type === 'danni' && (e.serviceType === 'lavaggio' || e.serviceType === 'meccanica')),
+      penaliLavaggio: sum(e => e.type === 'penali' && (e.serviceType === 'lavaggio' || e.serviceType === 'meccanica')),
+    }
+  }, [filteredEntries])
+
+  // ── Andamento (time series, monthly) ─────────────────────────────────────
+  const trendData = useMemo(() => {
+    const buckets = new Map<string, { month: string; danni: number; penali: number; totale: number }>()
+    for (const e of filteredEntries) {
+      if (!e.date) continue
+      const d = new Date(e.date)
+      if (isNaN(d.getTime())) continue
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const label = d.toLocaleDateString('it-IT', { month: 'short', year: '2-digit' })
+      const b = buckets.get(key) || { month: label, danni: 0, penali: 0, totale: 0 }
+      if (e.type === 'danni') b.danni += e.amount
+      else b.penali += e.amount
+      b.totale += e.amount
+      buckets.set(key, b)
+    }
+    return Array.from(buckets.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, v]) => v)
+  }, [filteredEntries])
+
+  // ── Donut: danni vs penali ───────────────────────────────────────────────
+  const ripartizioneData = useMemo(() => [
+    { name: 'Danni', value: kpi.danniTot, fill: COLORS.rose },
+    { name: 'Penali', value: kpi.penaliTot, fill: COLORS.orange },
+  ], [kpi])
+
+  // ── Per tipologia (horizontal bars, top 7 categories) ────────────────────
+  const tipologiaData = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const e of filteredEntries) {
+      map.set(e.category, (map.get(e.category) || 0) + e.amount)
+    }
+    return Array.from(map.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 7)
+  }, [filteredEntries])
+
+  // ── Stato pratiche donut ─────────────────────────────────────────────────
+  const statoData = useMemo(() => {
+    const map = new Map<Entry['status'], number>()
+    for (const e of filteredEntries) {
+      map.set(e.status, (map.get(e.status) || 0) + 1)
+    }
+    const colorFor: Record<Entry['status'], string> = {
+      paid: COLORS.emerald, pending: COLORS.amber, blocked: COLORS.rose, cancelled: COLORS.zinc,
+    }
+    return Array.from(map.entries()).map(([k, v]) => ({
+      name: STATUS_STYLES[k].label, value: v, fill: colorFor[k],
+    }))
+  }, [filteredEntries])
+
+  // ── Top clienti (by total amount) ────────────────────────────────────────
+  const topClienti = useMemo(() => {
+    const map = new Map<string, { name: string; total: number; count: number }>()
+    for (const e of filteredEntries) {
+      if (!e.customerName || e.customerName === '-') continue
+      const cur = map.get(e.customerName) || { name: e.customerName, total: 0, count: 0 }
+      cur.total += e.amount; cur.count += 1
+      map.set(e.customerName, cur)
+    }
+    return Array.from(map.values()).sort((a, b) => b.total - a.total).slice(0, 6)
+  }, [filteredEntries])
+
+  // ── Allerte critiche (pending > €500 OR > 30 days old) ───────────────────
+  const allerte = useMemo(() => {
+    const now = new Date()
+    return filteredEntries
+      .filter(e => e.status === 'pending')
+      .map(e => {
+        const d = e.date ? new Date(e.date) : null
+        const daysOld = d ? Math.floor((now.getTime() - d.getTime()) / 86400000) : 0
+        let severity: 'high' | 'medium' | 'low' = 'low'
+        if (e.amount >= 1000 || daysOld > 60) severity = 'high'
+        else if (e.amount >= 300 || daysOld > 30) severity = 'medium'
+        return { ...e, daysOld, severity }
+      })
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5)
+  }, [filteredEntries])
+
+  // ── Detail table data ────────────────────────────────────────────────────
+  const detailEntries = useMemo(() => {
+    return filteredEntries
+      .filter(e => tableFilter === 'all' || e.type === tableFilter)
+      .sort((a, b) => {
+        const da = a.date ? new Date(a.date).getTime() : 0
+        const db = b.date ? new Date(b.date).getTime() : 0
+        return db - da
+      })
+  }, [filteredEntries, tableFilter])
+
+  const totalPages = Math.max(1, Math.ceil(detailEntries.length / PAGE_SIZE))
+  const pageItems = detailEntries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  // ── Per veicolo Top 10 ───────────────────────────────────────────────────
+  const perVeicolo = useMemo(() => {
+    const map = new Map<string, { name: string; value: number }>()
+    for (const e of filteredEntries) {
+      const key = e.vehiclePlate || e.vehicleName
+      const cur = map.get(key) || { name: e.vehicleName || e.vehiclePlate, value: 0 }
+      cur.value += e.amount
       map.set(key, cur)
     }
-    return Array.from(map.values()).sort((a, b) => b.total - a.total).slice(0, 5)
-  }, [danniData, penaliData])
+    return Array.from(map.values()).sort((a, b) => b.value - a.value).slice(0, 10)
+  }, [filteredEntries])
 
-  // Top problematic customers
-  const topCustomers = useMemo(() => {
-    const map = new Map<string, { name: string; total: number; count: number }>()
-    const allVehicles = [
-      ...(danniData?.vehicles || []),
-      ...(penaliData?.vehicles || []),
-    ]
-    for (const v of allVehicles) {
-      if (!v.customerName || v.customerName === '-') continue
-      const cur = map.get(v.customerName) || { name: v.customerName, total: 0, count: 0 }
-      cur.total += v.totalAmount
-      cur.count += v.count
-      map.set(v.customerName, cur)
+  // ── Confronto periodo (current cutoff vs previous of same length) ────────
+  const confronto = useMemo(() => {
+    if (!cutoff) return null
+    const periodMs = Date.now() - cutoff.getTime()
+    const prevCutoff = new Date(cutoff.getTime() - periodMs)
+    const inRange = (e: Entry, start: Date, end: Date) => {
+      if (!e.date) return false
+      const d = new Date(e.date)
+      return d >= start && d < end
     }
-    return Array.from(map.values()).sort((a, b) => b.total - a.total).slice(0, 5)
-  }, [danniData, penaliData])
+    const sum = (filter: (e: Entry) => boolean) =>
+      allEntries.filter(filter).reduce((s, e) => s + e.amount, 0)
+    const curDanni = sum(e => e.type === 'danni' && inRange(e, cutoff, new Date()))
+    const curPenali = sum(e => e.type === 'penali' && inRange(e, cutoff, new Date()))
+    const prevDanni = sum(e => e.type === 'danni' && inRange(e, prevCutoff, cutoff))
+    const prevPenali = sum(e => e.type === 'penali' && inRange(e, prevCutoff, cutoff))
+    const pct = (cur: number, prev: number) => prev === 0 ? null : ((cur - prev) / prev) * 100
+    return {
+      danni: { current: curDanni, previous: prevDanni, pct: pct(curDanni, prevDanni) },
+      penali: { current: curPenali, previous: prevPenali, pct: pct(curPenali, prevPenali) },
+      totale: { current: curDanni + curPenali, previous: prevDanni + prevPenali, pct: pct(curDanni + curPenali, prevDanni + prevPenali) },
+    }
+  }, [cutoff, allEntries])
 
-  // Type split for the breakdown bar
-  const danniPct = combinedAmount > 0 ? Math.round((danniAmount / combinedAmount) * 100) : 0
-  const penaliPct = 100 - danniPct
+  // ── Previsioni (linear projection from last 30 days → next 30) ──────────
+  const previsioni = useMemo(() => {
+    const last30 = new Date()
+    last30.setDate(last30.getDate() - 30)
+    const recent = allEntries.filter(e => {
+      if (!e.date) return false
+      const d = new Date(e.date)
+      return d >= last30
+    })
+    const recentTotal = recent.reduce((s, e) => s + e.amount, 0)
+    const danniProj = recent.filter(e => e.type === 'danni').reduce((s, e) => s + e.amount, 0)
+    const penaliProj = recent.filter(e => e.type === 'penali').reduce((s, e) => s + e.amount, 0)
+    return {
+      danni: danniProj,
+      penali: penaliProj,
+      totale: recentTotal,
+      importoMedio: recent.length > 0 ? recentTotal / recent.length : 0,
+    }
+  }, [allEntries])
 
-  // ── Pagination ──────────────────────────────────────────────────────────────
-  const totalPages = Math.max(1, Math.ceil(merged.length / PAGE_SIZE))
-  const pageItems = merged.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  // ── Principali cause donut ───────────────────────────────────────────────
+  const causeData = useMemo(() => {
+    const palette = [COLORS.rose, COLORS.orange, COLORS.amber, COLORS.violet, COLORS.sky, COLORS.emerald, COLORS.zinc]
+    return tipologiaData.slice(0, 6).map((t, i) => ({ ...t, fill: palette[i % palette.length] }))
+  }, [tipologiaData])
 
+  // ── CSV / Excel / PDF exports ───────────────────────────────────────────
+  const exportCsv = () => {
+    const headers = ['Data', 'Tipo', 'Categoria', 'Cliente', 'Veicolo', 'Targa', 'Descrizione', 'Importo', 'Stato', 'Servizio']
+    const rows = detailEntries.map(e => [
+      fmtDate(e.date),
+      e.type === 'danni' ? 'Danno' : 'Penale',
+      e.category,
+      e.customerName,
+      e.vehicleName,
+      e.vehiclePlate,
+      e.description.replace(/[\r\n,;]/g, ' '),
+      e.amount.toFixed(2),
+      STATUS_STYLES[e.status].label,
+      e.serviceType,
+    ])
+    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `report-danni-penali-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-theme-text-primary tracking-tight">Report Danni & Penali</h2>
-          <p className="text-sm text-theme-text-secondary mt-0.5">Panoramica delle pratiche di danno e penale registrate sul parco veicoli</p>
+          <p className="text-sm text-theme-text-secondary mt-0.5">Analisi completa e performance di danni e penali</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Range presets */}
+          <div className="inline-flex rounded-full bg-theme-bg-tertiary/40 p-1 border border-theme-border">
+            {([
+              { k: '7' as RangePreset, l: '7g' },
+              { k: '30' as RangePreset, l: '30g' },
+              { k: '90' as RangePreset, l: '90g' },
+              { k: '365' as RangePreset, l: '12m' },
+              { k: 'all' as RangePreset, l: 'Tutto' },
+            ]).map(p => (
+              <button
+                key={p.k}
+                onClick={() => setRangePreset(p.k)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                  rangePreset === p.k
+                    ? 'bg-theme-bg-primary text-theme-text-primary shadow-sm border border-theme-border'
+                    : 'text-theme-text-secondary hover:text-theme-text-primary'
+                }`}
+              >{p.l}</button>
+            ))}
+          </div>
           <button
             onClick={fetchReports}
             disabled={loading}
             className="inline-flex items-center gap-2 px-4 py-2 bg-white text-theme-text-primary text-sm font-semibold rounded-full border border-theme-border hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
             {loading ? 'Aggiorno…' : 'Aggiorna'}
+          </button>
+          <button
+            onClick={exportCsv}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-dr7-gold text-white text-sm font-semibold rounded-full hover:opacity-90 transition-opacity"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2a4 4 0 014-4h6m0 0l-3-3m3 3l-3 3M5 5h4l2 3h6a2 2 0 012 2v0" />
+            </svg>
+            Genera Report
           </button>
         </div>
       </div>
@@ -161,309 +413,478 @@ export default function ReportPenaliDanniTab() {
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{error}</div>
       )}
 
-      {/* ── KPI cards (4) ───────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard
-          label="Totale Danni"
-          value={formatCurrency(danniAmount)}
-          sub={`${danniCount} ${danniCount === 1 ? 'caso' : 'casi'}`}
-          accent="rose"
-          icon={
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-          }
-        />
-        <KpiCard
-          label="Veicoli Danneggiati"
-          value={`${danniData?.totalVehicles || 0}`}
-          sub="con danni registrati"
-          accent="amber"
-          icon={
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-          }
-        />
-        <KpiCard
-          label="Penali Applicate"
-          value={`${penaliCount}`}
-          sub={formatCurrency(penaliAmount)}
-          accent="orange"
-          icon={
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-          }
-        />
-        <KpiCard
-          label="Importo Totale"
-          value={formatCurrency(combinedAmount)}
-          sub={`${combinedCount} voci`}
-          accent="gold"
-          icon={
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-          }
-        />
+      {/* ── KPI cards (7) ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+        <KpiCard label="Danni Totali" value={fmtEur(kpi.danniTot)} accent="rose" sub="contestati e in liquidazione" />
+        <KpiCard label="Penali Totali" value={fmtEur(kpi.penaliTot)} accent="orange" sub="aperte ed evase" />
+        <KpiCard label="Totale Contenzioso" value={fmtEur(kpi.contenziosoTot)} accent="gold" sub="combinato" big />
+        <KpiCard label="Danni Noleggio" value={fmtEur(kpi.danniNoleggio)} accent="rose" sub="parco veicoli" />
+        <KpiCard label="Penali Noleggio" value={fmtEur(kpi.penaliNoleggio)} accent="orange" sub="violazioni contrattuali" />
+        <KpiCard label="Danni Lavaggio" value={fmtEur(kpi.danniLavaggio)} accent="rose" sub="Prime Wash + meccanica" />
+        <KpiCard label="Penali Lavaggio" value={fmtEur(kpi.penaliLavaggio)} accent="orange" sub="Prime Wash + meccanica" />
       </div>
 
-      {/* ── Filter pills ────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2">
-        {([
-          { key: 'both' as Filter, label: 'Tutti', count: combinedCount, dot: 'bg-dr7-gold' },
-          { key: 'danni' as Filter, label: 'Danni', count: danniCount, dot: 'bg-rose-500' },
-          { key: 'penali' as Filter, label: 'Penali', count: penaliCount, dot: 'bg-orange-500' },
-        ]).map(t => (
-          <button
-            key={t.key}
-            onClick={() => setFilter(t.key)}
-            className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-colors border ${
-              filter === t.key
-                ? 'bg-theme-bg-primary border-theme-border text-theme-text-primary shadow-sm'
-                : 'bg-transparent border-transparent text-theme-text-secondary hover:bg-theme-bg-hover'
-            }`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${t.dot}`} />
-            {t.label}
-            <span className="text-xs text-theme-text-muted">{t.count}</span>
-          </button>
-        ))}
-        <div className="ml-auto flex items-center gap-2">
-          <label className="text-xs text-theme-text-muted">Ordina per</label>
-          <select
-            value={sortField}
-            onChange={e => setSortField(e.target.value as 'totalAmount' | 'count')}
-            className="px-3 py-1.5 bg-theme-bg-primary border border-theme-border rounded-lg text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold"
-          >
-            <option value="totalAmount">Importo</option>
-            <option value="count">Numero</option>
-          </select>
-        </div>
-      </div>
+      {/* ── Row 2: charts + Azioni Rapide sidebar ────────────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+        {/* Andamento (col-span 2) */}
+        <Card title="Andamento Danni e Penali" subtitle="Trend per periodo selezionato" className="xl:col-span-2 min-h-[300px]">
+          {trendData.length === 0 ? (
+            <EmptyChart message="Nessun dato per il periodo" />
+          ) : (
+            <ResponsiveContainer width="100%" height={250}>
+              <AreaChart data={trendData}>
+                <defs>
+                  <linearGradient id="gDanni" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={COLORS.rose} stopOpacity={0.35} />
+                    <stop offset="95%" stopColor={COLORS.rose} stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gPenali" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={COLORS.orange} stopOpacity={0.35} />
+                    <stop offset="95%" stopColor={COLORS.orange} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#71717a' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#71717a' }} axisLine={false} tickLine={false} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(v) => fmtEur2(Number(v))} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Area type="monotone" dataKey="danni" name="Danni" stroke={COLORS.rose} fill="url(#gDanni)" strokeWidth={2} />
+                <Area type="monotone" dataKey="penali" name="Penali" stroke={COLORS.orange} fill="url(#gPenali)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </Card>
 
-      {/* ── Main grid ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Left: list */}
-        <div className="lg:col-span-2 bg-theme-bg-primary border border-theme-border rounded-2xl overflow-hidden shadow-sm">
-          <div className="px-5 py-4 border-b border-theme-border flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-semibold text-theme-text-primary">Lista Danni & Penali</h3>
-              <p className="text-xs text-theme-text-muted">{merged.length} {merged.length === 1 ? 'voce' : 'voci'}</p>
+        {/* Ripartizione donut */}
+        <Card title="Ripartizione Danni vs Penali" subtitle="Volumi correnti" className="min-h-[300px]">
+          {kpi.contenziosoTot === 0 ? (
+            <EmptyChart message="Nessun dato" />
+          ) : (
+            <div className="relative">
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={ripartizioneData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} dataKey="value" stroke="none">
+                    {ripartizioneData.map((d, i) => <Cell key={i} fill={d.fill} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => fmtEur(Number(v))} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <div className="text-[11px] uppercase tracking-wide text-theme-text-muted">Totale</div>
+                <div className="text-lg font-bold text-theme-text-primary">{fmtEur(kpi.contenziosoTot)}</div>
+              </div>
+              <div className="flex justify-center gap-4 mt-2 text-xs">
+                <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: COLORS.rose }} /> Danni {fmtEur(kpi.danniTot)}</span>
+                <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: COLORS.orange }} /> Penali {fmtEur(kpi.penaliTot)}</span>
+              </div>
             </div>
+          )}
+        </Card>
+
+        {/* Azioni Rapide */}
+        <Card title="Azioni Rapide" className="min-h-[300px]">
+          <div className="space-y-1.5">
+            {[
+              { icon: '⊕', label: 'Nuova Segnalazione', tab: 'gestione-danni' },
+              { icon: '€', label: 'Crea Penale Manuale', tab: 'gestione-multe' },
+              { icon: '⚑', label: 'Verifica Pratiche Aperte', tab: 'unpaid' },
+              { icon: '↧', label: 'Esporta Excel', action: exportCsv },
+              { icon: '↥', label: 'Importa CSV', tab: 'bulk-import' },
+              { icon: '⚙', label: 'Analisi Predittiva', tab: 'reports' },
+              { icon: '↻', label: 'Riconciliazione Sospesi', tab: 'fattura' },
+            ].map(a => (
+              <button
+                key={a.label}
+                onClick={() => {
+                  if (a.action) return a.action()
+                  if (a.tab) window.dispatchEvent(new CustomEvent('admin:switch-tab', { detail: { tab: a.tab } }))
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left text-theme-text-primary hover:bg-theme-bg-hover rounded-lg transition-colors"
+              >
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-dr7-gold/10 text-dr7-gold text-xs font-semibold">{a.icon}</span>
+                {a.label}
+              </button>
+            ))}
           </div>
+        </Card>
+      </div>
 
-          {loading && (
-            <div className="px-5 py-12 text-center text-theme-text-muted text-sm">Caricamento…</div>
+      {/* ── Row 3: per tipologia + stato pratiche ────────────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+        <Card title="Danni e Penali per Tipologia" subtitle="Distribuzione importi per causa" className="xl:col-span-2">
+          {tipologiaData.length === 0 ? (
+            <EmptyChart message="Nessun dato" />
+          ) : (
+            <ResponsiveContainer width="100%" height={Math.max(220, tipologiaData.length * 32)}>
+              <BarChart data={tipologiaData} layout="vertical" margin={{ left: 10, right: 30 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: '#71717a' }} axisLine={false} tickLine={false} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#374151' }} axisLine={false} tickLine={false} width={150} />
+                <Tooltip formatter={(v) => fmtEur2(Number(v))} />
+                <Bar dataKey="value" radius={[0, 6, 6, 0]} fill={COLORS.gold} />
+              </BarChart>
+            </ResponsiveContainer>
           )}
+        </Card>
 
-          {!loading && merged.length === 0 && (
-            <div className="px-5 py-12 text-center text-theme-text-muted text-sm">Nessuna voce da mostrare per questo filtro.</div>
+        <Card title="Stato Pratiche" subtitle="Aperte / risolte / annullate">
+          {statoData.length === 0 ? (
+            <EmptyChart message="Nessun dato" />
+          ) : (
+            <div>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={statoData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" stroke="none">
+                    {statoData.map((d, i) => <Cell key={i} fill={d.fill} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-1 mt-2">
+                {statoData.map(s => (
+                  <div key={s.name} className="flex items-center justify-between text-xs">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full" style={{ background: s.fill }} />
+                      {s.name}
+                    </span>
+                    <span className="font-semibold text-theme-text-primary">{s.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
+        </Card>
 
-          {!loading && merged.length > 0 && (
+        <Card title="Allerte Critiche" subtitle={`${allerte.length} pratiche da gestire`}>
+          {allerte.length === 0 ? (
+            <div className="text-xs text-theme-text-muted py-6 text-center">Nessuna allerta attiva</div>
+          ) : (
+            <div className="space-y-2">
+              {allerte.map(a => (
+                <div key={a.id} className={`p-2.5 rounded-lg border-l-4 ${
+                  a.severity === 'high' ? 'bg-rose-50 border-rose-500'
+                  : a.severity === 'medium' ? 'bg-amber-50 border-amber-500'
+                  : 'bg-sky-50 border-sky-500'
+                }`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-semibold text-theme-text-primary truncate">{a.customerName || 'Cliente sconosciuto'}</div>
+                      <div className="text-[11px] text-theme-text-secondary truncate">{a.category} · {a.vehiclePlate}</div>
+                      <div className="text-[11px] text-theme-text-muted">{a.daysOld}g in sospeso</div>
+                    </div>
+                    <span className="text-sm font-bold text-theme-text-primary whitespace-nowrap">{fmtEur(a.amount)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* ── Row 4: Top clienti + Dettaglio table ─────────────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+        {/* Detail table (col-span 3) */}
+        <Card
+          title="Dettaglio Danni & Penali"
+          subtitle={`${detailEntries.length} ${detailEntries.length === 1 ? 'pratica' : 'pratiche'}`}
+          className="xl:col-span-3"
+          headerRight={
+            <div className="inline-flex rounded-full bg-theme-bg-tertiary/40 p-1 border border-theme-border">
+              {([
+                { k: 'all' as TableFilter, l: 'Tutti', n: filteredEntries.length },
+                { k: 'danni' as TableFilter, l: 'Danni', n: filteredEntries.filter(e => e.type === 'danni').length },
+                { k: 'penali' as TableFilter, l: 'Penali', n: filteredEntries.filter(e => e.type === 'penali').length },
+              ]).map(t => (
+                <button
+                  key={t.k}
+                  onClick={() => setTableFilter(t.k)}
+                  className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                    tableFilter === t.k
+                      ? 'bg-theme-bg-primary text-theme-text-primary shadow-sm border border-theme-border'
+                      : 'text-theme-text-secondary hover:text-theme-text-primary'
+                  }`}
+                >{t.l} <span className="text-theme-text-muted">{t.n}</span></button>
+              ))}
+            </div>
+          }
+        >
+          {loading ? (
+            <div className="py-12 text-center text-sm text-theme-text-muted">Caricamento…</div>
+          ) : detailEntries.length === 0 ? (
+            <div className="py-12 text-center text-sm text-theme-text-muted">Nessuna voce nel periodo selezionato.</div>
+          ) : (
             <>
-              <div className="hidden md:block overflow-x-auto">
+              <div className="overflow-x-auto -mx-5">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-theme-bg-tertiary/40 border-b border-theme-border text-xs uppercase tracking-wide text-theme-text-secondary">
-                      <th className="px-5 py-3 text-left font-medium">Tipo</th>
-                      <th className="px-5 py-3 text-left font-medium">Veicolo</th>
-                      <th className="px-5 py-3 text-left font-medium">Cliente</th>
-                      <th className="px-5 py-3 text-center font-medium">N.</th>
-                      <th className="px-5 py-3 text-right font-medium">Importo</th>
+                    <tr className="bg-theme-bg-tertiary/40 border-y border-theme-border text-[10px] uppercase tracking-wide text-theme-text-secondary">
+                      <th className="px-3 py-2.5 text-left font-medium">ID Pratica</th>
+                      <th className="px-3 py-2.5 text-left font-medium">Data</th>
+                      <th className="px-3 py-2.5 text-left font-medium">Tipo</th>
+                      <th className="px-3 py-2.5 text-left font-medium">Categoria</th>
+                      <th className="px-3 py-2.5 text-left font-medium">Cliente</th>
+                      <th className="px-3 py-2.5 text-left font-medium">Veicolo</th>
+                      <th className="px-3 py-2.5 text-left font-medium">Descrizione</th>
+                      <th className="px-3 py-2.5 text-right font-medium">Importo</th>
+                      <th className="px-3 py-2.5 text-left font-medium">Stato</th>
+                      <th className="px-3 py-2.5 text-left font-medium">Servizio</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {pageItems.map((v, i) => (
-                      <tr key={`${v.type}-${v.vehiclePlate}-${i}`} className="border-b border-theme-border last:border-0 hover:bg-theme-bg-hover/40 transition-colors">
-                        <td className="px-5 py-3">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
-                            v.type === 'danni'
-                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                              : 'bg-orange-50 text-orange-700 border-orange-200'
-                          }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${v.type === 'danni' ? 'bg-rose-500' : 'bg-orange-500'}`} />
-                            {v.type === 'danni' ? 'Danno' : 'Penale'}
+                    {pageItems.map((e) => (
+                      <tr key={e.id} className="border-b border-theme-border last:border-0 hover:bg-theme-bg-hover/40">
+                        <td className="px-3 py-2.5 font-mono text-[11px] text-theme-text-muted">{e.id.slice(0, 8).toUpperCase()}</td>
+                        <td className="px-3 py-2.5 text-theme-text-secondary whitespace-nowrap">{fmtDate(e.date)}</td>
+                        <td className="px-3 py-2.5">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${TYPE_STYLES[e.type]}`}>
+                            <span className={`w-1 h-1 rounded-full ${e.type === 'danni' ? 'bg-rose-500' : 'bg-orange-500'}`} />
+                            {e.type === 'danni' ? 'Danno' : 'Penale'}
                           </span>
                         </td>
-                        <td className="px-5 py-3">
-                          <div className="font-medium text-theme-text-primary">{v.vehicleName}</div>
-                          <div className="text-xs text-theme-text-muted">{v.vehiclePlate}</div>
-                        </td>
-                        <td className="px-5 py-3">
-                          <div className="flex items-center gap-2">
-                            <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-semibold ${avatarColor(v.customerName || v.vehiclePlate)}`}>
-                              {initials(v.customerName)}
+                        <td className="px-3 py-2.5 text-theme-text-primary">{e.category}</td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-2 min-w-[140px]">
+                            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-semibold ${avatarColor(e.customerName || e.vehiclePlate)}`}>
+                              {initials(e.customerName)}
                             </span>
-                            <span className="text-theme-text-primary">{v.customerName || '—'}</span>
+                            <span className="truncate text-theme-text-primary">{e.customerName || '—'}</span>
                           </div>
                         </td>
-                        <td className="px-5 py-3 text-center font-semibold text-theme-text-primary">{v.count}</td>
-                        <td className="px-5 py-3 text-right font-semibold text-dr7-gold">{formatCurrencyDecimal(v.totalAmount)}</td>
+                        <td className="px-3 py-2.5">
+                          <div className="font-medium text-theme-text-primary truncate max-w-[140px]">{e.vehicleName}</div>
+                          <div className="text-[10px] text-theme-text-muted">{e.vehiclePlate}</div>
+                        </td>
+                        <td className="px-3 py-2.5 text-theme-text-secondary text-xs max-w-[220px] truncate" title={e.description}>{e.description}</td>
+                        <td className="px-3 py-2.5 text-right font-semibold text-dr7-gold whitespace-nowrap">{fmtEur2(e.amount)}</td>
+                        <td className="px-3 py-2.5">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${STATUS_STYLES[e.status].cls}`}>
+                            {STATUS_STYLES[e.status].label}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-[11px] text-theme-text-secondary capitalize">{e.serviceType}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
 
-              {/* Mobile cards */}
-              <div className="md:hidden divide-y divide-theme-border">
-                {pageItems.map((v, i) => (
-                  <div key={`${v.type}-${v.vehiclePlate}-${i}`} className="px-4 py-3">
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="min-w-0">
-                        <div className="font-medium text-theme-text-primary truncate">{v.vehicleName}</div>
-                        <div className="text-xs text-theme-text-muted">{v.vehiclePlate}</div>
-                        <div className="text-xs text-theme-text-secondary mt-0.5 truncate">{v.customerName || '—'}</div>
-                      </div>
-                      <span className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
-                        v.type === 'danni' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-orange-50 text-orange-700 border-orange-200'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${v.type === 'danni' ? 'bg-rose-500' : 'bg-orange-500'}`} />
-                        {v.type === 'danni' ? 'Danno' : 'Penale'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-theme-text-secondary">N. {v.count}</span>
-                      <span className="font-semibold text-dr7-gold">{formatCurrencyDecimal(v.totalAmount)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Pagination */}
               {totalPages > 1 && (
-                <div className="px-5 py-3 border-t border-theme-border flex items-center justify-between text-xs text-theme-text-secondary">
-                  <span>Mostra {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, merged.length)} di {merged.length}</span>
+                <div className="pt-3 flex items-center justify-between text-xs text-theme-text-secondary">
+                  <span>Mostra {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, detailEntries.length)} di {detailEntries.length}</span>
                   <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setPage(p => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                      className="px-2 py-1 rounded border border-theme-border bg-theme-bg-primary disabled:opacity-40 hover:bg-theme-bg-hover"
-                    >‹</button>
-                    {Array.from({ length: totalPages }).slice(0, 6).map((_, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setPage(i + 1)}
-                        className={`w-7 h-7 rounded text-xs font-medium ${
-                          page === i + 1
-                            ? 'bg-dr7-gold text-white'
-                            : 'border border-theme-border bg-theme-bg-primary hover:bg-theme-bg-hover'
-                        }`}
-                      >{i + 1}</button>
+                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                      className="px-2 py-1 rounded border border-theme-border bg-theme-bg-primary disabled:opacity-40 hover:bg-theme-bg-hover">‹</button>
+                    {Array.from({ length: Math.min(totalPages, 6) }).map((_, i) => (
+                      <button key={i} onClick={() => setPage(i + 1)}
+                        className={`w-7 h-7 rounded text-xs font-medium ${page === i + 1 ? 'bg-dr7-gold text-white' : 'border border-theme-border bg-theme-bg-primary hover:bg-theme-bg-hover'}`}>{i + 1}</button>
                     ))}
-                    <button
-                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                      disabled={page === totalPages}
-                      className="px-2 py-1 rounded border border-theme-border bg-theme-bg-primary disabled:opacity-40 hover:bg-theme-bg-hover"
-                    >›</button>
+                    <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                      className="px-2 py-1 rounded border border-theme-border bg-theme-bg-primary disabled:opacity-40 hover:bg-theme-bg-hover">›</button>
                   </div>
                 </div>
               )}
             </>
           )}
-        </div>
+        </Card>
 
-        {/* Right: side panels */}
-        <div className="space-y-4">
-          {/* Analisi Economica */}
-          <SidePanel title="Analisi Economica">
-            <Row label="Danni Totali" value={formatCurrencyDecimal(danniAmount)} valueClass="text-rose-600" />
-            <Row label="Penali Totali" value={formatCurrencyDecimal(penaliAmount)} valueClass="text-orange-600" />
-            <Row label="Combinato" value={formatCurrencyDecimal(combinedAmount)} valueClass="text-dr7-gold font-semibold" />
-            <Row label="Casi Totali" value={`${combinedCount}`} />
-            {/* Split bar */}
-            {combinedAmount > 0 && (
-              <div className="pt-2">
-                <div className="h-2 rounded-full overflow-hidden flex bg-theme-bg-tertiary">
-                  <div className="bg-rose-400" style={{ width: `${danniPct}%` }} />
-                  <div className="bg-orange-400" style={{ width: `${penaliPct}%` }} />
-                </div>
-                <div className="flex justify-between text-xs text-theme-text-muted mt-1.5">
-                  <span>Danni {danniPct}%</span>
-                  <span>Penali {penaliPct}%</span>
-                </div>
-              </div>
-            )}
-          </SidePanel>
-
-          {/* Veicoli Più Danneggiati */}
-          <SidePanel title="Veicoli Più Coinvolti">
-            {topVehicles.length === 0 ? (
-              <p className="text-xs text-theme-text-muted">Nessun veicolo registrato.</p>
-            ) : topVehicles.map(v => (
-              <div key={v.plate} className="flex items-center justify-between gap-3 py-1.5 border-b border-theme-border last:border-0">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-theme-text-primary truncate">{v.name}</p>
-                  <p className="text-xs text-theme-text-muted">{v.plate} · {v.count} voci</p>
-                </div>
-                <span className="text-sm font-semibold text-dr7-gold whitespace-nowrap">{formatCurrency(v.total)}</span>
-              </div>
-            ))}
-          </SidePanel>
-
-          {/* Clienti Problematici */}
-          <SidePanel title="Clienti Problematici">
-            {topCustomers.length === 0 ? (
-              <p className="text-xs text-theme-text-muted">Nessun cliente registrato.</p>
-            ) : topCustomers.map(c => (
-              <div key={c.name} className="flex items-center justify-between gap-3 py-1.5 border-b border-theme-border last:border-0">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-semibold shrink-0 ${avatarColor(c.name)}`}>
-                    {initials(c.name)}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-sm text-theme-text-primary truncate">{c.name}</p>
-                    <p className="text-xs text-theme-text-muted">{c.count} voci</p>
+        {/* Top clienti */}
+        <Card title="Top Clienti Danni & Penali" subtitle="Per importo totale">
+          {topClienti.length === 0 ? (
+            <div className="text-xs text-theme-text-muted py-6 text-center">Nessun cliente</div>
+          ) : (
+            <div className="space-y-2">
+              {topClienti.map((c, i) => (
+                <div key={c.name} className="flex items-center gap-2.5 py-1.5 border-b border-theme-border last:border-0">
+                  <span className="text-[11px] font-bold text-theme-text-muted w-4">{i + 1}.</span>
+                  <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-semibold ${avatarColor(c.name)}`}>{initials(c.name)}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm text-theme-text-primary truncate">{c.name}</div>
+                    <div className="text-[10px] text-theme-text-muted">{c.count} pratiche</div>
                   </div>
+                  <span className="text-sm font-semibold text-dr7-gold whitespace-nowrap">{fmtEur(c.total)}</span>
                 </div>
-                <span className="text-sm font-semibold text-dr7-gold whitespace-nowrap">{formatCurrency(c.total)}</span>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* ── Row 5: Impatto + Per veicolo + Confronto + Previsioni + Cause ─ */}
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+        <Card title="Impatto Economico" subtitle="Contenzioso totale">
+          <div className="flex flex-col items-center justify-center py-2">
+            <div className="text-[11px] uppercase tracking-wide text-theme-text-muted">Totale</div>
+            <div className="text-3xl font-bold text-theme-text-primary">{fmtEur(kpi.contenziosoTot)}</div>
+            <div className="text-[11px] text-theme-text-muted mt-1">{filteredEntries.length} pratiche nel periodo</div>
+          </div>
+          {kpi.contenziosoTot > 0 && (
+            <div className="mt-3">
+              <div className="h-2 rounded-full overflow-hidden flex bg-theme-bg-tertiary">
+                <div className="bg-rose-400" style={{ width: `${(kpi.danniTot / kpi.contenziosoTot) * 100}%` }} />
+                <div className="bg-orange-400" style={{ width: `${(kpi.penaliTot / kpi.contenziosoTot) * 100}%` }} />
               </div>
-            ))}
-          </SidePanel>
-        </div>
+              <div className="flex justify-between text-[10px] text-theme-text-muted mt-1.5">
+                <span>Danni {Math.round((kpi.danniTot / kpi.contenziosoTot) * 100)}%</span>
+                <span>Penali {Math.round((kpi.penaliTot / kpi.contenziosoTot) * 100)}%</span>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        <Card title="Danni e Penali per Veicolo" subtitle="Top 10 per importo" className="xl:col-span-2">
+          {perVeicolo.length === 0 ? (
+            <EmptyChart message="Nessun veicolo" />
+          ) : (
+            <ResponsiveContainer width="100%" height={Math.max(220, perVeicolo.length * 26)}>
+              <BarChart data={perVeicolo} layout="vertical" margin={{ left: 10, right: 30 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: '#71717a' }} axisLine={false} tickLine={false} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#374151' }} axisLine={false} tickLine={false} width={140} />
+                <Tooltip formatter={(v) => fmtEur2(Number(v))} />
+                <Bar dataKey="value" radius={[0, 4, 4, 0]} fill={COLORS.gold} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </Card>
+
+        <Card title="Confronto Periodo" subtitle="vs periodo precedente">
+          {!confronto ? (
+            <div className="text-xs text-theme-text-muted py-6 text-center">Imposta un range per confronto</div>
+          ) : (
+            <div className="space-y-3">
+              <ConfrontoRow label="Danni" cur={confronto.danni.current} pct={confronto.danni.pct} />
+              <ConfrontoRow label="Penali" cur={confronto.penali.current} pct={confronto.penali.pct} />
+              <ConfrontoRow label="Totale" cur={confronto.totale.current} pct={confronto.totale.pct} bold />
+            </div>
+          )}
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <Card title="Previsioni" subtitle="Proiezione prossimi 30 giorni (base ultimi 30g)">
+          <div className="space-y-2">
+            <div className="flex justify-between items-baseline py-2 border-b border-theme-border">
+              <span className="text-sm text-theme-text-secondary">Danni Previsti</span>
+              <span className="text-base font-semibold text-rose-600">{fmtEur(previsioni.danni)}</span>
+            </div>
+            <div className="flex justify-between items-baseline py-2 border-b border-theme-border">
+              <span className="text-sm text-theme-text-secondary">Penali Previste</span>
+              <span className="text-base font-semibold text-orange-600">{fmtEur(previsioni.penali)}</span>
+            </div>
+            <div className="flex justify-between items-baseline py-2 border-b border-theme-border">
+              <span className="text-sm text-theme-text-secondary">Totale Previsto</span>
+              <span className="text-base font-bold text-dr7-gold">{fmtEur(previsioni.totale)}</span>
+            </div>
+            <div className="flex justify-between items-baseline py-2">
+              <span className="text-sm text-theme-text-secondary">Importo Medio</span>
+              <span className="text-base font-semibold text-theme-text-primary">{fmtEur(previsioni.importoMedio)}</span>
+            </div>
+          </div>
+        </Card>
+
+        <Card title="Principali Cause di Danni e Penali" subtitle="Top 6 categorie" className="xl:col-span-2">
+          {causeData.length === 0 ? (
+            <EmptyChart message="Nessuna causa registrata" />
+          ) : (
+            <div className="flex flex-col lg:flex-row items-center gap-4">
+              <div className="relative w-full lg:w-1/2">
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie data={causeData} cx="50%" cy="50%" innerRadius={50} outerRadius={85} dataKey="value" stroke="none">
+                      {causeData.map((d, i) => <Cell key={i} fill={d.fill} />)}
+                    </Pie>
+                    <Tooltip formatter={(v) => fmtEur2(Number(v))} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <div className="text-[11px] uppercase tracking-wide text-theme-text-muted">Totale</div>
+                  <div className="text-base font-bold text-theme-text-primary">{fmtEur(causeData.reduce((s, c) => s + c.value, 0))}</div>
+                </div>
+              </div>
+              <div className="flex-1 w-full space-y-1.5">
+                {causeData.map(c => (
+                  <div key={c.name} className="flex items-center justify-between gap-3 py-1 border-b border-theme-border last:border-0">
+                    <span className="inline-flex items-center gap-2 text-xs text-theme-text-primary">
+                      <span className="w-2 h-2 rounded-full" style={{ background: c.fill }} />
+                      {c.name}
+                    </span>
+                    <span className="text-xs font-semibold text-dr7-gold whitespace-nowrap">{fmtEur(c.value)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* ── Footer with timestamp ─────────────────────────────────────── */}
+      <div className="flex items-center justify-between text-[11px] text-theme-text-muted pt-2">
+        <span>Report aggiornato il {new Date().toLocaleString('it-IT', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+        <span>{filteredEntries.length} pratiche nel periodo · {allEntries.length} totali</span>
       </div>
     </div>
   )
 }
 
-// ── Reusable subcomponents ─────────────────────────────────────────────────────
+// ─── Reusable subcomponents ──────────────────────────────────────────────────
+function Card({ title, subtitle, headerRight, children, className = '' }: {
+  title: string
+  subtitle?: string
+  headerRight?: React.ReactNode
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={`bg-theme-bg-primary border border-theme-border rounded-2xl p-5 shadow-sm ${className}`}>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-theme-text-primary">{title}</h3>
+          {subtitle && <p className="text-[11px] text-theme-text-muted mt-0.5">{subtitle}</p>}
+        </div>
+        {headerRight}
+      </div>
+      {children}
+    </div>
+  )
+}
 
-function KpiCard({
-  label, value, sub, accent, icon,
-}: {
+function KpiCard({ label, value, sub, accent, big }: {
   label: string
   value: string
   sub?: string
-  accent: 'rose' | 'amber' | 'orange' | 'gold'
-  icon: React.ReactNode
+  accent: 'rose' | 'orange' | 'gold'
+  big?: boolean
 }) {
-  const accentClasses: Record<typeof accent, string> = {
-    rose: 'bg-rose-50 text-rose-600',
-    amber: 'bg-amber-50 text-amber-600',
-    orange: 'bg-orange-50 text-orange-600',
-    gold: 'bg-emerald-50 text-dr7-gold',
-  }
+  const dotCls = accent === 'rose' ? 'bg-rose-500' : accent === 'orange' ? 'bg-orange-500' : 'bg-dr7-gold'
   return (
-    <div className="bg-theme-bg-primary border border-theme-border rounded-2xl p-4 shadow-sm">
+    <div className={`bg-theme-bg-primary border ${big ? 'border-dr7-gold/40 ring-1 ring-dr7-gold/10' : 'border-theme-border'} rounded-2xl p-4 shadow-sm`}>
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs font-medium text-theme-text-secondary uppercase tracking-wide">{label}</p>
-        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full ${accentClasses[accent]}`}>{icon}</span>
+        <span className={`w-2 h-2 rounded-full ${dotCls}`} />
+        <span className="text-[10px] uppercase tracking-wide font-medium text-theme-text-secondary">{label}</span>
       </div>
-      <p className="text-2xl font-bold text-theme-text-primary tracking-tight">{value}</p>
-      {sub && <p className="text-xs text-theme-text-muted mt-1">{sub}</p>}
+      <p className={`${big ? 'text-2xl' : 'text-xl'} font-bold text-theme-text-primary tracking-tight tabular-nums`}>{value}</p>
+      {sub && <p className="text-[10px] text-theme-text-muted mt-1 truncate">{sub}</p>}
     </div>
   )
 }
 
-function SidePanel({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-theme-bg-primary border border-theme-border rounded-2xl p-5 shadow-sm">
-      <h3 className="text-sm font-semibold text-theme-text-primary mb-3">{title}</h3>
-      <div className="space-y-1">{children}</div>
-    </div>
-  )
+function EmptyChart({ message }: { message: string }) {
+  return <div className="flex items-center justify-center h-[220px] text-xs text-theme-text-muted">{message}</div>
 }
 
-function Row({ label, value, valueClass = '' }: { label: string; value: string; valueClass?: string }) {
+function ConfrontoRow({ label, cur, pct, bold }: { label: string; cur: number; pct: number | null; bold?: boolean }) {
+  const positive = pct !== null && pct >= 0
   return (
-    <div className="flex items-center justify-between py-1.5">
+    <div className={`flex items-center justify-between py-1.5 border-b border-theme-border last:border-0 ${bold ? 'font-semibold' : ''}`}>
       <span className="text-sm text-theme-text-secondary">{label}</span>
-      <span className={`text-sm text-theme-text-primary ${valueClass}`}>{value}</span>
+      <div className="text-right">
+        <div className={`text-sm ${bold ? 'text-dr7-gold font-bold' : 'text-theme-text-primary'}`}>{fmtEur(cur)}</div>
+        {pct !== null && (
+          <div className={`text-[10px] font-medium ${positive ? 'text-rose-600' : 'text-emerald-600'}`}>
+            {positive ? '▲' : '▼'} {Math.abs(pct).toFixed(1)}%
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -289,9 +289,10 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     const newErrors: Record<string, string> = {}
 
     // Global validations
-    if (!formData.email) {
-      newErrors.email = 'Email obbligatoria'
-    } else if (!validateEmail(formData.email)) {
+    // Email opzionale: WhatsApp è il canale primario di consegna per
+    // contratto / fattura / notifiche. Validiamo solo il formato se
+    // presente.
+    if (formData.email && !validateEmail(formData.email)) {
       newErrors.email = 'Formato email non valido'
     }
 

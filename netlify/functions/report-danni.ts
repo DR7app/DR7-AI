@@ -85,20 +85,70 @@ export const handler: Handler = async (event) => {
   }
 
   const params = event.queryStringParameters || {}
-  const reportType = params.type || 'danni' // 'danni' or 'penali'
+  const reportType = params.type || 'danni' // 'danni' or 'penali' or 'all'
 
-  if (reportType !== 'danni' && reportType !== 'penali') {
+  if (reportType !== 'danni' && reportType !== 'penali' && reportType !== 'all') {
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: 'Invalid type. Use "danni" or "penali"' })
+      body: JSON.stringify({ error: 'Invalid type. Use "danni", "penali" or "all"' })
     }
   }
 
   try {
-    // Fetch all fatture (invoices)
+    // ── Entry-level records returned alongside the per-vehicle aggregation
+    //    so the new ReportPenaliDanniTab can build temporal / status /
+    //    service-type charts without a second round-trip.
+    //
+    // service_type values normalized to: 'noleggio' | 'lavaggio' | 'meccanica'
+    //   (rental → noleggio, car_wash → lavaggio, mechanical_* → meccanica)
+    type Entry = {
+      id: string
+      date: string | null
+      type: 'danni' | 'penali'
+      category: string                 // human-readable bucket (e.g. "Ritardo", "Carrozzeria", "Fumo")
+      customerName: string
+      vehicleName: string
+      vehiclePlate: string
+      description: string
+      amount: number
+      status: 'paid' | 'pending' | 'cancelled' | 'blocked'
+      serviceType: 'noleggio' | 'lavaggio' | 'meccanica' | 'altro'
+      source: 'fattura' | 'pending' | 'cauzione'
+    }
+    const entries: Entry[] = []
+
+    // Lightweight description → categoria bucket. Maps PenaltyModal labels
+    // into the broader "Causa" buckets shown in the Tipologia / Cause donut.
+    function categorize(desc: string): string {
+      const d = desc.toLowerCase()
+      if (d.includes('incidente') || d.includes('carrozzeria') || d.includes('foro')) return 'Carrozzeria'
+      if (d.includes('fermo')) return 'Fermo Veicolo'
+      if (d.includes('sporco') || d.includes('igienizz') || d.includes('cani') || d.includes('pelo')) return 'Pulizia / Igienizzazione'
+      if (d.includes('fumo') || d.includes('cenere') || d.includes('odore')) return 'Fumo a Bordo'
+      if (d.includes('ritardo') || d.includes('riconsegna') || d.includes('check')) return 'Ritardo Riconsegna'
+      if (d.includes('carburante')) return 'Carburante'
+      if (d.includes('multa') || d.includes('sanzion')) return 'Multe'
+      if (d.includes('subnoleggio') || d.includes('guidatore') || d.includes('intestatario')) return 'Violazioni Contrattuali'
+      if (d.includes('km') || d.includes('eccesso') || d.includes('sforo')) return 'Sforo Km'
+      if (d.includes('patente') || d.includes('neopatentat')) return 'Documenti'
+      if (d.includes('pista') || d.includes('competizion')) return 'Uso Improprio'
+      return 'Altro'
+    }
+
+    function normalizeServiceType(st: string | null | undefined, bookingHasDates: boolean): Entry['serviceType'] {
+      const s = (st || '').toLowerCase().trim()
+      if (s === 'car_wash') return 'lavaggio'
+      if (s === 'mechanical_service' || s === 'mechanical') return 'meccanica'
+      if (s === 'car_rental' || s === 'rental') return 'noleggio'
+      // No explicit service_type — infer from dates (rentals have pickup/dropoff)
+      if (bookingHasDates) return 'noleggio'
+      return 'altro'
+    }
+
+    // Fetch all fatture (invoices). We need data_pagamento/stato for status.
     const { data: fatture, error: fattureError } = await supabase
       .from('fatture')
-      .select('id, booking_id, importo_totale, items, customer_name, data_emissione')
+      .select('id, booking_id, importo_totale, items, customer_name, data_emissione, data_pagamento, stato')
 
     if (fattureError) throw fattureError
 
@@ -109,15 +159,21 @@ export const handler: Handler = async (event) => {
         item.description && (item.description.includes('Penale prenotazione') || item.description.includes('Danno prenotazione'))
       )
       if (!hasPenalty) return false
-      return classifyInvoice(f.items) === reportType
+      const cls = classifyInvoice(f.items)
+      return reportType === 'all' ? cls !== null : cls === reportType
     })
 
-    // Get booking IDs to resolve vehicle info
+    // Get booking IDs to resolve vehicle / service info
     const bookingIds = matchingInvoices
       .map(f => f.booking_id)
       .filter((id): id is string => !!id)
 
-    const bookingLookup = new Map<string, { vehicle_name: string; vehicle_plate: string }>()
+    const bookingLookup = new Map<string, {
+      vehicle_name: string
+      vehicle_plate: string
+      service_type: string | null
+      has_dates: boolean
+    }>()
 
     if (bookingIds.length > 0) {
       const CHUNK_SIZE = 100
@@ -125,14 +181,16 @@ export const handler: Handler = async (event) => {
         const chunk = bookingIds.slice(i, i + CHUNK_SIZE)
         const { data: bookings } = await supabase
           .from('bookings')
-          .select('id, vehicle_name, vehicle_plate')
+          .select('id, vehicle_name, vehicle_plate, service_type, pickup_date, dropoff_date')
           .in('id', chunk)
 
         if (bookings) {
           bookings.forEach(b => {
             bookingLookup.set(b.id, {
               vehicle_name: b.vehicle_name || '',
-              vehicle_plate: b.vehicle_plate || ''
+              vehicle_plate: b.vehicle_plate || '',
+              service_type: b.service_type || null,
+              has_dates: !!(b.pickup_date && b.dropoff_date),
             })
           })
         }
@@ -171,49 +229,105 @@ export const handler: Handler = async (event) => {
       if (!vehicleMap[plate].customerName && f.customer_name) {
         vehicleMap[plate].customerName = f.customer_name
       }
+
+      // Push one entry per fattura (one fattura = one practice).
+      const cls = classifyInvoice(f.items) || 'penali'
+      const mainItem = (f.items || []).find((it: any) =>
+        it.description && (it.description.includes('Penale prenotazione') || it.description.includes('Danno prenotazione'))
+      )
+      const desc = mainItem?.description || ''
+      const motivo = desc.includes(' - ') ? desc.substring(desc.indexOf(' - ') + 3) : desc
+      const stato = (f.stato || '').toLowerCase()
+      const status: Entry['status'] =
+        stato === 'pagata' || stato === 'paid' || f.data_pagamento ? 'paid'
+        : stato === 'annullata' || stato === 'cancelled' ? 'cancelled'
+        : 'pending'
+      entries.push({
+        id: f.id,
+        date: f.data_pagamento || f.data_emissione || null,
+        type: cls,
+        category: categorize(motivo),
+        customerName: f.customer_name || '',
+        vehicleName: name,
+        vehiclePlate: plate,
+        description: motivo || desc,
+        amount: Number(f.importo_totale) || 0,
+        status,
+        serviceType: normalizeServiceType(booking?.service_type, !!booking?.has_dates),
+        source: 'fattura',
+      })
     })
 
     // Also scan bookings.booking_details for pending penalties/danni (Da Saldare, no fattura)
     // Skip bookings that already have a matching fattura to avoid double-counting
     {
       const bookingIdsWithFattura = new Set(bookingIds)
-      const detailsKey = reportType === 'danni' ? 'danni' : 'penalties'
+      // bookings.booking_details.penalties[] uses the ENGLISH key (see memory:
+      // booking_details_penalties_key.md), bookings.booking_details.danni[] is
+      // Italian. Mixed-language schema is intentional — don't unify.
+      const sourceKeys: Array<{ key: 'danni' | 'penalties'; type: 'danni' | 'penali' }> =
+        reportType === 'all'
+          ? [{ key: 'danni', type: 'danni' }, { key: 'penalties', type: 'penali' }]
+          : reportType === 'danni'
+            ? [{ key: 'danni', type: 'danni' }]
+            : [{ key: 'penalties', type: 'penali' }]
+
       const { data: allBookings } = await supabase
         .from('bookings')
-        .select('id, vehicle_name, vehicle_plate, customer_name, booking_details')
+        .select('id, vehicle_name, vehicle_plate, customer_name, booking_details, service_type, pickup_date, dropoff_date, status')
 
       if (allBookings) {
         for (const b of allBookings) {
           // Skip if this booking already has a fattura counted above
           if (bookingIdsWithFattura.has(b.id)) continue
 
-          const entries = b.booking_details?.[detailsKey]
-          if (!Array.isArray(entries) || entries.length === 0) continue
+          for (const { key: detailsKey, type: entryType } of sourceKeys) {
+            const list = b.booking_details?.[detailsKey]
+            if (!Array.isArray(list) || list.length === 0) continue
 
-          const plate = (b.vehicle_plate || 'Sconosciuto').replace(/\s/g, '').toUpperCase()
-          const name = b.vehicle_name || 'Sconosciuto'
+            const plate = (b.vehicle_plate || 'Sconosciuto').replace(/\s/g, '').toUpperCase()
+            const name = b.vehicle_name || 'Sconosciuto'
+            const hasDates = !!(b.pickup_date && b.dropoff_date)
+            const bookingCancelled = (b.status || '').toLowerCase().match(/cancell|annull/)
 
-          for (const entry of entries) {
-            const entryTotal = entry.total || (entry.amount || 0) * (entry.quantity || 1)
-            if (entryTotal <= 0) continue
+            for (const entry of list) {
+              const entryTotal = entry.total || (entry.amount || 0) * (entry.quantity || 1)
+              if (entryTotal <= 0) continue
 
-            if (!vehicleMap[plate]) {
-              vehicleMap[plate] = {
+              if (!vehicleMap[plate]) {
+                vehicleMap[plate] = {
+                  vehicleName: name,
+                  vehiclePlate: plate,
+                  customerName: b.customer_name || '',
+                  count: 0,
+                  totalAmount: 0,
+                }
+              }
+
+              vehicleMap[plate].count += 1
+              vehicleMap[plate].totalAmount += entryTotal
+              if (vehicleMap[plate].vehicleName === 'Sconosciuto' && name !== 'Sconosciuto') {
+                vehicleMap[plate].vehicleName = name
+              }
+              if (!vehicleMap[plate].customerName && b.customer_name) {
+                vehicleMap[plate].customerName = b.customer_name
+              }
+
+              const desc: string = entry.label || entry.description || entry.motivo || ''
+              entries.push({
+                id: `${b.id}:${entry.id || entry.code || desc.slice(0, 16)}`,
+                date: entry.date || entry.created_at || b.pickup_date || null,
+                type: entryType,
+                category: categorize(desc),
+                customerName: b.customer_name || '',
                 vehicleName: name,
                 vehiclePlate: plate,
-                customerName: b.customer_name || '',
-                count: 0,
-                totalAmount: 0,
-              }
-            }
-
-            vehicleMap[plate].count += 1
-            vehicleMap[plate].totalAmount += entryTotal
-            if (vehicleMap[plate].vehicleName === 'Sconosciuto' && name !== 'Sconosciuto') {
-              vehicleMap[plate].vehicleName = name
-            }
-            if (!vehicleMap[plate].customerName && b.customer_name) {
-              vehicleMap[plate].customerName = b.customer_name
+                description: desc,
+                amount: Number(entryTotal) || 0,
+                status: bookingCancelled ? 'cancelled' : 'pending',
+                serviceType: normalizeServiceType(b.service_type, hasDates),
+                source: 'pending',
+              })
             }
           }
         }
@@ -221,10 +335,10 @@ export const handler: Handler = async (event) => {
     }
 
     // For danni report: also include cashed cauzioni (stato='Bloccata')
-    if (reportType === 'danni') {
+    if (reportType === 'danni' || reportType === 'all') {
       const { data: cauzioni } = await supabase
         .from('cauzioni')
-        .select('veicolo_id, cliente_id, importo')
+        .select('id, veicolo_id, cliente_id, importo, data_creazione, data_blocco, stato')
         .eq('stato', 'Bloccata')
 
       if (cauzioni && cauzioni.length > 0) {
@@ -286,6 +400,23 @@ export const handler: Handler = async (event) => {
           if (!vehicleMap[plate].customerName && custName) {
             vehicleMap[plate].customerName = custName
           }
+
+          // Cauzione bloccata = danno (importo trattenuto).
+          // serviceType: assume noleggio (cauzioni are only created for rentals).
+          entries.push({
+            id: c.id,
+            date: c.data_blocco || c.data_creazione || null,
+            type: 'danni',
+            category: 'Cauzione Trattenuta',
+            customerName: custName,
+            vehicleName: name,
+            vehiclePlate: plate,
+            description: 'Cauzione bloccata',
+            amount: Number(c.importo) || 0,
+            status: 'blocked',
+            serviceType: 'noleggio',
+            source: 'cauzione',
+          })
         })
       }
     }
@@ -309,7 +440,11 @@ export const handler: Handler = async (event) => {
           customerName: v.customerName || '-',
           count: v.count,
           totalAmount: Math.round(v.totalAmount * 100) / 100,
-        }))
+        })),
+        entries: entries.map(e => ({
+          ...e,
+          amount: Math.round(e.amount * 100) / 100,
+        })),
       })
     }
   } catch (error: any) {

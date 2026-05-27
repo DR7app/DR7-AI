@@ -558,6 +558,13 @@ type AutomationsConfig = {
   coefficient_second_driver?: boolean
   coefficient_dr7_flex?: boolean
   coefficient_cauzione_veicoli?: boolean
+  // 2026-05-27: nuovi toggle per coprire TUTTE le voci che entrano
+  // nel prezzo dinamico. Prima erano hardcoded come "sempre escluse".
+  // Default false per mantenere il comportamento storico (a listino).
+  coefficient_km_packages?: boolean
+  coefficient_experience?: boolean
+  coefficient_delivery?: boolean
+  coefficient_pickup?: boolean
 }
 
 type CancellationAppliesTo = 'all' | 'rental' | 'carwash'
@@ -606,6 +613,11 @@ const INITIAL_AUTOMATIONS: AutomationsConfig = {
   coefficient_second_driver: true,
   coefficient_dr7_flex: true,
   coefficient_cauzione_veicoli: true,
+  // Default escluse (comportamento storico = sempre a listino).
+  coefficient_km_packages: false,
+  coefficient_experience: false,
+  coefficient_delivery: false,
+  coefficient_pickup: false,
 }
 
 // === Orari Lavaggio ===
@@ -6339,12 +6351,16 @@ function AutomazioniSection({
         <div className="p-5 space-y-4">
           {([
             { key: 'coefficient_unlimited_km',     label: 'KM Illimitati' },
+            { key: 'coefficient_km_packages',       label: 'Pacchetti KM' },
             { key: 'coefficient_insurance',         label: 'Assicurazione (Kasko)' },
             { key: 'coefficient_lavaggio',          label: 'Lavaggio finale' },
             { key: 'coefficient_no_cauzione',       label: 'No Cauzione / Cauzione ridotta' },
+            { key: 'coefficient_cauzione_veicoli',  label: 'Cauzione Veicoli' },
             { key: 'coefficient_second_driver',     label: 'Secondo Guidatore' },
             { key: 'coefficient_dr7_flex',          label: 'DR7 FLEX' },
-            { key: 'coefficient_cauzione_veicoli',  label: 'Cauzione Veicoli' },
+            { key: 'coefficient_experience',        label: 'Servizi Experience' },
+            { key: 'coefficient_delivery',          label: 'Consegna a domicilio' },
+            { key: 'coefficient_pickup',            label: 'Ritiro a domicilio' },
           ] as const).map(({ key, label }) => {
             const on = !!automations[key]
             return (

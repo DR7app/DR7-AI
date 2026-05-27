@@ -237,17 +237,25 @@ export default function ReportLavaggioTab() {
 
   // Theme tokens
   const isDark = theme === 'dark'
-  const rootBg = isDark
-    ? 'radial-gradient(ellipse 1200px 600px at 20% 0%, rgba(8,47,73,0.45), transparent 60%), radial-gradient(ellipse 900px 500px at 100% 100%, rgba(76,29,149,0.18), transparent 55%), linear-gradient(135deg, #000000 0%, #050507 50%, #0a0a0d 100%)'
-    : 'radial-gradient(ellipse 1000px 500px at 0% 0%, rgba(14,116,144,0.04), transparent 60%), radial-gradient(ellipse 900px 500px at 100% 100%, rgba(124,58,237,0.03), transparent 55%), #ffffff'
   const axis = isDark ? '#52525b' : '#a1a1aa'
   const grid = isDark ? 'rgba(34,211,238,0.08)' : 'rgba(15,23,42,0.06)'
 
   return (
     <div
-      className="relative text-zinc-900 dark:text-white -mx-3 -my-3 sm:-mx-6 sm:-my-6 lg:-mx-8 lg:-my-8 px-2 py-2 sm:px-3 sm:py-3 flex flex-col gap-2 overflow-hidden"
-      style={{ height: 'calc(100vh - 110px)', background: rootBg }}
+      className="relative text-zinc-900 dark:text-white -mx-3 -my-3 sm:-mx-6 sm:-my-6 lg:-mx-8 lg:-my-8 px-2 py-2 sm:px-3 sm:py-3 flex flex-col gap-2 overflow-hidden bg-white dark:bg-black"
+      style={{
+        height: 'calc(100vh - 110px)',
+        // Backup: drive the bg from the `theme` context too so dark mode
+        // wins even if Tailwind's dark: variant doesn't make it to the
+        // bundle (e.g. cached dev server, purge mis-config, palette
+        // overrides). Inline style beats utility classes.
+        background: isDark
+          ? 'radial-gradient(ellipse 1200px 600px at 20% 0%, rgba(8,47,73,0.45), transparent 60%), radial-gradient(ellipse 900px 500px at 100% 100%, rgba(76,29,149,0.18), transparent 55%), linear-gradient(135deg, #000000 0%, #050507 50%, #0a0a0d 100%)'
+          : '#ffffff',
+      }}
     >
+      {/* Dark-mode-only ambient atmosphere — gradient also lives in the
+          inline style above as a safety net for cached/stale Tailwind builds. */}
       <style>{`
         @keyframes lv-ambient{0%,100%{opacity:.6}50%{opacity:.9}}
         @keyframes lv-pulse{0%,100%{transform:scale(1);opacity:.5}50%{transform:scale(1.15);opacity:1}}
@@ -273,7 +281,6 @@ export default function ReportLavaggioTab() {
           <div className="min-w-0">
             <h1 className="text-sm font-bold tracking-tight truncate flex items-center gap-2">
               Lavaggio · Report Operativo
-              <span className="hidden sm:inline text-[10px] font-mono text-cyan-700 dark:text-cyan-400/80 px-1.5 py-0.5 rounded ring-1 ring-cyan-500/30 bg-cyan-500/10">DR7 MOTION</span>
             </h1>
             <p className="text-[10px] text-zinc-500 truncate">
               Intelligence operativa · {washData?.daysInMonth || '—'} giorni · {monthLabel(selectedMonth)}
@@ -314,7 +321,7 @@ export default function ReportLavaggioTab() {
         />
         <Kpi index={2} label="Ricavo" color="emerald"
           value={formatCurrencyShort(ricavo)} sub={`media ${formatCurrencyShort(avgRevenuePerWash)} / lavaggio`}
-          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>}
+          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 5.5A8 8 0 0 0 6 9M19 18.5A8 8 0 0 1 6 15M4 10h11M4 14h11"/></svg>}
         />
         <Kpi index={3} label="Spesa Merce" color="rose"
           value={formatCurrencyShort(spesaMerce)} sub={costsLoading ? 'caricamento…' : 'prodotti / consumabili'}

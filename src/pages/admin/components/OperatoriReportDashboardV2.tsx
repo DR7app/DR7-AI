@@ -190,9 +190,19 @@ interface OperatoriReportDashboardV2Props {
     onSwitchView?: (view: OperatoriView) => void
 }
 
+// 2026-05-23: Report Operatori — Salvatore vede solo la propria riga
+// del report, nonostante ROLE_FAILSAFE lo marchi 'direzione' per gli
+// altri tab (decisione direzione 2026-05-23, sostituisce richiesta
+// 2026-05-18 che gli dava pieno accesso al Report Operatori).
+// Tutti gli altri admin (Valerio, Ilenia, Ophe, eventuali futuri
+// 'direzione') mantengono la team-view classica.
+const REPORT_RESTRICTED_EMAILS = new Set<string>(['salvatore@dr7.app'])
+
 export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriReportDashboardV2Props = {}) {
-    const { hasRole } = useAdminRole()
-    const isDirezione = hasRole('direzione') || hasRole('developer')
+    const { hasRole, adminEmail } = useAdminRole()
+    const lowerAdminEmail = (adminEmail || '').toLowerCase()
+    const isRestrictedToOwn = REPORT_RESTRICTED_EMAILS.has(lowerAdminEmail)
+    const isDirezione = (hasRole('direzione') || hasRole('developer')) && !isRestrictedToOwn
 
     const [preset, setPreset] = useState<RangePreset>('30gg')
     const [{ from: rangeFrom, to: rangeTo }, setRange] = useState(() => rangeFromPreset('30gg'))
@@ -300,7 +310,17 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                 .select('id, nome, cognome, email, ruolo, ore_target_giornaliere, avatar_url, attivo')
                 .eq('attivo', true)
                 .order('cognome', { ascending: true })
-            const opListRaw = (ops || []) as Operatore[]
+            let opListRaw = (ops || []) as Operatore[]
+
+            // 2026-05-23: Salvatore (e ogni altra email in
+            // REPORT_RESTRICTED_EMAILS) vede solo la propria riga del
+            // report. Match per email su operatori_persone.email.
+            // Per tutti gli altri admin la lista resta completa.
+            if (isRestrictedToOwn) {
+                opListRaw = lowerAdminEmail
+                    ? opListRaw.filter(o => (o.email || '').toLowerCase() === lowerAdminEmail)
+                    : []
+            }
 
             // 2026-05-22: target ore proviene dal CONTRATTO attivo, non
             // dal vecchio operatori_persone.ore_target_giornaliere.
@@ -653,7 +673,7 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
         } finally {
             setLoading(false)
         }
-    }, [rangeFrom, rangeTo, isDirezione])
+    }, [rangeFrom, rangeTo, isDirezione, isRestrictedToOwn, lowerAdminEmail])
 
     useEffect(() => { load() }, [load])
 

@@ -722,6 +722,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     second_driver: boolean
     dr7_flex: boolean
     cauzione_veicoli: boolean
+    // 2026-05-27: nuovi toggle per voci prima hardcoded come sempre-escluse.
+    km_packages: boolean
+    experience: boolean
+    delivery: boolean
+    pickup: boolean
   }
   const [coeffFlags, setCoeffFlags] = useState<CoeffFlags>({
     unlimited_km: false,
@@ -731,6 +736,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     second_driver: true,
     dr7_flex: true,
     cauzione_veicoli: true,
+    km_packages: false,
+    experience: false,
+    delivery: false,
+    pickup: false,
   })
   useEffect(() => {
     let cancelled = false
@@ -747,6 +756,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           coefficient_second_driver?: boolean
           coefficient_dr7_flex?: boolean
           coefficient_cauzione_veicoli?: boolean
+          coefficient_km_packages?: boolean
+          coefficient_experience?: boolean
+          coefficient_delivery?: boolean
+          coefficient_pickup?: boolean
         }
       }
       setProDeposits(c.deposits || null)
@@ -761,6 +774,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         second_driver:    a.coefficient_second_driver !== false,
         dr7_flex:         a.coefficient_dr7_flex !== false,
         cauzione_veicoli: a.coefficient_cauzione_veicoli !== false,
+        km_packages:      !!a.coefficient_km_packages,
+        experience:       !!a.coefficient_experience,
+        delivery:         !!a.coefficient_delivery,
+        pickup:           !!a.coefficient_pickup,
       })
     }
     ;(async () => {
@@ -1068,41 +1085,31 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       : 1
 
     // List totals split by whether they're subject to the min/max clamp.
-    // Experience services AND location fees (consegna + ritiro) are
-    // INTENTIONALLY excluded from the coefficient and clamp — Experience is
-    // a bespoke pass-through to third parties, location fees cover km/transport
-    // costs that don't scale with demand. The Max €/g from Centralina applies
-    // only to the rental + standard extras.
-    const locationFees = Math.round((deliveryFee + pickupFee) * 100) / 100
-    // Per ogni extra, Automazioni > Inclusione Coefficiente decide se entra
-    // nel subtotale clamp-eligible (ON, prezzo × coefficiente) o se viene
-    // sommato a listino dopo (OFF, come experience / location fees).
+    // 2026-05-27: TUTTI gli extra ora hanno un toggle in Centralina Pro >
+    // Automazioni > Inclusione coefficiente (anche experience, consegna,
+    // ritiro, pacchetti km che prima erano hardcoded come sempre-escluse).
+    // Default: rental + assicurazione + lavaggio + cauzioni + secondo guid
+    // + dr7 flex inclusi nel coefficiente; km/experience/consegna/ritiro
+    // esclusi (a listino). Direzione li flippa da Centralina Pro.
     const pick = (amount: number, on: boolean) => ({ inCoeff: on ? amount : 0, atList: on ? 0 : amount })
     const splitUnlimitedKm    = pick(unlimitedKmTotal,    coeffFlags.unlimited_km)
     const splitInsurance      = pick(insuranceTotal,      coeffFlags.insurance)
     const splitLavaggio       = pick(lavaggioFee,         coeffFlags.lavaggio)
-    // 2026-05-26: TUTTI i 7 toggle di Centralina Pro > Automazioni >
-    // Inclusione Coefficiente ora rispettati anche qui (allineato a
-    // CarBookingWizard sito). Prima 2 toggle (no_cauzione,
-    // cauzione_veicoli) erano hardcoded ad atList ignorando la scelta
-    // dell'admin. La nota storica era: "non devono scalare col
-    // coefficiente, ne' essere mangiati dal clamp max" — pero' la UI
-    // mostrava comunque il toggle come configurabile. Adesso il toggle
-    // funziona davvero: ON = nel subtotale clamp-eligible (default),
-    // OFF = sommato a listino dopo (vecchio comportamento hardcoded).
     const splitNoCauzione     = pick(noCauzioneTotal,     coeffFlags.no_cauzione)
     const splitSecondDriver   = pick(secondDriverTotal,   coeffFlags.second_driver)
     const splitDr7Flex        = pick(dr7FlexTotal,        coeffFlags.dr7_flex)
     const splitCauzioneVeic   = pick(cauzioneVeicoliTotal, coeffFlags.cauzione_veicoli)
-    // Pacchetti KM seguono il toggle unlimited_km per coerenza col sito
-    // (vedi CarBookingWizard riga ~2069 "unlimited_km copre anche i
-    // pacchetti km"). Prima erano sempre atList anche se l'admin
-    // attivava il toggle.
-    const splitKmPackages     = pick(kmPackagesTotal,     coeffFlags.unlimited_km)
-    const extrasInCoeff = splitInsurance.inCoeff + splitLavaggio.inCoeff + splitNoCauzione.inCoeff + splitUnlimitedKm.inCoeff + splitSecondDriver.inCoeff + splitDr7Flex.inCoeff + splitCauzioneVeic.inCoeff + splitKmPackages.inCoeff
-    const extrasAtList  = splitInsurance.atList  + splitLavaggio.atList  + splitNoCauzione.atList  + splitUnlimitedKm.atList  + splitSecondDriver.atList  + splitDr7Flex.atList  + splitCauzioneVeic.atList  + splitKmPackages.atList
+    // 2026-05-27: pacchetti KM ora con toggle proprio (prima condivideva
+    // unlimited_km).
+    const splitKmPackages     = pick(kmPackagesTotal,     coeffFlags.km_packages)
+    // 2026-05-27: experience, consegna, ritiro ora toggle-driven.
+    const splitExperience     = pick(experienceCost,      coeffFlags.experience)
+    const splitDelivery       = pick(deliveryFee,         coeffFlags.delivery)
+    const splitPickup         = pick(pickupFee,           coeffFlags.pickup)
+    const extrasInCoeff = splitInsurance.inCoeff + splitLavaggio.inCoeff + splitNoCauzione.inCoeff + splitUnlimitedKm.inCoeff + splitSecondDriver.inCoeff + splitDr7Flex.inCoeff + splitCauzioneVeic.inCoeff + splitKmPackages.inCoeff + splitExperience.inCoeff + splitDelivery.inCoeff + splitPickup.inCoeff
+    const extrasAtList  = splitInsurance.atList  + splitLavaggio.atList  + splitNoCauzione.atList  + splitUnlimitedKm.atList  + splitSecondDriver.atList  + splitDr7Flex.atList  + splitCauzioneVeic.atList  + splitKmPackages.atList  + splitExperience.atList  + splitDelivery.atList  + splitPickup.atList
     const listSubtotalNoExp = listRentalTotal + extrasInCoeff
-    const listSubtotal = listSubtotalNoExp + experienceCost + locationFees + extrasAtList
+    const listSubtotal = listSubtotalNoExp + extrasAtList
 
     // Apply revenue coefficients ONLY to the clamp-eligible portion.
     // Experience + location fees stay at LIST PRICE — no coefficient, no
@@ -1141,13 +1148,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     // Real (uncapped) subtotal for display purposes — this is the "Subtotale"
     // line the admin sees, reflecting what the engine would ask for without
     // limits. The clamp lines below show how it's been capped.
-    // BUG FIX 2026-05-27: rimosso "+ kmPackagesTotal" qui — i pacchetti km
-    // sono gia' contati in extrasInCoeff (se toggle ON) o extrasAtList
-    // (se toggle OFF) via splitKmPackages. Aggiungerli di nuovo qui li
-    // raddoppia, rendendo il toggle inefficace (la riga km appare sempre
-    // a listino indipendentemente dallo switch).
-    const subtotalDisplay = Math.round((rawAfterRevenueNoExp + experienceAfterCoeff + locationFees + extrasAtList) * 100) / 100
-    const subtotalClamped = Math.round((afterRevenueTotalNoExp + experienceAfterCoeff + locationFees + extrasAtList) * 100) / 100
+    // 2026-05-27: rimossi experienceAfterCoeff + locationFees qui —
+    // experience, consegna, ritiro ora hanno toggle propri e sono gia'
+    // dentro extrasInCoeff/extrasAtList via splitExperience/Delivery/Pickup.
+    // Aggiungerli di nuovo qui li raddoppierebbe (stesso bug del km
+    // packages risolto il 2026-05-27).
+    const subtotalDisplay = Math.round((rawAfterRevenueNoExp + extrasAtList) * 100) / 100
+    const subtotalClamped = Math.round((afterRevenueTotalNoExp + extrasAtList) * 100) / 100
     // Keep the legacy `afterRevenue` alias = the clamped subtotal used for all
     // downstream math (markup, sconto, totale finale).
     const afterRevenue = subtotalClamped
@@ -5384,31 +5391,30 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                 OFF = la voce esce dal calcolo (sempre a listino)
                 Cosi' direzione vede subito se il toggle funziona davvero. */}
             {(() => {
-              const alwaysOut: string[] = ['Consegna', 'Ritiro', 'Experience']
-              const toggledOut: string[] = []
-              if (!coeffFlags.insurance)        toggledOut.push('Assicurazione')
-              if (!coeffFlags.lavaggio)         toggledOut.push('Lavaggio')
-              if (!coeffFlags.no_cauzione)      toggledOut.push('No Cauzione')
-              if (!coeffFlags.second_driver)    toggledOut.push('Secondo guidatore')
-              if (!coeffFlags.dr7_flex)         toggledOut.push('DR7 FLEX')
-              if (!coeffFlags.cauzione_veicoli) toggledOut.push('Cauzione veicoli')
-              if (!coeffFlags.unlimited_km)     toggledOut.push('KM illimitati / Pacchetti KM')
-              const allOut = [...alwaysOut, ...toggledOut]
-              const inList: string[] = []
-              if (coeffFlags.insurance)         inList.push('Assicurazione')
-              if (coeffFlags.lavaggio)          inList.push('Lavaggio')
-              if (coeffFlags.no_cauzione)       inList.push('No Cauzione')
-              if (coeffFlags.second_driver)     inList.push('Secondo guidatore')
-              if (coeffFlags.dr7_flex)          inList.push('DR7 FLEX')
-              if (coeffFlags.cauzione_veicoli)  inList.push('Cauzione veicoli')
-              if (coeffFlags.unlimited_km)      inList.push('KM illimitati / Pacchetti KM')
+              // 2026-05-27: tutti gli extra ora toggle-driven. Niente piu'
+              // hardcode di "Consegna/Ritiro/Experience" sempre fuori.
+              const items: { label: string; on: boolean }[] = [
+                { label: 'Assicurazione',            on: coeffFlags.insurance },
+                { label: 'Lavaggio',                 on: coeffFlags.lavaggio },
+                { label: 'No Cauzione',              on: coeffFlags.no_cauzione },
+                { label: 'Cauzione veicoli',         on: coeffFlags.cauzione_veicoli },
+                { label: 'Secondo guidatore',        on: coeffFlags.second_driver },
+                { label: 'DR7 FLEX',                 on: coeffFlags.dr7_flex },
+                { label: 'KM illimitati',            on: coeffFlags.unlimited_km },
+                { label: 'Pacchetti KM',             on: coeffFlags.km_packages },
+                { label: 'Servizi Experience',       on: coeffFlags.experience },
+                { label: 'Consegna a domicilio',     on: coeffFlags.delivery },
+                { label: 'Ritiro a domicilio',       on: coeffFlags.pickup },
+              ]
+              const inList = items.filter(i => i.on).map(i => i.label)
+              const outList = items.filter(i => !i.on).map(i => i.label)
               return (
                 <div className="pl-2 space-y-0.5">
                   <div className="text-[11px] text-theme-text-muted">
                     <span className="text-emerald-400">Incluse nel coefficiente:</span> Noleggio{inList.length > 0 ? `, ${inList.join(', ')}` : ''}
                   </div>
                   <div className="text-[11px] text-theme-text-muted">
-                    <span className="text-rose-400">Escluse (sempre a listino):</span> {allOut.join(', ')}
+                    <span className="text-rose-400">Escluse (a listino):</span> {outList.length > 0 ? outList.join(', ') : '—'}
                   </div>
                 </div>
               )

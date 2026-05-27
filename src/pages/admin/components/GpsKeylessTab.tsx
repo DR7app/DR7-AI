@@ -439,7 +439,6 @@ export default function GpsKeylessTab() {
           <div className="min-w-0">
             <h1 className="text-sm font-bold tracking-tight text-zinc-900 dark:text-white truncate flex items-center gap-2">
               GPS Fleet Command
-              <span className="hidden sm:inline text-[10px] font-mono text-cyan-700 dark:text-cyan-400/80 px-1.5 py-0.5 rounded ring-1 ring-cyan-500/30 bg-cyan-500/10">DR7 MOTION</span>
             </h1>
             <p className="text-[10px] text-zinc-500 truncate">Telemetria real-time · {vehicles.length} veicoli</p>
           </div>

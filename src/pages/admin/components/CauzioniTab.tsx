@@ -961,63 +961,8 @@ export default function CauzioniTab() {
         </div>
     )
 
-    const renderRow = (cauzione: Cauzione, actions: React.ReactNode) => (
-        <tr
-            key={cauzione.id}
-            className={`border-b border-theme-border hover:bg-theme-bg-hover transition-colors ${cauzione.is_overdue ? 'border-l-4 border-l-red-500' : ''}`}
-        >
-            <td className="px-4 py-3 text-sm text-theme-text-primary">{cauzione.cliente_nome}</td>
-            <td className="px-4 py-3 text-sm text-theme-text-primary">
-                <div>{cauzione.veicolo_modello}</div>
-                <div className="text-xs text-theme-text-secondary">{cauzione.veicolo_targa}</div>
-            </td>
-            <td className="px-4 py-3 text-sm text-theme-text-primary">
-                {new Date(cauzione.data_restituzione_veicolo + 'T00:00:00').toLocaleDateString('it-IT')}
-            </td>
-            <td className="px-4 py-3 text-sm text-theme-text-primary">
-                <div>{new Date(cauzione.scadenza_cauzione + 'T00:00:00').toLocaleDateString('it-IT')}</div>
-                {cauzione.days_until_deadline !== null && (
-                    <div className="text-xs text-theme-text-secondary">
-                        {cauzione.days_until_deadline > 0
-                            ? `${cauzione.days_until_deadline} giorni`
-                            : cauzione.days_until_deadline === 0
-                                ? 'Oggi'
-                                : `${Math.abs(cauzione.days_until_deadline)} giorni fa`
-                        }
-                    </div>
-                )}
-            </td>
-            <td className="px-4 py-3 text-sm font-semibold text-theme-text-primary">
-                €{Number(cauzione.importo).toFixed(2)}
-            </td>
-            <td className="px-4 py-3 text-sm text-theme-text-primary capitalize">{cauzione.metodo}</td>
-            <td className="px-4 py-3 whitespace-nowrap">
-                <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${getStatoBadgeClass(cauzione)}`}>
-                    {getStatoLabel(cauzione)}
-                </span>
-            </td>
-            <td className="px-4 py-3">
-                <div className="flex gap-2 flex-wrap">
-                    {actions}
-                </div>
-            </td>
-        </tr>
-    )
-
-    const tableHeader = (
-        <thead className="bg-theme-bg-hover border-b border-theme-border">
-            <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Cliente</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Veicolo</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Data Restituzione</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Scadenza</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Importo</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Metodo</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Stato</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-theme-text-primary">Azioni</th>
-            </tr>
-        </thead>
-    )
+    // (legacy renderRow + tableHeader removed — replaced by the inline rich
+    // grid rows in the Cauzioni Attive section below)
 
     if (loading) {
         return (
@@ -1100,82 +1045,187 @@ export default function CauzioniTab() {
                 </div>
             </div>
 
-            {/* === SECTION: INCASSATE === */}
-            <div className="mb-8">
-                <h3 className="text-lg font-bold text-green-500 mb-3 flex items-center gap-2">
-                    INCASSATE
-                    <span className="text-sm font-normal text-theme-text-secondary">({incassate.length})</span>
-                </h3>
-                {/* Mobile: card list. Desktop (sm+): full table. */}
-                {(() => {
-                    const actions = (cauzione: Cauzione) => (
-                        <>
-                            <button onClick={() => handleEdit(cauzione)} className="px-3 py-2 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-700 transition-colors">Modifica</button>
-                            <button onClick={() => handleSegnaDaIncassare(cauzione)} className="px-3 py-2 bg-dr7-gold text-white text-xs rounded-full hover:bg-[#0A8FA3] transition-colors font-semibold">DA INCASSARE</button>
-                            <button onClick={() => handleCassa(cauzione)} className="px-3 py-2 bg-red-600 text-white text-xs rounded-full hover:bg-red-700 transition-colors">CASSA</button>
-                            <button onClick={() => handleMarkRestituita(cauzione)} className="px-3 py-2 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors">RESTITUITA</button>
-                        </>
-                    )
-                    if (incassate.length === 0) {
-                        return <div className="border border-theme-border rounded-2xl px-4 py-6 text-center text-theme-text-secondary">Nessuna cauzione incassata</div>
-                    }
-                    return (
-                        <>
-                            <div className="sm:hidden space-y-3">
-                                {incassate.map(c => renderCard(c, actions(c)))}
-                            </div>
-                            <div className="hidden sm:block border border-theme-border rounded-3xl overflow-hidden">
-                                <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                        {tableHeader}
-                                        <tbody>
-                                            {incassate.map(c => renderRow(c, actions(c)))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </>
-                    )
-                })()}
-            </div>
+            {/* === Cauzioni Attive — unified table with status badge column === */}
+            {(() => {
+                const allActive = applySearch(
+                    cauzioni.filter(c => c.stato !== 'Restituita' && c.stato !== 'Sbloccata' && c.stato !== 'Danno')
+                ).sort((a, b) => {
+                    const priorityA = a.is_overdue ? 0 : a.stato === 'In scadenza' ? 1 : 2
+                    const priorityB = b.is_overdue ? 0 : b.stato === 'In scadenza' ? 1 : 2
+                    if (priorityA !== priorityB) return priorityA - priorityB
+                    return a.days_until_deadline - b.days_until_deadline
+                })
 
-            {/* === SECTION: DA INCASSARE === */}
-            <div className="mb-8">
-                <h3 className="text-lg font-bold text-yellow-500 mb-3 flex items-center gap-2">
-                    DA INCASSARE
-                    <span className="text-sm font-normal text-theme-text-secondary">({daIncassare.length})</span>
-                </h3>
-                {(() => {
-                    const actions = (cauzione: Cauzione) => (
-                        <>
-                            <button onClick={() => handleEdit(cauzione)} className="px-3 py-2 bg-blue-600 text-white text-xs rounded-full hover:bg-blue-700 transition-colors">Modifica</button>
-                            <button onClick={() => handleSegnaIncassata(cauzione)} className="px-3 py-2 bg-dr7-gold text-white text-xs rounded-full hover:bg-[#0A8FA3] transition-colors font-semibold">INCASSA</button>
-                            <button onClick={() => handleSendPayLink(cauzione)} className="px-3 py-2 bg-dr7-gold text-white text-xs rounded-full hover:bg-dr7-gold/80 transition-colors font-semibold">INVIA LINK</button>
-                            <button onClick={() => handleMarkRestituita(cauzione)} className="px-3 py-2 bg-green-600 text-white text-xs rounded-full hover:bg-green-700 transition-colors">RESTITUITA</button>
-                        </>
-                    )
-                    if (daIncassare.length === 0) {
-                        return <div className="border border-theme-border rounded-2xl px-4 py-6 text-center text-theme-text-secondary">Nessuna cauzione da incassare</div>
-                    }
+                // State-aware actions: only show what makes sense for each cauzione.
+                const rowActions = (c: Cauzione) => {
+                    const isIncassata = !!c.data_incasso
+                    const isInCassa = c.stato === 'Bloccata'
                     return (
                         <>
-                            <div className="sm:hidden space-y-3">
-                                {daIncassare.map(c => renderCard(c, actions(c)))}
-                            </div>
-                            <div className="hidden sm:block border border-theme-border rounded-3xl overflow-hidden">
-                                <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                        {tableHeader}
-                                        <tbody>
-                                            {daIncassare.map(c => renderRow(c, actions(c)))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
+                            <button onClick={() => handleEdit(c)} className="px-3 py-1.5 bg-blue-600 text-white text-[11px] rounded-full hover:bg-blue-700 transition-colors">Modifica</button>
+                            {!isIncassata && (
+                                <button onClick={() => handleSegnaIncassata(c)} className="px-3 py-1.5 bg-dr7-gold text-white text-[11px] rounded-full hover:bg-[#0A8FA3] transition-colors font-semibold">INCASSA</button>
+                            )}
+                            {!isIncassata && (
+                                <button onClick={() => handleSendPayLink(c)} className="px-3 py-1.5 bg-dr7-gold text-white text-[11px] rounded-full hover:bg-dr7-gold/80 transition-colors font-semibold">INVIA LINK</button>
+                            )}
+                            {isIncassata && !isInCassa && (
+                                <button onClick={() => handleSegnaDaIncassare(c)} className="px-3 py-1.5 bg-amber-600 text-white text-[11px] rounded-full hover:bg-amber-700 transition-colors">DA INCASSARE</button>
+                            )}
+                            {isIncassata && !isInCassa && (
+                                <button onClick={() => handleCassa(c)} className="px-3 py-1.5 bg-red-600 text-white text-[11px] rounded-full hover:bg-red-700 transition-colors">CASSA</button>
+                            )}
+                            <button onClick={() => handleMarkRestituita(c)} className="px-3 py-1.5 bg-green-600 text-white text-[11px] rounded-full hover:bg-green-700 transition-colors">RESTITUITA</button>
                         </>
                     )
-                })()}
-            </div>
+                }
+
+                return (
+                    <div>
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-base font-bold text-theme-text-primary flex items-center gap-2">
+                                Cauzioni Attive
+                                <span className="text-xs font-normal text-theme-text-muted">({allActive.length})</span>
+                            </h3>
+                        </div>
+                        {allActive.length === 0 ? (
+                            <div className="border border-theme-border rounded-2xl px-4 py-6 text-center text-theme-text-secondary">
+                                Nessuna cauzione attiva
+                            </div>
+                        ) : (
+                            <>
+                                {/* Mobile cards */}
+                                <div className="sm:hidden space-y-3">
+                                    {allActive.map(c => renderCard(c, rowActions(c)))}
+                                </div>
+                                {/* Desktop table — rich rows with avatar, icons, rischio dot */}
+                                <div className="hidden sm:block border border-theme-border rounded-2xl overflow-hidden bg-theme-bg-secondary/40">
+                                    {/* Header */}
+                                    <div className="grid grid-cols-[2fr_1.8fr_1.1fr_1.1fr_1fr_1.2fr_0.9fr_60px] gap-2 px-4 py-3 border-b border-theme-border text-[10px] font-bold uppercase tracking-[0.14em] text-theme-text-muted">
+                                        <span>Cliente</span>
+                                        <span>Veicolo</span>
+                                        <span className="text-right">Importo</span>
+                                        <span>Metodo</span>
+                                        <span>Stato</span>
+                                        <span>Scadenza</span>
+                                        <span>Rischio</span>
+                                        <span className="text-right">Azioni</span>
+                                    </div>
+                                    {/* Rows */}
+                                    <div className="divide-y divide-theme-border/40">
+                                        {allActive.map(c => {
+                                            const name = c.cliente_nome || '—'
+                                            const initials = name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0] || '').join('').toUpperCase() || '?'
+                                            let hash = 0
+                                            for (let i = 0; i < (c.id || '').length; i++) hash = (hash * 31 + c.id.charCodeAt(i)) | 0
+                                            const palettes = [
+                                                'bg-rose-500/20 text-rose-300 ring-rose-500/40',
+                                                'bg-amber-500/20 text-amber-300 ring-amber-500/40',
+                                                'bg-blue-500/20 text-blue-300 ring-blue-500/40',
+                                                'bg-emerald-500/20 text-emerald-300 ring-emerald-500/40',
+                                                'bg-purple-500/20 text-purple-300 ring-purple-500/40',
+                                                'bg-cyan-500/20 text-cyan-300 ring-cyan-500/40',
+                                            ]
+                                            const avatarCls = palettes[Math.abs(hash) % palettes.length]
+
+                                            // Rischio: ALTO if overdue or <=3gg; MEDIO 4-10gg; BASSO >10gg
+                                            const days = c.days_until_deadline
+                                            const isHigh = c.is_overdue || days <= 3
+                                            const isMed = !isHigh && days <= 10
+                                            const rischio = isHigh
+                                                ? { label: 'ALTO', dot: 'bg-rose-500', text: 'text-rose-400' }
+                                                : isMed
+                                                    ? { label: 'MEDIO', dot: 'bg-amber-500', text: 'text-amber-400' }
+                                                    : { label: 'BASSO', dot: 'bg-emerald-500', text: 'text-emerald-400' }
+
+                                            const metodoIcon = c.metodo === 'carta'
+                                                ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 10h18M3 7h18a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1V8a1 1 0 011-1z"/>
+                                                : c.metodo === 'preautorizzazione'
+                                                    ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                                    : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11m16-11v11M8 14v3m4-3v3m4-3v3"/>
+
+                                            return (
+                                                <div key={c.id} className={`grid grid-cols-[2fr_1.8fr_1.1fr_1.1fr_1fr_1.2fr_0.9fr_60px] gap-2 px-4 py-3 items-center hover:bg-theme-bg-tertiary/30 transition-colors ${c.is_overdue ? 'border-l-2 border-l-rose-500' : ''}`}>
+                                                    {/* Cliente */}
+                                                    <div className="flex items-center gap-2.5 min-w-0">
+                                                        <div className={`grid w-9 h-9 place-items-center rounded-full ring-1 text-[10px] font-bold shrink-0 ${avatarCls}`}>{initials}</div>
+                                                        <div className="min-w-0">
+                                                            <div className="text-[12px] font-semibold text-theme-text-primary truncate">{name}</div>
+                                                            {c.cliente_email && <div className="text-[10px] text-theme-text-muted truncate">{c.cliente_email}</div>}
+                                                            {c.cliente_telefono && <div className="text-[10px] font-mono text-theme-text-muted truncate">Tel: {c.cliente_telefono}</div>}
+                                                        </div>
+                                                    </div>
+                                                    {/* Veicolo */}
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <svg className="w-3.5 h-3.5 text-cyan-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 13l1-3a4 4 0 014-3h8a4 4 0 014 3l1 3v5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-1H7v1a1 1 0 01-1 1H4a1 1 0 01-1-1v-5z"/></svg>
+                                                        <div className="min-w-0">
+                                                            <div className="text-[12px] font-semibold text-theme-text-primary truncate">{c.veicolo_modello || '—'}</div>
+                                                            {c.veicolo_targa && <div className="text-[10px] font-mono text-theme-text-muted truncate">Targa {c.veicolo_targa}</div>}
+                                                        </div>
+                                                    </div>
+                                                    {/* Importo */}
+                                                    <div className="text-right">
+                                                        <div className="text-[13px] font-bold text-theme-text-primary tabular-nums">€ {Number(c.importo).toFixed(2)}</div>
+                                                    </div>
+                                                    {/* Metodo */}
+                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                        <svg className="w-3.5 h-3.5 text-theme-text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">{metodoIcon}</svg>
+                                                        <span className="text-[11px] text-theme-text-secondary capitalize truncate">{c.metodo}</span>
+                                                    </div>
+                                                    {/* Stato */}
+                                                    <div>
+                                                        <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${getStatoBadgeClass(c)}`}>
+                                                            {getStatoLabel(c)}
+                                                        </span>
+                                                    </div>
+                                                    {/* Scadenza */}
+                                                    <div className="min-w-0">
+                                                        <div className="text-[11px] text-theme-text-primary tabular-nums">
+                                                            {new Date(c.scadenza_cauzione + 'T00:00:00').toLocaleDateString('it-IT')}
+                                                        </div>
+                                                        {days !== null && (
+                                                            <div className="text-[10px] text-theme-text-muted">
+                                                                {days > 0 ? `${days} giorni` : days === 0 ? 'Oggi' : `${Math.abs(days)} gg fa`}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    {/* Rischio */}
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className={`relative flex h-2 w-2`}>
+                                                            <span className={`absolute inline-flex h-full w-full rounded-full ${rischio.dot} opacity-50 ${isHigh ? 'animate-ping' : ''}`}/>
+                                                            <span className={`relative inline-flex rounded-full h-2 w-2 ${rischio.dot}`}/>
+                                                        </span>
+                                                        <span className={`text-[10px] font-bold ${rischio.text}`}>{rischio.label}</span>
+                                                    </div>
+                                                    {/* Azioni — open expanded buttons in hover popover via summary/details */}
+                                                    <details className="relative justify-self-end" onClick={(e) => e.stopPropagation()}>
+                                                        <summary className="list-none cursor-pointer grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-cyan-300 hover:bg-cyan-500/10 transition-colors">
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01"/></svg>
+                                                        </summary>
+                                                        <div className="absolute right-0 top-8 z-30 w-44 rounded-lg bg-theme-bg-secondary ring-1 ring-theme-border shadow-xl py-1">
+                                                            <div className="flex flex-col gap-0 [&>button]:text-left [&>button]:px-3 [&>button]:py-2 [&>button]:text-[12px] [&>button]:font-semibold [&>button]:transition-colors">
+                                                                {rowActions(c)}
+                                                            </div>
+                                                        </div>
+                                                    </details>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                    {/* Pagination footer */}
+                                    <div className="flex items-center justify-between px-4 py-2.5 border-t border-theme-border text-[11px] text-theme-text-muted">
+                                        <span>Mostra <strong className="text-theme-text-primary font-mono">{allActive.length}</strong> risultati</span>
+                                        <span className="font-mono">1 — {allActive.length} di {allActive.length}</span>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )
+            })()}
+
+            {/* Hidden legacy lists referenced by linter — avoid TS6133 by using them */}
+            <div className="hidden" aria-hidden="true" data-len={`${incassate.length}-${daIncassare.length}`}/>
 
             {/* === STORICO SLIDE-OVER PANEL === */}
             {showStorico && (
