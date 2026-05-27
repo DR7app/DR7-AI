@@ -3,15 +3,14 @@ import toast from 'react-hot-toast'
 import { authFetch } from '../utils/authFetch'
 import { supabase } from '../supabaseClient'
 
-// Direzione + Salvatore: bypassano TUTTE le richieste OTP. Stesso elenco
-// usato da useLimitationOverride.ts. Tenuto qui per gli usi diretti del
-// modale (es. PreventiviTab) che non passano dall'hook.
-const OTP_BYPASS_EMAILS = new Set([
-  'valerio@dr7.app',
-  'ilenia@dr7.app',
-  'salvatore@dr7.app',
-  'ophe@dr7.app',
-])
+// 2026-05-27: TOGGLE-ONLY mode. La vecchia OTP_BYPASS_EMAILS hardcoded
+// (valerio/ilenia/salvatore/ophe) NON bypassa piu' automaticamente —
+// direzione controlla via toggle "OTP per Operatore" in OperatoriTab,
+// che scrive il tag role:bypass-otp nel DB. Costante mantenuta vuota
+// come no-op per ridurre il diff (callsite invariato).
+const OTP_BYPASS_EMAILS = new Set<string>()
+// Marker tag che il modal deve cercare nelle permissions per auto-bypass.
+const OTP_BYPASS_ROLE_TAG = 'role:bypass-otp'
 
 interface LimitationOverrideModalProps {
   isOpen: boolean
@@ -81,20 +80,38 @@ export default function LimitationOverrideModal({
   // Keep _onClose to satisfy prop interface but modal is not dismissible
   void _onClose
 
-  // Auto-bypass per direzione + Salvatore: appena la modale apre, se
-  // l'admin loggato è in whitelist auto-approva senza mostrare nulla.
-  // Genera un overrideId locale ('admin_bypass_*') per coerenza con il
-  // contratto onOverrideApproved.
+  // 2026-05-27: auto-bypass per ruolo role:bypass-otp (toggle "OTP
+  // DISABILITATO" in OperatoriTab). Niente piu' email hardcoded —
+  // direzione decide per operatore. Se l'admin loggato ha il tag, il
+  // modale auto-approva al volo (zero flash sullo schermo). Reason
+  // 'role_bypass_otp:<email>' nel log per audit.
   useEffect(() => {
     if (!isOpen) return
     let cancelled = false
     ;(async () => {
       try {
-        const { data } = await supabase.auth.getSession()
-        const email = (data.session?.user?.email || '').toLowerCase()
+        const { data: sess } = await supabase.auth.getSession()
+        const email = (sess.session?.user?.email || '').toLowerCase()
+        if (!email) return
+        // OTP_BYPASS_EMAILS e' vuota oggi (no-op), ma resta per i futuri
+        // override hardcoded. La vera fonte di verita' e' admins.permissions.
         if (!cancelled && OTP_BYPASS_EMAILS.has(email)) {
           const bypassId = `admin_bypass_${limitationCode}_${Date.now()}`
           onOverrideApproved(bypassId, `admin_bypass:${email}`)
+          return
+        }
+        const { data: adm } = await supabase
+          .from('admins')
+          .select('permissions')
+          .eq('email', email)
+          .maybeSingle()
+        if (cancelled) return
+        const perms = Array.isArray((adm as { permissions?: unknown } | null)?.permissions)
+          ? ((adm as { permissions: string[] }).permissions)
+          : []
+        if (perms.includes(OTP_BYPASS_ROLE_TAG)) {
+          const bypassId = `role_bypass_${limitationCode}_${Date.now()}`
+          onOverrideApproved(bypassId, `role_bypass_otp:${email}`)
         }
       } catch { /* ignore */ }
     })()
