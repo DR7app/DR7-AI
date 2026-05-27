@@ -11,7 +11,7 @@ export default function ReferralRewardTiers() {
           </div>
           <div>
             <h4 className="text-white font-semibold text-lg">Registrati Gratis</h4>
-            <p className="text-gray-400 text-sm mt-1">
+            <p className="text-theme-text-muted text-sm mt-1">
               Ricevi subito <span className="text-[#2d8a7e] font-bold">€15</span> di credito Wallet
               + un <span className="text-[#2d8a7e] font-bold">Buono da €50</span> per noleggio supercar
             </p>
@@ -27,7 +27,7 @@ export default function ReferralRewardTiers() {
           </div>
           <div>
             <h4 className="text-white font-semibold text-lg">Invita Amici che Ricaricano</h4>
-            <p className="text-gray-400 text-sm mt-1">
+            <p className="text-theme-text-muted text-sm mt-1">
               Per ogni amico che ricarica almeno €100, ricevi
               <span className="text-[#2d8a7e] font-bold"> €50</span> di credito Wallet
               + un <span className="text-[#2d8a7e] font-bold">Buono da €100</span> per noleggio supercar
@@ -44,7 +44,7 @@ export default function ReferralRewardTiers() {
           </div>
           <div>
             <h4 className="text-white font-semibold text-lg">Ogni 10 Amici</h4>
-            <p className="text-gray-400 text-sm mt-1">
+            <p className="text-theme-text-muted text-sm mt-1">
               Ogni 10 amici che inviti e ricaricano, ricevi un bonus extra di
               <span className="text-[#2d8a7e] font-bold"> €50</span> Wallet
               + <span className="text-[#2d8a7e] font-bold">Buono da €500</span> per noleggio supercar

@@ -2419,7 +2419,7 @@ export default function CustomersTab() {
             </div>
 
             <div className="flex gap-2 flex-wrap">
-              <button onClick={() => setReportCustomerId(customer.id)} className="text-xs py-1 px-2 bg-black hover:bg-gray-800 text-white rounded-full font-medium transition-colors flex-1">
+              <button onClick={() => setReportCustomerId(customer.id)} className="text-xs py-1 px-2 bg-theme-bg-primary hover:bg-theme-bg-tertiary text-theme-text-primary rounded-full font-medium transition-colors flex-1">
                 Report
               </button>
               <Button onClick={() => handleViewCustomerDetails(customer)} variant="secondary" className="text-xs py-1 px-2 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold flex-1">
@@ -2538,7 +2538,7 @@ export default function CustomersTab() {
                     <div className="flex gap-2 flex-wrap">
                       <button
                         onClick={() => setReportCustomerId(customer.id)}
-                        className="text-xs py-1 px-3 bg-black hover:bg-gray-800 text-white rounded-full font-medium transition-colors"
+                        className="text-xs py-1 px-3 bg-theme-bg-primary hover:bg-theme-bg-tertiary text-theme-text-primary rounded-full font-medium transition-colors"
                       >
                         Report
                       </button>

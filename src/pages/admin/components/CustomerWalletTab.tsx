@@ -586,7 +586,7 @@ export default function CustomerWalletTab() {
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => openModal(customer, 'credit')}
-                          className="px-4 py-2 text-sm font-medium border border-gray-300 dark:border-theme-border rounded-lg text-gray-700 dark:text-theme-text-primary hover:bg-gray-100 dark:hover:bg-theme-bg-tertiary transition-colors flex items-center gap-1.5">
+                          className="px-4 py-2 text-sm font-medium border border-theme-border-light dark:border-theme-border rounded-lg text-gray-700 dark:text-theme-text-primary hover:bg-gray-100 dark:hover:bg-theme-bg-tertiary transition-colors flex items-center gap-1.5">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                           Modifica
                         </button>
@@ -637,13 +637,13 @@ export default function CustomerWalletTab() {
       {modalCustomer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closeModal} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-fadeIn">
+          <div className="relative bg-theme-bg-primary rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-fadeIn">
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 pt-6 pb-2">
               <h3 className="text-xl font-bold text-gray-900">
                 {modalAction === 'credit' ? 'Carica Wallet' : 'Addebita Wallet'}
               </h3>
-              <button onClick={closeModal} className="p-1 text-gray-400 hover:text-gray-600 transition-colors">
+              <button onClick={closeModal} className="p-1 text-theme-text-muted hover:text-gray-600 transition-colors">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -660,14 +660,14 @@ export default function CustomerWalletTab() {
               </div>
               <div>
                 <p className="font-semibold text-gray-900">{modalCustomer.full_name}</p>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-theme-text-muted">
                   {modalCustomer.email || '—'}
                   {modalCustomer.phone && <span className="ml-2">{modalCustomer.phone}</span>}
                 </p>
               </div>
               {wallet && (
                 <div className="ml-auto text-right">
-                  <p className="text-xs text-gray-400">Saldo</p>
+                  <p className="text-xs text-theme-text-muted">Saldo</p>
                   <p className="font-bold text-gray-900">{formatEurDec(wallet.balance_cents)}</p>
                 </div>
               )}
@@ -675,7 +675,7 @@ export default function CustomerWalletTab() {
 
             <div className="px-6 pb-6 space-y-4">
               {/* Action toggle */}
-              <div className="flex rounded-lg overflow-hidden border border-gray-200">
+              <div className="flex rounded-lg overflow-hidden border border-theme-border-light">
                 <button
                   onClick={() => { setModalAction('credit'); setOtpSent(false); setOtpVerified(false); setOtpDigits(['','','','','','']) }}
                   className={`flex-1 py-2 text-sm font-semibold transition-colors ${modalAction === 'credit' ? 'text-white' : 'text-gray-600 bg-gray-50 hover:bg-gray-100'}`}
@@ -702,9 +702,9 @@ export default function CustomerWalletTab() {
                     placeholder="0.00"
                     min="0.01"
                     step="0.01"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 text-lg font-semibold outline-none focus:border-[#3a6a6a] focus:ring-1 focus:ring-[#3a6a6a] transition-all"
+                    className="w-full px-4 py-3 border border-theme-border-light rounded-xl text-gray-900 text-lg font-semibold outline-none focus:border-[#3a6a6a] focus:ring-1 focus:ring-[#3a6a6a] transition-all"
                   />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">&euro;</span>
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-theme-text-muted font-medium">&euro;</span>
                 </div>
               </div>
 
@@ -716,17 +716,17 @@ export default function CustomerWalletTab() {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Pagamento anticipato noleggio"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-gray-900 outline-none focus:border-[#3a6a6a] focus:ring-1 focus:ring-[#3a6a6a] transition-all"
+                  className="w-full px-4 py-2.5 border border-theme-border-light rounded-xl text-gray-900 outline-none focus:border-[#3a6a6a] focus:ring-1 focus:ring-[#3a6a6a] transition-all"
                 />
               </div>
 
               {/* Caricamento automatico mensile */}
               {modalAction === 'credit' && (
-                <div className={`border rounded-xl p-4 transition-colors ${recurringEnabled ? 'border-green-400 bg-green-50' : 'border-gray-200'}`}>
+                <div className={`border rounded-xl p-4 transition-colors ${recurringEnabled ? 'border-green-400 bg-green-50' : 'border-theme-border-light'}`}>
                   <div className="flex items-center justify-between mb-1">
                     <div>
                       <p className="text-sm font-semibold text-gray-900">Caricamento automatico mensile</p>
-                      <p className="text-xs text-gray-500">Attiva per programmare un accredito ricorrente.</p>
+                      <p className="text-xs text-theme-text-muted">Attiva per programmare un accredito ricorrente.</p>
                     </div>
                     <button
                       onClick={() => setRecurringEnabled(!recurringEnabled)}
@@ -740,7 +740,7 @@ export default function CustomerWalletTab() {
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">Giorno del mese</label>
                         <select value={recurringDay} onChange={e => setRecurringDay(parseInt(e.target.value))}
-                          className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-gray-900 outline-none focus:border-[#3a6a6a]">
+                          className="w-full px-3 py-2.5 border border-theme-border-light rounded-xl text-gray-900 outline-none focus:border-[#3a6a6a]">
                           {Array.from({ length: 28 }, (_, i) => (
                             <option key={i + 1} value={i + 1}>{i + 1}</option>
                           ))}
@@ -751,8 +751,8 @@ export default function CustomerWalletTab() {
                         <div className="relative">
                           <input type="number" value={recurringAmount} onChange={e => setRecurringAmount(e.target.value)}
                             placeholder="0" min="1" step="1"
-                            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-gray-900 outline-none focus:border-[#3a6a6a]" />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">&euro;</span>
+                            className="w-full px-3 py-2.5 border border-theme-border-light rounded-xl text-gray-900 outline-none focus:border-[#3a6a6a]" />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-text-muted text-sm">&euro;</span>
                         </div>
                       </div>
                     </div>
@@ -803,8 +803,8 @@ export default function CustomerWalletTab() {
                         otpVerified
                           ? 'border-green-400 bg-green-50 text-green-700'
                           : digit
-                            ? 'border-[#3a6a6a] bg-white text-gray-900'
-                            : 'border-gray-200 bg-gray-50 text-gray-900'
+                            ? 'border-[#3a6a6a] bg-theme-bg-primary text-gray-900'
+                            : 'border-theme-border-light bg-gray-50 text-gray-900'
                       } focus:border-[#3a6a6a] focus:ring-1 focus:ring-[#3a6a6a]`}
                       disabled={otpVerified}
                     />
@@ -821,7 +821,7 @@ export default function CustomerWalletTab() {
                 )}
 
                 {!otpVerified && (
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-theme-text-muted">
                     {otpSent
                       ? 'Codice inviato via email. Inserisci il codice per confermare.'
                       : 'Caricamento Wallet richiede l\'autorizzazione. Un codice OTP verra inviato via email per confermare.'}
@@ -832,11 +832,11 @@ export default function CustomerWalletTab() {
               {/* Transactions preview */}
               {transactions.length > 0 && (
                 <div className="border-t border-gray-100 pt-3">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Ultime transazioni</p>
+                  <p className="text-xs font-semibold text-theme-text-muted uppercase tracking-wide mb-2">Ultime transazioni</p>
                   <div className="space-y-1 max-h-32 overflow-y-auto">
                     {transactions.slice(0, 5).map(txn => (
                       <div key={txn.id} className="flex justify-between text-xs">
-                        <span className="text-gray-500">{TYPE_LABELS[txn.type] || txn.type}</span>
+                        <span className="text-theme-text-muted">{TYPE_LABELS[txn.type] || txn.type}</span>
                         <span className={txn.amount_cents >= 0 ? 'text-green-600 font-medium' : 'text-red-500 font-medium'}>
                           {txn.amount_cents >= 0 ? '+' : ''}{formatEurDec(txn.amount_cents)}
                         </span>

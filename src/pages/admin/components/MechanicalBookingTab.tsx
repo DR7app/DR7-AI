@@ -119,6 +119,13 @@ export default function MechanicalBookingTab() {
 
   async function handleDelete(id: string) {
     try {
+      // Capture booking info before deletion for the audit log
+      const { data: bInfo } = await supabase
+        .from('bookings')
+        .select('customer_name, customer_phone, vehicle_plate, service_name, appointment_date, appointment_time, price_total')
+        .eq('id', id)
+        .maybeSingle()
+
       // Try to delete from Google Calendar
       try {
         await fetch('/.netlify/functions/delete-calendar-event', {
@@ -144,7 +151,12 @@ export default function MechanicalBookingTab() {
         .eq('id', id)
 
       if (error) throw error
-      logAdminAction('delete_mechanical', 'mechanical_booking', id)
+      logAdminAction('delete_mechanical', 'mechanical_booking', id, {
+        customer: bInfo?.customer_name,
+        phone: bInfo?.customer_phone,
+        plate: bInfo?.vehicle_plate,
+        service: bInfo?.service_name,
+      })
       loadData()
     } catch (error) {
       console.error('Failed to delete booking:', error)
@@ -212,7 +224,14 @@ export default function MechanicalBookingTab() {
         alert(`✅ Fattura generata con successo!\n\nNumero: ${data.invoice.numero_fattura}\n\nVai alla tab "Fatture" per visualizzarla.`)
       }
 
-      logAdminAction('generate_mechanical_fattura', 'mechanical_booking', booking.id)
+      logAdminAction('generate_mechanical_fattura', 'mechanical_booking', booking.id, {
+        customer: booking.customer_name,
+        phone: booking.customer_phone,
+        service: booking.service_name,
+        vehicle: booking.vehicle_info,
+        amount: booking.price_total,
+        number: data?.invoice?.numero_fattura,
+      })
       loadData()
     } catch (error: unknown) {
       const _errMsg = error instanceof Error ? error.message : String(error)

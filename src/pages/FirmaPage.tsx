@@ -241,7 +241,7 @@ export default function FirmaPage() {
     if (status === 'expired') {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
+                <div className="bg-theme-bg-primary rounded-xl shadow-lg p-8 max-w-md w-full text-center">
                     <div className="text-5xl mb-4">&#8987;</div>
                     <h1 className="text-2xl font-bold text-gray-800 mb-2">Link Scaduto</h1>
                     <p className="text-gray-600">Il link di firma e scaduto. Contatta DR7 Empire per ricevere un nuovo link.</p>
@@ -253,7 +253,7 @@ export default function FirmaPage() {
     if (status === 'error') {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
+                <div className="bg-theme-bg-primary rounded-xl shadow-lg p-8 max-w-md w-full text-center">
                     <div className="text-5xl mb-4">&#9888;&#65039;</div>
                     <h1 className="text-2xl font-bold text-gray-800 mb-2">Errore</h1>
                     <p className="text-gray-600">{error}</p>
@@ -273,24 +273,24 @@ export default function FirmaPage() {
             <div className="max-w-2xl mx-auto p-4 sm:p-6">
                 {/* Contract Info Card */}
                 {contract && (
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                    <div className="bg-theme-bg-primary rounded-xl shadow-sm border border-theme-border-light p-6 mb-6">
                         <h1 className="text-xl font-bold text-gray-800 mb-1">
                             {contract.vehicleName ? `Contratto ${contract.contractNumber}` : contract.contractNumber || 'Documento'}
                         </h1>
                         <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
                             <div>
-                                <span className="text-gray-500 block">Cliente</span>
+                                <span className="text-theme-text-muted block">Cliente</span>
                                 <span className="font-semibold">{signerName}</span>
                             </div>
                             {contract.vehicleName && (
                                 <div>
-                                    <span className="text-gray-500 block">Veicolo</span>
+                                    <span className="text-theme-text-muted block">Veicolo</span>
                                     <span className="font-semibold">{contract.vehicleName}</span>
                                 </div>
                             )}
                             {contract.rentalStartDate && (
                                 <div>
-                                    <span className="text-gray-500 block">Ritiro</span>
+                                    <span className="text-theme-text-muted block">Ritiro</span>
                                     <span className="font-semibold">
                                         {new Date(contract.rentalStartDate).toLocaleDateString('it-IT')}
                                     </span>
@@ -298,7 +298,7 @@ export default function FirmaPage() {
                             )}
                             {contract.rentalEndDate && (
                                 <div>
-                                    <span className="text-gray-500 block">Riconsegna</span>
+                                    <span className="text-theme-text-muted block">Riconsegna</span>
                                     <span className="font-semibold">
                                         {new Date(contract.rentalEndDate).toLocaleDateString('it-IT')}
                                     </span>
@@ -310,7 +310,7 @@ export default function FirmaPage() {
 
                 {/* PDF Download Link */}
                 {contract?.pdfUrl && status !== 'signed' && (
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+                    <div className="bg-theme-bg-primary rounded-xl shadow-sm border border-theme-border-light overflow-hidden mb-6">
                         <div className="px-4 py-4 flex items-center justify-between">
                             <span className="text-sm text-gray-600 font-medium">Documento da firmare</span>
                             <a
@@ -335,7 +335,7 @@ export default function FirmaPage() {
 
                 {/* Step 1: Request OTP */}
                 {status === 'viewing' && (
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
+                    <div className="bg-theme-bg-primary rounded-xl shadow-sm border border-theme-border-light p-6 text-center">
                         <h2 className="text-lg font-bold text-gray-800 mb-2">Firma il Contratto</h2>
                         <p className="text-gray-600 text-sm mb-6">
                             Per procedere con la firma, invieremo un codice di verifica via WhatsApp o email.
@@ -350,7 +350,7 @@ export default function FirmaPage() {
                 )}
 
                 {status === 'otp_sending' && (
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
+                    <div className="bg-theme-bg-primary rounded-xl shadow-sm border border-theme-border-light p-6 text-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#2d8a7e] mx-auto mb-4"></div>
                         <p className="text-gray-600">Invio codice di verifica...</p>
                     </div>
@@ -358,7 +358,7 @@ export default function FirmaPage() {
 
                 {/* Step 2: Enter OTP */}
                 {(status === 'otp_sent' || status === 'otp_verifying') && (
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div className="bg-theme-bg-primary rounded-xl shadow-sm border border-theme-border-light p-6">
                         <h2 className="text-lg font-bold text-gray-800 mb-2 text-center">Inserisci Codice OTP</h2>
                         <p className="text-gray-600 text-sm mb-6 text-center">
                             {otpChannel === 'whatsapp'
@@ -377,7 +377,7 @@ export default function FirmaPage() {
                                     value={digit}
                                     onChange={e => handleOtpChange(i, e.target.value)}
                                     onKeyDown={e => handleOtpKeyDown(i, e)}
-                                    className="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-300 rounded-lg focus:border-[#2d8a7e] focus:outline-none transition-colors"
+                                    className="w-12 h-14 text-center text-2xl font-bold border-2 border-theme-border-light rounded-lg focus:border-[#2d8a7e] focus:outline-none transition-colors"
                                     disabled={status === 'otp_verifying'}
                                 />
                             ))}
@@ -400,7 +400,7 @@ export default function FirmaPage() {
                             <button
                                 onClick={handleRequestOtp}
                                 disabled={status === 'otp_verifying' || otpCooldown > 0}
-                                className="text-sm text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
+                                className="text-sm text-theme-text-muted hover:text-gray-700 transition-colors disabled:opacity-50"
                             >
                                 {otpCooldown > 0
                                     ? `Riprova tra ${otpCooldown}s`
@@ -412,7 +412,7 @@ export default function FirmaPage() {
 
                 {/* Step 3: Confirm and Sign */}
                 {status === 'signing' && (
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div className="bg-theme-bg-primary rounded-xl shadow-sm border border-theme-border-light p-6">
                         <h2 className="text-lg font-bold text-gray-800 mb-4 text-center">Conferma Firma</h2>
 
                         <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 mb-6 text-sm text-green-700 text-center">
@@ -436,7 +436,7 @@ export default function FirmaPage() {
                                 type="checkbox"
                                 checked={acceptedTerms}
                                 onChange={e => setAcceptedTerms(e.target.checked)}
-                                className="mt-1 h-5 w-5 rounded border-gray-300 text-[#2d8a7e] focus:ring-[#2d8a7e]"
+                                className="mt-1 h-5 w-5 rounded border-theme-border-light text-[#2d8a7e] focus:ring-[#2d8a7e]"
                             />
                             <span className="text-sm text-gray-700">
                                 Confermo che i dati inseriti sono corretti e accetto i termini e le condizioni del contratto.
@@ -491,14 +491,14 @@ export default function FirmaPage() {
 
                 {/* Step 4: Signed */}
                 {status === 'signed' && (
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
+                    <div className="bg-theme-bg-primary rounded-xl shadow-sm border border-theme-border-light p-6 text-center">
                         <div className="text-5xl mb-4">&#9989;</div>
                         <h2 className="text-2xl font-bold text-green-700 mb-2">Documento Firmato</h2>
                         <p className="text-gray-600 mb-2">
                             Il contratto e stato firmato con successo
                             {signedAt ? ` il ${new Date(signedAt).toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}` : ''}.
                         </p>
-                        <p className="text-gray-500 text-sm mb-6">
+                        <p className="text-theme-text-muted text-sm mb-6">
                             Riceverai una copia del contratto firmato via WhatsApp.
                         </p>
                     </div>
@@ -506,14 +506,14 @@ export default function FirmaPage() {
             </div>
 
             {/* Footer */}
-            <div className="text-center py-6 text-xs text-gray-400">
+            <div className="text-center py-6 text-xs text-theme-text-muted">
                 Dubai rent 7.0 S.p.A. - Via del Fangario 25, 09122 Cagliari (CA) - P.IVA 04104640927
             </div>
 
             {/* Marketing Info Modal */}
             {showMarketingInfo && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowMarketingInfo(false)}>
-                    <div className="bg-white rounded-xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+                    <div className="bg-theme-bg-primary rounded-xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
                         <h3 className="text-lg font-bold text-gray-800 mb-4">
                             INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI PER FINALITA DI MARKETING
                         </h3>

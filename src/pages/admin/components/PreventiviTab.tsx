@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { appendPreventivoEvent } from '../../../utils/preventivoEvents'
+import { logAdminAction } from '../../../utils/logAdminAction'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { buildConfigOverlay } from '../../../utils/configOverlay'
 import { getKmIncluded } from '../../../utils/configLookup'
@@ -223,6 +224,13 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   const [sortField, setSortField] = useState<'created_at' | 'pickup_date' | 'total_final' | 'rental_days'>('created_at')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
+  // Preventivo templates from Messaggi di Sistema. We keep BOTH variants so the
+  // sender picks one based on whether the preventivo carries a discount:
+  //   withSconto = body contains {sconto}   → used when p.sconto > 0
+  //   noSconto   = body without {sconto}    → used when p.sconto === 0
+  // null = still loading; empty strings inside = no matching row → hardcoded default.
+  const [preventivoTemplates, setPreventivoTemplates] = useState<{ withSconto: string; noSconto: string } | null>(null)
+
   // Centralina config
   const { config: rentalConfig } = useRentalConfig()
   const configOverlay = useMemo(() => buildConfigOverlay(rentalConfig), [rentalConfig])
@@ -437,7 +445,32 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     loadVehicles()
     loadCustomers()
     loadNoCauzioneRequests()
+    loadPreventivoTemplate()
   }, [])
+
+  async function loadPreventivoTemplate() {
+    // Load every enabled system_messages row that looks like a preventivo template
+    // (matches by message_key prefix OR label prefix — covers both the canonical
+    // pro_conferma_preventivo key and user-created keys like `preventivo_whatsapp_<ts>`
+    // or `preventivo_senza_sconto_<ts>`). We partition them by whether the body
+    // contains the literal `{sconto}` placeholder so the sender can choose based on
+    // the actual discount state of each preventivo.
+    try {
+      const { data } = await supabase
+        .from('system_messages')
+        .select('message_key, label, message_body, is_enabled')
+        .eq('is_enabled', true)
+        .or('message_key.ilike.preventivo%,message_key.eq.pro_conferma_preventivo,label.ilike.preventivo%')
+
+      const rows = (data || []).filter(r => r.message_body && r.message_body.trim().length > 0)
+      const withSconto = rows.find(r => r.message_body.includes('{sconto}'))?.message_body || ''
+      const noSconto   = rows.find(r => !r.message_body.includes('{sconto}'))?.message_body || ''
+      setPreventivoTemplates({ withSconto, noSconto })
+    } catch (e) {
+      console.error('[PreventiviTab] loadPreventivoTemplate error:', e)
+      setPreventivoTemplates({ withSconto: '', noSconto: '' })
+    }
+  }
 
   async function loadCustomers() {
     try {
@@ -794,7 +827,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
   function buildDefaultPreventivoMessage(p: Preventivo): string {
     const specs = [
       p.vehicle_name,
-      p.vehicle_model_year ? `my ${p.vehicle_model_year}` : '',
+      p.vehicle_model_year ? `${p.vehicle_model_year}` : '',
       p.vehicle_cv ? `${p.vehicle_cv}cv` : '',
       p.vehicle_0_100 ? `0-100 ${String(p.vehicle_0_100).replace('.', ',')}s` : '',
     ].filter(Boolean).join(' ')
@@ -835,90 +868,100 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     return msg.trim()
   }
 
-  async function formatWhatsAppMessage(p: Preventivo): Promise<string> {
-    // Try to load template from system_messages
-    try {
-      const { data: tpl } = await supabase
-        .from('system_messages')
-        .select('message_body, is_enabled')
-        .eq('message_key', 'preventivo_whatsapp')
-        .single()
+  // Renders a preventivo body (loaded into preventivoTemplates) with {var}
+  // substitution. Chooses the "with sconto" template when p.sconto > 0 and falls
+  // back to the "no sconto" one otherwise; if the chosen slot is empty, falls
+  // back to the other slot, then to buildDefaultPreventivoMessage.
+  function formatWhatsAppMessage(p: Preventivo): string {
+    const chosen = p.sconto > 0
+      ? (preventivoTemplates?.withSconto || preventivoTemplates?.noSconto || '')
+      : (preventivoTemplates?.noSconto   || preventivoTemplates?.withSconto || '')
+    if (!chosen) return buildDefaultPreventivoMessage(p)
 
-      if (tpl?.is_enabled && tpl.message_body) {
-        // Build variables for substitution
-        const specs = [
-          p.vehicle_name,
-          p.vehicle_model_year ? `my ${p.vehicle_model_year}` : '',
-          p.vehicle_cv ? `${p.vehicle_cv}cv` : '',
-          p.vehicle_0_100 ? `0-100 ${String(p.vehicle_0_100).replace('.', ',')}s` : '',
-        ].filter(Boolean).join(' ')
+    const specs = [
+      p.vehicle_name,
+      p.vehicle_model_year ? `${p.vehicle_model_year}` : '',
+      p.vehicle_cv ? `${p.vehicle_cv}cv` : '',
+      p.vehicle_0_100 ? `0-100 ${String(p.vehicle_0_100).replace('.', ',')}s` : '',
+    ].filter(Boolean).join(' ')
 
-        // Build pricing lines
-        let pricingLines = `${p.rental_days}gg x ${formatEur(p.base_daily_rate)}/g = ${formatEur((p.base_daily_rate) * p.rental_days)}`
-        if (p.insurance_total > 0) {
-          const insLabel = insuranceOptions.find(i => i.id === p.insurance_option)?.label || p.insurance_option || 'Kasko'
-          pricingLines += `\n${insLabel} = ${formatEur(p.insurance_total)}`
-        }
-        if (p.lavaggio_fee > 0) pricingLines += `\nLavaggio = ${formatEur(p.lavaggio_fee)}`
-        if (p.no_cauzione_total > 0) pricingLines += `\nNo cauzione = ${formatEur(p.no_cauzione_total)}`
-        if (p.unlimited_km_total > 0) {
-          pricingLines += `\nKm illimitati = ${formatEur(p.unlimited_km_total)}`
-        } else if (rentalConfig) {
-          const kmInc = getKmIncluded(rentalConfig, p.rental_days, p.vehicle_category || 'exotic')
-          pricingLines += `\nKm inclusi: ${kmInc === 'unlimited' ? 'Illimitati' : `${kmInc} Km`}`
-        }
-        if (p.second_driver_total > 0) pricingLines += `\nSecondo guidatore = ${formatEur(p.second_driver_total)}`
-        const extras = p.extras_detail as Record<string, unknown> | null
-        if (extras?.dr7_flex_total && Number(extras.dr7_flex_total) > 0) pricingLines += `\nDR7 Flex = ${formatEur(Number(extras.dr7_flex_total))}`
-        if (extras?.delivery_fee && Number(extras.delivery_fee) > 0) pricingLines += `\nConsegna = ${formatEur(Number(extras.delivery_fee))}`
-        if (extras?.pickup_fee && Number(extras.pickup_fee) > 0) pricingLines += `\nRitiro = ${formatEur(Number(extras.pickup_fee))}`
-        if (extras?.experience_cost && Number(extras.experience_cost) > 0) pricingLines += `\nServizi experience = ${formatEur(Number(extras.experience_cost))}`
+    const insLabel = p.insurance_total > 0
+      ? (insuranceOptions.find(i => i.id === p.insurance_option)?.label || p.insurance_option || 'Kasko')
+      : ''
 
-        let discountLine = ''
-        if (p.sconto > 0) discountLine = `sconto ${p.sconto_note || ''} ${formatEur(p.total_final)}`
+    let pricingLines = `${p.rental_days}gg x ${formatEur(p.base_daily_rate)}/g = ${formatEur(p.base_daily_rate * p.rental_days)}`
+    if (p.insurance_total > 0) pricingLines += `\n${insLabel} = ${formatEur(p.insurance_total)}`
+    if (p.lavaggio_fee > 0) pricingLines += `\nLavaggio = ${formatEur(p.lavaggio_fee)}`
+    if (p.no_cauzione_total > 0) pricingLines += `\nNo cauzione = ${formatEur(p.no_cauzione_total)}`
+    if (p.unlimited_km_total > 0) {
+      pricingLines += `\nKm illimitati = ${formatEur(p.unlimited_km_total)}`
+    } else if (rentalConfig) {
+      const kmInc = getKmIncluded(rentalConfig, p.rental_days, p.vehicle_category || 'exotic')
+      pricingLines += `\nKm inclusi: ${kmInc === 'unlimited' ? 'Illimitati' : `${kmInc} Km`}`
+    }
+    if (p.second_driver_total > 0) pricingLines += `\nSecondo guidatore = ${formatEur(p.second_driver_total)}`
+    const extras = p.extras_detail as Record<string, unknown> | null
+    if (extras?.dr7_flex_total && Number(extras.dr7_flex_total) > 0) pricingLines += `\nDR7 Flex = ${formatEur(Number(extras.dr7_flex_total))}`
+    if (extras?.delivery_fee && Number(extras.delivery_fee) > 0) pricingLines += `\nConsegna = ${formatEur(Number(extras.delivery_fee))}`
+    if (extras?.pickup_fee && Number(extras.pickup_fee) > 0) pricingLines += `\nRitiro = ${formatEur(Number(extras.pickup_fee))}`
+    if (extras?.experience_cost && Number(extras.experience_cost) > 0) pricingLines += `\nServizi experience = ${formatEur(Number(extras.experience_cost))}`
 
-        const vars: Record<string, string> = {
-          vehicle_specs: specs,
-          vehicle_name: p.vehicle_name || '',
-          rental_days: String(p.rental_days),
-          daily_rate: formatEur(p.base_daily_rate),
-          rental_total: formatEur((p.base_daily_rate) * p.rental_days),
-          insurance_line: p.insurance_total > 0 ? `${insuranceOptions.find(i => i.id === p.insurance_option)?.label || 'Kasko'} = ${formatEur(p.insurance_total)}` : '',
-          pricing_lines: pricingLines,
-          subtotal: formatEur(p.subtotal),
-          total: formatEur(p.total_final || p.subtotal),
-          sconto: discountLine,
-          customer_name: p.customer_name || '',
-          km_info: p.unlimited_km_total > 0 ? 'Illimitati' : (() => {
-            if (!rentalConfig) return ''
-            const km = getKmIncluded(rentalConfig, p.rental_days, p.vehicle_category || 'exotic')
-            return km === 'unlimited' ? 'Illimitati' : `${km} Km`
-          })(),
-        }
+    const discountLine = p.sconto > 0 ? `sconto ${p.sconto_note || ''} ${formatEur(p.total_final)}` : ''
 
-        let msg = tpl.message_body
-        for (const [k, v] of Object.entries(vars)) {
-          msg = msg.replace(new RegExp(`\\{${k}\\}`, 'g'), v || '')
-        }
-        // Clean up empty lines from unused variables
-        msg = msg.replace(/\n{3,}/g, '\n\n').trim()
-
-        const footer = rentalConfig?.preventivi?.whatsapp_footer
-        if (footer) msg += `\n\n${footer}`
-
-        return msg
-      }
-    } catch {
-      // Fallback to hardcoded
+    const fmtDate = (iso: string) => {
+      try {
+        return new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
+      } catch { return '' }
+    }
+    const fmtTime = (iso: string) => {
+      try {
+        return new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })
+      } catch { return '' }
     }
 
-    return buildDefaultPreventivoMessage(p)
+    const vars: Record<string, string> = {
+      vehicle_specs: specs,
+      vehicle_name: p.vehicle_name || '',
+      rental_days: String(p.rental_days),
+      daily_rate: formatEur(p.base_daily_rate),
+      rental_total: formatEur(p.base_daily_rate * p.rental_days),
+      insurance_line: p.insurance_total > 0 ? `${insLabel} = ${formatEur(p.insurance_total)}` : '',
+      insurance_option: insLabel,
+      pricing_lines: pricingLines,
+      breakdown: pricingLines,
+      subtotal: formatEur(p.subtotal),
+      total: formatEur(p.total_final || p.subtotal),
+      total_final: formatEur(p.total_final || p.subtotal),
+      sconto: discountLine,
+      sconto_note: p.sconto_note || '',
+      customer_name: p.customer_name || '',
+      pickup_date: p.pickup_date ? fmtDate(p.pickup_date) : '',
+      pickup_time: p.pickup_date ? fmtTime(p.pickup_date) : '',
+      dropoff_date: p.dropoff_date ? fmtDate(p.dropoff_date) : '',
+      dropoff_time: p.dropoff_date ? fmtTime(p.dropoff_date) : '',
+      km_info: p.unlimited_km_total > 0 ? 'Illimitati' : (() => {
+        if (!rentalConfig) return ''
+        const km = getKmIncluded(rentalConfig, p.rental_days, p.vehicle_category || 'exotic')
+        return km === 'unlimited' ? 'Illimitati' : `${km} Km`
+      })(),
+    }
+
+    let msg = chosen
+    for (const [k, v] of Object.entries(vars)) {
+      msg = msg.replace(new RegExp(`\\{${k}\\}`, 'g'), v || '')
+    }
+    msg = msg.replace(/\n{3,}/g, '\n\n').trim()
+
+    const footer = rentalConfig?.preventivi?.whatsapp_footer
+    if (footer) msg += `\n\n${footer}`
+
+    return msg
   }
 
   async function handleSendWhatsApp(preventivo: Preventivo, phone: string) {
     setSendingWhatsapp(true)
     try {
-      const message = await formatWhatsAppMessage(preventivo)
+      const message = formatWhatsAppMessage(preventivo)
 
       const response = await fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST',
@@ -948,6 +991,15 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
         .eq('id', preventivo.id)
 
       appendPreventivoEvent(preventivo.id, 'preventivo_inviato', { detail: `${phone} - ${selectedCust?.full_name || ''}` })
+      logAdminAction('preventivo_sent', 'preventivo', preventivo.id, {
+        number: preventivo.id.substring(0, 8),
+        customer: selectedCust?.full_name || preventivo.customer_name || null,
+        phone,
+        vehicle: preventivo.vehicle_name,
+        plate: preventivo.vehicle_plate,
+        total: preventivo.total_final,
+        rental_days: preventivo.rental_days,
+      })
       toast.success('Preventivo inviato via WhatsApp!')
       setShowPhoneModal(false)
       setWhatsappPhone('')
@@ -990,6 +1042,15 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
       .from('preventivi')
       .update({ status: 'accettato' })
       .eq('id', preventivo.id)
+
+    logAdminAction('preventivo_converted', 'preventivo', preventivo.id, {
+      number: preventivo.id.substring(0, 8),
+      customer: preventivo.customer_name,
+      phone: preventivo.customer_phone,
+      vehicle: preventivo.vehicle_name,
+      plate: preventivo.vehicle_plate,
+      total: preventivo.total_final,
+    })
 
     if (onConvertToBooking) {
       onConvertToBooking({
@@ -1057,6 +1118,14 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
     }
 
     appendPreventivoEvent(preventivo.id, 'no_cauzione_rifiutato', { detail: `discount_code: ${code}` })
+    logAdminAction('preventivo_rejected', 'preventivo', preventivo.id, {
+      number: preventivo.id.substring(0, 8),
+      customer: preventivo.customer_name,
+      phone: preventivo.customer_phone,
+      vehicle: preventivo.vehicle_name,
+      reason: 'no_cauzione non disponibile',
+      discount_code: code,
+    })
     toast.success(`Rifiutato — codice sconto ${code} inviato al cliente`)
     loadPreventivi()
   }
@@ -1238,7 +1307,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
                         )}
                       </div>
                       <div className="mt-1 text-[11px] text-theme-text-muted whitespace-pre-wrap font-mono leading-relaxed bg-theme-bg-tertiary/50 rounded p-2 max-w-xs">
-                        {buildDefaultPreventivoMessage(p)}
+                        {formatWhatsAppMessage(p)}
                       </div>
                     </td>
                     <td className="py-2 px-3 text-theme-text-muted text-xs">
@@ -1360,7 +1429,7 @@ export default function PreventiviTab({ onConvertToBooking }: Props) {
               />
 
               <div className="bg-theme-bg-primary rounded p-3 text-xs text-theme-text-muted whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
-                {buildDefaultPreventivoMessage(selectedPreventivo)}
+                {formatWhatsAppMessage(selectedPreventivo)}
               </div>
 
               <div className="flex gap-2 justify-end">

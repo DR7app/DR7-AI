@@ -110,7 +110,17 @@ const handler: Handler = async (event) => {
                 expirationDate: nexiExpirationStr,
                 resultUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-success?order=${orderId}`,
                 cancelUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/payment-cancelled?order=${orderId}`,
-                notificationUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/nexi-payment-callback`
+                notificationUrl: `${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/nexi-payment-callback`,
+                // Tokenize the card on every successful pay-by-link payment
+                // so that future merchant-initiated charges (sforo, danni,
+                // addebiti) can run against the same card without asking
+                // the customer for it again. contractId echoes orderId so
+                // we can find the recurringContractId from the callback.
+                recurrence: {
+                    action: 'CONTRACT_CREATION',
+                    contractId: orderId,
+                    contractType: 'MIT_UNSCHEDULED',
+                },
             },
             expirationDate: nexiExpirationStr
         };
@@ -184,13 +194,13 @@ const handler: Handler = async (event) => {
 
         if (dbError) console.error('[nexi-pay-by-link] DB error:', dbError);
 
-        // ─── Update booking with expiration tracking ────────────────────
-        if (bookingId) {
-            await supabase.from('bookings').update({
-                booking_details: supabase.rpc ? undefined : undefined, // Will be updated by caller
-            }).eq('id', bookingId);
-            // Note: the caller (ReservationsTab) updates booking_details with the link
-        }
+        // Note: the caller (ReservationsTab / PenaltyModal / DanniModal) writes
+        // booking_details with the payment link + pending penali/danni entries
+        // BEFORE invoking this function. Previously this block did
+        // `.update({ booking_details: undefined })` which could wipe the
+        // freshly-saved booking_details — removed to prevent penali/danni
+        // with nexi_pay_by_link status from vanishing before they reach the
+        // "In attesa di pagamento" list.
 
         // ─── Return with exact expiration timestamps ────────────────────
         return {

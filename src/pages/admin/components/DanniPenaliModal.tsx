@@ -293,7 +293,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
             if (paymentStatus === 'paid' && paidAmount < cartTotal) {
                 // PARTIAL
                 toast.success(`${purposeLabel} registrato (Parziale: €${paidAmount.toFixed(2)} / €${cartTotal.toFixed(2)})`)
-                logAdminAction('create_danni_penali', 'booking', booking.id, { amount: cartTotal, amountPaid: paidAmount, status: 'partial' })
+                logAdminAction('create_danni_penali', 'booking', booking.id, { customer: booking.customer_name, amount: cartTotal, amountPaid: paidAmount, status: 'partial' })
             } else if (paymentStatus === 'paid') {
                 // FULLY PAID → fattura
                 const allItems = [
@@ -333,7 +333,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                     }
                 }
                 toast.success(`Fattura ${purposeLabel} generata! N. ${data.invoice?.numero_fattura || 'N/A'} — €${cartTotal.toFixed(2)}`)
-                logAdminAction('create_danni_penali', 'booking', booking.id, { amount: cartTotal, status: paymentStatus, paymentMethod })
+                logAdminAction('create_danni_penali', 'booking', booking.id, { customer: booking.customer_name, amount: cartTotal, status: paymentStatus, paymentMethod })
             } else if (paymentStatus === 'nexi_pay_by_link') {
                 // NEXI PAY BY LINK — one combined link
                 try {
@@ -377,11 +377,11 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                 } catch (linkErr: any) {
                     toast.error('Errore Pay by Link: ' + linkErr.message)
                 }
-                logAdminAction('create_danni_penali', 'booking', booking.id, { amount: cartTotal, status: 'nexi_pay_by_link' })
+                logAdminAction('create_danni_penali', 'booking', booking.id, { customer: booking.customer_name, amount: cartTotal, status: 'nexi_pay_by_link' })
             } else {
                 // DA SALDARE
                 toast.success(`${purposeLabel} registrato (Da Saldare) — €${cartTotal.toFixed(2)}`)
-                logAdminAction('create_danni_penali', 'booking', booking.id, { amount: cartTotal, status: paymentStatus })
+                logAdminAction('create_danni_penali', 'booking', booking.id, { customer: booking.customer_name, amount: cartTotal, status: paymentStatus })
             }
 
             resetAndClose()

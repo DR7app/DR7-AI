@@ -2,6 +2,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useNavigate } from 'react-router-dom'
 import { useVehicleAlarm } from '../../contexts/VehicleAlarmContext'
+import { useTheme } from '../../contexts/ThemeContext'
 import RentalTabs from './components/RentalTabs'
 import { useBirthdayCount } from './components/BirthdaysTab'
 import PlaceholderTab from './components/PlaceholderTab'
@@ -86,6 +87,7 @@ export default function AdminDashboard() {
   const { alarmState, enableAudio } = useVehicleAlarm()
   const birthdayCount = useBirthdayCount()
   const { role: adminRole, canViewFinancials } = useAdminRole()
+  const { theme, toggleTheme } = useTheme()
 
   // RBAC: tabs restricted to superadmin
   const financialTabs: TabType[] = ['fattura', 'nexi', 'unpaid', 'cauzioni']
@@ -394,7 +396,23 @@ export default function AdminDashboard() {
               {tabLabels[activeTab] || activeTab}
             </h2>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <button
+              onClick={toggleTheme}
+              className="p-2 min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
+              title={theme === 'dark' ? 'Passa a tema chiaro' : 'Passa a tema scuro'}
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+              )}
+            </button>
             <span className="text-sm text-theme-text-muted hidden sm:block">
               {new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}
             </span>

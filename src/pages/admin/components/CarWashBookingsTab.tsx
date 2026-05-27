@@ -726,7 +726,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       if (error) throw error
 
       toast.success('Prenotazione eliminata')
-      logAdminAction('delete_carwash', 'carwash_booking', bookingId)
+      logAdminAction('delete_carwash', 'carwash_booking', bookingId, { customer: customerName })
       loadData()
     } catch (error: unknown) {
       const _errMsg = error instanceof Error ? error.message : String(error)
@@ -872,7 +872,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         toast.success(`Fattura generata con successo! Numero: ${data.invoice.numero_fattura}. Vai alla tab "Fatture" per visualizzarla.`)
       }
 
-      logAdminAction('generate_carwash_fattura', 'carwash_booking', booking.id)
+      logAdminAction('generate_carwash_fattura', 'carwash_booking', booking.id, {
+        customer: booking.customer_name,
+        phone: booking.customer_phone,
+        service: booking.service_name,
+        plate: booking.vehicle_plate,
+        amount: booking.price_total,
+        number: data?.invoice?.numero_fattura,
+      })
       loadData()
     } catch (error: unknown) {
       const _errMsg = error instanceof Error ? error.message : String(error)
@@ -1049,7 +1056,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
 
     logger.log('✅ Booking created successfully:', data)
-    logAdminAction('create_carwash', 'carwash_booking', data.id, { customer: customerName, service: serviceNames })
+    logAdminAction('create_carwash', 'carwash_booking', data.id, {
+      customer: customerName,
+      phone: customerPhone || null,
+      service: serviceNames,
+      plate: vehiclePlate || null,
+      appointment: `${formData.appointment_date} ${formData.appointment_time}`,
+      amount: totalPrice,
+      payment: formData.payment_status,
+    })
 
     // Generate fattura ONLY if paid — never for unpaid bookings, Wallet, or Gift Card
     const isPaid = formData.payment_status === 'paid' || formData.payment_status === 'completed' || formData.payment_status === 'succeeded'

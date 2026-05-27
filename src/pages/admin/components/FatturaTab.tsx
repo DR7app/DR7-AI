@@ -80,9 +80,14 @@ export default function FatturaTab() {
 
   async function handleDelete(id: string) {
     try {
+      const inv = invoices.find(i => i.id === id)
       const { error } = await supabase.from('fatture').delete().eq('id', id)
       if (error) throw error
-      logAdminAction('delete_fattura', 'fattura', id)
+      logAdminAction('delete_fattura', 'fattura', id, {
+        number: inv?.numero_fattura,
+        customer: inv?.customer_name,
+        amount: inv?.importo_totale,
+      })
       loadInvoices()
     } catch (error) {
       console.error('Error deleting invoice:', error)
@@ -197,7 +202,11 @@ export default function FatturaTab() {
       if (!response.ok) {
         console.error('SDI send failed:', result.error, result.details)
       } else {
-        logAdminAction('send_sdi', 'fattura', invoice.id)
+        logAdminAction('send_sdi', 'fattura', invoice.id, {
+          number: invoice.numero_fattura,
+          customer: invoice.customer_name,
+          amount: invoice.importo_totale,
+        })
       }
 
       loadInvoices()

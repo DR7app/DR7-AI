@@ -949,7 +949,7 @@ export default function ReportPreventiviTab() {
                     <p className="text-xs text-theme-text-muted mt-1">Ancora attivo</p>
                   </div>
                   <div className="rounded-lg bg-theme-bg-tertiary/40 p-3 text-center">
-                    <p className="text-2xl font-bold text-gray-400">{perdite.periodoNoDate}</p>
+                    <p className="text-2xl font-bold text-theme-text-muted">{perdite.periodoNoDate}</p>
                     <p className="text-xs text-theme-text-muted mt-1">Senza data</p>
                   </div>
                 </div>

@@ -220,7 +220,7 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
                                         type="checkbox"
                                         checked={formData.scope.includes(opt.value)}
                                         onChange={() => handleScopeToggle(opt.value)}
-                                        className="rounded border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
+                                        className="rounded border-theme-border-light bg-theme-bg-hover text-dr7-gold focus:ring-dr7-gold"
                                     />
                                     <span className="text-theme-text-secondary text-sm">{opt.label}</span>
                                 </label>
@@ -279,7 +279,7 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
                                 type="checkbox"
                                 checked={formData.has_minimum_spend}
                                 onChange={(e) => updateField('has_minimum_spend', e.target.checked)}
-                                className="rounded border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
+                                className="rounded border-theme-border-light bg-theme-bg-hover text-dr7-gold focus:ring-dr7-gold"
                             />
                             <span className="text-sm font-semibold text-theme-text-primary">Spesa minima</span>
                         </label>
@@ -332,7 +332,7 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
                                 type="checkbox"
                                 checked={formData.single_use}
                                 onChange={(e) => updateField('single_use', e.target.checked)}
-                                className="rounded border-theme-border-light bg-gray-700 text-dr7-gold focus:ring-dr7-gold"
+                                className="rounded border-theme-border-light bg-theme-bg-hover text-dr7-gold focus:ring-dr7-gold"
                             />
                             <span className="text-sm font-semibold text-theme-text-primary">Utilizzabile una sola volta</span>
                         </label>
@@ -381,7 +381,7 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
                                 <button
                                     type="button"
                                     onClick={regenerateCode}
-                                    className="px-4 py-3 bg-gray-700 text-theme-text-primary rounded-lg hover:bg-gray-600 transition-colors text-sm"
+                                    className="px-4 py-3 bg-theme-bg-hover text-theme-text-primary rounded-lg hover:bg-theme-bg-tertiary transition-colors text-sm"
                                 >
                                     Rigenera
                                 </button>

@@ -157,22 +157,22 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
       <div className="bg-gradient-to-br from-[#2d8a7e]/20 to-[#2d8a7e]/5 border border-[#2d8a7e]/30 rounded-2xl p-6 text-center relative">
         <button
           onClick={() => { setLoading(true); loadDashboard() }}
-          className="absolute top-3 right-3 text-gray-400 hover:text-[#2d8a7e] transition-colors p-2"
+          className="absolute top-3 right-3 text-theme-text-muted hover:text-[#2d8a7e] transition-colors p-2"
           title="Aggiorna"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
         </button>
-        <p className="text-gray-400 text-sm mb-1">Il tuo saldo Wallet</p>
+        <p className="text-theme-text-muted text-sm mb-1">Il tuo saldo Wallet</p>
         <p className="text-5xl font-bold text-[#2d8a7e]">&euro;{balance}</p>
-        <p className="text-gray-400 text-sm mt-2">Totale guadagnato: &euro;{totalEarned}</p>
+        <p className="text-theme-text-muted text-sm mt-2">Totale guadagnato: &euro;{totalEarned}</p>
       </div>
 
       {/* Referral Code & Share */}
       <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
         <div className="text-center">
-          <p className="text-gray-400 text-sm mb-2">Il tuo codice referral</p>
+          <p className="text-theme-text-muted text-sm mb-2">Il tuo codice referral</p>
           <p className="text-3xl font-bold text-white font-mono tracking-widest">{data.participant.referral_code}</p>
         </div>
 
@@ -196,22 +196,22 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white/5 border border-white/10 rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-white">{data.referrals.total}</p>
-          <p className="text-gray-400 text-xs mt-1">Amici Invitati</p>
+          <p className="text-theme-text-muted text-xs mt-1">Amici Invitati</p>
         </div>
         <div className="bg-white/5 border border-white/10 rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-[#2d8a7e]">{data.referrals.qualifying}</p>
-          <p className="text-gray-400 text-xs mt-1">Qualificati</p>
+          <p className="text-theme-text-muted text-xs mt-1">Qualificati</p>
         </div>
         <div className="bg-white/5 border border-white/10 rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-white">{data.referrals.milestones_reached}</p>
-          <p className="text-gray-400 text-xs mt-1">Traguardi</p>
+          <p className="text-theme-text-muted text-xs mt-1">Traguardi</p>
         </div>
       </div>
 
       {/* Milestone Progress */}
       <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
         <div className="flex justify-between items-center mb-2">
-          <span className="text-gray-400 text-sm">Prossimo traguardo</span>
+          <span className="text-theme-text-muted text-sm">Prossimo traguardo</span>
           <span className="text-white text-sm font-semibold">
             {data.referrals.progress_to_milestone}/10 amici qualificati
           </span>
@@ -222,7 +222,7 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
             style={{ width: `${(data.referrals.progress_to_milestone / 10) * 100}%` }}
           />
         </div>
-        <p className="text-gray-500 text-xs mt-2">
+        <p className="text-theme-text-muted text-xs mt-2">
           Raggiungi 10 amici qualificati per sbloccare €50 wallet + buono €500
         </p>
       </div>
@@ -232,11 +232,11 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
         const activeBuoni = data.discount_codes.filter(c => !c.used && new Date(c.expires_at) > new Date());
         return activeBuoni.length > 0 ? (
           <div className="bg-gradient-to-br from-green-500/10 to-green-500/5 border border-green-500/20 rounded-2xl p-4 text-center">
-            <p className="text-gray-400 text-sm">Buoni Sconto Attivi</p>
+            <p className="text-theme-text-muted text-sm">Buoni Sconto Attivi</p>
             <p className="text-2xl font-bold text-green-400">
               {activeBuoni.length} buon{activeBuoni.length === 1 ? 'o' : 'i'}
             </p>
-            <p className="text-gray-500 text-xs mt-1">
+            <p className="text-theme-text-muted text-xs mt-1">
               Valore totale: €{(activeBuoni.reduce((s, c) => s + c.amount_cents, 0) / 100).toFixed(2)} — Solo noleggio supercar
             </p>
           </div>
@@ -252,7 +252,7 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
               activeTab === tab
                 ? 'bg-[#2d8a7e] text-black'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                : 'text-theme-text-muted hover:text-white hover:bg-white/5'
             }`}
           >
             {tab === 'overview' ? 'Ricarica' : tab === 'buoni' ? 'Buoni Sconto' : tab === 'friends' ? 'Amici' : 'Transazioni'}
@@ -281,7 +281,7 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
           </div>
           <div className="flex gap-3">
             <div className="relative flex-1">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></span>
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-theme-text-muted"></span>
               <input
                 type="number"
                 value={topupAmount}
@@ -299,14 +299,14 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
               {topupLoading ? '...' : 'Ricarica'}
             </button>
           </div>
-          <p className="text-gray-500 text-xs">Importo minimo: €10. Pagamento sicuro via Nexi.</p>
+          <p className="text-theme-text-muted text-xs">Importo minimo: €10. Pagamento sicuro via Nexi.</p>
         </div>
       )}
 
       {activeTab === 'buoni' && (
         <div className="space-y-2">
           {data.discount_codes.length === 0 ? (
-            <div className="text-center py-10 text-gray-400">
+            <div className="text-center py-10 text-theme-text-muted">
               <p className="text-4xl mb-3">🎫</p>
               <p>Nessun buono sconto generato.</p>
               <p className="text-sm mt-1">Registrati o invita amici per ricevere buoni!</p>
@@ -335,13 +335,13 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
                               setCopiedCode(dc.code);
                               setTimeout(() => setCopiedCode(null), 2000);
                             }}
-                            className="text-xs px-2 py-0.5 bg-white/10 text-gray-300 rounded hover:bg-white/20 transition-colors"
+                            className="text-xs px-2 py-0.5 bg-white/10 text-theme-text-secondary rounded hover:bg-white/20 transition-colors"
                           >
                             {copiedCode === dc.code ? 'Copiato!' : 'Copia'}
                           </button>
                         )}
                       </div>
-                      <p className="text-gray-500 text-xs">
+                      <p className="text-theme-text-muted text-xs">
                         {dc.reason === 'registration' ? 'Bonus registrazione' :
                          dc.reason === 'friend_topup' ? 'Bonus amico ricarica' :
                          'Traguardo 10 amici'}
@@ -350,7 +350,7 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
                       <p className="text-gray-600 text-xs mt-0.5">Solo noleggio supercar</p>
                     </div>
                     <div className="text-right">
-                      <p className={`text-xl font-bold ${isActive ? 'text-green-400' : 'text-gray-500'}`}>
+                      <p className={`text-xl font-bold ${isActive ? 'text-green-400' : 'text-theme-text-muted'}`}>
                         €{(dc.amount_cents / 100).toFixed(0)}
                       </p>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
@@ -372,7 +372,7 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
       {activeTab === 'friends' && (
         <div className="space-y-2">
           {data.friends.length === 0 ? (
-            <div className="text-center py-10 text-gray-400">
+            <div className="text-center py-10 text-theme-text-muted">
               <p className="text-4xl mb-3">👥</p>
               <p>Non hai ancora invitato nessuno.</p>
               <p className="text-sm mt-1">Condividi il tuo codice per iniziare!</p>
@@ -382,7 +382,7 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
               <div key={friend.id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex justify-between items-center">
                 <div>
                   <p className="text-white font-medium">{friend.nome} {friend.cognome}</p>
-                  <p className="text-gray-500 text-xs">
+                  <p className="text-theme-text-muted text-xs">
                     {new Date(friend.created_at).toLocaleDateString('it-IT')}
                   </p>
                 </div>
@@ -402,13 +402,13 @@ export default function ReferralDashboard({ participantId }: DashboardProps) {
       {activeTab === 'transactions' && (
         <div className="space-y-2">
           {data.transactions.length === 0 ? (
-            <div className="text-center py-10 text-gray-400">Nessuna transazione</div>
+            <div className="text-center py-10 text-theme-text-muted">Nessuna transazione</div>
           ) : (
             data.transactions.map((txn) => (
               <div key={txn.id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex justify-between items-center">
                 <div>
                   <p className="text-white text-sm font-medium">{TYPE_LABELS[txn.type] || txn.type}</p>
-                  <p className="text-gray-500 text-xs">
+                  <p className="text-theme-text-muted text-xs">
                     {new Date(txn.created_at).toLocaleDateString('it-IT', {
                       day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
                     })}

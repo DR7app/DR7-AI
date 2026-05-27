@@ -452,21 +452,20 @@ Grazie per la collaborazione.`,
 
   // ── PREVENTIVO ──
   {
-    message_key: 'preventivo_send',
+    message_key: 'preventivo_whatsapp',
     label: 'Invio Preventivo al Cliente',
-    description: 'Inviato al cliente via WhatsApp quando si invia un preventivo',
-    message_body: `Preventivo {vehicle_specs}
+    description: 'Inviato al cliente via WhatsApp quando si invia un preventivo. Variabili: {vehicle_name}, {vehicle_specs}, {rental_days}, {daily_rate}, {rental_total}, {pricing_lines}, {breakdown}, {insurance_line}, {insurance_option}, {km_info}, {subtotal}, {total}, {total_final}, {sconto}, {sconto_note}, {customer_name}, {pickup_date}, {pickup_time}, {dropoff_date}, {dropoff_time}',
+    message_body: `Preventivo *{vehicle_specs}*
 
-{rental_days}gg x {daily_rate}/g = {rental_total}
-{insurance_line}
-{lavaggio_line}
-{no_cauzione_line}
-{km_illimitati_line}
-{second_driver_line}
-{extras_lines}
+*Ritiro:* {pickup_date} alle {pickup_time}
+*Riconsegna:* {dropoff_date} alle {dropoff_time}
+
+{pricing_lines}
 
 Totale = {subtotal}
-{sconto_line}`,
+*{sconto}*
+
+*DR7*`,
     is_automatic: false,
     is_enabled: true,
     include_header: false,
@@ -530,12 +529,36 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    // Upsert all real messages
+    // Fetch existing rows ONCE so we know which keys already exist; never overwrite
+    // a customised message_body when re-syncing.
+    const { data: existingRows } = await supabase
+      .from('system_messages')
+      .select('message_key')
+    const existingKeys = new Set((existingRows || []).map(r => r.message_key))
+
     for (const msg of MESSAGES) {
-      const { error } = await supabase
-        .from('system_messages')
-        .upsert(
-          {
+      if (existingKeys.has(msg.message_key)) {
+        // Row exists — refresh metadata only, leave message_body untouched so
+        // admin edits in MessaggiSistemaTab survive re-syncs.
+        const { error } = await supabase
+          .from('system_messages')
+          .update({
+            label: msg.label,
+            description: msg.description,
+            trigger_event: msg.trigger_event,
+            trigger_offset_hours: (msg as any).trigger_offset_hours || 0,
+            target_category: msg.target_category,
+            target_status: 'all',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('message_key', msg.message_key)
+
+        if (error) console.error(`Error updating metadata for ${msg.message_key}:`, error)
+      } else {
+        // New row — insert full default including message_body.
+        const { error } = await supabase
+          .from('system_messages')
+          .insert({
             message_key: msg.message_key,
             label: msg.label,
             description: msg.description,
@@ -548,12 +571,9 @@ export const handler: Handler = async (event) => {
             target_category: msg.target_category,
             target_status: 'all',
             updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'message_key' }
-        )
+          })
 
-      if (error) {
-        console.error(`Error upserting ${msg.message_key}:`, error)
+        if (error) console.error(`Error inserting ${msg.message_key}:`, error)
       }
     }
 

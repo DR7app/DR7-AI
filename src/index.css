@@ -10,11 +10,11 @@
 }
 
 html, body, #root {
-  background-color: #171717;
-  color: #ffffff;
+  background-color: var(--color-theme-bg-secondary);
+  color: var(--color-theme-text-primary);
   min-height: 100vh;
   min-height: 100dvh;
-  
+
   -webkit-overflow-scrolling: touch;
 }
 

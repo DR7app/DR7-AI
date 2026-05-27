@@ -347,23 +347,23 @@ export default function CompilaButton({
       {/* Conflict resolution modal */}
       {showConflicts && conflicts.length > 0 && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl max-w-lg w-full p-6 space-y-4">
-            <h3 className="text-lg font-bold text-white">Conflitto dati rilevato</h3>
-            <p className="text-sm text-gray-400">
+          <div className="bg-theme-bg-primary border border-theme-border rounded-xl max-w-lg w-full p-6 space-y-4">
+            <h3 className="text-lg font-bold text-theme-text-primary">Conflitto dati rilevato</h3>
+            <p className="text-sm text-theme-text-muted">
               Alcuni dati estratti dal documento differiscono da quelli già presenti nel form.
             </p>
 
             <div className="space-y-3 max-h-60 overflow-y-auto">
               {conflicts.map((c, i) => (
-                <div key={i} className="bg-gray-800 rounded-lg p-3 border border-yellow-600/30">
-                  <p className="text-xs text-gray-400 font-semibold mb-1">{FIELD_LABELS[c.field] || c.field}</p>
+                <div key={i} className="bg-theme-bg-tertiary rounded-lg p-3 border border-yellow-600/30">
+                  <p className="text-xs text-theme-text-muted font-semibold mb-1">{FIELD_LABELS[c.field] || c.field}</p>
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div>
-                      <span className="text-gray-500 text-xs">Attuale:</span>
-                      <p className="text-white">{c.currentValue}</p>
+                      <span className="text-theme-text-muted text-xs">Attuale:</span>
+                      <p className="text-theme-text-primary">{c.currentValue}</p>
                     </div>
                     <div>
-                      <span className="text-gray-500 text-xs">Dal documento:</span>
+                      <span className="text-theme-text-muted text-xs">Dal documento:</span>
                       <p className="text-yellow-400">{c.extractedValue}</p>
                     </div>
                   </div>
@@ -388,13 +388,13 @@ export default function CompilaButton({
               </button>
               <button
                 onClick={handleApplyKeepExisting}
-                className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg font-semibold text-sm hover:bg-gray-600"
+                className="flex-1 px-4 py-2 bg-theme-bg-hover text-theme-text-primary rounded-lg font-semibold text-sm hover:bg-gray-600"
               >
                 Mantieni attuali
               </button>
               <button
                 onClick={() => { setShowConflicts(false); setPendingData(null); setConflicts([]); }}
-                className="px-4 py-2 bg-gray-800 text-gray-400 rounded-lg text-sm hover:bg-gray-700"
+                className="px-4 py-2 bg-theme-bg-tertiary text-theme-text-muted rounded-lg text-sm hover:bg-theme-bg-hover"
               >
                 Annulla
               </button>

@@ -60,8 +60,12 @@ export async function logAdminAction(
       entity_id: entity_id || null,
       details: details || {},
     })
-    if (insertError) console.error('[LOG] Insert failed:', insertError)
-    else logger.log('[LOG] Insert OK:', action)
+    if (insertError) {
+      // Surface loudly so constraint/RLS failures don't disappear into the void.
+      console.error(`[LOG] Insert FAILED for action="${action}":`, insertError)
+    } else {
+      logger.log('[LOG] Insert OK:', action)
+    }
   } catch (err) {
     console.error('Failed to log admin action:', err)
   }

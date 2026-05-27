@@ -170,7 +170,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
             if (paymentStatus === 'paid' && paidAmount < cartTotal) {
                 // PARTIAL: save but no fattura
                 toast.success(`Danno registrato (Parziale: €${paidAmount.toFixed(2)} / €${cartTotal.toFixed(2)}) — fattura non generata`)
-                logAdminAction('create_danni', 'booking', booking.id, { amount: cartTotal, amountPaid: paidAmount, status: 'partial' })
+                logAdminAction('create_danni', 'booking', booking.id, { customer: booking.customer_name, phone: booking.customer_phone, amount: cartTotal, amountPaid: paidAmount, status: 'partial' })
             } else if (isFullyPaid) {
                 // FULLY PAID: generate fattura + send to SDI
                 const response = await authFetch('/.netlify/functions/generate-penalty-invoice', {
@@ -209,7 +209,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                 }
 
                 toast.success(`Fattura danni generata! N. ${data.invoice?.numero_fattura || 'N/A'} — €${cartTotal.toFixed(2)}`)
-                logAdminAction('create_danni', 'booking', booking.id, { amount: cartTotal, status: paymentStatus })
+                logAdminAction('create_danni', 'booking', booking.id, { customer: booking.customer_name, phone: booking.customer_phone, amount: cartTotal, status: paymentStatus })
             } else if (paymentStatus === 'nexi_pay_by_link') {
                 // NEXI PAY BY LINK: generate link + send WhatsApp
                 try {
@@ -253,11 +253,11 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                 } catch (linkErr: any) {
                     toast.error('Errore Pay by Link: ' + linkErr.message)
                 }
-                logAdminAction('create_danni', 'booking', booking.id, { amount: cartTotal, status: 'nexi_pay_by_link' })
+                logAdminAction('create_danni', 'booking', booking.id, { customer: booking.customer_name, phone: booking.customer_phone, amount: cartTotal, status: 'nexi_pay_by_link' })
             } else {
                 // DA SALDARE: already saved above, just show toast
                 toast.success(`Danno registrato (Da Saldare) — €${cartTotal.toFixed(2)}`)
-                logAdminAction('create_danni', 'booking', booking.id, { amount: cartTotal, status: paymentStatus })
+                logAdminAction('create_danni', 'booking', booking.id, { customer: booking.customer_name, phone: booking.customer_phone, amount: cartTotal, status: paymentStatus })
             }
 
             setCart([]); setNote(''); setPhotos([]); setPhotoPreviewUrls([]); onSuccess(); onClose()

@@ -318,7 +318,7 @@ export default function CodiciScontoTab() {
                                                             ? 'bg-gray-600 text-white hover:bg-gray-500'
                                                             : code.status === 'deactivated'
                                                             ? 'bg-green-600/80 text-white hover:bg-green-600'
-                                                            : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                                                            : 'bg-theme-bg-hover text-theme-text-muted cursor-not-allowed'
                                                     }`}
                                                     title={
                                                         code.status === 'active' ? 'Disattiva' :

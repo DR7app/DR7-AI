@@ -207,7 +207,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                 }
 
                 toast.success(`Fattura penale generata! N. ${data.invoice?.numero_fattura || 'N/A'} — €${cartTotal.toFixed(2)}`)
-                logAdminAction('create_penalty', 'booking', booking.id, { amount: cartTotal, status: paymentStatus, paymentMethod })
+                logAdminAction('create_penalty', 'booking', booking.id, { customer: booking.customer_name, amount: cartTotal, status: paymentStatus, paymentMethod })
             } else if (paymentStatus === 'nexi_pay_by_link') {
                 // NEXI PAY BY LINK: save to booking_details + generate link + WhatsApp
                 const { data: currentBookingNexi, error: fetchErrNexi } = await supabase
@@ -277,7 +277,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                 } catch (linkErr: any) {
                     toast.error('Errore Pay by Link: ' + linkErr.message)
                 }
-                logAdminAction('create_penalty', 'booking', booking.id, { amount: cartTotal, status: 'nexi_pay_by_link' })
+                logAdminAction('create_penalty', 'booking', booking.id, { customer: booking.customer_name, amount: cartTotal, status: 'nexi_pay_by_link' })
             } else {
                 // DA SALDARE: save to booking_details.penalties[] (no fattura)
                 const { data: currentBooking, error: fetchErr } = await supabase
@@ -315,7 +315,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                 if (updateErr) throw new Error('Errore nel salvataggio della penale.')
 
                 toast.success(`Penale registrata (Da Saldare) — €${cartTotal.toFixed(2)}`)
-                logAdminAction('create_penalty', 'booking', booking.id, { amount: cartTotal, status: paymentStatus })
+                logAdminAction('create_penalty', 'booking', booking.id, { customer: booking.customer_name, amount: cartTotal, status: paymentStatus })
             }
 
             setCart([]); setNote(''); onSuccess(); onClose()

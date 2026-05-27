@@ -122,7 +122,7 @@ export default function ReferralRegistrationForm({ onRegistered, initialReferral
       {step === 1 && (
         <form onSubmit={handleSendOtp} className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Nome *</label>
+            <label className="block text-sm text-theme-text-muted mb-1">Nome *</label>
             <input
               type="text"
               value={nome}
@@ -134,7 +134,7 @@ export default function ReferralRegistrationForm({ onRegistered, initialReferral
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Cognome *</label>
+            <label className="block text-sm text-theme-text-muted mb-1">Cognome *</label>
             <input
               type="text"
               value={cognome}
@@ -146,7 +146,7 @@ export default function ReferralRegistrationForm({ onRegistered, initialReferral
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Telefono WhatsApp *</label>
+            <label className="block text-sm text-theme-text-muted mb-1">Telefono WhatsApp *</label>
             <input
               type="tel"
               value={telefono}
@@ -158,7 +158,7 @@ export default function ReferralRegistrationForm({ onRegistered, initialReferral
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Email (opzionale)</label>
+            <label className="block text-sm text-theme-text-muted mb-1">Email (opzionale)</label>
             <input
               type="email"
               value={email}
@@ -169,7 +169,7 @@ export default function ReferralRegistrationForm({ onRegistered, initialReferral
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Codice Referral (opzionale)</label>
+            <label className="block text-sm text-theme-text-muted mb-1">Codice Referral (opzionale)</label>
             <input
               type="text"
               value={referralCode}
@@ -198,7 +198,7 @@ export default function ReferralRegistrationForm({ onRegistered, initialReferral
       {step === 2 && (
         <div className="space-y-6">
           <div className="text-center">
-            <p className="text-gray-400 mb-2">Abbiamo inviato un codice a 6 cifre via WhatsApp al numero</p>
+            <p className="text-theme-text-muted mb-2">Abbiamo inviato un codice a 6 cifre via WhatsApp al numero</p>
             <p className="text-white font-semibold text-lg">{telefono}</p>
           </div>
 
@@ -220,7 +220,7 @@ export default function ReferralRegistrationForm({ onRegistered, initialReferral
 
           <button
             onClick={() => { setStep(1); setOtpCode(''); setError('') }}
-            className="w-full py-2 text-gray-400 hover:text-white text-sm transition-colors"
+            className="w-full py-2 text-theme-text-muted hover:text-white text-sm transition-colors"
           >
             Torna indietro
           </button>
