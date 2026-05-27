@@ -738,35 +738,60 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
                 // Internamente: bypass = role:bypass-otp NEL array permissions.
                 const otpBypass = currentPerms.includes(OTP_BYPASS_TAG)
                 const otpEnabled = !otpBypass
+                // 2026-05-27: failsafe e' una lista hardcoded di email che
+                // bypassano SEMPRE l'OTP, a prescindere dal toggle. Se
+                // l'operatore selezionato e' in questa lista, il toggle e'
+                // INERTE — direzione deve saperlo subito.
+                const FAILSAFE_EMAILS = new Set(['valerio@dr7.app', 'ilenia@dr7.app', 'salvatore@dr7.app', 'ophe@dr7.app'])
+                const inFailsafe = FAILSAFE_EMAILS.has((selected.email || '').toLowerCase())
+                const hasDirezione = currentPerms.includes('role:direzione')
                 return (
                 <div className="mt-6 border-t border-theme-border pt-5">
                   {/* OTP per-operator toggle — sezione dedicata, separata dai
                       checkbox ruoli sotto. Su richiesta direzione (toggle ON/OFF
                       visibile per revoca rapida). */}
-                  <div className="mb-5 rounded-xl border border-theme-border bg-theme-bg-primary px-4 py-3">
+                  <div className={`mb-5 rounded-xl border px-4 py-3 ${inFailsafe ? 'border-amber-500/40 bg-amber-500/5' : 'border-theme-border bg-theme-bg-primary'}`}>
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <div className="text-[13px] font-semibold text-theme-text-primary flex items-center gap-2">
                           OTP per Operatore
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${otpEnabled ? 'bg-emerald-500/15 text-emerald-500' : 'bg-rose-500/15 text-rose-500'}`}>
-                            {otpEnabled ? 'ATTIVO' : 'DISABILITATO'}
-                          </span>
+                          {inFailsafe ? (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500">FAILSAFE — TOGGLE INERTE</span>
+                          ) : (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${otpEnabled ? 'bg-emerald-500/15 text-emerald-500' : 'bg-rose-500/15 text-rose-500'}`}>
+                              {otpEnabled ? 'ATTIVO' : 'DISABILITATO'}
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] text-theme-text-muted mt-0.5">
-                          {otpEnabled
-                            ? 'L\'operatore riceve la richiesta OTP per le azioni protette (comportamento normale).'
-                            : 'L\'operatore bypassa SEMPRE l\'OTP per qualsiasi azione — usare con cautela.'}
+                          {inFailsafe
+                            ? `${selected.email} e' nella failsafe list hardcoded (valerio/ilenia/salvatore/ophe) — bypassa SEMPRE OTP, il toggle qui non ha effetto. Per riabilitare l'OTP per loro serve modificare OTP_BYPASS_EMAILS nel codice.`
+                            : otpEnabled
+                              ? 'L\'operatore riceve la richiesta OTP per le azioni protette (comportamento normale).'
+                              : 'L\'operatore bypassa SEMPRE l\'OTP per qualsiasi azione — usare con cautela.'}
                         </div>
+                        {hasDirezione && !inFailsafe && !otpEnabled && (
+                          <div className="text-[11px] text-amber-500 mt-1">
+                            Attenzione: questo operatore ha anche il ruolo Direzione. Alcune azioni potrebbero saltare comunque l'OTP via altri gate (controlla Gestione OTP).
+                          </div>
+                        )}
                       </div>
                       <button
                         type="button"
                         onClick={() => toggleAdminRole(selected, OTP_BYPASS_TAG)}
-                        className={`relative inline-flex flex-shrink-0 items-center w-12 h-6 rounded-full transition-colors ${otpEnabled ? 'bg-emerald-500' : 'bg-rose-500/40 border border-rose-500/30'}`}
+                        disabled={inFailsafe}
+                        className={`relative inline-flex flex-shrink-0 items-center w-12 h-6 rounded-full transition-colors ${inFailsafe ? 'bg-gray-400/30 cursor-not-allowed opacity-50' : otpEnabled ? 'bg-emerald-500' : 'bg-rose-500/40 border border-rose-500/30'}`}
                         aria-pressed={otpEnabled}
                         aria-label={otpEnabled ? 'Disabilita OTP per questo operatore' : 'Attiva OTP per questo operatore'}
                       >
                         <span className={`inline-block w-5 h-5 rounded-full bg-white shadow transform transition-transform ${otpEnabled ? 'translate-x-6' : 'translate-x-0.5'}`} />
                       </button>
+                    </div>
+                    {/* Debug indicator: shows the underlying tag state so direzione
+                        can confirm the DB write happened. Tiny font, just diagnostic. */}
+                    <div className="text-[10px] text-theme-text-muted mt-2 pt-2 border-t border-theme-border/50 font-mono">
+                      Tag attuale: <code>{currentPerms.includes(OTP_BYPASS_TAG) ? 'role:bypass-otp PRESENTE' : 'role:bypass-otp ASSENTE'}</code>
+                      {' · '}Email: <code>{selected.email}</code>
                     </div>
                   </div>
 
