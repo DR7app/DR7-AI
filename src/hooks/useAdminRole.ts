@@ -12,6 +12,7 @@ import { supabase } from '../supabaseClient'
 export type AdminRoleTag =
   | 'direzione'
   | 'developer'
+  | 'bypass-otp'
   | 'payment-manager'
   | 'stipendio-editor'
   | 'sito-direzione'

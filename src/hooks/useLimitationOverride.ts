@@ -109,11 +109,37 @@ export function useLimitationOverride() {
     return null
   }
   const adminEmailRef = useRef<string | null>(readEmailSync())
+  // 2026-05-27: bypass per-operatore via tag `role:bypass-otp` su
+  // admins.permissions[]. Indipendente da OTP_BYPASS_EMAILS (failsafe
+  // hardcoded direzione) — entrambi vengono OR-ati nel check sotto.
+  // Direzione lo gestisce da Gestione Operatori > Permessi & Ruoli.
+  const adminHasBypassRoleRef = useRef<boolean>(false)
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       const e = (data.session?.user?.email || '').toLowerCase()
       if (e) adminEmailRef.current = e
     })
+  }, [])
+  useEffect(() => {
+    // Carica permissions dell'admin loggato e setta il ref per il bypass
+    // basato sul ruolo `role:bypass-otp`. Se la query fallisce o l'admin
+    // non e' in tabella, ref resta false (safe default = OTP richiesto).
+    let cancelled = false
+    ;(async () => {
+      const email = adminEmailRef.current
+      if (!email) return
+      const { data } = await supabase
+        .from('admins')
+        .select('permissions')
+        .eq('email', email)
+        .maybeSingle()
+      if (cancelled) return
+      const perms = Array.isArray((data as { permissions?: unknown } | null)?.permissions)
+        ? ((data as { permissions: string[] }).permissions)
+        : []
+      adminHasBypassRoleRef.current = perms.includes('role:bypass-otp')
+    })()
+    return () => { cancelled = true }
   }, [])
 
   // 2026-05-18: ritorna `true` se la richiesta e' stata BYPASSATA
@@ -144,7 +170,11 @@ export function useLimitationOverride() {
       const fresh = readEmailSync()
       if (fresh) adminEmailRef.current = fresh
     }
-    const adminBypass = !!adminEmailRef.current && OTP_BYPASS_EMAILS.has(adminEmailRef.current)
+    // adminBypass = email in failsafe (direzione) OPPURE permission
+    // `role:bypass-otp` attivo (toggle per-operatore da OperatoriTab).
+    const emailInFailsafe = !!adminEmailRef.current && OTP_BYPASS_EMAILS.has(adminEmailRef.current)
+    const roleBypass = adminHasBypassRoleRef.current
+    const adminBypass = emailInFailsafe || roleBypass
     const callerBypass = explicitBypass || adminBypass
 
     // Gate completo: is_required AND conditions. Se l'OTP e' disabilitato
@@ -167,13 +197,15 @@ export function useLimitationOverride() {
         action_context: auditCtx || `${code}_${Date.now()}`,
         draft_session_id: draftSessionIdRef.current,
         flow_type: flowTypeRef.current,
-        reason: adminBypass
-          ? `admin_bypass (${adminEmailRef.current})`
-          : explicitBypass
-            ? 'caller_bypass (es. veicolo TEST)'
-            : isDisabled
-              ? 'is_required=false in system_otp_overrides'
-              : 'conditions_not_matched',
+        reason: roleBypass
+          ? `role_bypass_otp (${adminEmailRef.current})`
+          : emailInFailsafe
+            ? `admin_bypass (${adminEmailRef.current})`
+            : explicitBypass
+              ? 'caller_bypass (es. veicolo TEST)'
+              : isDisabled
+                ? 'is_required=false in system_otp_overrides'
+                : 'conditions_not_matched',
         ...(runtimeCtx ? { runtime_context: runtimeCtx as Record<string, unknown> } : {}),
       })
       return true

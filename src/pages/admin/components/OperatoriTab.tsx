@@ -49,6 +49,7 @@ interface Admin {
 const ROLE_TAG_OPTIONS: { tag: string; label: string; hint: string }[] = [
   { tag: 'role:direzione',         label: 'Direzione',          hint: 'Superuser, sblocca tutto' },
   { tag: 'role:developer',         label: 'Developer',          hint: 'Bypass OTP Gestione OTP' },
+  { tag: 'role:bypass-otp',        label: 'Bypass OTP (tutto)', hint: 'Operatore non riceve mai richieste OTP — usare con cautela' },
   { tag: 'role:payment-manager',   label: 'Payment Manager',    hint: 'Segna fatture pagate' },
   { tag: 'role:stipendio-editor',  label: 'Stipendio Editor',   hint: 'Modifica stipendi Lavaggio' },
   { tag: 'role:sito-direzione',    label: 'Sito CMS',           hint: 'Modifica testi senza OTP' },
