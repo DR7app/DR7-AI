@@ -1638,21 +1638,20 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     // 2026-05-27 DIAGNOSTIC: log ogni decisione del save per debug.
     // Da rimuovere dopo verifica direzione.
     /* eslint-disable no-console */
-    console.log('[OTP Diagnostic] handleSave called', {
-      adminEmail,
-      permissions,
-      operatorBypassesOtp,
-      outOfHoursOverrideId,
-      noCauzioneOverrideId,
-      slotOverrideId,
-      trippedCodes,
-      motivazioni,
-      isValerio,
-      pickupTime: form.pickup_time,
-      returnTime: form.return_time,
-      pickupDate: form.pickup_date,
-      returnDate: form.return_date,
-    })
+    const pickupExcCheck = describeException(form.pickup_date, form.pickup_time, 'pickup')
+    const returnExcCheck = describeException(form.return_date, form.return_time, 'return')
+    console.log('[OTP] adminEmail =', adminEmail)
+    console.log('[OTP] permissions =', JSON.stringify(permissions))
+    console.log('[OTP] operatorBypassesOtp =', operatorBypassesOtp)
+    console.log('[OTP] isValerio =', isValerio)
+    console.log('[OTP] pickup =', form.pickup_date, form.pickup_time, '→ describeException =', pickupExcCheck)
+    console.log('[OTP] return =', form.return_date, form.return_time, '→ describeException =', returnExcCheck)
+    console.log('[OTP] outOfHoursOverrideId =', JSON.stringify(outOfHoursOverrideId))
+    console.log('[OTP] noCauzioneOverrideId =', JSON.stringify(noCauzioneOverrideId))
+    console.log('[OTP] slotOverrideId =', JSON.stringify(slotOverrideId))
+    console.log('[OTP] trippedCodes BEFORE filter =', JSON.stringify(trippedCodes))
+    console.log('[OTP] motivazioni BEFORE filter =', JSON.stringify(motivazioni))
+    console.log('[OTP] isOtpRequired(out_of_office_hours) =', isOtpRequired('out_of_office_hours'))
     /* eslint-enable no-console */
 
     // Filtro per Gestione OTP: se un codice è disattivato in
