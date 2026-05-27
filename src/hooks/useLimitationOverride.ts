@@ -202,11 +202,16 @@ export function useLimitationOverride() {
       const fresh = readEmailSync()
       if (fresh) adminEmailRef.current = fresh
     }
-    // adminBypass = email in failsafe (direzione) OPPURE permission
-    // `role:bypass-otp` attivo (toggle per-operatore da OperatoriTab).
-    const emailInFailsafe = !!adminEmailRef.current && OTP_BYPASS_EMAILS.has(adminEmailRef.current)
+    // 2026-05-27: TOGGLE-ONLY mode. La vecchia failsafe hardcoded
+    // (OTP_BYPASS_EMAILS) NON bypassa piu' automaticamente — direzione
+    // controlla l'OTP di OGNI operatore (anche valerio/ilenia/salvatore/ophe)
+    // via toggle in OperatoriTab > "OTP per Operatore". Il controllo di
+    // CHI puo' flippare il toggle e' gestito in OperatoriTab.toggleAdminRole.
+    // OTP_BYPASS_EMAILS resta come riferimento per migrazione / audit.
+    void OTP_BYPASS_EMAILS
+    const emailInFailsafe = false
     const roleBypass = adminHasBypassRoleRef.current
-    const adminBypass = emailInFailsafe || roleBypass
+    const adminBypass = roleBypass
     const callerBypass = explicitBypass || adminBypass
 
     // Gate completo: is_required AND conditions. Se l'OTP e' disabilitato
