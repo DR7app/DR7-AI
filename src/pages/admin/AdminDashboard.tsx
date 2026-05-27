@@ -352,6 +352,29 @@ export default function AdminDashboard() {
   const sectionForActiveTab = SECTIONS.find(s => s.tabs.some(t => t.tab === activeTab)) || null
   const isSectionActive = (sectionName: string) => sectionForActiveTab?.name === sectionName
 
+  // Sidebar grouping: maps each section to a top-level group (CORE BUSINESS,
+  // GESTIONE, SISTEMI) + an icon. Missing entries default to 'sistemi' and
+  // render with a generic dot icon.
+  const SECTION_META: Record<string, { group: 'core' | 'gestione' | 'sistemi'; icon: React.ReactNode }> = {
+    'Noleggio':        { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 13l1-3a4 4 0 014-3h8a4 4 0 014 3l1 3v5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-1H7v1a1 1 0 01-1 1H4a1 1 0 01-1-1v-5z"/> },
+    'Prime Wash':      { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 2v6m0 0l-3-3m3 3l3-3M5 12a7 7 0 1014 0c0-3-2-5-7-10-5 5-7 7-7 10z"/> },
+    'Flotta':          { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M5 17h14M5 17v-6l2-5h10l2 5v6M5 17a2 2 0 11-4 0 2 2 0 014 0zm14 0a2 2 0 114 0 2 2 0 01-4 0z"/> },
+    'Clienti':         { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-5.13a4 4 0 11-8 0 4 4 0 018 0zm6 4a3 3 0 11-6 0 3 3 0 016 0z"/> },
+    'Marketing':       { group: 'gestione', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/> },
+    'Report':          { group: 'gestione', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/> },
+    'Comunicazione':   { group: 'gestione', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/> },
+    'Amministrazione': { group: 'sistemi', icon: <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></> },
+    'Centralina Pro':  { group: 'sistemi', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M13 10V3L4 14h7v7l9-11h-7z"/> },
+    'Trustera':        { group: 'sistemi', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/> },
+    'E.M.T.N.':        { group: 'sistemi', icon: <><circle cx="12" cy="12" r="9" strokeWidth={1.7}/><path strokeWidth={1.7} d="M3 12h18M12 3a15 15 0 010 18M12 3a15 15 0 000 18"/></> },
+    'Sito':            { group: 'sistemi', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/> },
+  }
+  const GROUP_LABELS: Record<'core' | 'gestione' | 'sistemi', string> = {
+    core: 'CORE BUSINESS',
+    gestione: 'GESTIONE',
+    sistemi: 'SISTEMI',
+  }
+
   // Per i collaboratori la sidebar non serve: tutte le tab accessibili
   // (potenzialmente sparpagliate fra sezioni — es. Preventivi + Calendario
   // sotto Noleggio + Centralina Pro readonly) le mostriamo come barra
@@ -437,10 +460,10 @@ export default function AdminDashboard() {
           notch + home indicator don't eat the close button or bottom
           action row. */}
       <aside
-        className={`fixed left-3 z-[70] w-[60vw] max-w-[180px] bg-theme-bg-primary flex flex-col rounded-3xl shadow-2xl shadow-black/40 overflow-hidden transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-[110%]'}`}
+        className={`fixed left-3 z-[70] w-[72vw] max-w-[244px] bg-theme-bg-primary flex flex-col rounded-3xl shadow-2xl shadow-black/40 overflow-hidden transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-[110%]'}`}
         style={{
           top: 'max(0.75rem, env(safe-area-inset-top))',
-          bottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+          maxHeight: 'calc(100vh - max(1.5rem, env(safe-area-inset-top) + env(safe-area-inset-bottom)))',
         }}
       >
         {/* Logo + Close.
@@ -473,51 +496,87 @@ export default function AdminDashboard() {
             Spacing: flex-col + justify-evenly distribuisce le sezioni in
             modo uniforme su tutta l'altezza disponibile, eliminando il
             grosso vuoto sotto l'ultima voce. */}
-        <nav className="flex-1 flex flex-col justify-evenly py-2 px-3 overflow-y-auto scrollbar-thin">
-          {SECTIONS.map(section => {
-            const visibleTabs = section.tabs.filter(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin'))
-            if (visibleTabs.length === 0) return null
-            const firstVisible = visibleTabs[0]
-            const firstTab = firstVisible.tab
-            const sectionActive = isSectionActive(section.name)
-            const showBirthdayBadge = section.name === 'Marketing' && birthdayCount > 0
-            const showScartataBadge = section.name === 'Amministrazione' && scartataCount > 0
+        <nav className="flex flex-col gap-2.5 py-2.5 px-2 overflow-y-auto scrollbar-thin min-h-0">
+          {(['core', 'gestione', 'sistemi'] as const).map(grp => {
+            const groupSections = SECTIONS.filter(s => (SECTION_META[s.name]?.group || 'sistemi') === grp)
+            const renderable = groupSections
+              .map(section => {
+                const visibleTabs = section.tabs.filter(t => hasPermission(t.permKey || t.tab) && (!t.superadminOnly || adminRole === 'superadmin'))
+                return visibleTabs.length > 0 ? { section, visibleTabs } : null
+              })
+              .filter((x): x is { section: typeof groupSections[number]; visibleTabs: typeof groupSections[number]['tabs'] } => x !== null)
+            if (renderable.length === 0) return null
             return (
-              <button
-                key={section.name}
-                onClick={() => {
-                  if (!sectionActive) {
-                    setActiveTab(firstTab)
-                    // Jump straight to the sub-view of the first visible
-                    // sub-tab so a user with only `reservations-preventivi`
-                    // lands on Preventivi (not the hidden Prenotazioni list).
-                    if (firstVisible.subView) setRentalSubView(firstVisible.subView)
-                  }
-                  setSidebarOpen(false)
-                }}
-                // Full-width clickable row, but the active highlight only
-                // wraps the text — not the entire row. Text-only pill avoids
-                // the oversized green block that spanned the full sidebar.
-                className="w-full text-left flex items-center justify-between px-1 transition-colors group"
-              >
-                <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-colors ${sectionActive ? 'bg-gradient-to-r from-primary-dark via-primary to-primary-light text-white shadow-md shadow-dr7-gold/20' : 'text-theme-text-secondary group-hover:text-theme-text-primary group-hover:bg-dr7-gold/10'}`}>
-                  {section.name}
-                </span>
-                {showBirthdayBadge && (
-                  <span className="bg-dr7-gold/20 text-dr7-gold text-[10px] font-bold px-1.5 py-0.5 rounded-full mr-2">{birthdayCount}</span>
-                )}
-                {showScartataBadge && (
-                  <span className="bg-red-500/30 text-red-300 text-[10px] font-bold px-1.5 py-0.5 rounded-full mr-2" title={`${scartataCount} fattur${scartataCount === 1 ? 'a scartata' : 'e scartate'} dal SDI`}>
-                    {scartataCount}
-                  </span>
-                )}
-              </button>
+              <div key={grp} className="space-y-0.5">
+                <div className="px-2.5 pb-1 text-[9px] font-bold uppercase tracking-[0.16em] text-theme-text-muted/70">{GROUP_LABELS[grp]}</div>
+                {renderable.map(({ section, visibleTabs }) => {
+                  const firstVisible = visibleTabs[0]
+                  const firstTab = firstVisible.tab
+                  const sectionActive = isSectionActive(section.name)
+                  const meta = SECTION_META[section.name]
+                  const badge = section.name === 'Marketing' ? birthdayCount
+                              : section.name === 'Amministrazione' ? scartataCount : 0
+                  return (
+                    <button
+                      key={section.name}
+                      onClick={() => {
+                        if (!sectionActive) {
+                          setActiveTab(firstTab)
+                          if (firstVisible.subView) setRentalSubView(firstVisible.subView)
+                        }
+                        setSidebarOpen(false)
+                      }}
+                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[12.5px] font-semibold transition-all ${
+                        sectionActive
+                          ? 'bg-cyan-500/10 text-cyan-300 ring-1 ring-cyan-500/40 shadow-[0_0_20px_-8px_rgba(34,211,238,0.4)]'
+                          : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-hover'
+                      }`}
+                    >
+                      {meta?.icon && (
+                        <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">{meta.icon}</svg>
+                      )}
+                      <span className="flex-1 text-left truncate">{section.name}</span>
+                      {badge > 0 && (
+                        <span
+                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
+                            section.name === 'Amministrazione' ? 'bg-rose-500/20 text-rose-300' : 'bg-cyan-500/20 text-cyan-300'
+                          }`}
+                          title={section.name === 'Amministrazione' ? `${scartataCount} fattur${scartataCount === 1 ? 'a scartata' : 'e scartate'} dal SDI` : undefined}
+                        >
+                          {badge}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
             )
           })}
         </nav>
 
         {/* Bottom actions */}
-        <div className="px-3 py-3 border-t border-white/10 space-y-1">
+        <div className="px-3 py-3 border-t border-white/10 space-y-2">
+          {/* User card — avatar + name + role badge */}
+          {(adminName || adminEmail) && (() => {
+            const display = adminName || adminEmail || 'Utente'
+            const parts = display.trim().split(/\s+/).filter(Boolean)
+            const init = parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : display.slice(0, 2).toUpperCase()
+            return (
+              <div className="flex items-center gap-2.5 px-2 py-2 rounded-xl bg-theme-bg-tertiary/40 ring-1 ring-theme-border">
+                {adminAvatar ? (
+                  <img src={adminAvatar} alt={display} className="w-8 h-8 rounded-full object-cover ring-1 ring-cyan-500/40 shrink-0"/>
+                ) : (
+                  <div className="grid w-8 h-8 place-items-center rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40 shrink-0">{init}</div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11.5px] font-semibold text-theme-text-primary truncate">{display}</p>
+                  <span className="inline-block mt-0.5 text-[8.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/30">
+                    {adminRole === 'superadmin' ? 'Super Admin' : 'Admin'}
+                  </span>
+                </div>
+              </div>
+            )
+          })()}
           {/* Alarm row: bell button (Attiva Allarmi) + gear opens the inventory.
               The gear is always visible so admins can review what alarms exist
               even after audio is enabled. Nascosto per collaboratori
