@@ -595,7 +595,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   )
 
   const availableExperienceServices = useMemo(
-    () => configOverlay.experienceServices.filter(s => !s.tierOnly || s.tierOnly === form.driver_tier),
+    // 2026-05-27: nascondi servizi "per_km" (Pacchetto KM / prezzo al km
+    // manuale) dal form Preventivi su richiesta direzione — non usati.
+    // I servizi restano in Centralina Pro per il sito; qui non si vedono.
+    () => configOverlay.experienceServices.filter(s =>
+      s.unit !== 'per_km' && (!s.tierOnly || s.tierOnly === form.driver_tier)
+    ),
     [configOverlay.experienceServices, form.driver_tier]
   )
 
