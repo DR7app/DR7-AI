@@ -12,7 +12,7 @@
  *   />
  */
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { getCAPByCity, getProvinciaByCity } from '../data/sardegnaProvince'
 
 export interface ExtractedData {
@@ -67,6 +67,13 @@ interface CompilaButtonProps {
   onError?: (error: string) => void
   className?: string
   disabled?: boolean
+  /**
+   * When true, auto-extract 1.5s after the set of uploaded documents
+   * changes (debounced). Used by NewClientModal so the user does not
+   * have to manually click Compila after each upload.
+   * 2026-05-28.
+   */
+  autoTrigger?: boolean
 }
 
 async function fileToBase64(file: File): Promise<string> {
@@ -184,6 +191,7 @@ export default function CompilaButton({
   onError,
   className = '',
   disabled = false,
+  autoTrigger = false,
 }: CompilaButtonProps) {
   const [isExtracting, setIsExtracting] = useState(false)
   const [conflicts, setConflicts] = useState<DataConflict[]>([])
@@ -192,6 +200,15 @@ export default function CompilaButton({
   const [extractionNotes, setExtractionNotes] = useState<string[]>([])
 
   const validDocs = documents.filter(d => d.file)
+  // Signature of the current upload set — changes when files are added,
+  // removed, or swapped. Used to dedupe auto-trigger so we extract once
+  // per set, not on every render.
+  const docsKey = validDocs.map(d => {
+    if (d.file instanceof File) return `f:${d.file.name}:${d.file.size}`
+    if (typeof d.file === 'string') return `s:${d.file.slice(0, 64)}`
+    return ''
+  }).join('|')
+  const lastExtractedKeyRef = useRef<string>('')
 
   const handleCompila = async () => {
     if (validDocs.length === 0) {
@@ -356,6 +373,24 @@ export default function CompilaButton({
     setPendingData(null)
     setConflicts([])
   }
+
+  // Auto-trigger: when autoTrigger=true, fire handleCompila ~1.2s after
+  // the set of uploaded documents changes. Debounced so a multi-file
+  // upload burst (user dropping fronte+retro within ms of each other)
+  // counts as one extraction. Tracked by docsKey to avoid re-running
+  // for the same set after the user dismisses the conflict modal.
+  useEffect(() => {
+    if (!autoTrigger) return
+    if (validDocs.length === 0) return
+    if (isExtracting) return
+    if (docsKey === lastExtractedKeyRef.current) return
+    const timer = setTimeout(() => {
+      lastExtractedKeyRef.current = docsKey
+      handleCompila()
+    }, 1200)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docsKey, autoTrigger])
 
   const handleApplyKeepExisting = () => {
     if (!pendingData) return

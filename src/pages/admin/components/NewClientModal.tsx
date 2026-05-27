@@ -890,8 +890,61 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
                   {errors.email && <p className="text-red-500 text-[11px] mt-1">{errors.email}</p>}
                 </div>
-                <div className="pt-2 border-t border-theme-border">
-                  <p className="text-[11px] text-theme-text-muted">Sezione documenti in basso supporta auto-compilazione tramite Compila — bastano patente / carta d'identita' scansionate.</p>
+                {/* ── AUTO-FILL: quick scan a document → form is populated ───
+                    Highlighted upload zone right under phone/email so the user
+                    doesn't have to scroll to step 4 to find it. Uploading here
+                    sets identityFront (the shared state used by step 4 too).
+                    CompilaButton autoTrigger handles OCR + form fill. */}
+                <div className="pt-3 border-t border-theme-border">
+                  <div className="rounded-xl border-2 border-dashed border-dr7-gold/60 bg-dr7-gold/5 p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <svg className="w-4 h-4 text-dr7-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13l3 3 7-7M5 6h.01M9 6h.01M13 6h.01M5 18h.01M9 18h.01M13 18h.01" /></svg>
+                      <span className="text-[11px] font-bold uppercase tracking-wide text-dr7-gold">Auto-Compila dai documenti</span>
+                    </div>
+                    <p className="text-[10.5px] text-theme-text-muted leading-snug mb-2">
+                      Carica una foto della <strong>patente</strong> o della <strong>carta d'identità</strong>: il form si compilerà da solo in pochi secondi.
+                    </p>
+                    <label className="block">
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        capture="environment"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0]
+                          if (!f) return
+                          // Route to identityFront by default (most common doc).
+                          // If user already has identityFront, fill driversLicenseFront instead
+                          // so a 2nd upload doesn't overwrite the 1st.
+                          if (!identityFront) setIdentityFront(f)
+                          else if (!driversLicenseFront) setDriversLicenseFront(f)
+                          else if (!codiceFiscaleFront) setCodiceFiscaleFront(f)
+                          else setIdentityFront(f) // 4th+: overwrite identity
+                          e.target.value = ''
+                        }}
+                        className="block w-full text-[11px] text-theme-text-secondary file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-dr7-gold file:text-white hover:file:bg-dr7-gold/80 file:cursor-pointer cursor-pointer"
+                      />
+                    </label>
+                    {(identityFront || driversLicenseFront || codiceFiscaleFront) && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {identityFront && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Carta identità
+                          </span>
+                        )}
+                        {driversLicenseFront && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Patente
+                          </span>
+                        )}
+                        {codiceFiscaleFront && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Codice fiscale
+                          </span>
+                        )}
+                        <span className="text-[10px] text-theme-text-muted self-center">Estrazione in corso…</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1292,6 +1345,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       {(driversLicenseFront || driversLicenseBack || identityFront || identityBack || codiceFiscaleFront || codiceFiscaleBack) && (
                         <div className="pt-2">
                           <CompilaButton
+                            autoTrigger
                             documents={[
                               { file: driversLicenseFront, label: 'Patente Fronte' },
                               { file: driversLicenseBack, label: 'Patente Retro' },
