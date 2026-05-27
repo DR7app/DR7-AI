@@ -742,6 +742,23 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     onClose()
   }
 
+  // Live preview/score for the right-hand sidebar. NON persiste — solo
+  // contatori derivati dai campi gia' compilati per dare un'idea di
+  // completezza prima del salvataggio.
+  // 2026-05-28: questo useMemo DEVE stare prima dell'early return `if
+  // (!isOpen) return null` (sotto), altrimenti React lancia error #310
+  // "Rendered more hooks than during the previous render" quando la
+  // modale viene chiusa.
+  const filledScore = useMemo(() => {
+    const required: Array<string> = formData.tipo_cliente === 'persona_fisica'
+      ? [formData.nome, formData.cognome, formData.codice_fiscale, formData.data_nascita, formData.indirizzo, formData.citta_residenza, formData.codice_postale, formData.email, formData.telefono, formData.patente_numero]
+      : formData.tipo_cliente === 'azienda'
+        ? [formData.denominazione, formData.partita_iva, formData.sede_legale, formData.email, formData.telefono, formData.rappresentante_nome, formData.rappresentante_cognome, formData.rappresentante_cf, formData.rappresentante_doc_numero]
+        : [formData.ente_ufficio, formData.codice_univoco, formData.cf_pa, formData.citta, formData.email, formData.telefono]
+    const filled = required.filter(v => v && v.trim().length > 0).length
+    return Math.round((filled / required.length) * 100)
+  }, [formData])
+
   if (!isOpen) return null
 
   // ── New layout helpers (2026-05-22 redesign) ────────────────────────────
@@ -766,21 +783,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       container.scrollTo({ top, behavior: 'smooth' })
     }
   }
-  // Live preview/score for the right-hand sidebar. NON persiste — solo
-  // contatori derivati dai campi gia' compilati per dare un'idea di
-  // completezza prima del salvataggio.
   const previewName = formData.tipo_cliente === 'persona_fisica'
     ? `${formData.nome} ${formData.cognome}`.trim()
     : formData.tipo_cliente === 'azienda' ? formData.denominazione : formData.ente_ufficio
-  const filledScore = useMemo(() => {
-    const required: Array<string> = formData.tipo_cliente === 'persona_fisica'
-      ? [formData.nome, formData.cognome, formData.codice_fiscale, formData.data_nascita, formData.indirizzo, formData.citta_residenza, formData.codice_postale, formData.email, formData.telefono, formData.patente_numero]
-      : formData.tipo_cliente === 'azienda'
-        ? [formData.denominazione, formData.partita_iva, formData.sede_legale, formData.email, formData.telefono, formData.rappresentante_nome, formData.rappresentante_cognome, formData.rappresentante_cf, formData.rappresentante_doc_numero]
-        : [formData.ente_ufficio, formData.codice_univoco, formData.cf_pa, formData.citta, formData.email, formData.telefono]
-    const filled = required.filter(v => v && v.trim().length > 0).length
-    return Math.round((filled / required.length) * 100)
-  }, [formData])
   const docsCount = [driversLicenseFront, identityFront, codiceFiscaleFront].filter(Boolean).length
   const docsTotal = formData.tipo_cliente === 'persona_fisica' ? 3 : 1
   const scoreLabel = filledScore >= 80 ? 'Eccellente' : filledScore >= 60 ? 'Buono' : filledScore >= 30 ? 'In corso' : 'Da compilare'
