@@ -157,6 +157,41 @@ function DocumentiSubTab() {
     setShowCustomerDropdown(true)
   }
 
+  // ── Per-signer customer picker (2026-05-27) ───────────────────────────
+  // Picker dedicato per OGNI firmatario: l'admin clicca l'icona 👤 dentro
+  // l'input Nome del firmatario X, cerca, e il cliente scelto va in QUELLO
+  // specifico slot (non rimpiazza il primo vuoto come fa selectCustomer
+  // della search generica in alto).
+  const [pickerOpenIdx, setPickerOpenIdx] = useState<number | null>(null)
+  const [pickerSearch, setPickerSearch] = useState('')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [pickerResults, setPickerResults] = useState<any[]>([])
+
+  async function searchForPicker(query: string) {
+    setPickerSearch(query)
+    if (query.length < 2) { setPickerResults([]); return }
+    const { data } = await supabase
+      .from('customers_extended')
+      .select('id, nome, cognome, email, telefono, denominazione')
+      .or(`nome.ilike.%${query}%,cognome.ilike.%${query}%,denominazione.ilike.%${query}%,email.ilike.%${query}%`)
+      .limit(10)
+    setPickerResults(data || [])
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function pickCustomerForSigner(idx: number, customer: any) {
+    const name = customer.denominazione || [customer.nome, customer.cognome].filter(Boolean).join(' ')
+    setFormData(prev => ({
+      ...prev,
+      signers: prev.signers.map((s, i) => i === idx
+        ? { name, email: customer.email || '', phone: customer.telefono || '' }
+        : s),
+    }))
+    setPickerOpenIdx(null)
+    setPickerSearch('')
+    setPickerResults([])
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function selectCustomer(customer: any) {
     const name = customer.denominazione || [customer.nome, customer.cognome].filter(Boolean).join(' ')
@@ -486,13 +521,70 @@ function DocumentiSubTab() {
                   </div>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <input
-                    type="text"
-                    value={s.name}
-                    onChange={(e) => updateSigner(idx, { name: e.target.value })}
-                    placeholder="Nome *"
-                    className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
-                  />
+                  {/* Nome field con picker cliente per-signer (icona 👤 a destra) */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={s.name}
+                      onChange={(e) => updateSigner(idx, { name: e.target.value })}
+                      placeholder="Nome *"
+                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 pr-9 text-theme-text-primary text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPickerOpenIdx(pickerOpenIdx === idx ? null : idx)
+                        setPickerSearch('')
+                        setPickerResults([])
+                      }}
+                      title="Seleziona da clienti esistenti"
+                      aria-label="Seleziona da clienti esistenti"
+                      className="absolute inset-y-0 right-1.5 my-auto h-7 w-7 flex items-center justify-center rounded text-theme-text-muted hover:text-dr7-gold hover:bg-theme-bg-hover transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                      <svg className="w-3 h-3 -ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {pickerOpenIdx === idx && (
+                      <>
+                        <div className="fixed inset-0 z-20" onClick={() => { setPickerOpenIdx(null); setPickerSearch(''); setPickerResults([]) }} />
+                        <div className="absolute z-30 left-0 right-0 mt-1 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg overflow-hidden">
+                          <input
+                            type="text"
+                            autoFocus
+                            value={pickerSearch}
+                            onChange={(e) => searchForPicker(e.target.value)}
+                            placeholder="Cerca cliente..."
+                            className="w-full px-3 py-2 bg-theme-bg-tertiary border-b border-theme-border text-theme-text-primary text-sm focus:outline-none"
+                          />
+                          <div className="max-h-56 overflow-y-auto">
+                            {pickerSearch.length < 2 ? (
+                              <div className="px-3 py-3 text-xs text-theme-text-muted">Digita almeno 2 caratteri…</div>
+                            ) : pickerResults.length === 0 ? (
+                              <div className="px-3 py-3 text-xs text-theme-text-muted">Nessun cliente trovato.</div>
+                            ) : (
+                              pickerResults.map(c => (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  onClick={() => pickCustomerForSigner(idx, c)}
+                                  className="w-full text-left px-3 py-2 hover:bg-theme-bg-hover text-theme-text-primary text-sm border-b border-theme-border/30 last:border-0"
+                                >
+                                  <div className="font-semibold">{c.denominazione || [c.nome, c.cognome].filter(Boolean).join(' ') || c.email}</div>
+                                  <div className="text-[11px] text-theme-text-muted">
+                                    {c.email || '—'}{c.telefono ? ` · ${c.telefono}` : ''}
+                                  </div>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
                   <input
                     type="email"
                     value={s.email}
