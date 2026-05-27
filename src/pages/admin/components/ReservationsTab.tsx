@@ -832,6 +832,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // Canonical id of the Centralina Pro option chosen by the admin. Drives
     // the deposit amount + per-day surcharge that go into the booking total.
     deposit_option_id: '' as string,
+    // 2026-05-27: Cauzione Veicoli opt-in (+€20/g default, override da
+    // Centralina Pro). Allineato a PreventiviTab.form.include_cauzione_veicoli.
+    // Quando attivo, la fee entra nel calcolo coefficiente se
+    // automations.coefficient_cauzione_veicoli e' ON, altrimenti passa a
+    // listino.
+    include_cauzione_veicoli: false,
     // KM Overage Fee
     km_overage_fee: '', // si popola da Centralina quando si seleziona il veicolo
     unlimited_km: false,
@@ -1199,6 +1205,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 : 0
               const experienceCost = calculateExperienceCost(prev.experience_services, data.rentalDays)
               const flexCost = prev.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * data.rentalDays : 0
+              // 2026-05-27: Cauzione Veicoli opt-in. Daily rate da Centralina
+              // Pro (configOverlay.cauzioneVeicoliPerDay) con fallback €20/g
+              // come PreventiviTab.
+              const cauzioneVeicoliDaily = prev.include_cauzione_veicoli
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                ? ((configOverlay as any).cauzioneVeicoliPerDay ?? 20)
+                : 0
+              const cauzioneVeicoliFee = cauzioneVeicoliDaily * data.rentalDays
               const kmPackagesCost = (() => {
                 const kmPkgs = (prev.km_packages || {}) as Record<string, number>
                 if (!kmPkgs || Object.keys(kmPkgs).length === 0) return 0
@@ -1241,10 +1255,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const sExp = splitX(experienceCost,         coeffFlags.experience)
               const sDel = splitX(deliveryFee,            coeffFlags.delivery)
               const sPck = splitX(pickupFee,              coeffFlags.pickup)
-              // (cauzione_veicoli non ha una fee separata in ReservationsTab —
-              //  toggle no-op qui, attivo in Preventivi dove la fee esiste.)
-              const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC + sPkg.inC + sExp.inC + sDel.inC + sPck.inC
-              const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at  + sPkg.at  + sExp.at  + sDel.at  + sPck.at
+              // 2026-05-27: cauzione veicoli opt-in con toggle proprio.
+              const sCau = splitX(cauzioneVeicoliFee,     coeffFlags.cauzione_veicoli)
+              const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC + sPkg.inC + sExp.inC + sDel.inC + sPck.inC + sCau.inC
+              const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at  + sPkg.at  + sExp.at  + sDel.at  + sPck.at  + sCau.at
               const listSubtotalNoExp = listRentalTotal + extrasInCoeff
               // Combined coefficient from revenue engine
               const combinedCoeff = (data.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
@@ -1361,6 +1375,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         : 0
       const experienceCost = calculateExperienceCost(formData.experience_services, revenueSuggestion.rentalDays)
       const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * revenueSuggestion.rentalDays : 0
+      // 2026-05-27: Cauzione Veicoli opt-in (vedi nota nel path auto_apply).
+      const cauzioneVeicoliDaily = formData.include_cauzione_veicoli
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ? ((configOverlay as any).cauzioneVeicoliPerDay ?? 20)
+        : 0
+      const cauzioneVeicoliFee = cauzioneVeicoliDaily * revenueSuggestion.rentalDays
       const kmPackagesCost = (() => {
         const kmPkgs = (formData.km_packages || {}) as Record<string, number>
         if (!kmPkgs || Object.keys(kmPkgs).length === 0) return 0
@@ -1395,8 +1415,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const sExp = splitX(experienceCost,         coeffFlags.experience)
       const sDel = splitX(deliveryFee,            coeffFlags.delivery)
       const sPck = splitX(pickupFee,              coeffFlags.pickup)
-      const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC + sPkg.inC + sExp.inC + sDel.inC + sPck.inC
-      const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at  + sPkg.at  + sExp.at  + sDel.at  + sPck.at
+      const sCau = splitX(cauzioneVeicoliFee,     coeffFlags.cauzione_veicoli)
+      const extrasInCoeff = sIns.inC + sLav.inC + sNoC.inC + sKm.inC + sSec.inC + sFlx.inC + sPkg.inC + sExp.inC + sDel.inC + sPck.inC + sCau.inC
+      const extrasAtList  = sIns.at  + sLav.at  + sNoC.at  + sKm.at  + sSec.at  + sFlx.at  + sPkg.at  + sExp.at  + sDel.at  + sPck.at  + sCau.at
       const listSubtotalNoExp = listRentalTotal + extrasInCoeff
       const combinedCoeff = (revenueSuggestion.breakdown || []).reduce((acc: number, b: { coeff: number }) => acc * b.coeff, 1)
       const minDaily = typeof revenueSuggestion.minPrice === 'number' ? revenueSuggestion.minPrice : null
@@ -1441,7 +1462,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (Object.keys(updates).length > 0) setFormData(prev => ({ ...prev, ...updates }))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, formData.deposit_option_id, formData.has_second_driver, formData.experience_services, formData.dr7_flex, formData.km_packages, customerTier, noCauzioneResolvedDaily, selectedDepositSurchargePerDay, rentalConfig])
+  }, [formData.insurance_option, formData.delivery_fee, formData.pickup_fee, formData.delivery_enabled, formData.pickup_enabled, formData.payment_method, formData.unlimited_km, formData.deposit_status, formData.deposit_option_id, formData.has_second_driver, formData.experience_services, formData.dr7_flex, formData.km_packages, formData.include_cauzione_veicoli, customerTier, noCauzioneResolvedDaily, selectedDepositSurchargePerDay, rentalConfig])
 
   // Auto-populate second driver fields when customer is selected
   useEffect(() => {
@@ -3458,6 +3479,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       garante_phone: booking.booking_details?.garante_veicolo?.phone || '',
       garante_email: booking.booking_details?.garante_veicolo?.email || '',
       km_overage_fee: booking.km_overage_fee ? (booking.km_overage_fee).toFixed(2) : '',
+      include_cauzione_veicoli: !!booking.booking_details?.include_cauzione_veicoli,
       unlimited_km: booking.booking_details?.unlimited_km === true
         || booking.booking_details?.km_limit === 'Illimitati'
         // Website-created bookings store unlimited in kmPackage.type / includedKm.
@@ -6648,6 +6670,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       deposit: '0',
       deposit_status: 'da_incassare' as 'da_incassare' | 'incassata' | 'no_cauzione',
       deposit_option_id: '',
+      include_cauzione_veicoli: false,
       unlimited_km: false,
       km_limit: DEFAULT_KM_LIMIT,
       km_package_id: '',

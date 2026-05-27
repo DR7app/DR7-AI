@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState, useEffect, useCallback, useRef, lazy, Susp
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { formatAdminLog, formatEntityLabel } from '../../../utils/formatAdminLog'
+import { logAdminAction } from '../../../utils/logAdminAction'
 import OperatoriReportDashboardV2 from './OperatoriReportDashboardV2'
 import PayrollPeriodoView from './PayrollPeriodoView'
 import InviteOperatoreModal, { PERMISSION_SECTIONS } from './InviteOperatoreModal'
@@ -534,7 +535,8 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
       return
     }
     const current = Array.isArray(admin.permissions) ? admin.permissions : []
-    const next = current.includes(tag) ? current.filter(t => t !== tag) : [...current, tag]
+    const willAdd = !current.includes(tag)
+    const next = willAdd ? [...current, tag] : current.filter(t => t !== tag)
     const { error } = await supabase
       .from('admins')
       .update({ permissions: next })
@@ -544,7 +546,25 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
       return
     }
     setAdmins(prev => prev.map(a => a.id === admin.id ? { ...a, permissions: next } : a))
-    toast.success(current.includes(tag) ? `Rimosso ${tag.replace('role:', '')}` : `Assegnato ${tag.replace('role:', '')}`)
+    // Audit log for sensitive roles (granted/revoked traceability). The
+    // realtime channel on the operator side reacts within ~1s, no relogin.
+    const SENSITIVE_ROLES = new Set(['role:bypass-otp', 'role:direzione', 'role:developer'])
+    if (SENSITIVE_ROLES.has(tag)) {
+      logAdminAction('admin_role_changed', 'admin', admin.id, {
+        target_email: admin.email,
+        role: tag,
+        action: willAdd ? 'granted' : 'revoked',
+      })
+    }
+    // OTP bypass-otp has inverted UI semantics — surface that in the toast so
+    // direzione sees the EFFECT, not the underlying tag name.
+    if (tag === 'role:bypass-otp') {
+      toast.success(willAdd
+        ? `OTP DISABILITATO per ${admin.nome || admin.email}`
+        : `OTP ATTIVO per ${admin.nome || admin.email}`)
+    } else {
+      toast.success(willAdd ? `Assegnato ${tag.replace('role:', '')}` : `Rimosso ${tag.replace('role:', '')}`)
+    }
   }
 
   // ─── Aggregations ────────────────────────────────────────────────────
