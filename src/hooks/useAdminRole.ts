@@ -13,23 +13,25 @@ export type AdminRoleTag =
   | 'direzione'
   | 'developer'
   | 'bypass-otp'
+  | 'otp-admin'
   | 'payment-manager'
   | 'stipendio-editor'
   | 'sito-direzione'
   | 'preventivi-admin'
 
 const ROLE_FAILSAFE: Record<string, ReadonlySet<AdminRoleTag>> = {
-  'valerio@dr7.app':   new Set(['direzione', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
-  'ilenia@dr7.app':    new Set(['direzione', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
-  // 2026-05-18: Salvatore promosso a 'direzione' (prima aveva solo
-  // 'sito-direzione'). Direzione ha richiesto pieno accesso a tutto,
-  // incluso il Report Operatori. Permissions in DB sono gia' '*' ma
-  // il Dashboard usa hasRole('direzione') per i KPI fatturato/team.
-  'ophe@dr7.app':      new Set(['developer', 'sito-direzione']),
+  // 2026-05-27: aggiunto 'otp-admin' a tutti e 4 — direzione (v/i/s) e
+  // ophe come dev/manutentore. Senza failsafe, il ruolo deve essere
+  // assegnato in DB; con failsafe e' garantito da codice come gli altri
+  // ruoli. Per togliere il diritto a un futuro membro basta NON includerlo
+  // qui (e non aggiungere role:otp-admin in DB).
+  'valerio@dr7.app':   new Set(['direzione', 'otp-admin', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
+  'ilenia@dr7.app':    new Set(['direzione', 'otp-admin', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
+  'ophe@dr7.app':      new Set(['developer', 'otp-admin', 'sito-direzione']),
   // Salvatore gestisce il Sito CMS senza OTP — entry diretta in failsafe
   // su richiesta direzione 2026-05-13. Solo `sito-direzione`: bypassa
   // gestione_sito_access + gestione_sito_write; ogni altro OTP resta attivo.
-  'salvatore@dr7.app': new Set(['direzione', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
+  'salvatore@dr7.app': new Set(['direzione', 'otp-admin', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
 }
 
 export interface AdminRole {

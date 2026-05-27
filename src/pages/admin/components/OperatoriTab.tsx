@@ -50,6 +50,7 @@ interface Admin {
 const ROLE_TAG_OPTIONS: { tag: string; label: string; hint: string }[] = [
   { tag: 'role:direzione',         label: 'Direzione',          hint: 'Superuser, sblocca tutto' },
   { tag: 'role:developer',         label: 'Developer',          hint: 'Bypass OTP Gestione OTP' },
+  { tag: 'role:otp-admin',         label: 'OTP Admin',          hint: 'Puo\' attivare/disattivare l\'OTP per qualsiasi operatore' },
   { tag: 'role:payment-manager',   label: 'Payment Manager',    hint: 'Segna fatture pagate' },
   { tag: 'role:stipendio-editor',  label: 'Stipendio Editor',   hint: 'Modifica stipendi Lavaggio' },
   { tag: 'role:sito-direzione',    label: 'Sito CMS',           hint: 'Modifica testi senza OTP' },
@@ -59,15 +60,6 @@ const ROLE_TAG_OPTIONS: { tag: string; label: string; hint: string }[] = [
 // dedicato ON/OFF nella sezione "OTP per Operatore" (sotto). Default
 // safe: nessun bypass = OTP attivo.
 const OTP_BYPASS_TAG = 'role:bypass-otp'
-// 2026-05-27: solo questi 3 email possono flippare il toggle OTP per
-// QUALSIASI operatore. Direzione (canEditOperators) ne include altri
-// (es. ophe come dev/manutentore) — ma per OTP serve permesso piu'
-// stretto. Allineato a direzione policy: solo i veri proprietari.
-const OTP_TOGGLE_AUTHORIZED_EMAILS = new Set([
-  'valerio@dr7.app',
-  'ilenia@dr7.app',
-  'salvatore@dr7.app',
-])
 
 // hide:X keys: rimossi 2026-05-22 (commit d3423982 ha tolto l'unico
 // call site). Git history mantiene la definizione se servisse rimetterli.
@@ -319,10 +311,12 @@ export default function OperatoriTab() {
 
 function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
   const { hasRole, adminEmail } = useAdminRole()
-  // 2026-05-27: solo proprietari (valerio/ilenia/salvatore) possono
-  // flippare il toggle OTP per-operatore. Direzione include anche ophe
-  // (dev/manutentore) — ma per OTP serve permesso piu' stretto.
-  const canFlipOtpToggle = OTP_TOGGLE_AUTHORIZED_EMAILS.has((adminEmail || '').toLowerCase())
+  // 2026-05-27: chi puo' flippare il toggle OTP per-operatore e'
+  // ora un RUOLO (role:otp-admin) — non piu' una lista hardcoded di
+  // email. Failsafe pre-grants v/i/s/ophe; altri membri direzione
+  // possono ricevere il ruolo via Permessi & Ruoli senza toccare codice.
+  void adminEmail
+  const canFlipOtpToggle = hasRole('otp-admin')
   // Keep latest hasRole in a ref so the useCallback bodies below don't have to
   // depend on it (they're memoized on date/filter only and re-creating them on
   // every role-hook re-render would thrash useEffect downstream).
@@ -547,11 +541,11 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
       toast.error('Solo la direzione può modificare i ruoli.')
       return
     }
-    // 2026-05-27: il toggle bypass-OTP e' gated a un sottoinsieme stretto
-    // di direzione (Valerio/Ilenia/Salvatore). Anche ophe (developer) non
-    // puo' flipparlo, su richiesta direzione.
+    // 2026-05-27: il toggle bypass-OTP e' gated dal ruolo role:otp-admin.
+    // Solo chi ha quel ruolo (Valerio/Ilenia/Salvatore/Ophe via failsafe,
+    // o chiunque altro a cui direzione l'ha assegnato) puo' flipparlo.
     if (tag === OTP_BYPASS_TAG && !canFlipOtpToggle) {
-      toast.error('Solo Valerio, Ilenia o Salvatore possono modificare l\'OTP per operatore.')
+      toast.error('Serve il ruolo "OTP Admin" per modificare questo toggle.')
       return
     }
     const current = Array.isArray(admin.permissions) ? admin.permissions : []
@@ -776,7 +770,7 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
                         </div>
                         {!canFlipOtpToggle && (
                           <div className="text-[11px] text-amber-500 mt-1">
-                            Solo Valerio, Ilenia o Salvatore possono modificare questo toggle.
+                            Serve il ruolo <code className="bg-theme-bg-tertiary px-1 rounded">OTP Admin</code> per modificare questo toggle. Chiedilo alla direzione (sezione Permessi & Ruoli sotto).
                           </div>
                         )}
                       </div>
