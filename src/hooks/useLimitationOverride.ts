@@ -121,10 +121,26 @@ export function useLimitationOverride() {
     })
   }, [])
   useEffect(() => {
-    // Carica permissions dell'admin loggato e setta il ref per il bypass
-    // basato sul ruolo `role:bypass-otp`. Se la query fallisce o l'admin
-    // non e' in tabella, ref resta false (safe default = OTP richiesto).
+    // Load logged-in admin's permissions and set the bypass ref based on
+    // role:bypass-otp. If the query fails or the admin row is missing,
+    // ref stays false (safe default = OTP required).
+    // 2026-05-27: + realtime sync. If direzione changes the role while
+    // the operator is logged in, the bypass updates LIVE (otherwise
+    // revoke = security bug: operator keeps bypassing until refresh).
     let cancelled = false
+    const applyPerms = (perms: unknown) => {
+      const arr = Array.isArray(perms) ? (perms as string[]) : []
+      const wasBypass = adminHasBypassRoleRef.current
+      const isBypass = arr.includes('role:bypass-otp')
+      adminHasBypassRoleRef.current = isBypass
+      if (wasBypass !== isBypass) {
+        logAdminAction('limitation_bypass_role_changed', 'limitation', `bypass_role_${Date.now()}`, {
+          admin_email: adminEmailRef.current || 'unknown',
+          enabled: isBypass,
+        })
+      }
+    }
+    let channel: ReturnType<typeof supabase.channel> | null = null
     ;(async () => {
       const email = adminEmailRef.current
       if (!email) return
@@ -134,12 +150,28 @@ export function useLimitationOverride() {
         .eq('email', email)
         .maybeSingle()
       if (cancelled) return
-      const perms = Array.isArray((data as { permissions?: unknown } | null)?.permissions)
-        ? ((data as { permissions: string[] }).permissions)
-        : []
-      adminHasBypassRoleRef.current = perms.includes('role:bypass-otp')
+      applyPerms((data as { permissions?: unknown } | null)?.permissions)
+      // Subscribe to UPDATE on the admins row of THIS operator. When
+      // direzione toggles role:bypass-otp from OperatoriTab, the change
+      // propagates here without requiring re-login.
+      channel = supabase
+        .channel(`admin-perms-${email}`)
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'admins',
+          filter: `email=eq.${email}`,
+        }, (payload) => {
+          if (cancelled) return
+          const next = (payload.new as { permissions?: unknown } | null)?.permissions
+          applyPerms(next)
+        })
+        .subscribe()
     })()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      if (channel) supabase.removeChannel(channel)
+    }
   }, [])
 
   // 2026-05-18: ritorna `true` se la richiesta e' stata BYPASSATA

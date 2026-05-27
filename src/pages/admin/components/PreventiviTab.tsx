@@ -1159,16 +1159,24 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     // downstream math (markup, sconto, totale finale).
     const afterRevenue = subtotalClamped
 
-    // Apply maggiorazione on top
-    const markupMultiplier = 1 + maggiorazione / 100
-    const subtotal = Math.round(afterRevenue * markupMultiplier * 100) / 100
+    // Apply maggiorazione on top.
+    // 2026-05-27: toggle Centralina Pro > Automazioni > Maggiorazione Preventivo:
+    //   ON  (default) = markup calcolato su afterRevenue (post-coefficiente),
+    //                   quindi segue lo sconto/aumento dinamico. Comportamento
+    //                   storico.
+    //   OFF           = markup calcolato su listSubtotalNoExp (PRE-coefficiente),
+    //                   passa intero — il coefficiente non lo tocca. Utile
+    //                   quando direzione vuole un % di markup fisso garantito.
+    const markupBase = coeffFlags.maggiorazione ? afterRevenue : listSubtotalNoExp
+    const maggiorazioneAmount = Math.round(markupBase * (maggiorazione / 100) * 100) / 100
+    const subtotal = Math.round((afterRevenue + maggiorazioneAmount) * 100) / 100
 
     // Daily rate for display: derived from the clamped total so "€X/giorno ×
     // N giorni" always adds up to the subtotal (before markup).
     const dailyFromClamped = rentalDays > 0 ? afterRevenue / rentalDays : 0
-    const dailyAfterCoeff = Math.round(dailyFromClamped * markupMultiplier * 100) / 100
+    const markupMultiplierForDisplay = afterRevenue > 0 ? subtotal / afterRevenue : 1
+    const dailyAfterCoeff = Math.round(dailyFromClamped * markupMultiplierForDisplay * 100) / 100
     const rentalTotal = Math.round(listDailyRate * rentalDays * 100) / 100
-    const maggiorazioneAmount = Math.round(afterRevenue * (maggiorazione / 100) * 100) / 100
 
     const desiredFinal = parseFloat(form.sconto) || 0
     const sconto = desiredFinal > 0 && desiredFinal < subtotal ? Math.round((subtotal - desiredFinal) * 100) / 100 : 0
