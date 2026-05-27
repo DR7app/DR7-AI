@@ -5374,9 +5374,45 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
               </div>
             ))}
             <div className="flex justify-between text-xs text-dr7-gold pl-2">
-              <span>Coefficiente combinato: x{pricing.revenueCoeff.toFixed(4)} (escl. consegna/ritiro/experience)</span>
+              <span>Coefficiente combinato: x{pricing.revenueCoeff.toFixed(4)}</span>
               <span>{pricing.revenueCoeff < 1 ? `-${formatEur(pricing.listSubtotalNoExp - pricing.listSubtotalNoExp * pricing.revenueCoeff)}` : `+${formatEur(pricing.listSubtotalNoExp * pricing.revenueCoeff - pricing.listSubtotalNoExp)}`}</span>
             </div>
+            {/* 2026-05-27: mostra ESATTAMENTE cosa e' escluso dal coefficiente.
+                Sempre escluse: consegna, ritiro, experience services (per design).
+                Toggle Centralina Pro > Automazioni > Inclusione coefficiente:
+                ON  = la voce entra nel calcolo (× coefficiente)
+                OFF = la voce esce dal calcolo (sempre a listino)
+                Cosi' direzione vede subito se il toggle funziona davvero. */}
+            {(() => {
+              const alwaysOut: string[] = ['Consegna', 'Ritiro', 'Experience']
+              const toggledOut: string[] = []
+              if (!coeffFlags.insurance)        toggledOut.push('Assicurazione')
+              if (!coeffFlags.lavaggio)         toggledOut.push('Lavaggio')
+              if (!coeffFlags.no_cauzione)      toggledOut.push('No Cauzione')
+              if (!coeffFlags.second_driver)    toggledOut.push('Secondo guidatore')
+              if (!coeffFlags.dr7_flex)         toggledOut.push('DR7 FLEX')
+              if (!coeffFlags.cauzione_veicoli) toggledOut.push('Cauzione veicoli')
+              if (!coeffFlags.unlimited_km)     toggledOut.push('KM illimitati / Pacchetti KM')
+              const allOut = [...alwaysOut, ...toggledOut]
+              const inList: string[] = []
+              if (coeffFlags.insurance)         inList.push('Assicurazione')
+              if (coeffFlags.lavaggio)          inList.push('Lavaggio')
+              if (coeffFlags.no_cauzione)       inList.push('No Cauzione')
+              if (coeffFlags.second_driver)     inList.push('Secondo guidatore')
+              if (coeffFlags.dr7_flex)          inList.push('DR7 FLEX')
+              if (coeffFlags.cauzione_veicoli)  inList.push('Cauzione veicoli')
+              if (coeffFlags.unlimited_km)      inList.push('KM illimitati / Pacchetti KM')
+              return (
+                <div className="pl-2 space-y-0.5">
+                  <div className="text-[11px] text-theme-text-muted">
+                    <span className="text-emerald-400">Incluse nel coefficiente:</span> Noleggio{inList.length > 0 ? `, ${inList.join(', ')}` : ''}
+                  </div>
+                  <div className="text-[11px] text-theme-text-muted">
+                    <span className="text-rose-400">Escluse (sempre a listino):</span> {allOut.join(', ')}
+                  </div>
+                </div>
+              )
+            })()}
           </>
         )}
 
