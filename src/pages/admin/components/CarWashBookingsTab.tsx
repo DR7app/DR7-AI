@@ -140,6 +140,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [bookings, setBookings] = useState<CarWashBooking[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [carWashServices, setCarWashServices] = useState<CarWashService[]>([])
+  // 2026-05-27: prenotazioni esistenti per la data selezionata. Usate dal
+  // slot picker per disabilitare le ore gia' occupate PRIMA del submit (oggi
+  // il check girava solo dopo il salvataggio → operatore selezionava uno slot
+  // occupato senza saperlo).
+  const [busyBookingsOnDate, setBusyBookingsOnDate] = useState<{
+    id: string
+    customer_name: string | null
+    appointment_time: string | null
+    service_name: string | null
+  }[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   // Synchronous re-entry guard: React state updates are async, so a rapid
@@ -628,6 +638,38 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   //   - hypercar tier  → category ILIKE %hyper% OR equals icon/icons (any case)
   //   Both queries are case-insensitive so renamed categories
   //   ("Supercars", "Hypercar", "ICON") still match.
+  // 2026-05-27: carica le prenotazioni lavaggio gia' presenti sulla data
+  // selezionata cosi' il dropdown puo' disabilitare gli slot occupati prima
+  // del submit. Esclude 'Lavaggio Rientro' (interno) e gli stati cancellati.
+  useEffect(() => {
+    if (!formData.appointment_date) {
+      setBusyBookingsOnDate([])
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('id, customer_name, appointment_time, service_name')
+        .eq('service_type', 'car_wash')
+        .not('status', 'in', '(cancelled,annullata,expired,completed,completata)')
+        .gte('appointment_date', formData.appointment_date)
+        .lte('appointment_date', `${formData.appointment_date}T23:59:59`)
+        .neq('customer_name', 'Lavaggio Rientro')
+      if (cancelled) return
+      if (error) {
+        console.error('[CarWashBookingsTab] busy-slots fetch error:', error)
+        setBusyBookingsOnDate([])
+        return
+      }
+      // In editing mode, exclude the booking being edited (otherwise it
+      // would block its own slot).
+      const filtered = (data || []).filter(b => !editingBooking || b.id !== editingBooking.id)
+      setBusyBookingsOnDate(filtered)
+    })()
+    return () => { cancelled = true }
+  }, [formData.appointment_date, editingBooking])
+
   useEffect(() => {
     if (!experienceTier) {
       if (supercarFleet.length > 0) setSupercarFleet([])
@@ -3968,20 +4010,45 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         ? slots.filter(t => t.startsWith('13') || t.startsWith('14') || t.startsWith('15') || t.startsWith('16') || t.startsWith('17'))
                         : slots.filter(t => t.startsWith('15') || t.startsWith('16') || t.startsWith('17') || t.startsWith('18'))
 
+                      // 2026-05-27: marca gli slot occupati dalle prenotazioni
+                      // esistenti per la data selezionata. Considera la durata
+                      // del servizio gia' prenotato (servizio match per nome)
+                      // E la durata del nuovo lavaggio (selectedService +
+                      // extras tramite getTotalDuration). Se manca selezione
+                      // servizio, fallback 60 min per la nuova prenotazione.
+                      const newDuration = getTotalDuration() || 60
+                      const isSlotBusy = (slotTime: string): { busy: boolean; who?: string } => {
+                        for (const b of busyBookingsOnDate) {
+                          const bookingTime = b.appointment_time
+                          if (!bookingTime) continue
+                          const existingSvc = carWashServices.find(s => s.name === b.service_name)
+                          const existingDuration = existingSvc?.durationMinutes || 60
+                          if (checkTimeOverlap(slotTime, newDuration, bookingTime, existingDuration)) {
+                            return { busy: true, who: b.customer_name || 'altro cliente' }
+                          }
+                        }
+                        return { busy: false }
+                      }
+
+                      const renderSlot = (time: string) => {
+                        const { busy, who } = isSlotBusy(time)
+                        return (
+                          <option key={time} value={time} disabled={busy}>
+                            {time}{busy ? ` — occupato (${who})` : ''}
+                          </option>
+                        )
+                      }
+
                       return (
                         <>
                           {morningSlots.length > 0 && (
                             <optgroup label="Mattina">
-                              {morningSlots.map(time => (
-                                <option key={time} value={time}>{time}</option>
-                              ))}
+                              {morningSlots.map(renderSlot)}
                             </optgroup>
                           )}
                           {afternoonSlots.length > 0 && (
                             <optgroup label="Pomeriggio">
-                              {afternoonSlots.map(time => (
-                                <option key={time} value={time}>{time}</option>
-                              ))}
+                              {afternoonSlots.map(renderSlot)}
                             </optgroup>
                           )}
                         </>
