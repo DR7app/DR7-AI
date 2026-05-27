@@ -5487,6 +5487,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           ) / 100,
           no_cauzione_surcharge_per_day: selectedDepositSurchargePerDay
             || (formData.deposit_status === 'no_cauzione' ? CFG_NO_CAUZIONE_PER_DAY : 0),
+          // 2026-05-27: Cauzione Veicoli opt-in persistito nel JSONB
+          // booking_details. Stesso campo letto da PreventiviTab quando
+          // converte un preventivo in booking.
+          include_cauzione_veicoli: !!formData.include_cauzione_veicoli,
           // KM Limit
           km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
           unlimited_km: formData.unlimited_km,
@@ -5943,6 +5947,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 insuranceOption: 'KASKO_BASE',
                 deposit: parseFloat(formData.deposit) || 0,
                 deposit_status: formData.deposit_status,
+                include_cauzione_veicoli: !!formData.include_cauzione_veicoli,
                 km_limit: formData.unlimited_km ? 'Illimitati' : formData.km_limit,
                 unlimited_km: formData.unlimited_km,
                 delivery_enabled: formData.delivery_enabled,
@@ -7943,6 +7948,29 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         <p className="text-xs text-amber-400 mt-1">No Cauzione richiede una Kasko attiva</p>
                       )}
                     </div>
+                    {/* 2026-05-27: Cauzione Veicoli opt-in. Stesso pattern di
+                        PreventiviTab — l'admin spunta, la fee giornaliera
+                        configurata in Centralina Pro entra nel totale, e il
+                        toggle Centralina Pro > Automazioni > Cauzione Veicoli
+                        decide se la fee viaggia col coefficiente o sta a
+                        listino. */}
+                    {(() => {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      const cauzVeicDaily = (configOverlay as any).cauzioneVeicoliPerDay ?? 20
+                      return (
+                        <label className="md:col-span-2 flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
+                          <input
+                            type="checkbox"
+                            checked={!!formData.include_cauzione_veicoli}
+                            onChange={(e) => setFormData(prev => ({ ...prev, include_cauzione_veicoli: e.target.checked }))}
+                            className="w-4 h-4 accent-dr7-gold"
+                          />
+                          <span className="text-sm text-theme-text-primary">
+                            Cauzione Veicolo (€{cauzVeicDaily}/giorno)
+                          </span>
+                        </label>
+                      )
+                    })()}
                   </>
                 )}
               </div>
