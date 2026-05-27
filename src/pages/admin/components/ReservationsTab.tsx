@@ -8369,6 +8369,37 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             <span className="text-red-400 font-mono">+20%</span>
                           </div>
                         )}
+                        {/* 2026-05-27: mirror del riepilogo admin Preventivi.
+                            Mostra quali voci sono entrate nel coefficiente e
+                            quali sono rimaste a listino. Toggle gestiti da
+                            Centralina Pro > Automazioni > Inclusione coeff. */}
+                        {(() => {
+                          const items: { label: string; on: boolean }[] = [
+                            { label: 'Assicurazione',            on: coeffFlags.insurance },
+                            { label: 'Lavaggio',                 on: coeffFlags.lavaggio },
+                            { label: 'No Cauzione',              on: coeffFlags.no_cauzione },
+                            { label: 'Cauzione veicoli',         on: coeffFlags.cauzione_veicoli },
+                            { label: 'Secondo guidatore',        on: coeffFlags.second_driver },
+                            { label: 'DR7 FLEX',                 on: coeffFlags.dr7_flex },
+                            { label: 'KM illimitati',            on: coeffFlags.unlimited_km },
+                            { label: 'Pacchetti KM',             on: coeffFlags.km_packages },
+                            { label: 'Servizi Experience',       on: coeffFlags.experience },
+                            { label: 'Consegna a domicilio',     on: coeffFlags.delivery },
+                            { label: 'Ritiro a domicilio',       on: coeffFlags.pickup },
+                          ]
+                          const inList = items.filter(i => i.on).map(i => i.label)
+                          const outList = items.filter(i => !i.on).map(i => i.label)
+                          return (
+                            <div className="pl-1 pt-2 mt-1 border-t border-theme-border/50 space-y-0.5">
+                              <div className="text-[11px] text-theme-text-muted">
+                                <span className="text-emerald-400">Incluse nel coefficiente:</span> Noleggio{inList.length > 0 ? `, ${inList.join(', ')}` : ''}
+                              </div>
+                              <div className="text-[11px] text-theme-text-muted">
+                                <span className="text-rose-400">Escluse (a listino):</span> {outList.length > 0 ? outList.join(', ') : '—'}
+                              </div>
+                            </div>
+                          )
+                        })()}
                       </div>
                       )}
                     </>

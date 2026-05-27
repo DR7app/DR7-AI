@@ -727,6 +727,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     experience: boolean
     delivery: boolean
     pickup: boolean
+    // 2026-05-27: maggiorazione preventivo. ON = % applicata su afterRevenue
+    // (post-coefficiente, comportamento storico). OFF = applicata su
+    // listSubtotalNoExp (pre-coefficiente, % garantita di markup).
+    maggiorazione: boolean
   }
   const [coeffFlags, setCoeffFlags] = useState<CoeffFlags>({
     unlimited_km: false,
@@ -740,6 +744,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     experience: false,
     delivery: false,
     pickup: false,
+    maggiorazione: true,
   })
   useEffect(() => {
     let cancelled = false
@@ -760,6 +765,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           coefficient_experience?: boolean
           coefficient_delivery?: boolean
           coefficient_pickup?: boolean
+          coefficient_maggiorazione?: boolean
         }
       }
       setProDeposits(c.deposits || null)
@@ -778,6 +784,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         experience:       !!a.coefficient_experience,
         delivery:         !!a.coefficient_delivery,
         pickup:           !!a.coefficient_pickup,
+        maggiorazione:    a.coefficient_maggiorazione !== false,
       })
     }
     ;(async () => {
@@ -5413,6 +5420,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                 { label: 'Servizi Experience',       on: coeffFlags.experience },
                 { label: 'Consegna a domicilio',     on: coeffFlags.delivery },
                 { label: 'Ritiro a domicilio',       on: coeffFlags.pickup },
+                // 2026-05-27: maggiorazione preventivo (solo qui in admin).
+                ...(pricing.maggiorazione > 0
+                  ? [{ label: 'Maggiorazione preventivo', on: coeffFlags.maggiorazione }]
+                  : []),
               ]
               const inList = items.filter(i => i.on).map(i => i.label)
               const outList = items.filter(i => !i.on).map(i => i.label)
@@ -5456,7 +5467,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
 
         {pricing.maggiorazione > 0 && (
           <div className="flex justify-between text-sm text-dr7-gold">
-            <span>Maggiorazione preventivo (+{pricing.maggiorazione}%)</span>
+            <span>
+              Maggiorazione preventivo (+{pricing.maggiorazione}%)
+              <span className="text-[10px] text-theme-text-muted ml-1">
+                {coeffFlags.maggiorazione ? '(segue coefficiente)' : '(fissa su listino)'}
+              </span>
+            </span>
             <span>+{formatEur(pricing.maggiorazioneAmount)}</span>
           </div>
         )}

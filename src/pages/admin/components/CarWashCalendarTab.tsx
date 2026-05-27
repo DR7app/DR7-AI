@@ -568,7 +568,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-[10px] uppercase tracking-[0.14em] text-theme-text-muted font-semibold">{label}</div>
-          <div className="text-xl font-bold text-white tabular-nums leading-tight tracking-tight">{value}</div>
+          <div className="text-xl font-bold text-theme-text-primary tabular-nums leading-tight tracking-tight">{value}</div>
           <div className="flex items-center gap-2 text-[10px] mt-0.5 truncate">
             {delta && <span className={deltaColor(delta)}>{delta} vs ieri</span>}
             {sub && <span className="text-theme-text-muted truncate">{sub}</span>}

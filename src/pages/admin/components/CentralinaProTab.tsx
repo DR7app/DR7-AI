@@ -565,6 +565,10 @@ type AutomationsConfig = {
   coefficient_experience?: boolean
   coefficient_delivery?: boolean
   coefficient_pickup?: boolean
+  // Maggiorazione preventivo: ON (default, storico) = % calcolata su
+  // afterRevenue (segue coefficiente). OFF = % calcolata su listino
+  // pre-coefficiente (markup fisso garantito).
+  coefficient_maggiorazione?: boolean
 }
 
 type CancellationAppliesTo = 'all' | 'rental' | 'carwash'
@@ -618,6 +622,7 @@ const INITIAL_AUTOMATIONS: AutomationsConfig = {
   coefficient_experience: false,
   coefficient_delivery: false,
   coefficient_pickup: false,
+  coefficient_maggiorazione: true,
 }
 
 // === Orari Lavaggio ===
@@ -6361,6 +6366,7 @@ function AutomazioniSection({
             { key: 'coefficient_experience',        label: 'Servizi Experience' },
             { key: 'coefficient_delivery',          label: 'Consegna a domicilio' },
             { key: 'coefficient_pickup',            label: 'Ritiro a domicilio' },
+            { key: 'coefficient_maggiorazione',     label: 'Maggiorazione Preventivo' },
           ] as const).map(({ key, label }) => {
             const on = !!automations[key]
             return (
