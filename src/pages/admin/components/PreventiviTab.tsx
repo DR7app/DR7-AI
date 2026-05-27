@@ -1635,6 +1635,25 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     // del bypass globale di useLimitationOverride, ma applicato al custom
     // OTP flow di PreventiviTab (che non passa per requestOverride).
     const operatorBypassesOtp = permissions.includes('role:bypass-otp')
+    // 2026-05-27 DIAGNOSTIC: log ogni decisione del save per debug.
+    // Da rimuovere dopo verifica direzione.
+    /* eslint-disable no-console */
+    console.log('[OTP Diagnostic] handleSave called', {
+      adminEmail,
+      permissions,
+      operatorBypassesOtp,
+      outOfHoursOverrideId,
+      noCauzioneOverrideId,
+      slotOverrideId,
+      trippedCodes,
+      motivazioni,
+      isValerio,
+      pickupTime: form.pickup_time,
+      returnTime: form.return_time,
+      pickupDate: form.pickup_date,
+      returnDate: form.return_date,
+    })
+    /* eslint-enable no-console */
 
     // Filtro per Gestione OTP: se un codice è disattivato in
     // system_otp_overrides (is_required=false) lo bypassiamo SILENZIOSAMENTE
