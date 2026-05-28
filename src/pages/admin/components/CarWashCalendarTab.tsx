@@ -884,8 +884,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                         className={`
                           relative border-r border-theme-border/20 transition-all
                           ${isToday ? 'bg-[#22d3ee]/12 border-l border-r border-[#22d3ee]/40' : ''}
-                          ${!isToday && !slotBooking && !isRedDay ? 'bg-emerald-50 hover:bg-emerald-100 dark:bg-green-600/15 dark:hover:bg-green-600/25 cursor-pointer' : ''}
-                          ${!isToday && !slotBooking && isRedDay ? 'bg-rose-50 hover:bg-rose-100 dark:bg-red-950/10 dark:hover:bg-red-950/20' : ''}
+                          ${/* 2026-05-28: era bg-emerald-50 + dark:bg-green-600/15 ma il dark variant
+                              non si applicava correttamente — la griglia restava color crema
+                              anche in dark mode. Sostituito con opacity-based che funziona
+                              su qualsiasi sfondo (chiaro=verde tenue, scuro=verde tenue su nero). */''}
+                          ${!isToday && !slotBooking && !isRedDay ? 'bg-emerald-500/10 hover:bg-emerald-500/20 cursor-pointer' : ''}
+                          ${!isToday && !slotBooking && isRedDay ? 'bg-rose-500/10 hover:bg-rose-500/20' : ''}
                           ${slotBooking && !isBookingStart ? 'bg-transparent' : ''}
                         `}
                         style={dayCellStyle}
