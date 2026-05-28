@@ -970,11 +970,11 @@ export default function UnpaidBookingsTab() {
         .eq('id', bookingId)
         .single()
 
-      if (booking && (booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded')) {
-        toast.error('Impossibile eliminare una prenotazione gia pagata!')
-        return
-      }
-
+      // 2026-05-28: rimosso il guard "Impossibile eliminare una prenotazione
+      // gia' pagata". Direzione vuole poter eliminare da "In attesa di
+      // pagamento" qualsiasi riga li' presente — la riga e' in questo tab
+      // perche' qualcosa e' insoluto (es. estensione Da Saldare su booking
+      // gia' pagato). Il prompt "Confermi? Si/No" basta come protezione.
       if (booking) {
         try {
           await fetch('/.netlify/functions/delete-calendar-event', {
