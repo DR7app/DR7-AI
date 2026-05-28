@@ -3654,6 +3654,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Reset deposit_reminder_sent so IBAN message re-sends 60 min after the NEW dropoff
       const updatedBookingDetails = {
         ...extendingBooking.booking_details,
+        // 2026-05-28: protezione anti-auto-cancel. Una volta che direzione
+        // conferma un'estensione il booking NON deve essere cancellato dal
+        // cron `cancel-unpaid-nexi-bookings` anche se payment_status resta
+        // pending (estensione "Da Saldare" su booking originale unpaid).
+        // Il cron salta i record con manually_confirmed === true.
+        manually_confirmed: true,
+        manually_confirmed_at: new Date().toISOString(),
         deposit_reminder_sent: false,
         deposit_reminder_sent_at: null,
         iban_request_sent: false,
