@@ -742,6 +742,69 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     onClose()
   }
 
+  // Shared OCR result handler. Used by BOTH the hero auto-fill CompilaButton
+  // (mounted always, at the top of the modal) and the manual one at step 4.
+  // Defined once so the two surfaces stay in sync.
+  // 2026-05-28: extracted from inline onDataExtracted at step 4 so we can
+  // mount a second always-on CompilaButton in the hero — without that, the
+  // hero upload was stuck on "Estrazione in corso" because CompilaButton
+  // only existed inside the step-4 JSX, which doesn't render at step 1.
+  const handleExtractedData = (data: ExtractedData, _conflicts: DataConflict[]) => {
+    const FIELD_LABELS: Record<string, string> = {
+      nome: 'Nome', cognome: 'Cognome', sesso: 'Sesso',
+      data_nascita: 'Data di nascita', luogo_nascita: 'Luogo di nascita',
+      provincia_nascita: 'Provincia nascita', codice_fiscale: 'Codice fiscale',
+      indirizzo: 'Indirizzo', numero_civico: 'N. civico', codice_postale: 'CAP',
+      citta_residenza: 'Citta residenza', provincia_residenza: 'Provincia residenza',
+      patente_numero: 'N. patente', patente_tipo: 'Tipo patente',
+      patente_rilascio: 'Rilascio patente', patente_scadenza: 'Scadenza patente',
+      patente_ente: 'Ente patente',
+    }
+    const filled: string[] = []
+    const pushIf = (key: keyof typeof FIELD_LABELS, value: string | undefined) => {
+      if (value) filled.push(`${FIELD_LABELS[key as string]}: ${value}`)
+    }
+    pushIf('nome', data.nome); pushIf('cognome', data.cognome); pushIf('sesso', data.sesso)
+    pushIf('data_nascita', data.data_nascita); pushIf('luogo_nascita', data.luogo_nascita); pushIf('provincia_nascita', data.provincia_nascita)
+    pushIf('codice_fiscale', data.codice_fiscale); pushIf('indirizzo', data.indirizzo); pushIf('numero_civico', data.numero_civico)
+    pushIf('codice_postale', data.codice_postale); pushIf('citta_residenza', data.citta_residenza); pushIf('provincia_residenza', data.provincia_residenza)
+    pushIf('patente_numero', data.patente_numero); pushIf('patente_tipo', data.patente_tipo)
+    pushIf('patente_rilascio', data.patente_rilascio); pushIf('patente_scadenza', data.patente_scadenza); pushIf('patente_ente', data.patente_ente)
+    setFormData(prev => ({
+      ...prev,
+      ...(data.nome && { nome: data.nome }),
+      ...(data.cognome && { cognome: data.cognome }),
+      ...(data.sesso && { sesso: data.sesso as 'M' | 'F' | 'Altro' | '' }),
+      ...(data.data_nascita && { data_nascita: data.data_nascita }),
+      ...(data.luogo_nascita && { luogo_nascita: data.luogo_nascita }),
+      ...(data.provincia_nascita && { provincia_nascita: data.provincia_nascita }),
+      ...(data.codice_fiscale && { codice_fiscale: data.codice_fiscale }),
+      ...(data.indirizzo && { indirizzo: data.indirizzo }),
+      ...(data.numero_civico && { numero_civico: data.numero_civico }),
+      ...(data.codice_postale && { codice_postale: data.codice_postale }),
+      ...(data.citta_residenza && { citta_residenza: data.citta_residenza }),
+      ...(data.provincia_residenza && { provincia_residenza: data.provincia_residenza }),
+      ...(data.patente_numero && { patente_numero: data.patente_numero }),
+      ...(data.patente_tipo && { patente_tipo: data.patente_tipo }),
+      ...(data.patente_rilascio && { patente_rilascio: data.patente_rilascio }),
+      ...(data.patente_scadenza && { patente_scadenza: data.patente_scadenza }),
+      ...(data.patente_ente && { patente_ente: data.patente_ente }),
+    }))
+    setLastExtracted(filled.length > 0 ? filled : ['Nessun dato leggibile estratto'])
+    try { scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' }) } catch { /* ignore */ }
+    toast.success(`${filled.length} campi compilati dai documenti — verifica in cima al form`)
+  }
+
+  // Shared documents array — reused by both CompilaButton instances.
+  const heroDocuments = [
+    { file: driversLicenseFront, label: 'Patente Fronte' },
+    { file: driversLicenseBack, label: 'Patente Retro' },
+    { file: identityFront, label: 'Carta Identità Fronte' },
+    { file: identityBack, label: 'Carta Identità Retro' },
+    { file: codiceFiscaleFront, label: 'Codice Fiscale Fronte' },
+    { file: codiceFiscaleBack, label: 'Codice Fiscale Retro' },
+  ]
+
   // Live preview/score for the right-hand sidebar. NON persiste — solo
   // contatori derivati dai campi gia' compilati per dare un'idea di
   // completezza prima del salvataggio.
@@ -924,8 +987,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         className="block w-full text-[11px] text-theme-text-secondary file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-dr7-gold file:text-white hover:file:bg-dr7-gold/80 file:cursor-pointer cursor-pointer"
                       />
                     </label>
-                    {(identityFront || driversLicenseFront || codiceFiscaleFront) && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
+                    {(identityFront || driversLicenseFront || codiceFiscaleFront || identityBack || driversLicenseBack || codiceFiscaleBack) && (
+                      <div className="mt-2 flex flex-wrap gap-1.5 items-center">
                         {identityFront && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-medium">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Carta identità
@@ -941,9 +1004,21 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Codice fiscale
                           </span>
                         )}
-                        <span className="text-[10px] text-theme-text-muted self-center">Estrazione in corso…</span>
                       </div>
                     )}
+                    {/* Real CompilaButton — always mounted (since this whole hero
+                        block lives in step 1 / Identificazione Rapida which is
+                        the default first card). autoTrigger fires OCR ~1.2s
+                        after upload, button also acts as a manual retry. */}
+                    <div className="mt-2">
+                      <CompilaButton
+                        autoTrigger
+                        documents={heroDocuments}
+                        currentData={formData as unknown as Record<string, string | undefined | null>}
+                        onDataExtracted={handleExtractedData}
+                        onError={(err: string) => toast.error(err)}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1344,62 +1419,14 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
                       {(driversLicenseFront || driversLicenseBack || identityFront || identityBack || codiceFiscaleFront || codiceFiscaleBack) && (
                         <div className="pt-2">
+                          {/* Manual fallback. The hero CompilaButton (always
+                              mounted) handles autoTrigger; this one stays as a
+                              "Compila" button for users who scrolled to step 4
+                              and want to retry without re-uploading. */}
                           <CompilaButton
-                            autoTrigger
-                            documents={[
-                              { file: driversLicenseFront, label: 'Patente Fronte' },
-                              { file: driversLicenseBack, label: 'Patente Retro' },
-                              { file: identityFront, label: 'Carta Identità Fronte' },
-                              { file: identityBack, label: 'Carta Identità Retro' },
-                              { file: codiceFiscaleFront, label: 'Codice Fiscale Fronte' },
-                              { file: codiceFiscaleBack, label: 'Codice Fiscale Retro' },
-                            ]}
+                            documents={heroDocuments}
                             currentData={formData as unknown as Record<string, string | undefined | null>}
-                            onDataExtracted={(data: ExtractedData, _conflicts: DataConflict[]) => {
-                              const FIELD_LABELS: Record<string, string> = {
-                                nome: 'Nome', cognome: 'Cognome', sesso: 'Sesso',
-                                data_nascita: 'Data di nascita', luogo_nascita: 'Luogo di nascita',
-                                provincia_nascita: 'Provincia nascita', codice_fiscale: 'Codice fiscale',
-                                indirizzo: 'Indirizzo', numero_civico: 'N. civico', codice_postale: 'CAP',
-                                citta_residenza: 'Citta residenza', provincia_residenza: 'Provincia residenza',
-                                patente_numero: 'N. patente', patente_tipo: 'Tipo patente',
-                                patente_rilascio: 'Rilascio patente', patente_scadenza: 'Scadenza patente',
-                                patente_ente: 'Ente patente',
-                              }
-                              const filled: string[] = []
-                              const pushIf = (key: keyof typeof FIELD_LABELS, value: string | undefined) => {
-                                if (value) filled.push(`${FIELD_LABELS[key as string]}: ${value}`)
-                              }
-                              pushIf('nome', data.nome); pushIf('cognome', data.cognome); pushIf('sesso', data.sesso)
-                              pushIf('data_nascita', data.data_nascita); pushIf('luogo_nascita', data.luogo_nascita); pushIf('provincia_nascita', data.provincia_nascita)
-                              pushIf('codice_fiscale', data.codice_fiscale); pushIf('indirizzo', data.indirizzo); pushIf('numero_civico', data.numero_civico)
-                              pushIf('codice_postale', data.codice_postale); pushIf('citta_residenza', data.citta_residenza); pushIf('provincia_residenza', data.provincia_residenza)
-                              pushIf('patente_numero', data.patente_numero); pushIf('patente_tipo', data.patente_tipo)
-                              pushIf('patente_rilascio', data.patente_rilascio); pushIf('patente_scadenza', data.patente_scadenza); pushIf('patente_ente', data.patente_ente)
-                              setFormData(prev => ({
-                                ...prev,
-                                ...(data.nome && { nome: data.nome }),
-                                ...(data.cognome && { cognome: data.cognome }),
-                                ...(data.sesso && { sesso: data.sesso as 'M' | 'F' | 'Altro' | '' }),
-                                ...(data.data_nascita && { data_nascita: data.data_nascita }),
-                                ...(data.luogo_nascita && { luogo_nascita: data.luogo_nascita }),
-                                ...(data.provincia_nascita && { provincia_nascita: data.provincia_nascita }),
-                                ...(data.codice_fiscale && { codice_fiscale: data.codice_fiscale }),
-                                ...(data.indirizzo && { indirizzo: data.indirizzo }),
-                                ...(data.numero_civico && { numero_civico: data.numero_civico }),
-                                ...(data.codice_postale && { codice_postale: data.codice_postale }),
-                                ...(data.citta_residenza && { citta_residenza: data.citta_residenza }),
-                                ...(data.provincia_residenza && { provincia_residenza: data.provincia_residenza }),
-                                ...(data.patente_numero && { patente_numero: data.patente_numero }),
-                                ...(data.patente_tipo && { patente_tipo: data.patente_tipo }),
-                                ...(data.patente_rilascio && { patente_rilascio: data.patente_rilascio }),
-                                ...(data.patente_scadenza && { patente_scadenza: data.patente_scadenza }),
-                                ...(data.patente_ente && { patente_ente: data.patente_ente }),
-                              }))
-                              setLastExtracted(filled.length > 0 ? filled : ['Nessun dato leggibile estratto'])
-                              try { scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' }) } catch { /* ignore */ }
-                              toast.success(`${filled.length} campi compilati dai documenti — verifica in cima al form`)
-                            }}
+                            onDataExtracted={handleExtractedData}
                             onError={(err: string) => toast.error(err)}
                           />
                         </div>
