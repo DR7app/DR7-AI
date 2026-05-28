@@ -359,7 +359,25 @@ export default function ReviewManagementTab() {
         const err = await res.json()
         throw new Error(err.error || 'Errore invio')
       }
-      toast.success('Richiesta recensione inviata!')
+      // 2026-05-28: review-send torna SEMPRE HTTP 200 anche quando email
+      // o WhatsApp falliscono (es. Green API non configurato, SMTP timeout).
+      // Senza questo controllo, il toast diceva "inviata" ma il candidate
+      // veniva marcato send_status=FAILED dal backend → pill rossa "Fallito".
+      const data = await res.json().catch(() => ({}))
+      if (!data || data.success === false) {
+        const errs = Array.isArray(data?.errors) && data.errors.length > 0
+          ? data.errors.join(' · ')
+          : 'Invio fallito (nessun canale ha avuto successo)'
+        toast.error(`Invio fallito: ${errs}`, { duration: 10000 })
+        await Promise.all([fetchCandidates(), fetchStats()])
+        return
+      }
+      // Parziale: almeno un canale ok ma altri falliti → mostra warning
+      if (Array.isArray(data.errors) && data.errors.length > 0) {
+        toast(`Inviato in parte: ${data.errors.join(' · ')}`, { duration: 8000 })
+      } else {
+        toast.success('Richiesta recensione inviata!')
+      }
       await Promise.all([fetchCandidates(), fetchStats()])
     } catch (err: unknown) {
       const _errMsg = err instanceof Error ? err.message : String(err)
