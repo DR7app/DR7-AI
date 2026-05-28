@@ -290,48 +290,61 @@ const handler: Handler = async (event) => {
       }
     }
 
-    // Send WHATSAPP via Green API
+    // Send WHATSAPP via send-whatsapp-notification (stesso endpoint usato
+    // da TUTTI gli altri invii: conferme prenotazione, link pagamento,
+    // notifiche cauzione, ecc). Cosi' eredita:
+    //   - stessi env GREEN_API_* gia' funzionanti per gli altri messaggi
+    //   - wrapper header/footer Pro
+    //   - logging in sent_messages_log
+    //   - normalizzazione numero, retry, gestione blocco Green API, ecc.
+    // Prima review-send chiamava Green API direttamente con i suoi env,
+    // e quando uno dei due era mancante / il numero era in blocco
+    // l'errore arrivava come generico "Green API error" mentre gli altri
+    // canali funzionavano regolarmente.
     if (needsWhatsapp && candidate.customer_phone) {
       try {
-        if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) {
-          throw new Error('Green API not configured');
+        if (!whatsappMessage) {
+          throw new Error('Template review_request_whatsapp vuoto in Messaggi di Sistema Pro');
         }
 
         const targetPhone = cleanPhone(candidate.customer_phone);
-        const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`;
+        // Risolvi base URL del deploy Netlify corrente. URL = produzione,
+        // DEPLOY_URL = branch/preview, fallback all'host della richiesta.
+        const baseUrl = process.env.URL
+          || process.env.DEPLOY_PRIME_URL
+          || process.env.DEPLOY_URL
+          || (event.headers.host ? `https://${event.headers.host}` : '');
+        if (!baseUrl) {
+          throw new Error('Impossibile determinare base URL del deploy');
+        }
 
-        const response = await fetch(greenApiUrl, {
+        const response = await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            chatId: `${targetPhone}@c.us`,
-            message: whatsappMessage,
+            customPhone: targetPhone,
+            customMessage: whatsappMessage,
+            skipHeader: false,
+            type: 'Review Notification (WhatsApp)',
+            customerName: candidate.customer_name || 'N/A',
           }),
         });
 
-        const result = await response.json();
+        const result = await response.json().catch(() => ({}));
 
-        if (!response.ok || result.error) {
-          throw new Error(result.error || 'Green API error');
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${result.error || result.message || response.statusText}`);
+        }
+        if (result.skipped) {
+          throw new Error(result.message || result.reason || 'send-whatsapp-notification skipped');
+        }
+        if (result.success === false || result.error) {
+          throw new Error(result.error || 'send-whatsapp-notification failed');
         }
 
         whatsappSent = true;
         whatsappSentAt = new Date().toISOString();
-        console.log(`[review-send] WhatsApp sent to ${targetPhone}, messageId: ${result.idMessage}`);
-
-        // Log to sent_messages_log
-        try {
-          const fullMessage = whatsappMessage;
-          await supabase.from('sent_messages_log').insert({
-            customer_name: candidate.customer_name || 'N/A',
-            customer_phone: candidate.customer_phone,
-            message_text: fullMessage,
-            template_label: 'Review Notification (WhatsApp)',
-            status: 'sent',
-          });
-        } catch (logErr) {
-          console.error('Failed to log message:', logErr);
-        }
+        console.log(`[review-send] WhatsApp dispatched via send-whatsapp-notification for ${targetPhone}`);
       } catch (err: any) {
         console.error('[review-send] WhatsApp send error:', err);
         sendErrors.push(`WhatsApp: ${err.message}`);
