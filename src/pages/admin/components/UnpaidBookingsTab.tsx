@@ -869,13 +869,19 @@ export default function UnpaidBookingsTab() {
     }
   }
 
-  async function markSingleExtensionPaid(booking: UnpaidBooking, extIndex: number) {
+  async function markSingleExtensionPaid(booking: UnpaidBooking, extIndex: number, paymentMethod?: string) {
     try {
       const extensions = [...(booking.booking_details?.extension_history || [])]
       const ext = extensions[extIndex]
       if (!ext) return
 
-      extensions[extIndex] = { ...ext, payment_status: 'paid' }
+      // 2026-05-28: registra anche il metodo di pagamento sull'estensione,
+      // cosi' la fattura puo' usarlo + audit log ha tracciabilita'.
+      extensions[extIndex] = {
+        ...ext,
+        payment_status: 'paid',
+        ...(paymentMethod ? { payment_method: paymentMethod, paid_at: new Date().toISOString() } : {}),
+      }
 
       const { error } = await supabase
         .from('bookings')
@@ -1081,6 +1087,12 @@ export default function UnpaidBookingsTab() {
     // 1. Create Nexi link
     let result: { paymentUrl?: string; error?: string } = {}
     try {
+      // 2026-05-28: paymentPurpose='booking_topup' — la callback Nexi
+      // (nexi-payment-callback.ts:683+) usa questo branch per accumulare
+      // amount_paid invece di marcare il booking fully paid in un colpo.
+      // Senza questo, una Link Parziale di €100 su €500 marcava TUTTO
+      // pagato (callback ramo 'booking' default a riga 882). Adesso:
+      // newPaidCents = priorPaid + transaction → fullyPaid solo se >= total.
       const res = await authFetch('/.netlify/functions/nexi-pay-by-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1090,7 +1102,8 @@ export default function UnpaidBookingsTab() {
           customerEmail: booking.customer_email || booking.booking_details?.customer?.email || '',
           customerName: booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente',
           description,
-          expirationDays: 7
+          expirationDays: 7,
+          paymentPurpose: 'booking_topup',
         })
       })
       result = await res.json().catch(() => ({}))
@@ -2000,7 +2013,16 @@ export default function UnpaidBookingsTab() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((ext: any, idx: number) => ({ ext, idx }))
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .filter(({ ext }: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link')
+      .filter(({ ext }: any) => {
+        const unpaid = ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link'
+        if (!unpaid) return false
+        // 2026-05-28: nascondi estensioni con residuo 0 (es. Da Saldare €0
+        // = solo cambio data senza extra). Allineato al booking filter
+        // sopra a riga ~440.
+        const amt = Number(ext.additional_amount) || 0
+        const paid = Number(ext.amount_paid) || 0
+        return (amt - paid) > 0
+      })
   }
 
   const getPendingWithIndex = (booking: UnpaidBooking, arrayKey: 'penalties' | 'danni') => {
@@ -2009,7 +2031,13 @@ export default function UnpaidBookingsTab() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((item: any, realIdx: number) => ({ item, realIdx }))
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .filter(({ item }: any) => !item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial' || item.paymentStatus === 'nexi_pay_by_link')
+      .filter(({ item }: any) => {
+        const unpaid = !item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial' || item.paymentStatus === 'nexi_pay_by_link'
+        if (!unpaid) return false
+        const amt = Number(item.amount ?? item.total ?? 0)
+        const paid = Number(item.amountPaid ?? 0)
+        return (amt - paid) > 0
+      })
   }
 
   // ── Build Customer Groups ──────────────────────────────────────────────────
@@ -2452,13 +2480,42 @@ export default function UnpaidBookingsTab() {
                         )}
                         <div className="flex gap-1 flex-wrap mt-1 pt-1 border-t border-purple-500/10">
                           <button
-                            onClick={() => markSingleExtensionPaid(booking, extIdx)}
+                            onClick={() => askPaymentMethod(
+                              `Estensione Pagata — €${extRemaining.toFixed(2)} · ${booking.customer_name || 'Cliente'}`,
+                              (method) => markSingleExtensionPaid(booking, extIdx, method)
+                            )}
                             className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
                           >Pagato</button>
                           <button
                             onClick={() => sendPayByLink(booking, extRemaining, `Estensione ${booking.vehicle_name || ''}`)}
                             className="px-2 py-0.5 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold"
                           >Invia Link</button>
+                          {/* 2026-05-28: Link Parziale per estensioni — paritetico
+                              alla riga booking. sendPayByLink usa paymentPurpose
+                              'booking_topup' quindi la callback accumula correttamente. */}
+                          {partialLinkKey !== extPartialKey && (
+                            <button
+                              onClick={() => { setPartialLinkKey(extPartialKey); setPartialLinkValue('') }}
+                              className="px-2 py-0.5 bg-purple-400 hover:bg-purple-500 text-white rounded text-xs font-semibold"
+                            >Link Parziale</button>
+                          )}
+                          {partialLinkKey === extPartialKey && (
+                            <div className="flex items-center gap-1 w-full mt-1">
+                              <input type="number" step="0.01" min="1" max={extRemaining}
+                                value={partialLinkValue} onChange={e => setPartialLinkValue(e.target.value)}
+                                placeholder={`Max €${extRemaining.toFixed(2)}`}
+                                className="flex-1 px-2 py-1 bg-theme-bg-tertiary border border-purple-500/50 rounded text-xs text-theme-text-primary"
+                                autoFocus
+                              />
+                              <button onClick={() => {
+                                const amt = parseFloat(partialLinkValue)
+                                if (!amt || amt <= 0) return
+                                sendPayByLink(booking, Math.min(amt, extRemaining), `Estensione ${booking.vehicle_name || ''} (parziale)`)
+                                setPartialLinkKey(null)
+                              }} className="px-2 py-1 bg-purple-600 text-white rounded text-xs font-semibold">Invia</button>
+                              <button onClick={() => setPartialLinkKey(null)} className="px-2 py-1 bg-gray-600 text-white rounded text-xs">X</button>
+                            </div>
+                          )}
                           {partialPayItemKey !== extPartialKey && (
                             <button
                               onClick={() => { setPartialPayItemKey(extPartialKey); setPartialPayValue('') }}
