@@ -8654,15 +8654,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     </div>
                   )
                 })()}
-                <div
-                  className={`p-3 rounded-md border cursor-pointer transition-all flex items-center gap-2 ${formData.km_limit === DEFAULT_KM_LIMIT && !formData.unlimited_km
-                    ? 'border-theme-text-primary bg-theme-text-primary/5'
-                    : 'border-theme-border hover:border-theme-border'
-                    } ${formData.unlimited_km ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  onClick={() => !formData.unlimited_km && setFormData(p => ({ ...p, km_limit: DEFAULT_KM_LIMIT }))}
-                >
-                  <span className="text-theme-text-primary font-bold text-sm">100 Km / Giorno</span>
-                </div>
+                {/* 2026-05-28: rimosso preset hardcoded "100 Km / Giorno".
+                    L'admin ha gia':
+                    - "{km} km inclusi" sopra (auto-calcolato da Centralina)
+                    - "Limite KM Personale" input sotto (override manuale)
+                    - "KM Illimitati" checkbox (Illimitati)
+                    Il pacchetto a 100 km fisso non e' piu' un'opzione valida. */}
               </div>
 
               {/* Manual KM Input - Fallback if not using presets */}
