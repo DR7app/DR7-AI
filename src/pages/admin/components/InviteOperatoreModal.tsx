@@ -40,8 +40,6 @@ export const PERMISSION_SECTIONS: { name: string; tabs: { key: string; label: st
     { key: 'campagna-marketing', label: 'Campagna Marketing' },
     { key: 'referral', label: 'Referral' },
     { key: 'codice-sconto', label: 'Codice Sconto' },
-    { key: 'maxi-promo-gap', label: 'Maxi Promo Gap' },
-    { key: 'promo-incassi', label: 'Promo Incassi' },
   ]},
   { name: 'Report', tabs: [
     { key: 'report-noleggio', label: 'Noleggio' },
