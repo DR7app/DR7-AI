@@ -145,10 +145,13 @@ export const handler: Handler = async (event) => {
       return 'altro'
     }
 
-    // Fetch all fatture (invoices). We need data_pagamento/stato for status.
+    // Fetch all fatture (invoices). `stato` drives the paid/pending/cancelled
+    // bucketing for the report — no `data_pagamento` column exists on this
+    // table (verified 2026-05-28: only report-danni referenced it, FatturaTab
+    // uses `stato` exclusively). Querying it caused a 500 on the function.
     const { data: fatture, error: fattureError } = await supabase
       .from('fatture')
-      .select('id, booking_id, importo_totale, items, customer_name, data_emissione, data_pagamento, stato')
+      .select('id, booking_id, importo_totale, items, customer_name, data_emissione, stato')
 
     if (fattureError) throw fattureError
 
@@ -239,12 +242,12 @@ export const handler: Handler = async (event) => {
       const motivo = desc.includes(' - ') ? desc.substring(desc.indexOf(' - ') + 3) : desc
       const stato = (f.stato || '').toLowerCase()
       const status: Entry['status'] =
-        stato === 'pagata' || stato === 'paid' || f.data_pagamento ? 'paid'
+        stato === 'pagata' || stato === 'paid' ? 'paid'
         : stato === 'annullata' || stato === 'cancelled' ? 'cancelled'
         : 'pending'
       entries.push({
         id: f.id,
-        date: f.data_pagamento || f.data_emissione || null,
+        date: f.data_emissione || null,
         type: cls,
         category: categorize(motivo),
         customerName: f.customer_name || '',
@@ -336,9 +339,13 @@ export const handler: Handler = async (event) => {
 
     // For danni report: also include cashed cauzioni (stato='Bloccata')
     if (reportType === 'danni' || reportType === 'all') {
+      // 2026-05-28: era `data_creazione, data_blocco` — colonne inesistenti
+      // (schema reale: created_at, data_incasso, data_restituzione, ecc.).
+      // La query falliva silenziosamente (error non catturato) e i danni da
+      // cauzione bloccata sparivano dal report.
       const { data: cauzioni } = await supabase
         .from('cauzioni')
-        .select('id, veicolo_id, cliente_id, importo, data_creazione, data_blocco, stato')
+        .select('id, veicolo_id, cliente_id, importo, created_at, data_incasso, stato')
         .eq('stato', 'Bloccata')
 
       if (cauzioni && cauzioni.length > 0) {
@@ -405,7 +412,7 @@ export const handler: Handler = async (event) => {
           // serviceType: assume noleggio (cauzioni are only created for rentals).
           entries.push({
             id: c.id,
-            date: c.data_blocco || c.data_creazione || null,
+            date: c.data_incasso || c.created_at || null,
             type: 'danni',
             category: 'Cauzione Trattenuta',
             customerName: custName,
