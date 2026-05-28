@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import type { ClientTier } from '../../../contexts/ClientStatusContext'
+import DateRangePicker, { resolveDateRange, isInRange, type DateRangeValue } from '../../../components/admin/DateRangePicker'
 
 interface CustomerReport {
   customerId: string
@@ -195,6 +196,7 @@ export default function ReportClientiTab() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [dateRange, setDateRange] = useState<DateRangeValue>({ preset: 'all' })
   const [sortField, setSortField] = useState<SortField>('totale_spesa')
   const [sortAsc, setSortAsc] = useState(false)
 
@@ -228,14 +230,24 @@ export default function ReportClientiTab() {
     }
   }
 
+  const range = useMemo(() => resolveDateRange(dateRange), [dateRange])
+
   const filteredClienti = useMemo(() => {
     if (!clientiData?.customers) return []
-    if (!search.trim()) return clientiData.customers
     const q = search.trim().toLowerCase()
-    return clientiData.customers.filter(c =>
-      (c.name || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q)
-    )
-  }, [clientiData, search])
+    return clientiData.customers.filter(c => {
+      // 2026-05-28: filtro per data ultima prenotazione (cliente "attivo
+      // nel periodo"). Clienti senza prenotazioni passano sempre quando
+      // preset='all', altrimenti vengono esclusi dal range temporale.
+      if (range.from || range.to) {
+        if (!isInRange(c.ultima_prenotazione, range)) return false
+      }
+      if (q && !((c.name || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q))) {
+        return false
+      }
+      return true
+    })
+  }, [clientiData, search, range])
 
   const sortedClienti = useMemo(() =>
     [...filteredClienti].sort((a, b) => sortAsc ? a[sortField] - b[sortField] : b[sortField] - a[sortField]),
@@ -260,6 +272,7 @@ export default function ReportClientiTab() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h2 className="text-2xl font-bold text-theme-text-primary">Report Clienti</h2>
+        <DateRangePicker value={dateRange} onChange={setDateRange} />
       </div>
 
       {/* Controls */}

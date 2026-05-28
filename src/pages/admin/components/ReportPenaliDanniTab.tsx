@@ -6,6 +6,7 @@ import {
   PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
+import DateRangePicker, { resolveDateRange, isInRange, type DateRangeValue } from '../../../components/admin/DateRangePicker'
 
 // ─── Types matching netlify/functions/report-danni.ts response ────────────────
 interface Entry {
@@ -38,7 +39,6 @@ interface ReportData {
   entries?: Entry[]
 }
 
-type RangePreset = '7' | '30' | '90' | '365' | 'all'
 type TableFilter = 'all' | 'danni' | 'penali'
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ export default function ReportPenaliDanniTab() {
   const [error, setError] = useState('')
 
   // Filters
-  const [rangePreset, setRangePreset] = useState<RangePreset>('30')
+  const [dateRange, setDateRange] = useState<DateRangeValue>({ preset: '30' })
   const [tableFilter, setTableFilter] = useState<TableFilter>('all')
 
   // Pagination for detail table
@@ -110,7 +110,7 @@ export default function ReportPenaliDanniTab() {
   const PAGE_SIZE = 8
 
   useEffect(() => { fetchReports() }, [])
-  useEffect(() => { setPage(1) }, [tableFilter, rangePreset])
+  useEffect(() => { setPage(1) }, [tableFilter, dateRange])
 
   async function fetchReports() {
     setLoading(true)
@@ -133,13 +133,7 @@ export default function ReportPenaliDanniTab() {
   }
 
   // ── Cutoff & filtered entries ─────────────────────────────────────────────
-  const cutoff = useMemo(() => {
-    if (rangePreset === 'all') return null
-    const days = parseInt(rangePreset, 10)
-    const d = new Date()
-    d.setDate(d.getDate() - days)
-    return d
-  }, [rangePreset])
+  const range = useMemo(() => resolveDateRange(dateRange), [dateRange])
 
   const allEntries: Entry[] = useMemo(() => {
     const e: Entry[] = []
@@ -149,14 +143,8 @@ export default function ReportPenaliDanniTab() {
   }, [penaliData, danniData])
 
   const filteredEntries: Entry[] = useMemo(() => {
-    return allEntries.filter(e => {
-      if (cutoff && e.date) {
-        const d = new Date(e.date)
-        if (!isNaN(d.getTime()) && d < cutoff) return false
-      }
-      return true
-    })
-  }, [allEntries, cutoff])
+    return allEntries.filter(e => isInRange(e.date, range))
+  }, [allEntries, range])
 
   // ── KPIs (7 cards) ────────────────────────────────────────────────────────
   const kpi = useMemo(() => {
@@ -367,26 +355,7 @@ export default function ReportPenaliDanniTab() {
           <p className="text-sm text-theme-text-secondary mt-0.5">Analisi completa e performance di danni e penali</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* Range presets */}
-          <div className="inline-flex rounded-full bg-theme-bg-tertiary/40 p-1 border border-theme-border">
-            {([
-              { k: '7' as RangePreset, l: '7g' },
-              { k: '30' as RangePreset, l: '30g' },
-              { k: '90' as RangePreset, l: '90g' },
-              { k: '365' as RangePreset, l: '12m' },
-              { k: 'all' as RangePreset, l: 'Tutto' },
-            ]).map(p => (
-              <button
-                key={p.k}
-                onClick={() => setRangePreset(p.k)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
-                  rangePreset === p.k
-                    ? 'bg-theme-bg-primary text-theme-text-primary shadow-sm border border-theme-border'
-                    : 'text-theme-text-secondary hover:text-theme-text-primary'
-                }`}
-              >{p.l}</button>
-            ))}
-          </div>
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
           <button
             onClick={fetchReports}
             disabled={loading}
