@@ -399,11 +399,12 @@ export default function ReportsTab() {
     const totalRentalRevenue = vehicles.reduce((s, v) => s + v.rentalRevenue, 0)
     const totalPenaltyRevenue = vehicles.reduce((s, v) => s + v.penaltyRevenue, 0)
     const totalDanniRevenue = vehicles.reduce((s, v) => s + v.danniRevenue, 0)
+    const totalAnticipatedRevenue = vehicles.reduce((s, v) => s + (v.anticipatedRevenue || 0), 0)
     const totalRevenue = vehicles.reduce((s, v) => s + v.totalRevenue, 0)
     const avgUtil = vehicles.length > 0
       ? vehicles.reduce((s, v) => s + v.utilizationRate, 0) / vehicles.length
       : 0
-    return { totalRented, totalRentalRevenue, totalPenaltyRevenue, totalDanniRevenue, totalRevenue, avgUtil, count: vehicles.length }
+    return { totalRented, totalRentalRevenue, totalPenaltyRevenue, totalDanniRevenue, totalAnticipatedRevenue, totalRevenue, avgUtil, count: vehicles.length }
   }
 
   function formatPercent(rate: number): string {
@@ -468,6 +469,11 @@ export default function ReportsTab() {
       </th>
       <th className="text-right px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('danniRevenue')}>
         Danni {sortField === 'danniRevenue' && (sortDir === 'asc' ? '↑' : '↓')}
+      </th>
+      {/* 2026-05-28: colonna Anticipato sempre visibile (prima era solo
+          nel dettaglio espanso). Allineata a Ricavo noleggio anticipato. */}
+      <th className="text-right px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('anticipatedRevenue' as keyof VehicleReport)}>
+        Anticipato {sortField === ('anticipatedRevenue' as keyof VehicleReport) && (sortDir === 'asc' ? '↑' : '↓')}
       </th>
       <th className="text-right px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('totalRevenue')}>
         TOTALE {sortField === 'totalRevenue' && (sortDir === 'asc' ? '↑' : '↓')}
@@ -721,11 +727,14 @@ export default function ReportsTab() {
           <td className="text-right px-4 py-3 text-theme-text-primary font-semibold">{formatCurrency(v.rentalRevenue)}</td>
           <td className="text-right px-4 py-3 text-yellow-400 font-semibold">{v.penaltyRevenue > 0 ? formatCurrency(v.penaltyRevenue) : '-'}</td>
           <td className="text-right px-4 py-3 text-red-400 font-semibold">{v.danniRevenue > 0 ? formatCurrency(v.danniRevenue) : '-'}</td>
-          <td className="text-right px-4 py-3 text-dr7-gold font-bold">{formatCurrency(v.totalRevenue)}</td>
+          {/* 2026-05-28: Anticipato sempre visibile (cyan come nel breakdown
+              mobile). Mostra '-' se 0 per coerenza con Penali/Danni. */}
+          <td className="text-right px-4 py-3 text-cyan-400 font-semibold">{(v.anticipatedRevenue || 0) > 0 ? formatCurrency(v.anticipatedRevenue || 0) : '-'}</td>
+          <td className="text-right px-4 py-3 text-dr7-gold font-bold">{formatCurrency(v.totalRevenue + (v.anticipatedRevenue || 0))}</td>
         </tr>
         {isExpanded && v.bookings && v.bookings.length > 0 && (
           <tr key={`${v.vehicleId}-details`}>
-            <td colSpan={11} className="px-4 py-2 bg-theme-bg-primary/30">
+            <td colSpan={12} className="px-4 py-2 bg-theme-bg-primary/30">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-theme-text-muted">
@@ -1086,6 +1095,12 @@ export default function ReportsTab() {
                     </span>
                     <span className="text-theme-text-muted">
                       Ricavo: <span className="font-bold text-dr7-gold">{formatCurrency(summary.totalRevenue)}</span>
+                    </span>
+                    {/* 2026-05-28: Ricavo anticipato visibile nell'header categoria
+                        (desktop + mobile) come richiesto. Mostrato anche a 0 per
+                        coerenza visuale tra categorie. */}
+                    <span className="text-theme-text-muted">
+                      Ricavo anticipato: <span className="font-bold text-cyan-400">{formatCurrency(summary.totalAnticipatedRevenue)}</span>
                     </span>
                   </div>
                 </div>
