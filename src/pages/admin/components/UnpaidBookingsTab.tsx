@@ -445,19 +445,39 @@ export default function UnpaidBookingsTab() {
         if (!isPaid(booking.payment_status)) return true
 
         const extensions = booking.booking_details?.extension_history || []
-        // Only NEW extensions explicitly marked as unpaid trigger Da Saldare.
-        // Legacy extensions saved before payment_status tracking existed have
-        // undefined and must NOT be treated as unpaid (they were paid).
+        // 2026-05-28: extension entra in "In attesa di pagamento" SOLO se
+        // status non-paid AND amount > 0. Estensioni Da Saldare a €0
+        // (es. solo cambio data senza extra) non hanno nulla da incassare,
+        // quindi non devono apparire nella lista insoluti.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (extensions.some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link')) return true
+        if (extensions.some((ext: any) => {
+          const unpaid = ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link'
+          if (!unpaid) return false
+          const amt = Number(ext.additional_amount) || 0
+          const paid = Number(ext.amount_paid) || 0
+          // Owes something only if there's actually a positive residual.
+          return (amt - paid) > 0
+        })) return true
 
         const penalties = booking.booking_details?.penalties || []
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (penalties.some((p: any) => !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial' || p.paymentStatus === 'nexi_pay_by_link')) return true
+        if (penalties.some((p: any) => {
+          const unpaid = !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial' || p.paymentStatus === 'nexi_pay_by_link'
+          if (!unpaid) return false
+          const amt = Number(p.amount ?? p.total ?? 0)
+          const paid = Number(p.amountPaid ?? 0)
+          return (amt - paid) > 0
+        })) return true
 
         const danni = booking.booking_details?.danni || []
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (danni.some((d: any) => !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial' || d.paymentStatus === 'nexi_pay_by_link')) return true
+        if (danni.some((d: any) => {
+          const unpaid = !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial' || d.paymentStatus === 'nexi_pay_by_link'
+          if (!unpaid) return false
+          const amt = Number(d.amount ?? d.total ?? 0)
+          const paid = Number(d.amountPaid ?? 0)
+          return (amt - paid) > 0
+        })) return true
 
         // Only keep for fattura items if the booking itself is NOT paid
         if (bookingIdsWithFatturaItems.has(booking.id) && !isPaid(booking.payment_status)) return true
