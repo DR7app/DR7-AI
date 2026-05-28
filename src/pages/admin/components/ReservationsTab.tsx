@@ -5427,8 +5427,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         currency: formData.currency.toUpperCase(),
         // Pay by Link bookings start as pending_payment/unpaid;
         // other payment methods start as confirmed/paid
-        status: (!editingId && isNexiPayByLink(formData.payment_method) && formData.payment_status !== 'paid')
-          ? 'pending' : formData.status === 'pending_payment' ? 'pending' : (formData.status || 'confirmed'),
+        // 2026-05-28: se l'admin ha spuntato "Conferma Prenotazione" il
+        // booking va creato come 'confirmed' anche con Pay by Link, cosi'
+        // il cron `cancel-unpaid-nexi-bookings` non lo prende in
+        // considerazione (filtra per status='pending') e nel calendario
+        // appare come confermato (rosso col nome cliente, non "Da Saldare").
+        // payment_status resta 'unpaid' per far vedere "Da saldare" finche'
+        // il cliente non paga il link. Allineato a CarWashBookingsTab.
+        status: (!editingId && confirmBooking)
+          ? 'confirmed'
+          : (!editingId && isNexiPayByLink(formData.payment_method) && formData.payment_status !== 'paid')
+            ? 'pending' : formData.status === 'pending_payment' ? 'pending' : (formData.status || 'confirmed'),
         payment_status: (!editingId && isNexiPayByLink(formData.payment_method) && formData.payment_status !== 'paid')
           ? 'unpaid' : formData.payment_status,
         payment_method: formData.payment_method,
