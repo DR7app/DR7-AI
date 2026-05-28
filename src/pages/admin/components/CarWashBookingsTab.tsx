@@ -2256,14 +2256,24 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       // con un messaggio chiaro all'operatore. L'admin doveva non poter
       // ignorare il conflitto: prima il codice loggava e proseguiva,
       // creando appuntamenti sovrapposti (caso reale verificato).
+      // 2026-05-28: direzione puo' sovrapporre con OTP. Se l'override
+      // 'carwash_slot_occupied' e' stato approvato (o per-operator bypass
+      // attivo) procediamo. Altrimenti scatta il modal OTP.
       if (hasConflict && conflictingBooking) {
-        logger.warn('Conflitto orario lavaggio:', conflictingBooking.customer_name, conflictDetails)
-        toast.error(
-          `Slot occupato — ${conflictingBooking.customer_name || 'altro cliente'} ha gia' un appuntamento ${conflictDetails}. ` +
-          `Scegli un orario diverso o sposta l'altra prenotazione.`,
-          { duration: 7000 }
-        )
-        return
+        if (override.hasOverride('carwash_slot_occupied')) {
+          logger.log('ADMIN OVERRIDE: slot conflict bypassato via OTP', conflictingBooking.customer_name, conflictDetails)
+        } else {
+          logger.warn('Conflitto orario lavaggio:', conflictingBooking.customer_name, conflictDetails)
+          const bypassed = override.requestOverride(
+            'carwash_slot_occupied',
+            `Slot ${formData.appointment_time} occupato da ${conflictingBooking.customer_name || 'altro cliente'} (${conflictDetails}). Sovrapporre richiede autorizzazione direzionale.`,
+          )
+          if (!bypassed) {
+            // Modal aperto — il save riprende dopo OTP approval via resume hook
+            return
+          }
+          // bypassed=true: per-operator bypass attivo, procediamo direttamente
+        }
       }
 
       // Nessun conflitto: procediamo con la creazione (force=true per
@@ -3989,7 +3999,36 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Ora *</label>
                   <select
                     value={formData.appointment_time}
-                    onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
+                    onChange={(e) => {
+                      // 2026-05-28: slot occupati SELEZIONABILI — direzione
+                      // decide se sovrascrivere con OTP. Stessa pattern del
+                      // preventivo slot picker. requestOverride rispetta il
+                      // per-operator role:bypass-otp (toggle in OperatoriTab).
+                      const newTime = e.target.value
+                      if (!newTime) { setFormData({ ...formData, appointment_time: '' }); return }
+                      // Inline busy check (stessa logica della render funzione
+                      // sotto, ma accessibile qui senza scope IIFE).
+                      const newDuration = getTotalDuration() || 60
+                      const conflict = busyBookingsOnDate.find(b => {
+                        const bookingTime = b.appointment_time
+                        if (!bookingTime) return false
+                        const existingSvc = carWashServices.find(s => s.name === b.service_name)
+                        const existingDuration = existingSvc?.durationMinutes || 60
+                        return checkTimeOverlap(newTime, newDuration, bookingTime, existingDuration as number)
+                      })
+                      if (!conflict) { setFormData({ ...formData, appointment_time: newTime }); return }
+                      const who = conflict.customer_name || 'altro cliente'
+                      if (override.hasOverride('carwash_slot_occupied')) {
+                        setFormData({ ...formData, appointment_time: newTime })
+                        return
+                      }
+                      setFormData({ ...formData, appointment_time: newTime })
+                      const bypassed = override.requestOverride(
+                        'carwash_slot_occupied',
+                        `Slot ${newTime} occupato da ${who} — sovrapporre richiede autorizzazione direzionale.`,
+                      )
+                      void bypassed // ignorato: il save controllera' hasOverride
+                    }}
                     className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                   >
                     <option value="">Seleziona orario</option>
@@ -4036,9 +4075,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
                       const renderSlot = (time: string) => {
                         const { busy, who } = isSlotBusy(time)
+                        // 2026-05-28: occupied slots ora SELEZIONABILI con
+                        // marker rosso "●". Click → OTP modal (gated dal
+                        // per-operator role:bypass-otp). Stessa pattern UX
+                        // del preventivo slot picker.
                         return (
-                          <option key={time} value={time} disabled={busy}>
-                            {time}{busy ? ` — occupato (${who})` : ''}
+                          <option key={time} value={time}>
+                            {busy ? `● ${time} — occupato (${who})` : time}
                           </option>
                         )
                       }
