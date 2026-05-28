@@ -104,8 +104,13 @@ const handler: Handler = async (event) => {
     }
 
     // Validate contact availability based on channel
-    const needsEmail = sendChannel === 'EMAIL_ONLY' || sendChannel === 'EMAIL_AND_WHATSAPP';
-    const needsWhatsapp = sendChannel === 'WHATSAPP_ONLY' || sendChannel === 'EMAIL_AND_WHATSAPP';
+    // 2026-05-28: review flow e' WhatsApp-only. Anche se il caller passa
+    // EMAIL_ONLY o EMAIL_AND_WHATSAPP (ad esempio da cron legacy o template
+    // di settings), ignoriamo l'email branch — solo WhatsApp esce. Cosi'
+    // nessun candidato riceve mai un'email recensione.
+    void sendChannel
+    const needsEmail = false
+    const needsWhatsapp = true
 
     if (needsEmail && !candidate.contact_available_email) {
       return {

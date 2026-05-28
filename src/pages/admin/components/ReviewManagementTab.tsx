@@ -346,14 +346,17 @@ export default function ReviewManagementTab() {
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  async function handleSend(candidateId: string, channel: 'EMAIL' | 'WHATSAPP' | 'BOTH') {
-    const channelMap: Record<string, string> = { EMAIL: 'EMAIL_ONLY', WHATSAPP: 'WHATSAPP_ONLY', BOTH: 'EMAIL_AND_WHATSAPP' }
+  async function handleSend(candidateId: string, _channel?: 'EMAIL' | 'WHATSAPP' | 'BOTH') {
+    // 2026-05-28: review flow e' WhatsApp-only. Il parametro `_channel`
+    // resta per compatibilita' coi caller esistenti ma viene ignorato:
+    // ogni invio recensione passa SEMPRE via Green API (WHATSAPP_ONLY).
+    void _channel
     setSendingId(candidateId)
     try {
       const res = await fetch(`${NETLIFY_BASE}/review-send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candidateId, sendChannel: channelMap[channel] || 'EMAIL_AND_WHATSAPP', sendMode: 'MANUAL' }),
+        body: JSON.stringify({ candidateId, sendChannel: 'WHATSAPP_ONLY', sendMode: 'MANUAL' }),
       })
       if (!res.ok) {
         const err = await res.json()
@@ -388,7 +391,7 @@ export default function ReviewManagementTab() {
   }
 
   async function handleApproveAndSend(candidateId: string) {
-    if (!confirm('Approvare questo cliente? Diventera\' idoneo a ricevere la richiesta recensione (l\'invio resta manuale via i bottoni Email/WhatsApp).')) return
+    if (!confirm('Approvare questo cliente? Diventera\' idoneo a ricevere la richiesta recensione via WhatsApp (clicca poi il bottone "Invia").')) return
     setSendingId(candidateId)
     try {
       // Approva soltanto — niente piu' invio automatico. La direzione
@@ -603,19 +606,22 @@ export default function ReviewManagementTab() {
 
     for (const candidate of eligibleToSend) {
       try {
-        const channel = candidate.customer_email && candidate.customer_phone
-          ? 'BOTH'
-          : candidate.customer_email
-            ? 'EMAIL'
-            : 'WHATSAPP'
-
+        // 2026-05-28: WhatsApp-only. Saltare i candidati senza telefono —
+        // niente fallback email.
+        if (!candidate.customer_phone) {
+          failed++
+          toast.loading(`Invio in corso: ${success + failed}/${eligibleToSend.length}`, { id: toastId })
+          continue
+        }
         const res = await fetch(`${NETLIFY_BASE}/review-send`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ candidateId: candidate.id, sendChannel: channel === 'BOTH' ? 'EMAIL_AND_WHATSAPP' : channel === 'EMAIL' ? 'EMAIL_ONLY' : 'WHATSAPP_ONLY', sendMode: 'AUTOMATIC' }),
+          body: JSON.stringify({ candidateId: candidate.id, sendChannel: 'WHATSAPP_ONLY', sendMode: 'AUTOMATIC' }),
         })
         if (res.ok) {
-          success++
+          const data = await res.json().catch(() => ({}))
+          if (data && data.success !== false) success++
+          else failed++
         } else {
           failed++
         }
@@ -946,16 +952,7 @@ export default function ReviewManagementTab() {
           <p className="text-sm text-theme-text-secondary mt-0.5">Sistema automatico di richiesta di recensione ai clienti</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => handleBulkSend()}
-            disabled={bulkSending}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-theme-bg-primary text-theme-text-primary text-sm font-semibold rounded-full border border-theme-border hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-            {bulkSending ? 'Invio…' : 'Invia Email'}
-          </button>
+          {/* 2026-05-28: rimosso bottone "Invia Email" — review flow WhatsApp-only */}
           <button
             onClick={() => handleBulkSend()}
             disabled={bulkSending}
@@ -1109,33 +1106,29 @@ export default function ReviewManagementTab() {
               <span className="text-sm text-theme-text-primary">Richiedi conferma manuale per casi gialli</span>
             </label>
 
-            {/* Canale auto noleggio */}
+            {/* Canale auto noleggio — 2026-05-28: WhatsApp-only (Email/Both rimossi) */}
             <div>
               <label className="block text-sm text-theme-text-secondary mb-1">Canale auto noleggio</label>
               <select
-                value={settingsDraft.auto_channel_rental}
+                value={settingsDraft.auto_channel_rental === 'WHATSAPP' || settingsDraft.auto_channel_rental === 'DISABLED' ? settingsDraft.auto_channel_rental : 'WHATSAPP'}
                 onChange={e => setSettingsDraft({ ...settingsDraft, auto_channel_rental: e.target.value as typeof settingsDraft.auto_channel_rental })}
                 className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-border rounded-xl text-sm text-theme-text-primary"
               >
                 <option value="DISABLED">Disattivato</option>
-                <option value="EMAIL">Email</option>
                 <option value="WHATSAPP">WhatsApp</option>
-                <option value="BOTH">Entrambi</option>
               </select>
             </div>
 
-            {/* Canale auto lavaggio */}
+            {/* Canale auto lavaggio — 2026-05-28: WhatsApp-only */}
             <div>
               <label className="block text-sm text-theme-text-secondary mb-1">Canale auto lavaggio</label>
               <select
-                value={settingsDraft.auto_channel_wash}
+                value={settingsDraft.auto_channel_wash === 'WHATSAPP' || settingsDraft.auto_channel_wash === 'DISABLED' ? settingsDraft.auto_channel_wash : 'WHATSAPP'}
                 onChange={e => setSettingsDraft({ ...settingsDraft, auto_channel_wash: e.target.value as typeof settingsDraft.auto_channel_wash })}
                 className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-border rounded-xl text-sm text-theme-text-primary"
               >
                 <option value="DISABLED">Disattivato</option>
-                <option value="EMAIL">Email</option>
                 <option value="WHATSAPP">WhatsApp</option>
-                <option value="BOTH">Entrambi</option>
               </select>
             </div>
 
@@ -1172,14 +1165,15 @@ export default function ReviewManagementTab() {
             Placeholder disponibili: {PLACEHOLDERS.map(p => <code key={p} className="mx-1 px-1.5 py-0.5 bg-theme-bg-hover rounded text-dr7-gold">{p}</code>)}
           </p>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {TEMPLATE_KEYS.map(key => {
+            {/* 2026-05-28: filtra solo i template WhatsApp — review flow WhatsApp-only */}
+            {TEMPLATE_KEYS.filter(k => k.includes('WHATSAPP')).map(key => {
               const t = templatesDraft.find(t => t.template_key === key) || {
                 id: key,
                 template_key: key,
-                subject: key.includes('EMAIL') ? '' : null,
+                subject: null,
                 body: '',
               }
-              const isEmail = key.includes('EMAIL')
+              const isEmail = false
               return (
                 <div key={key} className="bg-theme-bg-primary border border-theme-border rounded-2xl p-4">
                   <h4 className="text-sm font-semibold text-theme-text-primary mb-3">{TEMPLATE_LABELS[key]}</h4>
@@ -1238,18 +1232,7 @@ export default function ReviewManagementTab() {
             <div className="flex gap-1.5 justify-end items-center flex-wrap">
               {isEligible && (
                 <>
-                  {candidate.customer_email && (
-                    <button
-                      onClick={() => handleSend(candidate.id, 'EMAIL')}
-                      disabled={sendingId === candidate.id}
-                      title="Invia Email"
-                      className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-theme-border bg-theme-bg-primary text-theme-text-secondary hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                    </button>
-                  )}
+                  {/* 2026-05-28: rimosso bottone Email per-riga — WhatsApp-only */}
                   {candidate.customer_phone && (
                     <button
                       onClick={() => handleSend(candidate.id, 'WHATSAPP')}
