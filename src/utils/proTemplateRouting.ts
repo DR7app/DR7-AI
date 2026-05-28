@@ -121,6 +121,12 @@ export const OLD_TO_PRO: Record<string, string> = {
   // the canonical pro_annullamento_cliente slot (was pinned to a specific
   // pro_custom_* key). LABEL_FALLBACKS keeps the legacy custom alive.
   website_booking_cancelled_customer: 'pro_annullamento_cliente',
+
+  // Prime Wash — servizio finito ("AUTO PRONTA" button su CarWashBookingsTab,
+  // sia per Lavaggi che per Meccanica). Single event for both service types;
+  // il resolver sceglie il template per service_type su template a Tipo
+  // servizio = Prime Wash.
+  service_ready_customer: 'pro_auto_pronta',
 }
 
 /**

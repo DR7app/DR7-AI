@@ -1221,6 +1221,90 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
   }
 
+  // AUTO PRONTA — one-shot per booking. Persistence: booking_details.auto_pronta_sent_at
+  // (JSONB, no schema migration). Optimistic local Set keeps the UI greyed
+  // istantaneamente prima del refetch.
+  const [autoProntaSentIds, setAutoProntaSentIds] = useState<Set<string>>(new Set())
+  const [autoProntaSending, setAutoProntaSending] = useState<Set<string>>(new Set())
+
+  const isAutoProntaSent = (booking: CarWashBooking) =>
+    autoProntaSentIds.has(booking.id) || !!booking.booking_details?.auto_pronta_sent_at
+
+  async function handleAutoPronta(booking: CarWashBooking) {
+    if (!booking.id) return
+    if (isAutoProntaSent(booking)) return
+    if (autoProntaSending.has(booking.id)) return
+
+    const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
+    if (!custPhone) {
+      toast.error('Numero di telefono cliente mancante — impossibile inviare WhatsApp')
+      return
+    }
+
+    const custName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente'
+    const firstName = custName.split(' ')[0] || 'Cliente'
+    const bookingRef = (booking.id || '').substring(0, 8).toUpperCase()
+    const svcType = (booking as unknown as { service_type?: string })?.service_type || 'car_wash'
+
+    setAutoProntaSending(prev => { const next = new Set(prev); next.add(booking.id); return next })
+    const toastId = toast.loading('Invio notifica AUTO PRONTA al cliente...')
+
+    try {
+      // 1. Persist flag in DB so button stays greyed across reloads /
+      //    other admins. Merge into existing booking_details JSONB.
+      const newDetails = {
+        ...(booking.booking_details || {}),
+        auto_pronta_sent_at: new Date().toISOString(),
+      }
+      const { error: updErr } = await supabase
+        .from('bookings')
+        .update({ booking_details: newDetails })
+        .eq('id', booking.id)
+      if (updErr) throw updErr
+
+      // 2. Send WhatsApp via Pro template resolver (service_ready_customer →
+      //    pro_auto_pronta, picked per service_type).
+      const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customPhone: custPhone,
+          templateKey: 'service_ready_customer',
+          booking: { service_type: svcType },
+          templateVars: {
+            customer_name: firstName,
+            nome: firstName,
+            booking_id: bookingRef,
+            booking_ref: bookingRef,
+            service_name: booking.service_name || '',
+            vehicle_name: booking.vehicle_name || booking.booking_details?.vehicleMakeModel || '',
+            vehicle_plate: booking.vehicle_plate || '',
+            targa: booking.vehicle_plate || '',
+          },
+          skipHeader: true,
+        }),
+      })
+      const waResult = await waResp.json().catch(() => ({}))
+      if (!waResp.ok || waResult?.skipped) {
+        toast.error('Nessun template configurato in Messaggi di Sistema Pro per "Auto pronta / Servizio finito" (Prime Wash). Verifica il template: ATTIVO, body non vuoto, evento "service_ready_customer" tra gli eventi gestiti, Tipo servizio = Prime Wash.', { id: toastId, duration: 12000 })
+      } else {
+        toast.success('WhatsApp AUTO PRONTA inviato al cliente', { id: toastId })
+      }
+
+      // 3. Mark as sent locally (the DB flag already persisted above).
+      setAutoProntaSentIds(prev => { const next = new Set(prev); next.add(booking.id); return next })
+      logAdminAction('auto_pronta_sent', 'carwash_booking', booking.id, {
+        ...buildCarWashContext(booking),
+        customer: custName,
+      })
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err)
+      toast.error('Errore: ' + errMsg, { id: toastId })
+    } finally {
+      setAutoProntaSending(prev => { const next = new Set(prev); next.delete(booking.id); return next })
+    }
+  }
+
   const [generatingInvoice, setGeneratingInvoice] = useState(false)
 
   async function handleGenerateInvoice(booking: CarWashBooking) {
@@ -4549,6 +4633,26 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           <button onClick={() => handleGenerateInvoice(booking)} disabled={generatingInvoice} className={`px-3 py-1.5 ${generatingInvoice ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-dr7-gold/20 hover:bg-dr7-gold/40 text-dr7-gold'} rounded-full text-xs font-medium transition-colors min-h-[44px]`}>
                             {generatingInvoice ? '...' : 'Fattura'}
                           </button>
+                          {booking.customer_name !== 'Lavaggio Rientro' && (() => {
+                            const sent = isAutoProntaSent(booking)
+                            const sending = autoProntaSending.has(booking.id)
+                            return (
+                              <button
+                                onClick={() => handleAutoPronta(booking)}
+                                disabled={sent || sending}
+                                title={sent ? 'WhatsApp AUTO PRONTA già inviato' : 'Notifica al cliente che l\'auto è pronta'}
+                                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors min-h-[44px] ${
+                                  sent
+                                    ? 'bg-theme-bg-hover text-theme-text-muted cursor-not-allowed opacity-60'
+                                    : sending
+                                      ? 'bg-emerald-500/15 text-emerald-500 cursor-wait'
+                                      : 'bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-500'
+                                }`}
+                              >
+                                {sent ? 'Già inviata' : sending ? '...' : 'Auto Pronta'}
+                              </button>
+                            )
+                          })()}
                           {booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
                             <button onClick={() => handleResendPaymentLink(booking)} className="px-3 py-1.5 bg-dr7-gold/20 hover:bg-dr7-gold/40 text-dr7-gold rounded-full text-xs font-medium transition-colors min-h-[44px]">Rinvia Link</button>
                           )}
@@ -4661,7 +4765,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     )}
 
                     {/* Action buttons */}
-                    <div className="px-4 pb-4 flex gap-2">
+                    <div className="px-4 pb-4 flex gap-2 flex-wrap">
                       <button
                         onClick={() => openEditBooking(booking)}
                         className="flex-1 py-2.5 rounded-xl bg-dr7-gold/10 hover:bg-dr7-gold/20 text-dr7-gold text-xs font-semibold transition-all active:scale-[0.98]"
@@ -4675,6 +4779,25 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       >
                         {generatingInvoice ? '...' : 'Fattura'}
                       </button>
+                      {!isRientro && (() => {
+                        const sent = isAutoProntaSent(booking)
+                        const sending = autoProntaSending.has(booking.id)
+                        return (
+                          <button
+                            onClick={() => handleAutoPronta(booking)}
+                            disabled={sent || sending}
+                            className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-[0.98] ${
+                              sent
+                                ? 'bg-theme-bg-hover text-theme-text-muted cursor-not-allowed opacity-60'
+                                : sending
+                                  ? 'bg-emerald-500/10 text-emerald-500 cursor-wait'
+                                  : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500'
+                            }`}
+                          >
+                            {sent ? 'Già inviata' : sending ? '...' : 'Auto Pronta'}
+                          </button>
+                        )
+                      })()}
                       {booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
                         <button
                           onClick={() => handleResendPaymentLink(booking)}
