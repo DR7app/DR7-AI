@@ -3767,13 +3767,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         logger.log('[handleConfirmExtend] ✅ WhatsApp admin notification sent')
 
         // Send to customer phone — resolve from multiple sources.
-        // CRITICAL: NON inviare la conferma cliente se l'estensione richiede
-        // ancora un pagamento. Altrimenti il cliente riceve "estensione
-        // confermata" PRIMA di aver pagato. La conferma post-pagamento parte
-        // dal callback Nexi (payment_received_extension) o quando l'admin
-        // marca pagato manualmente.
-        const extensionFullySettled = additionalAmount <= 0
-          || extendData.extension_payment_status === 'paid'
+        // 2026-05-28: rimosso il guard extensionFullySettled. Il cliente HA
+        // GIA' la macchina: deve sapere che l'estensione e' stata confermata
+        // a prescindere dal pagamento. Per "Nexi Pay by Link" parte ANCHE
+        // il messaggio col link (sotto, riga ~3908). Per "Da Saldare" il
+        // template {payment_status} sara' "Da saldare" — il cliente vede
+        // le nuove date + saldera' dopo.
         let customerPhone = extendingBooking.customer_phone || extendingBooking.booking_details?.customer?.phone
 
         // Fallback: look up phone from customers_extended if not on the booking
@@ -3790,25 +3789,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           }
         }
 
-        if (customerPhone && extensionFullySettled) {
-          const customerFirstName = extendingBooking.booking_details?.customer?.firstName
-            || extendingBooking.customer_name?.split(' ')[0]
-            || 'Cliente'
-
-          const extraDaysCount = Math.max(
-            1,
-            Math.ceil((newDropoffDateTime.getTime() - prevDropoff.getTime()) / (1000 * 60 * 60 * 24))
-          )
-          const vehicleNameForMsg = newVehicle
-            ? newVehicle.display_name
-            : (extendingBooking.vehicle_name || 'N/A')
-
-          // Per le estensioni mandiamo al cliente lo STESSO template della
-          // conferma noleggio (pro_conferma_noleggio) — l'utente non vuole un
-          // messaggio "Modifica" o "Estensione" separato, ma la conferma
-          // riepilogativa con i nuovi dati. Passiamo l'oggetto booking
-          // aggiornato cosi' send-whatsapp-notification popola tutte le var.
-          void customerFirstName; void vehicleNameForMsg; void extraDaysCount  // var non usate sotto
+        if (customerPhone) {
+          // 2026-05-28: invio SEMPRE — il cliente ha gia' la macchina,
+          // deve sapere che l'estensione e' stata confermata indipendentemente
+          // dal pagamento. {payment_status} nel template Pro mostrera'
+          // "Da saldare" / "Pagato" / "Da saldare" secondo il caso.
           const updatedBooking = {
             ...extendingBooking,
             ...(newVehicle ? {
@@ -3818,6 +3803,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             } : {}),
             dropoff_date: newDropoffDateTime.toISOString(),
             booking_details: updatedBookingDetails,
+            // Riflette lo stato reale (paid/pending/nexi_pay_by_link) cosi'
+            // il template var {payment_status} si risolve correttamente.
+            payment_status: extendData.extension_payment_status === 'paid'
+              ? 'paid'
+              : extendingBooking.payment_status,
             isEdit: false, // forza il template rental_new (conferma) invece di rental_modified
           }
           const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
@@ -3833,12 +3823,41 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           if (!waResp.ok || waResult?.skipped) {
             toast.error('Template mancante in Messaggi di Sistema Pro: pro_conferma_noleggio')
           } else {
-            logger.log('[handleConfirmExtend] ✅ WhatsApp customer notification sent to', customerPhone)
+            logger.log('[handleConfirmExtend] WhatsApp customer notification sent to', customerPhone, 'status=', extendData.extension_payment_status)
           }
-        } else if (!customerPhone) {
-          logger.warn('[handleConfirmExtend] ⚠️ No customer phone — skipped customer notification')
+
+          // 2026-05-28: generate extension contract + send the PDF link via
+          // WhatsApp. Customer needs the updated contract regardless of
+          // payment status (he has the car). Non-blocking on failure.
+          try {
+            const contractRes = await authFetch('/.netlify/functions/generate-extension-contract', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bookingId: extendingBooking.id }),
+            })
+            const contractData = await contractRes.json().catch(() => ({}))
+            if (contractRes.ok && contractData?.url) {
+              logger.log('[handleConfirmExtend] Extension contract generated:', contractData.url)
+              const contractMsg = `Ciao, ecco il contratto aggiornato dell'estensione:\n${contractData.url}\n\n— DR7`
+              await fetch('/.netlify/functions/send-whatsapp-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  customPhone: customerPhone,
+                  customMessage: contractMsg,
+                  skipHeader: true,
+                }),
+              })
+              logger.log('[handleConfirmExtend] Contract link sent to customer')
+            } else {
+              logger.warn('[handleConfirmExtend] Extension contract generation failed:', contractData?.error || contractRes.status)
+              toast.error(`Contratto estensione non generato: ${contractData?.error || 'errore sconosciuto'}`)
+            }
+          } catch (contractErr) {
+            logger.warn('[handleConfirmExtend] Extension contract send failed (non-blocking):', contractErr)
+          }
         } else {
-          logger.log('[handleConfirmExtend] ⏸️ Conferma cliente NON inviata: estensione con pagamento ancora pendente (' + extendData.extension_payment_status + '). Verrà inviata dopo il pagamento.')
+          logger.warn('[handleConfirmExtend] No customer phone — skipped customer notification')
         }
       } catch (whatsappError) {
         console.error('[handleConfirmExtend] ⚠️ WhatsApp notification failed:', whatsappError)
