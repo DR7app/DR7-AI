@@ -2267,6 +2267,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           sconto_note: scontoNote,
           sconto_pre: scontoAmount > 0 ? formatEur(scontoPre) : '',
           sconto_post: formatEur(scontoPost),
+          // {sconto_prezzo}: come {sconto_post} (prezzo finale dopo sconto)
+          // ma VUOTO quando non c'e' sconto. Utile per template che mostrano
+          // solo il numero senza la parola "sconto" o la nota, e devono
+          // sparire del tutto senza sconto.
+          sconto_prezzo: scontoAmount > 0 ? formatEur(scontoPost) : '',
           // Alias non-"sconto" — usali nei template "Preventivo senza sconto"
           // per evitare la parola "sconto" nel nome variabile.
           // Stesso swap del 'total' qui sopra: se il coefficient dinamico ha

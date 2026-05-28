@@ -915,6 +915,7 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
         items: [
             { key: 'total', description: 'Il prezzo finale (sempre valorizzato)', example: '€1.290,00' },
             { key: 'sconto', description: 'Riga sconto pronta (vuota se nessuno sconto)', example: 'sconto valido 24h €1.290,00', aliases: ['sconto_line'] },
+            { key: 'sconto_prezzo', description: 'Solo il prezzo finale dopo sconto (vuoto se nessuno sconto)', example: '€1.290,00' },
         ],
         recipes: [
             {
@@ -926,6 +927,11 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
                 label: 'Preventivo con sconto (la riga sconto si nasconde se non applicato)',
                 snippet: 'Prezzo: {total}\n{sconto}',
                 preview: 'Prezzo: €1.290,00\nsconto valido 24h €1.290,00',
+            },
+            {
+                label: 'Preventivo con sconto — solo prezzo (senza la parola "sconto")',
+                snippet: 'Prezzo: {total}\n{sconto_prezzo}',
+                preview: 'Prezzo: €1.290,00\n€1.290,00',
             },
         ],
     },

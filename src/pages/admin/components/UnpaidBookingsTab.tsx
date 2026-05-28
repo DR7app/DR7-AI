@@ -2412,7 +2412,13 @@ export default function UnpaidBookingsTab() {
           // ma TUTTI i bottoni (Pagato / Invia Link / Link Parziale / Parziale)
           // sparivano insieme al badge "In attesa di pagamento", impedendo
           // all'admin di incassare il resto.
-          const isPending = booking.payment_status === 'pending' || booking.payment_status === 'unpaid' || booking.payment_status === 'partial'
+          // 2026-05-28 bis: allineato al filtro lista (vedi righe ~440-486):
+          // qualsiasi status non-paid mantiene visibili i bottoni. Senza questo,
+          // bookings con payment_status = 'nexi_pay_by_link' / null / '' (es.
+          // dopo "Invia Link" o righe legacy/test) restavano nella lista senza
+          // alcun bottone, lasciando l'admin senza modo di incassare.
+          const isPaidStatus = (s: string | null | undefined) => s === 'paid' || s === 'completed' || s === 'succeeded'
+          const isPending = !isPaidStatus(booking.payment_status)
           const pendingExts = getPendingExtensions(booking)
           const bkKey = `noleggio:${booking.id}`
           const editKey = `edit:noleggio:${booking.id}`

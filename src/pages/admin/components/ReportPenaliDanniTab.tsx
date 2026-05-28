@@ -272,6 +272,7 @@ export default function ReportPenaliDanniTab() {
 
   // ── Confronto periodo (current cutoff vs previous of same length) ────────
   const confronto = useMemo(() => {
+    const cutoff = range.from
     if (!cutoff) return null
     const periodMs = Date.now() - cutoff.getTime()
     const prevCutoff = new Date(cutoff.getTime() - periodMs)
@@ -292,7 +293,7 @@ export default function ReportPenaliDanniTab() {
       penali: { current: curPenali, previous: prevPenali, pct: pct(curPenali, prevPenali) },
       totale: { current: curDanni + curPenali, previous: prevDanni + prevPenali, pct: pct(curDanni + curPenali, prevDanni + prevPenali) },
     }
-  }, [cutoff, allEntries])
+  }, [range.from, allEntries])
 
   // ── Previsioni (linear projection from last 30 days → next 30) ──────────
   const previsioni = useMemo(() => {
