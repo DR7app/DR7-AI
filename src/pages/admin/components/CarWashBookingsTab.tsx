@@ -1034,6 +1034,49 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       if (!override.hasOverride('wash.delete')) return
     }
     try {
+      // 2026-05-28: notifica WhatsApp al CLIENTE prima della delete.
+      // Template: pro_annullamento_cliente (legacy event
+      // website_booking_cancelled_customer). Skip se non c'e' phone.
+      // Lanciato qui — non in attesa della delete — cosi' una WhatsApp
+      // failure non blocca l'eliminazione (best-effort).
+      try {
+        const bk = bookings.find(b => b.id === bookingId)
+        const customerPhone = bk?.customer_phone || bk?.booking_details?.customer?.phone || ''
+        if (customerPhone) {
+          fetch('/.netlify/functions/send-whatsapp-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              templateKey: 'website_booking_cancelled_customer',
+              customPhone: customerPhone,
+              isCustomerMessage: true,
+              booking: {
+                id: bookingId,
+                service_type: 'car_wash',
+                service_name: bk?.service_name || '',
+                customer_name: bk?.customer_name || customerName,
+                customer_email: bk?.customer_email || '',
+                customer_phone: customerPhone,
+                appointment_date: bk?.appointment_date || '',
+                appointment_time: bk?.appointment_time || '',
+                vehicle_plate: bk?.vehicle_plate || bk?.booking_details?.vehicle?.plate || '',
+                price_total: bk?.price_total || 0,
+                payment_status: bk?.payment_status || '',
+                booking_details: bk?.booking_details || {},
+              },
+            }),
+          }).then(r => {
+            logger.log('[CarWash Cancel] WhatsApp notification dispatched, status:', r.status)
+          }).catch(waErr => {
+            logger.warn('[CarWash Cancel] WhatsApp notification failed (non-blocking):', waErr)
+          })
+        } else {
+          logger.log('[CarWash Cancel] Customer phone missing — WhatsApp notification skipped')
+        }
+      } catch (notifyErr) {
+        logger.warn('[CarWash Cancel] Notification preparation failed:', notifyErr)
+      }
+
       // Try to delete from Google Calendar
       try {
         await fetch('/.netlify/functions/delete-calendar-event', {
