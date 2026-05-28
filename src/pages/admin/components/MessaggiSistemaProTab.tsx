@@ -188,6 +188,8 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; servic
       'mechanical_confirmed_da_saldare',
       'mechanical_paid_cash', 'mechanical_paid_card', 'mechanical_paid_bank_transfer',
       'mechanical_paid_paypal', 'mechanical_paid_wallet',
+      // Auto pronta / lavaggio concluso (bottone "Auto Pronta" su CarWashBookingsTab)
+      'service_ready_customer',
     ],
   },
   {
