@@ -2296,40 +2296,38 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       if (!schedulingValidation.isValid) {
         console.error('❌ Scheduling validation failed:', schedulingValidation.errors)
 
-        // Build error message
-        let errorMessage = '🚫 CONFLITTO DI PROGRAMMAZIONE\n\n'
-        errorMessage += 'La prenotazione lavaggio viola le regole di programmazione obbligatorie:\n\n'
-
-        schedulingValidation.errors.forEach((error, index) => {
-          errorMessage += `${index + 1}. ${error.message}\n\n`
-        })
-
-        errorMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
-        errorMessage += '📋 REGOLE DI PROGRAMMAZIONE:\n\n'
-        errorMessage += '• LAVAGGIO + RICONSEGNA → Gap minimo 30 minuti\n'
-        errorMessage += '• LAVAGGIO + RITIRO → Gap minimo 15 minuti\n'
-        errorMessage += '• LAVAGGIO + LAVAGGIO → Nessun evento simultaneo\n\n'
-
-        // Add suggested slots if available
-        if (schedulingValidation.suggestedSlots && schedulingValidation.suggestedSlots.length > 0) {
-          errorMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
-          errorMessage += '✅ ORARI DISPONIBILI SUGGERITI:\n\n'
-          schedulingValidation.suggestedSlots.slice(0, 3).forEach((slot, index) => {
-            const slotDate = new Date(slot)
-            errorMessage += `${index + 1}. ${slotDate.toLocaleDateString('it-IT')} alle ${slotDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}\n`
+        // 2026-05-28: la validazione scheduling (LAVAGGIO+LAVAGGIO simultaneo,
+        // gap LAVAGGIO+RICONSEGNA 30min, gap LAVAGGIO+RITIRO 15min) NON deve
+        // essere un hard-block. Direzione/operatori con `role:bypass-otp`
+        // possono sovrapporre direttamente; gli altri ricevono il modal OTP
+        // 'carwash_slot_occupied' e il save riprende dopo l'approvazione
+        // (via resume hook). Prima qui partiva un toast.error che impediva
+        // anche a Super Admin di forzare uno slot occupato — bug visto
+        // in produzione: button Conferma greyed pure con bypass attivo.
+        if (override.hasOverride('carwash_slot_occupied')) {
+          logger.log('ADMIN OVERRIDE: scheduling validation bypassata via OTP', schedulingValidation.errors)
+        } else {
+          // Build error message per il modal OTP (la direzione vede esattamente
+          // quale regola viene violata e con quale prenotazione).
+          let errorMessage = 'CONFLITTO DI PROGRAMMAZIONE\n\n'
+          errorMessage += 'La prenotazione lavaggio viola le regole di programmazione:\n\n'
+          schedulingValidation.errors.forEach((error, index) => {
+            errorMessage += `${index + 1}. ${error.message}\n\n`
           })
-          errorMessage += '\n'
+          errorMessage += 'Sovrapporre richiede autorizzazione direzionale.'
+
+          const bypassed = override.requestOverride('carwash_slot_occupied', errorMessage)
+          if (!bypassed) {
+            // Modal aperto — il save riprende dopo OTP approval via resume hook
+            setSubmitting(false)
+            submitLockRef.current = false
+            return
+          }
+          // bypassed=true: per-operator bypass attivo, procediamo direttamente
         }
-
-        errorMessage += 'Modifica l\'orario per rispettare le regole di programmazione.'
-
-        toast.error(errorMessage, { duration: 8000 })
-        setSubmitting(false)
-        submitLockRef.current = false
-        return
+      } else {
+        logger.log('✅ Scheduling validation passed')
       }
-
-      logger.log('✅ Scheduling validation passed')
 
       // ADMIN PANEL: Always allow bookings, just show warning if there's a conflict
       logger.log('🔧 ADMIN PANEL: Checking for conflicts (informational only)')
