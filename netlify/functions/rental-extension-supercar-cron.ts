@@ -22,7 +22,11 @@ const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
 
 const TEMPLATE_LABEL = 'Richiesta prolungamento SUPERCAR'
-const SUPERCAR_CATEGORY = 'exotic'
+// 2026-05-28: era 'exotic' literal. Dopo migrazione Centralina Pro la
+// categoria ha id 'supercars' (o custom). Match su set + case-insensitive
+// per non perdere bookings — stesso alias supercars<->exotic usato
+// ovunque (vedi category_alias_supercars_exotic memory).
+const SUPERCAR_CATEGORIES = new Set(['exotic', 'exotic_cars', 'supercars', 'supercar'])
 const MIN_DURATION_HOURS = 72
 
 function romeHour(d: Date = new Date()): number {
@@ -153,7 +157,8 @@ export const handler: Handler = async () => {
         const category = Array.isArray(vehiclesField)
             ? vehiclesField[0]?.category
             : vehiclesField?.category
-        if (category !== SUPERCAR_CATEGORY) {
+        const categoryNorm = String(category || '').toLowerCase().trim()
+        if (!SUPERCAR_CATEGORIES.has(categoryNorm)) {
             skipped++
             continue
         }

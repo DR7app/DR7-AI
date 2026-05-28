@@ -229,7 +229,42 @@ const handler: Handler = async (event) => {
         } catch (e) {
           console.error('[send-whatsapp-notification] custom vars load failed (non-fatal):', e instanceof Error ? e.message : String(e));
         }
-        // Caller-provided vars overlay the custom ones
+        // 2026-05-28: ALSO inject booking-derived vars so the templateKey
+        // branch has the same placeholders as the legacy messageKey branch.
+        // Bug: cancellation template used {custName}/{bookingRef} and they
+        // came through as literal text (then stripped by the safety net),
+        // leaving "Salve ," instead of "Salve Mario,".
+        if (booking) {
+          const customerName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente';
+          const bookingShortId = booking.id ? String(booking.id).substring(0, 8).toUpperCase() : '';
+          const bookingDerived: Record<string, string> = {
+            nome: customerName.split(' ')[0],
+            customer_name: customerName,
+            cliente: customerName,
+            custName: customerName,
+            full_name: customerName,
+            fullName: customerName,
+            customer_email: booking.customer_email || booking.booking_details?.customer?.email || '',
+            customer_phone: booking.customer_phone || booking.booking_details?.customer?.phone || '',
+            booking_id: bookingShortId,
+            booking_ref: bookingShortId,
+            bookingRef: bookingShortId,
+            ref: bookingShortId,
+            reference: bookingShortId,
+            codice: bookingShortId,
+            vehicle_name: booking.vehicle_name || '',
+            plate: booking.vehicle_plate || booking.booking_details?.vehicle?.plate || '',
+            targa: booking.vehicle_plate || booking.booking_details?.vehicle?.plate || '',
+            service_name: booking.service_name || booking.booking_details?.serviceName || booking.booking_details?.service_name || '',
+            servizio: booking.service_name || booking.booking_details?.serviceName || '',
+          };
+          // mergedVars stay authoritative (custom DB vars + caller templateVars)
+          // — booking-derived only fills the gaps.
+          for (const [k, v] of Object.entries(bookingDerived)) {
+            if (mergedVars[k] === undefined || mergedVars[k] === '') mergedVars[k] = v;
+          }
+        }
+        // Caller-provided vars overlay everything else
         if (templateVars && typeof templateVars === 'object') {
           mergedVars = { ...mergedVars, ...templateVars };
         }
