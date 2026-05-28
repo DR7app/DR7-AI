@@ -2357,11 +2357,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
               const cap = pkg.is_quantity_buyable ? Math.max(1, Number(pkg.max_quantity) || 2) : 1
               const q = Math.max(0, Math.min(cap, qty))
               if (q <= 0) continue
-              const totalKm = pkg.km * q
               const totalPrice = Math.round(pkg.price * q * 100) / 100
-              const labelStr = q > 1
-                ? `${pkg.label} × ${q} ${totalKm} Km`
-                : `${pkg.label} ${totalKm} Km`
+              // 2026-05-28: la label del pacchetto include gia' i km
+              // (default `Pacchetto ${km} km` in convertProConfig.ts) — non
+              // riappenderli o WhatsApp mostra "Pacchetto 200 km 200 Km".
+              const labelStr = q > 1 ? `${pkg.label} × ${q}` : pkg.label
               lines.push(`${labelStr} = ${formatEur(totalPrice)}`)
             }
             // Legacy: experience_km_quotes (Servizi Extra al km, vecchio
