@@ -2407,7 +2407,12 @@ export default function UnpaidBookingsTab() {
           const plate = booking.vehicle_plate || booking.booking_details?.vehicle?.plate || booking.booking_details?.vehicle_plate || ''
           const pickupDate = booking.pickup_date || booking.booking_details?.pickup_date
           const dropoffDate = booking.dropoff_date || booking.booking_details?.dropoff_date
-          const isPending = booking.payment_status === 'pending' || booking.payment_status === 'unpaid'
+          // 2026-05-28: 'partial' incluso — senza questo, dopo aver registrato
+          // un pagamento parziale la riga restava visibile (residuo mostrato)
+          // ma TUTTI i bottoni (Pagato / Invia Link / Link Parziale / Parziale)
+          // sparivano insieme al badge "In attesa di pagamento", impedendo
+          // all'admin di incassare il resto.
+          const isPending = booking.payment_status === 'pending' || booking.payment_status === 'unpaid' || booking.payment_status === 'partial'
           const pendingExts = getPendingExtensions(booking)
           const bkKey = `noleggio:${booking.id}`
           const editKey = `edit:noleggio:${booking.id}`
