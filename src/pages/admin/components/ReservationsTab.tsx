@@ -3803,11 +3803,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             } : {}),
             dropoff_date: newDropoffDateTime.toISOString(),
             booking_details: updatedBookingDetails,
-            // Riflette lo stato reale (paid/pending/nexi_pay_by_link) cosi'
-            // il template var {payment_status} si risolve correttamente.
+            // 2026-05-28: il template {payment_status} riflette lo stato
+            // dell'ESTENSIONE, non del booking originale. Il messaggio sta
+            // confermando l'estensione: se questa e' "Da Saldare" o "Nexi
+            // Pay by Link" il cliente deve vedere "Da saldare", anche se
+            // il booking originale era gia' pagato in pieno. Altrimenti
+            // arriva "Pagato" anche quando in realta' deve ancora saldare
+            // l'estensione (bug riportato 2026-05-28: extension Da Saldare
+            // su booking originale paid -> messaggio "Pagato").
             payment_status: extendData.extension_payment_status === 'paid'
               ? 'paid'
-              : extendingBooking.payment_status,
+              : 'pending',
             isEdit: false, // forza il template rental_new (conferma) invece di rental_modified
           }
           const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
