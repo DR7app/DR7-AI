@@ -1870,17 +1870,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
 
     // Handle Nexi Pay by Link.
-    // REGOLA UI (confermata 2026-05-27): il link parte SOLO se Conferma
-    // Prenotazione e' OFF. Quando l'admin spunta Conferma, vince la
-    // conferma del lavaggio — l'admin si occupa del pagamento di persona,
-    // il cliente NON riceve il link (sarebbe doppio messaggio
-    // contraddittorio: "prenotazione confermata" + "completa il pagamento
-    // per confermare"). La prenotazione resta comunque confermata (status
-    // = 'confirmed' + manually_confirmed=true) quindi il cron non la
-    // cancellera' dopo 1h anche senza pagamento online.
+    // 2026-05-28: il link parte SEMPRE quando Pay by Link + Da Saldare,
+    // anche con Conferma Prenotazione ON. Il cliente riceve DUE messaggi:
+    // (1) conferma "Prenotazione confermata — Da saldare" (vedi sotto) e
+    // (2) link di pagamento da completare quando vuole. Cosi' il cliente
+    // sa che il posto e' bloccato e ha comunque il link a portata di mano
+    // se vuole pagare prima di arrivare. La regola precedente (2026-05-27,
+    // link saltato con Conferma ON) e' stata revocata su richiesta utente.
     const isNexiPending = formData.payment_status === 'pending'
       && isNexiPayByLink(formData.payment_method)
-      && !confirmBooking
     if (isNexiPending && data) {
       try {
         const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
@@ -1995,18 +1993,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         })
       })
 
-      // Send customer confirmation message (skip for Nexi — link message sent
-      // separately). Stesso pattern di ReservationsTab: se la prenotazione e'
-      // "Da Saldare" e l'admin NON ha spuntato "Conferma Prenotazione",
-      // salta il messaggio (lo manderemo quando segnera' pagato). Se invece
-      // la spunta e' attiva, manda comunque il template — il body usa
-      // {payment_status} per mostrare "Da saldare" al cliente.
+      // Send customer confirmation message.
+      // 2026-05-28: rimosso il gate `!isNexiPending` — quando Conferma e'
+      // ON con Pay by Link, il cliente deve ricevere SIA il conferma SIA
+      // il link (vedi commento sul blocco PbL piu' sopra). Il gate
+      // `!isPendingNotConfirmed` salta solo il caso Da Saldare senza
+      // Conferma (lo manderemo quando l'admin segna pagato).
       const isPendingNotConfirmed =
         !confirmBooking
         && formData.payment_status !== 'paid'
         && formData.payment_status !== 'completed'
         && formData.payment_status !== 'succeeded'
-      if (customerPhone && !isNexiPending && !isPendingNotConfirmed) {
+      if (customerPhone && !isPendingNotConfirmed) {
         const custFirstName = customerName?.split(' ')[0] || 'Cliente'
         const apptDt = new Date(appointmentDateTime)
         // Short date — the Pro "Conferma Lavaggio" body uses "24/04/2026"
