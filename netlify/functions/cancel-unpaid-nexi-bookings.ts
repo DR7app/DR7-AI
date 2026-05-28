@@ -136,20 +136,42 @@ const cancelHandler: Handler = async () => {
             cancelled++;
             console.log(`[cancel-unpaid-nexi] Cancelled booking ${booking.id} (${booking.customer_name}), link deactivated: ${linkDeactivated}`);
 
-            // 3. Notify customer via WhatsApp — template-only
+            // 3. Notify customer via WhatsApp — route attraverso templateKey
+            //    'website_booking_cancelled_customer' che risolve a
+            //    pro_annullamento_cliente (Messaggi di Sistema Pro).
+            //    2026-05-28: prima usava il legacy 'booking_cancelled_whatsapp'
+            //    con renderTemplate locale, quindi modificare il template Pro
+            //    NON cambiava il messaggio inviato dalla cron. Adesso entrambi
+            //    i path (manual delete + unpaid-nexi cron) usano lo stesso
+            //    template editabile da admin.
             const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone;
             if (custPhone) {
-                const custName = booking.customer_name || 'Cliente';
-                const bookingRef = booking.id.substring(0, 8).toUpperCase();
-                const custBody = await renderTemplate('booking_cancelled_whatsapp', { custName, bookingRef });
-                if (custBody) {
-                    await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
+                try {
+                    const r = await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ customPhone: custPhone, customMessage: custBody, skipHeader: true })
+                        body: JSON.stringify({
+                            templateKey: 'website_booking_cancelled_customer',
+                            customPhone: custPhone,
+                            isCustomerMessage: true,
+                            booking: {
+                                id: booking.id,
+                                service_type: booking.service_type || 'rental',
+                                customer_name: booking.customer_name,
+                                customer_email: booking.customer_email,
+                                customer_phone: custPhone,
+                                vehicle_name: booking.vehicle_name || '',
+                                vehicle_plate: booking.vehicle_plate || booking.booking_details?.vehicle?.plate || '',
+                                pickup_date: booking.pickup_date,
+                                dropoff_date: booking.dropoff_date,
+                                price_total: booking.price_total || 0,
+                                booking_details: booking.booking_details || {},
+                            },
+                        }),
                     });
-                } else {
-                    console.log('[cancel-unpaid-nexi] booking_cancelled_whatsapp template missing/disabled — skipping customer WhatsApp');
+                    console.log(`[cancel-unpaid-nexi] customer WhatsApp via pro_annullamento_cliente: status=${r.status}`);
+                } catch (waErr) {
+                    console.error('[cancel-unpaid-nexi] customer WhatsApp send failed (non-blocking):', waErr);
                 }
             }
 
