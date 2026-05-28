@@ -8173,6 +8173,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     newAmountPaid = centsToEurStr(fullTotalCents)
                   } else if (newStatus === 'unpaid') {
                     newAmountPaid = '0' // No payment
+                  } else if (newStatus === 'partial') {
+                    // 2026-05-28: switching to 'partial' from 'paid' kept the
+                    // full amount_paid, making the system treat it as fully
+                    // paid even though status said partial. Reset to 0 unless
+                    // the existing amount is already a true partial (strictly
+                    // less than total). Admin then types the partial amount.
+                    const fullTotalCents = eurToCents(formData.total_amount || '0')
+                      + eurToCents(formData.delivery_fee || '0')
+                      + eurToCents(formData.pickup_fee || '0')
+                    const currentPaidCents = eurToCents(formData.amount_paid || '0')
+                    if (currentPaidCents >= fullTotalCents || currentPaidCents <= 0) {
+                      newAmountPaid = '0'
+                    }
+                    // else: already a valid partial — preserve admin's input
                   }
                   // If 'pending' (Da Saldare), leave amount_paid as is (allows partial)
 
