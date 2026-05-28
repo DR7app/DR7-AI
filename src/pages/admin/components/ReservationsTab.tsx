@@ -3839,35 +3839,41 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             logger.log('[handleConfirmExtend] WhatsApp customer notification sent to', customerPhone, 'status=', extendData.extension_payment_status)
           }
 
-          // 2026-05-28: generate extension contract + send the PDF link via
-          // WhatsApp. Customer needs the updated contract regardless of
-          // payment status (he has the car). Non-blocking on failure.
-          try {
-            const contractRes = await authFetch('/.netlify/functions/generate-extension-contract', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ bookingId: extendingBooking.id }),
-            })
-            const contractData = await contractRes.json().catch(() => ({}))
-            if (contractRes.ok && contractData?.url) {
-              logger.log('[handleConfirmExtend] Extension contract generated:', contractData.url)
-              const contractMsg = `Ciao, ecco il contratto aggiornato dell'estensione:\n${contractData.url}\n\n— DR7`
-              await fetch('/.netlify/functions/send-whatsapp-notification', {
+          // 2026-05-28: contratto SOLO se estensione pagata. "Da Saldare"
+          // e "Nexi Pay by Link" attendono il pagamento — il contratto
+          // partira' dopo (per Nexi via callback, per Da Saldare quando
+          // l'admin segna pagato manualmente). Direzione: non vogliamo
+          // dare il contratto firmato al cliente prima che paghi.
+          if (extendData.extension_payment_status === 'paid') {
+            try {
+              const contractRes = await authFetch('/.netlify/functions/generate-extension-contract', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  customPhone: customerPhone,
-                  customMessage: contractMsg,
-                  skipHeader: true,
-                }),
+                body: JSON.stringify({ bookingId: extendingBooking.id }),
               })
-              logger.log('[handleConfirmExtend] Contract link sent to customer')
-            } else {
-              logger.warn('[handleConfirmExtend] Extension contract generation failed:', contractData?.error || contractRes.status)
-              toast.error(`Contratto estensione non generato: ${contractData?.error || 'errore sconosciuto'}`)
+              const contractData = await contractRes.json().catch(() => ({}))
+              if (contractRes.ok && contractData?.url) {
+                logger.log('[handleConfirmExtend] Extension contract generated:', contractData.url)
+                const contractMsg = `Ciao, ecco il contratto aggiornato dell'estensione:\n${contractData.url}\n\n— DR7`
+                await fetch('/.netlify/functions/send-whatsapp-notification', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    customPhone: customerPhone,
+                    customMessage: contractMsg,
+                    skipHeader: true,
+                  }),
+                })
+                logger.log('[handleConfirmExtend] Contract link sent to customer')
+              } else {
+                logger.warn('[handleConfirmExtend] Extension contract generation failed:', contractData?.error || contractRes.status)
+                toast.error(`Contratto estensione non generato: ${contractData?.error || 'errore sconosciuto'}`)
+              }
+            } catch (contractErr) {
+              logger.warn('[handleConfirmExtend] Extension contract send failed (non-blocking):', contractErr)
             }
-          } catch (contractErr) {
-            logger.warn('[handleConfirmExtend] Extension contract send failed (non-blocking):', contractErr)
+          } else {
+            logger.log('[handleConfirmExtend] Skipping contract generation — extension status =', extendData.extension_payment_status, '(contract sent only when paid)')
           }
         } else {
           logger.warn('[handleConfirmExtend] No customer phone — skipped customer notification')
