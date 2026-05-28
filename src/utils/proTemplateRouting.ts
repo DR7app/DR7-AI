@@ -255,6 +255,9 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
   // Extras / servizi premium
   on_extra_added: 'Servizio extra aggiunto a una prenotazione esistente',
   on_extension_requested: 'Cliente richiede estensione del noleggio',
+
+  // Prime Wash — auto pronta (admin clicca AUTO PRONTA su CarWashBookingsTab)
+  service_ready_customer: 'PRIME WASH: auto pronta / lavaggio concluso (admin clicca "Auto Pronta" sulla riga della prenotazione)',
 }
 
 /**
@@ -491,6 +494,17 @@ export const LABEL_FALLBACKS: Record<string, string[][]> = {
     ['promo', 'incassi'],
     ['promo', 'incasso'],
     ['incassi', 'promo'],
+  ],
+
+  // Prime Wash — auto pronta / lavaggio concluso
+  pro_auto_pronta: [
+    ['lavaggio', 'conclus'],
+    ['lavaggio', 'finit'],
+    ['lavaggio', 'pronto'],
+    ['auto', 'pronta'],
+    ['servizio', 'conclus'],
+    ['servizio', 'pronto'],
+    ['ready'],
   ],
 }
 
