@@ -4034,65 +4034,31 @@ function ServiziSection({
           <input
             value={servizi.delivery_title ?? 'Consegna a Domicilio'}
             onChange={(e) => setServizi({ ...servizi, delivery_title: e.target.value })}
-            className="w-full bg-transparent outline-none text-[15px] font-semibold text-theme-text-primary mb-3 focus:bg-theme-bg-primary rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
+            className="w-full bg-transparent outline-none text-[15px] font-semibold text-theme-text-primary mb-4 focus:bg-theme-bg-primary rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
             placeholder="Titolo"
           />
-          <p className="text-[12px] text-theme-text-secondary mb-3">
-            Imposta un prezzo €/km per ogni categoria. La "Tariffa di default" viene usata solo quando una categoria non e' configurata. Senza un prezzo valido la consegna a domicilio richiede autorizzazione direzionale al Salva.
-          </p>
 
-          {/* Tariffa di default (fallback) */}
-          <label className="block mb-4">
-            <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">
-              Tariffa di default (fallback)
-            </span>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">
-                €
-              </span>
-              <input
-                type="number"
-                min={0}
-                step={0.01}
-                value={servizi.delivery.price_per_km}
-                onChange={(e) => {
-                  const v = e.target.value
-                  setServizi({
-                    ...servizi,
-                    delivery: {
-                      ...servizi.delivery,
-                      price_per_km: v === '' ? '' : Number(v),
-                    },
-                  })
-                }}
-                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-12 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">
-                /km
-              </span>
+          {/* Per-category prices (no flat fallback — se manca un prezzo, consegna = €0).
+              2026-05-29: layout stack (label sopra, input sotto) cosi' i nomi
+              categoria lunghi (Exotic, Hypercar, Supercar, Flotta aziendale,
+              Scooter) restano completamente leggibili anche in colonne strette
+              — prima erano troncati a "Exoti...", "Hyp...", "Sup...". */}
+          {categories.length === 0 ? (
+            <div className="text-[13px] text-theme-text-secondary italic py-2">
+              Nessuna categoria configurata. Aggiungi categorie in &ldquo;Categorie Veicoli&rdquo; per impostare i prezzi.
             </div>
-          </label>
-
-          {/* Per-category rows */}
-          <div className="space-y-2">
-            <div className="text-[11px] font-medium uppercase tracking-wide text-theme-text-muted">
-              Prezzi per categoria
-            </div>
-            {categories.length === 0 ? (
-              <div className="text-[12px] text-theme-text-secondary italic py-2">
-                Nessuna categoria configurata. Aggiungi categorie in "Categorie Veicoli" per impostare i prezzi.
-              </div>
-            ) : (
-              categories.map((cat) => {
+          ) : (
+            <div className="space-y-3">
+              {categories.map((cat) => {
                 const byCat = servizi.delivery.by_category ?? {}
                 const raw = byCat[cat.id]
                 const value: number | '' = raw === undefined ? '' : raw
                 return (
-                  <div key={cat.id} className="flex items-center gap-3">
-                    <label className="flex-1 text-[13px] text-theme-text-primary truncate" title={cat.label}>
+                  <label key={cat.id} className="block">
+                    <span className="block text-[13px] font-medium text-theme-text-primary mb-1.5 leading-snug">
                       {cat.label}
-                    </label>
-                    <div className="relative w-40">
+                    </span>
+                    <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">
                         €
                       </span>
@@ -4118,17 +4084,17 @@ function ServiziSection({
                           })
                         }}
                         placeholder="—"
-                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-12 py-1.5 text-[13px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                        className="w-full bg-theme-bg-primary border border-theme-border rounded-lg pl-7 pr-12 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">
                         /km
                       </span>
                     </div>
-                  </div>
+                  </label>
                 )
-              })
-            )}
-          </div>
+              })}
+            </div>
+          )}
         </section>
 
         {/* Secondo Guidatore */}
