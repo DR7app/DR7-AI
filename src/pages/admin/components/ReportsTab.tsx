@@ -1093,12 +1093,12 @@ export default function ReportsTab() {
                     <span className="text-theme-text-muted">
                       Utilizzo: <span className={`font-bold ${getUtilizationColor(summary.avgUtil)}`}>{formatPercent(summary.avgUtil)}</span>
                     </span>
+                    {/* 2026-05-29: Ricavo categoria include il ricavo
+                        anticipato (allineato a TOTALE riga desktop + mobile).
+                        Prima `summary.totalRevenue` saltava la parte anticipata. */}
                     <span className="text-theme-text-muted">
-                      Ricavo: <span className="font-bold text-dr7-gold">{formatCurrency(summary.totalRevenue)}</span>
+                      Ricavo: <span className="font-bold text-dr7-gold">{formatCurrency(summary.totalRevenue + summary.totalAnticipatedRevenue)}</span>
                     </span>
-                    {/* 2026-05-28: Ricavo anticipato visibile nell'header categoria
-                        (desktop + mobile) come richiesto. Mostrato anche a 0 per
-                        coerenza visuale tra categorie. */}
                     <span className="text-theme-text-muted">
                       Ricavo anticipato: <span className="font-bold text-cyan-400">{formatCurrency(summary.totalAnticipatedRevenue)}</span>
                     </span>
