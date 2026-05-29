@@ -165,9 +165,33 @@ export function getLavaggioFee(config: RentalConfig): number {
   return config.lavaggio?.fee ?? 0
 }
 
-/** Get delivery price per km */
+/** Get delivery price per km (flat fallback, no category) */
 export function getDeliveryPricePerKm(config: RentalConfig): number {
   return config.delivery?.price_per_km ?? 0
+}
+
+/**
+ * Get delivery price per km for a specific vehicle category.
+ * Returns `null` when no per-category value AND no flat fallback exists —
+ * caller decides UX (block + OTP override). When the category is missing
+ * from `by_category` but a flat `price_per_km > 0` is configured, the
+ * flat rate is used as the legacy fallback (preserve old behaviour for
+ * categories the admin hasn't yet filled in).
+ *
+ * Honors the supercars↔exotic alias from `category_alias_supercars_exotic`.
+ */
+export function getDeliveryPricePerKmForCategory(
+  config: RentalConfig,
+  category: string | null | undefined,
+): number | null {
+  const byCat = config.delivery?.by_category
+  if (category && byCat) {
+    const v = lookupByCategoryAlias(byCat, category)
+    if (typeof v === 'number' && v > 0) return v
+  }
+  const flat = config.delivery?.price_per_km
+  if (typeof flat === 'number' && flat > 0) return flat
+  return null
 }
 
 /** Get DR7 Flex daily price */

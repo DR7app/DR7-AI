@@ -136,7 +136,13 @@ type ServiziConfig = {
     description: string
   }
   lavaggio: { fee: number | ''; mandatory: boolean }
-  delivery: { price_per_km: number | '' }
+  /**
+   * Consegna a domicilio. `price_per_km` resta come "Tariffa di
+   * default" usata quando manca un valore per la categoria. `by_category`
+   * mappa `categoryId → €/km` ed e' la sorgente di verita' per il
+   * calcolo. Le categorie sono lette dinamicamente da `categories`.
+   */
+  delivery: { price_per_km: number | ''; by_category?: Record<string, number | ''> }
   second_driver: Record<string, number | ''> // keyed by fascia.id
   /**
    * Pickup locations the admin can pick from when creating a preventivo or
@@ -165,7 +171,7 @@ const INITIAL_SERVIZI: ServiziConfig = {
     description: 'Cancella fino al giorno del noleggio',
   },
   lavaggio: { fee: 9.9, mandatory: true },
-  delivery: { price_per_km: 3 },
+  delivery: { price_per_km: 3, by_category: {} },
   second_driver: { A: 10, B: 20 },
   second_driver_billing: 'flat',
   pickup_locations: [
@@ -2232,7 +2238,22 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
 
     if (saved.servizi.lavaggio.fee !== current.servizi.lavaggio.fee) out.push(`Pulizia Finale: €${saved.servizi.lavaggio.fee} → €${current.servizi.lavaggio.fee}`)
     if (saved.servizi.lavaggio.mandatory !== current.servizi.lavaggio.mandatory) out.push(`Pulizia Finale: ${current.servizi.lavaggio.mandatory ? 'obbligatoria' : 'facoltativa'}`)
-    if (saved.servizi.delivery.price_per_km !== current.servizi.delivery.price_per_km) out.push(`Consegna a domicilio: €${saved.servizi.delivery.price_per_km} → €${current.servizi.delivery.price_per_km}/km`)
+    if (saved.servizi.delivery.price_per_km !== current.servizi.delivery.price_per_km) out.push(`Consegna a domicilio (default): €${saved.servizi.delivery.price_per_km} → €${current.servizi.delivery.price_per_km}/km`)
+    {
+      const savedByCat = saved.servizi.delivery.by_category ?? {}
+      const currByCat = current.servizi.delivery.by_category ?? {}
+      const allCatIds = new Set([...Object.keys(savedByCat), ...Object.keys(currByCat)])
+      allCatIds.forEach((catId) => {
+        if (savedByCat[catId] !== currByCat[catId]) {
+          const cat = current.categories.find((c) => c.id === catId) ?? saved.categories.find((c) => c.id === catId)
+          const label = cat?.label || catId
+          const sv = savedByCat[catId]
+          const cv = currByCat[catId]
+          const fmt = (n: number | '' | undefined) => (n === '' || n === undefined ? '—' : `€${n}`)
+          out.push(`Consegna a domicilio (${label}): ${fmt(sv)} → ${fmt(cv)}/km`)
+        }
+      })
+    }
     {
       const sdKeys = new Set([...Object.keys(saved.servizi.second_driver), ...Object.keys(current.servizi.second_driver)])
       sdKeys.forEach((k) => {
@@ -4006,7 +4027,7 @@ function ServiziSection({
           </label>
         </section>
 
-        {/* Consegna a Domicilio */}
+        {/* Consegna a Domicilio — €/km per categoria (2026-05-29) */}
         <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm p-5">
           <input
             value={servizi.delivery_title ?? 'Consegna a Domicilio'}
@@ -4014,9 +4035,14 @@ function ServiziSection({
             className="w-full bg-transparent outline-none text-[15px] font-semibold text-theme-text-primary mb-3 focus:bg-theme-bg-primary rounded-md px-1.5 py-0.5 -mx-1.5 transition-colors"
             placeholder="Titolo"
           />
-          <label className="block">
+          <p className="text-[12px] text-theme-text-secondary mb-3">
+            Imposta un prezzo €/km per ogni categoria. La "Tariffa di default" viene usata solo quando una categoria non e' configurata. Senza un prezzo valido la consegna a domicilio richiede autorizzazione direzionale al Salva.
+          </p>
+
+          {/* Tariffa di default (fallback) */}
+          <label className="block mb-4">
             <span className="block text-[11px] font-medium uppercase tracking-wide text-theme-text-muted mb-1">
-              Prezzo per km
+              Tariffa di default (fallback)
             </span>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">
@@ -4029,7 +4055,13 @@ function ServiziSection({
                 value={servizi.delivery.price_per_km}
                 onChange={(e) => {
                   const v = e.target.value
-                  setServizi({ ...servizi, delivery: { price_per_km: v === '' ? '' : Number(v) } })
+                  setServizi({
+                    ...servizi,
+                    delivery: {
+                      ...servizi.delivery,
+                      price_per_km: v === '' ? '' : Number(v),
+                    },
+                  })
                 }}
                 className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-12 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               />
@@ -4038,6 +4070,63 @@ function ServiziSection({
               </span>
             </div>
           </label>
+
+          {/* Per-category rows */}
+          <div className="space-y-2">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-theme-text-muted">
+              Prezzi per categoria
+            </div>
+            {categories.length === 0 ? (
+              <div className="text-[12px] text-theme-text-secondary italic py-2">
+                Nessuna categoria configurata. Aggiungi categorie in "Categorie Veicoli" per impostare i prezzi.
+              </div>
+            ) : (
+              categories.map((cat) => {
+                const byCat = servizi.delivery.by_category ?? {}
+                const raw = byCat[cat.id]
+                const value: number | '' = raw === undefined ? '' : raw
+                return (
+                  <div key={cat.id} className="flex items-center gap-3">
+                    <label className="flex-1 text-[13px] text-theme-text-primary truncate" title={cat.label}>
+                      {cat.label}
+                    </label>
+                    <div className="relative w-40">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">
+                        €
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={value}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          const nextByCat = { ...(servizi.delivery.by_category ?? {}) }
+                          if (v === '') {
+                            delete nextByCat[cat.id]
+                          } else {
+                            nextByCat[cat.id] = Number(v)
+                          }
+                          setServizi({
+                            ...servizi,
+                            delivery: {
+                              ...servizi.delivery,
+                              by_category: nextByCat,
+                            },
+                          })
+                        }}
+                        placeholder="—"
+                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-12 py-1.5 text-[13px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">
+                        /km
+                      </span>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
         </section>
 
         {/* Secondo Guidatore */}

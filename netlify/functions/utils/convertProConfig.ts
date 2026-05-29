@@ -37,7 +37,7 @@ export function convertProToLegacy(pro: any): any {
     deposits: { TIER_1_RESIDENT: [], TIER_2_RESIDENT: [], TIER_1_NON_RESIDENT: [], TIER_2_NON_RESIDENT: [], category_defaults: {} },
     second_driver: {},
     lavaggio: { fee: 9.90, mandatory: true },
-    delivery: { price_per_km: 3 },
+    delivery: { price_per_km: 3, by_category: {} },
     no_cauzione_surcharge: { per_day: 49, tier_restriction: 'TIER_2', requires_kasko: true },
     experience_services: [],
     dr7_flex: { daily_price: 19.90, refund_percent: 90, tier_restriction: 'TIER_2', description: '' },
@@ -174,7 +174,16 @@ export function convertProToLegacy(pro: any): any {
       }
     }
     if (s.lavaggio) config.lavaggio = { fee: num(s.lavaggio.fee), mandatory: s.lavaggio.mandatory }
-    if (s.delivery) config.delivery = { price_per_km: num(s.delivery.price_per_km) }
+    if (s.delivery) {
+      const byCat: Record<string, number> = {}
+      if (s.delivery.by_category) {
+        for (const [catId, price] of Object.entries(s.delivery.by_category)) {
+          const n = num(price)
+          if (n > 0) byCat[catId] = n
+        }
+      }
+      config.delivery = { price_per_km: num(s.delivery.price_per_km), by_category: byCat }
+    }
     if (s.second_driver) {
       for (const [fId, price] of Object.entries(s.second_driver)) {
         config.second_driver[PRO_TO_TIER[fId] || fId] = num(price)

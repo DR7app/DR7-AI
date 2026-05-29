@@ -5,7 +5,7 @@ import { authFetch } from '../../../utils/authFetch'
 import { appendPreventivoEvent } from '../../../utils/preventivoEvents'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { buildConfigOverlay } from '../../../utils/configOverlay'
-import { getKmIncluded, getInsuranceOptions, getUnlimitedKmPrice } from '../../../utils/configLookup'
+import { getKmIncluded, getInsuranceOptions, getUnlimitedKmPrice, getDeliveryPricePerKmForCategory } from '../../../utils/configLookup'
 import { resolvePacchetti } from '../../../utils/pacchettiResolver'
 import type { RentalConfig } from '../../../types/rentalConfig'
 import Input from './Input'
@@ -818,6 +818,17 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     // km / km illimitati / deposits della Urban — sbagliato.
     return String(selectedVehicle?.category || '').toLowerCase().trim() || 'urban'
   }, [selectedVehicle])
+
+  // 2026-05-29: tariffa consegna domicilio per CATEGORIA del veicolo.
+  // Letta da Centralina Pro > Servizi > Consegna a Domicilio. Quando manca
+  // sia il valore per la categoria sia il fallback flat, il rate e' null
+  // e l'UI mostra un warning; il fee calcolato cade a 0 (l'admin puo'
+  // digitare manualmente, l'OTP gate scatta al Salva se necessario).
+  const deliveryRateForVehicle = useMemo(
+    () => getDeliveryPricePerKmForCategory(rentalConfig, proCategoryKey),
+    [rentalConfig, proCategoryKey]
+  )
+  const deliveryRateMissing = deliveryRateForVehicle == null
 
   // Pro-resolved extras with safe fallbacks. Each falls back to the
   // legacy Centralina Unica overlay (keeps the form working until the
@@ -4933,7 +4944,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                   const km = (parts.lat != null && parts.lon != null)
                     ? kmFromDR7Office({ lat: parts.lat, lon: parts.lon })
                     : 0
-                  const rate = Number(rentalConfig?.delivery?.price_per_km) || 3
+                  const rate = deliveryRateForVehicle ?? 0
                   const fee = km * rate
                   // BUG FIX 2026-05-18: rispetta il prezzo manuale digitato
                   // dall'admin. Prima qualsiasi nuova selezione di indirizzo
@@ -4955,6 +4966,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                   })
                 }}
               />
+              {deliveryRateMissing && (
+                <div className="text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">
+                  Prezzo consegna domicilio non configurato per la categoria "{proCategoryKey}". Configura in Centralina Pro &gt; Servizi &gt; Consegna a Domicilio oppure inserisci il costo manualmente.
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div className="bg-theme-bg-tertiary/40 border border-theme-border rounded px-3 py-2">
                   <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Distanza dall'ufficio</div>
@@ -4962,9 +4978,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                     {form.delivery_km > 0 ? `${form.delivery_km} km` : '—'}
                   </div>
                   <div className="text-[10px] text-theme-text-muted mt-0.5">
-                    {form.delivery_km > 0
-                      ? `${form.delivery_km} km × €${(Number(rentalConfig?.delivery?.price_per_km) || 3).toFixed(2)}/km`
-                      : 'Seleziona un indirizzo dai suggerimenti'}
+                    {form.delivery_km > 0 && deliveryRateForVehicle != null
+                      ? `${form.delivery_km} km × €${deliveryRateForVehicle.toFixed(2)}/km`
+                      : form.delivery_km > 0
+                        ? `${form.delivery_km} km (prezzo non configurato)`
+                        : 'Seleziona un indirizzo dai suggerimenti'}
                   </div>
                 </div>
                 <Input
@@ -5005,7 +5023,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                   const km = (parts.lat != null && parts.lon != null)
                     ? kmFromDR7Office({ lat: parts.lat, lon: parts.lon })
                     : 0
-                  const rate = Number(rentalConfig?.delivery?.price_per_km) || 3
+                  const rate = deliveryRateForVehicle ?? 0
                   const fee = km * rate
                   // BUG FIX 2026-05-18: rispetta il prezzo manuale digitato
                   // dall'admin (stesso fix di delivery_fee). Il fee calcolato
@@ -5024,6 +5042,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                   })
                 }}
               />
+              {deliveryRateMissing && (
+                <div className="text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">
+                  Prezzo consegna domicilio non configurato per la categoria "{proCategoryKey}". Configura in Centralina Pro &gt; Servizi &gt; Consegna a Domicilio oppure inserisci il costo manualmente.
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div className="bg-theme-bg-tertiary/40 border border-theme-border rounded px-3 py-2">
                   <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Distanza dall'ufficio</div>
@@ -5031,9 +5054,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                     {form.pickup_km > 0 ? `${form.pickup_km} km` : '—'}
                   </div>
                   <div className="text-[10px] text-theme-text-muted mt-0.5">
-                    {form.pickup_km > 0
-                      ? `${form.pickup_km} km × €${(Number(rentalConfig?.delivery?.price_per_km) || 3).toFixed(2)}/km`
-                      : 'Seleziona un indirizzo dai suggerimenti'}
+                    {form.pickup_km > 0 && deliveryRateForVehicle != null
+                      ? `${form.pickup_km} km × €${deliveryRateForVehicle.toFixed(2)}/km`
+                      : form.pickup_km > 0
+                        ? `${form.pickup_km} km (prezzo non configurato)`
+                        : 'Seleziona un indirizzo dai suggerimenti'}
                   </div>
                 </div>
                 <Input

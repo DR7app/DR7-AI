@@ -35,7 +35,7 @@ interface ProServiziConfig {
   pickup_locations?: ProPickupLocation[]
   dr7_flex: { daily_price: number | ''; refund_percent: number | ''; tier_restriction: string; description: string }
   lavaggio: { fee: number | ''; mandatory: boolean }
-  delivery: { price_per_km: number | '' }
+  delivery: { price_per_km: number | ''; by_category?: Record<string, number | ''> }
   second_driver: Record<string, number | ''>
 }
 interface ProTariffaGiornaliera { id: string; label: string; mode: 'unica' | 'per_residenza'; days: string[]; unica: Record<string, number | ''>; residente: Record<string, number | ''>; non_residente: Record<string, number | ''>; extraPerDay: number | '' }
@@ -330,7 +330,19 @@ export function convertProToRentalConfig(pro: ProSnapshot): RentalConfig {
 
     // Delivery
     if (s.delivery) {
-      config.delivery = { price_per_km: num(s.delivery.price_per_km) }
+      const byCat: Record<string, number> = {}
+      if (s.delivery.by_category) {
+        for (const [catId, price] of Object.entries(s.delivery.by_category)) {
+          // Salviamo solo le entry numeriche valide (>=0). Stringhe vuote
+          // = categoria non configurata → caller decide UX (block + OTP).
+          const n = num(price)
+          if (n > 0) byCat[catId] = n
+        }
+      }
+      config.delivery = {
+        price_per_km: num(s.delivery.price_per_km),
+        by_category: byCat,
+      }
     }
 
     // Second driver — map fascia IDs to tier keys

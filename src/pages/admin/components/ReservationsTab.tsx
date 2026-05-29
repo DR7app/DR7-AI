@@ -95,7 +95,7 @@ import {
 } from '../../../utils/tierClassification'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { buildConfigOverlay, getVehicleSforoOverride } from '../../../utils/configOverlay'
-import { getKmIncluded, getUnlimitedKmPrice as getUnlimitedKmPriceFromConfig, getInsuranceOptions as getInsuranceOptionsFromConfig, getInsuranceNameById } from '../../../utils/configLookup'
+import { getKmIncluded, getUnlimitedKmPrice as getUnlimitedKmPriceFromConfig, getInsuranceOptions as getInsuranceOptionsFromConfig, getInsuranceNameById, getDeliveryPricePerKmForCategory } from '../../../utils/configLookup'
 import { resolvePacchetti } from '../../../utils/pacchettiResolver'
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
 
@@ -2039,6 +2039,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     })),
     { value: 'domicilio', label: 'Consegna a domicilio (inserisci indirizzo)', fee: 0 },
   ], [configOverlay.pickupLocations])
+
+  // 2026-05-29: tariffa €/km consegna domicilio per categoria del veicolo
+  // selezionato. Mostrata come hint sopra i campi "Costo consegna" /
+  // "Costo ritiro" cosi' l'operatore sa quanto fatturare al cliente senza
+  // dover aprire Centralina Pro. Null = nessun prezzo configurato per la
+  // categoria (banner amber sul form).
+  const deliveryRateForSelectedVehicle = useMemo(() => {
+    const v = vehicles.find(x => x.id === formData.vehicle_id)
+    const cat = String(v?.category || '').toLowerCase().trim() || null
+    return getDeliveryPricePerKmForCategory(rentalConfig, cat)
+  }, [vehicles, formData.vehicle_id, rentalConfig])
 
   const [userEmail, setUserEmail] = useState<string | null>(null)
 
@@ -7617,6 +7628,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <Input label="Provincia" value={formData.delivery_province}
                         onChange={(e) => setFormData({ ...formData, delivery_province: e.target.value.toUpperCase() })} placeholder="CA" maxLength={2} />
                     </div>
+                    {deliveryRateForSelectedVehicle != null ? (
+                      <p className="text-[11px] text-theme-text-muted">
+                        Tariffa categoria (da Centralina Pro): €{deliveryRateForSelectedVehicle.toFixed(2)}/km
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-amber-400">
+                        Prezzo consegna domicilio non configurato per questa categoria. Configura in Centralina Pro &gt; Servizi &gt; Consegna a Domicilio.
+                      </p>
+                    )}
                     <Input label="Costo consegna (€) *" type="number" step="0.01" min="0" required
                       value={formData.delivery_fee}
                       onChange={(e) => setFormData({ ...formData, delivery_fee: e.target.value })} placeholder="0.00" />
@@ -7704,6 +7724,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <Input label="Provincia" value={formData.pickup_province}
                         onChange={(e) => setFormData({ ...formData, pickup_province: e.target.value.toUpperCase() })} placeholder="CA" maxLength={2} />
                     </div>
+                    {deliveryRateForSelectedVehicle != null ? (
+                      <p className="text-[11px] text-theme-text-muted">
+                        Tariffa categoria (da Centralina Pro): €{deliveryRateForSelectedVehicle.toFixed(2)}/km
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-amber-400">
+                        Prezzo consegna domicilio non configurato per questa categoria. Configura in Centralina Pro &gt; Servizi &gt; Consegna a Domicilio.
+                      </p>
+                    )}
                     <Input label="Costo ritiro (€) *" type="number" step="0.01" min="0" required
                       value={formData.pickup_fee}
                       onChange={(e) => setFormData({ ...formData, pickup_fee: e.target.value })} placeholder="0.00" />
@@ -8179,16 +8208,34 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       const filtered = getInsuranceOptions(selectedVehicle, activeTier, configOverlay, rentalConfig)
                       const currentId = formData.insurance_option
                       const hasCurrent = !!filtered.find(o => o.id === currentId)
-                      // GHOST OPTION FIX: if the stored insurance UID isn't in
-                      // the filtered options (vehicle category / driver tier
-                      // mismatch, or the option was renamed in Centralina Pro)
-                      // we MUST still show it. Otherwise the select silently
-                      // defaults to the first option (Kasko Base) and the next
-                      // Save overwrites the customer's real choice. Lookup the
-                      // label across ALL Pro insurance options.
-                      const ghostLabel = !hasCurrent && currentId
-                        ? (getInsuranceNameById(rentalConfig as any, currentId) || currentId)
+                      // 2026-05-29: prima il fallback "(salvata in prenotazione)"
+                      // veniva renderizzato anche quando esisteva un'opzione
+                      // Centralina Pro con lo STESSO NOME (es. saved="KASKO_BASE"
+                      // legacy + Pro "Kasko Base" = due righe doppie nel select).
+                      // Adesso: se il nome legacy combacia con un'opzione Pro,
+                      // niente ghost — il select mostra solo l'opzione reale,
+                      // e mappiamo formData.insurance_option all'id Pro cosi'
+                      // il prossimo Salva persiste il nuovo id (de-legacy).
+                      const ghostLabelRaw = !hasCurrent && currentId
+                        ? (getInsuranceNameById(rentalConfig as any, currentId) || null)
                         : null
+                      const normalize = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, '')
+                      const matchedByName = ghostLabelRaw
+                        ? filtered.find(o => normalize(o.label) === normalize(ghostLabelRaw))
+                        : null
+                      const ghostLabel = ghostLabelRaw && !matchedByName ? ghostLabelRaw : null
+                      const selectValue = matchedByName ? matchedByName.id : currentId
+                      // Se abbiamo un match di nome, allinea formData all'id
+                      // canonico Pro (silenziosamente al render). Senza questo,
+                      // il select mostra il nome Pro ma `formData.insurance_option`
+                      // resta sul legacy id, e il Salva persiste il legacy.
+                      if (matchedByName && matchedByName.id !== currentId) {
+                        queueMicrotask(() => {
+                          setFormData(prev => prev.insurance_option === currentId
+                            ? { ...prev, insurance_option: matchedByName.id as KaskoTier }
+                            : prev)
+                        })
+                      }
                       return (
                         <>
                           {ghostLabel && (
@@ -8197,7 +8244,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             </option>
                           )}
                           {filtered.map(opt => (
-                            <option key={opt.id} value={opt.id}>
+                            <option key={opt.id} value={opt.id} {...(opt.id === selectValue ? { 'data-selected-saved': '1' } : {})}>
                               {opt.label} {opt.pricePerDay > 0 ? `(€${opt.pricePerDay}/giorno)` : '(inclusa)'}
                             </option>
                           ))}

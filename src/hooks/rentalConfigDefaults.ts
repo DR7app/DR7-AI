@@ -63,7 +63,7 @@ export const DEFAULT_RENTAL_CONFIG: RentalConfig = {
 
   lavaggio: { fee: 0, mandatory: false },
 
-  delivery: { price_per_km: 0 },
+  delivery: { price_per_km: 0, by_category: {} },
 
   pickup_locations: [],
 
