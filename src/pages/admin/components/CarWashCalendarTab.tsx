@@ -164,69 +164,67 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
     if (sendingReady === booking.id) return
     setSendingReady(booking.id)
     const phone = booking.customer_phone || booking.booking_details?.customer?.phone || ''
-    const firstName = (booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente').split(' ')[0]
-    const plate = booking.vehicle_plate || booking.booking_details?.vehicle?.plate || booking.booking_details?.vehiclePlate || ''
+    const fullName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente'
+    const firstName = fullName.split(' ')[0]
+    const plate = booking.vehicle_plate || booking.booking_details?.vehicle?.plate || ''
+    const bookingRef = (booking.id || '').substring(0, 8).toUpperCase() || 'N/A'
+    const svcType = (booking as { service_type?: string })?.service_type || 'car_wash'
     try {
-      // 1) WhatsApp al cliente — templateKey 'service_ready_customer'
-      //    (gia' instradato a pro_auto_pronta in proTemplateRouting.ts).
-      //    Direzione edita il template "Auto pronta / Lavaggio concluso"
-      //    in Messaggi di Sistema Pro per personalizzare il testo.
-      //    Fallback hardcoded se il template e' disabilitato/non c'e'.
+      // 1) Persisti flag auto_pronta_sent_at — stesso campo usato da
+      //    CarWashBookingsTab cosi' il dettaglio nel calendario E la lista
+      //    bookings rimangono sincronizzati ("Gia inviata" / "Già notificato"
+      //    appare ovunque dopo il primo click).
+      const newDetails = {
+        ...(booking.booking_details || {}),
+        auto_pronta_sent_at: new Date().toISOString(),
+      }
+      await supabase
+        .from('bookings')
+        .update({ booking_details: newDetails })
+        .eq('id', booking.id)
+
+      // 2) WhatsApp al cliente — stesso payload del bottone su
+      //    CarWashBookingsTab (templateKey + templateVars espliciti).
+      //    Il resolver instrada service_ready_customer al custom
+      //    'pro_custom_lavaggio_concluso_*' che direzione ha configurato
+      //    (handled_events: ['service_ready_customer'] + target=Prime Wash).
       if (phone) {
-        const tplRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
+        const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customPhone: phone,
             templateKey: 'service_ready_customer',
-            booking: {
-              id: booking.id,
-              service_type: 'car_wash',
-              customer_name: booking.customer_name,
-              customer_phone: phone,
-              service_name: booking.service_name,
+            booking: { service_type: svcType },
+            templateVars: {
+              customer_name: firstName,
+              nome: firstName,
+              booking_id: bookingRef,
+              booking_ref: bookingRef,
+              service_name: booking.service_name || '',
+              vehicle_name: booking.vehicle_name || booking.booking_details?.vehicleMakeModel || '',
               vehicle_plate: plate,
-              appointment_date: booking.appointment_date,
-              appointment_time: booking.appointment_time,
-              booking_details: booking.booking_details || {},
+              targa: plate,
             },
+            skipHeader: true,
           }),
         })
-        const tplData = await tplRes.json().catch(() => ({}))
-        if (tplData?.skipped || !tplRes.ok) {
-          // Fallback: messaggio diretto se pro_auto_pronta e' disabilitato.
-          const fallbackMsg = `Buongiorno ${firstName},\n\nLa Sua auto${plate ? ` *${plate}*` : ''} è pronta per il ritiro.\n\nLa aspettiamo.\n\n— DR7`
-          await fetch('/.netlify/functions/send-whatsapp-notification', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              customPhone: phone,
-              customMessage: fallbackMsg,
-              skipHeader: false,
-            }),
-          })
+        const waResult = await waResp.json().catch(() => ({}))
+        if (!waResp.ok || waResult?.skipped) {
+          toast.error('Template "Auto pronta / Lavaggio concluso" non configurato in Messaggi di Sistema Pro. Verifica: ATTIVO, body non vuoto, evento "service_ready_customer" tra eventi gestiti, Tipo servizio = Prime Wash.', { duration: 12000 })
+        } else {
+          toast.success('WhatsApp AUTO PRONTA inviato al cliente')
         }
+      } else {
+        toast('Segnata pronta (nessun telefono cliente per WhatsApp)')
       }
 
-      // 2) Marca la booking come "auto pronta" in DB. Usiamo un flag in
-      //    booking_details cosi' non tocchiamo il payment/status flow
-      //    esistente, e direzione vede sul calendario se gia' segnalato.
-      await supabase.from('bookings').update({
-        booking_details: {
-          ...(booking.booking_details || {}),
-          auto_pronta_at: new Date().toISOString(),
-          auto_pronta_sent: !!phone,
-        },
-        updated_at: new Date().toISOString(),
-      }).eq('id', booking.id)
-
-      logAdminAction('carwash_auto_pronta', 'carwash_booking', booking.id, {
-        customer: booking.customer_name || 'N/A',
+      logAdminAction('auto_pronta_sent', 'carwash_booking', booking.id, {
+        customer: fullName,
         plate,
-        phone_present: !!phone,
+        from: 'calendar',
       })
 
-      toast.success(phone ? 'Cliente notificato — Auto pronta!' : 'Segnata pronta (nessun telefono cliente per WhatsApp)')
       setSelectedBooking(null)
       loadData()
     } catch (err: unknown) {
@@ -1355,7 +1353,10 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                   booking_details. Disabilitato durante l'invio + se gia'
                   inviato in passato (mostra "Già notificato"). */}
               {(() => {
-                const alreadySent = !!selectedBooking.booking_details?.auto_pronta_sent
+                // Allineato a CarWashBookingsTab: legge auto_pronta_sent_at
+                // (timestamp) cosi' il bottone resta grigio dopo il primo
+                // click da qualunque punto dell'admin.
+                const alreadySent = !!selectedBooking.booking_details?.auto_pronta_sent_at
                 const inFlight = sendingReady === selectedBooking.id
                 return (
                   <button
