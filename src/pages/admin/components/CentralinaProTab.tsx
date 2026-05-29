@@ -1825,7 +1825,7 @@ export default function CentralinaProTab() {
                 <CauzioniSection deposits={deposits} setDeposits={setDeposits} fasce={fasce} categories={categories} />
               )
             )}
-            {section === 'p5' && <ServiziSection servizi={servizi} setServizi={setServizi} fasce={fasce} />}
+            {section === 'p5' && <ServiziSection servizi={servizi} setServizi={setServizi} fasce={fasce} categories={categories} />}
             {section === 'p6' && (
               <PrezzoDinamicoSection config={prezzoDinamico} setConfig={setPrezzoDinamico} categories={categories} />
             )}
@@ -3709,10 +3709,12 @@ function ServiziSection({
   servizi,
   setServizi,
   fasce,
+  categories,
 }: {
   servizi: ServiziConfig
   setServizi: (next: ServiziConfig) => void
   fasce: Fascia[]
+  categories: Category[]
 }) {
   function patchExp(id: string, p: Partial<ExperienceService>) {
     setServizi({ ...servizi, experience: servizi.experience.map((s) => (s.id === id ? { ...s, ...p } : s)) })
