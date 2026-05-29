@@ -9436,8 +9436,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           return legacyMap[rawId] || rawId || 'Kasko Base'
                         })()}</span></div>
                         <div><span className="text-theme-text-muted">Cauzione:</span> <span className="text-theme-text-primary">{
+                          // 2026-05-29: rimosso label hardcoded "+30%" — il
+                          // valore reale viene da Centralina Pro (puo' essere
+                          // un fisso, %, o per-day). Mostriamo solo l'importo
+                          // effettivo salvato sul booking, niente percentuale
+                          // inventata.
                           selectedBooking.booking_details?.depositOption === 'no_deposit'
-                            ? `Senza cauzione (+30% = €${selectedBooking.booking_details?.noDepositSurcharge?.toFixed(2) || '0.00'})`
+                            ? `Senza cauzione (+€${Number(selectedBooking.booking_details?.noDepositSurcharge || 0).toFixed(2)})`
                             : (selectedBooking.deposit_amount || selectedBooking.booking_details?.deposit)
                               ? `€${selectedBooking.deposit_amount || selectedBooking.booking_details?.deposit}`
                               : 'N/A'
