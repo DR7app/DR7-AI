@@ -516,17 +516,18 @@ export const handler: Handler = async (event) => {
       : 100
 
     // === 5. CLIENTI (Customers) ===
-    // New customers: created_at in this month
+    // New customers: created_at within the SELECTED RANGE (not a single
+    // calendar month — supports cross-month custom ranges like 30/04→29/05).
     const newThisMonth = customers.filter(c => {
       if (!c.created_at) return false
-      const d = c.created_at.substring(0, 7) // YYYY-MM
-      return d === month
+      const d = c.created_at.substring(0, 10) // YYYY-MM-DD
+      return d >= monthStartISO && d <= monthEndISO
     }).length
 
-    const prevMonthStr = `${prevYear}-${String(prevMonthNum).padStart(2, '0')}`
     const prevNewCount = customers.filter(c => {
       if (!c.created_at) return false
-      return c.created_at.substring(0, 7) === prevMonthStr
+      const d = c.created_at.substring(0, 10)
+      return d >= prevMonthStartISO && d <= prevMonthEndISO
     }).length
 
     // Active customers: had a booking this month

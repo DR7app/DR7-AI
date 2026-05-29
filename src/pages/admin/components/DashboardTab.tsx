@@ -216,6 +216,25 @@ function isoAddDays(iso: string, n: number): string {
   const dt = new Date(Date.UTC(y, m - 1, d) + n * 86400000)
   return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`
 }
+// All YYYY-MM calendar months touched by the [from,to] range, inclusive.
+// Aruba passive-invoice fetch is month-bucketed, so the supplier panel sums
+// across every month the selected range spans.
+function monthsInRange(from: string, to: string): string[] {
+  const months: string[] = []
+  let y = parseInt(from.substring(0, 4)), m = parseInt(from.substring(5, 7))
+  const ey = parseInt(to.substring(0, 4)), em = parseInt(to.substring(5, 7))
+  let guard = 0
+  while ((y < ey || (y === ey && m <= em)) && guard++ < 120) {
+    months.push(`${y}-${String(m).padStart(2, '0')}`)
+    m++; if (m > 12) { m = 1; y++ }
+  }
+  return months
+}
+// Format an ISO date (YYYY-MM-DD) as Italian DD/MM/YYYY.
+function fmtItalianDate(iso: string): string {
+  if (!iso || iso.length < 10) return iso || ''
+  return `${iso.substring(8, 10)}/${iso.substring(5, 7)}/${iso.substring(0, 4)}`
+}
 
 export default function DashboardTab() {
   // Selected date range — default to the current calendar month.
@@ -282,8 +301,8 @@ export default function DashboardTab() {
   const [supplierExpanded, setSupplierExpanded] = useState(false)
   const [supplierDetailOpen, setSupplierDetailOpen] = useState<string | null>(null)
 
-  const fetchSupplierCosts = useCallback(async (month: string, opts?: { useCache?: boolean }) => {
-    const cacheKey = `${SUPPLIER_CACHE_PREFIX}:${month}`
+  const fetchSupplierCosts = useCallback(async (from: string, to: string, opts?: { useCache?: boolean }) => {
+    const cacheKey = `${SUPPLIER_CACHE_PREFIX}:${from}_${to}`
     if (opts?.useCache !== false) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const cached = readCache<any>(cacheKey)
@@ -294,13 +313,32 @@ export default function DashboardTab() {
     setSupplierLoading(true)
     setSupplierError(null)
     try {
-      const res = await fetch(`/.netlify/functions/get-incoming-invoices?month=${month}`)
-      const json = await res.json()
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || `HTTP ${res.status}`)
+      // Aruba invoices are month-bucketed — fetch every month the range spans
+      // and merge into one range-wide payload.
+      const months = monthsInRange(from, to)
+      const results = await Promise.all(months.map(async (mo) => {
+        const res = await fetch(`/.netlify/functions/get-incoming-invoices?month=${mo}`)
+        const json = await res.json()
+        if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
+        return json
+      }))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const merged: any = { success: true, invoices: [], supplierTotals: {}, grandTotal: 0, totalCount: 0 }
+      for (const json of results) {
+        if (Array.isArray(json.invoices)) merged.invoices.push(...json.invoices)
+        const st = json.supplierTotals || {}
+        for (const name of Object.keys(st)) {
+          const agg = st[name] || { count: 0, total: 0 }
+          const cur = merged.supplierTotals[name] || { count: 0, total: 0 }
+          cur.count += agg.count || 0
+          cur.total += agg.total || 0
+          merged.supplierTotals[name] = cur
+        }
+        merged.grandTotal += Number(json.grandTotal) || 0
+        merged.totalCount += Number(json.totalCount) || 0
       }
-      setSupplierData(json)
-      writeCache(cacheKey, json)
+      setSupplierData(merged)
+      writeCache(cacheKey, merged)
     } catch (err: unknown) {
       const _errMsg = err instanceof Error ? err.message : String(err)
       console.error('[Dashboard] Supplier costs error:', err)
@@ -313,7 +351,7 @@ export default function DashboardTab() {
 
   useEffect(() => {
     fetchDashboard({ useCache: true })
-    fetchSupplierCosts(selectedMonth, { useCache: true })
+    fetchSupplierCosts(dateFrom, dateTo, { useCache: true })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateFrom, dateTo])
 
@@ -350,7 +388,7 @@ export default function DashboardTab() {
 
   function refreshAll() {
     fetchDashboard({ force: true })
-    fetchSupplierCosts(selectedMonth, { useCache: false })
+    fetchSupplierCosts(dateFrom, dateTo, { useCache: false })
   }
 
   function fmtRelative(iso: string | null): string {
@@ -381,13 +419,6 @@ export default function DashboardTab() {
     a.click()
     document.body.removeChild(a)
     setTimeout(() => URL.revokeObjectURL(url), 1000)
-  }
-
-  // Format month for display
-  const formatMonth = (m: string) => {
-    const [y, mo] = m.split('-')
-    const months = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre']
-    return `${months[parseInt(mo) - 1]} ${y}`
   }
 
   // Only show full-screen loader if we have NOTHING to display.
@@ -421,12 +452,14 @@ export default function DashboardTab() {
   const health = calcHealthScore(d)
   const cashTotal = d.cashFlow.incassato + d.cashFlow.daIncassare + d.cashFlow.insolutiScaduti
   const conversionLabel = d.bookings.conversionRate >= 85 ? 'Ottimo' : d.bookings.conversionRate >= 70 ? 'Buono' : 'Da migliorare'
+  // Italian-formatted label for the currently selected period (DD/MM/YYYY → DD/MM/YYYY).
+  const periodLabel = `${fmtItalianDate(dateFrom)} → ${fmtItalianDate(dateTo)}`
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
 
       {/* ========== OVERVIEW (KPI strip + charts) ========== */}
-      <DashboardOverview />
+      <DashboardOverview dateFrom={dateFrom} dateTo={dateTo} />
 
       {/* ========== HEADER ========== */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2">
@@ -436,21 +469,49 @@ export default function DashboardTab() {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
-            <input
-              type="date"
-              value={dateFrom}
-              max={dateTo}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-[#19C2D6]/40 focus:border-[#19C2D6] outline-none"
-            />
+            {/* Italian-formatted date field — the native picker is overlaid
+                transparently so the OS calendar still opens, but only the
+                DD/MM/YYYY label is shown (never the browser's US format). */}
+            <div className="relative inline-flex items-center gap-2 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm cursor-pointer focus-within:ring-2 focus-within:ring-[#19C2D6]/40 focus-within:border-[#19C2D6]">
+              <span className="tabular-nums">{fmtItalianDate(dateFrom)}</span>
+              <svg className="w-4 h-4 text-theme-text-muted" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></svg>
+              <input
+                type="date"
+                value={dateFrom}
+                aria-label="Data inizio periodo"
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                onClick={(e) => (e.currentTarget as any).showPicker?.()}
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (!v) return
+                  setDateFrom(v)
+                  // Keep range valid without locking the picker: if the new start
+                  // is after the current end, push the end to match so the user
+                  // can always re-select any date freely.
+                  if (v > dateTo) setDateTo(v)
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+            </div>
             <span className="text-theme-text-muted text-sm">→</span>
-            <input
-              type="date"
-              value={dateTo}
-              min={dateFrom}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:ring-2 focus:ring-[#19C2D6]/40 focus:border-[#19C2D6] outline-none"
-            />
+            <div className="relative inline-flex items-center gap-2 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm cursor-pointer focus-within:ring-2 focus-within:ring-[#19C2D6]/40 focus-within:border-[#19C2D6]">
+              <span className="tabular-nums">{fmtItalianDate(dateTo)}</span>
+              <svg className="w-4 h-4 text-theme-text-muted" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></svg>
+              <input
+                type="date"
+                value={dateTo}
+                aria-label="Data fine periodo"
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                onClick={(e) => (e.currentTarget as any).showPicker?.()}
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (!v) return
+                  setDateTo(v)
+                  if (v < dateFrom) setDateFrom(v)
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+            </div>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => { setDateFrom(firstDayOfMonthIso()); setDateTo(lastDayOfMonthIso()) }}
@@ -510,7 +571,7 @@ export default function DashboardTab() {
           </button>
           <div className="text-right hidden sm:block">
             <p className="text-[10px] text-theme-text-muted uppercase">Periodo</p>
-            <p className="text-sm font-semibold text-theme-text-primary">{dateFrom} → {dateTo}</p>
+            <p className="text-sm font-semibold text-theme-text-primary tabular-nums">{periodLabel}</p>
           </div>
         </div>
       </div>
@@ -610,7 +671,7 @@ export default function DashboardTab() {
         const danniTot = mr.penaliDanni.danniTotale
         return (
           <div>
-            <SectionHeader title="Sintesi del Mese" subtitle={`Tutte le attività del mese in un colpo d'occhio · ${d.period.month}`} />
+            <SectionHeader title="Sintesi del Periodo" subtitle={`Tutte le attività del periodo in un colpo d'occhio · ${periodLabel}`} />
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
               {/* Entrate */}
               <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-emerald-500/20">
@@ -677,9 +738,9 @@ export default function DashboardTab() {
               <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-purple-500/20">
                 <p className="text-[10px] uppercase tracking-widest text-purple-300 font-semibold mb-2">Clienti</p>
                 <p className="text-3xl font-bold text-purple-400 leading-tight">+{mr.clienti.nuoviMese}</p>
-                <p className="text-xs text-theme-text-muted mt-1">Nuovi clienti nel mese</p>
+                <p className="text-xs text-theme-text-muted mt-1">Nuovi clienti nel periodo</p>
                 <div className="mt-3 space-y-1 text-xs text-theme-text-muted">
-                  <div className="flex justify-between"><span>Attivi nel mese</span><span className="text-theme-text-primary">{mr.clienti.attiviMese}</span></div>
+                  <div className="flex justify-between"><span>Attivi nel periodo</span><span className="text-theme-text-primary">{mr.clienti.attiviMese}</span></div>
                   <div className="flex justify-between"><span>Totale clienti</span><span className="text-theme-text-primary">{fmt(mr.clienti.totale)}</span></div>
                   <div className="flex justify-between"><span>Preventivi</span><span className="text-theme-text-primary">{mr.preventivi.total}</span></div>
                   <div className="flex justify-between pt-1 border-t border-purple-500/20 mt-1">
@@ -713,7 +774,7 @@ export default function DashboardTab() {
         const p = d.monthlyReports.preventivi
         const hasAnalytics = (p.topVehicles?.length ?? 0) > 0 || (p.topPeriodi?.length ?? 0) > 0 || (p.topPerdite?.length ?? 0) > 0 || (p.azioniSuggerite?.length ?? 0) > 0
         if (p.total === 0 && !hasAnalytics) return null
-        const monthLabel = d.period.month
+        const monthLabel = periodLabel
         return (
           <div>
             <SectionHeader title="Report Preventivi" subtitle={`Analisi domanda → conversione → perdite · ${monthLabel} (esclusi operatori test)`} />
@@ -899,7 +960,7 @@ export default function DashboardTab() {
                 <div className="h-full bg-[#19C2D6] rounded-full transition-all duration-1000" style={{ width: `${d.fleet.occupationRate}%` }} />
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-theme-text-muted">Mese precedente</span>
+                <span className="text-theme-text-muted">Periodo precedente</span>
                 <span className="text-theme-text-primary font-medium">{d.fleet.previousRate}%</span>
               </div>
               <div className="h-2 rounded-full bg-white/5 overflow-hidden">
@@ -1084,7 +1145,7 @@ export default function DashboardTab() {
                 <span className="text-theme-text-muted text-xs group-hover:text-blue-400">Apri →</span>
               </div>
               <p className="text-2xl font-bold text-blue-400">€ {fmtDec(d.monthlyReports.lavaggio.ricavoTotale)}</p>
-              <p className="text-xs text-theme-text-muted mt-1">{d.monthlyReports.lavaggio.count} lavaggi nel mese</p>
+              <p className="text-xs text-theme-text-muted mt-1">{d.monthlyReports.lavaggio.count} lavaggi nel periodo</p>
             </button>
 
             {/* CLIENTI */}
@@ -1097,7 +1158,7 @@ export default function DashboardTab() {
                 <span className="text-theme-text-muted text-xs group-hover:text-emerald-400">Apri →</span>
               </div>
               <p className="text-2xl font-bold text-emerald-400">+{d.monthlyReports.clienti.nuoviMese}</p>
-              <p className="text-xs text-theme-text-muted mt-1">{d.monthlyReports.clienti.attiviMese} attivi nel mese · {fmt(d.monthlyReports.clienti.totale)} totali</p>
+              <p className="text-xs text-theme-text-muted mt-1">{d.monthlyReports.clienti.attiviMese} attivi nel periodo · {fmt(d.monthlyReports.clienti.totale)} totali</p>
             </button>
 
             {/* PENALI & DANNI */}
@@ -1150,18 +1211,18 @@ export default function DashboardTab() {
 
       {/* ========== FATTURATO DEL MESE (era "Cash Flow") ========== */}
       <div>
-        <SectionHeader title="Fatturato del Mese" subtitle="Tutte le prenotazioni del mese — pagate, da incassare e scadute" />
+        <SectionHeader title="Fatturato del Periodo" subtitle="Tutte le prenotazioni del periodo — pagate, da incassare e scadute" />
         {/* Totale fatturato \u2014 TUTTO il mese, indipendentemente dallo stato pagamento */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
           <StatCard
-            label="Totale Fatturato Mese"
+            label="Totale Fatturato Periodo"
             value={`\u20AC ${fmt(d.revenue.currentMonth)}`}
-            sub={`Incassato + da incassare (tutte le prenotazioni valide di ${formatMonth(selectedMonth)})`}
+            sub={`Incassato + da incassare (tutte le prenotazioni valide di ${periodLabel})`}
             accent="gold"
             border
           />
           <StatCard
-            label="Mese precedente"
+            label="Periodo precedente"
             value={`\u20AC ${fmt(d.revenue.previousMonth)}`}
             trend={d.revenue.changePercent}
             accent="default"
@@ -1177,14 +1238,14 @@ export default function DashboardTab() {
         {/* Visibility on what's intentionally NOT in fatturato */}
         <div className="grid grid-cols-2 gap-3 mb-3">
           <StatCard
-            label="Annullate del mese"
+            label="Annullate del periodo"
             value={`\u20AC ${fmt(d.revenue.cancelledRentalsTotal || 0)}`}
             sub={`${d.revenue.cancelledRentalsCount || 0} prenotazioni cancellate (non in fatturato)`}
             accent="red"
             border
           />
           <StatCard
-            label="Lavaggi del mese"
+            label="Lavaggi del periodo"
             value={`\u20AC ${fmt(d.revenue.washTotal || 0)}`}
             sub={`${d.revenue.washCount || 0} lavaggi (rendiconto separato)`}
             accent="blue"
@@ -1240,7 +1301,7 @@ export default function DashboardTab() {
             <SectionHeader title="Fornitori — Cash Flow" subtitle="Pagamenti effettivi dal modulo Fornitori (data_pagamento)" />
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
               <div className="bg-theme-bg-secondary/60 rounded-2xl p-4 border border-white/5">
-                <p className="text-xs text-theme-text-muted uppercase tracking-wide">Pagato nel mese</p>
+                <p className="text-xs text-theme-text-muted uppercase tracking-wide">Pagato nel periodo</p>
                 <p className="text-xl font-semibold text-theme-text-primary mt-1">€ {fmtDec(fcf.pagatoMese)}</p>
                 <p className="text-xs text-theme-text-muted mt-1">
                   {fcf.invoicePaidCount} fatture · {trend >= 0 ? '+' : ''}{trend}% vs mese prec.
@@ -1326,7 +1387,7 @@ export default function DashboardTab() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
                 {fcf.bySupplier.length > 0 && (
                   <div className="bg-theme-bg-secondary/60 rounded-2xl p-4 border border-white/5">
-                    <p className="text-xs text-theme-text-muted uppercase tracking-wide mb-2">Top Fornitori (pagato nel mese)</p>
+                    <p className="text-xs text-theme-text-muted uppercase tracking-wide mb-2">Top Fornitori (pagato nel periodo)</p>
                     <div className="space-y-1.5">
                       {fcf.bySupplier.slice(0, 5).map((s, i) => (
                         <div key={i} className="flex justify-between items-center text-sm">
@@ -1470,7 +1531,7 @@ export default function DashboardTab() {
           <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-6 text-center">
             <p className="text-red-400 font-medium text-sm mb-1">Errore caricamento fatture fornitori</p>
             <p className="text-theme-text-muted text-xs">{supplierError}</p>
-            <button onClick={() => fetchSupplierCosts(selectedMonth)} className="mt-3 px-4 py-1.5 bg-[#19C2D6] text-black rounded-lg text-xs font-bold hover:bg-[#0A8FA3] transition-colors">
+            <button onClick={() => fetchSupplierCosts(dateFrom, dateTo)} className="mt-3 px-4 py-1.5 bg-[#19C2D6] text-black rounded-lg text-xs font-bold hover:bg-[#0A8FA3] transition-colors">
               Riprova
             </button>
           </div>

@@ -18,6 +18,22 @@ import { supabase } from '../../../supabaseClient'
 
 type GaRange = '7d' | '28d' | '90d' | '180d' | '365d'
 
+// GA only accepts fixed preset windows, while the dashboard date pickers allow
+// an arbitrary from→to span. Map the selected span to the closest preset so the
+// traffic charts still render; the KPI numbers use the exact dates.
+const GA_PRESET_DAYS: Array<{ k: GaRange; d: number }> = [
+  { k: '7d', d: 7 }, { k: '28d', d: 28 }, { k: '90d', d: 90 }, { k: '180d', d: 180 }, { k: '365d', d: 365 },
+]
+function spanToGaPreset(from: string, to: string): GaRange {
+  const ms = new Date(to + 'T00:00:00').getTime() - new Date(from + 'T00:00:00').getTime()
+  const days = Number.isFinite(ms) ? Math.max(1, Math.round(ms / 86400000) + 1) : 28
+  let best = GA_PRESET_DAYS[1] // default 28d
+  for (const p of GA_PRESET_DAYS) {
+    if (Math.abs(p.d - days) < Math.abs(best.d - days)) best = p
+  }
+  return best.k
+}
+
 interface GaKpi { visits: number; pageviews: number; users: number; bookings: number; calls: number; revenue: number; delta_visits: number; delta_pageviews: number; delta_users: number }
 interface GaSeriesPoint { day: string; total: number; organico: number; ads: number; maps: number }
 interface GaChannelSlice { name: string; value: number }
@@ -116,8 +132,10 @@ function KpiCard({ label, value, delta, spark, accent, icon, sub }: KpiCardProps
   )
 }
 
-export default function DashboardOverview() {
-  const [range, setRange] = useState<GaRange>('28d')
+export default function DashboardOverview({ dateFrom, dateTo }: { dateFrom: string; dateTo: string }) {
+  // Range is driven by the parent's date pickers — a single date control for
+  // the whole dashboard. GA traffic uses the closest preset to the span.
+  const gaRange = spanToGaPreset(dateFrom, dateTo)
   const [ga, setGa] = useState<GaPayload | null>(null)
   const [kpi, setKpi] = useState<KpiPayload | null>(null)
   const [walletUsers, setWalletUsers] = useState<number>(0)
@@ -129,57 +147,58 @@ export default function DashboardOverview() {
     let cancelled = false
     async function load() {
       setLoading(true)
-      // Compute date range for dashboard-kpi (same range as GA)
       const now = new Date()
-      const daysBack = range === '7d' ? 7 : range === '28d' ? 28 : range === '90d' ? 90 : range === '180d' ? 180 : 365
-      const dateFrom = new Date(now.getTime() - daysBack * 86400000).toISOString().slice(0, 10)
-      const dateTo = now.toISOString().slice(0, 10)
+      try {
+        const [gaRes, kpiRes] = await Promise.all([
+          fetch(`/.netlify/functions/ga-report?range=${gaRange}`).then(r => r.json()).catch(() => null),
+          authFetch(`/.netlify/functions/dashboard-kpi?from=${dateFrom}&to=${dateTo}`).then(r => r.json()).catch(() => null),
+        ])
+        if (cancelled) return
+        setGa(gaRes)
+        setKpi(kpiRes)
 
-      const [gaRes, kpiRes] = await Promise.all([
-        fetch(`/.netlify/functions/ga-report?range=${range}`).then(r => r.json()).catch(() => null),
-        authFetch(`/.netlify/functions/dashboard-kpi?from=${dateFrom}&to=${dateTo}`).then(r => r.json()).catch(() => null),
-      ])
-      if (cancelled) return
-      setGa(gaRes)
-      setKpi(kpiRes)
+        // Wallet users (count distinct user_id with balance > 0)
+        const { count: walletCount } = await supabase
+          .from('user_credit_balance')
+          .select('user_id', { count: 'exact', head: true })
+          .gt('balance', 0)
+        if (!cancelled) setWalletUsers(walletCount || 0)
 
-      // Wallet users (count distinct user_id with balance > 0)
-      const { count: walletCount } = await supabase
-        .from('user_credit_balance')
-        .select('user_id', { count: 'exact', head: true })
-        .gt('balance', 0)
-      if (!cancelled) setWalletUsers(walletCount || 0)
+        // Club active members
+        const { count: clubCount } = await supabase
+          .from('dr7_club_subscriptions')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'active')
+        if (!cancelled) setClubMembers(clubCount || 0)
 
-      // Club active members
-      const { count: clubCount } = await supabase
-        .from('dr7_club_subscriptions')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'active')
-      if (!cancelled) setClubMembers(clubCount || 0)
-
-      // Top vehicles by booking count last 30 days
-      const sinceISO = new Date(now.getTime() - 30 * 86400000).toISOString()
-      const { data: vehData } = await supabase
-        .from('bookings')
-        .select('vehicle_name, vehicle_plate, vehicle_id')
-        .gte('booked_at', sinceISO)
-        .eq('service_type', 'car_rental')
-      const counts = new Map<string, { name: string; plate: string; count: number }>()
-      for (const b of vehData || []) {
-        const key = (b.vehicle_id || b.vehicle_name || '').toString()
-        if (!key) continue
-        const prev = counts.get(key)
-        if (prev) prev.count++
-        else counts.set(key, { name: b.vehicle_name || '—', plate: b.vehicle_plate || '', count: 1 })
+        // Top vehicles by booking count last 30 days
+        const sinceISO = new Date(now.getTime() - 30 * 86400000).toISOString()
+        const { data: vehData } = await supabase
+          .from('bookings')
+          .select('vehicle_name, vehicle_plate, vehicle_id')
+          .gte('booked_at', sinceISO)
+          .eq('service_type', 'car_rental')
+        const counts = new Map<string, { name: string; plate: string; count: number }>()
+        for (const b of vehData || []) {
+          const key = (b.vehicle_id || b.vehicle_name || '').toString()
+          if (!key) continue
+          const prev = counts.get(key)
+          if (prev) prev.count++
+          else counts.set(key, { name: b.vehicle_name || '—', plate: b.vehicle_plate || '', count: 1 })
+        }
+        const top = Array.from(counts.values()).sort((a, b) => b.count - a.count).slice(0, 5)
+        if (!cancelled) setTopVehicles(top.map(t => ({ name: t.name, plate: t.plate, bookings: t.count, image_url: null })))
+      } catch (err) {
+        console.error('[DashboardOverview] load failed:', err)
+      } finally {
+        // Always clear the spinner — otherwise a failed query leaves the
+        // overview stuck on "Caricamento dashboard…" forever.
+        if (!cancelled) setLoading(false)
       }
-      const top = Array.from(counts.values()).sort((a, b) => b.count - a.count).slice(0, 5)
-      if (!cancelled) setTopVehicles(top.map(t => ({ name: t.name, plate: t.plate, bookings: t.count, image_url: null })))
-
-      setLoading(false)
     }
     load()
     return () => { cancelled = true }
-  }, [range])
+  }, [dateFrom, dateTo, gaRange])
 
   // Build sparkline series for each KPI from GA traffic
   const visitsSpark = useMemo(() => (ga?.traffic || []).slice(-14).map(p => p.total), [ga])
@@ -223,26 +242,11 @@ export default function DashboardOverview() {
 
   return (
     <div className="space-y-5">
-      {/* Header with range selector */}
+      {/* Header — date range is controlled by the dashboard date pickers (single control) */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-theme-text-primary tracking-tight">Dashboard Overview</h2>
           <p className="text-sm text-theme-text-muted">Panoramica generale delle performance</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {(['7d','28d','90d','180d','365d'] as GaRange[]).map(r => (
-            <button
-              key={r}
-              onClick={() => setRange(r)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                range === r
-                  ? 'bg-dr7-gold text-black'
-                  : 'bg-theme-bg-tertiary text-theme-text-muted hover:text-theme-text-primary'
-              }`}
-            >
-              {r === '7d' ? '7 giorni' : r === '28d' ? '28 giorni' : r === '90d' ? '3 mesi' : r === '180d' ? '6 mesi' : '12 mesi'}
-            </button>
-          ))}
         </div>
       </div>
 
