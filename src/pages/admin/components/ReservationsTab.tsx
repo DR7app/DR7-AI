@@ -3135,7 +3135,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           body: JSON.stringify({ id: bookingId })
         })
 
-        if (!res.ok) throw new Error('Failed to delete reservation')
+        if (!res.ok) throw new Error('Errore eliminazione prenotazione')
       }
 
       // Delete Google Calendar event
@@ -4879,8 +4879,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // ===== AVAILABILITY ENGINE VALIDATION =====
       // Blocks same-car 75-min buffer AND the 15-min cross-vehicle handover gap.
       // Admin can override both via director OTP (slot_unavailable).
-      // SKIP when EDITING an existing booking or when showAllVehicles is forced.
-      if (formData.vehicle_id && !editingId && !showAllVehicles) {
+      // 2026-05-28: rimosso il bypass su `!showAllVehicles`. Anche quando
+      // l'operatore spunta "Mostra tutti i veicoli" e seleziona un'auto
+      // gia' prenotata, il check parte: requestOverride apre la modale OTP
+      // per chi non ha role:bypass-otp (direzione decide), e auto-bypassa
+      // per i ruoli autorizzati. Cosi' l'operatore non viene mai bloccato
+      // in modo opaco — o passa via OTP o via bypass, mai un hard-block.
+      if (formData.vehicle_id && !editingId) {
         const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id)
 
         if (selectedVehicle) {
@@ -5105,7 +5110,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
             if (secondDriverError) {
               console.error('Failed to create second driver customer:', secondDriverError)
-              throw new Error(`Failed to create second driver: ${secondDriverError.message}`)
+              throw new Error(`Errore creazione secondo guidatore: ${secondDriverError.message}`)
             }
 
             secondDriverId = newSecondDriver.id
@@ -5113,7 +5118,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           }
         } catch (error) {
           console.error('Error creating second driver:', error)
-          throw new Error('Failed to create second driver: ' + (error as Error).message)
+          throw new Error('Errore creazione secondo guidatore: ' + (error as Error).message)
         }
       }
 
@@ -5231,7 +5236,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
             if (customerError) {
               console.error('Failed to create customer:', customerError)
-              throw new Error(`Failed to create customer: ${customerError.message}`)
+              throw new Error(`Errore creazione cliente: ${customerError.message}`)
             }
 
             customerId = newCustomer.id
@@ -5239,7 +5244,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           }
         } catch (error) {
           console.error('Error creating customer:', error)
-          throw new Error('Failed to create customer: ' + (error as Error).message)
+          throw new Error('Errore creazione cliente: ' + (error as Error).message)
         }
       }
 
@@ -5426,7 +5431,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
         currency: formData.currency.toUpperCase(),
         // Pay by Link bookings start as pending_payment/unpaid;
-        // other payment methods start as confirmed/paid
+        // other payment methods start as confirmed/paid.
         // 2026-05-28: se l'admin ha spuntato "Conferma Prenotazione" il
         // booking va creato come 'confirmed' anche con Pay by Link, cosi'
         // il cron `cancel-unpaid-nexi-bookings` non lo prende in
@@ -5707,7 +5712,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (bookingError) {
           console.error('Failed to update booking:', bookingError)
           console.error('Booking data that failed:', bookingData)
-          throw new Error(`Failed to update booking entry: ${bookingError.message || JSON.stringify(bookingError)}`)
+          throw new Error(`Errore aggiornamento prenotazione: ${bookingError.message || JSON.stringify(bookingError)}`)
         }
         insertedBooking = data
         logger.log('Booking updated successfully:', insertedBooking)
@@ -5764,7 +5769,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (bookingError) {
           console.error('Failed to create booking:', bookingError)
           console.error('Booking data that failed:', bookingData)
-          throw new Error(`Failed to create booking entry: ${bookingError.message || JSON.stringify(bookingError)}`)
+          throw new Error(`Errore creazione prenotazione: ${bookingError.message || JSON.stringify(bookingError)}`)
         }
         insertedBooking = data
         logger.log('Booking created successfully:', insertedBooking)
@@ -6657,7 +6662,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       toast.success(editingId ? 'Prenotazione aggiornata!' : 'Prenotazione creata!')
     } catch (error) {
       console.error('Failed to save reservation:', error)
-      alert('Failed to save reservation: ' + (error as Error).message)
+      alert('Errore salvataggio prenotazione: ' + (error as Error).message)
     } finally {
       setIsSubmitting(false)
       submitLockRef.current = false

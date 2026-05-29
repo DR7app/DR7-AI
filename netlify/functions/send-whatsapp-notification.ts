@@ -337,7 +337,12 @@ const handler: Handler = async (event) => {
             .in('message_key', ['pro_wrapper_header', 'pro_wrapper_footer']);
           const hdr = wrapRows?.find((w: any) => w.message_key === 'pro_wrapper_header' && w.is_enabled !== false)?.message_body || '';
           const ftr = wrapRows?.find((w: any) => w.message_key === 'pro_wrapper_footer' && w.is_enabled !== false)?.message_body || '';
-          rendered = [hdr, rendered, ftr].filter(Boolean).join('\n\n');
+          // 2026-05-29: dedup wrapper se il body contiene gia' header/footer.
+          const norm = (s: string) => s.replace(/\*/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+          const nr = norm(rendered);
+          const skipHdr = hdr && nr.startsWith(norm(hdr));
+          const skipFtr = ftr && nr.endsWith(norm(ftr));
+          rendered = [skipHdr ? '' : hdr, rendered, skipFtr ? '' : ftr].filter(Boolean).join('\n\n');
         }
         message = rendered;
       }
@@ -775,7 +780,13 @@ const handler: Handler = async (event) => {
       const footerTpl = wrappers?.find((w: any) => w.message_key === 'pro_wrapper_footer' && w.is_enabled !== false);
       const header = headerTpl?.message_body || '';
       const footer = footerTpl?.message_body || '';
-      wrappedMessage = [header, finalMessage, footer].filter(Boolean).join('\n\n');
+      // 2026-05-29: dedup — non prependere header se finalMessage gia' inizia
+      // con quel testo (admin ha incollato il wrapper nel body). Idem footer.
+      const norm = (s: string) => s.replace(/\*/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const nf = norm(finalMessage);
+      const skipHdr = header && nf.startsWith(norm(header));
+      const skipFtr = footer && nf.endsWith(norm(footer));
+      wrappedMessage = [skipHdr ? '' : header, finalMessage, skipFtr ? '' : footer].filter(Boolean).join('\n\n');
     } catch {
       wrappedMessage = finalMessage;
     }

@@ -368,8 +368,22 @@ export async function getMessageTemplate(
   if (tpl.include_header === true) {
     const headerTpl = templates.find(t => t.message_key === 'pro_wrapper_header' && t.is_enabled !== false)
     const footerTpl = templates.find(t => t.message_key === 'pro_wrapper_footer' && t.is_enabled !== false)
-    if (headerTpl?.message_body) body = headerTpl.message_body + '\n\n' + body
-    if (footerTpl?.message_body) body = body + '\n\n' + footerTpl.message_body
+    // 2026-05-29: dedup — non aggiungere header/footer se il body li
+    // contiene gia' (admin che ha incollato il wrapper nel body, poi
+    // attiva include_header → header doppio nel WhatsApp). Confronto
+    // case-insensitive, trim, ignora asterischi (bold WhatsApp).
+    const norm = (s: string) => s.replace(/\*/g, '').replace(/\s+/g, ' ').trim().toLowerCase()
+    const headerBody = headerTpl?.message_body || ''
+    const footerBody = footerTpl?.message_body || ''
+    const normBody = norm(body)
+    const normHeader = norm(headerBody)
+    const normFooter = norm(footerBody)
+    if (headerBody && !normBody.startsWith(normHeader)) {
+      body = headerBody + '\n\n' + body
+    }
+    if (footerBody && !normBody.endsWith(normFooter)) {
+      body = body + '\n\n' + footerBody
+    }
   }
 
   return body
