@@ -7,6 +7,8 @@ import { useTheme } from '../../../contexts/ThemeContext'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
+import { logger } from '../../../utils/logger'
+import { logAdminAction } from '../../../utils/logAdminAction'
 
 // 2026-05-22: Premium telemetry restyle scoped to this page only.
 // 2026-05-27: gated to dark mode only — overriding theme vars in light
@@ -153,6 +155,87 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   const [currentDate, setCurrentDate] = useState(new Date())
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedBooking, setSelectedBooking] = useState<CarWashBooking | null>(null)
+  // 2026-05-29: stato per il pulsante "Auto Pronta" nel dettaglio booking.
+  // Disabilita finche' WhatsApp + update DB sono in flight, ed evita doppio
+  // send se direzione clicca due volte di fila.
+  const [sendingReady, setSendingReady] = useState<string | null>(null)
+
+  async function handleAutoPronta(booking: CarWashBooking) {
+    if (sendingReady === booking.id) return
+    setSendingReady(booking.id)
+    const phone = booking.customer_phone || booking.booking_details?.customer?.phone || ''
+    const firstName = (booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente').split(' ')[0]
+    const plate = booking.vehicle_plate || booking.booking_details?.vehicle?.plate || booking.booking_details?.vehiclePlate || ''
+    try {
+      // 1) WhatsApp al cliente — templateKey 'carwash_ready' (admin lo
+      //    configura in Messaggi di Sistema Pro). Fallback a customMessage
+      //    se il template non esiste, cosi' il pulsante funziona subito
+      //    anche senza setup template.
+      if (phone) {
+        const tplRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customPhone: phone,
+            templateKey: 'carwash_ready',
+            booking: {
+              id: booking.id,
+              service_type: 'car_wash',
+              customer_name: booking.customer_name,
+              customer_phone: phone,
+              service_name: booking.service_name,
+              vehicle_plate: plate,
+              appointment_date: booking.appointment_date,
+              appointment_time: booking.appointment_time,
+              booking_details: booking.booking_details || {},
+            },
+          }),
+        })
+        const tplData = await tplRes.json().catch(() => ({}))
+        if (tplData?.skipped || !tplRes.ok) {
+          // Fallback: messaggio diretto se il Pro template non c'e' / disabilitato.
+          const fallbackMsg = `Buongiorno ${firstName},\n\nLa Sua auto${plate ? ` *${plate}*` : ''} è pronta per il ritiro.\n\nLa aspettiamo.\n\n— DR7`
+          await fetch('/.netlify/functions/send-whatsapp-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              customPhone: phone,
+              customMessage: fallbackMsg,
+              skipHeader: false,
+            }),
+          })
+        }
+      }
+
+      // 2) Marca la booking come "auto pronta" in DB. Usiamo un flag in
+      //    booking_details cosi' non tocchiamo il payment/status flow
+      //    esistente, e direzione vede sul calendario se gia' segnalato.
+      await supabase.from('bookings').update({
+        booking_details: {
+          ...(booking.booking_details || {}),
+          auto_pronta_at: new Date().toISOString(),
+          auto_pronta_sent: !!phone,
+        },
+        updated_at: new Date().toISOString(),
+      }).eq('id', booking.id)
+
+      logAdminAction('carwash_auto_pronta', 'carwash_booking', booking.id, {
+        customer: booking.customer_name || 'N/A',
+        plate,
+        phone_present: !!phone,
+      })
+
+      toast.success(phone ? 'Cliente notificato — Auto pronta!' : 'Segnata pronta (nessun telefono cliente per WhatsApp)')
+      setSelectedBooking(null)
+      loadData()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      logger.error('[Auto Pronta] failed:', msg)
+      toast.error('Errore: ' + msg)
+    } finally {
+      setSendingReady(null)
+    }
+  }
   const [editingBooking, setEditingBooking] = useState<CarWashBooking | null>(null)
   const saveEditLockRef = useRef(false)
 
@@ -1256,7 +1339,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                 DR7-{selectedBooking.id.toUpperCase().slice(0, 8)}
               </div>
 
-              {/* Action button */}
+              {/* Action buttons */}
               <button
                 onClick={() => {
                   setEditingBooking(selectedBooking)
@@ -1266,6 +1349,29 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
               >
                 Modifica Prenotazione
               </button>
+              {/* 2026-05-29: Auto Pronta — notifica WhatsApp al cliente che
+                  l'auto e' pronta per il ritiro + stamp auto_pronta_at nel
+                  booking_details. Disabilitato durante l'invio + se gia'
+                  inviato in passato (mostra "Già notificato"). */}
+              {(() => {
+                const alreadySent = !!selectedBooking.booking_details?.auto_pronta_sent
+                const inFlight = sendingReady === selectedBooking.id
+                return (
+                  <button
+                    onClick={() => handleAutoPronta(selectedBooking)}
+                    disabled={inFlight || alreadySent}
+                    className={`w-full py-3 rounded-xl font-semibold text-[15px] transition-all active:scale-[0.98] ${
+                      alreadySent
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 cursor-not-allowed'
+                        : inFlight
+                          ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 cursor-wait'
+                          : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300'
+                    }`}
+                  >
+                    {alreadySent ? '✓ Cliente già notificato' : inFlight ? 'Invio in corso...' : 'Auto Pronta'}
+                  </button>
+                )
+              })()}
             </div>
           </div>
         </div>
