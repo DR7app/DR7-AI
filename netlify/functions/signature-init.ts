@@ -1,6 +1,7 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
+import nodemailer from 'nodemailer'
 import { renderTemplate } from './utils/messageTemplates'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
@@ -80,6 +81,77 @@ async function sendWhatsAppSigningLink(
         }
     } catch (waErr: any) {
         console.warn(`[signature-init] WhatsApp error for ${signerName}:`, waErr.message)
+        return false
+    }
+}
+
+// 2026-05-29: SMTP per il FALLBACK EMAIL del link di firma. Green API
+// accetta sendMessage (ritorna idMessage) anche per numeri SENZA WhatsApp,
+// quindi un firmatario senza WhatsApp risultava "inviato" ma non riceveva
+// nulla (caso reale: padre garante/proprietario auto). Ora, se il firmatario
+// ha un'email, il link arriva ANCHE via email. Stessa config SMTP di
+// send-contract-email.ts (info@dr7.app).
+const emailTransporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.secureserver.net',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD,
+    },
+})
+
+async function sendEmailSigningLink(
+    email: string,
+    signerName: string,
+    contractNumber: string,
+    signingUrl: string
+): Promise<boolean> {
+    if (!email || !process.env.SMTP_USER || !process.env.SMTP_PASSWORD) return false
+
+    try {
+        const safeName = signerName || 'Cliente'
+        const subject = `Firma contratto DR7${contractNumber ? ` n. ${contractNumber}` : ''}`
+        const html = `
+            <div style="font-family: Arial, sans-serif; color: #1a1a1a; max-width: 560px; margin: 0 auto;">
+                <p>Gentile ${safeName},</p>
+                <p>per completare la pratica di noleggio DR7${contractNumber ? ` (contratto n. <strong>${contractNumber}</strong>)` : ''}
+                   è necessaria la sua firma.</p>
+                <p style="margin: 24px 0;">
+                    <a href="${signingUrl}"
+                       style="background:#0891b2;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;display:inline-block;">
+                        Firma il contratto
+                    </a>
+                </p>
+                <p>Oppure copia e incolla questo link nel browser:<br>
+                   <a href="${signingUrl}">${signingUrl}</a></p>
+                <p style="color:#666;font-size:13px;">Il link scade tra ${TOKEN_EXPIRY_HOURS} ore. Se non ha richiesto questa firma può ignorare il messaggio.</p>
+                <p style="color:#666;font-size:13px;">DR7 Empire — info@dr7.app</p>
+            </div>`
+
+        await emailTransporter.sendMail({
+            from: '"DR7 Empire" <info@dr7.app>',
+            to: email,
+            subject,
+            html,
+        })
+        console.log(`[signature-init] Signing link sent via EMAIL to ${email} for ${signerName}`)
+
+        try {
+            const sb = createClient(supabaseUrl, supabaseServiceKey)
+            await sb.from('sent_messages_log').insert({
+                customer_name: signerName,
+                customer_phone: '',
+                message_text: `Email firma → ${email}: ${signingUrl}`,
+                template_label: 'Signature Request Link (Email)',
+                status: 'sent',
+            })
+        } catch (logErr) {
+            console.error('Failed to log email message:', logErr)
+        }
+        return true
+    } catch (mailErr: any) {
+        console.warn(`[signature-init] Email error for ${signerName} <${email}>:`, mailErr?.message || mailErr)
         return false
     }
 }
@@ -392,19 +464,30 @@ export const handler: Handler = async (event) => {
 
             // Send WhatsApp signing link
             const signingUrl = `${SIGNING_BASE_URL}/firma/${token}`
-            const sent = await sendWhatsAppSigningLink(
+            const waSent = await sendWhatsAppSigningLink(
                 signer.phone,
                 signer.name,
                 contract.contract_number || '',
                 signingUrl
             )
+            // 2026-05-29: invia ANCHE via email se il firmatario ha un'email
+            // PROPRIA (non il fallback cliente principale — altrimenti il
+            // token del garante finirebbe nella casella del cliente). Cosi'
+            // chi non ha WhatsApp riceve comunque il contratto: Green API
+            // ritorna idMessage anche per numeri non-WhatsApp, quindi waSent
+            // da solo non garantisce la consegna.
+            const emailSent = signer.email
+                ? await sendEmailSigningLink(signer.email, signer.name, contract.contract_number || '', signingUrl)
+                : false
+            const sent = waSent || emailSent
+            const channels = [waSent ? 'whatsapp' : null, emailSent ? 'email' : null].filter(Boolean)
 
             if (sent) {
                 await supabase.from('signature_audit_trail').insert({
                     signature_request_id: sigRequest.id,
                     event_type: 'link_sent',
-                    event_description: `Link di firma inviato via WhatsApp a ${signer.name} (${signer.role})`,
-                    metadata: { signing_url: signingUrl, channel: 'whatsapp', signer_role: signer.role }
+                    event_description: `Link di firma inviato a ${signer.name} (${signer.role}) via ${channels.join(' + ')}`,
+                    metadata: { signing_url: signingUrl, channel: channels.join('+'), signer_role: signer.role }
                 })
             }
 
@@ -418,7 +501,7 @@ export const handler: Handler = async (event) => {
         if (sentCount === 0) {
             return {
                 statusCode: 500,
-                body: JSON.stringify({ error: 'Impossibile inviare i link via WhatsApp. Verifica i numeri di telefono.' })
+                body: JSON.stringify({ error: 'Impossibile inviare i link di firma (WhatsApp ed email falliti). Verifica i numeri di telefono e le email dei firmatari.' })
             }
         }
 
@@ -427,7 +510,7 @@ export const handler: Handler = async (event) => {
             body: JSON.stringify({
                 success: true,
                 message: allSent
-                    ? `Link di firma inviato a ${sentCount} firmatari via WhatsApp`
+                    ? `Link di firma inviato a ${sentCount} firmatari (WhatsApp e/o email)`
                     : `Link inviato a ${sentCount}/${results.length} firmatari. Non inviato a: ${failedNames.join(', ')}`,
                 signers: results
             })

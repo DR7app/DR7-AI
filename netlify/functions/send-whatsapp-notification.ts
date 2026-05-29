@@ -264,9 +264,22 @@ const handler: Handler = async (event) => {
             if (mergedVars[k] === undefined || mergedVars[k] === '') mergedVars[k] = v;
           }
         }
-        // Caller-provided vars overlay everything else
+        // Caller-provided vars overlay everything else.
+        // 2026-05-29 BUG FIX: i caller passano chiavi GIA' tra graffe
+        // (es. '{customer_name}', '{vehicle_name}', '{plate}') mentre le
+        // booking-derived qui sopra usano chiavi NUDE ('customer_name', ...).
+        // Con lo spread grezzo `{ ...mergedVars, ...templateVars }` le due
+        // forme NON collidono, quindi restavano ENTRAMBE in mergedVars: nel
+        // loop di sostituzione la chiave nuda (fallback 'Cliente' / '' perche'
+        // il caller passa solo booking:{id,service_type}) veniva iterata PRIMA
+        // e vinceva, azzerando nome cliente e targa nel messaggio di conferma
+        // prenotazione. Normalizziamo le graffe della chiave cosi' il valore
+        // reale del caller sovrascrive davvero il fallback booking-derived.
         if (templateVars && typeof templateVars === 'object') {
-          mergedVars = { ...mergedVars, ...templateVars };
+          for (const [k, v] of Object.entries(templateVars)) {
+            const ck = String(k).replace(/^\s*\{+\s*|\s*\}+\s*$/g, '').trim();
+            if (ck) mergedVars[ck] = v;
+          }
         }
         if (Object.keys(mergedVars).length > 0) {
           // Normalise each key: strip optional leading/trailing braces and any
