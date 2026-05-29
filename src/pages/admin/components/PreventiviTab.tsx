@@ -4947,23 +4947,23 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                   const rate = deliveryRateForVehicle ?? 0
                   const fee = km * rate
                   // BUG FIX 2026-05-18: rispetta il prezzo manuale digitato
-                  // dall'admin. Prima qualsiasi nuova selezione di indirizzo
-                  // sovrascriveva delivery_fee col calcolato km×rate, e
-                  // l'admin perdeva il valore appena scritto. Adesso il fee
-                  // calcolato e' solo un SUGGERIMENTO: lo usiamo solo se il
-                  // campo e' vuoto o 0 (admin non ha ancora messo nulla).
-                  setForm(prev => {
-                    const currentFee = parseFloat(prev.delivery_fee || '0')
-                    const keepManual = currentFee > 0
-                    return {
-                      ...prev,
-                      delivery_address: parts.full,
-                      delivery_km: km,
-                      delivery_fee: keepManual
-                        ? prev.delivery_fee
-                        : (fee > 0 ? fee.toFixed(2) : '0'),
-                    }
-                  })
+                  // dall'admin (storico — vedi nota 2026-05-29 sotto).
+                  // 2026-05-29: il guard "keepManual = currentFee > 0" bloccava
+                  // QUALSIASI ricalcolo appena delivery_fee era != 0, quindi
+                  // cambiando indirizzo restava il vecchio prezzo (bug "prezzo
+                  // hardcoded / falso, non calcola dall'indirizzo"). Selezionare
+                  // un indirizzo dai suggerimenti e' un segnale esplicito di
+                  // "ricalcola dalla distanza": sovrascriviamo sempre col valore
+                  // km×tariffa. L'admin puo' comunque correggere a mano il campo
+                  // Costo dopo. Se la tariffa categoria non e' configurata
+                  // (rate 0 → fee 0) lasciamo il valore precedente per non
+                  // azzerare un prezzo manuale.
+                  setForm(prev => ({
+                    ...prev,
+                    delivery_address: parts.full,
+                    delivery_km: km,
+                    delivery_fee: fee > 0 ? fee.toFixed(2) : prev.delivery_fee,
+                  }))
                 }}
               />
               {deliveryRateMissing && (
@@ -5026,20 +5026,17 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                   const rate = deliveryRateForVehicle ?? 0
                   const fee = km * rate
                   // BUG FIX 2026-05-18: rispetta il prezzo manuale digitato
-                  // dall'admin (stesso fix di delivery_fee). Il fee calcolato
-                  // e' solo un SUGGERIMENTO se l'admin non ha gia' messo nulla.
-                  setForm(prev => {
-                    const currentFee = parseFloat(prev.pickup_fee || '0')
-                    const keepManual = currentFee > 0
-                    return {
-                      ...prev,
-                      pickup_address: parts.full,
-                      pickup_km: km,
-                      pickup_fee: keepManual
-                        ? prev.pickup_fee
-                        : (fee > 0 ? fee.toFixed(2) : '0'),
-                    }
-                  })
+                  // dall'admin (stesso fix di delivery_fee).
+                  // 2026-05-29: vedi nota in delivery_fee — selezionare un
+                  // indirizzo ricalcola sempre il costo da km×tariffa; se la
+                  // tariffa categoria non e' configurata teniamo il valore
+                  // precedente per non azzerare un prezzo manuale.
+                  setForm(prev => ({
+                    ...prev,
+                    pickup_address: parts.full,
+                    pickup_km: km,
+                    pickup_fee: fee > 0 ? fee.toFixed(2) : prev.pickup_fee,
+                  }))
                 }}
               />
               {deliveryRateMissing && (

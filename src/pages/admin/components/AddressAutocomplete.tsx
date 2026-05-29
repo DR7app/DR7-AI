@@ -53,6 +53,12 @@ export default function AddressAutocomplete({
   const [suggestions, setSuggestions] = useState<NominatimResult[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const [highlightIndex, setHighlightIndex] = useState(-1)
+  // 2026-05-29: stato esplicito della ricerca. Prima ogni errore/0-risultati
+  // veniva inghiottito (`if (!res.ok) return` + `catch {}`), quindi quando
+  // Nominatim rifiutava/limitava la richiesta il menu restava vuoto senza
+  // alcun messaggio → l'utente vedeva "nessun indirizzo trovato" senza capire
+  // il perche'. Ora distinguiamo loading / vuoto / errore e lo mostriamo.
+  const [status, setStatus] = useState<'idle' | 'loading' | 'empty' | 'error'>('idle')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const skipFetchRef = useRef(false)
@@ -60,21 +66,34 @@ export default function AddressAutocomplete({
   const fetchSuggestions = useCallback(async (query: string) => {
     if (query.length < 3) {
       setSuggestions([])
+      setStatus('idle')
       setIsOpen(false)
       return
     }
+    setStatus('loading')
+    setIsOpen(true)
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=5&countrycodes=it`,
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=jsonv2&addressdetails=1&limit=5&countrycodes=it`,
         { headers: { 'Accept-Language': 'it' } }
       )
-      if (!res.ok) return
+      if (!res.ok) {
+        // 429 = rate limit, 403 = endpoint che blocca l'uso autocomplete.
+        console.warn(`[AddressAutocomplete] Nominatim HTTP ${res.status} per "${query}"`)
+        setSuggestions([])
+        setStatus('error')
+        return
+      }
       const data: NominatimResult[] = await res.json()
       setSuggestions(data)
-      setIsOpen(data.length > 0)
+      setStatus(data.length > 0 ? 'idle' : 'empty')
+      setIsOpen(true)
       setHighlightIndex(-1)
-    } catch {
-      // Silently fail — user can still type manually
+    } catch (err) {
+      // Rete bloccata / CORS / ad-blocker: mostra l'errore invece di sparire.
+      console.warn('[AddressAutocomplete] ricerca indirizzo fallita:', err)
+      setSuggestions([])
+      setStatus('error')
     }
   }, [])
 
@@ -127,6 +146,7 @@ export default function AddressAutocomplete({
     onChange(formatted)
     if (onSelectParts) onSelectParts(extractParts(result))
     setSuggestions([])
+    setStatus('idle')
     setIsOpen(false)
   }
 
@@ -174,6 +194,13 @@ export default function AddressAutocomplete({
         required={required}
         autoComplete="off"
       />
+      {isOpen && suggestions.length === 0 && status !== 'idle' && (
+        <div className="absolute z-50 left-0 right-0 mt-1 bg-theme-bg-primary border border-theme-border rounded-lg shadow-2xl px-4 py-3 text-sm">
+          {status === 'loading' && <span className="text-theme-text-muted">Ricerca indirizzo…</span>}
+          {status === 'empty' && <span className="text-theme-text-muted">Nessun indirizzo trovato. Prova con la sola città (es. "Cagliari") o digita il costo a mano.</span>}
+          {status === 'error' && <span className="text-amber-400">Ricerca indirizzi non disponibile (servizio mappe bloccato o limitato). Inserisci città e costo manualmente.</span>}
+        </div>
+      )}
       {isOpen && suggestions.length > 0 && (
         <ul className="absolute z-50 left-0 right-0 mt-1 bg-theme-bg-primary border border-theme-border rounded-lg shadow-2xl max-h-60 overflow-y-auto">
           {suggestions.map((result, i) => (

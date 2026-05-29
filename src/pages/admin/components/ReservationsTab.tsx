@@ -96,6 +96,7 @@ import {
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { buildConfigOverlay, getVehicleSforoOverride } from '../../../utils/configOverlay'
 import { getKmIncluded, getUnlimitedKmPrice as getUnlimitedKmPriceFromConfig, getInsuranceOptions as getInsuranceOptionsFromConfig, getInsuranceNameById, getDeliveryPricePerKmForCategory } from '../../../utils/configLookup'
+import { kmFromDR7Office } from '../../../utils/dr7Distance'
 import { resolvePacchetti } from '../../../utils/pacchettiResolver'
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
 
@@ -7611,13 +7612,30 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       label="Indirizzo Consegna (opzionale)"
                       value={formData.delivery_street}
                       onChange={(val) => setFormData(prev => ({ ...prev, delivery_street: val }))}
-                      onSelectParts={(parts) => setFormData(prev => ({
-                        ...prev,
-                        delivery_street: parts.street || parts.full,
-                        delivery_city: parts.city,
-                        delivery_zip: parts.zip,
-                        delivery_province: parts.province,
-                      }))}
+                      onSelectParts={(parts) => {
+                        // 2026-05-29: calcola il Costo consegna dalla distanza
+                        // ufficio→indirizzo (km × tariffa categoria Centralina
+                        // Pro), come nel preventivo. Prima onSelectParts riempiva
+                        // solo via/citta/CAP/prov e NON calcolava nulla, quindi
+                        // l'operatore doveva digitare il costo a mano. Ora,
+                        // selezionando un indirizzo dai suggerimenti, il costo
+                        // si compila da solo (sovrascrivibile). Se la tariffa
+                        // categoria non e' configurata (rate null) teniamo il
+                        // valore precedente per non azzerare un eventuale manuale.
+                        const km = (parts.lat != null && parts.lon != null)
+                          ? kmFromDR7Office({ lat: parts.lat, lon: parts.lon })
+                          : 0
+                        const rate = deliveryRateForSelectedVehicle ?? 0
+                        const fee = km * rate
+                        setFormData(prev => ({
+                          ...prev,
+                          delivery_street: parts.street || parts.full,
+                          delivery_city: parts.city,
+                          delivery_zip: parts.zip,
+                          delivery_province: parts.province,
+                          delivery_fee: fee > 0 ? fee.toFixed(2) : prev.delivery_fee,
+                        }))
+                      }}
                       placeholder="Via Roma 15, 09131 Cagliari"
                     />
                     <div className="grid grid-cols-3 gap-2 mt-1">
@@ -7707,13 +7725,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       label="Indirizzo Ritiro (opzionale)"
                       value={formData.pickup_street}
                       onChange={(val) => setFormData(prev => ({ ...prev, pickup_street: val }))}
-                      onSelectParts={(parts) => setFormData(prev => ({
-                        ...prev,
-                        pickup_street: parts.street || parts.full,
-                        pickup_city: parts.city,
-                        pickup_zip: parts.zip,
-                        pickup_province: parts.province,
-                      }))}
+                      onSelectParts={(parts) => {
+                        // 2026-05-29: vedi nota in delivery — calcola il Costo
+                        // ritiro da km×tariffa categoria selezionando un indirizzo.
+                        const km = (parts.lat != null && parts.lon != null)
+                          ? kmFromDR7Office({ lat: parts.lat, lon: parts.lon })
+                          : 0
+                        const rate = deliveryRateForSelectedVehicle ?? 0
+                        const fee = km * rate
+                        setFormData(prev => ({
+                          ...prev,
+                          pickup_street: parts.street || parts.full,
+                          pickup_city: parts.city,
+                          pickup_zip: parts.zip,
+                          pickup_province: parts.province,
+                          pickup_fee: fee > 0 ? fee.toFixed(2) : prev.pickup_fee,
+                        }))
+                      }}
                       placeholder="Via Roma 15, 09131 Cagliari"
                     />
                     <div className="grid grid-cols-3 gap-2 mt-1">
