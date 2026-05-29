@@ -984,9 +984,18 @@ export default function ReportsTab() {
                 {formatPercent(vehicleData.avgUtilizationRate)}
               </p>
             </div>
+            {/* 2026-05-29: Ricavo Noleggi e Ricavo TOTALE includono il
+                ricavo anticipato (allineato al breakdown per-veicolo che
+                sommava gia' anticipato dentro il TOTALE riga). Riga
+                "di cui anticipato" sotto la cifra rende esplicita la
+                composizione cosi' l'admin sa quanto del totale e' gia'
+                incassato ma riferito a noleggi futuri. */}
             <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
               <p className="text-xs text-theme-text-muted">Ricavo Noleggi</p>
-              <p className="text-2xl font-bold text-theme-text-primary">{formatCurrency(vehicleData.totalRentalRevenue)}</p>
+              <p className="text-2xl font-bold text-theme-text-primary">{formatCurrency(vehicleData.totalRentalRevenue + (vehicleData.totalAnticipatedRevenue || 0))}</p>
+              {(vehicleData.totalAnticipatedRevenue || 0) > 0 && (
+                <p className="text-[10px] text-cyan-400 mt-0.5">di cui {formatCurrency(vehicleData.totalAnticipatedRevenue || 0)} anticipato</p>
+              )}
             </div>
             {vehicleData.totalPenaltyRevenue > 0 && (
               <div className="bg-theme-bg-secondary/50 rounded-xl border border-yellow-500/30 p-4">
@@ -1002,7 +1011,10 @@ export default function ReportsTab() {
             )}
             <div className="bg-theme-bg-secondary/50 rounded-xl border border-dr7-gold/30 p-4">
               <p className="text-xs text-theme-text-muted">Ricavo TOTALE</p>
-              <p className="text-2xl font-bold text-dr7-gold">{formatCurrency(vehicleData.totalRevenue)}</p>
+              <p className="text-2xl font-bold text-dr7-gold">{formatCurrency(vehicleData.totalRevenue + (vehicleData.totalAnticipatedRevenue || 0))}</p>
+              {(vehicleData.totalAnticipatedRevenue || 0) > 0 && (
+                <p className="text-[10px] text-cyan-400 mt-0.5">di cui {formatCurrency(vehicleData.totalAnticipatedRevenue || 0)} anticipato</p>
+              )}
             </div>
             {/* 2026-05-24: Incassi anticipati SEMPRE visibile cosi' l'admin
                 vede chiaramente il valore anche quando e' 0 (e capisce che
@@ -1020,7 +1032,7 @@ export default function ReportsTab() {
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <h3 className="text-sm font-bold text-cyan-400">Incassi Anticipati nel Periodo</h3>
-                  <p className="text-[11px] text-theme-text-muted">Pagati nel periodo selezionato — il noleggio sarà in un mese futuro. Conteggiati a parte dal Ricavo TOTALE per non gonfiare il fatturato del mese.</p>
+                  <p className="text-[11px] text-theme-text-muted">Pagati nel periodo selezionato — il noleggio sarà in un mese futuro. Inclusi in Ricavo Noleggi e Ricavo TOTALE (riga "di cui anticipato").</p>
                 </div>
                 <span className="text-xl font-bold text-cyan-400 tabular-nums">{formatCurrency(vehicleData.totalAnticipatedRevenue || 0)}</span>
               </div>
