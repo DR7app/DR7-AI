@@ -469,6 +469,64 @@ export const handler: Handler = async (event) => {
                 console.error('[signature-complete] WhatsApp send failed:', waErr.message)
             }
 
+            // 2026-05-29: BROADCAST contratto fully signed a TUTTI i firmatari
+            // se questo era l'ultimo signer. Verifica contando i pending dopo
+            // l'update di sopra. Spedisce il PDF finale via Green API ad ogni
+            // signature_request che ha un signer_phone. Customer principale e'
+            // gia' stato avvisato sopra; il broadcast copre 2° guidatore,
+            // fideiussori 1/2/3, e garante_veicolo cosi' ognuno ha la copia
+            // firmata da tutti per il proprio archivio.
+            if (sigRequest.contract_id) {
+                try {
+                    const { data: allReqs } = await supabase
+                        .from('signature_requests')
+                        .select('id, signer_name, signer_email, signer_phone, status')
+                        .eq('contract_id', sigRequest.contract_id)
+                    const totalSigners = (allReqs || []).length
+                    const pendingCount = (allReqs || []).filter(r => r.status === 'pending').length
+                    console.log(`[signature-complete] broadcast check: total=${totalSigners} pending=${pendingCount}`)
+                    if (totalSigners > 1 && pendingCount === 0) {
+                        console.log('[signature-complete] All signers complete — broadcasting final PDF to everyone')
+                        const cacheBustedUrl = `${signedPdfUrl}${signedPdfUrl.includes('?') ? '&' : '?'}v=${Date.now()}&final=1`
+                        const finalFileName = `${docIdentifier}_firmato_completo.pdf`
+                        const finalCaption = `Contratto ${docIdentifier} firmato da TUTTE le parti il ${signedAtRome} — DR7 Empire`
+                        const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
+                        for (const recipient of allReqs || []) {
+                            const rawPhone = String(recipient.signer_phone || '')
+                            if (!rawPhone) {
+                                console.log(`[signature-complete] broadcast skipped (no phone): ${recipient.signer_name}`)
+                                continue
+                            }
+                            let cleanPhone = rawPhone.replace(/[\s\-\+\(\)]/g, '')
+                            if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
+                            if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
+                            try {
+                                const bcRes = await fetch(greenApiUrl, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        chatId: `${cleanPhone}@c.us`,
+                                        urlFile: cacheBustedUrl,
+                                        fileName: finalFileName,
+                                        caption: finalCaption,
+                                    }),
+                                })
+                                const bcResult = await bcRes.json().catch(() => ({}))
+                                if (bcRes.ok && !bcResult?.error) {
+                                    console.log(`[signature-complete] broadcast OK -> ${recipient.signer_name} (${cleanPhone}) msg=${bcResult.idMessage}`)
+                                } else {
+                                    console.warn(`[signature-complete] broadcast FAIL -> ${recipient.signer_name}:`, bcResult)
+                                }
+                            } catch (bcErr: any) {
+                                console.error(`[signature-complete] broadcast exception -> ${recipient.signer_name}:`, bcErr?.message)
+                            }
+                        }
+                    }
+                } catch (broadcastErr: any) {
+                    console.error('[signature-complete] broadcast block failed (non-blocking):', broadcastErr?.message)
+                }
+            }
+
             // Send "booking confirmed" message to customer using rental_new_customer template
             // Render template directly from Messaggi Sistema and send via Green API
             if (contract?.booking_id) {
