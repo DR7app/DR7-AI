@@ -318,6 +318,29 @@ export const handler: Handler = async (event) => {
             console.log('[signature-init] No garante_veicolo in booking_details')
         }
 
+        // ─── Garanti / Fideiussori Solidali (max 3) ───────────────
+        // 2026-05-29: aggiunge come signer ogni garante presente in
+        // booking_details.guarantors[]. Ognuno riceve la sua signature
+        // request indipendente (email o WhatsApp) sullo stesso contratto.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const fideiussori: any[] = Array.isArray((booking?.booking_details as any)?.guarantors)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ? (booking!.booking_details as any).guarantors
+            : []
+        for (let n = 1; n <= 3; n++) {
+            const row = fideiussori.find(r => Number(r?.index) === n)
+            if (!row) continue
+            const fName = String(row[`garante_${n}_nome_cognome`] || '').trim()
+            const fEmail = String(row[`garante_${n}_email`] || '').trim()
+            const fPhone = String(row[`garante_${n}_telefono`] || '').trim()
+            if (fName && (fEmail || fPhone)) {
+                signers.push({ name: fName, email: fEmail, phone: fPhone, role: `fideiussore_${n}` })
+                console.log(`[signature-init] Fideiussore ${n} added to signers: ${fName} (email="${fEmail}" phone="${fPhone}")`)
+            } else {
+                console.warn(`[signature-init] Fideiussore ${n} skipped — name+contact missing: name="${fName}" email="${fEmail}" phone="${fPhone}"`)
+            }
+        }
+
         console.log(`[signature-init] Creating ${signers.length} signing request(s) for contract ${contract.contract_number}`)
 
         const tokenExpiresAt = new Date(Date.now() + TOKEN_EXPIRY_HOURS * 60 * 60 * 1000)
