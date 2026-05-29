@@ -1181,6 +1181,40 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             'TelefonoSecondoGuidatore': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.phone || '') : '',
             'EmailSecondoGuidatore': (booking.booking_details?.second_driver?.name) ? (booking.booking_details?.second_driver?.email || '') : '',
 
+            // ─── Garanti / Fideiussori Solidali (max 3) ───────────────
+            // 2026-05-29: i field name AcroForm devono essere ESATTAMENTE
+            // garante_N_<suffix>. I valori sono letti da booking_details.guarantors[]
+            // (array di max 3 entry con chiavi assolute, vedi ReservationsTab.tsx).
+            // Se l'estensione N non esiste sul booking, il valore e' '' e il PDF
+            // resta vuoto in quel campo — niente errore, niente fallback.
+            ...(() => {
+              const map: Record<string, string> = {}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const guarantors: any[] = Array.isArray((booking.booking_details as any)?.guarantors)
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                ? (booking.booking_details as any).guarantors
+                : []
+              const SUFFIXES = [
+                'nome_cognome', 'codice_fiscale', 'sesso',
+                'indirizzo', 'cap', 'citta', 'provincia',
+                'data_nascita', 'citta_nascita', 'provincia_nascita',
+                'telefono', 'email',
+              ]
+              for (let n = 1; n <= 3; n++) {
+                const row = guarantors.find(r => Number(r?.index) === n) || {}
+                for (const suffix of SUFFIXES) {
+                  const k = `garante_${n}_${suffix}`
+                  let v = String(row[k] ?? '')
+                  // Format data nascita in IT (dd/mm/yyyy) se sembra ISO.
+                  if (v && (suffix === 'data_nascita') && /^\d{4}-\d{2}-\d{2}/.test(v)) {
+                    try { v = new Date(v).toLocaleDateString('it-IT') } catch { /* lascia raw */ }
+                  }
+                  map[k] = v
+                }
+              }
+              return map
+            })(),
+
             // Company Data (for business clients) — usiamo isAzienda (azienda + PA)
             // Mappiamo TUTTI i possibili nomi AcroForm del PDF perche' il template
             // template usa label tipo "Regione/Ragione sociale", "Sede legale",
