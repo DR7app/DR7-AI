@@ -523,7 +523,7 @@ export default function ReviewsTab() {
                                             {b.customer_name}
                                             {b.review_sent_at && (
                                                 <span className="block text-xs text-green-400 mt-1">
-                                                    (Recensione inviata: {new Date(b.review_sent_at).toLocaleDateString()})
+                                                    (Recensione inviata: {new Date(b.review_sent_at).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })})
                                                 </span>
                                             )}
                                         </td>
