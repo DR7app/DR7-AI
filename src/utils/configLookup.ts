@@ -172,11 +172,13 @@ export function getDeliveryPricePerKm(config: RentalConfig): number {
 
 /**
  * Get delivery price per km for a specific vehicle category.
- * Returns `null` when no per-category value AND no flat fallback exists —
- * caller decides UX (block + OTP override). When the category is missing
- * from `by_category` but a flat `price_per_km > 0` is configured, the
- * flat rate is used as the legacy fallback (preserve old behaviour for
- * categories the admin hasn't yet filled in).
+ * Returns `null` when the category has no value in `by_category`.
+ *
+ * 2026-05-29: rimosso il flat fallback su `price_per_km`. Direzione ha
+ * tolto l'input "Tariffa di default" dalla Centralina Pro — l'unica
+ * sorgente valida e' `by_category[<categoria>]`. Se la categoria non
+ * e' configurata, il caller mostra €0 (Netlify) o il banner "non
+ * configurato" (admin form).
  *
  * Honors the supercars↔exotic alias from `category_alias_supercars_exotic`.
  */
@@ -185,13 +187,9 @@ export function getDeliveryPricePerKmForCategory(
   category: string | null | undefined,
 ): number | null {
   const byCat = config.delivery?.by_category
-  if (category && byCat) {
-    const v = lookupByCategoryAlias(byCat, category)
-    if (typeof v === 'number' && v > 0) return v
-  }
-  const flat = config.delivery?.price_per_km
-  if (typeof flat === 'number' && flat > 0) return flat
-  return null
+  if (!category || !byCat) return null
+  const v = lookupByCategoryAlias(byCat, category)
+  return typeof v === 'number' && v > 0 ? v : null
 }
 
 /** Get DR7 Flex daily price */
