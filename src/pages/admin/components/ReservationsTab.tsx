@@ -825,6 +825,50 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     second_driver_license_issued_by: '',
     second_driver_license_issue_date: '',
     second_driver_license_expiry: '',
+    // 2026-05-29: Garante / Fideiussore Solidale (max 3).
+    // Field names FROZEN per direzione (Adobe Acrobat PDF autofill).
+    // DO NOT rename — usati in booking_details.guarantors[].* alla save
+    // e mappati 1:1 ai field name del PDF contratto fideiussione.
+    garante_count: 0 as 0 | 1 | 2 | 3,
+    // Guarantor 1
+    garante_1_nome_cognome: '',
+    garante_1_codice_fiscale: '',
+    garante_1_sesso: '',
+    garante_1_indirizzo: '',
+    garante_1_cap: '',
+    garante_1_citta: '',
+    garante_1_provincia: '',
+    garante_1_data_nascita: '',
+    garante_1_citta_nascita: '',
+    garante_1_provincia_nascita: '',
+    garante_1_telefono: '',
+    garante_1_email: '',
+    // Guarantor 2
+    garante_2_nome_cognome: '',
+    garante_2_codice_fiscale: '',
+    garante_2_sesso: '',
+    garante_2_indirizzo: '',
+    garante_2_cap: '',
+    garante_2_citta: '',
+    garante_2_provincia: '',
+    garante_2_data_nascita: '',
+    garante_2_citta_nascita: '',
+    garante_2_provincia_nascita: '',
+    garante_2_telefono: '',
+    garante_2_email: '',
+    // Guarantor 3
+    garante_3_nome_cognome: '',
+    garante_3_codice_fiscale: '',
+    garante_3_sesso: '',
+    garante_3_indirizzo: '',
+    garante_3_cap: '',
+    garante_3_citta: '',
+    garante_3_provincia: '',
+    garante_3_data_nascita: '',
+    garante_3_citta_nascita: '',
+    garante_3_provincia_nascita: '',
+    garante_3_telefono: '',
+    garante_3_email: '',
     // Kasko & Deposit
     insurance_option: 'KASKO_BASE' as KaskoTier,
     deposit: '0',
@@ -3423,6 +3467,30 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       second_driver_license_issued_by: booking.booking_details?.second_driver?.license_issued_by || '',
       second_driver_license_issue_date: booking.booking_details?.second_driver?.license_issue_date || '',
       second_driver_license_expiry: booking.booking_details?.second_driver?.license_expiry || '',
+      // 2026-05-29: Garanti / Fideiussori — ricostruisci formData dai
+      // booking_details.guarantors[] persistiti al save. I field name sono
+      // FROZEN (Adobe Acrobat PDF autofill), quindi leggiamo per chiave
+      // assoluta (guarantor_N_*) e non per index relativo.
+      ...(() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const arr: any[] = Array.isArray((booking.booking_details as any)?.guarantors)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ? (booking.booking_details as any).guarantors
+          : []
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const persistedCount = Number((booking.booking_details as any)?.garante_count) || arr.length
+        const cnt = Math.min(3, Math.max(0, persistedCount)) as 0 | 1 | 2 | 3
+        const out: Record<string, unknown> = { garante_count: cnt }
+        const fields = ['nome_cognome','codice_fiscale','sesso','indirizzo','cap','citta','provincia','data_nascita','citta_nascita','provincia_nascita','telefono','email']
+        for (let n = 1; n <= 3; n++) {
+          const row = arr.find(r => Number(r?.index) === n) || {}
+          for (const f of fields) {
+            const k = `garante_${n}_${f}`
+            out[k] = (row as Record<string, unknown>)[k] || ''
+          }
+        }
+        return out
+      })(),
       // Insurance resolution:
       // 1. booking.insurance_option (top-level column, written by RPC + admin)
       // 2. booking_details.insuranceOption (camelCase, written by the website wizard)
@@ -5583,6 +5651,29 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           second_driver_fee_per_day: formData.has_second_driver && customerTier?.tier
             ? (customerTier.tier === 'TIER_2' ? CFG_SECOND_DRIVER.TIER_2 : CFG_SECOND_DRIVER.TIER_1)
             : null,
+          // 2026-05-29: Garanti / Fideiussori Solidali (max 3). Persistiti
+          // nel JSONB booking_details cosi' il contratto fideiussione
+          // PDF (Adobe Acrobat) puo' auto-fillarsi leggendo i field name
+          // FROZEN. Salviamo solo card N se garante_count >= N — niente
+          // entry vuote in DB.
+          garante_count: formData.garante_count,
+          guarantors: ([1, 2, 3] as const)
+            .filter(n => formData.garante_count >= n)
+            .map(n => ({
+              index: n,
+              [`garante_${n}_nome_cognome`]: formData[`garante_${n}_nome_cognome` as keyof typeof formData] || '',
+              [`garante_${n}_codice_fiscale`]: formData[`garante_${n}_codice_fiscale` as keyof typeof formData] || '',
+              [`garante_${n}_sesso`]: formData[`garante_${n}_sesso` as keyof typeof formData] || '',
+              [`garante_${n}_indirizzo`]: formData[`garante_${n}_indirizzo` as keyof typeof formData] || '',
+              [`garante_${n}_cap`]: formData[`garante_${n}_cap` as keyof typeof formData] || '',
+              [`garante_${n}_citta`]: formData[`garante_${n}_citta` as keyof typeof formData] || '',
+              [`garante_${n}_provincia`]: formData[`garante_${n}_provincia` as keyof typeof formData] || '',
+              [`garante_${n}_data_nascita`]: formData[`garante_${n}_data_nascita` as keyof typeof formData] || '',
+              [`garante_${n}_citta_nascita`]: formData[`garante_${n}_citta_nascita` as keyof typeof formData] || '',
+              [`garante_${n}_provincia_nascita`]: formData[`garante_${n}_provincia_nascita` as keyof typeof formData] || '',
+              [`garante_${n}_telefono`]: formData[`garante_${n}_telefono` as keyof typeof formData] || '',
+              [`garante_${n}_email`]: formData[`garante_${n}_email` as keyof typeof formData] || '',
+            })),
           // Experience Services & DR7 Flex
           experience_services: formData.experience_services,
           experience_cost: calculateExperienceCost(formData.experience_services, revenueSuggestion?.rentalDays || 1),
@@ -6772,6 +6863,44 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       garante_birth_provincia: '',
       garante_phone: '',
       garante_email: '',
+      // 2026-05-29: Garante / Fideiussore Solidale reset (max 3).
+      garante_count: 0 as 0 | 1 | 2 | 3,
+      garante_1_nome_cognome: '',
+      garante_1_codice_fiscale: '',
+      garante_1_sesso: '',
+      garante_1_indirizzo: '',
+      garante_1_cap: '',
+      garante_1_citta: '',
+      garante_1_provincia: '',
+      garante_1_data_nascita: '',
+      garante_1_citta_nascita: '',
+      garante_1_provincia_nascita: '',
+      garante_1_telefono: '',
+      garante_1_email: '',
+      garante_2_nome_cognome: '',
+      garante_2_codice_fiscale: '',
+      garante_2_sesso: '',
+      garante_2_indirizzo: '',
+      garante_2_cap: '',
+      garante_2_citta: '',
+      garante_2_provincia: '',
+      garante_2_data_nascita: '',
+      garante_2_citta_nascita: '',
+      garante_2_provincia_nascita: '',
+      garante_2_telefono: '',
+      garante_2_email: '',
+      garante_3_nome_cognome: '',
+      garante_3_codice_fiscale: '',
+      garante_3_sesso: '',
+      garante_3_indirizzo: '',
+      garante_3_cap: '',
+      garante_3_citta: '',
+      garante_3_provincia: '',
+      garante_3_data_nascita: '',
+      garante_3_citta_nascita: '',
+      garante_3_provincia_nascita: '',
+      garante_3_telefono: '',
+      garante_3_email: '',
       km_packages: {},
     })
     setNewCustomerData({
@@ -7840,6 +7969,146 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 </div>
               )}
             </div>
+
+            {/* ─── Garante / Fideiussore Solidale (max 3) ───────────────
+                2026-05-29: progressive disclosure — niente form vuoti.
+                Click "+ Aggiungi Garante" -> mostra card 1.
+                Click "+ Aggiungi un altro garante" sotto la card N -> card N+1.
+                Max 3. "Rimuovi garante" cancella SOLO quella card e
+                ricompatta il counter mantenendo le altre intatte.
+
+                I field name (guarantor_N_*) sono FROZEN per il PDF autofill
+                Adobe Acrobat — vedi tabella in fondo all'implementazione. */}
+            {(() => {
+              // Italian suffix list — corrisponde al naming permanente Adobe Acrobat
+              const GUARANTOR_SUFFIXES = [
+                'nome_cognome','codice_fiscale','sesso','indirizzo','cap','citta','provincia',
+                'data_nascita','citta_nascita','provincia_nascita','telefono','email'
+              ] as const
+              type GS = typeof GUARANTOR_SUFFIXES[number]
+              const renderGuarantorCard = (n: 1 | 2 | 3) => {
+                const fk = (suffix: GS) => `garante_${n}_${suffix}` as keyof typeof formData
+                const val = (suffix: GS) => String(formData[fk(suffix)] ?? '')
+                const set = (suffix: GS, v: string) => setFormData(prev => ({ ...prev, [fk(suffix)]: v }))
+                const upper = (suffix: GS, v: string, max?: number) => {
+                  const u = v.toUpperCase().slice(0, max ?? v.length)
+                  set(suffix, u)
+                }
+                const removeGuarantor = () => {
+                  // Rimuovi la card N: shifta le successive in giu' (N+1 -> N)
+                  // cosi' i field names restano coerenti dopo il delete.
+                  setFormData(prev => {
+                    const next = { ...prev }
+                    if (n === 1) {
+                      for (const f of GUARANTOR_SUFFIXES) {
+                        const k1 = `garante_1_${f}` as keyof typeof prev
+                        const k2 = `garante_2_${f}` as keyof typeof prev
+                        const k3 = `garante_3_${f}` as keyof typeof prev
+                        ;(next as Record<string, unknown>)[k1] = prev[k2]
+                        ;(next as Record<string, unknown>)[k2] = prev[k3]
+                        ;(next as Record<string, unknown>)[k3] = ''
+                      }
+                    } else if (n === 2) {
+                      for (const f of GUARANTOR_SUFFIXES) {
+                        const k2 = `garante_2_${f}` as keyof typeof prev
+                        const k3 = `garante_3_${f}` as keyof typeof prev
+                        ;(next as Record<string, unknown>)[k2] = prev[k3]
+                        ;(next as Record<string, unknown>)[k3] = ''
+                      }
+                    } else {
+                      for (const f of GUARANTOR_SUFFIXES) {
+                        const k3 = `garante_3_${f}` as keyof typeof prev
+                        ;(next as Record<string, unknown>)[k3] = ''
+                      }
+                    }
+                    next.garante_count = Math.max(0, prev.garante_count - 1) as 0 | 1 | 2 | 3
+                    return next
+                  })
+                }
+                // Lightweight client-side hints (no blocking save — direzione
+                // ha imposto "additive only"; mostriamo solo segnali visivi).
+                const cfRx = /^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$/i
+                const capRx = /^\d{5}$/
+                const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+                const phoneRx = /^[+()\d\s\-./]{6,}$/
+                const cf = val('codice_fiscale'); const cfWarn = cf && !cfRx.test(cf)
+                const cap = val('cap'); const capWarn = cap && !capRx.test(cap)
+                const em = val('email'); const emWarn = em && !emailRx.test(em)
+                const ph = val('telefono'); const phWarn = ph && !phoneRx.test(ph)
+                return (
+                  <div key={`guarantor-card-${n}`} className="rounded-lg border border-theme-border bg-theme-bg-primary overflow-hidden">
+                    {/* Header bar — dark title style (matches contract design) */}
+                    <div className="flex items-center justify-between px-4 py-2.5 bg-theme-bg-tertiary border-b border-theme-border">
+                      <h5 className="text-theme-text-primary text-sm font-bold tracking-wide uppercase">
+                        {n}° Garante / Fideiussore Solidale
+                      </h5>
+                      <button
+                        type="button"
+                        onClick={removeGuarantor}
+                        className="text-xs font-medium text-red-500 hover:text-red-600 hover:underline transition-colors"
+                      >
+                        Rimuovi garante
+                      </button>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      {/* Row 1: Nome | CF | Sesso */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <Input label="Nome e Cognome" value={val('nome_cognome')} onChange={(e) => set('nome_cognome', e.target.value)} />
+                        <Input label={`Codice Fiscale${cfWarn ? ' (formato non valido)' : ''}`} value={cf} onChange={(e) => upper('codice_fiscale', e.target.value, 16)} />
+                        <Select
+                          label="Sesso"
+                          value={val('sesso')}
+                          onChange={(e) => set('sesso', e.target.value)}
+                          options={[
+                            { value: '', label: 'Seleziona...' },
+                            { value: 'M', label: 'Maschio' },
+                            { value: 'F', label: 'Femmina' },
+                          ]}
+                        />
+                      </div>
+                      {/* Row 2: Indirizzo | CAP | Citta | Provincia */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <Input label="Indirizzo" value={val('indirizzo')} onChange={(e) => set('indirizzo', e.target.value)} />
+                        <Input label={`CAP${capWarn ? ' (5 cifre)' : ''}`} value={cap} onChange={(e) => set('cap', e.target.value.replace(/[^0-9]/g, '').slice(0, 5))} />
+                        <Input label="Città" value={val('citta')} onChange={(e) => set('citta', e.target.value)} />
+                        <Input label="Provincia" value={val('provincia')} onChange={(e) => upper('provincia', e.target.value, 2)} maxLength={2} />
+                      </div>
+                      {/* Row 3: Data | Citta Nascita | Prov Nascita */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <Input label="Data di Nascita" type="date" value={val('data_nascita')} onChange={(e) => set('data_nascita', e.target.value)} />
+                        <Input label="Città di Nascita" value={val('citta_nascita')} onChange={(e) => set('citta_nascita', e.target.value)} />
+                        <Input label="Provincia di Nascita" value={val('provincia_nascita')} onChange={(e) => upper('provincia_nascita', e.target.value, 2)} maxLength={2} />
+                      </div>
+                      {/* Row 4: Telefono | Email */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input label={`Telefono${phWarn ? ' (formato non valido)' : ''}`} type="tel" value={ph} onChange={(e) => set('telefono', e.target.value)} />
+                        <Input label={`Email${emWarn ? ' (formato non valido)' : ''}`} type="email" value={em} onChange={(e) => set('email', e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+                )
+              }
+              const addLabel = formData.garante_count === 0
+                ? '+ Aggiungi Garante / Fideiussore'
+                : '+ Aggiungi un altro garante'
+              return (
+                <div className="md:col-span-2 p-4 rounded-lg border border-theme-border space-y-4">
+                  <h4 className="text-theme-text-primary font-semibold">Garante / Fideiussore Solidale</h4>
+                  {formData.garante_count >= 1 && renderGuarantorCard(1)}
+                  {formData.garante_count >= 2 && renderGuarantorCard(2)}
+                  {formData.garante_count >= 3 && renderGuarantorCard(3)}
+                  {formData.garante_count < 3 && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, garante_count: (prev.garante_count + 1) as 0 | 1 | 2 | 3 }))}
+                      className="w-full sm:w-auto px-4 py-2.5 rounded-lg border border-dashed border-dr7-gold/50 bg-dr7-gold/5 hover:bg-dr7-gold/10 text-dr7-gold text-sm font-semibold transition-colors"
+                    >
+                      {addLabel}
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* Kasko & Deposit */}
             <div className="md:col-span-2  p-4 rounded-lg border border-theme-border">
