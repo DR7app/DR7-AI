@@ -64,7 +64,7 @@ interface CustomerDetails {
 interface CustomerDocument {
   id: string
   customer_id: string
-  document_type: 'drivers_license' | 'identity_document' | 'libretto_front' | 'libretto_back'
+  document_type: string
   file_name: string
   file_path: string
   file_size: number
@@ -75,6 +75,14 @@ interface CustomerDocument {
 
 const DRIVERS_LICENSE_BUCKET = 'driver-licenses'
 const IDENTITY_DOCS_BUCKET = 'customer-documents'
+const CODICE_FISCALE_BUCKET = 'codice-fiscale'
+
+// Legacy single-row types map to the "fronte" slot of their category so
+// documents uploaded before the fronte/retro split stay visible.
+const LEGACY_FRONT_FALLBACK: Record<string, string> = {
+  drivers_license_front: 'drivers_license',
+  identity_document_front: 'identity_document',
+}
 
 export default function CustomerDocuments({ customerId, customerName, onClose }: CustomerDocumentsProps) {
   const [documents, setDocuments] = useState<CustomerDocument[]>([])
@@ -82,8 +90,12 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState<{ [key: string]: boolean }>({})
   const [selectedFiles, setSelectedFiles] = useState<{ [key: string]: File | null }>({
-    drivers_license: null,
-    identity_document: null,
+    drivers_license_front: null,
+    drivers_license_back: null,
+    identity_document_front: null,
+    identity_document_back: null,
+    codice_fiscale_front: null,
+    codice_fiscale_back: null,
     libretto_front: null,
     libretto_back: null
   })
@@ -190,9 +202,9 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
       const filePath = `${customerId}/${fileName}`
 
       // Select correct bucket based on document type
-      const bucket = documentType === 'drivers_license' ? DRIVERS_LICENSE_BUCKET
-        : (documentType === 'libretto_front' || documentType === 'libretto_back') ? IDENTITY_DOCS_BUCKET
-        : IDENTITY_DOCS_BUCKET
+      const bucket = documentType.startsWith('drivers_license') ? DRIVERS_LICENSE_BUCKET
+        : documentType.startsWith('codice_fiscale') ? CODICE_FISCALE_BUCKET
+        : IDENTITY_DOCS_BUCKET // identity_document* + libretto*
 
       // Upload to storage
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -314,7 +326,10 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
   }
 
   const getDocument = (type: string) => {
-    return documents.find(d => d.document_type === type)
+    const doc = documents.find(d => d.document_type === type)
+    if (doc) return doc
+    const legacy = LEGACY_FRONT_FALLBACK[type]
+    return legacy ? documents.find(d => d.document_type === legacy) : undefined
   }
 
   const renderDocumentSection = (
@@ -323,7 +338,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
     description: string
   ) => {
     const doc = getDocument(type)
-    const previewUrl = previewUrls[type]
+    const previewUrl = doc ? previewUrls[doc.document_type] : null
     const isUploading = uploading[type]
     const selectedFile = selectedFiles[type]
 
@@ -590,18 +605,40 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
             </div>
           </div>
 
-          {/* Driver's License Section */}
+          {/* Carta d'Identità */}
           {renderDocumentSection(
-            'drivers_license',
-            'Patente di Guida',
-            'Carica la patente di guida del cliente'
+            'identity_document_front',
+            'Carta d\'Identità (Fronte)',
+            'Carica il fronte della carta d\'identità o passaporto'
+          )}
+          {renderDocumentSection(
+            'identity_document_back',
+            'Carta d\'Identità (Retro)',
+            'Carica il retro della carta d\'identità o passaporto'
           )}
 
-          {/* Identity Document Section */}
+          {/* Patente di Guida */}
           {renderDocumentSection(
-            'identity_document',
-            'Documento di Identità',
-            'Carica carta d\'identità o passaporto del cliente'
+            'drivers_license_front',
+            'Patente (Fronte)',
+            'Carica il fronte della patente di guida'
+          )}
+          {renderDocumentSection(
+            'drivers_license_back',
+            'Patente (Retro)',
+            'Carica il retro della patente di guida'
+          )}
+
+          {/* Codice Fiscale */}
+          {renderDocumentSection(
+            'codice_fiscale_front',
+            'Codice Fiscale (Fronte)',
+            'Carica il fronte della tessera codice fiscale'
+          )}
+          {renderDocumentSection(
+            'codice_fiscale_back',
+            'Codice Fiscale (Retro)',
+            'Carica il retro della tessera codice fiscale'
           )}
 
           {/* Libretto Fronte */}
@@ -624,7 +661,8 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
             <div className="space-y-1">
               <p className="text-xs text-theme-text-muted">
                 <strong>Buckets:</strong> <code className="bg-theme-bg-tertiary px-2 py-0.5 rounded mr-1">{DRIVERS_LICENSE_BUCKET}</code>
-                <code className="bg-theme-bg-tertiary px-2 py-0.5 rounded">{IDENTITY_DOCS_BUCKET}</code>
+                <code className="bg-theme-bg-tertiary px-2 py-0.5 rounded mr-1">{IDENTITY_DOCS_BUCKET}</code>
+                <code className="bg-theme-bg-tertiary px-2 py-0.5 rounded">{CODICE_FISCALE_BUCKET}</code>
               </p>
               <p className="text-xs text-theme-text-muted">
                 <strong>Path:</strong> <code className="bg-theme-bg-tertiary px-2 py-0.5 rounded">{customerId}/</code>
@@ -633,7 +671,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
                 <strong>Formati supportati:</strong> Immagini (JPG, PNG), PDF
               </p>
               <p className="text-xs text-theme-text-muted">
-                <strong>Documenti caricati:</strong> {documents.length}/2
+                <strong>Documenti caricati:</strong> {documents.length}
               </p>
             </div>
           </div>

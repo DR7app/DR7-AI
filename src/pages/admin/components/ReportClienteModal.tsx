@@ -444,8 +444,8 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   const fmtDate = (d: string) => new Date(d).toLocaleDateString('it-IT')
   const daysSince = (d: Date) => Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24))
 
-  const docStatus = (type: string) => {
-    const doc = documents.find(d => d.document_type === type)
+  const docStatus = (type: string, legacy?: string) => {
+    const doc = documents.find(d => d.document_type === type || (legacy ? d.document_type === legacy : false))
     if (!doc) return { label: 'Mancante', color: 'text-red-400' }
     if (doc.status === 'verified') return { label: 'Verificato', color: 'text-green-400' }
     if (doc.status === 'pending_verification') return { label: 'In attesa', color: 'text-yellow-400' }
@@ -979,12 +979,20 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                 <div className="bg-theme-bg-secondary rounded-xl border border-theme-border p-4">
                   <h4 className="text-sm font-bold text-theme-text-muted uppercase tracking-wider mb-3">Documenti</h4>
                   <div className="space-y-2">
-                    {['drivers_license', 'identity_document', 'libretto_front', 'libretto_back'].map(type => {
-                      const s = docStatus(type)
-                      const labels: Record<string, string> = { drivers_license: 'Patente', identity_document: 'Carta Identita', libretto_front: 'Libretto Fronte', libretto_back: 'Libretto Retro' }
+                    {[
+                      { type: 'identity_document_front', label: 'Carta Identita Fronte', legacy: 'identity_document' },
+                      { type: 'identity_document_back', label: 'Carta Identita Retro' },
+                      { type: 'drivers_license_front', label: 'Patente Fronte', legacy: 'drivers_license' },
+                      { type: 'drivers_license_back', label: 'Patente Retro' },
+                      { type: 'codice_fiscale_front', label: 'Codice Fiscale Fronte' },
+                      { type: 'codice_fiscale_back', label: 'Codice Fiscale Retro' },
+                      { type: 'libretto_front', label: 'Libretto Fronte' },
+                      { type: 'libretto_back', label: 'Libretto Retro' },
+                    ].map(({ type, label, legacy }) => {
+                      const s = docStatus(type, legacy)
                       return (
                         <div key={type} className="flex items-center justify-between text-sm">
-                          <span className="text-theme-text-primary">{labels[type] || type}</span>
+                          <span className="text-theme-text-primary">{label}</span>
                           <span className={`text-xs font-medium ${s.color}`}>{s.label}</span>
                         </div>
                       )

@@ -621,8 +621,12 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 .from('customer_documents')
                 .insert({
                   customer_id: createdClientId,
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  document_type: docType as any,
+                  // Distinct document_type per side (e.g. drivers_license_front /
+                  // drivers_license_back). Storing the same type for fronte AND
+                  // retro used to violate UNIQUE(customer_id, document_type) and
+                  // silently drop the second file — see migration
+                  // 20260529_customer_documents_multi_doc.sql.
+                  document_type: `${docType}${suffix}`,
                   file_name: file.name,
                   file_path: filePath,
                   file_size: file.size,
@@ -1356,14 +1360,14 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
               <div className="flex items-center gap-2 mb-4">
                 <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-dr7-gold/15 text-dr7-gold text-[10px] font-bold">4</span>
                 <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wide">
-                  {formData.tipo_cliente === 'azienda' ? 'Documento Rappresentante' : 'Documenti Obbligatori'}
+                  {formData.tipo_cliente === 'azienda' ? 'Documento Rappresentante' : 'Documenti'}
                 </h3>
               </div>
 
               {formData.tipo_cliente === 'persona_fisica' && (
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Patente n.*</label>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Patente n.</label>
                     <input type="text" value={formData.patente_numero} onChange={(e) => setFormData({ ...formData, patente_numero: e.target.value.toUpperCase() })}
                       className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase font-mono" />
                   </div>
@@ -1405,16 +1409,16 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   {showDocumentSection && (
                     <div className="space-y-3 mt-2">
                       <DocUploadGroup label="Patente">
-                        <DocFileInput value={driversLicenseFront} onChange={setDriversLicenseFront} placeholder="Fronte" />
-                        <DocFileInput value={driversLicenseBack} onChange={setDriversLicenseBack} placeholder="Retro" />
+                        <DocFileInput value={driversLicenseFront} onChange={setDriversLicenseFront} placeholder="Patente Fronte" />
+                        <DocFileInput value={driversLicenseBack} onChange={setDriversLicenseBack} placeholder="Patente Retro" />
                       </DocUploadGroup>
                       <DocUploadGroup label="Carta d'identità">
-                        <DocFileInput value={identityFront} onChange={setIdentityFront} placeholder="Fronte" />
-                        <DocFileInput value={identityBack} onChange={setIdentityBack} placeholder="Retro" />
+                        <DocFileInput value={identityFront} onChange={setIdentityFront} placeholder="Carta d'Identità Fronte" />
+                        <DocFileInput value={identityBack} onChange={setIdentityBack} placeholder="Carta d'Identità Retro" />
                       </DocUploadGroup>
                       <DocUploadGroup label="Codice Fiscale">
-                        <DocFileInput value={codiceFiscaleFront} onChange={setCodiceFiscaleFront} placeholder="Fronte" />
-                        <DocFileInput value={codiceFiscaleBack} onChange={setCodiceFiscaleBack} placeholder="Retro" />
+                        <DocFileInput value={codiceFiscaleFront} onChange={setCodiceFiscaleFront} placeholder="Codice Fiscale Fronte" />
+                        <DocFileInput value={codiceFiscaleBack} onChange={setCodiceFiscaleBack} placeholder="Codice Fiscale Retro" />
                       </DocUploadGroup>
 
                       {(driversLicenseFront || driversLicenseBack || identityFront || identityBack || codiceFiscaleFront || codiceFiscaleBack) && (
@@ -1617,13 +1621,13 @@ function DocUploadGroup({ label, children }: { label: string; children: React.Re
 function DocFileInput({ value, onChange, placeholder }: { value: File | null; onChange: (f: File | null) => void; placeholder: string }) {
   return (
     <label className="block">
-      <span className="text-[10px] text-theme-text-muted">{placeholder}</span>
+      <span className="text-xs font-semibold text-theme-text-primary">{placeholder}</span>
       <input type="file" accept="image/*,.pdf" onChange={(e) => onChange(e.target.files?.[0] || null)}
-        className="mt-1 block w-full text-[10px] text-theme-text-secondary
-          file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
-          file:text-[10px] file:font-semibold file:bg-dr7-gold/15 file:text-dr7-gold
+        className="mt-1 block w-full text-xs text-theme-text-secondary
+          file:mr-2 file:py-1.5 file:px-2.5 file:rounded file:border-0
+          file:text-xs file:font-semibold file:bg-dr7-gold/15 file:text-dr7-gold
           hover:file:bg-dr7-gold/25 file:cursor-pointer" />
-      {value && <p className="text-[10px] text-emerald-600 mt-0.5 truncate" title={value.name}>{value.name}</p>}
+      {value && <p className="text-xs text-emerald-600 mt-1 truncate" title={value.name}>{value.name}</p>}
     </label>
   )
 }
