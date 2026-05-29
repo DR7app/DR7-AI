@@ -63,7 +63,7 @@ export default function IncomingScansList() {
                     <tbody>
                         {scans.map((scan) => (
                             <tr key={scan.id} className="border-b border-theme-border hover:bg-theme-bg-tertiary/30 transition-colors">
-                                <td className="px-6 py-4">{new Date(scan.created_at).toLocaleString()}</td>
+                                <td className="px-6 py-4">{new Date(scan.created_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome', hour12: false })}</td>
                                 <td className="px-6 py-4 font-mono text-sm">{scan.original_filename}</td>
                                 <td className="px-6 py-4 text-xs font-mono">{scan.scan_job_id || '-'}</td>
                                 <td className="px-6 py-4">

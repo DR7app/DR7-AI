@@ -195,12 +195,12 @@ export const handler: Handler = async (event) => {
             // Contract Info - Mark as EXTENSION
             'ContractNumber': contractNumber,
             'NumeroContratto': contractNumber,
-            'Date': new Date().toLocaleDateString('it-IT'),
-            'Data': new Date().toLocaleDateString('it-IT'),
+            'Date': new Date().toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
+            'Data': new Date().toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
             'PlaceOfIssue': 'Cagliari',
             'LuogoStipula': 'Cagliari',
-            'TimeOfIssue': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }),
-            'OrarioStipula': new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }),
+            'TimeOfIssue': new Date().toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false }),
+            'OrarioStipula': new Date().toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false }),
 
             // Customer Info
             'CustomerName': clientName || '',

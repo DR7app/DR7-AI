@@ -595,7 +595,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                         playAlarm({
                             bookingId: booking.id,
                             vehicleName: booking.vehicle_name || 'Unknown Vehicle',
-                            returnTime: returnTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+                            returnTime: returnTime.toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false }),
                             customerName: booking.customer_name || 'Unknown Customer',
                             type: 'return'
                         })
@@ -638,7 +638,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                     playAlarm({
                         bookingId: booking.id,
                         vehicleName: booking.vehicle_name || 'Unknown Vehicle',
-                        returnTime: returnTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+                        returnTime: returnTime.toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false }),
                         customerName: booking.customer_name || 'Unknown Customer',
                         type: 'return'
                     })

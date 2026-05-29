@@ -51,7 +51,7 @@ export default function ScanJobCreator() {
                 <div className="flex flex-col items-center animate-fade-in">
                     <div id="print-area" className="bg-theme-text-primary p-8 rounded-full mb-6 text-center max-w-sm w-full mx-auto">
                         <h1 className="text-2xl text-black font-bold mb-4">SCAN COVER SHEET</h1>
-                        <p className="text-black mb-4 font-mono">{new Date().toLocaleString()}</p>
+                        <p className="text-black mb-4 font-mono">{new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome', hour12: false })}</p>
                         <div className="flex justify-center mb-4">
                             <QRCodeSVG value={JSON.stringify({ jobId: currentJobId })} size={200} />
                         </div>

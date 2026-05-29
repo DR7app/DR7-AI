@@ -114,7 +114,7 @@ export default function CheckOutTab() {
 
     const getReturnTime = (booking: Booking) => {
         return booking.booking_details?.returnTime ||
-            new Date(booking.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+            new Date(booking.dropoff_date).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false })
     }
 
     const getTarga = (booking: Booking) => {
