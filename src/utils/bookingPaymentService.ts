@@ -134,7 +134,7 @@ export function isPaymentLinkExpired(expiresAt: string | null | undefined): bool
 export function buildPendingPaymentBookingFields() {
   const { createdAt, expiresAt } = calculatePaymentLinkExpiry()
   return {
-    status: 'pending' as const,
+    status: 'pending_payment' as const,
     payment_status: 'unpaid' as const,
     payment_method: 'Nexi Pay by Link' as const,
     payment_link_created_at: createdAt,
@@ -160,15 +160,17 @@ export function buildPaymentLinkUpdateFields(paymentUrl: string, orderId: string
  * This is the ONLY way a booking transitions from pending_payment to confirmed.
  */
 export function buildPaymentConfirmedFields(transactionId: string, contractId: string | null, amountCents: number) {
+  const nowIso = new Date().toISOString()
   return {
     status: 'confirmed' as const,
     payment_status: 'paid' as const,
-    updated_at: new Date().toISOString(),
+    paid_at: nowIso,
+    updated_at: nowIso,
     amount_paid: amountCents,
     booking_details_patch: {
       nexi_transaction_id: transactionId,
       nexi_contract_id: contractId,
-      nexi_paid_at: new Date().toISOString(),
+      nexi_paid_at: nowIso,
       paymentStatus: 'paid',
     }
   }

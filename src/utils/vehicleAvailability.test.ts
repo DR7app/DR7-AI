@@ -1,4 +1,21 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+
+// vehicleAvailability.ts imports supabaseClient at module load, which throws
+// when VITE_SUPABASE_URL is missing in the test env. Mock it so the import
+// chain succeeds — the unit tests below pass bookings explicitly and don't
+// hit the network.
+vi.mock('../supabaseClient', () => ({
+  supabase: {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: () => Promise.resolve({ data: null, error: null }),
+        }),
+      }),
+    }),
+  },
+}))
+
 import { isVehicleAvailable } from './vehicleAvailability'
 
 // Minimal mock types matching the function's interface
