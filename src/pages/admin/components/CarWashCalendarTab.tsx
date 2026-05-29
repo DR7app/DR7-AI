@@ -167,17 +167,18 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
     const firstName = (booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente').split(' ')[0]
     const plate = booking.vehicle_plate || booking.booking_details?.vehicle?.plate || booking.booking_details?.vehiclePlate || ''
     try {
-      // 1) WhatsApp al cliente — templateKey 'carwash_ready' (admin lo
-      //    configura in Messaggi di Sistema Pro). Fallback a customMessage
-      //    se il template non esiste, cosi' il pulsante funziona subito
-      //    anche senza setup template.
+      // 1) WhatsApp al cliente — templateKey 'service_ready_customer'
+      //    (gia' instradato a pro_auto_pronta in proTemplateRouting.ts).
+      //    Direzione edita il template "Auto pronta / Lavaggio concluso"
+      //    in Messaggi di Sistema Pro per personalizzare il testo.
+      //    Fallback hardcoded se il template e' disabilitato/non c'e'.
       if (phone) {
         const tplRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customPhone: phone,
-            templateKey: 'carwash_ready',
+            templateKey: 'service_ready_customer',
             booking: {
               id: booking.id,
               service_type: 'car_wash',
@@ -193,7 +194,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         })
         const tplData = await tplRes.json().catch(() => ({}))
         if (tplData?.skipped || !tplRes.ok) {
-          // Fallback: messaggio diretto se il Pro template non c'e' / disabilitato.
+          // Fallback: messaggio diretto se pro_auto_pronta e' disabilitato.
           const fallbackMsg = `Buongiorno ${firstName},\n\nLa Sua auto${plate ? ` *${plate}*` : ''} è pronta per il ritiro.\n\nLa aspettiamo.\n\n— DR7`
           await fetch('/.netlify/functions/send-whatsapp-notification', {
             method: 'POST',
