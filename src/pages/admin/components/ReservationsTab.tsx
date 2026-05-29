@@ -8051,6 +8051,50 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       </button>
                     </div>
                     <div className="p-4 space-y-4">
+                      {/* Cliente picker — auto-popola i 12 campi del garante
+                          leggendo da customers_extended. L'operatore puo' anche
+                          digitare a mano senza scegliere un cliente. */}
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text-secondary mb-2">
+                          Seleziona da clienti <span className="text-theme-text-muted text-xs font-normal">(opzionale — popola i campi)</span>
+                        </label>
+                        <CustomerAutocomplete
+                          customers={customers}
+                          selectedCustomerId=""
+                          onSelectCustomer={async (customerId) => {
+                            if (!customerId) return
+                            const { data: full } = await supabase
+                              .from('customers_extended')
+                              .select('*')
+                              .eq('id', customerId)
+                              .single()
+                            const basic = customers.find(c => c.id === customerId)
+                            if (!full && !basic) return
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const fc: any = full || {}
+                            const fullName = (fc.nome && fc.cognome)
+                              ? `${fc.nome} ${fc.cognome}`.trim()
+                              : (basic?.full_name || '')
+                            setFormData(prev => ({
+                              ...prev,
+                              [`garante_${n}_nome_cognome`]: fullName,
+                              [`garante_${n}_codice_fiscale`]: (fc.codice_fiscale || '').toUpperCase(),
+                              [`garante_${n}_sesso`]: fc.sesso || '',
+                              [`garante_${n}_indirizzo`]: fc.indirizzo || '',
+                              [`garante_${n}_cap`]: fc.codice_postale || fc.cap || '',
+                              [`garante_${n}_citta`]: fc.citta_residenza || fc.citta || '',
+                              [`garante_${n}_provincia`]: (fc.provincia_residenza || fc.provincia || '').toUpperCase(),
+                              [`garante_${n}_data_nascita`]: fc.data_nascita || '',
+                              [`garante_${n}_citta_nascita`]: fc.luogo_nascita || fc.citta_nascita || '',
+                              [`garante_${n}_provincia_nascita`]: (fc.provincia_nascita || '').toUpperCase(),
+                              [`garante_${n}_telefono`]: fc.telefono || basic?.phone || '',
+                              [`garante_${n}_email`]: fc.email || basic?.email || '',
+                            }))
+                          }}
+                          placeholder="Cerca nome, email o telefono..."
+                          required={false}
+                        />
+                      </div>
                       {/* Row 1: Nome | CF | Sesso */}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <Input label="Nome e Cognome" value={val('nome_cognome')} onChange={(e) => set('nome_cognome', e.target.value)} />
