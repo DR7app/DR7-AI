@@ -1566,11 +1566,6 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             Annulla
           </button>
           <div className="flex items-center gap-2">
-            <button type="button" disabled
-              title="Funzione bozza in arrivo — per ora il salvataggio crea direttamente il cliente"
-              className="hidden sm:inline-flex px-4 py-2 min-h-[44px] rounded-full text-sm text-theme-text-muted bg-theme-bg-tertiary opacity-60 cursor-not-allowed">
-              Salva Bozza
-            </button>
             <button onClick={handleSave} disabled={isSaving}
               className="px-6 py-2.5 min-h-[44px] rounded-full bg-dr7-gold text-white text-sm font-bold hover:opacity-90 transition-opacity shadow-sm disabled:opacity-50">
               {isSaving ? 'Salvataggio…' : (initialData ? 'Aggiorna Cliente' : 'Salva e Apri Scheda Cliente')}
