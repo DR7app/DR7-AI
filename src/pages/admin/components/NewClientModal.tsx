@@ -968,48 +968,23 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                       <svg className="w-4 h-4 text-dr7-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13l3 3 7-7M5 6h.01M9 6h.01M13 6h.01M5 18h.01M9 18h.01M13 18h.01" /></svg>
                       <span className="text-[11px] font-bold uppercase tracking-wide text-dr7-gold">Auto-Compila dai documenti</span>
                     </div>
-                    <p className="text-[10.5px] text-theme-text-muted leading-snug mb-2">
-                      Carica una foto della <strong>patente</strong> o della <strong>carta d'identità</strong>: il form si compilerà da solo in pochi secondi.
+                    <p className="text-[10.5px] text-theme-text-muted leading-snug mb-3">
+                      Carica fronte e retro di ogni documento: il form si compilerà da solo in pochi secondi.
                     </p>
-                    <label className="block">
-                      <input
-                        type="file"
-                        accept="image/*,application/pdf"
-                        capture="environment"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0]
-                          if (!f) return
-                          // Route to identityFront by default (most common doc).
-                          // If user already has identityFront, fill driversLicenseFront instead
-                          // so a 2nd upload doesn't overwrite the 1st.
-                          if (!identityFront) setIdentityFront(f)
-                          else if (!driversLicenseFront) setDriversLicenseFront(f)
-                          else if (!codiceFiscaleFront) setCodiceFiscaleFront(f)
-                          else setIdentityFront(f) // 4th+: overwrite identity
-                          e.target.value = ''
-                        }}
-                        className="block w-full text-[11px] text-theme-text-secondary file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-dr7-gold file:text-white hover:file:bg-dr7-gold/80 file:cursor-pointer cursor-pointer"
-                      />
-                    </label>
-                    {(identityFront || driversLicenseFront || codiceFiscaleFront || identityBack || driversLicenseBack || codiceFiscaleBack) && (
-                      <div className="mt-2 flex flex-wrap gap-1.5 items-center">
-                        {identityFront && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-medium">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Carta identità
-                          </span>
-                        )}
-                        {driversLicenseFront && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-medium">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Patente
-                          </span>
-                        )}
-                        {codiceFiscaleFront && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-medium">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Codice fiscale
-                          </span>
-                        )}
-                      </div>
-                    )}
+                    <div className="space-y-3">
+                      <DocUploadGroup label="Patente">
+                        <DocFileInput value={driversLicenseFront} onChange={setDriversLicenseFront} placeholder="Patente Fronte" />
+                        <DocFileInput value={driversLicenseBack} onChange={setDriversLicenseBack} placeholder="Patente Retro" />
+                      </DocUploadGroup>
+                      <DocUploadGroup label="Carta d'identità">
+                        <DocFileInput value={identityFront} onChange={setIdentityFront} placeholder="Carta d'Identità Fronte" />
+                        <DocFileInput value={identityBack} onChange={setIdentityBack} placeholder="Carta d'Identità Retro" />
+                      </DocUploadGroup>
+                      <DocUploadGroup label="Codice Fiscale">
+                        <DocFileInput value={codiceFiscaleFront} onChange={setCodiceFiscaleFront} placeholder="Codice Fiscale Fronte" />
+                        <DocFileInput value={codiceFiscaleBack} onChange={setCodiceFiscaleBack} placeholder="Codice Fiscale Retro" />
+                      </DocUploadGroup>
+                    </div>
                     {/* Real CompilaButton — always mounted (since this whole hero
                         block lives in step 1 / Identificazione Rapida which is
                         the default first card). autoTrigger fires OCR ~1.2s
