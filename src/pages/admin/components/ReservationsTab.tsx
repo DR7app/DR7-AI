@@ -9577,6 +9577,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       {
                         title: 'Altro',
                         actions: [
+                          {
+                            label: booking.booking_details?.auto_pronta_sent_at ? '✓ Auto Pronta inviata' : 'Auto Pronta',
+                            onClick: () => handleAutoPronta(booking),
+                            disabled: autoProntaSending || !!booking.booking_details?.auto_pronta_sent_at,
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            visible: booking.status !== 'cancelled' && !['car_wash', 'mechanical'].includes(String((booking as any).service_type || '').toLowerCase()),
+                          },
                           { label: 'Danni & Penali', onClick: () => { setSelectedBookingForDanniPenali(booking); setDanniPenaliInitialTab('danni'); setDanniPenaliModalOpen(true) } },
                         ],
                       },
@@ -9757,6 +9764,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             {
                               title: 'Altro',
                               actions: [
+                                {
+                                  label: booking.booking_details?.auto_pronta_sent_at ? '✓ Auto Pronta inviata' : 'Auto Pronta',
+                                  onClick: () => handleAutoPronta(booking),
+                                  disabled: autoProntaSending || !!booking.booking_details?.auto_pronta_sent_at,
+                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                  visible: booking.status !== 'cancelled' && !['car_wash', 'mechanical'].includes(String((booking as any).service_type || '').toLowerCase()),
+                                },
                                 {
                                   label: 'Danni & Penali',
                                   onClick: () => { setSelectedBookingForDanniPenali(booking); setDanniPenaliInitialTab('danni'); setDanniPenaliModalOpen(true) },
