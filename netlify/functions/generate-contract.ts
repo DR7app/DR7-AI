@@ -416,11 +416,42 @@ export const handler: Handler = async (event) => {
 
         const pickupDate = new Date(booking.pickup_date)
         const dropoffDate = new Date(booking.dropoff_date)
-        // Generate sequential contract number: DR71000, DR71001, ...
-        const { count: contractCount } = await supabase
+        // Numero contratto UNIVOCO. NON usare il count: riusa i numeri dopo
+        // una cancellazione e collide su generazioni ravvicinate → duplicati
+        // come DR71208 su clienti diversi. Su una RIGENERAZIONE manteniamo il
+        // numero gia' assegnato alla prenotazione (NON lo ricalcoliamo, così
+        // un contratto esistente non cambia mai numero); altrimenti prendiamo
+        // MAX(suffisso)+1 e verifichiamo che sia libero.
+        let contractNumber: string
+        const { data: existingForBooking } = await supabase
             .from('contracts')
-            .select('id', { count: 'exact', head: true })
-        const contractNumber = `DR7${1000 + (contractCount || 0)}`
+            .select('contract_number, created_at')
+            .eq('booking_id', bookingId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+        const existingNumber = existingForBooking?.[0]?.contract_number
+        if (existingNumber && /^DR7\d+$/.test(existingNumber)) {
+            contractNumber = existingNumber
+        } else {
+            const { data: allNums } = await supabase.from('contracts').select('contract_number')
+            let maxN = 999 // così il primo nuovo è DR71000
+            for (const r of allNums || []) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const m = /^DR7(\d+)$/.exec((r as any).contract_number || '')
+                if (m) { const n = parseInt(m[1], 10); if (n > maxN) maxN = n }
+            }
+            let candidate = maxN + 1
+            // Best-effort unicità: salta eventuali numeri già presi.
+            for (let i = 0; i < 50; i++) {
+                const { count: exists } = await supabase
+                    .from('contracts')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('contract_number', `DR7${candidate}`)
+                if (!exists) break
+                candidate++
+            }
+            contractNumber = `DR7${candidate}`
+        }
 
         // KM limit: recognize BOTH shapes.
         //   admin shape:   booking_details.unlimited_km=true  + km_limit='Illimitati'
