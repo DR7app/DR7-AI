@@ -23,6 +23,8 @@ export const OLD_TO_PRO: Record<string, string> = {
   rental_modified: 'pro_promemoria_appuntamento',
   // Auto pronta Noleggio (admin clicca "Auto Pronta" su prenotazione/calendario)
   rental_auto_pronta: 'pro_auto_pronta_noleggio',
+  // Contratto estensione: link PDF del contratto aggiornato dopo estensione pagata
+  extension_contract_customer: 'pro_contratto_estensione',
   deposit_return_iban: 'pro_richiesta_iban',
 
   // Lavaggio — customer + admin get the same template
@@ -144,6 +146,7 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
   rental_new_admin: 'Alla creazione della prenotazione noleggio (admin)',
   rental_modified: 'Alla modifica della prenotazione noleggio',
   rental_auto_pronta: 'NOLEGGIO: auto pronta — veicolo pronto al ritiro (admin clicca "Auto Pronta" su prenotazione o calendario)',
+  extension_contract_customer: 'NOLEGGIO: contratto estensione aggiornato — link PDF al cliente dopo estensione pagata. Variabile {contract_url}',
   deposit_return_iban: 'Quando si chiede l\'IBAN per il rimborso cauzione',
 
   // Lavaggio
