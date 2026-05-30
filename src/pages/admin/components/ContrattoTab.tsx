@@ -26,6 +26,58 @@ interface Contract {
   pdf_url?: string
   booking_id: string
   signed_pdf_url?: string
+  signers?: SignerStatus[]
+}
+
+// Stato di firma per ciascun firmatario del contratto (da signature_requests).
+interface SignerStatus {
+  signer_name: string
+  signer_phone?: string
+  role: string
+  status: string
+  signed_at?: string | null
+  created_at?: string | null
+}
+
+// Ordine di priorità per scegliere, a parità di ruolo, quale richiesta mostrare
+// (es. dopo un "Rinvia contratto" coesistono una 'cancelled' e una 'pending').
+const SIGNER_STATUS_RANK: Record<string, number> = {
+  signed: 0, otp_verified: 1, otp_sent: 2, pending: 3, expired: 4, cancelled: 5,
+}
+const SIGNER_ROLE_ORDER = ['1_guidatore', '2_guidatore', 'garante', 'fideiussore_1', 'fideiussore_2', 'fideiussore_3']
+
+function signerRoleLabel(role: string): string {
+  switch (role) {
+    case '1_guidatore': return '1° guidatore'
+    case '2_guidatore': return '2° guidatore'
+    case 'garante': return 'Garante'
+    case 'fideiussore_1': return 'Fideiussore 1'
+    case 'fideiussore_2': return 'Fideiussore 2'
+    case 'fideiussore_3': return 'Fideiussore 3'
+    default: return role || 'Firmatario'
+  }
+}
+
+// Riduce le signature_requests grezze a una riga per ruolo, scegliendo lo
+// stato più rilevante (firmato > in firma > in attesa > scaduto > annullato).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function reduceSigners(rows: any[]): SignerStatus[] {
+  const byRole = new Map<string, SignerStatus>()
+  for (const r of rows) {
+    const key = r.role || r.signer_name || `row_${byRole.size}`
+    const prev = byRole.get(key)
+    if (!prev) { byRole.set(key, r); continue }
+    const rRank = SIGNER_STATUS_RANK[r.status] ?? 9
+    const pRank = SIGNER_STATUS_RANK[prev.status] ?? 9
+    if (rRank < pRank || (rRank === pRank && (r.created_at || '') > (prev.created_at || ''))) {
+      byRole.set(key, r)
+    }
+  }
+  const rank = (role: string) => {
+    const i = SIGNER_ROLE_ORDER.indexOf(role)
+    return i === -1 ? 999 : i
+  }
+  return Array.from(byRole.values()).sort((a, b) => rank(a.role) - rank(b.role))
 }
 
 export default function ContrattoTab() {
@@ -139,6 +191,24 @@ export default function ContrattoTab() {
         .order('updated_at', { ascending: false })
 
       if (error) throw error
+
+      // Firmatari + stato firma per ogni contratto (da signature_requests).
+      // Un'unica query su tutti i contratti caricati, poi raggruppata.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const contractIds = (data || []).map((c: any) => c.id).filter(Boolean)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sigByContract: Record<string, any[]> = {}
+      if (contractIds.length > 0) {
+        const { data: sigs } = await supabase
+          .from('signature_requests')
+          .select('contract_id, signer_name, signer_phone, role, status, signed_at, created_at')
+          .in('contract_id', contractIds)
+        for (const s of sigs || []) {
+          if (!s.contract_id) continue
+          ;(sigByContract[s.contract_id] ||= []).push(s)
+        }
+      }
+
       // Resolve customer_name from booking if contract's customer_name is empty
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const resolved = (data || []).map((c: any) => {
@@ -152,6 +222,7 @@ export default function ContrattoTab() {
         if (!c.customer_phone && b) {
           c.customer_phone = b.customer_phone || b.booking_details?.customer?.phone || ''
         }
+        c.signers = reduceSigners(sigByContract[c.id] || [])
         return c
       })
       setContracts(resolved)
@@ -847,6 +918,22 @@ export default function ContrattoTab() {
                       {contract.status === 'active' ? 'Attivo' :
                         contract.status === 'completed' ? 'Completato' : 'Cancellato'}
                     </span>
+                    {contract.signers && contract.signers.length > 0 && (() => {
+                      const signedCount = contract.signers.filter(s => s.status === 'signed').length
+                      const total = contract.signers.length
+                      const allSigned = signedCount === total
+                      return (
+                        <span className={`px-2 py-1 rounded text-xs font-bold border ${
+                          allSigned
+                            ? 'bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30'
+                            : signedCount > 0
+                              ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30'
+                              : 'bg-theme-bg-tertiary text-theme-text-secondary border-theme-border'
+                        }`}>
+                          {allSigned ? '✓ ' : ''}{signedCount}/{total} firmato
+                        </span>
+                      )
+                    })()}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
                     <div>
@@ -868,6 +955,44 @@ export default function ContrattoTab() {
                       <p className="text-dr7-gold font-bold">€{contract.total_amount.toFixed(2)}</p>
                     </div>
                   </div>
+
+                  {/* Firmatari del contratto + stato firma (fallback per sapere
+                      chi ha firmato anche prima che firmino tutti). */}
+                  {contract.signers && contract.signers.length > 0 ? (
+                    <div className="mt-3 pt-3 border-t border-theme-border">
+                      <span className="text-theme-text-muted text-sm">Firmatari:</span>
+                      <div className="flex flex-wrap gap-2 mt-1.5">
+                        {contract.signers.map((s, i) => {
+                          const signed = s.status === 'signed'
+                          const expired = s.status === 'expired'
+                          const cancelled = s.status === 'cancelled'
+                          const statusLabel = signed ? '✓ Firmato'
+                            : expired ? 'Scaduto'
+                            : cancelled ? 'Annullato'
+                            : 'In attesa'
+                          const statusClass = signed ? 'text-green-700 dark:text-green-400'
+                            : expired ? 'text-red-600 dark:text-red-400'
+                            : cancelled ? 'text-theme-text-muted'
+                            : 'text-amber-700 dark:text-amber-400'
+                          return (
+                            <span
+                              key={i}
+                              className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs bg-theme-bg-tertiary border border-theme-border"
+                              title={signed && s.signed_at ? `Firmato il ${new Date(s.signed_at).toLocaleString('it-IT')}` : undefined}
+                            >
+                              <span className="text-theme-text-primary font-semibold">{s.signer_name || '—'}</span>
+                              <span className="text-theme-text-muted">{signerRoleLabel(s.role)}</span>
+                              <span className={`font-bold ${statusClass}`}>{statusLabel}</span>
+                            </span>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3 pt-3 border-t border-theme-border">
+                      <span className="text-theme-text-muted text-sm">Nessuna richiesta di firma inviata.</span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-col gap-2 ml-4">
                   {contract.pdf_url && (
