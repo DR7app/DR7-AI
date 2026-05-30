@@ -533,12 +533,9 @@ const cronHandler = async () => {
             const lo = new Date(now + sign * offsetH * 3600 * 1000 - wideBackMs).toISOString();
             const hi = new Date(now + sign * offsetH * 3600 * 1000 + wideFwdMs).toISOString();
             q = q.gte('pickup_date', lo).lte('pickup_date', hi);
-            // 2026-05-30: il promemoria RITIRO va SOLO a chi ha PAGATO. Non
-            // ricordare il ritiro a un cliente con prenotazione non saldata
-            // (es. unpaid/pending/partial). Riconosciamo i tre valori "pagato".
-            if (tpl.trigger_event === 'before_pickup') {
-                q = q.in('payment_status', ['paid', 'succeeded', 'completed']);
-            }
+            // 2026-05-30: il gate "pagato O confermato" per il promemoria ritiro
+            // è applicato per-booking nel loop sotto (serve leggere anche
+            // manually_confirmed da booking_details, non filtrabile bene in SQL).
         } else if (tpl.trigger_event === 'before_dropoff' || tpl.trigger_event === 'after_dropoff') {
             const sign = tpl.trigger_event === 'before_dropoff' ? +1 : -1;
             const lo = new Date(now + sign * offsetH * 3600 * 1000 - wideBackMs).toISOString();
@@ -583,6 +580,19 @@ const cronHandler = async () => {
         if (!candidates?.length) continue;
 
         for (const booking of candidates as Booking[]) {
+            // 2026-05-30: promemoria RITIRO → va a chi ha PAGATO **oppure** a chi
+            // ha la prenotazione CONFERMATA (manually_confirmed). Confermare
+            // significa "il cliente prende l'auto" anche se Da Saldare/Contanti,
+            // quindi il promemoria 24h prima deve partire comunque (caso concas:
+            // unpaid ma confermato). Restano esclusi i non-pagati e non-confermati.
+            if (tpl.trigger_event === 'before_pickup') {
+                const ps = String(booking.payment_status || '').toLowerCase()
+                const isPaid = ps === 'paid' || ps === 'succeeded' || ps === 'completed'
+                const isConfirmed = booking.booking_details?.manually_confirmed === true
+                    || booking.status === 'confirmed'
+                if (!isPaid && !isConfirmed) continue
+            }
+
             // Filtri avanzati (service_type / cauzione / targa / metodo / importo)
             if (!matchesAdvancedFilters(tpl, booking)) continue
             if (!await passesCustomerFilters(tpl, booking, supabase)) continue
