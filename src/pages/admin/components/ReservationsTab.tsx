@@ -2218,9 +2218,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Check if current insurance option is valid for this vehicle + tier
       const isCurrentOptionValid = availableOptions.some(opt => opt.id === formData.insurance_option)
 
-      // If current option is not available, reset to KASKO_BASE
-      if (!isCurrentOptionValid) {
-        setFormData(prev => ({ ...prev, insurance_option: 'KASKO_BASE' }))
+      // Se l'opzione corrente non e' valida per questo veicolo, NON forzare
+      // KASKO_BASE (per Urban/Fiat Panda KASKO_BASE non esiste tra le opzioni
+      // Centralina Pro → restava un id invalido e il contratto mostrava
+      // "Kasko Base" invece di RCA). Ripieghiamo sulla prima opzione VALIDA
+      // della categoria (RCA se presente, è la base per ogni categoria).
+      if (!isCurrentOptionValid && availableOptions.length > 0) {
+        const fallbackId = (availableOptions.find(opt => opt.id === 'RCA')?.id
+          || availableOptions[0]?.id
+          || 'KASKO_BASE') as KaskoTier
+        setFormData(prev => ({ ...prev, insurance_option: fallbackId }))
       }
     }
   }, [formData.vehicle_id, vehicles, formData.insurance_option, customerTier])
