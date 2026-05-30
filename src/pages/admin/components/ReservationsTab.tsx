@@ -1145,6 +1145,31 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return fallback
   }, [depositOptionsForCurrentBooking, configOverlay.noCauzionePerDay])
 
+  // 2026-05-30: Cauzione Veicolo (id canonico 'vehicle_deposit') ora letto
+  // PER CATEGORIA da Centralina Pro, come fa PreventiviTab. Prima era
+  // hardcoded a configOverlay.cauzioneVeicoliPerDay ?? €20 indipendentemente
+  // dalla categoria. Risoluzione: categoria × fascia × residenza + alias
+  // supercars<->exotic + match id 'vehicle_deposit' o label "Cauzione
+  // veicolo/auto/macchina".
+  const isVehicleDepositOpt = (o: ProDepositOption) => {
+    if (o.id === 'vehicle_deposit') return true
+    const label = String(o.label || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim()
+    return /cauzione (con )?(veicolo|auto|macchina)|deposito (con )?(veicolo|auto)|vehicle deposit/.test(label)
+  }
+  const cauzioneVeicoliResolvedDaily = useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fallback = (configOverlay as any).cauzioneVeicoliPerDay ?? 20
+    const opt = depositOptionsForCurrentBooking.find(isVehicleDepositOpt)
+    if (opt) {
+      const num = Number(opt.surcharge_per_day)
+      // Rispetta il valore configurato (anche 0): se l'opzione esiste e' la
+      // sorgente di verita' per quella categoria.
+      if (Number.isFinite(num) && num >= 0) return num
+    }
+    return fallback
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [depositOptionsForCurrentBooking, configOverlay])
+
   // Currently-selected option (from formData.deposit_option_id). Drives the
   // surcharge_per_day applied to the booking total — replaces the previous
   // "only fire when status=no_cauzione" behaviour.
@@ -1266,12 +1291,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 : 0
               const experienceCost = calculateExperienceCost(prev.experience_services, data.rentalDays)
               const flexCost = prev.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * data.rentalDays : 0
-              // 2026-05-27: Cauzione Veicoli opt-in. Daily rate da Centralina
-              // Pro (configOverlay.cauzioneVeicoliPerDay) con fallback €20/g
-              // come PreventiviTab.
+              // 2026-05-30: Cauzione Veicoli daily rate ora PER CATEGORIA da
+              // Centralina Pro (cauzioneVeicoliResolvedDaily). Allineato a
+              // PreventiviTab. Prima usava flat configOverlay.cauzioneVeicoliPerDay.
               const cauzioneVeicoliDaily = prev.include_cauzione_veicoli
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                ? ((configOverlay as any).cauzioneVeicoliPerDay ?? 20)
+                ? cauzioneVeicoliResolvedDaily
                 : 0
               const cauzioneVeicoliFee = cauzioneVeicoliDaily * data.rentalDays
               const kmPackagesCost = (() => {
@@ -1436,10 +1460,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         : 0
       const experienceCost = calculateExperienceCost(formData.experience_services, revenueSuggestion.rentalDays)
       const flexCost = formData.dr7_flex && activeTier === 'TIER_2' ? CFG_DR7_FLEX_PER_DAY * revenueSuggestion.rentalDays : 0
-      // 2026-05-27: Cauzione Veicoli opt-in (vedi nota nel path auto_apply).
+      // 2026-05-30: Cauzione Veicoli per-categoria (vedi nota nel path auto_apply).
       const cauzioneVeicoliDaily = formData.include_cauzione_veicoli
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ? ((configOverlay as any).cauzioneVeicoliPerDay ?? 20)
+        ? cauzioneVeicoliResolvedDaily
         : 0
       const cauzioneVeicoliFee = cauzioneVeicoliDaily * revenueSuggestion.rentalDays
       const kmPackagesCost = (() => {
@@ -8510,23 +8533,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         toggle Centralina Pro > Automazioni > Cauzione Veicoli
                         decide se la fee viaggia col coefficiente o sta a
                         listino. */}
-                    {(() => {
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      const cauzVeicDaily = (configOverlay as any).cauzioneVeicoliPerDay ?? 20
-                      return (
-                        <label className="md:col-span-2 flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
-                          <input
-                            type="checkbox"
-                            checked={!!formData.include_cauzione_veicoli}
-                            onChange={(e) => setFormData(prev => ({ ...prev, include_cauzione_veicoli: e.target.checked }))}
-                            className="w-4 h-4 accent-dr7-gold"
-                          />
-                          <span className="text-sm text-theme-text-primary">
-                            Cauzione Veicolo (€{cauzVeicDaily}/giorno)
-                          </span>
-                        </label>
-                      )
-                    })()}
+                    {/* 2026-05-30: prezzo letto da Centralina Pro per categoria/
+                        fascia/residenza tramite cauzioneVeicoliResolvedDaily. */}
+                    <label className="md:col-span-2 flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
+                      <input
+                        type="checkbox"
+                        checked={!!formData.include_cauzione_veicoli}
+                        onChange={(e) => setFormData(prev => ({ ...prev, include_cauzione_veicoli: e.target.checked }))}
+                        className="w-4 h-4 accent-dr7-gold"
+                      />
+                      <span className="text-sm text-theme-text-primary">
+                        Cauzione Veicolo (€{cauzioneVeicoliResolvedDaily}/giorno)
+                      </span>
+                    </label>
                   </>
                 )}
               </div>
