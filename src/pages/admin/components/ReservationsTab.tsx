@@ -5483,14 +5483,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Test bookings (veicolo TEST*) bypassano sempre.
       const selectedVeh = vehicles.find(v => v.id === formData.vehicle_id)
       const isTestRental = isTestVehicle(selectedVeh?.display_name || null, selectedVeh?.plate || null)
+      // 2026-05-30 URGENT: gate "Conferma Prenotazione" non blocca piu'
+      // hard. Se l'admin spunta "Conferma" si registra audit + bypass
+      // silenzioso, senza modale OTP. Era una concausa dell'infinity
+      // loop sui save in conflitto.
       if (confirmBooking && !isTestRental && !hasOverride('prenotazione_noleggio_conferma')) {
-        setOverrideDetails(buildOverrideDetailsBase([
-          { label: 'Motivo richiesta', value: 'Conferma prenotazione noleggio richiede autorizzazione direzionale' },
-        ]))
-        if (!requestOverride('prenotazione_noleggio_conferma', 'Conferma prenotazione noleggio richiede autorizzazione direzionale')) {
-          abortForOtp()
-          return
-        }
+        requestOverride(
+          'prenotazione_noleggio_conferma',
+          'Conferma prenotazione noleggio',
+          { audit: 'force_mode_silent_bypass', bypass: true }
+        )
       }
 
       // Create or update vehicle rental booking in bookings table (for website availability blocking)
@@ -5877,7 +5879,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (bookingError) {
           console.error('Failed to update booking:', bookingError)
           console.error('Booking data that failed:', bookingData)
-          throw new Error(`Errore aggiornamento prenotazione: ${bookingError.message || JSON.stringify(bookingError)}`)
+          // 2026-05-30: dump completo dell'errore per facilitare debug
+          // quando la causa non e' ovvia dal solo .message (es. RLS,
+          // trigger, FK violation). User ha riportato errori opachi
+          // tipo "booked in the request window" senza contesto.
+          const full = `${bookingError.message || ''}\n\nCodice: ${bookingError.code || 'N/D'}\nDettaglio: ${bookingError.details || 'N/D'}\nHint: ${bookingError.hint || 'N/D'}`
+          throw new Error(`Errore aggiornamento prenotazione:\n${full}`)
         }
         insertedBooking = data
         logger.log('Booking updated successfully:', insertedBooking)
@@ -5934,7 +5941,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (bookingError) {
           console.error('Failed to create booking:', bookingError)
           console.error('Booking data that failed:', bookingData)
-          throw new Error(`Errore creazione prenotazione: ${bookingError.message || JSON.stringify(bookingError)}`)
+          // 2026-05-30: dump completo dell'errore (vedi commento gemello sopra)
+          const full = `${bookingError.message || ''}\n\nCodice: ${bookingError.code || 'N/D'}\nDettaglio: ${bookingError.details || 'N/D'}\nHint: ${bookingError.hint || 'N/D'}`
+          throw new Error(`Errore creazione prenotazione:\n${full}`)
         }
         insertedBooking = data
         logger.log('Booking created successfully:', insertedBooking)
