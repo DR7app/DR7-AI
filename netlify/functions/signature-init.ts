@@ -275,13 +275,51 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // 2026-05-30 BUG FIX: se il telefono non è sul booking, cerca il profilo
+        // cliente in customers_extended. Prima si cercava SOLO per email — ma una
+        // prenotazione "a sorpresa" creata senza telefono (e spesso senza email)
+        // non aveva email su cui matchare, quindi il numero aggiunto DOPO nella
+        // scheda Clienti non veniva mai letto → il 1° guidatore (es. Edoardo)
+        // restava senza recapito e non riceveva il contratto, mentre il garante
+        // (con numero proprio sul booking) sì. Ora proviamo in ordine:
+        //   1) customerId (link affidabile dal booking_details.customer)
+        //   2) email
+        //   3) nome+cognome esatto
+        if (!customerPhone) {
+            const custId = booking?.booking_details?.customer?.customerId
+                || booking?.booking_details?.customer?.id
+                || booking?.user_id
+            if (custId) {
+                const { data: c } = await supabase
+                    .from('customers_extended')
+                    .select('telefono')
+                    .eq('id', custId)
+                    .maybeSingle()
+                if (c?.telefono) customerPhone = c.telefono
+            }
+        }
         if (!customerPhone && contract.customer_email) {
             const { data: customer } = await supabase
                 .from('customers_extended')
                 .select('telefono')
-                .eq('email', contract.customer_email)
+                .ilike('email', contract.customer_email)
                 .maybeSingle()
             if (customer?.telefono) customerPhone = customer.telefono
+        }
+        if (!customerPhone && signerName && signerName !== 'Cliente') {
+            // ultimo fallback: match per nome completo esatto (case-insensitive)
+            const parts = signerName.trim().split(/\s+/)
+            if (parts.length >= 2) {
+                const nome = parts.slice(0, -1).join(' ')
+                const cognome = parts[parts.length - 1]
+                const { data: c } = await supabase
+                    .from('customers_extended')
+                    .select('telefono')
+                    .ilike('nome', nome)
+                    .ilike('cognome', cognome)
+                    .maybeSingle()
+                if (c?.telefono) customerPhone = c.telefono
+            }
         }
 
         // 2026-05-30: NON bloccare più l'intero invio quando SOLO il 1°
