@@ -585,8 +585,14 @@ export default function ReportsTab() {
               // €1579+€880 di penali = €2459. Penali/danni sono one-time charges,
               // si sommano interi (no proration) — coerente con il totale veicolo
               // che gia' include penaltyRevenue + danniRevenue sul backend.
+              // 2026-05-30 BUG FIX: la quota mese non può MAI superare il totale
+              // della prenotazione. days_in_month a volte arriva > billable_days
+              // (es. 2g totali ma 3 "gg nel mese") → (1499.99/2)*3 = 2249.99,
+              // gonfiando il ricavo sopra l'incassato. Clampiamo i giorni-mese a
+              // billable_days così la proporzione è sempre ≤ total_price.
+              const daysInMonthClamped = Math.min(b.days_in_month, b.billable_days)
               const rentalInMonth = b.billable_days > 0
-                ? (b.total_price / b.billable_days) * b.days_in_month
+                ? (b.total_price / b.billable_days) * daysInMonthClamped
                 : b.total_price
               const revInMonth = Math.round((rentalInMonth + pen + dan) * 100) / 100
               return (
@@ -776,7 +782,9 @@ export default function ReportsTab() {
                         </td>
                         <td className="text-right py-1 px-2 text-dr7-gold">
                           {formatCurrency(
-                            (b.billable_days > 0 ? (b.total_price / b.billable_days) * b.days_in_month : b.total_price)
+                            (b.billable_days > 0
+                              ? (b.total_price / b.billable_days) * Math.min(b.days_in_month, b.billable_days)
+                              : b.total_price)
                             + pen + dan
                           )}
                         </td>
