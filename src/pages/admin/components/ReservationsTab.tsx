@@ -1161,20 +1161,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     return fallback
   }, [depositOptionsForCurrentBooking, configOverlay.noCauzionePerDay])
 
-  // 2026-05-30: Cauzione Veicolo (id canonico 'vehicle_deposit') ora letto
-  // PER CATEGORIA da Centralina Pro, come fa PreventiviTab. Prima era
-  // hardcoded a configOverlay.cauzioneVeicoliPerDay ?? €20 indipendentemente
-  // dalla categoria. Risoluzione: categoria × fascia × residenza + alias
-  // supercars<->exotic + match id 'vehicle_deposit' o label "Cauzione
-  // veicolo/auto/macchina".
+  // 2026-05-30: Cauzione Veicolo (id canonico 'vehicle_deposit') letto SOLO
+  // da Centralina Pro per categoria × fascia × residenza. NIENTE FALLBACK:
+  // se l'opzione non e' configurata in Centralina Pro per quella
+  // combinazione, il prezzo e' 0 e la checkbox non aggiunge nulla al totale.
+  // L'utente vuole che la fonte di verita' sia SEMPRE Centralina Pro, mai
+  // €20 di default (che era il motivo dei prezzi sbagliati).
   const isVehicleDepositOpt = (o: ProDepositOption) => {
     if (o.id === 'vehicle_deposit') return true
     const label = String(o.label || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim()
     return /cauzione (con )?(veicolo|auto|macchina)|deposito (con )?(veicolo|auto)|vehicle deposit/.test(label)
   }
   const cauzioneVeicoliResolvedDaily = useMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const fallback = (configOverlay as any).cauzioneVeicoliPerDay ?? 20
     const opt = depositOptionsForCurrentBooking.find(isVehicleDepositOpt)
     if (opt) {
       const num = Number(opt.surcharge_per_day)
@@ -1182,9 +1180,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // sorgente di verita' per quella categoria.
       if (Number.isFinite(num) && num >= 0) return num
     }
-    return fallback
+    return 0
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [depositOptionsForCurrentBooking, configOverlay])
+  }, [depositOptionsForCurrentBooking])
 
   // Currently-selected option (from formData.deposit_option_id). Drives the
   // surcharge_per_day applied to the booking total — replaces the previous
@@ -8560,16 +8558,21 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         decide se la fee viaggia col coefficiente o sta a
                         listino. */}
                     {/* 2026-05-30: prezzo letto da Centralina Pro per categoria/
-                        fascia/residenza tramite cauzioneVeicoliResolvedDaily. */}
+                        fascia/residenza. Se non configurato in Pro = 0 €/giorno.
+                        Mostra etichetta esplicita "(non configurata in Centralina Pro)"
+                        cosi' l'admin sa subito dove andare a settarla. */}
                     <label className="md:col-span-2 flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
                       <input
                         type="checkbox"
                         checked={!!formData.include_cauzione_veicoli}
                         onChange={(e) => setFormData(prev => ({ ...prev, include_cauzione_veicoli: e.target.checked }))}
                         className="w-4 h-4 accent-dr7-gold"
+                        disabled={cauzioneVeicoliResolvedDaily <= 0}
                       />
-                      <span className="text-sm text-theme-text-primary">
-                        Cauzione Veicolo (€{cauzioneVeicoliResolvedDaily}/giorno)
+                      <span className={`text-sm ${cauzioneVeicoliResolvedDaily > 0 ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}>
+                        Cauzione Veicolo {cauzioneVeicoliResolvedDaily > 0
+                          ? `(€${cauzioneVeicoliResolvedDaily}/giorno)`
+                          : '(non configurata in Centralina Pro per questa categoria)'}
                       </span>
                     </label>
                   </>
