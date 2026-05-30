@@ -7659,6 +7659,31 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       </select>
                     </div>
 
+                    {/* Residenza Cliente — come in Preventivi (Residente / Non
+                        Residente). Incide su TUTTO (prezzo, assicurazione,
+                        cauzioni), per questo sta in alto e non dentro la
+                        cauzione. Il bottone attivo riflette la residenza
+                        auto-rilevata dalla provincia finché l'admin non sceglie. */}
+                    <div className="mt-3">
+                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">Residenza Cliente</label>
+                      <div className="flex gap-2">
+                        {([true, false] as const).map(val => (
+                          <button
+                            key={String(val)}
+                            type="button"
+                            onClick={() => setResidencyOverride(val ? 'residente' : 'non_residente')}
+                            className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+                              isResidenteSardegna === val
+                                ? 'bg-dr7-gold text-white'
+                                : 'bg-theme-bg-tertiary text-theme-text-muted border border-theme-border hover:border-theme-text-muted'
+                            }`}
+                          >
+                            {val ? 'Residente Sardegna' : 'Non Residente'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     {customers.length === 0 && (
                       <p className="text-sm text-yellow-400 mt-2">
                         Nessun cliente trovato. Verifica che l'API sia attiva o crea un nuovo cliente.
@@ -8435,33 +8460,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                         Opzione Cauzione · {customerTier?.tier === 'TIER_1' ? 'Fascia B' : 'Fascia A'} · {isResidenteSardegna ? 'Residente' : 'Non residente'}
                       </label>
-                      <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
-                        <span className="text-theme-text-muted">Residenza cauzione:</span>
-                        {(['auto', 'residente', 'non_residente'] as const).map(opt => {
-                          const labels = {
-                            auto: customerProvincia
-                              ? `Auto (${isResidenteSardegnaAuto ? 'Residente' : 'Non residente'} · ${customerProvincia})`
-                              : 'Auto (provincia sconosciuta)',
-                            residente: 'Residente Sardegna',
-                            non_residente: 'Non residente',
-                          }
-                          const active = residencyOverride === opt
-                          return (
-                            <button
-                              key={opt}
-                              type="button"
-                              onClick={() => setResidencyOverride(opt)}
-                              className={`px-2.5 py-1 rounded-full border transition-colors ${
-                                active
-                                  ? 'bg-dr7-gold/20 border-dr7-gold text-dr7-gold'
-                                  : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:text-theme-text-primary'
-                              }`}
-                            >
-                              {labels[opt]}
-                            </button>
-                          )
-                        })}
-                      </div>
+                      {/* La residenza si imposta in alto (Residenza Cliente) —
+                          incide su tutto, non solo sulla cauzione. */}
                       {depositOptionsForCurrentBooking.length === 0 ? (
                         <p className="text-xs text-amber-400 mb-2">
                           Nessuna opzione configurata in Centralina Pro per questa combinazione.
