@@ -26,6 +26,101 @@ interface Contract {
   pdf_url?: string
   booking_id: string
   signed_pdf_url?: string
+  signers?: SignerStatus[]
+}
+
+// Un firmatario del contratto: la persona (dal booking_details) + lo stato di
+// firma sovrapposto dalle signature_requests. status può anche essere
+// 'not_sent' quando la persona è sul contratto ma non ha ancora ricevuto la
+// richiesta di firma.
+interface SignerStatus {
+  signer_name: string
+  signer_phone?: string
+  role: string
+  status: string // signed | otp_verified | otp_sent | pending | expired | cancelled | not_sent
+  signed_at?: string | null
+}
+
+const SIGNER_STATUS_RANK: Record<string, number> = {
+  signed: 0, otp_verified: 1, otp_sent: 2, pending: 3, expired: 4, cancelled: 5,
+}
+const SIGNER_ROLE_ORDER = ['1_guidatore', '2_guidatore', 'garante', 'fideiussore_1', 'fideiussore_2', 'fideiussore_3']
+
+function signerRoleLabel(role: string): string {
+  switch (role) {
+    case '1_guidatore': return '1° guidatore'
+    case '2_guidatore': return '2° guidatore'
+    case 'garante': return 'Garante'
+    case 'fideiussore_1': return 'Fideiussore 1'
+    case 'fideiussore_2': return 'Fideiussore 2'
+    case 'fideiussore_3': return 'Fideiussore 3'
+    default: return role || 'Firmatario'
+  }
+}
+
+// Mappa ruolo -> stato firma più rilevante dalle signature_requests grezze.
+// A parità di ruolo: firmato > in firma > in attesa > scaduto > annullato; a
+// parità di rango, la più recente (dopo "Rinvia contratto" coesistono righe
+// 'cancelled' + 'pending').
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function signatureStatusByRole(rows: any[]): Map<string, { status: string; signed_at?: string | null }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const byRole = new Map<string, any>()
+  for (const r of rows) {
+    if (!r.role) continue
+    const prev = byRole.get(r.role)
+    if (!prev) { byRole.set(r.role, r); continue }
+    const rRank = SIGNER_STATUS_RANK[r.status] ?? 9
+    const pRank = SIGNER_STATUS_RANK[prev.status] ?? 9
+    if (rRank < pRank || (rRank === pRank && (r.created_at || '') > (prev.created_at || ''))) {
+      byRole.set(r.role, r)
+    }
+  }
+  return byRole
+}
+
+// Lista COMPLETA dei firmatari dal booking_details (1°/2° guidatore, garante,
+// fideiussori) — stessi campi di signature-init — con lo stato firma
+// sovrapposto. Così compaiono sempre, anche prima dell'invio ('not_sent').
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildContractSigners(c: any, sigRows: any[]): SignerStatus[] {
+  const bd = c?.bookings?.booking_details || {}
+  const sigMap = signatureStatusByRole(sigRows)
+  const out: SignerStatus[] = []
+  const add = (role: string, name: string, phone?: string) => {
+    const n = (name || '').trim()
+    if (!n) return
+    const sig = sigMap.get(role)
+    out.push({ role, signer_name: n, signer_phone: phone || '', status: sig?.status || 'not_sent', signed_at: sig?.signed_at || null })
+  }
+
+  add('1_guidatore', c.customer_name || bd?.customer?.fullName || c?.bookings?.customer_name || '', c.customer_phone || bd?.customer?.phone)
+
+  const sd = bd?.second_driver
+  if (sd) {
+    const sdName = (sd.name && sd.surname) ? `${sd.name} ${sd.surname}`
+      : (sd.fullName || sd.full_name || [sd.nome, sd.cognome].filter(Boolean).join(' '))
+    add('2_guidatore', sdName, sd.phone || sd.telefono)
+  }
+
+  const g = bd?.garante_veicolo
+  if (g && g.tipo !== 'guidatore') {
+    add('garante', `${g.nome || ''} ${g.cognome || ''}`.trim(), g.telefono || g.phone)
+  }
+
+  const fids = Array.isArray(bd?.guarantors) ? bd.guarantors : []
+  for (let n = 1; n <= 3; n++) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const row = fids.find((r: any) => Number(r?.index) === n)
+    if (!row) continue
+    add(`fideiussore_${n}`, String(row[`garante_${n}_nome_cognome`] || ''), String(row[`garante_${n}_telefono`] || ''))
+  }
+
+  const rank = (role: string) => {
+    const i = SIGNER_ROLE_ORDER.indexOf(role)
+    return i === -1 ? 999 : i
+  }
+  return out.sort((a, b) => rank(a.role) - rank(b.role))
 }
 
 export default function ContrattoTab() {
@@ -139,6 +234,34 @@ export default function ContrattoTab() {
         .order('updated_at', { ascending: false })
 
       if (error) throw error
+
+      // Stato firma: matchiamo per BOOKING_ID (oltre che per contract_id).
+      // Con righe contratto duplicate per una prenotazione, le firme possono
+      // puntare a una riga diversa o solo al booking → matchando solo per
+      // contract_id risultavano "non firmate" anche se qualcuno aveva firmato.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const contractIds = (data || []).map((c: any) => c.id).filter(Boolean)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const bookingIds = (data || []).map((c: any) => c.booking_id).filter(Boolean)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sigById = new Map<string, any>()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const collect = (rows: any[] | null) => { for (const s of rows || []) if (s?.id) sigById.set(s.id, s) }
+      const SIG_COLS = 'id, contract_id, booking_id, signer_name, signer_phone, role, status, signed_at, created_at'
+      if (bookingIds.length > 0) {
+        const { data: byBooking } = await supabase.from('signature_requests').select(SIG_COLS).in('booking_id', bookingIds)
+        collect(byBooking)
+      }
+      if (contractIds.length > 0) {
+        const { data: byContract } = await supabase.from('signature_requests').select(SIG_COLS).in('contract_id', contractIds)
+        collect(byContract)
+      }
+      const allSigs = Array.from(sigById.values())
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sigsForContract = (c: any) =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        allSigs.filter((s: any) => (c.id && s.contract_id === c.id) || (c.booking_id && s.booking_id === c.booking_id))
+
       // Resolve customer_name from booking if contract's customer_name is empty
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const resolved = (data || []).map((c: any) => {
@@ -152,6 +275,7 @@ export default function ContrattoTab() {
         if (!c.customer_phone && b) {
           c.customer_phone = b.customer_phone || b.booking_details?.customer?.phone || ''
         }
+        c.signers = buildContractSigners(c, sigsForContract(c))
         return c
       })
       setContracts(resolved)
@@ -847,6 +971,22 @@ export default function ContrattoTab() {
                       {contract.status === 'active' ? 'Attivo' :
                         contract.status === 'completed' ? 'Completato' : 'Cancellato'}
                     </span>
+                    {contract.signers && contract.signers.length > 0 && (() => {
+                      const signedCount = contract.signers.filter(s => s.status === 'signed').length
+                      const total = contract.signers.length
+                      const allSigned = signedCount === total
+                      return (
+                        <span className={`px-2 py-1 rounded text-xs font-bold border ${
+                          allSigned
+                            ? 'bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30'
+                            : signedCount > 0
+                              ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30'
+                              : 'bg-theme-bg-tertiary text-theme-text-secondary border-theme-border'
+                        }`}>
+                          {allSigned ? '✓ ' : ''}{signedCount}/{total} firmato
+                        </span>
+                      )
+                    })()}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
                     <div>
@@ -868,6 +1008,38 @@ export default function ContrattoTab() {
                       <p className="text-dr7-gold font-bold">€{contract.total_amount.toFixed(2)}</p>
                     </div>
                   </div>
+
+                  {/* Persone sul contratto (1°/2° guidatore, garante,
+                      fideiussori) + stato firma di ciascuno. */}
+                  {contract.signers && contract.signers.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-theme-border">
+                      <span className="text-theme-text-muted text-sm">Firmatari:</span>
+                      <div className="flex flex-wrap gap-2 mt-1.5">
+                        {contract.signers.map((s, i) => {
+                          const label = s.status === 'signed' ? '✓ Firmato'
+                            : s.status === 'expired' ? 'Scaduto'
+                            : s.status === 'cancelled' ? 'Annullato'
+                            : s.status === 'not_sent' ? 'Non inviato'
+                            : 'In attesa'
+                          const cls = s.status === 'signed' ? 'text-green-700 dark:text-green-400'
+                            : s.status === 'expired' ? 'text-red-600 dark:text-red-400'
+                            : (s.status === 'cancelled' || s.status === 'not_sent') ? 'text-theme-text-muted'
+                            : 'text-amber-700 dark:text-amber-400'
+                          return (
+                            <span
+                              key={i}
+                              className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs bg-theme-bg-tertiary border border-theme-border"
+                              title={s.status === 'signed' && s.signed_at ? `Firmato il ${new Date(s.signed_at).toLocaleString('it-IT')}` : (s.signer_phone || undefined)}
+                            >
+                              <span className="text-theme-text-primary font-semibold">{s.signer_name}</span>
+                              <span className="text-theme-text-muted">{signerRoleLabel(s.role)}</span>
+                              <span className={`font-bold ${cls}`}>{label}</span>
+                            </span>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-col gap-2 ml-4">
                   {contract.pdf_url && (
