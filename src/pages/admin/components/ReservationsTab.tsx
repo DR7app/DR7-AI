@@ -6896,9 +6896,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const currentlyPaid = PAID_STATUSES.includes(formData.payment_status || '')
       const wasOriginallyPaid = !!editingId
         && PAID_STATUSES.includes(editingOriginalPaymentStatus || '')
+      // 2026-05-30 BUG FIX: per i metodi SENZA callback Nexi (Contanti, Bonifico,
+      // Carta in negozio) NON esiste un evento di pagamento futuro che faccia
+      // partire il contratto. Quindi se l'admin spunta "Conferma Prenotazione"
+      // su una nuova prenotazione Da Saldare in CONTANTI, il contratto di firma
+      // DEVE partire subito al salvataggio — altrimenti non partirebbe mai
+      // (il deferral "parte dopo il pagamento" vale solo per Pay-by-Link).
+      const isPayByLink = isNexiPayByLink(formData.payment_method)
+      const confirmedNonPayByLink = confirmBooking && !isPayByLink
       const shouldSendSigningLink = !!insertedBooking?.id
         && !editHasBalanceOwed  // defer signing link until after payment on edits with balance
-        && (currentlyPaid || wasOriginallyPaid)
+        && (currentlyPaid || wasOriginallyPaid || confirmedNonPayByLink)
       if (shouldSendSigningLink) {
         try {
           // Fetch the contract that was just generated for this booking
