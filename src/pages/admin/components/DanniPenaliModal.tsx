@@ -696,13 +696,17 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                                         templateKey: tplKey,
                                         booking: { id: booking.id, service_type: 'car_rental' },
                                         templateVars: {
-                                            '{customer_name}': custName || 'Cliente',
-                                            '{nome}': (custName || 'Cliente').split(' ')[0],
-                                            '{amount}': cartTotal.toFixed(2),
-                                            '{link}': linkData.paymentUrl,
-                                            '{payment_link}': linkData.paymentUrl,
-                                            '{booking_ref}': bookingRef,
-                                            '{booking_id}': bookingRef,
+                                            // Il template "Link pagamento penali e danni" usa {total}
+                                            // per l'importo (non {amount}); il booking passato non ha
+                                            // price_total → {total} restava vuoto ("€,"). Passiamo total.
+                                            customer_name: custName || 'Cliente',
+                                            nome: (custName || 'Cliente').split(' ')[0],
+                                            total: cartTotal.toFixed(2),
+                                            amount: cartTotal.toFixed(2),
+                                            link: linkData.paymentUrl,
+                                            payment_link: linkData.paymentUrl,
+                                            booking_ref: bookingRef,
+                                            booking_id: bookingRef,
                                         },
                                     }),
                                 })
