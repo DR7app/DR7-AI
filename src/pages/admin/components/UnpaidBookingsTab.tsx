@@ -1323,7 +1323,15 @@ export default function UnpaidBookingsTab() {
         if (remaining <= 0) break
         const item = arr[i]
         if (item.paymentStatus === 'paid') continue
-        if (item.paymentStatus && item.paymentStatus !== 'pending' && item.paymentStatus !== 'partial') continue
+        // 2026-05-30 BUG FIX: includi 'nexi_pay_by_link' tra gli stati pagabili.
+        // Un item con link inviato ("in attesa di pagamento — Pay by Link inviato")
+        // ha paymentStatus='nexi_pay_by_link': prima veniva SALTATO dal loop, quindi
+        // "Parziale" non scriveva nulla ma mostrava lo stesso il toast di successo
+        // → l'admin vedeva "ok" ma la riga non cambiava (es. Cani/pelo di cane).
+        if (item.paymentStatus
+            && item.paymentStatus !== 'pending'
+            && item.paymentStatus !== 'partial'
+            && item.paymentStatus !== 'nexi_pay_by_link') continue
         const total = item.total || (item.amount || 0) * (item.quantity || 1)
         const itemRemaining = total - (item.amountPaid || 0)
         const toApply = Math.min(remaining, itemRemaining)
@@ -1351,7 +1359,13 @@ export default function UnpaidBookingsTab() {
         }
       }
 
-      toast.success('Pagamento parziale registrato')
+      // 2026-05-30: non mentire all'admin. Mostra successo solo se qualcosa è
+      // stato davvero applicato (item booking_details o fattura).
+      if (changed || remaining < paymentAmount) {
+        toast.success('Pagamento parziale registrato')
+      } else {
+        toast.error('Nessun importo applicato — la voce potrebbe essere già saldata o non trovata.')
+      }
       loadUnpaidBookings()
     } catch (err: unknown) {
       const _errMsg = err instanceof Error ? err.message : String(err)
