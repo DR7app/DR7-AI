@@ -5641,6 +5641,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         price_total: Math.round(eurToCents(formData.total_amount)),
         km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
         currency: formData.currency.toUpperCase(),
+        // 2026-05-30 BUG FIX: persisti l'ACCONTO su una nuova prenotazione
+        // Pay-by-Link 'partial'. Prima amount_paid non veniva salvato e lo stato
+        // era forzato a 'unpaid', quindi quando il cliente pagava il link del
+        // RESIDUO il callback topup partiva da 0 → restava "in attesa" perché il
+        // residuo da solo non copriva il totale. Ora salviamo l'acconto.
+        amount_paid: (!editingId && formData.payment_status === 'partial')
+          ? eurToCents(formData.amount_paid || '0')
+          : undefined,
         // Pay by Link bookings start as pending_payment/unpaid;
         // other payment methods start as confirmed/paid.
         // 2026-05-28: se l'admin ha spuntato "Conferma Prenotazione" il
@@ -5654,7 +5662,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           ? 'confirmed'
           : (!editingId && isNexiPayByLink(formData.payment_method) && formData.payment_status !== 'paid')
             ? 'pending' : formData.status === 'pending_payment' ? 'pending' : (formData.status || 'confirmed'),
-        payment_status: (!editingId && isNexiPayByLink(formData.payment_method) && formData.payment_status !== 'paid')
+        // 2026-05-30: NON forzare 'unpaid' quando l'admin ha registrato un
+        // ACCONTO (partial). Solo le booking senza nulla pagato partono 'unpaid';
+        // le 'partial' mantengono lo stato così l'acconto resta visibile e il
+        // callback topup del link residuo lo somma correttamente.
+        payment_status: (!editingId && isNexiPayByLink(formData.payment_method)
+                          && formData.payment_status !== 'paid' && formData.payment_status !== 'partial')
           ? 'unpaid' : formData.payment_status,
         payment_method: formData.payment_method,
         customer_name: customerInfo?.full_name || 'N/A',
@@ -6042,6 +6055,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             logger.warn('[PayByLink] Skipped — totalEur is 0. Check total_amount field.')
           } else {
             logger.log('[PayByLink] Generating link for booking', insertedBooking.id, 'amount €' + totalEur.toFixed(2))
+            // 2026-05-30 BUG FIX: per un acconto/partial il link copre solo il
+            // RESIDUO (totalEur = totale − già pagato). Va trattato come
+            // booking_topup nel callback così l'importo si SOMMA all'amount_paid
+            // esistente (acconto) invece di sovrascriverlo, e lo stato diventa
+            // 'paid' solo se copre l'intero totale (altrimenti resta 'partial').
+            // Prima mancava paymentPurpose → callback lo trattava come 'booking'
+            // (prima-volta): sovrascriveva amount_paid col solo residuo e/o non
+            // aggiornava correttamente, lasciando "in attesa di pagamento".
+            const isPartialLink = formData.payment_status === 'partial' && alreadyPaidCents > 0
             const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -6051,7 +6073,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 customerEmail: customerInfo?.email || '',
                 customerName: customerInfo?.full_name || 'Cliente',
                 description: `Noleggio DR7 - ${vehicle?.display_name || ''} - ${customerInfo?.full_name || ''}`,
-                expirationHours: 1
+                expirationHours: 1,
+                ...(isPartialLink ? { paymentPurpose: 'booking_topup' } : {}),
               })
             })
             const linkData = await linkRes.json().catch(() => ({} as any))
