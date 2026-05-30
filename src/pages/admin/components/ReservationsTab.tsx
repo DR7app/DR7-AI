@@ -5035,31 +5035,38 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           )
 
           if (!availabilityResult.available && !hasOverride('slot_unavailable')) {
-            setOverrideDetails(buildOverrideDetailsBase([
-              { label: 'Motivo richiesta', value: 'Slot non disponibile / conflitto disponibilita' },
-              { label: 'Dettaglio conflitto', value: availabilityResult.reason || 'Slot non disponibile' },
-            ]))
-            // 2026-05-30: se l'operatore ha esplicitamente spuntato
-            // "Mostra tutti i veicoli (ignora disponibilità)", consideriamo
-            // quel click come bypass esplicito ("so cosa sto facendo"). Senza
-            // questo, dopo il refactor del 28/05 il toggle non bastava più:
-            // un operatore senza role:bypass-otp restava bloccato dietro
-            // l'OTP anche dopo aver acceso il flag di force-mode. URGENT
-            // 30/05: operatore con bypass attivo ma OTP modal mai apriva /
-            // shouldRequireOtp non matchava → loop opaco. Adesso il toggle
-            // = override caller-bypass garantito.
-            const wasBypassed = requestOverride(
-              'slot_unavailable',
-              availabilityResult.reason || 'Slot non disponibile',
-              showAllVehicles
-                ? { audit: 'force_mode_show_all_vehicles', bypass: true }
-                : undefined
+            // 2026-05-30 URGENT: il conflitto di disponibilita' NON deve mai
+            // hard-bloccare l'admin. Storia dei tentativi:
+            //  - prima del 28/05 bastava spuntare "Mostra tutti i veicoli"
+            //  - 28/05 quel bypass e' stato rimosso → richiesto OTP
+            //  - 30/05 (commit precedente) re-aggiunto bypass su checkbox
+            //    ma operatori non vedevano/non spuntavano la checkbox e
+            //    restavano bloccati comunque
+            //  - 30/05 (questo commit) bypass UNCONDIZIONATO: mostra solo
+            //    un confirm() di sicurezza. Click OK = procedi. Click
+            //    Cancel = abort. Niente piu' OTP, niente piu' checkbox
+            //    obbligatoria. L'admin e' adulto e responsabile.
+            // L'azione resta loggata nell'audit trail (limitation_override_bypassed
+            // con reason='caller_bypass') per tracciabilita' direzionale.
+            const reason = availabilityResult.reason || 'Slot non disponibile'
+            const proceed = window.confirm(
+              'CONFLITTO DISPONIBILITA\'\n\n' +
+              reason + '\n\n' +
+              'OK = crea la prenotazione comunque (in sovrapposizione)\n' +
+              'Annulla = torna indietro e modifica date/veicolo'
             )
-            if (!wasBypassed) {
-              abortForOtp()
+            if (!proceed) {
+              setIsSubmitting(false)
+              submitLockRef.current = false
               return
             }
-            // bypass: l'override e' gia' in overrideMap, proseguiamo col save
+            // Registra l'override bypassato per audit + per non ri-chiedere
+            // se piu' validazioni rilanciano questo codice.
+            requestOverride(
+              'slot_unavailable',
+              reason,
+              { audit: 'force_mode_confirm_dialog', bypass: true }
+            )
           }
 
           logger.log('✅ Vehicle availability check passed')
