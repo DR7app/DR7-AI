@@ -530,7 +530,7 @@ const handler: Handler = async (event) => {
         if (isSuccess && isExtension && transaction.booking_id) {
             const { data: booking } = await supabase
                 .from('bookings')
-                .select('id, customer_name, customer_phone, customer_email, vehicle_name, booking_details')
+                .select('id, customer_name, customer_phone, customer_email, vehicle_name, booking_details, payment_status')
                 .eq('id', transaction.booking_id)
                 .single();
 
