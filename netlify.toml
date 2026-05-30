@@ -126,13 +126,12 @@
 # 2026-05-22 REVERT: direzione NON vuole che questo cron giri (rischio invii
 #   randomici: decine di template sono is_automatic+is_enabled per errore).
 # 2026-05-30 RIATTIVATO IN SICUREZZA — solo "promemoria ritiro veicolo".
-#   Il cron ora rispetta la env SCHEDULED_MSGS_ALLOWLIST (CSV di message_key):
-#   se impostata, processa SOLO quei template e salta tutti gli altri. Imposta
-#   su Netlify (Site settings > Environment variables):
-#     SCHEDULED_MSGS_ALLOWLIST = pro_custom_promemoria_ritiro_veicolo_1778334892254
-#   Finché la env contiene SOLO quella chiave, può partire SOLO il promemoria
-#   ritiro 24h prima del pickup. NON aggiungere altre chiavi senza verificarle:
-#   senza env (vuota) il cron tornerebbe a far girare TUTTO (pericoloso).
+#   Il cron ha un'ALLOWLIST hardcoded di default = SOLO il promemoria ritiro
+#   (pro_custom_promemoria_ritiro_veicolo_1778334892254), quindi funziona al
+#   deploy senza toccare le env. La env SCHEDULED_MSGS_ALLOWLIST (CSV di
+#   message_key) può sovrascrivere l'elenco se in futuro servono altri template.
+#   NON esiste modalità "manda tutto": allowlist vuota ⇒ nessun invio (fail-safe
+#   anti-incident del 2026-05-13). Aggiungere chiavi solo dopo verifica.
 [functions."process-scheduled-system-messages-cron"]
   schedule = "*/8 * * * *"
 

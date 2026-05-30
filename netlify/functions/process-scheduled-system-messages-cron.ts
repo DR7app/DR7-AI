@@ -424,16 +424,24 @@ const cronHandler = async () => {
     // message_key) il cron processa ESCLUSIVAMENTE quei template e salta ogni
     // altro. Così, anche con il cron acceso, può partire solo ciò che è in
     // allowlist. Lasciare la env vuota = comportamento storico (tutti).
+    // ALLOWLIST DI SICUREZZA. Questo cron era disabilitato dal 2026-05-13
+    // (mass-send ~1000 msg) perché decine di template sono is_automatic+is_enabled
+    // per errore (wrapper, fatture, link pagamento/firma forzati su schedule).
+    // Riattivato il 2026-05-30 SOLO per il "promemoria ritiro veicolo": la
+    // consegna è permessa ESCLUSIVAMENTE per i message_key in allowlist.
+    // Default (senza env) = SOLO il promemoria ritiro, così funziona al deploy
+    // senza dover toccare le env su Netlify. La env SCHEDULED_MSGS_ALLOWLIST
+    // (CSV) può sovrascrivere l'elenco se in futuro servono altri template.
+    // NB: non esiste un caso "manda tutto" — se l'allowlist fosse vuota il cron
+    // non manda nulla (fail-safe anti-incident).
+    const DEFAULT_ALLOWLIST = ['pro_custom_promemoria_ritiro_veicolo_1778334892254'];
     const allowlistRaw = (process.env.SCHEDULED_MSGS_ALLOWLIST || '').trim();
-    const allowlist = allowlistRaw ? allowlistRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
-    // FAIL-SAFE: senza allowlist il cron NON manda nulla. Storicamente ha
-    // causato un mass-send (~1000 msg). Riattivato il 2026-05-30 solo per il
-    // promemoria ritiro: la consegna è permessa SOLO per i message_key elencati
-    // in SCHEDULED_MSGS_ALLOWLIST. Env mancante/vuota ⇒ esce senza inviare,
-    // così un deploy senza la env non può ripetere l'incident.
+    const allowlist = allowlistRaw
+        ? allowlistRaw.split(',').map(s => s.trim()).filter(Boolean)
+        : DEFAULT_ALLOWLIST;
     if (allowlist.length === 0) {
-        console.warn('[scheduled-msgs] SCHEDULED_MSGS_ALLOWLIST non impostata — cron in modalità SAFE (nessun invio). Imposta la env per abilitare i template consentiti.');
-        return { statusCode: 200, body: JSON.stringify({ ok: true, sent: 0, scanned: 0, reason: 'no_allowlist_safe_mode' }) };
+        console.warn('[scheduled-msgs] allowlist vuota — modalità SAFE (nessun invio).');
+        return { statusCode: 200, body: JSON.stringify({ ok: true, sent: 0, scanned: 0, reason: 'empty_allowlist_safe_mode' }) };
     }
     console.log(`[scheduled-msgs] ALLOWLIST attiva — solo: ${allowlist.join(', ')}`);
 
