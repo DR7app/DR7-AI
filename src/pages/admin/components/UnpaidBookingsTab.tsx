@@ -355,10 +355,30 @@ export default function UnpaidBookingsTab() {
         .neq('customer_name', 'Lavaggio Rientro')
         .order('created_at', { ascending: false })
 
+      // 2026-05-30: a cancelled/completed booking should only stay in
+      // "In attesa di pagamento" if a penale/danno is ACTUALLY UNPAID.
+      // The PostgREST `.or(...neq.[])` above only proves the arrays are
+      // non-empty, so a cancelled rental whose penali/danni are all paid
+      // was re-included forever and the red X "wouldn't make it disappear".
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const hasUnpaidDebtItem = (b: any): boolean => {
+        for (const key of ['penalties', 'danni'] as const) {
+          const arr = b?.booking_details?.[key]
+          if (!Array.isArray(arr)) continue
+          for (const it of arr) {
+            if (it?.paymentStatus === 'paid') continue
+            const total = Number(it?.total ?? ((Number(it?.amount) || 0) * (Number(it?.quantity) || 1))) || 0
+            const paid = Number(it?.amountPaid) || 0
+            if (paid < total) return true
+          }
+        }
+        return false
+      }
+
       const seen = new Set((activeData || []).map(b => b.id))
       const merged = [
         ...(activeData || []),
-        ...((terminalWithItems || []).filter(b => !seen.has(b.id))),
+        ...((terminalWithItems || []).filter(b => !seen.has(b.id) && hasUnpaidDebtItem(b))),
       ]
       for (const b of (terminalUnpaid || [])) {
         if (!seen.has(b.id) && !merged.some(m => m.id === b.id)) {

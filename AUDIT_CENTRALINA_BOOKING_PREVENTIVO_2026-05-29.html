@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Audit Centralina Pro &rarr; Booking &amp; Preventivo &mdash; 2026-05-29</title>
+<style>
+  :root {
+    --gold: #c9a14a;
+    --ink: #1a1a1a;
+    --muted: #6b7280;
+    --rule: #d1d5db;
+    --ok: #15803d;
+    --warn: #b45309;
+    --bad: #b91c1c;
+    --na: #6b7280;
+    --bg-soft: #f9fafb;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #fff; color: var(--ink); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.45;
+    padding: 24px 28px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  header { border-bottom: 2px solid var(--gold); padding-bottom: 12px; margin-bottom: 18px; }
+  h1 { margin: 0 0 4px; font-size: 20pt; letter-spacing: -0.2px; }
+  .subtitle { color: var(--muted); font-size: 10pt; }
+  h2 { margin: 22px 0 10px; font-size: 13pt; border-left: 4px solid var(--gold); padding-left: 8px; }
+  p { margin: 0 0 10px; }
+  .lead { font-size: 10.5pt; color: #374151; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    margin: 8px 0 14px; padding: 10px 12px;
+    background: var(--bg-soft); border: 1px solid var(--rule); border-radius: 6px;
+    font-size: 9.5pt;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .dot-ok   { background: var(--ok); }
+  .dot-warn { background: var(--warn); }
+  .dot-bad  { background: var(--bad); }
+  .dot-na   { background: var(--na); }
+  table {
+    width: 100%; border-collapse: collapse; margin-top: 8px;
+    font-size: 9.5pt;
+  }
+  th, td { border: 1px solid var(--rule); padding: 7px 8px; text-align: left; vertical-align: top; }
+  thead th { background: var(--ink); color: #fff; font-weight: 600; }
+  tbody tr:nth-child(even) td { background: var(--bg-soft); }
+  td.section { font-weight: 600; white-space: nowrap; }
+  td.code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9pt; color: #374151; }
+  .pill {
+    display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 9pt;
+    font-weight: 600; letter-spacing: 0.2px; text-transform: uppercase; line-height: 1.6;
+  }
+  .pill-ok   { background: #dcfce7; color: var(--ok); border: 1px solid #86efac; }
+  .pill-warn { background: #fef3c7; color: var(--warn); border: 1px solid #fcd34d; }
+  .pill-bad  { background: #fee2e2; color: var(--bad); border: 1px solid #fca5a5; }
+  .pill-na   { background: #e5e7eb; color: var(--na); border: 1px solid #d1d5db; }
+
+  ul.fixes { padding-left: 18px; }
+  ul.fixes li { margin-bottom: 6px; }
+  .file { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.5pt; color: #1f2937; background: #f3f4f6; padding: 1px 5px; border-radius: 3px; }
+  footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid var(--rule); font-size: 9pt; color: var(--muted); }
+
+  @page { size: A4; margin: 14mm 12mm; }
+  @media print {
+    body { padding: 0; max-width: none; }
+    header { page-break-after: avoid; }
+    table { page-break-inside: auto; }
+    tr { page-break-inside: avoid; page-break-after: auto; }
+    h2 { page-break-after: avoid; }
+    .no-print { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Audit Centralina Pro &rarr; Booking &amp; Preventivo</h1>
+  <div class="subtitle">DR7 Empire Admin &mdash; verifica connettivit&agrave; tra ogni sezione di Centralina Pro e i flussi <strong>ReservationsTab</strong> (booking) e <strong>PreventiviTab</strong> (preventivo). Generato il <strong>29/05/2026</strong>.</div>
+</header>
+
+<p class="lead">
+  Questo documento elenca <strong>tutte le sezioni configurabili in Centralina Pro</strong> (<span class="file">centralina_pro_config.config</span> in Supabase) e dichiara, per ognuna, se il valore viene effettivamente <strong>letto dal form di prenotazione</strong> (ReservationsTab.tsx) e dal <strong>form di preventivo</strong> (PreventiviTab.tsx). Le righe con stato &laquo;Mancante&raquo; o &laquo;Parziale&raquo; sono i punti dove l&rsquo;admin pu&ograve; modificare la Centralina senza che si rifletta automaticamente sui form &mdash; vanno chiusi.
+</p>
+
+<div class="legend">
+  <span><i class="dot dot-ok"></i> <strong>CONNESSA</strong>: la sezione viene letta dal flusso e applicata in tempo reale</span>
+  <span><i class="dot dot-warn"></i> <strong>PARZIALE</strong>: lettura parziale o solo in alcuni rami</span>
+  <span><i class="dot dot-bad"></i> <strong>MANCANTE</strong>: la sezione non viene letta &mdash; valori hardcoded o ignorati</span>
+  <span><i class="dot dot-na"></i> <strong>N.A.</strong>: la sezione non si applica a quel flusso per design</span>
+</div>
+
+<h2>Matrice di connessione</h2>
+<table>
+  <thead>
+    <tr>
+      <th style="width: 18%;">Sezione Centralina</th>
+      <th style="width: 13%;">Booking (ReservationsTab)</th>
+      <th style="width: 13%;">Preventivo (PreventiviTab)</th>
+      <th>Note tecnica</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="section">Categorie veicoli<br><span class="code">categories[]</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td>Lette via <span class="file">selectedVehicle.category</span>. Determinano insurance/km/sforo/cauzioni/consegna per categoria. Alias <span class="file">supercars&harr;exotic</span> attivo nei lookup.</td>
+    </tr>
+    <tr>
+      <td class="section">Fasce A/B<br><span class="code">fasce[]</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td>Tier calcolato in <span class="file">tierClassification.ts</span> (et&agrave; + anni patente). Pilota insurance, second driver, no cauzione, deposit.</td>
+    </tr>
+    <tr>
+      <td class="section">Assicurazioni<br><span class="code">insurance</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="file">getInsuranceOptions(config, category, tier)</span>. Dropdown popolato da Centralina, prezzo/giorno corretto per categoria&times;fascia.</td>
+    </tr>
+    <tr>
+      <td class="section">Km inclusi<br><span class="code">km[].table</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="file">getKmIncluded(config, days, category)</span>. Output mostrato nel riepilogo e scritto nel booking. Tabella 1/2/3/4/5 + extraPerDay.</td>
+    </tr>
+    <tr>
+      <td class="section">Sforo &euro;/km<br><span class="code">km[].sforo / sforo_km</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="pill pill-warn">Parziale</span></td>
+      <td>Booking: <span class="file">getSforoForCategory</span> usato e salvato in <span class="file">booking_details.sforo_km</span>. Preventivo: lettura via <span class="file">(configOverlay as any).sforoKm</span> &mdash; <strong>chiave inesistente</strong>, cade a 0. Fix sotto.</td>
+    </tr>
+    <tr>
+      <td class="section">Km illimitati &euro;/giorno<br><span class="code">unlimited_km</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="file">getUnlimitedKmPrice(config, category, tier)</span> in entrambi.</td>
+    </tr>
+    <tr>
+      <td class="section">Cauzioni per fascia&times;residenza<br><span class="code">deposits</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td>Opzioni lette via <span class="file">configOverlay.depositDefaults</span> + <span class="file">deposits.[TIER_X_RESIDENT|NON_RESIDENT]</span>. Hook <span class="file">depositOptionsForCurrentBooking</span> in entrambi.</td>
+    </tr>
+    <tr>
+      <td class="section">Pacchetti Km<br><span class="code">pacchetti_km</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td>Letti via <span class="file">(rentalConfig as any).pacchetti_km</span> in entrambi. Multi-select cumulativo. <strong>Nota:</strong> il campo NON &egrave; nello schema tipizzato &mdash; trattato come <span class="code">any</span>.</td>
+    </tr>
+    <tr>
+      <td class="section">Servizi Experience<br><span class="code">servizi.experience[]</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="file">configOverlay.experienceServices</span> filtrati per <span class="file">is_active</span> + <span class="file">tier_only</span>.</td>
+    </tr>
+    <tr>
+      <td class="section">DR7 Flex<br><span class="code">servizi.dr7_flex</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="file">configOverlay.dr7FlexPerDay</span> + <span class="file">tier_restriction</span> + <span class="file">enabled</span>.</td>
+    </tr>
+    <tr>
+      <td class="section">Pulizia finale<br><span class="code">servizi.lavaggio</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="file">configOverlay.lavaggioFee</span> + <span class="file">mandatory</span> flag.</td>
+    </tr>
+    <tr>
+      <td class="section">Consegna a Domicilio per categoria<br><span class="code">servizi.delivery.by_category</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="file">getDeliveryPricePerKmForCategory(config, category)</span> in entrambi (aggiunta 2026-05-29). Banner amber quando la categoria non &egrave; configurata. Fallback flat rimosso &mdash; mancante = &euro;0.</td>
+    </tr>
+    <tr>
+      <td class="section">Secondo Guidatore<br><span class="code">servizi.second_driver</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="file">configOverlay.secondDriverTier1/2</span> + <span class="file">second_driver_billing</span> (flat / per_day).</td>
+    </tr>
+    <tr>
+      <td class="section">Luoghi di ritiro<br><span class="code">servizi.pickup_locations[]</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td>Aeroporti / luoghi extra. <span class="file">configOverlay.pickupLocations</span>. <strong>Attenzione:</strong> la fee &egrave; calcolata come <span class="file">km &times; delivery.price_per_km</span> globale &mdash; <strong>NON</strong> usa la tariffa per categoria. Fix consigliato sotto.</td>
+    </tr>
+    <tr>
+      <td class="section">No Cauzione (sovrapprezzo)<br><span class="code">no_cauzione_surcharge</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="file">configOverlay.noCauzionePerDay</span>. Gate fascia + Kasko + OTP direzionale.</td>
+    </tr>
+    <tr>
+      <td class="section">Tariffe giornaliere<br><span class="code">prezzoDinamico.tariffe</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="file">getDailyRateFromConfig</span> legge <span class="file">rental_day_rates[category]</span>. Output suggerito nel form.</td>
+    </tr>
+    <tr>
+      <td class="section">Coefficiente dinamico<br><span class="code">prezzoDinamico.dynamic</span></td>
+      <td><span class="pill pill-na">N.A.</span></td>
+      <td><span class="pill pill-warn">Parziale</span></td>
+      <td>Calcolato dal Netlify <span class="file">calculate-dynamic-price.ts</span> solo per il <strong>sito cliente</strong>. L&rsquo;admin inserisce prezzi manualmente. PreventiviTab applica il coefficient solo nel preview &laquo;Pro pricing&raquo;.</td>
+    </tr>
+    <tr>
+      <td class="section">Maggiorazione preventivo &percnt;<br><span class="code">preventivi.maggiorazione_pct</span></td>
+      <td><span class="pill pill-na">N.A.</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="file">configOverlay.maggiorazionePct</span> pre-popolato nel form preventivo.</td>
+    </tr>
+    <tr>
+      <td class="section">Scadenza preventivo<br><span class="code">preventivi.scadenza_default_ore</span></td>
+      <td><span class="pill pill-na">N.A.</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="file">configOverlay.defaultExpiryHours</span> applicato in fase di invio.</td>
+    </tr>
+    <tr>
+      <td class="section">Catalogo Penali<br><span class="code">penali[]</span></td>
+      <td><span class="pill pill-bad">Mancante</span></td>
+      <td><span class="pill pill-bad">Mancante</span></td>
+      <td>Nessun riferimento diretto nel form di booking n&eacute; preventivo. Penali si applicano solo via <span class="file">DanniPenaliModal</span> dopo il noleggio. <strong>Non blocca</strong> il flusso ma manca la &laquo;preview penale&raquo; nei preventivi.</td>
+    </tr>
+    <tr>
+      <td class="section">Catalogo Danni<br><span class="code">danni[]</span></td>
+      <td><span class="pill pill-bad">Mancante</span></td>
+      <td><span class="pill pill-bad">Mancante</span></td>
+      <td>Idem &mdash; applicati solo post-noleggio via <span class="file">DanniPenaliModal</span>.</td>
+    </tr>
+    <tr>
+      <td class="section">Fiscale (Aliquota IVA)<br><span class="code">fiscal.aliquota_iva</span></td>
+      <td><span class="pill pill-warn">Parziale</span></td>
+      <td><span class="pill pill-warn">Parziale</span></td>
+      <td>Letta lato server in <span class="file">generate-invoice-from-booking.ts</span>. I form NON leggono direttamente: il prezzo lordo &egrave; quello visibile, la quota IVA si calcola alla fattura.</td>
+    </tr>
+    <tr>
+      <td class="section">Fiscale (auto-invoice per metodo)<br><span class="code">fiscal.payment_methods</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="pill pill-na">N.A.</span></td>
+      <td><span class="file">paymentMethodAutoInvoice()</span> determina se generare fattura automaticamente al &laquo;segna pagato&raquo;.</td>
+    </tr>
+    <tr>
+      <td class="section">DR7 Club / Cashback<br><span class="code">dr7_club</span></td>
+      <td><span class="pill pill-bad">Mancante</span></td>
+      <td><span class="pill pill-bad">Mancante</span></td>
+      <td>Tier e cashback applicati solo a callback Nexi (<span class="file">dr7Privilege.ts</span>) e a wallet operations. Form di booking/preventivo non visualizzano <em>quanto cashback maturer&agrave;</em> il cliente.</td>
+    </tr>
+    <tr>
+      <td class="section">Automazioni (buffer / grace)<br><span class="code">automations</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td>Lette inline in <span class="file">vehicleAvailability.ts</span> (rental_buffer, cross_vehicle_gap, late_return_grace). Pilotano availability e billing days.</td>
+    </tr>
+    <tr>
+      <td class="section">Marketing (review URL, sito)<br><span class="code">marketing</span></td>
+      <td><span class="pill pill-na">N.A.</span></td>
+      <td><span class="pill pill-na">N.A.</span></td>
+      <td>Non si applica al booking/preventivo. Usato dai flussi recensioni e WhatsApp.</td>
+    </tr>
+    <tr>
+      <td class="section">Orari Lavaggio<br><span class="code">lavaggio_hours</span></td>
+      <td><span class="pill pill-na">N.A.</span></td>
+      <td><span class="pill pill-na">N.A.</span></td>
+      <td>Si applica solo a <span class="file">CarWashBookingsTab</span>. Booking/preventivo noleggio non li leggono.</td>
+    </tr>
+    <tr>
+      <td class="section">Orari Noleggio<br><span class="code">noleggio_hours</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="pill pill-ok">Connessa</span></td>
+      <td><span class="file">isInRentalHours()</span> + <span class="file">rentalHoursFor()</span>. Domenica chiusa. Gate OTP <span class="file">out_of_office_hours</span> se fuori orario.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Lacune da chiudere</h2>
+<p>Solo i punti dove l&rsquo;admin pu&ograve; cambiare la Centralina senza che il flusso lo veda.</p>
+
+<ul class="fixes">
+  <li>
+    <strong>Sforo nel preventivo</strong> &mdash; PreventiviTab legge <span class="file">(configOverlay as any).sforoKm</span>: chiave inesistente, valore sempre <span class="code">0</span>. Fix: usare <span class="file">getSforoKm(rentalConfig, vehicleId, category)</span> come gi&agrave; fa ReservationsTab. <span class="file">src/pages/admin/components/PreventiviTab.tsx:1249</span>
+  </li>
+  <li>
+    <strong>Tariffa consegna per i Luoghi di ritiro (aeroporti)</strong> &mdash; <span class="file">configOverlay.pickupLocations</span> calcola la fee come <span class="code">km &times; price_per_km</span> globale, ma il flat <span class="file">price_per_km</span> &egrave; stato deprecato. Adesso i luoghi extra possono mostrare &euro;0. Fix: passare la categoria del veicolo selezionato e usare <span class="file">getDeliveryPricePerKmForCategory</span> al posto del flat.
+  </li>
+  <li>
+    <strong>Penali e Danni preview</strong> (nice-to-have) &mdash; il preventivo potrebbe includere un listino delle penali principali per categoria, oggi non &egrave; visibile finch&eacute; non si apre <span class="file">DanniPenaliModal</span>. Decisione di prodotto: opzionale.
+  </li>
+  <li>
+    <strong>DR7 Club / Cashback preview</strong> (nice-to-have) &mdash; il booking non mostra al cliente quanto cashback maturer&agrave;. Si potrebbe leggere <span class="file">dr7_club.cashback_rates</span> in fase di riepilogo. Decisione di prodotto: opzionale.
+  </li>
+  <li>
+    <strong>Tipizzazione di <span class="code">pacchetti_km</span></strong> &mdash; il campo &egrave; letto come <span class="code">any</span> in 9+ punti. Fix di hygiene: aggiungerlo a <span class="file">RentalConfig</span> e a <span class="file">PersistedSnapshot</span> con tipo esplicito. Nessun cambio funzionale.
+  </li>
+</ul>
+
+<h2>Sezioni completamente connesse (nessuna azione)</h2>
+<p>Tutte queste sezioni sono lette dal codice di Booking e Preventivo in tempo reale: salvarle in Centralina basta, il form si aggiorna.</p>
+<table>
+  <thead>
+    <tr><th style="width: 30%;">Sezione</th><th>Cosa pilota</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Categorie veicoli</td><td>Insurance/km/sforo/cauzioni/consegna selezionati dal lookup</td></tr>
+    <tr><td>Fasce A/B</td><td>Tier driver, deposit, second driver, no cauzione gate</td></tr>
+    <tr><td>Assicurazioni</td><td>Dropdown Kasko + prezzo giornaliero</td></tr>
+    <tr><td>Km inclusi</td><td>Tabella km per giorni + extra</td></tr>
+    <tr><td>Km illimitati</td><td>Prezzo giornaliero per tier</td></tr>
+    <tr><td>Cauzioni</td><td>Opzioni cauzione per fascia &times; residenza</td></tr>
+    <tr><td>Pacchetti Km</td><td>Multi-select cumulativo nel riepilogo</td></tr>
+    <tr><td>Servizi Experience</td><td>Dropdown extra (bouquet, autista, ecc.)</td></tr>
+    <tr><td>DR7 Flex</td><td>Prezzo giornaliero + restrizione fascia</td></tr>
+    <tr><td>Pulizia finale</td><td>Tariffa + flag obbligatoria</td></tr>
+    <tr><td>Consegna domicilio per categoria</td><td>&euro;/km per categoria del veicolo</td></tr>
+    <tr><td>Secondo guidatore</td><td>Tariffa per fascia + modalit&agrave; flat/per_day</td></tr>
+    <tr><td>No cauzione</td><td>Sovrapprezzo + gate fascia + OTP direzionale</td></tr>
+    <tr><td>Tariffe giornaliere</td><td>Prezzo base per categoria suggerito nel form</td></tr>
+    <tr><td>Maggiorazione preventivo</td><td>Percentuale pre-popolata</td></tr>
+    <tr><td>Scadenza preventivo</td><td>Ore di validit&agrave; applicate all&rsquo;invio</td></tr>
+    <tr><td>Automazioni</td><td>Buffer 75/15 min + grace ritardo riconsegna</td></tr>
+    <tr><td>Orari noleggio</td><td>Slot ritiro/riconsegna + gate fuori orario</td></tr>
+  </tbody>
+</table>
+
+<footer>
+  Documento generato il 29/05/2026 &mdash; file: <span class="file">AUDIT_CENTRALINA_BOOKING_PREVENTIVO_2026-05-29.html</span>.
+  Apri questo file nel browser e usa &laquo;File &gt; Stampa &gt; Salva come PDF&raquo; per ottenere la versione PDF italiana.
+</footer>
+
+</body>
+</html>
