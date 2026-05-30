@@ -95,7 +95,7 @@ import {
 } from '../../../utils/tierClassification'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { buildConfigOverlay, getVehicleSforoOverride } from '../../../utils/configOverlay'
-import { getKmIncluded, getUnlimitedKmPrice as getUnlimitedKmPriceFromConfig, getInsuranceOptions as getInsuranceOptionsFromConfig, getInsuranceNameById, getDeliveryPricePerKmForCategory } from '../../../utils/configLookup'
+import { getKmIncluded, getUnlimitedKmPrice as getUnlimitedKmPriceFromConfig, getInsuranceOptions as getInsuranceOptionsFromConfig, getInsuranceNameById, getInsuranceOptionById, getDeliveryPricePerKmForCategory } from '../../../utils/configLookup'
 import { kmFromDR7Office } from '../../../utils/dr7Distance'
 import { resolvePacchetti } from '../../../utils/pacchettiResolver'
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
@@ -688,7 +688,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     }
     set(operation, 'Metodo pagamento', formData.payment_method || '')
     set(operation, 'Stato pagamento', formData.payment_status || '')
-    set(operation, 'Assicurazione', formData.insurance_option || '')
+    // Assicurazione: mostra il NOME leggibile (es. "Kasko Base"), non l'id
+    // Pro grezzo (es. "kfxsmueq"). getInsuranceNameById cerca l'opzione in
+    // TUTTE le categorie/fasce, quindi risolve anche se l'id selezionato
+    // appartiene a una fascia diversa da quella di default.
+    const rawIns = formData.insurance_option || ''
+    const insLegacyMap: Record<string, string> = {
+      RCA: 'RCA', KASKO_BASE: 'Kasko Base', KASKO_BLACK: 'Kasko Black',
+      KASKO_SIGNATURE: 'Kasko Signature', KASKO_DR7: 'Kasko DR7', DR7: 'Kasko DR7',
+    }
+    const insDisplay =
+      (rentalConfig ? getInsuranceNameById(rentalConfig, rawIns) : null)
+      || insLegacyMap[rawIns]
+      || (rawIns ? rawIns.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase()) : '')
+    set(operation, 'Assicurazione', insDisplay)
 
     // Meta — operatore + timestamp
     const operatorEmail = typeof window !== 'undefined' ? (sessionStorage.getItem('admin-email') || null) : null
@@ -1273,7 +1286,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const activeTier = customerTier?.tier
               const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier, configOverlay, rentalConfig) : []
               const selectedKasko = kaskoOptions.find(k => k.id === prev.insurance_option)
-              const insuranceTotal = (selectedKasko?.pricePerDay || 0) * data.rentalDays
+              // Fallback all-tier: se l'id selezionato non e' nella lista della
+              // fascia di default, recuperiamo comunque il prezzo dell'opzione
+              // dal config (evita assicurazione = €0 per mismatch di fascia).
+              const insurancePerDay = selectedKasko?.pricePerDay
+                ?? (rentalConfig ? getInsuranceOptionById(rentalConfig, prev.insurance_option)?.daily_price : undefined)
+                ?? 0
+              const insuranceTotal = insurancePerDay * data.rentalDays
               // Stesso comportamento di PreventiviTab: il fee tipato
               // dall'admin entra SEMPRE nel totale (niente gate su
               // delivery_enabled / pickup_location). Se vale 0 non
@@ -1444,7 +1463,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const activeTier = customerTier?.tier || 'TIER_1'
       const kaskoOptions = selectedVehicle ? getInsuranceOptions(selectedVehicle, activeTier, configOverlay, rentalConfig) : []
       const selectedKasko = kaskoOptions.find(k => k.id === formData.insurance_option)
-      const insuranceTotal = (selectedKasko?.pricePerDay || 0) * revenueSuggestion.rentalDays
+      // Fallback all-tier (vedi nota path auto_apply): evita assicurazione €0
+      // quando l'id selezionato non e' nella lista della fascia di default.
+      const insurancePerDay = selectedKasko?.pricePerDay
+        ?? (rentalConfig ? getInsuranceOptionById(rentalConfig, formData.insurance_option)?.daily_price : undefined)
+        ?? 0
+      const insuranceTotal = insurancePerDay * revenueSuggestion.rentalDays
       // Stesso comportamento di PreventiviTab — il fee viene contato
       // ogni volta che ha un valore > 0, senza dipendere da checkbox
       // o dal valore del dropdown pickup_location. Admin ha digitato

@@ -40,8 +40,11 @@ export function getInsuranceOptions(config: RentalConfig, category: string, tier
     ?? []
 }
 
-/** Find an insurance option's display name by id, searching every category + tier. */
-export function getInsuranceNameById(config: RentalConfig | null | undefined, id: string): string | null {
+/** Find a full insurance option by id, searching every category + tier.
+ *  Used to resolve an ALREADY-SELECTED option whose id may belong to a
+ *  different fascia than the one the current lookup defaults to (a selected
+ *  id uniquely identifies its option + price regardless of tier gating). */
+export function getInsuranceOptionById(config: RentalConfig | null | undefined, id: string): InsuranceOption | null {
   if (!config?.insurance || !id) return null
   for (const [catKey, catConfig] of Object.entries(config.insurance)) {
     if (catKey === 'eligibility' || catKey === 'deductibles' || catKey === 'category_labels') continue
@@ -50,10 +53,15 @@ export function getInsuranceNameById(config: RentalConfig | null | undefined, id
       const opts = (catConfig as Record<string, InsuranceOption[]>)[tierKey]
       if (!Array.isArray(opts)) continue
       const match = opts.find(o => o.id === id)
-      if (match) return match.name
+      if (match) return match
     }
   }
   return null
+}
+
+/** Find an insurance option's display name by id, searching every category + tier. */
+export function getInsuranceNameById(config: RentalConfig | null | undefined, id: string): string | null {
+  return getInsuranceOptionById(config, id)?.name ?? null
 }
 
 /** Get KM included for a number of rental days + vehicle category */
