@@ -334,9 +334,18 @@ const handler: Handler = async (event) => {
           // ancora popolata non finisce mai a video come "{nuova_var}" letterale.
           // Niente parens-cleanup qui: e' un alias opzionale e troppi testi
           // legittimi sono "(parola)" da preservare.
+          //
+          // 2026-05-30: regex piu' permissive sul contenuto del placeholder.
+          // Prima `[a-zA-Z0-9_]+` lasciava passare letterali come `{vehicle name}`,
+          // `{nome.utente}`, `{auto-targa}`. Ora cattura QUALSIASI carattere
+          // non-`{}` lungo 1-60 char (evita di mangiare interi blocchi di
+          // testo accidentalmente). Risolto in produzione: alcuni template
+          // admin-edited usavano placeholder con punti/trattini e finivano
+          // letterali nel messaggio al cliente.
+          const PLACEHOLDER_INNER = '[^{}\\n]{1,60}'
           rendered = rendered
-            .replace(/^[ \t]*[•\-\*]?[ \t]*\*?\{\{?\s*[a-zA-Z0-9_]+\s*\}?\}\*?[ \t]*\n?/gm, '')
-            .replace(/\{\{?\s*[a-zA-Z0-9_]+\s*\}?\}/g, '');
+            .replace(new RegExp(`^[ \\t]*[•\\-\\*]?[ \\t]*\\*?\\{\\{?\\s*${PLACEHOLDER_INNER}\\s*\\}?\\}\\*?[ \\t]*\\n?`, 'gm'), '')
+            .replace(new RegExp(`\\{\\{?\\s*${PLACEHOLDER_INNER}\\s*\\}?\\}`, 'g'), '');
           // Cleanup finale: collapse 3+ newlines into 2 (preserva paragraph
           // breaks legittimi, rimuove gli extra introdotti da vars vuote)
           rendered = rendered.replace(/\n{3,}/g, '\n\n').trim();
@@ -774,6 +783,39 @@ const handler: Handler = async (event) => {
         success: true,
         skipped: true,
         reason: 'empty_body_no_template',
+      }),
+    };
+  }
+
+  // 2026-05-30: secondary hard gate. Anche con body presente, blocca l'invio se:
+  //   (a) dopo le sostituzioni il body si e' ridotto a < 20 char "significativi"
+  //       (i.e. tutto era placeholder e i fallback non c'erano), OPPURE
+  //   (b) il body contiene ancora literal "{...}" letterali (safety net miss).
+  // In entrambi i casi logghiamo forte cosi' direzione individua quale template
+  // e' mal-configurato in Messaggi di Sistema Pro.
+  const meaningfulChars = finalMessage.replace(/[\s\W]/g, '').length;
+  const leftoverPlaceholderMatch = finalMessage.match(/\{[^{}\n]{1,60}\}/);
+  if (meaningfulChars < 20 || leftoverPlaceholderMatch) {
+    console.error(
+      `[send-whatsapp] BLOCKED suspicious message body — too short or contains leftover placeholders. ` +
+      `templateKey=${templateKey} messageKey=${explicitMessageKey} usedTemplateKey=${usedTemplateKey} ` +
+      `bookingId=${booking?.id || 'n/a'} serviceType=${booking?.service_type || 'n/a'} ` +
+      `meaningfulChars=${meaningfulChars} leftover=${leftoverPlaceholderMatch?.[0] || '—'} ` +
+      `body=${JSON.stringify(finalMessage.substring(0, 200))}`
+    );
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        message: 'Body collapsed to placeholders/whitespace — skipped (template likely misconfigured)',
+        success: true,
+        skipped: true,
+        reason: 'body_collapsed_or_unresolved',
+        debug: {
+          meaningfulChars,
+          leftoverPlaceholder: leftoverPlaceholderMatch?.[0] || null,
+          templateKey,
+          usedTemplateKey,
+        }
       }),
     };
   }
