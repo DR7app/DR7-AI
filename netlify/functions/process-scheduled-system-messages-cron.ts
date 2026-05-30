@@ -599,7 +599,7 @@ const cronHandler = async () => {
             if (targetMs < now - LOOKBACK_MS) continue;       // troppo tardi
             if (targetMs > now + LOOKFORWARD_MS) continue;    // troppo presto
 
-            // Dedup: gia' inviato?
+            // Dedup veloce (best-effort): salta se gia' loggato.
             const { data: existing } = await supabase
                 .from('system_message_send_log')
                 .select('id')
@@ -611,7 +611,32 @@ const cronHandler = async () => {
                 continue;
             }
 
-            // Invia
+            // 2026-05-30 ANTI-DOPPIO INVIO: "claim" PRIMA di inviare.
+            // Inseriamo la riga di log con stato 'sending' SFRUTTANDO il vincolo
+            // DB UNIQUE(system_message_id, booking_id). Se due cron tick si
+            // sovrappongono (finestra 8min) o se la select sopra ha perso una
+            // riga appena creata, il secondo insert FALLISCE sul unique → non
+            // inviamo. Cosi' il messaggio parte AT-MOST-ONCE, anche in race.
+            // Prima si inviava e POI si loggava: se il log falliva, il run
+            // successivo non trovava la riga e RIMANDAVA il messaggio (doppio).
+            const { data: claim, error: claimErr } = await supabase
+                .from('system_message_send_log')
+                .insert({
+                    system_message_id: tpl.id,
+                    booking_id: booking.id,
+                    customer_phone: booking.customer_phone,
+                    status: 'sending',
+                })
+                .select('id')
+                .maybeSingle();
+            if (claimErr || !claim?.id) {
+                // unique violation o altro → un altro tick ha gia' preso questo invio
+                console.log(`[scheduled-msgs] claim fallito per ${tpl.message_key}/${booking.id} (gia' in invio?) — skip`);
+                totalSkipped++;
+                continue;
+            }
+
+            // Invia (claim ottenuto: questo è l'unico tick che invierà)
             try {
                 const baseUrl = process.env.URL || 'https://admin.dr7empire.com';
                 const res = await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
@@ -624,13 +649,13 @@ const cronHandler = async () => {
                 let resp: any = null;
                 try { resp = await res.json(); } catch { /* ignore */ }
 
-                await supabase.from('system_message_send_log').insert({
-                    system_message_id: tpl.id,
-                    booking_id: booking.id,
-                    customer_phone: booking.customer_phone,
-                    status: ok ? (resp?.skipped ? 'skipped' : 'sent') : 'error',
-                    error: ok ? null : `HTTP ${res.status}: ${JSON.stringify(resp)?.slice(0, 200)}`,
-                });
+                // Aggiorna la riga di claim con l'esito reale.
+                await supabase.from('system_message_send_log')
+                    .update({
+                        status: ok ? (resp?.skipped ? 'skipped' : 'sent') : 'error',
+                        error: ok ? null : `HTTP ${res.status}: ${JSON.stringify(resp)?.slice(0, 200)}`,
+                    })
+                    .eq('id', claim.id);
 
                 if (ok) {
                     if (resp?.skipped) totalSkipped++;
@@ -643,15 +668,11 @@ const cronHandler = async () => {
             } catch (e: unknown) {
                 totalErrors++;
                 const msg = e instanceof Error ? e.message : String(e);
-                try {
-                    await supabase.from('system_message_send_log').insert({
-                        system_message_id: tpl.id,
-                        booking_id: booking.id,
-                        customer_phone: booking.customer_phone,
-                        status: 'error',
-                        error: msg.slice(0, 500),
-                    });
-                } catch { /* dedup race ok */ }
+                // Marca la riga claim come errore (resta a bloccare il doppio invio;
+                // se vuoi ritentare manualmente, cancella la riga di log).
+                await supabase.from('system_message_send_log')
+                    .update({ status: 'error', error: msg.slice(0, 500) })
+                    .eq('id', claim.id);
                 results.push({ template: tpl.label, booking_id: booking.id, status: 'error', reason: msg });
             }
         }
