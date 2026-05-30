@@ -1561,15 +1561,22 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             return { statusCode: 500, body: JSON.stringify({ error: 'Failed to persist contract: ' + dbError.message }) }
         }
 
-        // 8a. Mark any previous signature_requests for this booking as superseded
-        // so the customer can't open a stale signing link and sign an outdated PDF.
-        // Match by booking_id to cover legacy duplicate contract rows too.
+        // 8a. Mark any previous PENDING signature_requests for this booking as
+        // superseded so the customer can't open a stale signing link and sign an
+        // outdated PDF. Match by booking_id to cover legacy duplicate contract rows.
+        // 2026-05-30 BUG FIX: NON toccare le richieste già 'signed' (né 'completed').
+        // Prima includevamo 'signed' nella lista → ogni rigenerazione del contratto
+        // (automatica dal callback pagamento dopo estensione/topup, o al salvataggio
+        // di una prenotazione) marcava le firme già APPOSTE come 'superseded', e in
+        // Contratti il booking tornava "in attesa / 0/N firmato" pur essendo firmato
+        // (caso reale: DR71589 Fofana, rigenerato più volte oggi). Ora superseder solo
+        // le richieste ancora aperte; le firme valide restano.
         try {
             await supabase
                 .from('signature_requests')
                 .update({ status: 'superseded', updated_at: new Date().toISOString() })
                 .eq('booking_id', bookingId)
-                .in('status', ['pending', 'otp_sent', 'otp_verified', 'signed'])
+                .in('status', ['pending', 'otp_sent', 'otp_verified'])
         } catch (cleanupErr) {
             console.warn('[generate-contract] Failed to supersede old signature_requests:', cleanupErr)
         }
