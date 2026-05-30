@@ -70,7 +70,19 @@ export const handler: Handler = async (event) => {
           }
         }
         if (!invoiceDate) {
-          const m = flat.match(/<Data>\s*([0-9T:.+\-]+)\s*<\/Data>/)
+          // 2026-05-30 BUG FIX: la data del documento sta DENTRO
+          // <DatiGeneraliDocumento>. Il vecchio match prendeva il PRIMO <Data>
+          // del file, che per alcuni fornitori (es. Exotica) è un altro tag
+          // (trasmissione / scadenza pagamento / riferimento termini) → data
+          // vuota. Ora cerchiamo prima il <Data> dentro DatiGeneraliDocumento,
+          // poi (fallback) il primo <Data> con formato data valido yyyy-MM-dd.
+          const blockMatch = flat.match(/<DatiGeneraliDocumento>([\s\S]*?)<\/DatiGeneraliDocumento>/i)
+          const scope = blockMatch ? blockMatch[1] : flat
+          let m = scope.match(/<Data>\s*(\d{4}-\d{2}-\d{2}[0-9T:.+\-]*)\s*<\/Data>/)
+          if (!m) {
+            // fallback: primo <Data> con formato data ISO ovunque nel file
+            m = flat.match(/<Data>\s*(\d{4}-\d{2}-\d{2}[0-9T:.+\-]*)\s*<\/Data>/)
+          }
           if (m) {
             let d = m[1]
             if (d.includes('T')) d = d.split('T')[0]
@@ -78,7 +90,12 @@ export const handler: Handler = async (event) => {
           }
         }
         if (!invoiceNumber) {
-          const m = flat.match(/<Numero>\s*([^<]+?)\s*<\/Numero>/)
+          // Stesso ragionamento della data: il <Numero> del documento sta in
+          // DatiGeneraliDocumento. Preferiamo quello scoped, poi fallback globale.
+          const blockMatch = flat.match(/<DatiGeneraliDocumento>([\s\S]*?)<\/DatiGeneraliDocumento>/i)
+          const scope = blockMatch ? blockMatch[1] : flat
+          let m = scope.match(/<Numero>\s*([^<]+?)\s*<\/Numero>/)
+          if (!m) m = flat.match(/<Numero>\s*([^<]+?)\s*<\/Numero>/)
           if (m) invoiceNumber = m[1].trim()
         }
       } catch (xerr: any) {
