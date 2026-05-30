@@ -536,17 +536,73 @@ export const handler: Handler = async (event) => {
         if (skipMainItems) {
             // Main booking already invoiced — penalties/danni will be added below
         } else if (extensionAmount && extensionAmount > 0) {
-            // Extension invoice: single line for the additional amount
-            const extGross = extensionAmount // Amount in EUR, includes IVA
+            // Extension invoice. 2026-05-30: itemizza AUTOMATICAMENTE quando il
+            // pagamento copre piu' voci (es. link "Saldo completo" = estensione
+            // data + estensione con cambio auto su prenotazione collegata). Una
+            // riga per ogni estensione pending del genitore + una riga per ogni
+            // prenotazione FIGLIA collegata (parent_booking_id). Se la somma lorda
+            // delle voci coincide con extensionAmount (tolleranza 1 cent) usiamo
+            // le righe dettagliate; altrimenti fallback alla riga unica generica.
             const vatRate = includeIVA ? dynamicVatRate : 0
             const vatDivisor = 1 + dynamicVatRate / 100
-            items.push({
-                description: `Estensione noleggio ${booking.vehicle_name || ''} - ${booking.id.substring(0, 8).toUpperCase()}`,
-                unit_price: extGross / vatDivisor,
-                quantity: 1,
-                vat_rate: vatRate,
-                total: extGross / vatDivisor
-            })
+            const fmtDay = (iso: string) => { try { return new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' }) } catch { return '' } }
+
+            const detailLines: { description: string; gross: number }[] = []
+
+            // a) estensioni pending sul genitore (extension_history)
+            const parentExts = Array.isArray(bookingDetails.extension_history) ? bookingDetails.extension_history : []
+            for (const ext of parentExts) {
+                const st = String(ext?.payment_status || '').toLowerCase()
+                const amt = Number(ext?.additional_amount) || 0
+                if (amt <= 0) continue
+                if (st === 'paid' || st === 'completed' || st === 'succeeded') continue
+                const carName = ext?.new_vehicle_name || booking.vehicle_name || ''
+                const period = ext?.new_dropoff ? ` (fino al ${fmtDay(ext.new_dropoff)})` : ''
+                detailLines.push({ description: `Estensione noleggio ${carName}${period}`, gross: amt })
+            }
+
+            // b) prenotazioni figlie collegate (estensione con cambio auto)
+            try {
+                const { data: kids } = await supabase
+                    .from('bookings')
+                    .select('id, vehicle_name, price_total, pickup_date, dropoff_date')
+                    .eq('booking_details->>parent_booking_id', booking.id)
+                for (const kid of (kids || [])) {
+                    const gross = (Number(kid.price_total) || 0) / 100
+                    if (gross <= 0) continue
+                    const from = kid.pickup_date ? fmtDay(kid.pickup_date) : ''
+                    const to = kid.dropoff_date ? fmtDay(kid.dropoff_date) : ''
+                    const period = from && to ? ` (${from} - ${to})` : ''
+                    detailLines.push({ description: `Estensione noleggio ${kid.vehicle_name || ''}${period}`, gross })
+                }
+            } catch (kidErr) {
+                console.error('[Invoice] child bookings lookup failed:', kidErr)
+            }
+
+            const detailSum = detailLines.reduce((s, l) => s + l.gross, 0)
+            const useDetailed = detailLines.length > 0 && Math.abs(detailSum - extensionAmount) < 0.01
+
+            if (useDetailed) {
+                for (const l of detailLines) {
+                    items.push({
+                        description: l.description,
+                        unit_price: l.gross / vatDivisor,
+                        quantity: 1,
+                        vat_rate: vatRate,
+                        total: l.gross / vatDivisor,
+                    })
+                }
+            } else {
+                // Fallback: riga unica generica per l'intero importo
+                const extGross = extensionAmount
+                items.push({
+                    description: `Estensione noleggio ${booking.vehicle_name || ''} - ${booking.id.substring(0, 8).toUpperCase()}`,
+                    unit_price: extGross / vatDivisor,
+                    quantity: 1,
+                    vat_rate: vatRate,
+                    total: extGross / vatDivisor
+                })
+            }
         } else if (booking.service_type === 'car_wash' || booking.service_type === 'mechanical') {
             // Logic for Services (Car Wash / Mechanical)
             // User confirmed prices INCLUDE IVA (Gross)
