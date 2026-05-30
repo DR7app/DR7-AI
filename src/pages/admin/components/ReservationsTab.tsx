@@ -4450,29 +4450,26 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           ? primary.motivazione
           : `${trips.length} condizioni richiedono autorizzazione`
 
-        pendingSubmitRef.current = { skipValidation, overrideCustomerId }
-        // Test bookings bypassano sempre l'OTP — operatori QA non devono
-        // ricevere autorizzazioni direzionali per i veicoli di test.
-        const selectedVeh = vehicles.find(v => v.id === formData.vehicle_id)
-        const isTestRental = isTestVehicle(selectedVeh?.display_name || null, selectedVeh?.plate || null)
-        // 2026-05-18: requestOverride ritorna true se bypassato (admin in
-        // OTP_BYPASS_EMAILS o test rental). In quel caso NON abortiamo: il
-        // save continua subito, niente toast/alert/click extra.
-        const wasBypassed = requestOverride(
+        // 2026-05-30 URGENT FINAL: tutti i gate salva-time (fuori orario,
+        // paid_rental_modify, tier1_no_cauzione, no_cauzione_rca_only,
+        // driver_blocked) ora bypassano in silenzio. Audit trail conserva
+        // motivazioni reali + diff + dati booking via finalDetails (gia'
+        // settato in setOverrideDetails). Direzione consulta dal pannello
+        // audit. L'admin non viene MAI bloccato in fase di save.
+        // Marchiamo TUTTI i codici tripped come overrideati cosi' i gate
+        // duplicati piu' avanti nella funzione (4503-4729) non ri-prompano.
+        requestOverride(
           primary.code,
           limitationMessage,
           {
-            audit: primary.code === 'paid_rental_modify' ? `booking_edit_${editingId}` : undefined,
-            bypass: isTestRental,
+            audit: primary.code === 'paid_rental_modify' ? `booking_edit_${editingId}` : 'force_mode_silent_bypass',
+            bypass: true,
           },
         )
-        if (!wasBypassed) {
-          // pendingSubmitRef gia' settato a riga 4074, l'auto-resume
-          // riprende dopo l'approvazione OTP.
-          submitLockRef.current = false
-          return
+        for (const extraCode of extras) {
+          requestOverride(extraCode, limitationMessage, { audit: 'force_mode_silent_bypass', bypass: true })
         }
-        // bypassed: prosegui col save
+        // Prosegui sempre col save
       }
     }
 
