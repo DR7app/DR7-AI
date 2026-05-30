@@ -41,8 +41,12 @@ interface SignerStatus {
   signed_at?: string | null
 }
 
+// NB: la tabella signature_requests NON ha una colonna 'role'. Abbiniamo
+// quindi ogni persona del contratto alla sua firma per NOME (e telefono come
+// fallback). 'superseded' = vecchia richiesta sostituita da un "Rinvia
+// contratto"; conta meno di 'signed'/'pending'.
 const SIGNER_STATUS_RANK: Record<string, number> = {
-  signed: 0, otp_verified: 1, otp_sent: 2, pending: 3, expired: 4, cancelled: 5,
+  signed: 0, otp_verified: 1, otp_sent: 2, pending: 3, superseded: 4, expired: 5, cancelled: 6,
 }
 const SIGNER_ROLE_ORDER = ['1_guidatore', '2_guidatore', 'garante', 'fideiussore_1', 'fideiussore_2', 'fideiussore_3']
 
@@ -58,40 +62,48 @@ function signerRoleLabel(role: string): string {
   }
 }
 
-// Mappa ruolo -> stato firma più rilevante dalle signature_requests grezze.
-// A parità di ruolo: firmato > in firma > in attesa > scaduto > annullato; a
-// parità di rango, la più recente (dopo "Rinvia contratto" coesistono righe
-// 'cancelled' + 'pending').
+function normName(s: string | null | undefined): string {
+  return (s || '').toLowerCase().replace(/\s+/g, ' ').trim()
+}
+// Ultime 9 cifre del telefono (ignora prefissi/formattazioni diverse).
+function normPhone(s: string | null | undefined): string {
+  return (s || '').replace(/\D/g, '').slice(-9)
+}
+
+// Miglior stato firma per una persona, abbinando le signature_requests per
+// NOME (o telefono). Ritorna 'not_sent' se non c'è nessuna richiesta per lei.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function signatureStatusByRole(rows: any[]): Map<string, { status: string; signed_at?: string | null }> {
+function statusForPerson(name: string, phone: string | undefined, rows: any[]): { status: string; signed_at?: string | null } {
+  const nn = normName(name)
+  const np = normPhone(phone)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const byRole = new Map<string, any>()
+  let best: any = null
   for (const r of rows) {
-    if (!r.role) continue
-    const prev = byRole.get(r.role)
-    if (!prev) { byRole.set(r.role, r); continue }
+    const matchName = !!nn && normName(r.signer_name) === nn
+    const matchPhone = np.length >= 6 && normPhone(r.signer_phone) === np
+    if (!matchName && !matchPhone) continue
+    if (!best) { best = r; continue }
     const rRank = SIGNER_STATUS_RANK[r.status] ?? 9
-    const pRank = SIGNER_STATUS_RANK[prev.status] ?? 9
-    if (rRank < pRank || (rRank === pRank && (r.created_at || '') > (prev.created_at || ''))) {
-      byRole.set(r.role, r)
-    }
+    const pRank = SIGNER_STATUS_RANK[best.status] ?? 9
+    const rT = r.signed_at || r.created_at || ''
+    const pT = best.signed_at || best.created_at || ''
+    if (rRank < pRank || (rRank === pRank && rT > pT)) best = r
   }
-  return byRole
+  return best ? { status: best.status, signed_at: best.signed_at || null } : { status: 'not_sent', signed_at: null }
 }
 
 // Lista COMPLETA dei firmatari dal booking_details (1°/2° guidatore, garante,
-// fideiussori) — stessi campi di signature-init — con lo stato firma
-// sovrapposto. Così compaiono sempre, anche prima dell'invio ('not_sent').
+// fideiussori) con lo stato firma sovrapposto (abbinato per nome/telefono).
+// Compaiono sempre, anche prima dell'invio ('not_sent').
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildContractSigners(c: any, sigRows: any[]): SignerStatus[] {
   const bd = c?.bookings?.booking_details || {}
-  const sigMap = signatureStatusByRole(sigRows)
   const out: SignerStatus[] = []
   const add = (role: string, name: string, phone?: string) => {
     const n = (name || '').trim()
     if (!n) return
-    const sig = sigMap.get(role)
-    out.push({ role, signer_name: n, signer_phone: phone || '', status: sig?.status || 'not_sent', signed_at: sig?.signed_at || null })
+    const st = statusForPerson(n, phone, sigRows)
+    out.push({ role, signer_name: n, signer_phone: phone || '', status: st.status, signed_at: st.signed_at })
   }
 
   add('1_guidatore', c.customer_name || bd?.customer?.fullName || c?.bookings?.customer_name || '', c.customer_phone || bd?.customer?.phone)
@@ -247,15 +259,20 @@ export default function ContrattoTab() {
       const sigById = new Map<string, any>()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const collect = (rows: any[] | null) => { for (const s of rows || []) if (s?.id) sigById.set(s.id, s) }
-      const SIG_COLS = 'id, contract_id, booking_id, signer_name, signer_phone, role, status, signed_at, created_at'
-      if (bookingIds.length > 0) {
-        const { data: byBooking } = await supabase.from('signature_requests').select(SIG_COLS).in('booking_id', bookingIds)
-        collect(byBooking)
+      // NB: NIENTE colonna 'role' (non esiste su signature_requests: includerla
+      // faceva fallire l'intera query → tutti "Non inviato").
+      const SIG_COLS = 'id, contract_id, booking_id, signer_name, signer_phone, status, signed_at, created_at'
+      // Batch dell'IN: con molte righe la lista di id supererebbe la lunghezza
+      // max dell'URL e la query fallirebbe (di nuovo tutti "Non inviato").
+      const fetchByColumn = async (column: string, ids: string[]) => {
+        for (let i = 0; i < ids.length; i += 80) {
+          const chunk = ids.slice(i, i + 80)
+          const { data: rows } = await supabase.from('signature_requests').select(SIG_COLS).in(column, chunk)
+          collect(rows)
+        }
       }
-      if (contractIds.length > 0) {
-        const { data: byContract } = await supabase.from('signature_requests').select(SIG_COLS).in('contract_id', contractIds)
-        collect(byContract)
-      }
+      if (bookingIds.length > 0) await fetchByColumn('booking_id', bookingIds)
+      if (contractIds.length > 0) await fetchByColumn('contract_id', contractIds)
       const allSigs = Array.from(sigById.values())
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sigsForContract = (c: any) =>
