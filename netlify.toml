@@ -123,12 +123,18 @@
 #     dedupe per entity scadenza/inactive falliva silenziosamente)
 #   - audit di quali template hanno is_enabled=true
 #   - test manuale con un sottoinsieme prima di riattivare
-# 2026-05-22 REVERT: direzione NON vuole che questo cron giri.
-# Schedule commentato cosi' Netlify NON registra il cron. I template
-# Pro con trigger_event=before_pickup/dropoff/etc restano inattivi
-# (ma niente invii randomici).
-# [functions."process-scheduled-system-messages-cron"]
-#   schedule = "*/8 * * * *"
+# 2026-05-22 REVERT: direzione NON vuole che questo cron giri (rischio invii
+#   randomici: decine di template sono is_automatic+is_enabled per errore).
+# 2026-05-30 RIATTIVATO IN SICUREZZA — solo "promemoria ritiro veicolo".
+#   Il cron ora rispetta la env SCHEDULED_MSGS_ALLOWLIST (CSV di message_key):
+#   se impostata, processa SOLO quei template e salta tutti gli altri. Imposta
+#   su Netlify (Site settings > Environment variables):
+#     SCHEDULED_MSGS_ALLOWLIST = pro_custom_promemoria_ritiro_veicolo_1778334892254
+#   Finché la env contiene SOLO quella chiave, può partire SOLO il promemoria
+#   ritiro 24h prima del pickup. NON aggiungere altre chiavi senza verificarle:
+#   senza env (vuota) il cron tornerebbe a far girare TUTTO (pericoloso).
+[functions."process-scheduled-system-messages-cron"]
+  schedule = "*/8 * * * *"
 
 # DR7 Privilege — DISABILITATO dopo invio massivo non voluto.
 # Lo schedule è commentato così Netlify NON registra il cron.

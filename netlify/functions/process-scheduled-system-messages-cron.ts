@@ -415,7 +415,33 @@ const cronHandler = async () => {
     await loadPaymentMethodAliases(supabase);
     await loadResidentProvinces(supabase);
 
+    // 2026-05-30 SAFETY ALLOWLIST. Questo cron era DISABILITATO dal 2026-05-13
+    // (incident: ~1000 messaggi randomici) perché decine di template risultano
+    // is_automatic+is_enabled per errore (wrapper header/footer, template
+    // event-driven come fatture/link pagamento/firma forzati su uno schedule).
+    // Per riattivare SOLO il "promemoria ritiro veicolo" senza far ripartire
+    // tutto il resto, se la env SCHEDULED_MSGS_ALLOWLIST è impostata (CSV di
+    // message_key) il cron processa ESCLUSIVAMENTE quei template e salta ogni
+    // altro. Così, anche con il cron acceso, può partire solo ciò che è in
+    // allowlist. Lasciare la env vuota = comportamento storico (tutti).
+    const allowlistRaw = (process.env.SCHEDULED_MSGS_ALLOWLIST || '').trim();
+    const allowlist = allowlistRaw ? allowlistRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+    // FAIL-SAFE: senza allowlist il cron NON manda nulla. Storicamente ha
+    // causato un mass-send (~1000 msg). Riattivato il 2026-05-30 solo per il
+    // promemoria ritiro: la consegna è permessa SOLO per i message_key elencati
+    // in SCHEDULED_MSGS_ALLOWLIST. Env mancante/vuota ⇒ esce senza inviare,
+    // così un deploy senza la env non può ripetere l'incident.
+    if (allowlist.length === 0) {
+        console.warn('[scheduled-msgs] SCHEDULED_MSGS_ALLOWLIST non impostata — cron in modalità SAFE (nessun invio). Imposta la env per abilitare i template consentiti.');
+        return { statusCode: 200, body: JSON.stringify({ ok: true, sent: 0, scanned: 0, reason: 'no_allowlist_safe_mode' }) };
+    }
+    console.log(`[scheduled-msgs] ALLOWLIST attiva — solo: ${allowlist.join(', ')}`);
+
     for (const tpl of templates as SystemMessage[]) {
+        // Allowlist gate: salta tutto ciò che non è esplicitamente consentito.
+        const mk = String((tpl as { message_key?: string }).message_key || '');
+        if (!allowlist.includes(mk)) continue;
+
         // Skip eventi non gestiti (preventivo gestito altrove)
         if (tpl.trigger_event === 'on_preventivo') continue;
 
