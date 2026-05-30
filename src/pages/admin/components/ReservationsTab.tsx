@@ -3977,28 +3977,27 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // dare il contratto firmato al cliente prima che paghi.
           if (extendData.extension_payment_status === 'paid') {
             try {
-              const contractRes = await authFetch('/.netlify/functions/generate-extension-contract', {
+              // Stesso processo di una prenotazione: rigenera il contratto con
+              // le nuove date e invia il LINK CONTRATTO tramite il flusso firma
+              // standard (signature-init → template Pro esistente). Niente testo
+              // hardcoded, niente template nuovo: la conferma usa "Conferma
+              // Noleggio", il link contratto usa il template firma.
+              const contractRes = await authFetch('/.netlify/functions/generate-contract', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ bookingId: extendingBooking.id }),
               })
-              const contractData = await contractRes.json().catch(() => ({}))
-              if (contractRes.ok && contractData?.url) {
-                logger.log('[handleConfirmExtend] Extension contract generated:', contractData.url)
-                const contractMsg = `Ciao, ecco il contratto aggiornato dell'estensione:\n${contractData.url}\n\n— DR7`
-                await fetch('/.netlify/functions/send-whatsapp-notification', {
+              if (contractRes.ok) {
+                logger.log('[handleConfirmExtend] Extension contract regenerated; sending link via signature-init')
+                await fetch('/.netlify/functions/signature-init', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    customPhone: customerPhone,
-                    customMessage: contractMsg,
-                    skipHeader: true,
-                  }),
+                  body: JSON.stringify({ bookingId: extendingBooking.id }),
                 })
-                logger.log('[handleConfirmExtend] Contract link sent to customer')
               } else {
-                logger.warn('[handleConfirmExtend] Extension contract generation failed:', contractData?.error || contractRes.status)
-                toast.error(`Contratto estensione non generato: ${contractData?.error || 'errore sconosciuto'}`)
+                const errData = await contractRes.json().catch(() => ({}))
+                logger.warn('[handleConfirmExtend] Extension contract regen failed:', errData?.error || contractRes.status)
+                toast.error(`Contratto estensione non generato: ${errData?.error || 'errore sconosciuto'}`)
               }
             } catch (contractErr) {
               logger.warn('[handleConfirmExtend] Extension contract send failed (non-blocking):', contractErr)
