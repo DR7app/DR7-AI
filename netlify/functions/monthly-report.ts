@@ -536,14 +536,22 @@ async function generateVehicleReport(
       }
 
       // Add days to the set (for maintenance exclusion) and sum total
-      const overlapDays = endDay - startDay + 1
+      const overlapDaysRaw = endDay - startDay + 1
+      // Total booking days for revenue proration (shared function, UTC-safe)
+      const totalBookingDays = computeBillableDays(pickupDateRaw, dropoffDateRaw)
+      // 2026-05-30 BUG FIX: overlapDaysRaw conta i giorni di CALENDARIO toccati
+      // (giorno ritiro + giorno riconsegna entrambi inclusi → "endDay-startDay+1"),
+      // mentre i giorni FATTURABILI sono il diff secco (notti). Per una
+      // prenotazione 30/05→01/06: billable = 2, ma overlapRaw = 2 (in maggio) o
+      // fino a 3 in mesi a cavallo → la proporzione (ricavo/billable)*overlap
+      // gonfiava il ricavo sopra l'incassato (€1499.99/2*3 = €2249.99, caso
+      // Bartoli). I giorni-nel-mese non possono superare i giorni fatturabili.
+      const overlapDays = Math.min(overlapDaysRaw, totalBookingDays)
       rentedDaysTotal += overlapDays
       for (let d = startDay; d <= endDay; d++) {
         rentedDays.add(d)
       }
 
-      // Total booking days for revenue proration (shared function, UTC-safe)
-      const totalBookingDays = computeBillableDays(pickupDateRaw, dropoffDateRaw)
       // price_total may be numeric or string (wallet RPC casts to numeric)
       const rawPrice = booking.price_total
       const bookingRevenue = (typeof rawPrice === 'string' ? parseFloat(rawPrice) : (rawPrice || 0)) / 100

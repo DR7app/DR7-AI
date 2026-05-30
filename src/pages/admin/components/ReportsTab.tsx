@@ -619,7 +619,7 @@ export default function ReportsTab() {
                   </div>
                   <div className="flex justify-between text-theme-text-muted mb-1.5">
                     <span>GG nel mese</span>
-                    <span className="text-green-400 font-medium">{b.days_in_month}g</span>
+                    <span className="text-green-400 font-medium">{Math.min(b.days_in_month, b.billable_days)}g</span>
                   </div>
 
                   {/* Ricavo noleggio (prorated to the month if cross-month) */}
@@ -767,7 +767,7 @@ export default function ReportsTab() {
                         <td className="py-1 px-2 text-theme-text-muted">{formatDateIT(b.start_at)}</td>
                         <td className="py-1 px-2 text-theme-text-muted">{formatDateIT(b.end_at)}</td>
                         <td className="text-center py-1 px-2 text-theme-text-primary">{b.billable_days}g</td>
-                        <td className="text-center py-1 px-2 text-green-400">{b.days_in_month}g</td>
+                        <td className="text-center py-1 px-2 text-green-400">{Math.min(b.days_in_month, b.billable_days)}g</td>
                         <td className="text-center py-1 px-2">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${badge.color}`}>
                             {badge.label}
