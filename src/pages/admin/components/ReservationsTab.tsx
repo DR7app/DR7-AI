@@ -4988,10 +4988,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               { label: 'Motivo richiesta', value: 'Slot non disponibile / conflitto disponibilita' },
               { label: 'Dettaglio conflitto', value: availabilityResult.reason || 'Slot non disponibile' },
             ]))
-            // 2026-05-18: requestOverride ritorna true se bypassato
-            // (admin OTP_BYPASS_EMAILS: ophe/salvatore/valerio/ilenia) →
-            // continuiamo senza abortire. False = modale OTP aperta → exit.
-            const wasBypassed = requestOverride('slot_unavailable', availabilityResult.reason || 'Slot non disponibile')
+            // 2026-05-30: se l'operatore ha esplicitamente spuntato
+            // "Mostra tutti i veicoli (ignora disponibilità)", consideriamo
+            // quel click come bypass esplicito ("so cosa sto facendo"). Senza
+            // questo, dopo il refactor del 28/05 il toggle non bastava più:
+            // un operatore senza role:bypass-otp restava bloccato dietro
+            // l'OTP anche dopo aver acceso il flag di force-mode. URGENT
+            // 30/05: operatore con bypass attivo ma OTP modal mai apriva /
+            // shouldRequireOtp non matchava → loop opaco. Adesso il toggle
+            // = override caller-bypass garantito.
+            const wasBypassed = requestOverride(
+              'slot_unavailable',
+              availabilityResult.reason || 'Slot non disponibile',
+              showAllVehicles
+                ? { audit: 'force_mode_show_all_vehicles', bypass: true }
+                : undefined
+            )
             if (!wasBypassed) {
               abortForOtp()
               return
