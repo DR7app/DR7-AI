@@ -927,6 +927,59 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     return fallback
   }, [proDeposits, selectedVehicle, form.driver_tier, form.residente_sardegna, configOverlay.noCauzionePerDay])
 
+  // Cauzione Veicolo (id canonico 'vehicle_deposit'): legge il €/giorno PER
+  // CATEGORIA dalla Centralina Pro (proDeposits), come fa noCauzione. Prima era
+  // hardcoded a €20/giorno indipendentemente dalla categoria. Stessa
+  // risoluzione categoria/fascia/residenza + alias supercars<->exotic.
+  const cauzioneVeicoliResolvedDaily = useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fallback = (configOverlay as any).cauzioneVeicoliPerDay ?? 20
+    if (!proDeposits) return fallback
+
+    const firstVal = Object.values(proDeposits)[0] as Record<string, unknown> | undefined
+    const isOld = !!firstVal && typeof firstVal === 'object'
+      && ('residente' in firstVal || 'non_residente' in firstVal)
+
+    const vehCat = String(selectedVehicle?.category || '').toLowerCase().trim()
+    const aliases: string[] = vehCat === 'supercars' ? ['supercars', 'exotic']
+      : vehCat === 'exotic' ? ['exotic', 'supercars']
+      : vehCat ? [vehCat] : []
+
+    const fasciaKey = form.driver_tier === 'TIER_1' ? 'B' : 'A'
+    const residencyKey = form.residente_sardegna ? 'residente' : 'non_residente'
+
+    let opts: { id?: string; label?: string; surcharge_per_day?: number | string; is_active?: boolean }[] = []
+    if (isOld) {
+      const fasciaCfg = (proDeposits[fasciaKey] as { residente?: unknown; non_residente?: unknown } | undefined)
+      opts = (fasciaCfg?.[residencyKey] as typeof opts) || []
+    } else {
+      let catCfg: Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
+      for (const key of aliases) {
+        const candidate = proDeposits[key] as Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
+        if (candidate) { catCfg = candidate; break }
+      }
+      const fasciaCfg = catCfg?.[fasciaKey]
+      opts = (fasciaCfg?.[residencyKey] as typeof opts) || []
+    }
+    opts = opts.filter(o => o.is_active !== false)
+
+    // Match per id canonico 'vehicle_deposit' (o label "Cauzione con veicolo/
+    // auto", "deposito veicolo", "vehicle deposit" per opzioni aggiunte a mano).
+    const isVehicleDepositOpt = (o: { id?: string; label?: string }) => {
+      if (o.id === 'vehicle_deposit') return true
+      const label = String(o.label || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim()
+      return /cauzione (con )?(veicolo|auto|macchina)|deposito (con )?(veicolo|auto)|vehicle deposit/.test(label)
+    }
+    const opt = opts.find(isVehicleDepositOpt)
+    if (opt) {
+      const num = Number(opt.surcharge_per_day)
+      // Rispetta il valore configurato (anche 0): se l'opzione esiste è la
+      // sorgente di verità per quella categoria.
+      if (Number.isFinite(num) && num >= 0) return num
+    }
+    return fallback
+  }, [proDeposits, selectedVehicle, form.driver_tier, form.residente_sardegna, configOverlay])
+
   // Revenue pricing
   const [revenueData, setRevenueData] = useState<{
     finalDailyRateEur: number
@@ -1052,11 +1105,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     const dr7FlexDaily = form.include_dr7_flex ? proDr7FlexDaily : 0
     const dr7FlexTotal = Math.round(dr7FlexDaily * rentalDays * 100) / 100
 
-    // Cauzione veicoli: €20/giorno (override possibile via configOverlay se impostato)
-    const CAUZIONE_VEICOLI_DAILY_DEFAULT = 20
-    const cauzioneVeicoliDaily = form.include_cauzione_veicoli
-      ? ((configOverlay as any).cauzioneVeicoliPerDay ?? CAUZIONE_VEICOLI_DAILY_DEFAULT)
-      : 0
+    // Cauzione Veicolo: €/giorno PER CATEGORIA dalla Centralina Pro
+    // (cauzioneVeicoliResolvedDaily), non più hardcoded a €20.
+    const cauzioneVeicoliDaily = form.include_cauzione_veicoli ? cauzioneVeicoliResolvedDaily : 0
     const cauzioneVeicoliTotal = Math.round(cauzioneVeicoliDaily * rentalDays * 100) / 100
 
     const deliveryFee = parseFloat(form.delivery_fee) || 0
@@ -5140,7 +5191,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
             <input type="checkbox" checked={form.include_cauzione_veicoli} onChange={(e) => setForm(prev => ({ ...prev, include_cauzione_veicoli: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
             <span className="text-sm text-theme-text-primary">
-              Cauzione Veicolo ({formatEur((configOverlay as any).cauzioneVeicoliPerDay ?? 20)}/giorno)
+              Cauzione Veicolo ({formatEur(cauzioneVeicoliResolvedDaily)}/giorno)
             </span>
           </label>
           <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
