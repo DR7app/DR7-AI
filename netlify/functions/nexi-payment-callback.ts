@@ -768,7 +768,94 @@ const handler: Handler = async (event) => {
                     }
                 }).eq('id', booking.id);
 
-                // Fattura for the topup amount only (delta invoice)
+                // 2026-05-30: AUTO-SALDO prenotazioni FIGLIE collegate (estensione
+                // con cambio auto). Il link "Saldo completo" copre il saldo del
+                // genitore PIÙ il totale di ogni booking figlia (es. GLE 5→6).
+                // Quando il genitore è pagato: marchiamo ogni figlia pending come
+                // PAID (esce da "in attesa di pagamento") e generiamo il SUO
+                // contratto (+ signature-init) così il cliente riceve il contratto
+                // della macchina di quei giorni. NIENTE fattura figlia: UNA sola
+                // fattura — quella del topup qui sotto — che riepiloga l'intero
+                // importo. Poi riequilibriamo amount_paid del genitore.
+                let settledChildrenCents = 0;
+                try {
+                    const { data: childBookings } = await supabase
+                        .from('bookings')
+                        .select('id, price_total, payment_status, booking_details')
+                        .eq('booking_details->>parent_booking_id', booking.id);
+                    for (const child of (childBookings || [])) {
+                        const alreadyPaid = ['paid', 'succeeded', 'completed'].includes(String(child.payment_status || '').toLowerCase());
+                        if (alreadyPaid) continue;
+                        const childCents = Number(child.price_total) || 0;
+                        if (childCents <= 0) continue;
+                        settledChildrenCents += childCents;
+
+                        await supabase.from('bookings').update({
+                            payment_status: 'paid',
+                            status: 'confirmed',
+                            amount_paid: childCents,
+                            updated_at: new Date().toISOString(),
+                            booking_details: {
+                                ...child.booking_details,
+                                amountPaid: childCents,
+                                nexi_paid_at: new Date().toISOString(),
+                                paymentStatus: 'paid',
+                                settled_by_parent_topup: booking.id,
+                                settled_by_order_id: transaction.order_id,
+                            }
+                        }).eq('id', child.id);
+                        console.log(`[nexi-payment-callback] Child booking ${child.id} auto-settled via parent topup (€${(childCents/100).toFixed(2)})`);
+
+                        // Contratto figlia + signature-init. NESSUNA fattura figlia.
+                        try {
+                            const cRes = await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/generate-contract`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
+                                body: JSON.stringify({ bookingId: child.id })
+                            });
+                            if (cRes.ok) {
+                                const { data: cRow } = await supabase
+                                    .from('contracts')
+                                    .select('id')
+                                    .eq('booking_id', child.id)
+                                    .order('created_at', { ascending: false })
+                                    .limit(1)
+                                    .maybeSingle();
+                                if (cRow?.id) {
+                                    await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/signature-init`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ contractId: cRow.id, bookingId: child.id })
+                                    });
+                                }
+                                console.log(`[nexi-payment-callback] Child contract generated for ${child.id}`);
+                            }
+                        } catch (e) {
+                            console.error(`[nexi-payment-callback] Child contract failed for ${child.id}:`, e);
+                        }
+                    }
+
+                    if (settledChildrenCents > 0) {
+                        const parentAdjustedPaid = Math.max(0, newPaidCents - settledChildrenCents);
+                        const parentFullyPaid = booking.price_total ? parentAdjustedPaid >= (booking.price_total - 1) : false;
+                        await supabase.from('bookings').update({
+                            amount_paid: parentAdjustedPaid,
+                            payment_status: parentFullyPaid ? 'paid' : 'partial',
+                            booking_details: {
+                                ...booking.booking_details,
+                                amountPaid: parentAdjustedPaid,
+                                children_settled_cents: settledChildrenCents,
+                            }
+                        }).eq('id', booking.id);
+                        console.log(`[nexi-payment-callback] Parent ${booking.id} rebalanced to €${(parentAdjustedPaid/100).toFixed(2)} after settling €${(settledChildrenCents/100).toFixed(2)} of children`);
+                    }
+                } catch (childErr) {
+                    console.error('[nexi-payment-callback] Child auto-settle failed:', childErr);
+                }
+
+                // UNICA fattura: copre l'intero importo del link "Saldo completo"
+                // (saldo genitore + estensione/i). Le voci/descrizione le costruisce
+                // generate-invoice-from-booking dal booking, spiegando cos'è.
                 try {
                     await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/generate-invoice-from-booking`, {
                         method: 'POST',
