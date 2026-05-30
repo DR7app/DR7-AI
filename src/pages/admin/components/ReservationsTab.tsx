@@ -3985,31 +3985,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const contractData = await contractRes.json().catch(() => ({}))
               if (contractRes.ok && contractData?.url) {
                 logger.log('[handleConfirmExtend] Extension contract generated:', contractData.url)
-                // 2026-05-30: NIENTE testo hardcoded. Il messaggio del contratto
-                // estensione arriva dal template Pro "Contratto estensione"
-                // (evento extension_contract_customer), come per le prenotazioni.
-                // La variabile {contract_url} contiene il link al PDF.
-                const waContractResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
+                const contractMsg = `Ciao, ecco il contratto aggiornato dell'estensione:\n${contractData.url}\n\n— DR7`
+                await fetch('/.netlify/functions/send-whatsapp-notification', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     customPhone: customerPhone,
-                    templateKey: 'extension_contract_customer',
-                    booking: updatedBooking,
-                    templateVars: {
-                      contract_url: contractData.url,
-                      url: contractData.url,
-                      link_contratto: contractData.url,
-                    },
+                    customMessage: contractMsg,
                     skipHeader: true,
                   }),
                 })
-                const waContractResult = await waContractResp.json().catch(() => ({}))
-                if (!waContractResp.ok || waContractResult?.skipped) {
-                  toast.error('Template "Contratto estensione" mancante in Messaggi di Sistema Pro: assegna l\'evento a un template (Tipo servizio Noleggio) con la variabile {contract_url}.', { duration: 12000 })
-                } else {
-                  logger.log('[handleConfirmExtend] Contract link sent to customer via Pro template')
-                }
+                logger.log('[handleConfirmExtend] Contract link sent to customer')
               } else {
                 logger.warn('[handleConfirmExtend] Extension contract generation failed:', contractData?.error || contractRes.status)
                 toast.error(`Contratto estensione non generato: ${contractData?.error || 'errore sconosciuto'}`)
