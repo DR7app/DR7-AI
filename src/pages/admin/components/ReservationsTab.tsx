@@ -987,8 +987,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.customer_id])
 
-  // Default to "residente" if no provincia is known yet — matches PreventiviTab default.
-  const isResidenteSardegna = customerProvincia ? SARDEGNA_PROVINCES.has(customerProvincia) : true
+  // 2026-05-30: admin override sulla residenza per la cauzione. La direzione
+  // si lamentava che la label "Residente" usciva sempre, anche per clienti
+  // chiaramente non residenti (provincia non in customers_extended, o
+  // cliente non sardo). Adesso:
+  //  - 'auto' (default): deriva dalla provincia del cliente
+  //    (vuota → fallback 'residente' come prima, compatibile con PreventiviTab)
+  //  - 'residente' / 'non_residente': override esplicito dell'admin
+  // Il toggle e' visibile sotto la label cauzione.
+  type ResidencyOverride = 'auto' | 'residente' | 'non_residente'
+  const [residencyOverride, setResidencyOverride] = useState<ResidencyOverride>('auto')
+  // Reset override quando cambia cliente — il nuovo cliente puo' avere
+  // residenza diversa, non vogliamo trascinare l'override del precedente.
+  useEffect(() => { setResidencyOverride('auto') }, [formData.customer_id])
+  const isResidenteSardegnaAuto = customerProvincia ? SARDEGNA_PROVINCES.has(customerProvincia) : true
+  const isResidenteSardegna = residencyOverride === 'auto'
+    ? isResidenteSardegnaAuto
+    : residencyOverride === 'residente'
 
   const [proDeposits, setProDeposits] = useState<Record<string, unknown> | null>(null)
   // Flags da Centralina Pro > Automazioni > Inclusione Coefficiente.
@@ -8366,6 +8381,33 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                         Opzione Cauzione · {customerTier?.tier === 'TIER_1' ? 'Fascia B' : 'Fascia A'} · {isResidenteSardegna ? 'Residente' : 'Non residente'}
                       </label>
+                      <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
+                        <span className="text-theme-text-muted">Residenza cauzione:</span>
+                        {(['auto', 'residente', 'non_residente'] as const).map(opt => {
+                          const labels = {
+                            auto: customerProvincia
+                              ? `Auto (${isResidenteSardegnaAuto ? 'Residente' : 'Non residente'} · ${customerProvincia})`
+                              : 'Auto (provincia sconosciuta)',
+                            residente: 'Residente Sardegna',
+                            non_residente: 'Non residente',
+                          }
+                          const active = residencyOverride === opt
+                          return (
+                            <button
+                              key={opt}
+                              type="button"
+                              onClick={() => setResidencyOverride(opt)}
+                              className={`px-2.5 py-1 rounded-full border transition-colors ${
+                                active
+                                  ? 'bg-dr7-gold/20 border-dr7-gold text-dr7-gold'
+                                  : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:text-theme-text-primary'
+                              }`}
+                            >
+                              {labels[opt]}
+                            </button>
+                          )
+                        })}
+                      </div>
                       {depositOptionsForCurrentBooking.length === 0 ? (
                         <p className="text-xs text-amber-400 mb-2">
                           Nessuna opzione configurata in Centralina Pro per questa combinazione.
