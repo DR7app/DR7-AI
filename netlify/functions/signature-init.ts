@@ -508,18 +508,18 @@ export const handler: Handler = async (event) => {
                 contract.contract_number || '',
                 signingUrl
             )
-            // 2026-05-29: invia ANCHE via email se il firmatario ha un'email
-            // PROPRIA (non il fallback cliente principale — altrimenti il
-            // token del garante finirebbe nella casella del cliente). Cosi'
-            // chi non ha WhatsApp riceve comunque il contratto: Green API
-            // ritorna idMessage anche per numeri non-WhatsApp, quindi waSent
-            // da solo non garantisce la consegna.
-            // Solo email REALE: gli indirizzi placeholder @dr7-empire.local
-            // (sintetizzati quando un firmatario non ha email) non sono
-            // consegnabili — non tentiamo l'invio (es. 1° guidatore senza
-            // contatti in una prenotazione con garante).
+            // Email SOLO come BACKUP per chi ha gia' un NUMERO di telefono
+            // (es. numero non su WhatsApp: Green API ritorna idMessage anche
+            // per numeri non-WhatsApp, quindi waSent da solo non garantisce la
+            // consegna — l'email copre quel caso).
+            // 2026-05-30: NESSUN fallback email se manca il numero. Le persone
+            // "a sorpresa" che lascio senza telefono NON devono essere
+            // contattate (nemmeno via email) finche' non aggiungo il loro
+            // numero e rinvio il contratto. Inoltre niente invio agli indirizzi
+            // placeholder @dr7-empire.local (sintetizzati quando manca l'email).
+            const hasPhone = !!(signer.phone && String(signer.phone).trim())
             const hasRealEmail = !!(signer.email && !String(signer.email).endsWith('@dr7-empire.local'))
-            const emailSent = hasRealEmail
+            const emailSent = (hasPhone && hasRealEmail)
                 ? await sendEmailSigningLink(signer.email, signer.name, contract.contract_number || '', signingUrl)
                 : false
             const sent = waSent || emailSent
