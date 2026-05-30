@@ -563,6 +563,30 @@ const handler: Handler = async (event) => {
                     console.log(`[nexi-payment-callback] Extension marked as paid in booking_details`);
                 }
 
+                // 2026-05-30: SECONDA PRENOTAZIONE collegata (estensione con
+                // cambio auto). Quando l'estensione crea una booking separata
+                // (booking_details.parent_booking_id presente), QUELLA riga È
+                // l'estensione: l'intero price_total corrisponde all'importo
+                // del link. Qui non c'è una extension_history da marcare, quindi
+                // flippiamo direttamente la riga a "paid" così il pagamento del
+                // suo link la salda automaticamente (prima restava "in attesa di
+                // pagamento" per sempre nonostante il pagamento ricevuto).
+                if (details.parent_booking_id && booking.payment_status !== 'paid') {
+                    await supabase.from('bookings').update({
+                        payment_status: 'paid',
+                        status: 'confirmed',
+                        amount_paid: transaction.amount_cents,
+                        updated_at: new Date().toISOString(),
+                        booking_details: {
+                            ...details,
+                            amountPaid: transaction.amount_cents,
+                            nexi_paid_at: new Date().toISOString(),
+                            paymentStatus: 'paid',
+                        }
+                    }).eq('id', booking.id);
+                    console.log(`[nexi-payment-callback] Child extension booking ${booking.id} marked PAID (parent ${details.parent_booking_id})`);
+                }
+
                 // Generate fattura for EXTENSION AMOUNT ONLY (not full booking).
                 // Verifichiamo la risposta — prima era fire-and-forget e i
                 // fallimenti silenziosi facevano sparire la fattura senza che
