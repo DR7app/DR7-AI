@@ -4450,26 +4450,34 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           ? primary.motivazione
           : `${trips.length} condizioni richiedono autorizzazione`
 
-        // 2026-05-30 URGENT FINAL: tutti i gate salva-time (fuori orario,
-        // paid_rental_modify, tier1_no_cauzione, no_cauzione_rca_only,
-        // driver_blocked) ora bypassano in silenzio. Audit trail conserva
-        // motivazioni reali + diff + dati booking via finalDetails (gia'
-        // settato in setOverrideDetails). Direzione consulta dal pannello
-        // audit. L'admin non viene MAI bloccato in fase di save.
-        // Marchiamo TUTTI i codici tripped come overrideati cosi' i gate
-        // duplicati piu' avanti nella funzione (4503-4729) non ri-prompano.
-        requestOverride(
+        pendingSubmitRef.current = { skipValidation, overrideCustomerId }
+        // Test bookings bypassano sempre l'OTP — operatori QA non devono
+        // ricevere autorizzazioni direzionali per i veicoli di test.
+        const selectedVeh = vehicles.find(v => v.id === formData.vehicle_id)
+        const isTestRental = isTestVehicle(selectedVeh?.display_name || null, selectedVeh?.plate || null)
+        // 2026-05-18: requestOverride ritorna true se bypassato (admin con
+        // role:bypass-otp o test rental). In quel caso NON abortiamo: il
+        // save continua subito, niente toast/alert/click extra. Direzione
+        // decide CHI ha bypass via Operatori > Permessi & Ruoli (toggle
+        // role:bypass-otp per operatore).
+        // 2026-05-30: ripristinato il flusso OTP originale dopo che il
+        // 36f35127 lo aveva rimosso globalmente. Direzione vuole mantenere
+        // l'OTP per gli operatori NON in role:bypass-otp.
+        const wasBypassed = requestOverride(
           primary.code,
           limitationMessage,
           {
-            audit: primary.code === 'paid_rental_modify' ? `booking_edit_${editingId}` : 'force_mode_silent_bypass',
-            bypass: true,
+            audit: primary.code === 'paid_rental_modify' ? `booking_edit_${editingId}` : undefined,
+            bypass: isTestRental,
           },
         )
-        for (const extraCode of extras) {
-          requestOverride(extraCode, limitationMessage, { audit: 'force_mode_silent_bypass', bypass: true })
+        if (!wasBypassed) {
+          // pendingSubmitRef gia' settato sopra, l'auto-resume riprende
+          // dopo l'approvazione OTP via useEffect su overrideCodes.
+          submitLockRef.current = false
+          return
         }
-        // Prosegui sempre col save
+        // bypassed: prosegui col save
       }
     }
 
@@ -5031,31 +5039,30 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             undefined
           )
 
-          if (!availabilityResult.available) {
-            // 2026-05-30 URGENT FINAL: il conflitto di disponibilita' NON
-            // blocca piu' l'admin in NESSUNA circostanza. Niente confirm(),
-            // niente OTP, niente checkbox. Storia:
-            //  - prima 28/05: checkbox "Mostra tutti i veicoli" bypassava
-            //  - 28/05: tolto, richiesto OTP per tutti
-            //  - 30/05 (74e7cef4): re-aggiunto bypass su checkbox
-            //  - 30/05 (f091f1fc): confirm() dialog unconditional
-            //  - 30/05 (questo commit): PASS-THROUGH totale — confirm()
-            //    causava infinity loop in alcuni flussi (probabilmente
-            //    re-mount form / useEffect overrideCodes che ri-fira mentre
-            //    submitLockRef e' false). Adesso: log + audit + procedi,
-            //    zero interazione utente sul conflitto.
-            // Audit: il record finisce in admin_audit_log via requestOverride
-            // bypass=true (vedi useLimitationOverride.ts). Direzione puo'
-            // vedere chi ha creato overlap dal pannello audit.
-            const reason = availabilityResult.reason || 'Slot non disponibile'
-            logger.warn(`[AVAILABILITY] Conflitto bypassato senza prompt: ${reason}`)
-            if (!hasOverride('slot_unavailable')) {
-              requestOverride(
-                'slot_unavailable',
-                reason,
-                { audit: 'force_mode_silent_bypass', bypass: true }
-              )
+          if (!availabilityResult.available && !hasOverride('slot_unavailable')) {
+            setOverrideDetails(buildOverrideDetailsBase([
+              { label: 'Motivo richiesta', value: 'Slot non disponibile / conflitto disponibilita' },
+              { label: 'Dettaglio conflitto', value: availabilityResult.reason || 'Slot non disponibile' },
+            ]))
+            // 2026-05-30: regola definitiva sui conflitti di disponibilita'.
+            //  - Checkbox "Mostra tutti i veicoli (ignora disponibilità)"
+            //    spuntata = bypass esplicito ("so cosa sto facendo"),
+            //    nessun OTP. Solo gli operatori che vedono la checkbox
+            //    (admin Reservations) possono attivare questo bypass.
+            //  - Checkbox NON spuntata = OTP standard (modale direzione)
+            //    per chi non ha role:bypass-otp.
+            const wasBypassed = requestOverride(
+              'slot_unavailable',
+              availabilityResult.reason || 'Slot non disponibile',
+              showAllVehicles
+                ? { audit: 'force_mode_show_all_vehicles', bypass: true }
+                : undefined
+            )
+            if (!wasBypassed) {
+              abortForOtp()
+              return
             }
+            // bypass: l'override e' gia' in overrideMap, proseguiamo col save
           }
 
           logger.log('✅ Vehicle availability check passed')
@@ -5480,16 +5487,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Test bookings (veicolo TEST*) bypassano sempre.
       const selectedVeh = vehicles.find(v => v.id === formData.vehicle_id)
       const isTestRental = isTestVehicle(selectedVeh?.display_name || null, selectedVeh?.plate || null)
-      // 2026-05-30 URGENT: gate "Conferma Prenotazione" non blocca piu'
-      // hard. Se l'admin spunta "Conferma" si registra audit + bypass
-      // silenzioso, senza modale OTP. Era una concausa dell'infinity
-      // loop sui save in conflitto.
+      // 2026-05-30: ripristinato il gate "Conferma Prenotazione". Direzione
+      // vuole l'OTP attivo per operatori senza role:bypass-otp.
       if (confirmBooking && !isTestRental && !hasOverride('prenotazione_noleggio_conferma')) {
-        requestOverride(
-          'prenotazione_noleggio_conferma',
-          'Conferma prenotazione noleggio',
-          { audit: 'force_mode_silent_bypass', bypass: true }
-        )
+        setOverrideDetails(buildOverrideDetailsBase([
+          { label: 'Motivo richiesta', value: 'Conferma prenotazione noleggio richiede autorizzazione direzionale' },
+        ]))
+        if (!requestOverride('prenotazione_noleggio_conferma', 'Conferma prenotazione noleggio richiede autorizzazione direzionale')) {
+          abortForOtp()
+          return
+        }
       }
 
       // Create or update vehicle rental booking in bookings table (for website availability blocking)
@@ -9778,7 +9785,29 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                               ],
                             },
                           ]
-                          return <GestisciMenu sections={sections} size="sm" />
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          const svc = String((booking as any).service_type || '').toLowerCase()
+                          const showAutoPronta = booking.status !== 'cancelled' && !['car_wash', 'mechanical'].includes(svc)
+                          const autoProntaDone = !!booking.booking_details?.auto_pronta_sent_at
+                          return (
+                            <div className="flex items-center gap-2">
+                              {showAutoPronta && (
+                                <button
+                                  onClick={() => handleAutoPronta(booking)}
+                                  disabled={autoProntaSending || autoProntaDone}
+                                  title="Notifica WhatsApp al cliente: veicolo pronto al ritiro"
+                                  className={`px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors disabled:opacity-60 ${
+                                    autoProntaDone
+                                      ? 'bg-green-600/20 text-green-700 dark:text-green-400 cursor-default'
+                                      : 'bg-green-600 hover:bg-green-700 text-white'
+                                  }`}
+                                >
+                                  {autoProntaDone ? '✓ Pronta' : 'Auto Pronta'}
+                                </button>
+                              )}
+                              <GestisciMenu sections={sections} size="sm" />
+                            </div>
+                          )
                         })()}
                       </td>
                     </tr>
