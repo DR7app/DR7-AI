@@ -379,9 +379,20 @@ const handler: Handler = async (event) => {
   if (targetPhone.startsWith('00')) {
     targetPhone = targetPhone.substring(2);
   }
-  // 10-digit local Italian number → always prepend country code 39
-  // (covers numbers starting with 39X like 392, 393, 394 mobile prefixes)
-  if (targetPhone.length === 10) {
+  // 2026-05-30: REGOLA — un numero SENZA prefisso internazionale è ITALIANO.
+  // I cellulari italiani iniziano con '3' e hanno 9-10 cifre (es. 3516880919,
+  // 348399597). Se manca il country code (numero che inizia con '3' e non è
+  // già un numero internazionale che inizia con 39 + lunghezza piena),
+  // prependiamo '39'. Prima si gestiva SOLO il caso esatto di 10 cifre, quindi
+  // un mobile italiano di altra lunghezza restava senza prefisso e Green API
+  // non consegnava. NB: un vero italiano con prefisso è '39' + 9/10 cifre
+  // (lunghezza 11/12); un numero di 10 cifre che inizia con '3' è SENZA
+  // prefisso → va prefissato.
+  if (/^3\d{8,9}$/.test(targetPhone)) {
+    // 9-10 cifre, inizia con 3, nessun country code → mobile italiano
+    targetPhone = '39' + targetPhone;
+  } else if (targetPhone.length === 10) {
+    // fallback storico: qualsiasi altro numero locale a 10 cifre → Italia
     targetPhone = '39' + targetPhone;
   }
 
@@ -876,11 +887,13 @@ const handler: Handler = async (event) => {
       const fullMessage = wrappedMessage;
       const customerName = booking?.customer_name || booking?.booking_details?.customer?.fullName || body.customerName || 'N/A';
       const templateLabel = body.type || (customMessage ? 'Messaggio Manuale' : booking?.service_type || 'Notifica');
-      createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-        .from('sent_messages_log')
-        .insert({ customer_name: customerName, customer_phone: targetPhone, message_text: fullMessage, template_label: templateLabel, status: 'sent' })
-        .then(() => {})
-        .catch((e: unknown) => console.error('Log failed:', e));
+      // Fire and forget, never blocks the response. Promise.resolve(...) dà un
+      // vero Promise (con .catch) attorno al thenable del query builder Supabase.
+      Promise.resolve(
+        createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+          .from('sent_messages_log')
+          .insert({ customer_name: customerName, customer_phone: targetPhone, message_text: fullMessage, template_label: templateLabel, status: 'sent' })
+      ).catch((e: unknown) => console.error('Log failed:', e));
     }
 
     // ── Optional email channel ──
