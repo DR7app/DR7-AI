@@ -669,7 +669,22 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                         try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch { /* clipboard not available */ }
                         const custPhone = currentBooking?.customer_phone || booking.customer_phone || booking.booking_details?.customer?.phone
                         const bookingRef = (booking.id || '').substring(0, 8).toUpperCase()
-                        const tplKey = 'pro_custom_link_pagamento_penali_e_danni_17'
+                        // Risolvi la chiave del template "Link pagamento penali e danni"
+                        // per LABEL: le custom hanno una key auto-generata che cambia se
+                        // il template viene ricreato. Prima era hardcoded troncata
+                        // ('..._17') → lookup fallita → WhatsApp non inviato. Fallback
+                        // alla key nota se la query non trova nulla.
+                        let tplKey = 'pro_custom_link_pagamento_penali_e_danni_1776869218359'
+                        try {
+                            const { data: tplRow } = await supabase
+                                .from('system_messages')
+                                .select('message_key')
+                                .ilike('label', '%link pagamento%penali%')
+                                .eq('is_enabled', true)
+                                .limit(1)
+                                .maybeSingle()
+                            if (tplRow?.message_key) tplKey = tplRow.message_key
+                        } catch { /* usa il fallback */ }
                         let sent = false
                         if (custPhone) {
                             try {
