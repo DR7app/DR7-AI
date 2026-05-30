@@ -235,14 +235,26 @@ export const handler: Handler = async (event) => {
         // e si rinvia: firmano SOLO quelli che non avevano ancora firmato.
         // Match per RUOLO (stabile anche se cambiano i recapiti tra un invio e
         // l'altro: 1_guidatore, 2_guidatore, garante, fideiussore_1..3).
+        // 2026-05-30 BUG FIX: la tabella signature_requests NON ha colonna 'role'
+        // (vedi memory signature_requests_no_role_column). Il vecchio
+        // .select('role') tornava undefined per ogni riga → il set era VUOTO →
+        // nessuno veniva saltato → un firmatario già firmato (es. il garante
+        // Daniele) riceveva di nuovo il link al "rinvia contratto". Ora
+        // identifichiamo i firmatari già firmati per NOME + TELEFONO normalizzato
+        // (colonne reali), e saltiamo quelli nel loop sotto.
+        const normName = (s?: string | null) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ')
+        const normPh = (s?: string | null) => String(s || '').replace(/[^0-9]/g, '').replace(/^0+/, '')
         const { data: signedByContract } = await supabase
-            .from('signature_requests').select('role').eq('contract_id', contract.id).eq('status', 'signed')
+            .from('signature_requests').select('signer_name, signer_phone').eq('contract_id', contract.id).eq('status', 'signed')
         const { data: signedByBooking } = effBookingIdForCancel
-            ? await supabase.from('signature_requests').select('role').eq('booking_id', effBookingIdForCancel).eq('status', 'signed')
+            ? await supabase.from('signature_requests').select('signer_name, signer_phone').eq('booking_id', effBookingIdForCancel).eq('status', 'signed')
             : { data: null }
-        const signedRoles = new Set<string>(
-            [...(signedByContract || []), ...(signedByBooking || [])].map(r => r.role).filter(Boolean)
-        )
+        const signedNames = new Set<string>()
+        const signedPhones = new Set<string>()
+        for (const r of [...(signedByContract || []), ...(signedByBooking || [])]) {
+            const n = normName((r as any).signer_name); if (n) signedNames.add(n)
+            const p = normPh((r as any).signer_phone); if (p) signedPhones.add(p)
+        }
 
         // Hash the original PDF
         const pdfResponse = await fetch(contract.pdf_url)
@@ -417,9 +429,14 @@ export const handler: Handler = async (event) => {
         const results: { name: string; role: string; sent: boolean }[] = []
 
         for (const signer of signers) {
-            // Salta chi ha già firmato: non ricreare richiesta né reinviare link.
-            if (signer.role && signedRoles.has(signer.role)) {
-                console.log(`[signature-init] ${signer.role} (${signer.name}) ha già firmato — skip reinvio`)
+            // Salta chi ha già firmato (match per NOME o TELEFONO): non ricreare
+            // la richiesta né reinviare il link. Così il garante che ha già
+            // firmato (es. Daniele) NON viene ridisturbato a un rinvio contratto.
+            const sName = normName(signer.name)
+            const sPhone = normPh(signer.phone)
+            const alreadySigned = (sName && signedNames.has(sName)) || (sPhone && signedPhones.has(sPhone))
+            if (alreadySigned) {
+                console.log(`[signature-init] ${signer.name} (${signer.role}) ha già firmato — skip reinvio`)
                 results.push({ name: signer.name, role: signer.role, sent: true })
                 continue
             }
