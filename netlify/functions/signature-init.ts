@@ -295,6 +295,23 @@ export const handler: Handler = async (event) => {
             console.log(`[signature-init] Cancelled ${existingRequests.length} existing requests`)
         }
 
+        // 2026-05-30: firmatari che hanno GIÀ firmato. Su "rinvia contratto"
+        // NON ricreiamo né reinviamo la loro richiesta — la firma resta valida
+        // (vedi sopra: lo stato 'signed' non è tra activeStatuses, quindi non
+        // viene annullato). Caso d'uso: sorpresa/regalo — il garante firma in
+        // anticipo, poi più tardi si aggiungono i numeri degli altri guidatori
+        // e si rinvia: firmano SOLO quelli che non avevano ancora firmato.
+        // Match per RUOLO (stabile anche se cambiano i recapiti tra un invio e
+        // l'altro: 1_guidatore, 2_guidatore, garante, fideiussore_1..3).
+        const { data: signedByContract } = await supabase
+            .from('signature_requests').select('role').eq('contract_id', contract.id).eq('status', 'signed')
+        const { data: signedByBooking } = effBookingIdForCancel
+            ? await supabase.from('signature_requests').select('role').eq('booking_id', effBookingIdForCancel).eq('status', 'signed')
+            : { data: null }
+        const signedRoles = new Set<string>(
+            [...(signedByContract || []), ...(signedByBooking || [])].map(r => r.role).filter(Boolean)
+        )
+
         // Hash the original PDF
         const pdfResponse = await fetch(contract.pdf_url)
         if (!pdfResponse.ok) {
@@ -335,14 +352,15 @@ export const handler: Handler = async (event) => {
             if (customer?.telefono) customerPhone = customer.telefono
         }
 
-        // Contracts are delivered exclusively via WhatsApp — phone is the
-        // channel that matters. If we have no phone AND no email there is
-        // literally nowhere to send the link, so we reject. But missing
-        // ONLY the email is fine: synthesize a placeholder so the
-        // signer_email NOT-NULL constraint is satisfied.
-        if (!contract.customer_email && !customerPhone) {
-            return { statusCode: 400, body: JSON.stringify({ error: 'Cliente senza email né telefono — impossibile inviare il contratto' }) }
-        }
+        // 2026-05-30: NON bloccare più l'intero invio quando SOLO il 1°
+        // guidatore è privo di contatti. Il contratto deve poter partire verso
+        // il garante / 2° guidatore / fideiussori che hanno un recapito (caso:
+        // prenotazione con garante in cui il 1° guidatore volutamente non ha
+        // telefono). Il 1° guidatore resta firmatario (deve comunque firmare),
+        // ma se non ha né telefono né email non gli viene inviato nulla. Il
+        // controllo "nessun destinatario raggiungibile" è spostato DOPO la
+        // costruzione della lista firmatari (vedi più sotto). Email mancante:
+        // sintetizziamo un placeholder per soddisfare il vincolo NOT-NULL.
         const signerEmail = contract.customer_email
             || `noemail.${(customerPhone || effectiveBookingId || 'unknown').replace(/[^0-9a-zA-Z]/g, '')}@dr7-empire.local`
 
@@ -413,6 +431,19 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // 2026-05-30: protezione spostata qui. Rifiutiamo SOLO se NESSUN
+        // firmatario è raggiungibile (né telefono né email reale — gli email
+        // placeholder @dr7-empire.local non contano). Così un contratto con
+        // garante raggiungibile parte anche se il 1° guidatore non ha contatti.
+        const anyReachable = signers.some(s => {
+            const hasPhone = !!(s.phone && String(s.phone).trim())
+            const hasRealEmail = !!(s.email && !String(s.email).endsWith('@dr7-empire.local'))
+            return hasPhone || hasRealEmail
+        })
+        if (!anyReachable) {
+            return { statusCode: 400, body: JSON.stringify({ error: 'Nessun firmatario raggiungibile (telefono o email) — impossibile inviare il contratto' }) }
+        }
+
         console.log(`[signature-init] Creating ${signers.length} signing request(s) for contract ${contract.contract_number}`)
 
         const tokenExpiresAt = new Date(Date.now() + TOKEN_EXPIRY_HOURS * 60 * 60 * 1000)
@@ -421,6 +452,13 @@ export const handler: Handler = async (event) => {
         const results: { name: string; role: string; sent: boolean }[] = []
 
         for (const signer of signers) {
+            // Salta chi ha già firmato: non ricreare richiesta né reinviare link.
+            if (signer.role && signedRoles.has(signer.role)) {
+                console.log(`[signature-init] ${signer.role} (${signer.name}) ha già firmato — skip reinvio`)
+                results.push({ name: signer.name, role: signer.role, sent: true })
+                continue
+            }
+
             const token = crypto.randomBytes(32).toString('hex')
 
             // Create signature request
@@ -476,7 +514,12 @@ export const handler: Handler = async (event) => {
             // chi non ha WhatsApp riceve comunque il contratto: Green API
             // ritorna idMessage anche per numeri non-WhatsApp, quindi waSent
             // da solo non garantisce la consegna.
-            const emailSent = signer.email
+            // Solo email REALE: gli indirizzi placeholder @dr7-empire.local
+            // (sintetizzati quando un firmatario non ha email) non sono
+            // consegnabili — non tentiamo l'invio (es. 1° guidatore senza
+            // contatti in una prenotazione con garante).
+            const hasRealEmail = !!(signer.email && !String(signer.email).endsWith('@dr7-empire.local'))
+            const emailSent = hasRealEmail
                 ? await sendEmailSigningLink(signer.email, signer.name, contract.contract_number || '', signingUrl)
                 : false
             const sent = waSent || emailSent
