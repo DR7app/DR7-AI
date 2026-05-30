@@ -259,9 +259,9 @@ export const handler: Handler = async (event) => {
         // 1st driver (main customer) — always present
         const signerName = contract.customer_name || 'Cliente'
 
-        let customerPhone = contract.customer_phone || ''
+        let customerPhone = ''
 
-        // Fetch booking for additional signers + phone
+        // Fetch booking for additional signers + phone snapshot
         let booking: any = null
         if (effectiveBookingId) {
             const { data: bookingData } = await supabase
@@ -270,33 +270,25 @@ export const handler: Handler = async (event) => {
                 .eq('id', effectiveBookingId)
                 .single()
             booking = bookingData
-            if (booking && !customerPhone) {
-                customerPhone = booking.customer_phone || booking.booking_details?.customer?.phone || ''
-            }
         }
 
-        // 2026-05-30 BUG FIX: se il telefono non è sul booking, cerca il profilo
-        // cliente in customers_extended. Prima si cercava SOLO per email — ma una
-        // prenotazione "a sorpresa" creata senza telefono (e spesso senza email)
-        // non aveva email su cui matchare, quindi il numero aggiunto DOPO nella
-        // scheda Clienti non veniva mai letto → il 1° guidatore (es. Edoardo)
-        // restava senza recapito e non riceveva il contratto, mentre il garante
-        // (con numero proprio sul booking) sì. Ora proviamo in ordine:
-        //   1) customerId (link affidabile dal booking_details.customer)
-        //   2) email
-        //   3) nome+cognome esatto
-        if (!customerPhone) {
-            const custId = booking?.booking_details?.customer?.customerId
-                || booking?.booking_details?.customer?.id
-                || booking?.user_id
-            if (custId) {
-                const { data: c } = await supabase
-                    .from('customers_extended')
-                    .select('telefono')
-                    .eq('id', custId)
-                    .maybeSingle()
-                if (c?.telefono) customerPhone = c.telefono
-            }
+        // 2026-05-30: LA SCHEDA CLIENTI È LA FONTE AUTOREVOLE per il telefono del
+        // 1° guidatore. Se aggiorni il numero in Clienti, il rinvio del contratto
+        // DEVE usare quello nuovo — non lo snapshot vecchio salvato sul contratto
+        // o sul booking (caso Edoardo: prenotazione sorpresa senza numero, numero
+        // aggiunto dopo in Clienti). Quindi proviamo PRIMA il profilo live
+        // (customerId → email → nome+cognome); solo se non lo troviamo cadiamo
+        // sullo snapshot di booking/contract.
+        const liveCustId = booking?.booking_details?.customer?.customerId
+            || booking?.booking_details?.customer?.id
+            || booking?.user_id
+        if (liveCustId) {
+            const { data: c } = await supabase
+                .from('customers_extended')
+                .select('telefono')
+                .eq('id', liveCustId)
+                .maybeSingle()
+            if (c?.telefono) customerPhone = c.telefono
         }
         if (!customerPhone && contract.customer_email) {
             const { data: customer } = await supabase
@@ -307,7 +299,6 @@ export const handler: Handler = async (event) => {
             if (customer?.telefono) customerPhone = customer.telefono
         }
         if (!customerPhone && signerName && signerName !== 'Cliente') {
-            // ultimo fallback: match per nome completo esatto (case-insensitive)
             const parts = signerName.trim().split(/\s+/)
             if (parts.length >= 2) {
                 const nome = parts.slice(0, -1).join(' ')
@@ -320,6 +311,14 @@ export const handler: Handler = async (event) => {
                     .maybeSingle()
                 if (c?.telefono) customerPhone = c.telefono
             }
+        }
+        // Fallback finale: snapshot salvato su contract/booking (se il profilo
+        // live non ha un numero, usiamo l'ultimo dato disponibile).
+        if (!customerPhone) {
+            customerPhone = contract.customer_phone
+                || booking?.customer_phone
+                || booking?.booking_details?.customer?.phone
+                || ''
         }
 
         // 2026-05-30: NON bloccare più l'intero invio quando SOLO il 1°
