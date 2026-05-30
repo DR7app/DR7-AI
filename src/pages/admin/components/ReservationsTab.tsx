@@ -5034,39 +5034,31 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             undefined
           )
 
-          if (!availabilityResult.available && !hasOverride('slot_unavailable')) {
-            // 2026-05-30 URGENT: il conflitto di disponibilita' NON deve mai
-            // hard-bloccare l'admin. Storia dei tentativi:
-            //  - prima del 28/05 bastava spuntare "Mostra tutti i veicoli"
-            //  - 28/05 quel bypass e' stato rimosso → richiesto OTP
-            //  - 30/05 (commit precedente) re-aggiunto bypass su checkbox
-            //    ma operatori non vedevano/non spuntavano la checkbox e
-            //    restavano bloccati comunque
-            //  - 30/05 (questo commit) bypass UNCONDIZIONATO: mostra solo
-            //    un confirm() di sicurezza. Click OK = procedi. Click
-            //    Cancel = abort. Niente piu' OTP, niente piu' checkbox
-            //    obbligatoria. L'admin e' adulto e responsabile.
-            // L'azione resta loggata nell'audit trail (limitation_override_bypassed
-            // con reason='caller_bypass') per tracciabilita' direzionale.
+          if (!availabilityResult.available) {
+            // 2026-05-30 URGENT FINAL: il conflitto di disponibilita' NON
+            // blocca piu' l'admin in NESSUNA circostanza. Niente confirm(),
+            // niente OTP, niente checkbox. Storia:
+            //  - prima 28/05: checkbox "Mostra tutti i veicoli" bypassava
+            //  - 28/05: tolto, richiesto OTP per tutti
+            //  - 30/05 (74e7cef4): re-aggiunto bypass su checkbox
+            //  - 30/05 (f091f1fc): confirm() dialog unconditional
+            //  - 30/05 (questo commit): PASS-THROUGH totale — confirm()
+            //    causava infinity loop in alcuni flussi (probabilmente
+            //    re-mount form / useEffect overrideCodes che ri-fira mentre
+            //    submitLockRef e' false). Adesso: log + audit + procedi,
+            //    zero interazione utente sul conflitto.
+            // Audit: il record finisce in admin_audit_log via requestOverride
+            // bypass=true (vedi useLimitationOverride.ts). Direzione puo'
+            // vedere chi ha creato overlap dal pannello audit.
             const reason = availabilityResult.reason || 'Slot non disponibile'
-            const proceed = window.confirm(
-              'CONFLITTO DISPONIBILITA\'\n\n' +
-              reason + '\n\n' +
-              'OK = crea la prenotazione comunque (in sovrapposizione)\n' +
-              'Annulla = torna indietro e modifica date/veicolo'
-            )
-            if (!proceed) {
-              setIsSubmitting(false)
-              submitLockRef.current = false
-              return
+            logger.warn(`[AVAILABILITY] Conflitto bypassato senza prompt: ${reason}`)
+            if (!hasOverride('slot_unavailable')) {
+              requestOverride(
+                'slot_unavailable',
+                reason,
+                { audit: 'force_mode_silent_bypass', bypass: true }
+              )
             }
-            // Registra l'override bypassato per audit + per non ri-chiedere
-            // se piu' validazioni rilanciano questo codice.
-            requestOverride(
-              'slot_unavailable',
-              reason,
-              { audit: 'force_mode_confirm_dialog', bypass: true }
-            )
           }
 
           logger.log('✅ Vehicle availability check passed')
