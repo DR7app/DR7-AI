@@ -533,6 +533,12 @@ const cronHandler = async () => {
             const lo = new Date(now + sign * offsetH * 3600 * 1000 - wideBackMs).toISOString();
             const hi = new Date(now + sign * offsetH * 3600 * 1000 + wideFwdMs).toISOString();
             q = q.gte('pickup_date', lo).lte('pickup_date', hi);
+            // 2026-05-30: il promemoria RITIRO va SOLO a chi ha PAGATO. Non
+            // ricordare il ritiro a un cliente con prenotazione non saldata
+            // (es. unpaid/pending/partial). Riconosciamo i tre valori "pagato".
+            if (tpl.trigger_event === 'before_pickup') {
+                q = q.in('payment_status', ['paid', 'succeeded', 'completed']);
+            }
         } else if (tpl.trigger_event === 'before_dropoff' || tpl.trigger_event === 'after_dropoff') {
             const sign = tpl.trigger_event === 'before_dropoff' ? +1 : -1;
             const lo = new Date(now + sign * offsetH * 3600 * 1000 - wideBackMs).toISOString();
