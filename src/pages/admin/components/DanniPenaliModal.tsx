@@ -663,10 +663,40 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                     const linkData = await linkRes.json()
 
                     if (linkRes.ok && linkData.paymentUrl) {
-                        // Nessun messaggio WhatsApp automatico al cliente: la
-                        // direzione invia il link manualmente quando vuole.
+                        // 2026-05-30: invia AUTOMATICAMENTE il link al cliente della
+                        // prenotazione via WhatsApp. Template scelto in base al tipo:
+                        // pro_richiesta_danni / pro_richiesta_penali / pro_richiesta_danni_penali.
                         try { await navigator.clipboard.writeText(linkData.paymentUrl) } catch { /* clipboard not available */ }
-                        toast.success(`Pay by Link ${purposeLabel} creato (€${cartTotal.toFixed(2)}) — copiato negli appunti`)
+                        const custPhone = currentBooking?.customer_phone || booking.customer_phone || booking.booking_details?.customer?.phone
+                        const bookingRef = (booking.id || '').substring(0, 8).toUpperCase()
+                        const tplKey = 'pro_custom_link_pagamento_penali_e_danni_17'
+                        let sent = false
+                        if (custPhone) {
+                            try {
+                                const waRes = await authFetch('/.netlify/functions/send-whatsapp-notification', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        customPhone: custPhone,
+                                        templateKey: tplKey,
+                                        booking: { id: booking.id, service_type: 'car_rental' },
+                                        templateVars: {
+                                            '{customer_name}': custName || 'Cliente',
+                                            '{nome}': (custName || 'Cliente').split(' ')[0],
+                                            '{amount}': cartTotal.toFixed(2),
+                                            '{link}': linkData.paymentUrl,
+                                            '{payment_link}': linkData.paymentUrl,
+                                            '{booking_ref}': bookingRef,
+                                            '{booking_id}': bookingRef,
+                                        },
+                                    }),
+                                })
+                                const waJson = await waRes.json().catch(() => ({}))
+                                sent = waRes.ok && !waJson.skipped
+                            } catch { /* fall through to manual */ }
+                        }
+                        if (sent) toast.success(`Pay by Link ${purposeLabel} inviato al cliente via WhatsApp (€${cartTotal.toFixed(2)})`)
+                        else toast(`Link ${purposeLabel} creato (€${cartTotal.toFixed(2)}) — copiato negli appunti${custPhone ? ' (invio WhatsApp non riuscito, invialo a mano)' : ' (cliente senza numero)'}`, { icon: '⚠️', duration: 8000 })
                     } else {
                         toast.error('Errore creazione Pay by Link: ' + (linkData.error || 'Errore'))
                     }
