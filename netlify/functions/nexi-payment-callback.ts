@@ -213,7 +213,7 @@ const handler: Handler = async (event) => {
                 try {
                     const { data: refusedBooking } = await supabase
                         .from('bookings')
-                        .select('id, customer_name, customer_phone, customer_email, vehicle_name, booking_details')
+                        .select('id, customer_name, customer_phone, customer_email, vehicle_name, vehicle_plate, booking_details')
                         .eq('id', transaction.booking_id)
                         .single();
 
@@ -223,7 +223,22 @@ const handler: Handler = async (event) => {
                         const rbEmail = refusedBooking.customer_email || refusedBooking.booking_details?.customer?.email || '';
                         const rbAmountEur = transaction.amount_cents / 100;
                         const rbRef = (refusedBooking.id || '').substring(0, 8).toUpperCase();
-                        const rbDescription = transaction.description || `Pagamento DR7 - ${refusedBooking.vehicle_name || 'Prenotazione'} - ${rbName}`;
+                        // 2026-05-30: causale leggibile in base al paymentPurpose.
+                        // Senza questo il messaggio retry diceva sempre "Pagamento DR7"
+                        // generico e il cliente non capiva se era penali, estensione,
+                        // saldo, o prenotazione iniziale.
+                        const causaleByPurpose: Record<string, string> = {
+                            'penali': 'Penali',
+                            'danni': 'Danni',
+                            'danni_penali': 'Danni e Penali',
+                            'extension': 'Estensione noleggio',
+                            'booking_topup': 'Saldo prenotazione',
+                            'booking': 'Prenotazione',
+                        };
+                        const rbCausale = causaleByPurpose[String(paymentPurpose || 'booking')] || 'Pagamento';
+                        const rbVehicle = refusedBooking.vehicle_name || refusedBooking.booking_details?.vehicle?.name || '';
+                        const rbTarga = refusedBooking.vehicle_plate || refusedBooking.booking_details?.vehicle?.targa || refusedBooking.booking_details?.vehicle?.plate || '';
+                        const rbDescription = transaction.description || `${rbCausale} DR7 — ${rbVehicle || 'Prenotazione'} — ${rbName}`;
 
                         // Generate a fresh Pay-by-Link (1-hour expiry, same as admin flow)
                         const linkRes = await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/nexi-pay-by-link`, {
@@ -250,6 +265,11 @@ const handler: Handler = async (event) => {
                                 // o {booking_id} — tutti risolvono allo stesso valore così
                                 // niente leaka come {...} letterale nel messaggio al cliente.
                                 const amountStr = rbAmountEur.toFixed(2);
+                                // 2026-05-30: passa TUTTE le variabili che un template
+                                // admin-edited puo' contenere. Senza queste, placeholder
+                                // tipo {scadenza}, {causale}, {targa}, {veicolo} uscivano
+                                // letterali nel WhatsApp al cliente (es. "Penale di €...
+                                // {scadenza} ...{targa}..."). Bug riportato 30/05.
                                 const retryMsg = await renderTemplate('pro_richiesta_pagamento', {
                                     customer_name: rbName,
                                     nome: (rbName || '').split(' ')[0] || 'Cliente',
@@ -260,6 +280,19 @@ const handler: Handler = async (event) => {
                                     payment_link: linkData.paymentUrl,
                                     booking_ref: rbRef,
                                     booking_id: rbRef,
+                                    // Causale leggibile del pagamento (Penali / Estensione /
+                                    // Saldo prenotazione / Danni / Prenotazione)
+                                    causale: rbCausale,
+                                    description: rbDescription,
+                                    descrizione: rbDescription,
+                                    // Scadenza link (auto-retry sempre 1 ora)
+                                    expiry: '1 ora',
+                                    scadenza: '1 ora',
+                                    // Veicolo / targa
+                                    vehicle_name: rbVehicle,
+                                    veicolo: rbVehicle,
+                                    targa: rbTarga,
+                                    plate: rbTarga,
                                 });
 
                                 if (retryMsg === null) {
