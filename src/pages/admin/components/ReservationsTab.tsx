@@ -9595,7 +9595,29 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         ],
                       },
                     ]
-                    return <GestisciMenu sections={sections} size="md" />
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const svcMd = String((booking as any).service_type || '').toLowerCase()
+                    const showAutoProntaMd = booking.status !== 'cancelled' && !['car_wash', 'mechanical'].includes(svcMd)
+                    const autoProntaDoneMd = !!booking.booking_details?.auto_pronta_sent_at
+                    return (
+                      <div className="flex items-center gap-2">
+                        {showAutoProntaMd && (
+                          <button
+                            onClick={() => handleAutoPronta(booking)}
+                            disabled={autoProntaSending || autoProntaDoneMd}
+                            title="Notifica WhatsApp al cliente: veicolo pronto al ritiro"
+                            className={`px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors disabled:opacity-60 ${
+                              autoProntaDoneMd
+                                ? 'bg-green-600/20 text-green-700 dark:text-green-400 cursor-default'
+                                : 'bg-green-600 hover:bg-green-700 text-white'
+                            }`}
+                          >
+                            {autoProntaDoneMd ? '✓ Pronta' : 'Auto Pronta'}
+                          </button>
+                        )}
+                        <GestisciMenu sections={sections} size="md" />
+                      </div>
+                    )
                   })()}
                 </div>
               </div>
