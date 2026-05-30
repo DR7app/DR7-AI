@@ -739,6 +739,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   const [generatingContract, setGeneratingContract] = useState(false)
+  const [autoProntaSending, setAutoProntaSending] = useState(false)
   // Pre-auth disabled — Nexi capture not supported via Pay by Link API
 
   const isInitialEditLoad = useRef(false)
@@ -2856,6 +2857,56 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       toast.error('Errore generazione contratto: ' + _errMsg, { duration: 12000 })
     } finally {
       setGeneratingContract(false)
+    }
+  }
+
+  // "Auto Pronta": notifica WhatsApp al cliente che il veicolo è pronto al
+  // ritiro. Invia il template Pro agganciato all'evento "Auto pronta Noleggio"
+  // (legacy key rental_auto_pronta). Stesso pattern di Prime Wash.
+  async function handleAutoPronta(booking: Booking) {
+    if (autoProntaSending) return
+    if (booking.booking_details?.auto_pronta_sent_at) { toast('Cliente già notificato (Auto Pronta)'); return }
+    const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
+    if (!custPhone) { toast.error('Numero di telefono cliente mancante — impossibile inviare WhatsApp'); return }
+    const custName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente'
+    const firstName = String(custName).split(' ')[0] || 'Cliente'
+    const bookingRef = String(booking.id || '').substring(0, 8).toUpperCase()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svcType = (booking as any).service_type || 'car_rental'
+
+    setAutoProntaSending(true)
+    const toastId = toast.loading('Invio notifica AUTO PRONTA al cliente...')
+    try {
+      const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customPhone: custPhone,
+          templateKey: 'rental_auto_pronta',
+          booking: { service_type: svcType },
+          templateVars: {
+            customer_name: firstName, nome: firstName,
+            booking_id: bookingRef, booking_ref: bookingRef,
+            vehicle_name: booking.vehicle_name || '',
+            vehicle_plate: booking.vehicle_plate || '', targa: booking.vehicle_plate || '',
+          },
+          skipHeader: true,
+        }),
+      })
+      const waResult = await waResp.json().catch(() => ({}))
+      if (!waResp.ok || waResult?.skipped) {
+        toast.error('Nessun template "Auto pronta Noleggio" configurato in Messaggi di Sistema Pro. Verifica: template ATTIVO, body non vuoto, evento "Auto pronta Noleggio" tra gli eventi gestiti, Tipo servizio = Noleggio.', { id: toastId, duration: 12000 })
+        return
+      }
+      const newDetails = { ...(booking.booking_details || {}), auto_pronta_sent_at: new Date().toISOString() }
+      await supabase.from('bookings').update({ booking_details: newDetails }).eq('id', booking.id)
+      setSelectedBooking(prev => (prev && prev.id === booking.id ? { ...prev, booking_details: newDetails } as Booking : prev))
+      toast.success('WhatsApp AUTO PRONTA inviato al cliente', { id: toastId })
+      logAdminAction('auto_pronta_sent', 'booking', booking.id, buildBookingContext(booking))
+    } catch (err: unknown) {
+      toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)), { id: toastId })
+    } finally {
+      setAutoProntaSending(false)
     }
   }
 
@@ -9983,6 +10034,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       className="flex-1 px-4 py-3 bg-orange-600/30 hover:bg-orange-600/50 rounded-full text-theme-text-primary transition-colors font-medium"
                     >
                       Invia Contratto
+                    </button>
+                  )}
+                  {selectedBooking.status !== 'cancelled' && (
+                    <button
+                      onClick={() => handleAutoPronta(selectedBooking)}
+                      disabled={autoProntaSending || !!selectedBooking.booking_details?.auto_pronta_sent_at}
+                      className={`flex-1 px-4 py-3 rounded-full transition-colors font-medium disabled:opacity-60 ${
+                        selectedBooking.booking_details?.auto_pronta_sent_at
+                          ? 'bg-green-600/20 text-green-600 dark:text-green-400 cursor-default'
+                          : 'bg-green-600 hover:bg-green-700 text-white'
+                      }`}
+                    >
+                      {selectedBooking.booking_details?.auto_pronta_sent_at ? '✓ Auto Pronta inviata' : autoProntaSending ? 'Invio…' : 'Auto Pronta'}
                     </button>
                   )}
                   {/* Pre-Auth Cauzione disabled — Nexi capture not reliable via API */}

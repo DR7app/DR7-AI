@@ -168,7 +168,7 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; servic
     label: 'Noleggio',
     color: 'blue',
     service: 'rental',
-    keys: ['rental_new_customer', 'rental_new', 'rental_new_admin', 'rental_modified', 'rental_da_saldare_customer'],
+    keys: ['rental_new_customer', 'rental_new', 'rental_new_admin', 'rental_modified', 'rental_auto_pronta', 'rental_da_saldare_customer'],
   },
   {
     // Prime Wash = lavaggi + meccanica (stesso umbrella nel sistema:

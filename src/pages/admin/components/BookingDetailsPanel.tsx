@@ -20,6 +20,62 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
   const [paymentLink, setPaymentLink] = useState<string | null>(booking.payment_link || null)
   const [linkCopied, setLinkCopied] = useState(false)
   const [resolvedCustomer, setResolvedCustomer] = useState<{ name?: string; phone?: string; email?: string } | null>(null)
+  const [autoProntaSending, setAutoProntaSending] = useState(false)
+  const [autoProntaSent, setAutoProntaSent] = useState<boolean>(!!booking.booking_details?.auto_pronta_sent_at)
+
+  // "Auto Pronta": notifica WhatsApp al cliente che il veicolo è pronto al
+  // ritiro. Invia il template Pro agganciato all'evento "Auto pronta Noleggio"
+  // (legacy key rental_auto_pronta → resolver per handled_events/service_type).
+  // Stesso pattern del bottone Auto Pronta di Prime Wash (CarWashBookingsTab).
+  async function handleAutoPronta() {
+    if (autoProntaSending || autoProntaSent) return
+    const custPhone = booking.customer_phone || resolvedCustomer?.phone || booking.booking_details?.customer?.phone
+    if (!custPhone) { toast.error('Numero di telefono cliente mancante — impossibile inviare WhatsApp'); return }
+    const custName = booking.customer_name || resolvedCustomer?.name || booking.booking_details?.customer?.fullName || 'Cliente'
+    const firstName = String(custName).split(' ')[0] || 'Cliente'
+    const bookingRef = String(booking.id || '').substring(0, 8).toUpperCase()
+    const svcType = booking.service_type || 'car_rental'
+
+    setAutoProntaSending(true)
+    const toastId = toast.loading('Invio notifica AUTO PRONTA al cliente...')
+    try {
+      const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customPhone: custPhone,
+          templateKey: 'rental_auto_pronta',
+          booking: { service_type: svcType },
+          templateVars: {
+            customer_name: firstName,
+            nome: firstName,
+            booking_id: bookingRef,
+            booking_ref: bookingRef,
+            vehicle_name: booking.vehicle_name || booking.booking_details?.vehicle?.name || '',
+            vehicle_plate: booking.vehicle_plate || '',
+            targa: booking.vehicle_plate || '',
+          },
+          skipHeader: true,
+        }),
+      })
+      const waResult = await waResp.json().catch(() => ({}))
+      if (!waResp.ok || waResult?.skipped) {
+        toast.error('Nessun template "Auto pronta Noleggio" configurato in Messaggi di Sistema Pro. Verifica: template ATTIVO, body non vuoto, evento "Auto pronta Noleggio" tra gli eventi gestiti, Tipo servizio = Noleggio.', { id: toastId, duration: 12000 })
+        return
+      }
+      // Persisti il flag solo dopo invio riuscito (così un fallimento non
+      // griglia il bottone). Merge nel booking_details JSONB esistente.
+      const newDetails = { ...(booking.booking_details || {}), auto_pronta_sent_at: new Date().toISOString() }
+      const { error: updErr } = await supabase.from('bookings').update({ booking_details: newDetails }).eq('id', booking.id)
+      if (updErr) logger.warn('[AutoPronta] flag persist failed:', updErr.message)
+      setAutoProntaSent(true)
+      toast.success('WhatsApp AUTO PRONTA inviato al cliente', { id: toastId })
+    } catch (err: unknown) {
+      toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)), { id: toastId })
+    } finally {
+      setAutoProntaSending(false)
+    }
+  }
 
   // Fetch customer data from customers_extended when booking is missing info
   useEffect(() => {
@@ -398,6 +454,22 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
               </button>
             )}
           </div>
+
+          {/* Auto Pronta — notifica WhatsApp al cliente che il veicolo è pronto.
+              Solo per noleggio (non lavaggio/meccanica, che hanno il loro bottone). */}
+          {!['car_wash', 'mechanical'].includes(String(booking.service_type || '').toLowerCase()) && (
+            <button
+              onClick={handleAutoPronta}
+              disabled={autoProntaSending || autoProntaSent}
+              className={`w-full px-4 py-2 rounded border font-medium transition-colors disabled:opacity-60 ${
+                autoProntaSent
+                  ? 'bg-green-600/20 text-green-600 dark:text-green-400 border-green-600/30 cursor-default'
+                  : 'bg-green-600 hover:bg-green-700 text-white border-green-700'
+              }`}
+            >
+              {autoProntaSent ? '✓ Cliente notificato (Auto Pronta)' : autoProntaSending ? 'Invio in corso…' : 'Auto Pronta'}
+            </button>
+          )}
         </div>
       </motion.div>
     </div>
