@@ -281,11 +281,12 @@ export default function ContrattoTab() {
     // telefono. L'email serve solo come fallback se il telefono manca.
     // Prima qui bloccavamo su email mancante anche con telefono presente
     // → "EMAIL MANCANTE" pure su clienti con telefono valido.
-    if (!contract.customer_phone && !contract.customer_email) {
-      toast.error('Cliente senza telefono nè email: impossibile inviare il contratto.')
-      return
-    }
-
+    // 2026-05-30: NON blocchiamo più sul contatto del SOLO 1° guidatore.
+    // Una prenotazione con garante deve poter inviare il contratto al garante
+    // anche se il 1° guidatore è volutamente senza telefono/email (caso
+    // sorpresa). È signature-init a decidere: invia a chi è raggiungibile
+    // (garante / 2° guidatore / fideiussori) e rifiuta solo se NESSUN
+    // firmatario lo è, restituendo un errore che mostriamo qui sotto.
     setSendingSignature(contract.id)
     try {
       const res = await fetch('/.netlify/functions/signature-init', {
