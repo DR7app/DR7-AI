@@ -21,6 +21,7 @@
  */
 
 import { supabase } from '../supabaseClient'
+import { getHolidayForDate } from '../data/italianHolidays'
 
 export type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 
@@ -95,11 +96,18 @@ export function getSlotMinutes(): number {
     return CONFIG.slot_minutes || DEFAULT_CONFIG.slot_minutes
 }
 
+// 2026-05-30: festività nazionali italiane sono CHIUSE come la domenica.
+// Admin puo' comunque forzare via OTP override (flag rosso + warning),
+// customer-side il wizard mostra zero slot.
+const HOLIDAY_CLOSED: DayHours = { is_open: false, windows: [] }
+
 export function getPickupDayHours(date: Date): DayHours {
+    if (getHolidayForDate(date)) return HOLIDAY_CLOSED
     return CONFIG.hours_pickup[dayKeyFromDate(date)] ?? DEFAULT_CONFIG.hours_pickup[dayKeyFromDate(date)]
 }
 
 export function getReturnDayHours(date: Date): DayHours {
+    if (getHolidayForDate(date)) return HOLIDAY_CLOSED
     return CONFIG.hours_return[dayKeyFromDate(date)] ?? DEFAULT_CONFIG.hours_return[dayKeyFromDate(date)]
 }
 
@@ -164,6 +172,17 @@ export function describeOfficeHours(
     dateStr: string | Date,
     kind: 'pickup' | 'return' = 'pickup',
 ): string {
+    let date: Date
+    if (typeof dateStr === 'string') {
+        if (!dateStr) return 'Chiuso'
+        date = new Date(dateStr + 'T12:00:00')
+    } else {
+        date = dateStr
+    }
+    if (!isNaN(date.getTime())) {
+        const holiday = getHolidayForDate(date)
+        if (holiday) return `Chiuso (festività: ${holiday.name})`
+    }
     const ranges = getOfficeMinuteRangesForDate(dateStr, kind)
     if (ranges.length === 0) return 'Chiuso'
     return ranges.map(([a, b]) => `${minutesToTime(a)}–${minutesToTime(b)}`).join(' / ')
