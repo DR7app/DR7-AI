@@ -555,7 +555,24 @@ async function generateVehicleReport(
       // price_total may be numeric or string (wallet RPC casts to numeric)
       const rawPrice = booking.price_total
       const bookingRevenue = (typeof rawPrice === 'string' ? parseFloat(rawPrice) : (rawPrice || 0)) / 100
-      rentalRevenue += (bookingRevenue / totalBookingDays) * overlapDays
+
+      // 2026-05-30: il Ricavo conta SOLO l'INCASSATO.
+      //   - pagato (paid/completed/succeeded) → conta l'intero prezzo
+      //   - parziale (partial)               → conta SOLO l'acconto incassato (amountPaid)
+      //   - non pagato (unpaid/pending/altro) → NON conta nulla
+      // Prima si sommava price_total a prescindere dal pagamento: una
+      // prenotazione "Da Saldare" gonfiava il Ricavo Noleggi con soldi mai
+      // incassati. La quota mensile resta proporzionata ai giorni nel periodo.
+      const psNorm = String(booking.payment_status || '').toLowerCase()
+      const fullyPaid = ['paid', 'completed', 'succeeded'].includes(psNorm)
+      const amountPaidCents = Number(booking.booking_details?.amountPaid ?? booking.booking_details?.amount_paid ?? 0) || 0
+      const collectedEur = fullyPaid
+        ? bookingRevenue
+        : (psNorm === 'partial' ? amountPaidCents / 100 : 0)
+      if (collectedEur > 0) {
+        // Proporziona l'incassato ai giorni nel periodo (come il prezzo pieno).
+        rentalRevenue += (collectedEur / totalBookingDays) * overlapDays
+      }
 
       // Customer name from top-level or booking_details
       const customerName = booking.customer_name
@@ -609,8 +626,11 @@ async function generateVehicleReport(
         end_at: dropoffDateRaw,
         billable_days: totalBookingDays,
         days_in_month: overlapDays,
-        total_price: bookingRevenue,
-        revenue_per_day: totalBookingDays > 0 ? Math.round((bookingRevenue / totalBookingDays) * 100) / 100 : 0,
+        // 2026-05-30: total_price = INCASSATO (intero se pagato, acconto se
+        // parziale, 0 se non pagato) — coerente col Ricavo TOTALE che ora conta
+        // solo l'incassato. Così le righe sommano al totale del veicolo.
+        total_price: Math.round(collectedEur * 100) / 100,
+        revenue_per_day: totalBookingDays > 0 ? Math.round((collectedEur / totalBookingDays) * 100) / 100 : 0,
         payment_status: booking.payment_status || '-',
         payment_method: booking.payment_method || '-',
         penalty_amount: Math.round(bookingPenaltyAmount * 100) / 100,
