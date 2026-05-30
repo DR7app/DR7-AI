@@ -40,10 +40,21 @@ function fmtEur(n: number) {
 function fmtDate(iso: string) {
   if (!iso) return '—'
   try {
-    return new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })
+    return new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
   } catch {
     return iso
   }
+}
+
+// 2026-05-30: Da/A date-range helpers (YYYY-MM-DD) per il filtro periodo
+// del Ricevuto. Default = mese corrente (dal giorno 1 a oggi).
+function todayISO(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function firstOfMonthISO(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
 }
 
 // ─── KpiCard (local copy, same visual language as FatturaTab) ───────────
@@ -109,6 +120,10 @@ function KpiCard({ icon, label, value, delta, deltaIsPp, deltaSuffix, tone }: Kp
 
 export default function IncomingInvoicesView() {
   const [month, setMonth] = useState<string>(currentMonth())
+  // 2026-05-30: filtro per intervallo di date (Da -> A). Guida la fetch;
+  // `month` resta come default interno legacy ma il controllo visibile e' il range.
+  const [dateFrom, setDateFrom] = useState<string>(firstOfMonthISO())
+  const [dateTo, setDateTo] = useState<string>(todayISO())
   const [mode, setMode] = useState<'tracked' | 'all'>('all')
   const [invoices, setInvoices] = useState<IncomingInvoice[]>([])
   const [loading, setLoading] = useState(true)
@@ -123,7 +138,7 @@ export default function IncomingInvoicesView() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/.netlify/functions/get-incoming-invoices?month=${month}&mode=${mode}`)
+      const res = await fetch(`/.netlify/functions/get-incoming-invoices?from=${dateFrom}&to=${dateTo}&mode=${mode}`)
       const text = await res.text()
       let json: { success?: boolean; error?: string; invoices?: IncomingInvoice[] }
       try { json = JSON.parse(text) } catch {
@@ -140,7 +155,7 @@ export default function IncomingInvoicesView() {
     } finally {
       setLoading(false)
     }
-  }, [month, mode])
+  }, [dateFrom, dateTo, month, mode])
 
   useEffect(() => { load() }, [load])
 
@@ -380,13 +395,24 @@ export default function IncomingInvoicesView() {
       <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label className="block text-[10px] text-theme-text-muted uppercase tracking-wider mb-1">Mese</label>
-            <input
-              type="month"
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-              className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
-            />
+            <label className="block text-[10px] text-theme-text-muted uppercase tracking-wider mb-1">Periodo (Da &rarr; A)</label>
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
+              />
+              <input
+                type="date"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
+              />
+            </div>
+            <p className="text-[10px] text-theme-text-muted mt-1">{dateFrom.split('-').reverse().join('/')} &rarr; {dateTo.split('-').reverse().join('/')}</p>
           </div>
           <div>
             <label className="block text-[10px] text-theme-text-muted uppercase tracking-wider mb-1">Filtro fornitori</label>

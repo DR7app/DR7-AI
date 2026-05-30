@@ -77,22 +77,34 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    // List incoming invoices for the selected month
-    const month = params.month // YYYY-MM format
+    // List incoming invoices for the selected period
+    const month = params.month // YYYY-MM (legacy single-month filter)
+    const from = params.from   // YYYY-MM-DD (range start, inclusive)
+    const to = params.to       // YYYY-MM-DD (range end, inclusive)
     const mode = params.mode || 'tracked' // 'tracked' (filter to fornitori) | 'all' (no filter)
     let startDate: string | undefined
     let endDate: string | undefined
 
-    if (month) {
+    // Europe/Rome offset (+01:00 / +02:00 DST) for a given Y-M-D at local noon.
+    // Aruba wants ISO 8601 with timezone: yyyy-MM-ddTHH:mm:ss.fffzzz
+    const romeTz = (y: number, m: number, d: number): string => {
+      const mid = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
+      const romeStr = mid.toLocaleString('en-US', { timeZone: 'Europe/Rome', hour12: false })
+      const utcStr = mid.toLocaleString('en-US', { timeZone: 'UTC', hour12: false })
+      const off = Math.round((new Date(romeStr).getTime() - new Date(utcStr).getTime()) / 3600000)
+      return `${off >= 0 ? '+' : '-'}${String(Math.abs(off)).padStart(2, '0')}:00`
+    }
+
+    if (from && to) {
+      // 2026-05-30: filtro per intervallo di date arbitrario (Da -> A).
+      const [fy, fm, fd] = from.split('-').map(Number)
+      const [ty, tm, td] = to.split('-').map(Number)
+      startDate = `${from}T00:00:00.000${romeTz(fy, fm, fd)}`
+      endDate = `${to}T23:59:59.999${romeTz(ty, tm, td)}`
+    } else if (month) {
       const [year, mo] = month.split('-')
       const daysInMonth = new Date(parseInt(year), parseInt(mo), 0).getDate()
-      // Aruba wants ISO 8601 with timezone: yyyy-MM-ddTHH:mm:ss.fffzzz
-      // Compute Europe/Rome offset for the chosen month (CET +01:00 / CEST +02:00 during DST).
-      const monthMid = new Date(Date.UTC(parseInt(year), parseInt(mo) - 1, 15, 12, 0, 0))
-      const romeStr = monthMid.toLocaleString('en-US', { timeZone: 'Europe/Rome', hour12: false })
-      const utcStr = monthMid.toLocaleString('en-US', { timeZone: 'UTC', hour12: false })
-      const offsetHours = Math.round((new Date(romeStr).getTime() - new Date(utcStr).getTime()) / 3600000)
-      const tz = `${offsetHours >= 0 ? '+' : '-'}${String(Math.abs(offsetHours)).padStart(2, '0')}:00`
+      const tz = romeTz(parseInt(year), parseInt(mo), 15)
       startDate = `${year}-${mo}-01T00:00:00.000${tz}`
       endDate = `${year}-${mo}-${String(daysInMonth).padStart(2, '0')}T23:59:59.999${tz}`
     }
@@ -210,9 +222,11 @@ export const handler: Handler = async (event) => {
     // post-filtriamo per emission date. Se invoiceDate manca (rarissimo,
     // raw response Aruba senza documentDate), teniamo la riga per evitare
     // di nasconderla.
-    const filteredByMonth = month
-      ? filteredByMode.filter(i => !i.invoiceDate || i.invoiceDate.startsWith(month))
-      : filteredByMode
+    const filteredByMonth = (from && to)
+      ? filteredByMode.filter(i => !i.invoiceDate || (i.invoiceDate >= from && i.invoiceDate <= to))
+      : month
+        ? filteredByMode.filter(i => !i.invoiceDate || i.invoiceDate.startsWith(month))
+        : filteredByMode
 
     // No server-side enrichment — would blow Netlify's 10s timeout for many rows.
     // The UI calls /get-incoming-invoice-detail per row to populate amount/date/number.
@@ -240,7 +254,7 @@ export const handler: Handler = async (event) => {
         supplierTotals,
         grandTotal,
         totalCount: invoices.length,
-        period: month || 'all'
+        period: (from && to) ? `${from}..${to}` : (month || 'all')
       })
     }
   } catch (error: any) {
