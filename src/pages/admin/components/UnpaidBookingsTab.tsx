@@ -2813,10 +2813,16 @@ export default function UnpaidBookingsTab() {
           return (
             <div key={idx} className={`${colorClasses.bg} border ${colorClasses.border} rounded-lg p-2.5`}>
               <div className="text-xs text-theme-text-primary font-medium">{item.label}</div>
-              <div className={`font-bold text-sm ${colorClasses.text}`}>€{item.remaining.toFixed(2)}</div>
+              <div className={`font-bold text-sm ${colorClasses.text}`}>
+                €{item.remaining.toFixed(2)}
+                {item.paymentStatus === 'partial' && item.amount > item.remaining && (
+                  <span className="ml-1.5 text-[11px] font-normal text-theme-text-muted line-through">€{item.amount.toFixed(2)}</span>
+                )}
+              </div>
               {item.paymentStatus === 'partial' && (
-                <div className="text-[10px] text-blue-400">
-                  €{item.amountPaid.toFixed(2)} pagati su €{item.amount.toFixed(2)}
+                <div className="text-[10px] inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/40 font-semibold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                  Parziale — €{item.amountPaid.toFixed(2)} pagato · €{item.remaining.toFixed(2)} da incassare
                 </div>
               )}
               {item.paymentStatus === 'nexi_pay_by_link' && (
