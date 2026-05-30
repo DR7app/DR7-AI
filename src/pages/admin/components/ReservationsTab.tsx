@@ -8564,15 +8564,33 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         toggle Centralina Pro > Automazioni > Cauzione Veicoli
                         decide se la fee viaggia col coefficiente o sta a
                         listino. */}
-                    {/* 2026-05-30: prezzo letto da Centralina Pro per categoria/
-                        fascia/residenza. Se non configurato in Pro = 0 €/giorno.
-                        Mostra etichetta esplicita "(non configurata in Centralina Pro)"
-                        cosi' l'admin sa subito dove andare a settarla. */}
+                    {/* 2026-05-30: "Cauzione Veicolo" e "Auto come Cauzione" sono
+                        la stessa cosa concettualmente — il cliente lascia il suo
+                        veicolo come cauzione. Spuntare uno apre anche l'altro
+                        (apre la sezione targa + dati garante). Sticchando uno
+                        si chiude anche l'altro. */}
                     <label className="md:col-span-2 flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
                       <input
                         type="checkbox"
                         checked={!!formData.include_cauzione_veicoli}
-                        onChange={(e) => setFormData(prev => ({ ...prev, include_cauzione_veicoli: e.target.checked }))}
+                        onChange={(e) => {
+                          const checked = e.target.checked
+                          setFormData(prev => ({
+                            ...prev,
+                            include_cauzione_veicoli: checked,
+                            // Sincronizza con "Auto come Cauzione": spuntando
+                            // questa, l'admin vede SUBITO i campi targa/garante
+                            // sotto. Stoglienzo, resetta anche i campi.
+                            cauzione_auto: checked,
+                            ...(!checked && {
+                              cauzione_targa: '', cauzione_targa_year: '', cauzione_targa_brand: '', cauzione_targa_model: '',
+                              cauzione_proprietario_tipo: 'guidatore' as const,
+                              garante_customer_id: '', garante_nome: '', garante_cognome: '', garante_codice_fiscale: '',
+                              garante_sesso: '', garante_indirizzo: '', garante_cap: '', garante_citta: '', garante_provincia: '',
+                              garante_birth_date: '', garante_birth_place: '', garante_birth_provincia: '', garante_phone: '', garante_email: '',
+                            }),
+                          }))
+                        }}
                         className="w-4 h-4 accent-dr7-gold"
                         disabled={cauzioneVeicoliResolvedDaily <= 0}
                       />
@@ -8598,6 +8616,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       setFormData(prev => ({
                         ...prev,
                         cauzione_auto: checked,
+                        // 2026-05-30: sincronizza con "Cauzione Veicolo".
+                        // Sono lo stesso concetto: il cliente lascia il suo
+                        // veicolo come cauzione. Apri/chiudi entrambi insieme.
+                        include_cauzione_veicoli: checked,
                         ...(!checked && {
                           cauzione_targa: '', cauzione_targa_year: '', cauzione_targa_brand: '', cauzione_targa_model: '',
                           cauzione_proprietario_tipo: 'guidatore' as const,
