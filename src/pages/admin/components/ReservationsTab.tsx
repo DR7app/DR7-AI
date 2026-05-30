@@ -1117,13 +1117,29 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // dei 3 id legacy ('supercars'/'aziendali'/'urban') — quindi tutte le
     // categorie custom (Suv Luxury, Flotta Aziendale, Hypercar, ecc.)
     // venivano forzate a 'urban' e mostravano le opzioni cauzione sbagliate.
-    const aliases: string[] = vehCat === 'supercars' ? ['supercars', 'exotic']
-      : vehCat === 'exotic' ? ['exotic', 'supercars']
+    // 2026-05-30: alias estesi per allinearsi al website (pickDepositOptions
+    // in CarBookingWizard). Aggiunti 'supercar' singolare, alias bidirezionali
+    // aziendali<->furgone, urban<->utilitaria, e case-insensitive fallback su
+    // tutte le keys reali di proDeposits (Centralina Pro accetta nomi categoria
+    // con maiuscole/accenti tipo "Hypercar Elitè").
+    const aliases: string[] = (vehCat === 'supercars' || vehCat === 'supercar')
+      ? ['supercars', 'supercar', 'exotic']
+      : vehCat === 'exotic' ? ['exotic', 'supercars', 'supercar']
+      : (vehCat === 'aziendali' || vehCat === 'furgone')
+        ? ['aziendali', 'furgone']
+      : (vehCat === 'urban' || vehCat === 'utilitaria')
+        ? ['urban', 'utilitaria']
       : vehCat ? [vehCat] : []
     let catCfg: Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
     for (const key of aliases) {
       const candidate = proDeposits[key] as Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
       if (candidate) { catCfg = candidate; break }
+    }
+    // Case-insensitive fallback: cerca tra le chiavi reali di proDeposits.
+    if (!catCfg && vehCat) {
+      const keys = Object.keys(proDeposits)
+      const match = keys.find(k => String(k).toLowerCase().trim() === vehCat)
+      if (match) catCfg = proDeposits[match] as Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
     }
     const fasciaCfg = catCfg?.[fasciaKey]
     const ownOpts = filterActive(((fasciaCfg?.[residencyKey] as ProDepositOption[]) || []).slice())
@@ -3538,13 +3554,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // need the per-method "Pagamento ricevuto", not another conferma).
       _wasConfirmedAtLoad: booking.booking_details?.manually_confirmed === true,
       amount_paid: booking.booking_details?.amountPaid ? centsToEurStr(Math.round(booking.booking_details.amountPaid)) : '0',
-      // Subtract delivery/pickup fees to get BASE rental amount only
-      // (fees are re-added on save at price_total calculation)
-      // Only subtract if the corresponding flag is enabled to avoid drift when toggling off
-      total_amount: centsToEurStr(Math.round(booking.price_total
-        - ((booking.delivery_enabled || booking.booking_details?.delivery_enabled) ? (booking.delivery_fee || 0) : 0)
-        - ((booking.pickup_enabled || booking.booking_details?.pickup_enabled) ? (booking.pickup_fee || 0) : 0)
-      )),
+      // 2026-05-30: carica il TOTALE pieno. Prima si sottraevano consegna/ritiro
+      // per ottenere il "base", perché il save li ri-aggiungeva — ma quel
+      // doppio conteggio è stato rimosso (price_total = total_amount esatto).
+      // Ora total_amount in form = price_total intero; nessuna sottrazione,
+      // altrimenti modificare+salvare ridurrebbe il totale di ogni fee.
+      total_amount: centsToEurStr(Math.round(booking.price_total)),
       currency: booking.currency.toUpperCase(),
       source: 'admin',
       // 2nd Driver
@@ -5610,9 +5625,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         dropoff_date: returnDate.toISOString(),
         pickup_location: pickupLocationLabel,
         dropoff_location: dropoffLocationLabel,
-        price_total: Math.round(eurToCents(formData.total_amount) // Convert to cents (base rental)
-          + eurToCents(formData.delivery_fee || '0')
-          + eurToCents(formData.pickup_fee || '0')),
+        // 2026-05-30 BUG FIX: NON ri-aggiungere consegna/ritiro qui. `total_amount`
+        // È GIÀ il prezzo finale che l'admin vede come "Totale" e include già le fee
+        // di consegna/ritiro (l'auto-calc le mette in extrasAtList → total_amount,
+        // vedi ~riga 1515). Sommarle di nuovo qui le contava DUE volte: il prezzo
+        // finale impostato dall'admin veniva gonfiato all'ultimo momento dalla
+        // consegna a domicilio. price_total = esattamente il totale mostrato.
+        // (delivery_fee/pickup_fee restano salvati a parte in booking_details
+        // come dettaglio, non si sommano al totale.)
+        price_total: Math.round(eurToCents(formData.total_amount)),
         km_overage_fee: parseFloat(formData.km_overage_fee) || 0,
         currency: formData.currency.toUpperCase(),
         // Pay by Link bookings start as pending_payment/unpaid;
@@ -6004,9 +6025,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         try {
           // Use cents-based addition to avoid float drift, then convert to EUR
           // Subtract already paid amount for partial payments
+          // 2026-05-30: total_amount È GIÀ il totale pieno (include consegna/ritiro).
+          // Non ri-aggiungere le fee qui o il link chiederebbe più del dovuto.
           const fullTotalCents = eurToCents(formData.total_amount || '0')
-            + eurToCents(formData.delivery_fee || '0')
-            + eurToCents(formData.pickup_fee || '0')
           const alreadyPaidCents = formData.payment_status === 'partial' ? eurToCents(formData.amount_paid || '0') : 0
           const totalCents = Math.max(0, fullTotalCents - alreadyPaidCents)
           const totalEur = totalCents / 100
@@ -6141,33 +6162,38 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             customerName: customerInfo?.full_name || '',
             customerEmail: customerInfo?.email || '',
             customerPhone: customerInfo?.phone || '',
-            items: [
-              {
-                description: `Noleggio ${vehicle?.display_name || 'Veicolo'}`,
-                quantity: 1,
-                unitPrice: eurToCents(formData.total_amount),
-                total: eurToCents(formData.total_amount)
-              },
-              ...(formData.delivery_enabled ? [{
-                description: 'Consegna a domicilio',
-                quantity: 1,
-                unitPrice: eurToCents(formData.delivery_fee),
-                total: eurToCents(formData.delivery_fee)
-              }] : []),
-              ...(formData.pickup_enabled ? [{
-                description: 'Ritiro a domicilio',
-                quantity: 1,
-                unitPrice: eurToCents(formData.pickup_fee),
-                total: eurToCents(formData.pickup_fee)
-              }] : [])
-            ],
-            subtotal: eurToCents(formData.total_amount)
-              + eurToCents(formData.delivery_fee || '0')
-              + eurToCents(formData.pickup_fee || '0'),
+            // 2026-05-30: total_amount È GIÀ il totale (include consegna/ritiro).
+            // Mostriamo consegna/ritiro come righe separate per chiarezza, ma la
+            // riga Noleggio è il TOTALE MENO quelle fee, così la somma righe ==
+            // subtotal == total == total_amount (niente doppio conteggio).
+            items: (() => {
+              const delCents = formData.delivery_enabled ? eurToCents(formData.delivery_fee || '0') : 0
+              const pckCents = formData.pickup_enabled ? eurToCents(formData.pickup_fee || '0') : 0
+              const rentalCents = Math.max(0, eurToCents(formData.total_amount) - delCents - pckCents)
+              return [
+                {
+                  description: `Noleggio ${vehicle?.display_name || 'Veicolo'}`,
+                  quantity: 1,
+                  unitPrice: rentalCents,
+                  total: rentalCents
+                },
+                ...(delCents > 0 ? [{
+                  description: 'Consegna a domicilio',
+                  quantity: 1,
+                  unitPrice: delCents,
+                  total: delCents
+                }] : []),
+                ...(pckCents > 0 ? [{
+                  description: 'Ritiro a domicilio',
+                  quantity: 1,
+                  unitPrice: pckCents,
+                  total: pckCents
+                }] : [])
+              ]
+            })(),
+            subtotal: eurToCents(formData.total_amount),
             tax: 0,
-            total: eurToCents(formData.total_amount)
-              + eurToCents(formData.delivery_fee || '0')
-              + eurToCents(formData.pickup_fee || '0'),
+            total: eurToCents(formData.total_amount),
             paymentStatus: formData.payment_status || 'pending',
             bookingDate: new Date().toISOString(),
             serviceDate: `${formData.pickup_date}T${formData.pickup_time}:00`,
@@ -8741,10 +8767,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
                   // Auto-update amount_paid based on status
                   if (newStatus === 'paid') {
-                    // Full payment = base + delivery fee + pickup fee (cents-based to avoid float drift)
+                    // 2026-05-30: total_amount È GIÀ il totale pieno (consegna/ritiro inclusi).
                     const fullTotalCents = eurToCents(formData.total_amount || '0')
-                      + eurToCents(formData.delivery_fee || '0')
-                      + eurToCents(formData.pickup_fee || '0')
                     newAmountPaid = centsToEurStr(fullTotalCents)
                   } else if (newStatus === 'unpaid') {
                     newAmountPaid = '0' // No payment
@@ -8755,8 +8779,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     // the existing amount is already a true partial (strictly
                     // less than total). Admin then types the partial amount.
                     const fullTotalCents = eurToCents(formData.total_amount || '0')
-                      + eurToCents(formData.delivery_fee || '0')
-                      + eurToCents(formData.pickup_fee || '0')
                     const currentPaidCents = eurToCents(formData.amount_paid || '0')
                     if (currentPaidCents >= fullTotalCents || currentPaidCents <= 0) {
                       newAmountPaid = '0'
