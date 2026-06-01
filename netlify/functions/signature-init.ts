@@ -244,25 +244,41 @@ export const handler: Handler = async (event) => {
         // (colonne reali), e saltiamo quelli nel loop sotto.
         const normName = (s?: string | null) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ')
         const normPh = (s?: string | null) => String(s || '').replace(/[^0-9]/g, '').replace(/^0+/, '')
-        const { data: signedByContract } = await supabase
-            .from('signature_requests').select('signer_name, signer_phone').eq('contract_id', contract.id).eq('status', 'signed')
-        const { data: signedByBooking } = effBookingIdForCancel
-            ? await supabase.from('signature_requests').select('signer_name, signer_phone').eq('booking_id', effBookingIdForCancel).eq('status', 'signed')
-            : { data: null }
-        const signedNames = new Set<string>()
-        const signedPhones = new Set<string>()
-        for (const r of [...(signedByContract || []), ...(signedByBooking || [])]) {
-            const n = normName((r as any).signer_name); if (n) signedNames.add(n)
-            const p = normPh((r as any).signer_phone); if (p) signedPhones.add(p)
-        }
 
-        // Hash the original PDF
+        // Hash the CURRENT PDF first — serve a confrontarlo con l'hash
+        // salvato sulle vecchie firme. Se l'admin ha rigenerato il contratto
+        // (cambio orari, modifica dati) l'hash cambia: in quel caso le firme
+        // precedenti sono su una versione OBSOLETA del PDF e dobbiamo
+        // reinviare a tutti, anche a chi aveva gia' firmato la versione vecchia.
         const pdfResponse = await fetch(contract.pdf_url)
         if (!pdfResponse.ok) {
             return { statusCode: 500, body: JSON.stringify({ error: 'Impossibile scaricare il PDF del contratto' }) }
         }
         const pdfBuffer = Buffer.from(await pdfResponse.arrayBuffer())
         const originalPdfHash = crypto.createHash('sha256').update(pdfBuffer).digest('hex')
+
+        // 2026-06-01: filtra le firme "vecchie" — quelle con un original_pdf_hash
+        // diverso dall'hash CORRENTE del PDF. Quelle sono firme su una versione
+        // obsoleta (l'admin ha rigenerato il contratto) e NON devono bloccare il
+        // reinvio. Prima il "skip se gia' firmato" usava SOLO nome/telefono,
+        // quindi la rigenerazione faceva fallire silenziosamente l'invio: il
+        // garante che aveva firmato la versione vecchia veniva saltato e non
+        // riceveva la versione aggiornata da firmare di nuovo.
+        const { data: signedByContract } = await supabase
+            .from('signature_requests').select('signer_name, signer_phone, original_pdf_hash').eq('contract_id', contract.id).eq('status', 'signed')
+        const { data: signedByBooking } = effBookingIdForCancel
+            ? await supabase.from('signature_requests').select('signer_name, signer_phone, original_pdf_hash').eq('booking_id', effBookingIdForCancel).eq('status', 'signed')
+            : { data: null }
+        const signedNames = new Set<string>()
+        const signedPhones = new Set<string>()
+        for (const r of [...(signedByContract || []), ...(signedByBooking || [])]) {
+            // Skip se questa firma e' su una versione obsoleta del PDF —
+            // il signer deve firmare la nuova versione.
+            const sigHash = (r as { original_pdf_hash?: string | null }).original_pdf_hash
+            if (sigHash && sigHash !== originalPdfHash) continue
+            const n = normName((r as { signer_name?: string }).signer_name); if (n) signedNames.add(n)
+            const p = normPh((r as { signer_phone?: string }).signer_phone); if (p) signedPhones.add(p)
+        }
 
         // Build list of all signers
         const signers: SignerInfo[] = []
