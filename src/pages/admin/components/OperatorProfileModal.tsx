@@ -1340,6 +1340,13 @@ function CalcolaPagaSection({
                         onChange={(e) => onChangeTo(e.target.value)}
                         className="bg-theme-bg-secondary border border-theme-border rounded px-2 py-1 text-[11px] text-theme-text-primary"
                     />
+                    {/* 2026-06-01: conteggio giorni del periodo selezionato,
+                        cosi' l'admin vede subito "da questa data a questa data
+                        = N giorni" senza dover scrollare fino alle pillole in
+                        cima al modal. */}
+                    <span className="ml-1 px-2 py-1 rounded bg-theme-bg-secondary border border-theme-border text-[11px] font-semibold text-theme-text-primary whitespace-nowrap">
+                        {days.length} {days.length === 1 ? 'giorno' : 'giorni'}
+                    </span>
                 </div>
             </div>
 
