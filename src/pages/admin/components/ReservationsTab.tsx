@@ -6063,6 +6063,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // confusing.
       const isPendingForLink = formData.payment_status === 'pending' || formData.payment_status === 'unpaid' || formData.payment_status === 'partial'
       const isPayByLinkMethod = isNexiPayByLink(formData.payment_method)
+      // 2026-06-01: log diagnostico — direzione si lamenta che il link
+      // non parte su Da Saldare + Conferma. Logghiamo i 4 gating cosi'
+      // se uno e' false sappiamo subito quale.
+      logger.log('[PayByLink GATE]', {
+        editingId,
+        formData_payment_status: formData.payment_status,
+        formData_payment_method: formData.payment_method,
+        isPendingForLink,
+        isPayByLinkMethod,
+        hasInsertedBooking: !!insertedBooking,
+        willFire: !editingId && isPendingForLink && isPayByLinkMethod && !!insertedBooking,
+      })
       if (!editingId && isPendingForLink && isPayByLinkMethod && insertedBooking) {
         try {
           // Use cents-based addition to avoid float drift, then convert to EUR
@@ -6157,11 +6169,34 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   })
                 })
                 const waJson = await waRes.json().catch(() => ({} as any))
-                if (waJson?.skipped && waJson?.reason === 'pro_template_unavailable') {
-                  toast.error('Link creato ma template "pro_richiesta_pagamento" mancante in Messaggi di Sistema Pro — messaggio NON inviato.', { duration: 10000 })
-                  logger.error('[PayByLink] Template pro_richiesta_pagamento missing/disabled — WhatsApp skipped')
-                } else if (!waRes.ok) {
-                  toast.error(`Link creato ma invio WhatsApp fallito: ${waJson?.message || waRes.status}`, { duration: 10000 })
+                // 2026-06-01: fallback robusto — se il template Pro non e'
+                // configurato (skipped), invia comunque il link al cliente
+                // con un messaggio di fallback hardcoded. Direzione si
+                // lamentava di "ho confermato Da Saldare + PBL e il cliente
+                // NON riceve il link". Causa root: template mancante in
+                // Messaggi di Sistema Pro. Adesso il link parte sempre,
+                // poi l'admin puo' configurare il template Pro a piacere.
+                const templateSkipped = waJson?.skipped && waJson?.reason === 'pro_template_unavailable'
+                if (templateSkipped || !waRes.ok) {
+                  logger.warn('[PayByLink] Template Pro non disponibile — invio fallback hardcoded')
+                  const custName = customerInfo?.full_name || 'Cliente'
+                  const firstName = custName.split(' ')[0] || 'Cliente'
+                  const fallbackMsg = `Ciao ${firstName},\n\nLa tua prenotazione DR7 e' confermata. Per completarla, paga ${totalEur.toFixed(2)} € entro 1 ora a questo link:\n\n${linkData.paymentUrl}\n\nRif. prenotazione: ${insertedBooking.id.substring(0, 8).toUpperCase()}\n\nGrazie,\nDR7 Empire`
+                  const fbRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      customPhone: custPhone,
+                      customMessage: fallbackMsg,
+                      type: 'Link Pagamento (fallback)',
+                    })
+                  })
+                  if (fbRes.ok) {
+                    toast.success('Pay by Link inviato (fallback — configura "pro_richiesta_pagamento" in Messaggi di Sistema Pro)', { duration: 8000 })
+                    logger.log('✅ Nexi Pay by Link sent via fallback:', linkData.paymentUrl)
+                  } else {
+                    toast.error(`Link creato ma invio WhatsApp fallito anche su fallback: ${waJson?.message || waRes.status}`, { duration: 10000 })
+                  }
                 } else {
                   toast.success('Pay by Link generato e inviato al cliente!')
                   logger.log('✅ Nexi Pay by Link sent:', linkData.paymentUrl)
