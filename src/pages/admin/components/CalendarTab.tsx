@@ -7,6 +7,7 @@ import { TEST_PLATE_FILTER } from '../../../utils/testPlates'
 import { isReportableRentalBooking, prorateRevenueForMonth, getOccupiedDaysInMonth } from '../../../utils/monthlyBookingMath'
 import BookingDetailsPanel from './BookingDetailsPanel'
 import { FinancialData } from '../../../components/FinancialData'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { authFetch } from '../../../utils/authFetch'
 import { getPaletteForCategory } from '../../../utils/categoryPalettes'
@@ -87,6 +88,9 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [searchQuery, setSearchQuery] = useState('')
+  // 2026-06-01: filtro periodo Da/A — nasconde i veicoli che non hanno
+  // alcun booking che si sovrappone alla finestra selezionata.
+  const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   // Canonical monthly fatturato + bookings count — same numbers Report Noleggio
   // + Dashboard show (source: /.netlify/functions/monthly-report). Client-side
@@ -426,10 +430,25 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
 
   // Filter Rows for Display
   const visibleRows = useMemo(() => {
-    if (!searchQuery) return processedRows
+    let rows = processedRows
+    // 2026-06-01: filtro periodo Da/A — mostra solo veicoli con almeno
+    // un booking che si sovrappone alla finestra (pickup<=to AND dropoff>=from).
+    if (dateRange.from || dateRange.to) {
+      rows = rows.filter(row => {
+        return row.events.some(e => {
+          const pk = String(e.booking.pickup_date || '').slice(0, 10)
+          const dr = String(e.booking.dropoff_date || '').slice(0, 10)
+          if (!pk && !dr) return false
+          // Overlap test: booking [pk, dr] vs range [from, to].
+          if (dateRange.from && dr && dr < dateRange.from) return false
+          if (dateRange.to && pk && pk > dateRange.to) return false
+          return true
+        })
+      })
+    }
+    if (!searchQuery) return rows
     const q = searchQuery.toLowerCase()
-    return processedRows.filter(row => {
-      // Create a simplified flattened string to search
+    return rows.filter(row => {
       const vehicleMatch = row.vehicle.display_name.toLowerCase().includes(q) ||
         (row.vehicle.plate || '').toLowerCase().includes(q)
       const bookingMatch = row.events.some(e =>
@@ -437,7 +456,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       )
       return vehicleMatch || bookingMatch
     })
-  }, [processedRows, searchQuery])
+  }, [processedRows, searchQuery, dateRange])
 
 
   // --- Render Helpers ---
@@ -515,6 +534,10 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
             onChange={e => setSearchQuery(e.target.value)}
           />
         </div>
+      </div>
+      {/* 2026-06-01: filtro periodo Da/A — overlap con i booking del veicolo */}
+      <div className="px-4 py-2 bg-theme-bg-primary/20 backdrop-blur-md border-b border-theme-border/30">
+        <DateRangeFilter value={dateRange} onChange={setDateRange} compact />
       </div>
 
       {/* 2. Scrollable Calendar Area */}
