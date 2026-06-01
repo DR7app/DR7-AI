@@ -1,34 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { motion } from 'framer-motion'
 import { supabase } from '../../../supabaseClient'
 import { FinancialData } from '../../../components/FinancialData'
 import { useAdminRole } from '../../../hooks/useAdminRole'
-import { useTheme } from '../../../contexts/ThemeContext'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
-import { logger } from '../../../utils/logger'
-import { logAdminAction } from '../../../utils/logAdminAction'
-
-// 2026-05-22: Premium telemetry restyle scoped to this page only.
-// 2026-05-27: gated to dark mode only — overriding theme vars in light
-// mode broke CLAUDE.md rule "Always preserve dark mode AND light mode".
-// Dark-mode override gives the cinematic look; light mode falls through
-// to the normal theme tokens (white/off-white surfaces, ink text).
-const TELEMETRY_VARS_DARK: React.CSSProperties = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ...({
-    '--color-theme-bg-primary': '#0a0d14',
-    '--color-theme-bg-secondary': '#10141e',
-    '--color-theme-bg-tertiary': '#161b28',
-    '--color-theme-border': '#1b2333',
-    '--color-theme-border-light': '#243049',
-    '--color-theme-text-primary': '#e2e8f0',
-    '--color-theme-text-secondary': '#cbd5e1',
-    '--color-theme-text-muted': '#64748b',
-    '--color-theme-shadow': 'rgba(2,6,15,0.6)',
-  } as any),
-}
 
 // --- Configuration ---
 const CELL_WIDTH = 52 // Balanced width: fits full month on screen while maintaining readability
@@ -147,94 +123,12 @@ interface CarWashService {
 
 export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabProps) {
   const { canViewFinancials } = useAdminRole()
-  const { theme } = useTheme()
-  const TELEMETRY_VARS: React.CSSProperties = theme === 'dark' ? TELEMETRY_VARS_DARK : {}
   const [hideFinancials, setHideFinancials] = useState(false)
   const [bookings, setBookings] = useState<CarWashBooking[]>([])
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedBooking, setSelectedBooking] = useState<CarWashBooking | null>(null)
-  // 2026-05-29: stato per il pulsante "Auto Pronta" nel dettaglio booking.
-  // Disabilita finche' WhatsApp + update DB sono in flight, ed evita doppio
-  // send se direzione clicca due volte di fila.
-  const [sendingReady, setSendingReady] = useState<string | null>(null)
-
-  async function handleAutoPronta(booking: CarWashBooking) {
-    if (sendingReady === booking.id) return
-    setSendingReady(booking.id)
-    const phone = booking.customer_phone || booking.booking_details?.customer?.phone || ''
-    const fullName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente'
-    const firstName = fullName.split(' ')[0]
-    const plate = booking.vehicle_plate || booking.booking_details?.vehicle?.plate || ''
-    const bookingRef = (booking.id || '').substring(0, 8).toUpperCase() || 'N/A'
-    const svcType = (booking as { service_type?: string })?.service_type || 'car_wash'
-    try {
-      // 1) Persisti flag auto_pronta_sent_at — stesso campo usato da
-      //    CarWashBookingsTab cosi' il dettaglio nel calendario E la lista
-      //    bookings rimangono sincronizzati ("Gia inviata" / "Già notificato"
-      //    appare ovunque dopo il primo click).
-      const newDetails = {
-        ...(booking.booking_details || {}),
-        auto_pronta_sent_at: new Date().toISOString(),
-      }
-      await supabase
-        .from('bookings')
-        .update({ booking_details: newDetails })
-        .eq('id', booking.id)
-
-      // 2) WhatsApp al cliente — stesso payload del bottone su
-      //    CarWashBookingsTab (templateKey + templateVars espliciti).
-      //    Il resolver instrada service_ready_customer al custom
-      //    'pro_custom_lavaggio_concluso_*' che direzione ha configurato
-      //    (handled_events: ['service_ready_customer'] + target=Prime Wash).
-      if (phone) {
-        const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            customPhone: phone,
-            templateKey: 'service_ready_customer',
-            booking: { service_type: svcType },
-            templateVars: {
-              customer_name: firstName,
-              nome: firstName,
-              booking_id: bookingRef,
-              booking_ref: bookingRef,
-              service_name: booking.service_name || '',
-              vehicle_name: booking.vehicle_name || booking.booking_details?.vehicleMakeModel || '',
-              vehicle_plate: plate,
-              targa: plate,
-            },
-            skipHeader: true,
-          }),
-        })
-        const waResult = await waResp.json().catch(() => ({}))
-        if (!waResp.ok || waResult?.skipped) {
-          toast.error('Template "Auto pronta / Lavaggio concluso" non configurato in Messaggi di Sistema Pro. Verifica: ATTIVO, body non vuoto, evento "service_ready_customer" tra eventi gestiti, Tipo servizio = Prime Wash.', { duration: 12000 })
-        } else {
-          toast.success('WhatsApp AUTO PRONTA inviato al cliente')
-        }
-      } else {
-        toast('Segnata pronta (nessun telefono cliente per WhatsApp)')
-      }
-
-      logAdminAction('auto_pronta_sent', 'carwash_booking', booking.id, {
-        customer: fullName,
-        plate,
-        from: 'calendar',
-      })
-
-      setSelectedBooking(null)
-      loadData()
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      logger.error('[Auto Pronta] failed:', msg)
-      toast.error('Errore: ' + msg)
-    } finally {
-      setSendingReady(null)
-    }
-  }
   const [editingBooking, setEditingBooking] = useState<CarWashBooking | null>(null)
   const saveEditLockRef = useRef(false)
 
@@ -611,7 +505,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
     }
   }, [bookings])
 
-  const deltaColor = (s: string) => s.startsWith('+') && s !== '+0%' ? 'text-emerald-600 dark:text-emerald-400' : s.startsWith('-') ? 'text-red-600 dark:text-red-400' : 'text-theme-text-muted'
+  const deltaColor = (s: string) => s.startsWith('+') && s !== '+0%' ? 'text-emerald-400' : s.startsWith('-') ? 'text-red-400' : 'text-theme-text-muted'
   // Richer KPI card: colored icon square on the left + label / value / delta
   // stacked on the right. Matches the mockup style.
   const KpiCard = ({ label, value, delta, sub, icon, accent }: {
@@ -622,12 +516,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
     // Vibrant filled icon squares (mockup style) — stronger contrast than
     // the previous soft tints.
     const accentBg: Record<typeof accent, string> = {
-      emerald: 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/25 dark:text-emerald-300 ring-1 ring-inset ring-emerald-400/40',
-      blue: 'bg-blue-500/15 text-blue-700 dark:bg-blue-500/25 dark:text-blue-300 ring-1 ring-inset ring-blue-400/40',
-      cyan: 'bg-cyan-500/15 text-cyan-700 dark:bg-cyan-500/25 dark:text-cyan-700 dark:text-cyan-300 ring-1 ring-inset ring-cyan-400/40',
-      amber: 'bg-amber-500/15 text-amber-700 dark:bg-amber-500/25 dark:text-amber-300 ring-1 ring-inset ring-amber-400/40',
-      fuchsia: 'bg-fuchsia-500/15 text-fuchsia-700 dark:bg-fuchsia-500/25 dark:text-fuchsia-300 ring-1 ring-inset ring-fuchsia-400/40',
-      rose: 'bg-rose-500/15 text-rose-700 dark:bg-rose-500/25 dark:text-rose-300 ring-1 ring-inset ring-rose-400/40',
+      emerald: 'bg-emerald-500/25 text-emerald-300 ring-1 ring-inset ring-emerald-400/40',
+      blue: 'bg-blue-500/25 text-blue-300 ring-1 ring-inset ring-blue-400/40',
+      cyan: 'bg-cyan-500/25 text-cyan-300 ring-1 ring-inset ring-cyan-400/40',
+      amber: 'bg-amber-500/25 text-amber-300 ring-1 ring-inset ring-amber-400/40',
+      fuchsia: 'bg-fuchsia-500/25 text-fuchsia-300 ring-1 ring-inset ring-fuchsia-400/40',
+      rose: 'bg-rose-500/25 text-rose-300 ring-1 ring-inset ring-rose-400/40',
     }
     const iconPath: Record<typeof icon, string> = {
       cars: 'M3 13l2-7h14l2 7M5 17h14M7 17v3M17 17v3M5 13h14M7 10h10',
@@ -638,27 +532,21 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       fire: 'M12 2a7 7 0 015 12c1-3-1-6-3-8 0 4-4 5-4 9a4 4 0 008 0c0 5-5 7-7 7s-7-2-7-7c0-7 8-9 8-13z',
     }
     return (
-      <motion.div
-        whileHover={{ y: -2 }}
-        transition={{ type: 'spring', stiffness: 320, damping: 22 }}
-        className="group relative flex-1 min-w-[160px] flex items-center gap-3 rounded-xl p-3 overflow-hidden bg-theme-bg-tertiary dark:bg-[linear-gradient(135deg,rgba(20,28,45,0.85)_0%,rgba(10,15,25,0.85)_100%)] border border-theme-border shadow-[0_8px_24px_-12px_rgba(0,0,0,0.15)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_8px_24px_-12px_rgba(0,0,0,0.6)] backdrop-blur-md hover:border-cyan-400/30 transition-all"
-      >
-        {/* sheen on hover */}
-        <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-        <div className={`relative w-10 h-10 rounded-lg flex items-center justify-center border ${accentBg[accent]} shrink-0`}>
+      <div className="flex-1 min-w-[160px] bg-theme-bg-primary/40 backdrop-blur-sm border border-theme-border/40 rounded-xl p-3 flex items-center gap-3">
+        <div className={`w-10 h-10 rounded-lg flex items-center justify-center border ${accentBg[accent]}`}>
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d={iconPath[icon]} />
           </svg>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-theme-text-muted font-semibold">{label}</div>
-          <div className="text-xl font-bold text-theme-text-primary tabular-nums leading-tight tracking-tight">{value}</div>
+          <div className="text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold">{label}</div>
+          <div className="text-xl font-bold text-theme-text-primary tabular-nums leading-tight">{value}</div>
           <div className="flex items-center gap-2 text-[10px] mt-0.5 truncate">
             {delta && <span className={deltaColor(delta)}>{delta} vs ieri</span>}
             {sub && <span className="text-theme-text-muted truncate">{sub}</span>}
           </div>
         </div>
-      </motion.div>
+      </div>
     )
   }
 
@@ -672,18 +560,10 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   }
 
   return (
-    <div
-      style={TELEMETRY_VARS}
-      className="relative flex flex-col h-[calc(100vh-240px)] sm:h-[calc(100vh-200px)] rounded-2xl border border-theme-border dark:border-cyan-400/10 shadow-[0_0_60px_-10px_rgba(34,211,238,0.10)] overflow-hidden bg-theme-bg-primary dark:bg-[radial-gradient(ellipse_at_top,_rgba(34,211,238,0.07)_0%,_transparent_55%),linear-gradient(180deg,#0a0d14_0%,#070a10_100%)]"
-    >
-      {/* Ambient cyan glow — decorative, sits behind everything */}
-      <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
-        <div className="absolute -top-32 -left-32 w-[480px] h-[480px] rounded-full bg-cyan-500/[0.06] blur-3xl" />
-        <div className="absolute -bottom-32 -right-32 w-[420px] h-[420px] rounded-full bg-blue-600/[0.05] blur-3xl" />
-      </div>
+    <div className="flex flex-col h-[calc(100vh-240px)] sm:h-[calc(100vh-200px)] bg-transparent rounded-xl border border-theme-border/30 shadow-2xl overflow-hidden">
 
-      {/* 0. KPI Strip — telemetry widgets row */}
-      <div className="relative z-10 flex flex-wrap gap-2 sm:gap-3 p-3 sm:p-4 border-b border-theme-border bg-theme-bg-secondary dark:bg-black/20 backdrop-blur-md">
+      {/* 0. KPI Strip — bigger cards with icons, mockup style */}
+      <div className="flex flex-wrap gap-2 sm:gap-3 p-3 sm:p-4 bg-theme-bg-primary/10 border-b border-theme-border/30">
         <KpiCard icon="cars" accent="emerald" label="Lavaggi Oggi" value={String(kpis.lavaggi)} delta={kpis.lavaggiDelta} />
         <KpiCard icon="clock" accent="blue" label="Slot Occupati" value={`${kpis.occ}%`} delta={kpis.occDelta} sub={`${formatDuration(kpis.bookedMin)} / ${formatDuration(kpis.openMin)}`} />
         <KpiCard icon="slot" accent="cyan" label="Slot Liberi" value={String(kpis.freeSlots)} sub={`${formatDuration(kpis.freeMin)} disp.`} />
@@ -692,8 +572,9 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         <KpiCard icon="fire" accent="rose" label="Saturazione" value={`${kpis.occ}%`} sub={kpis.occ >= 85 ? 'Alta' : kpis.occ >= 50 ? 'Media' : 'Bassa'} />
       </div>
 
-      {/* View tabs + date display + Oggi button — dark pill row, cyan accent. */}
-      <div className="relative z-10 flex flex-wrap items-center gap-3 px-3 sm:px-4 py-2.5 border-b border-theme-border bg-theme-bg-secondary dark:bg-black/20 backdrop-blur-md">
+      {/* View tabs + date display + Oggi button — mockup style: dark pill
+          row with bright cyan accent on the active tab. */}
+      <div className="flex flex-wrap items-center gap-3 px-3 sm:px-4 py-2.5 bg-theme-bg-primary/10 border-b border-theme-border/30">
         <div className="flex items-center gap-2 bg-theme-bg-primary/30 rounded-full p-1 border border-theme-border/40">
           {(['giorno', 'settimana', 'mese'] as const).map(v => (
             <button
@@ -757,7 +638,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       </div>
 
       {/* 1. Control Bar */}
-      <div className="relative z-10 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-3 sm:p-4 bg-theme-bg-secondary dark:bg-black/25 backdrop-blur-md border-b border-theme-border shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-3 sm:p-4 bg-theme-bg-primary/20 backdrop-blur-md border-b border-theme-border/30 z-10 shadow-sm">
         <div className="flex items-center gap-3 sm:gap-4">
           <h2 className="text-base sm:text-xl font-light text-theme-text-primary capitalize w-32 sm:w-48">
             {currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
@@ -799,14 +680,14 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
               <>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-theme-text-muted">{rangeLabel}:</span>
-                  <span className="text-cyan-700 dark:text-cyan-300 font-bold text-xs sm:text-sm">
+                  <span className="text-dr7-gold font-bold text-xs sm:text-sm">
                     {list.length} lavaggi
                   </span>
                 </div>
                 {canViewFinancials && !hideFinancials && (
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-theme-text-muted">Fatturato:</span>
-                    <span className="text-green-700 dark:text-green-400 font-bold text-xs sm:text-sm">
+                    <span className="text-green-400 font-bold text-xs sm:text-sm">
                       <FinancialData type="total">
                         €{(total / 100).toFixed(2)}
                       </FinancialData>
@@ -820,8 +701,8 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
             <button
               onClick={() => setHideFinancials(!hideFinancials)}
               className={`px-3 py-2 rounded text-xs font-semibold transition-colors ${hideFinancials
-                ? 'bg-green-600 text-white hover:bg-green-700'
-                : 'bg-cyan-500 text-white hover:bg-[#0A8FA3]'
+                ? 'bg-green-600 text-theme-text-primary hover:bg-green-700'
+                : 'bg-dr7-gold text-white hover:bg-[#0A8FA3]'
                 }`}
             >
               {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
@@ -830,7 +711,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
           <input
             type="text"
             placeholder="Cerca..."
-            className="bg-theme-bg-primary/20 border border-theme-border/50 rounded-full px-4 py-2 text-sm w-full sm:w-64 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-cyan-400/50"
+            className="bg-theme-bg-primary/20 border border-theme-border/50 rounded-full px-4 py-2 text-sm w-full sm:w-64 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold/50"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
@@ -839,21 +720,21 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
 
       {/* Compact legend — same colour codes used by the booking cards in the
           grid below. Wraps on small screens, no fixed sidebar. */}
-      <div className="relative z-10 hidden md:flex items-center gap-3 px-3 sm:px-4 py-2 bg-theme-bg-secondary dark:bg-black/20 backdrop-blur-md border-b border-theme-border text-[11px] flex-wrap">
+      <div className="hidden md:flex items-center gap-3 px-3 sm:px-4 py-2 bg-theme-bg-primary/10 border-b border-theme-border/30 text-[11px] flex-wrap">
         <span className="text-theme-text-muted uppercase tracking-wider font-semibold">Legenda</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /><span className="text-theme-text-primary">Pagato</span></span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-amber-500" /><span className="text-theme-text-primary">Link Nexi inviato</span></span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-700" /><span className="text-theme-text-primary">Da pagare</span></span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-blue-700" /><span className="text-theme-text-primary">Rientro</span></span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm border-2 border-amber-300" /><span className="text-theme-text-primary">Con note</span></span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#22d3ee]" /><span className="text-theme-text-primary">Oggi</span></span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#c9a84a]" /><span className="text-theme-text-primary">Oggi</span></span>
       </div>
 
       {/* 2. Main area: calendar grid + (lg only) right sidebar */}
       <div className="flex-1 flex overflow-hidden">
 
       {/* 2A. Scrollable Calendar Area */}
-      <div className="relative z-10 flex-1 overflow-auto flex flex-col w-full bg-theme-bg-primary dark:bg-[linear-gradient(180deg,#0a0d14_0%,#070a10_100%)]">
+      <div className="flex-1 overflow-auto relative flex flex-col w-full bg-theme-bg-primary">
 
         {/* A. Sticky Header Row - Days */}
         <div className={`flex sticky top-0 z-[40] bg-theme-bg-primary shadow-lg border-b border-theme-border/50 ${stretchCols ? 'w-full' : 'min-w-max'}`}>
@@ -875,8 +756,8 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                   key={day}
                   className={`
                     flex flex-col items-center justify-center border-r border-theme-border/30 relative transition-colors
-                    ${(isHol || isSun) ? 'bg-rose-100 dark:bg-red-950/20' : ''}
-                    ${isToday ? 'bg-gradient-to-b from-[#22d3ee]/45 to-[#22d3ee]/15 border-l-2 border-r-2 border-[#22d3ee] shadow-[inset_0_-3px_0_0_#22d3ee]' : ''}
+                    ${(isHol || isSun) ? 'bg-red-950/20' : ''}
+                    ${isToday ? 'bg-gradient-to-b from-[#c9a84a]/45 to-[#c9a84a]/15 border-l-2 border-r-2 border-[#c9a84a] shadow-[inset_0_-3px_0_0_#c9a84a]' : ''}
                   `}
                   style={headerCellStyle}
                 >
@@ -889,12 +770,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                   )}
 
                   <span
-                    className={`text-sm font-bold ${isToday ? 'text-[#22d3ee]' : 'text-theme-text-primary/90'}`}
+                    className={`text-sm font-bold ${isToday ? 'text-[#c9a84a]' : 'text-theme-text-primary/90'}`}
                   >
                     {day}
                   </span>
                   <span
-                    className={`text-[9px] uppercase tracking-wide ${isToday ? 'text-[#22d3ee]/80' : 'text-theme-text-primary/50'}`}
+                    className={`text-[9px] uppercase tracking-wide ${isToday ? 'text-[#c9a84a]/80' : 'text-theme-text-primary/50'}`}
                   >
                     {d.toLocaleDateString('it-IT', { weekday: 'short' })}
                   </span>
@@ -965,13 +846,9 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                         key={`${day}-${timeString}`}
                         className={`
                           relative border-r border-theme-border/20 transition-all
-                          ${isToday ? 'bg-[#22d3ee]/12 border-l border-r border-[#22d3ee]/40' : ''}
-                          ${/* 2026-05-28: era bg-emerald-50 + dark:bg-green-600/15 ma il dark variant
-                              non si applicava correttamente — la griglia restava color crema
-                              anche in dark mode. Sostituito con opacity-based che funziona
-                              su qualsiasi sfondo (chiaro=verde tenue, scuro=verde tenue su nero). */''}
-                          ${!isToday && !slotBooking && !isRedDay ? 'bg-emerald-500/10 hover:bg-emerald-500/20 cursor-pointer' : ''}
-                          ${!isToday && !slotBooking && isRedDay ? 'bg-rose-500/10 hover:bg-rose-500/20' : ''}
+                          ${isToday ? 'bg-[#c9a84a]/12 border-l border-r border-[#c9a84a]/40' : ''}
+                          ${!isToday && !slotBooking && !isRedDay ? 'bg-green-600/15 hover:bg-green-600/25 cursor-pointer' : ''}
+                          ${!isToday && !slotBooking && isRedDay ? 'bg-red-950/10 hover:bg-red-950/20' : ''}
                           ${slotBooking && !isBookingStart ? 'bg-transparent' : ''}
                         `}
                         style={dayCellStyle}
@@ -996,17 +873,17 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                           // Gradient + soft shadow + hover lift for a polished look (mockup style).
                           const isPendingLink = !isRientro && isPendingPaymentLink(startEvt.booking)
                           const bgColor = isRientro
-                            ? 'bg-gradient-to-br from-blue-400 to-blue-600 dark:from-blue-700 dark:to-blue-900 border-blue-400/40 dark:border-blue-500/40 shadow-blue-500/20 dark:shadow-blue-900/30'
+                            ? 'bg-gradient-to-br from-blue-700 to-blue-900 border-blue-500/40 shadow-blue-900/30'
                             : isPaid
-                              ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 dark:from-emerald-500 dark:to-emerald-700 border-emerald-300/50 dark:border-emerald-300/40 shadow-emerald-500/20 dark:shadow-emerald-900/30'
+                              ? 'bg-gradient-to-br from-emerald-500 to-emerald-700 border-emerald-300/40 shadow-emerald-900/30'
                               : isPendingLink
-                                ? 'bg-gradient-to-br from-amber-400 to-amber-600 dark:from-amber-500 dark:to-amber-700 border-amber-300/50 dark:border-amber-300/40 shadow-amber-500/20 dark:shadow-amber-900/30'
-                                : 'bg-gradient-to-br from-red-500 to-red-700 dark:from-red-700 dark:to-red-900 border-red-400/50 dark:border-red-500/40 shadow-red-500/20 dark:shadow-red-900/30'
+                                ? 'bg-gradient-to-br from-amber-500 to-amber-700 border-amber-300/40 shadow-amber-900/30'
+                                : 'bg-gradient-to-br from-red-700 to-red-900 border-red-500/40 shadow-red-900/30'
 
                           return (
                           <div
                             key={startEvt.booking.id}
-                            className={`absolute inset-x-0 ${bgColor} border border-white/10 rounded-lg shadow-[0_4px_12px_-4px_rgba(0,0,0,0.5)] hover:shadow-[0_8px_24px_-6px_rgba(34,211,238,0.45)] hover:-translate-y-0.5 hover:brightness-110 transition-all duration-200 cursor-pointer ${hasClientOverlap ? 'z-[25]' : 'z-20'} overflow-hidden group/booking ring-0 hover:ring-1 hover:ring-cyan-300/40`}
+                            className={`absolute inset-x-0 ${bgColor} border rounded-md shadow-lg hover:shadow-2xl hover:-translate-y-0.5 hover:brightness-105 transition-all duration-150 cursor-pointer ${hasClientOverlap ? 'z-[25]' : 'z-20'} overflow-hidden group/booking ring-0 hover:ring-2 hover:ring-white/30`}
                             style={{
                               height: `${(startEvt.duration / 5) * CELL_HEIGHT - 2}px`,
                               top: `${topOffset}px`,
@@ -1072,7 +949,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                               {(startEvt.booking.booking_details?.vehicleMakeModel || startEvt.booking.vehicle_plate || startEvt.booking.vehicle_name) && (
                                 <div className="flex items-center gap-1.5 mb-2 pb-1.5 border-b border-theme-border/50">
                                   {startEvt.booking.vehicle_plate && (
-                                    <span className="font-mono font-bold text-cyan-700 dark:text-cyan-300 text-[11px]">{startEvt.booking.vehicle_plate}</span>
+                                    <span className="font-mono font-bold text-dr7-gold text-[11px]">{startEvt.booking.vehicle_plate}</span>
                                   )}
                                   {(startEvt.booking.booking_details?.vehicleMakeModel || startEvt.booking.vehicle_name) && (
                                     <span className="text-theme-text-primary text-[11px]">{startEvt.booking.booking_details?.vehicleMakeModel || startEvt.booking.vehicle_name}</span>
@@ -1080,8 +957,8 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                                   {startEvt.booking.booking_details?.vehicleCategory && (
                                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
                                       startEvt.booking.booking_details.vehicleCategory === 'urban'
-                                        ? 'bg-blue-600/30 text-blue-700 dark:text-blue-400'
-                                        : 'bg-orange-600/30 text-orange-700 dark:text-orange-400'
+                                        ? 'bg-blue-600/30 text-blue-400'
+                                        : 'bg-orange-600/30 text-orange-400'
                                     }`}>
                                       {startEvt.booking.booking_details.vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
                                     </span>
@@ -1127,8 +1004,10 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
 
       </div>
 
-      {/* 2B. Right sidebar — telemetry intelligence panel. */}
-      <aside className="relative z-10 hidden lg:flex flex-col w-72 shrink-0 border-l border-theme-border bg-theme-bg-secondary dark:bg-black/30 backdrop-blur-md p-4 gap-4 overflow-auto">
+      {/* 2B. Right sidebar — mini calendar, vertical legend, smart suggestions.
+            No operator data anywhere. Only renders on lg+ so it doesn't crowd
+            mobile/tablet. */}
+      <aside className="hidden lg:flex flex-col w-72 shrink-0 border-l border-theme-border/30 bg-theme-bg-primary/30 p-4 gap-4 overflow-auto">
         {/* Mini month calendar — click a day to jump to it */}
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -1160,7 +1039,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                 const hasBk = dayBookingsCount > 0
                 cells.push(
                   <div key={d} className={`h-7 rounded flex flex-col items-center justify-center text-[11px] tabular-nums relative ${
-                    isTodayMini ? 'bg-[#22d3ee] text-white font-bold' :
+                    isTodayMini ? 'bg-[#c9a84a] text-white font-bold' :
                     hasBk ? 'bg-emerald-500/15 text-theme-text-primary' :
                     'text-theme-text-muted'
                   }`}>
@@ -1183,17 +1062,17 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
             <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-red-700" /><span className="text-theme-text-primary">Da pagare</span></li>
             <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-blue-700" /><span className="text-theme-text-primary">Rientro</span></li>
             <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm border-2 border-amber-300" /><span className="text-theme-text-primary">Con note</span></li>
-            <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-[#22d3ee]" /><span className="text-theme-text-primary">Oggi</span></li>
+            <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-[#c9a84a]" /><span className="text-theme-text-primary">Oggi</span></li>
           </ul>
         </div>
 
         {/* Smart suggestion — heuristic based on today's saturation */}
-        <div className="mt-auto bg-cyan-500/5 border border-cyan-400/20 rounded-xl p-3">
+        <div className="mt-auto bg-dr7-gold/5 border border-dr7-gold/20 rounded-xl p-3">
           <div className="flex items-center gap-2 mb-1">
-            <svg className="w-4 h-4 text-cyan-700 dark:text-cyan-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            <span className="text-[11px] font-semibold text-cyan-700 dark:text-cyan-300 uppercase tracking-wider">Suggerimenti Smart</span>
+            <span className="text-[11px] font-semibold text-dr7-gold uppercase tracking-wider">Suggerimenti Smart</span>
           </div>
           <p className="text-[11px] text-theme-text-secondary leading-relaxed">
             {kpis.occ < 50
@@ -1275,7 +1154,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                   {selectedBooking.vehicle_plate && (
                     <div className={`px-4 py-3 flex items-center justify-between ${selectedBooking.booking_details?.vehicleMakeModel ? 'border-b border-theme-border/20' : ''}`}>
                       <span className="text-theme-text-muted text-sm">Targa</span>
-                      <span className="font-mono font-bold text-cyan-700 dark:text-cyan-300 text-sm tracking-wider">{selectedBooking.vehicle_plate}</span>
+                      <span className="font-mono font-bold text-dr7-gold text-sm tracking-wider">{selectedBooking.vehicle_plate}</span>
                     </div>
                   )}
                   {selectedBooking.booking_details?.vehicleMakeModel && (
@@ -1320,7 +1199,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
               {/* Price card */}
               <div className="rounded-xl bg-theme-bg-tertiary/60 px-4 py-4 flex items-center justify-between">
                 <span className="text-theme-text-primary text-base font-semibold">Totale</span>
-                <span className="text-cyan-700 dark:text-cyan-300 font-bold text-2xl tracking-tight">
+                <span className="text-dr7-gold font-bold text-2xl tracking-tight">
                   €{(selectedBooking.price_total / 100).toFixed(2)}
                 </span>
               </div>
@@ -1338,42 +1217,16 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                 DR7-{selectedBooking.id.toUpperCase().slice(0, 8)}
               </div>
 
-              {/* Action buttons */}
+              {/* Action button */}
               <button
                 onClick={() => {
                   setEditingBooking(selectedBooking)
                   setSelectedBooking(null)
                 }}
-                className="w-full py-3 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-700 dark:text-cyan-300 font-semibold text-[15px] transition-all active:scale-[0.98]"
+                className="w-full py-3 rounded-xl bg-dr7-gold/15 hover:bg-dr7-gold/25 text-dr7-gold font-semibold text-[15px] transition-all active:scale-[0.98]"
               >
                 Modifica Prenotazione
               </button>
-              {/* 2026-05-29: Auto Pronta — notifica WhatsApp al cliente che
-                  l'auto e' pronta per il ritiro + stamp auto_pronta_at nel
-                  booking_details. Disabilitato durante l'invio + se gia'
-                  inviato in passato (mostra "Già notificato"). */}
-              {(() => {
-                // Allineato a CarWashBookingsTab: legge auto_pronta_sent_at
-                // (timestamp) cosi' il bottone resta grigio dopo il primo
-                // click da qualunque punto dell'admin.
-                const alreadySent = !!selectedBooking.booking_details?.auto_pronta_sent_at
-                const inFlight = sendingReady === selectedBooking.id
-                return (
-                  <button
-                    onClick={() => handleAutoPronta(selectedBooking)}
-                    disabled={inFlight || alreadySent}
-                    className={`w-full py-3 rounded-xl font-semibold text-[15px] transition-all active:scale-[0.98] ${
-                      alreadySent
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 cursor-not-allowed'
-                        : inFlight
-                          ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 cursor-wait'
-                          : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300'
-                    }`}
-                  >
-                    {alreadySent ? '✓ Cliente già notificato' : inFlight ? 'Invio in corso...' : 'Auto Pronta'}
-                  </button>
-                )
-              })()}
             </div>
           </div>
         </div>
@@ -1467,15 +1320,15 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                               setEditExtraPriceOptions(p => { const n = { ...p }; delete n[extra.id]; return n })
                               setEditExtraQuantities(p => { const n = { ...p }; delete n[extra.id]; return n })
                             } else { setEditExtras(p => [...p, extra]) }
-                          }} className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 ${isSelected ? 'bg-cyan-500/20 border-cyan-400 text-cyan-700 dark:text-cyan-300' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-primary hover:border-cyan-400'}`}>
-                            <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[10px] ${isSelected ? 'bg-cyan-500 border-cyan-400 text-white' : 'border-theme-text-muted'}`}>{isSelected && '✓'}</span>
+                          }} className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 ${isSelected ? 'bg-dr7-gold/20 border-dr7-gold text-dr7-gold' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-primary hover:border-dr7-gold'}`}>
+                            <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[10px] ${isSelected ? 'bg-dr7-gold border-dr7-gold text-white' : 'border-theme-text-muted'}`}>{isSelected && '✓'}</span>
                             {extra.name} {!hasPO && <span className="opacity-70">EUR {extra.price.toFixed(2)}</span>}
                           </button>
                           {isSelected && hasPO && (
                             <div className="flex flex-wrap gap-1 ml-2">
                               {extra.price_options!.map((opt: { label: string; price: number }) => (
                                 <button key={opt.label} type="button" onClick={() => setEditExtraPriceOptions(p => ({ ...p, [extra.id]: opt }))}
-                                  className={`px-2 py-0.5 text-[10px] rounded-full border ${curOpt?.label === opt.label ? 'bg-cyan-500 text-white border-cyan-400 font-bold' : 'border-theme-border text-theme-text-secondary hover:border-cyan-400'}`}>
+                                  className={`px-2 py-0.5 text-[10px] rounded-full border ${curOpt?.label === opt.label ? 'bg-dr7-gold text-white border-dr7-gold font-bold' : 'border-theme-border text-theme-text-secondary hover:border-dr7-gold'}`}>
                                   {opt.label} EUR {opt.price}
                                 </button>
                               ))}
@@ -1484,9 +1337,9 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                           {isSelected && extra.price_unit && (
                             <div className="flex items-center gap-2 ml-2">
                               <span className="text-[10px] text-theme-text-muted">{extra.price_unit}:</span>
-                              <button type="button" onClick={() => setEditExtraQuantities(p => ({ ...p, [extra.id]: Math.max(1, (p[extra.id] || 1) - 1) }))} className="w-6 h-6 rounded-full border border-theme-border text-theme-text-primary hover:border-cyan-400 flex items-center justify-center text-xs">-</button>
+                              <button type="button" onClick={() => setEditExtraQuantities(p => ({ ...p, [extra.id]: Math.max(1, (p[extra.id] || 1) - 1) }))} className="w-6 h-6 rounded-full border border-theme-border text-theme-text-primary hover:border-dr7-gold flex items-center justify-center text-xs">-</button>
                               <span className="text-xs font-bold w-5 text-center">{editExtraQuantities[extra.id] || 1}</span>
-                              <button type="button" onClick={() => setEditExtraQuantities(p => ({ ...p, [extra.id]: Math.min(10, (p[extra.id] || 1) + 1) }))} className="w-6 h-6 rounded-full border border-theme-border text-theme-text-primary hover:border-cyan-400 flex items-center justify-center text-xs">+</button>
+                              <button type="button" onClick={() => setEditExtraQuantities(p => ({ ...p, [extra.id]: Math.min(10, (p[extra.id] || 1) + 1) }))} className="w-6 h-6 rounded-full border border-theme-border text-theme-text-primary hover:border-dr7-gold flex items-center justify-center text-xs">+</button>
                             </div>
                           )}
                         </div>
@@ -1498,7 +1351,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
               {/* Totale calcolato + override manuale */}
               <div className="p-3 bg-theme-bg-tertiary/50 rounded-lg flex justify-between items-center">
                 <span className="text-sm text-theme-text-muted">Totale servizi</span>
-                <span className="text-lg font-bold text-cyan-700 dark:text-cyan-300">EUR {getEditTotal().toFixed(2)}</span>
+                <span className="text-lg font-bold text-dr7-gold">EUR {getEditTotal().toFixed(2)}</span>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -1510,7 +1363,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Ora</label>
-                  <input type="time" lang="it-IT" value={editingBooking.appointment_time}
+                  <input type="time" value={editingBooking.appointment_time}
                     onChange={(e) => setEditingBooking({ ...editingBooking, appointment_time: e.target.value })}
                     className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary" />
                 </div>
@@ -1559,7 +1412,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                         onChange={(e) => setEditingBooking({ ...editingBooking, booking_details: { ...(editingBooking.booking_details || {}), amountPaid: Math.round(parseFloat(e.target.value || '0') * 100) } })}
                         placeholder="0.00"
                         className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm" />
-                      <p className="text-xs text-cyan-700 dark:text-cyan-300 mt-1">
+                      <p className="text-xs text-dr7-gold mt-1">
                         Rimanente: EUR {(((editingBooking.price_total || 0) - (editingBooking.booking_details?.amountPaid || 0)) / 100).toFixed(2)}
                       </p>
                     </div>
@@ -1641,7 +1494,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                     saveEditLockRef.current = false
                   }
                 }}
-                className="flex-1 bg-cyan-500 hover:bg-cyan-500/90 text-white px-6 py-3 rounded-full font-medium transition-colors"
+                className="flex-1 bg-dr7-gold hover:bg-dr7-gold/90 text-white px-6 py-3 rounded-full font-medium transition-colors"
               >
                 Salva Modifiche
               </button>
