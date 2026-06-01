@@ -2827,8 +2827,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         return
       }
 
-      // Send via WhatsApp
-      await fetch('/.netlify/functions/send-whatsapp-notification', {
+      // Send via WhatsApp. Verifichiamo la risposta — prima il fetch era
+      // fire-and-forget e il toast "inviato!" usciva sempre, anche quando
+      // il template Pro era mancante e WA veniva silently skipped.
+      const waRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2841,7 +2843,34 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           templateVars: { '{customer_name}': custName, '{booking_id}': bookingRef, '{total}': totalEur, '{payment_link}': newPaymentLink, '{expiry}': '1 ora' }
         })
       })
-      toast.success('Nuovo link di pagamento generato e inviato via WhatsApp!')
+      const waJson = await waRes.json().catch(() => ({} as { skipped?: boolean; reason?: string; message?: string }))
+      // 2026-06-01: fallback hardcoded se template Pro non configurato.
+      // Stesso pattern del blocco PayByLink in save flow. Garantisce che
+      // il cliente riceva SEMPRE il link, anche se l'admin non ha ancora
+      // popolato pro_richiesta_pagamento in Messaggi di Sistema Pro.
+      const skipped = (waJson as { skipped?: boolean; reason?: string }).skipped
+        && (waJson as { reason?: string }).reason === 'pro_template_unavailable'
+      if (skipped || !waRes.ok) {
+        logger.warn('[ResendPayByLink] Template Pro non disponibile — invio fallback hardcoded')
+        const firstName = (custName || 'Cliente').split(' ')[0] || 'Cliente'
+        const fallbackMsg = `Ciao ${firstName},\n\nLa tua prenotazione DR7 e' confermata. Per completarla, paga ${totalEur} € entro 1 ora a questo link:\n\n${newPaymentLink}\n\nRif. prenotazione: ${bookingRef}\n\nGrazie,\nDR7 Empire`
+        const fbRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customPhone: custPhone,
+            customMessage: fallbackMsg,
+            type: 'Link Pagamento (fallback)',
+          })
+        })
+        if (fbRes.ok) {
+          toast.success('Link inviato (fallback — configura "pro_richiesta_pagamento" in Messaggi di Sistema Pro)', { duration: 8000 })
+        } else {
+          toast.error('Errore invio link via WhatsApp (anche fallback fallito)', { duration: 8000 })
+        }
+      } else {
+        toast.success('Nuovo link di pagamento generato e inviato via WhatsApp!')
+      }
 
       // Refresh bookings list
       await loadData()
