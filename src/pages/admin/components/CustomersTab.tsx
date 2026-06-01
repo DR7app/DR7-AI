@@ -7,6 +7,7 @@ import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import ReportClienteModal from './ReportClienteModal'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 import { useClientStatus } from '../../../contexts/ClientStatusContext'
 
 interface Customer {
@@ -124,6 +125,8 @@ export default function CustomersTab() {
   const [uploadingId, setUploadingId] = useState(false)
   const [uploadingCodiceFiscale, setUploadingCodiceFiscale] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  // 2026-06-01: filtro periodo Da/A — su created_at del cliente.
+  const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
   const [showNewClientModal, setShowNewClientModal] = useState(false)
   const [viewingCustomerDetails, setViewingCustomerDetails] = useState<Customer | null>(null)
   const [reportCustomerId, setReportCustomerId] = useState<string | null>(null)
@@ -192,6 +195,17 @@ export default function CustomersTab() {
       return sortDir === 'asc' ? cmp : -cmp
     })
 
+    // 2026-06-01: filtro periodo Da/A su created_at (Europe/Rome)
+    if (dateRange.from || dateRange.to) {
+      result = result.filter((c) => {
+        if (!c.created_at) return false
+        const romeDay = new Date(c.created_at).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+        if (dateRange.from && romeDay < dateRange.from) return false
+        if (dateRange.to && romeDay > dateRange.to) return false
+        return true
+      })
+    }
+
     // 2. Apply search filter (split query into words so "Mario Rossi" matches "Mario Giuseppe Rossi")
     if (searchQuery) {
       const words = searchQuery.toLowerCase().split(/\s+/).filter(Boolean)
@@ -231,7 +245,7 @@ export default function CustomersTab() {
       })
     }
 
-  }, [allCustomers, searchQuery, currentPage, sortField, sortDir, walletBalances])
+  }, [allCustomers, searchQuery, dateRange, currentPage, sortField, sortDir, walletBalances])
 
   async function exportCustomersCSV() {
     setExporting(true)
@@ -2559,6 +2573,11 @@ export default function CustomersTab() {
               </svg>
             </button>
           )}
+        </div>
+
+        {/* 2026-06-01: filtro periodo Da/A su data registrazione cliente */}
+        <div className="mt-3">
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
         </div>
       </div>
 
