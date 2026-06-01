@@ -170,12 +170,16 @@ export default function PayrollPeriodoView() {
                 // una soglia giornaliera implicita (settimanali/5) per-giorno:
                 // per Salvatore (40h/sett, 6×8h=48h) dava 0 straord — sbagliato,
                 // la settimana supera 40h ⇒ 8h di straordinario.
-                const dailyCapMin = Math.round(
-                    (c?.ore_soglia_straordinario
-                        ?? c?.ore_target_giornaliere
-                        ?? op.ore_target_giornaliere
-                        ?? 8) * 60
-                )
+                // 2026-06-01: cap GIORNALIERO solo se esplicitamente configurato
+                // (soglia o ore_target_giornaliere). Se l'operatore ha SOLO il
+                // settimanale (Salvatore 40h/sett), niente cap 8h/giorno inventato:
+                // altrimenti un giorno >8h in una settimana ≤40h genererebbe
+                // straordinario inesistente. "Single field": vale solo la soglia
+                // impostata.
+                const dailyExplicit = c?.ore_soglia_straordinario ?? c?.ore_target_giornaliere
+                const dailyCapMin = (dailyExplicit != null && Number(dailyExplicit) > 0)
+                    ? Math.round(Number(dailyExplicit) * 60)
+                    : 0
                 const weeklyCapMin = (c?.ore_target_settimanali != null && c.ore_target_settimanali > 0)
                     ? Math.round(c.ore_target_settimanali * 60)
                     : 0

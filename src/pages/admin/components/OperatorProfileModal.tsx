@@ -1180,12 +1180,17 @@ function CalcolaPagaSection({
         //   - soglia settimanale = ore_target_settimanali (se impostata).
         // Se l'admin imposta SOLO il settimanale (caso Salvatore), il giornaliero
         // usa il default 8h; se imposta solo il giornaliero, niente cap settimanale.
-        const dailyCapMin = Math.round(
-            (contract?.ore_soglia_straordinario
-                ?? contract?.ore_target_giornaliere
-                ?? oreTargetGiornaliere
-                ?? 8) * 60
-        )
+        // 2026-06-01: il cap GIORNALIERO vale SOLO se l'admin l'ha configurato
+        // esplicitamente (soglia straordinario o ore_target_giornaliere). Se
+        // l'operatore ha SOLO il target settimanale (caso Salvatore: 40h/sett,
+        // giornaliero e soglia VUOTI), NON inventiamo un cap di 8h/giorno —
+        // altrimenti un giorno >8h dentro una settimana ≤40h genererebbe
+        // straordinario inesistente (over-conteggio). Regola "single field":
+        // si applica solo la soglia che hai impostato.
+        const dailyExplicit = contract?.ore_soglia_straordinario ?? contract?.ore_target_giornaliere
+        const dailyCapMin = (dailyExplicit != null && Number(dailyExplicit) > 0)
+            ? Math.round(Number(dailyExplicit) * 60)
+            : 0
         const weeklyCapMin = (contract?.ore_target_settimanali != null && contract.ore_target_settimanali > 0)
             ? Math.round(contract.ore_target_settimanali * 60)
             : 0
