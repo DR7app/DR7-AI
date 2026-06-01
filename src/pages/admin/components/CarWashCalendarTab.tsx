@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../../../supabaseClient'
 import { FinancialData } from '../../../components/FinancialData'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
@@ -154,6 +155,8 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [searchQuery, setSearchQuery] = useState('')
+  // 2026-06-01: filtro periodo Da/A su appointment_date.
+  const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
   const [selectedBooking, setSelectedBooking] = useState<CarWashBooking | null>(null)
   // 2026-05-29: stato per il pulsante "Auto Pronta" nel dettaglio booking.
   // Disabilita finche' WhatsApp + update DB sono in flight, ed evita doppio
@@ -527,16 +530,27 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       })
   }, [bookings])
 
-  // Filter by search query
+  // Filter by search query + date range
   const filteredEvents = useMemo(() => {
-    if (!searchQuery.trim()) return calendarEvents
+    let list = calendarEvents
+    // 2026-06-01: filtro periodo Da/A su appointment_date
+    if (dateRange.from || dateRange.to) {
+      list = list.filter(evt => {
+        const d = String(evt.booking.appointment_date || '').slice(0, 10)
+        if (!d) return false
+        if (dateRange.from && d < dateRange.from) return false
+        if (dateRange.to && d > dateRange.to) return false
+        return true
+      })
+    }
+    if (!searchQuery.trim()) return list
     const q = searchQuery.toLowerCase()
-    return calendarEvents.filter(evt => {
+    return list.filter(evt => {
       const customerName = evt.booking.customer_name || evt.booking.booking_details?.customer?.fullName || ''
       return customerName.toLowerCase().includes(q) ||
         evt.booking.service_name.toLowerCase().includes(q)
     })
-  }, [calendarEvents, searchQuery])
+  }, [calendarEvents, searchQuery, dateRange])
 
   // Group events by day for lane assignment
   const eventsByDay = useMemo(() => {
@@ -835,6 +849,11 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
             onChange={e => setSearchQuery(e.target.value)}
           />
         </div>
+      </div>
+
+      {/* 2026-06-01: filtro periodo Da/A su appointment_date */}
+      <div className="px-3 sm:px-4 py-2 bg-theme-bg-primary/20 backdrop-blur-md border-b border-theme-border/30">
+        <DateRangeFilter value={dateRange} onChange={setDateRange} compact />
       </div>
 
       {/* Compact legend — same colour codes used by the booking cards in the
