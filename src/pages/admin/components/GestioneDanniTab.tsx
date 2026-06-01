@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 
 // ── Keyword classification (mirrors report-danni.ts) ──────────────────────────
 const DANNI_KEYWORDS = [
@@ -97,6 +98,9 @@ export default function GestioneDanniTab() {
   const [error, setError] = useState('')
   const [customers, setCustomers] = useState<CustomerGroup[]>([])
   const [search, setSearch] = useState('')
+  // 2026-06-01: filtro periodo Da/A — mostra solo clienti con almeno
+  // un item (penale/danno) nella finestra selezionata.
+  const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
 
   // Modal state
   const [editModal, setEditModal] = useState<{
@@ -370,13 +374,28 @@ export default function GestioneDanniTab() {
 
   // ── Filtered list ──────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
-    if (!search.trim()) return customers
+    let list = customers
+    // 2026-06-01: filtro periodo — mostra cliente se ALMENO un item
+    // (penali o danni) ha una data in range.
+    if (dateRange.from || dateRange.to) {
+      list = list.filter(c => {
+        const allItems = [...(c.penaliItems || []), ...(c.danniItems || [])]
+        return allItems.some(it => {
+          const d = String(it.date || '').slice(0, 10)
+          if (!d) return false
+          if (dateRange.from && d < dateRange.from) return false
+          if (dateRange.to && d > dateRange.to) return false
+          return true
+        })
+      })
+    }
+    if (!search.trim()) return list
     const q = search.trim().toLowerCase()
-    return customers.filter(c =>
+    return list.filter(c =>
       c.customerName.toLowerCase().includes(q) ||
       c.customerEmail.toLowerCase().includes(q)
     )
-  }, [customers, search])
+  }, [customers, search, dateRange])
 
   // ── Grand totals ───────────────────────────────────────────────────────────
   const grandPenali = customers.reduce((s, c) => s + c.penaliTotal, 0)
@@ -807,6 +826,9 @@ export default function GestioneDanniTab() {
               className="w-full pl-10 pr-4 py-3 bg-theme-bg-secondary border border-theme-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all text-sm"
             />
           </div>
+
+          {/* 2026-06-01: filtro periodo Da/A su date item (penali/danni) */}
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
 
           {/* Desktop table */}
           <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border overflow-hidden">
