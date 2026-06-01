@@ -5,6 +5,7 @@ import CassaCauzioneModal from './CassaCauzioneModal'
 import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 
 interface Cauzione {
     id: string
@@ -39,6 +40,8 @@ export default function CauzioniTab() {
     const [showModal, setShowModal] = useState(false)
     const [selectedCauzione, setSelectedCauzione] = useState<Cauzione | null>(null)
     const [searchTerm, setSearchTerm] = useState('')
+    // 2026-06-01: filtro periodo Da/A — created_at della cauzione.
+    const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
     const [filterMetodo, setFilterMetodo] = useState<string>('all')
     const [showStorico, setShowStorico] = useState(false)
     const [cassaCauzione, setCassaCauzione] = useState<Cauzione | null>(null)
@@ -285,7 +288,17 @@ export default function CauzioniTab() {
     // --- Section Filters ---
     const visibleCauzioni = cauzioni.filter(c => c.stato !== 'Restituita' && c.stato !== 'Sbloccata' && c.stato !== 'Bloccata' && c.stato !== 'Danno')
 
+    // 2026-06-01: helper periodo Da/A su created_at (UTC → YYYY-MM-DD Rome).
+    const passesDateRange = (c: Cauzione): boolean => {
+        if (!dateRange.from && !dateRange.to) return true
+        if (!c.created_at) return true
+        const romeDay = new Date(c.created_at).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+        if (dateRange.from && romeDay < dateRange.from) return false
+        if (dateRange.to && romeDay > dateRange.to) return false
+        return true
+    }
     const applySearch = (list: Cauzione[]) => list.filter(c => {
+        if (!passesDateRange(c)) return false
         const matchesSearch = searchTerm === '' ||
             c.cliente_nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             c.veicolo_modello?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1042,6 +1055,10 @@ export default function CauzioniTab() {
                         <option value="bonifico">Bonifico</option>
                         <option value="carta">Carta</option>
                     </select>
+                </div>
+                {/* 2026-06-01: filtro periodo Da/A su created_at */}
+                <div className="mt-3">
+                    <DateRangeFilter value={dateRange} onChange={setDateRange} />
                 </div>
             </div>
 

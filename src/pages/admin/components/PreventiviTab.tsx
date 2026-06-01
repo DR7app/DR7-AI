@@ -20,6 +20,7 @@ import CustomerAutocomplete from './CustomerAutocomplete'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import { isOtpRequired } from '../../../utils/otpConfigCache'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { classifyDriverTier, calculateAge, calculateLicenseYears } from '../../../utils/tierClassification'
 import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
@@ -470,6 +471,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   // Filtro per data esatta di creazione (YYYY-MM-DD, Europe/Rome).
   // Vuoto = nessun filtro per data.
   const [dateFilter, setDateFilter] = useState<string>('')
+  // 2026-06-01: filtro periodo Da/A — sostituisce/affianca dateFilter (singolo).
+  // Quando entrambi sono settati, il range vince (piu' espressivo).
+  const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
   // Modal "Rifiutato" — stato isolato dentro PreventivoRejectModal e aperto
   // tramite CustomEvent su window, così aprirlo NON ri-renderizza l'intera
   // lista preventivi (era il motivo dei 15 sec di apertura).
@@ -3075,6 +3079,17 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         return romeDay === dateFilter
       })
     }
+    // 2026-06-01: filtro periodo Da/A (inclusivo) — confronta created_at
+    // convertito a Europe/Rome con il range scelto. Coexiste con dateFilter.
+    if (dateRange.from || dateRange.to) {
+      list = list.filter(p => {
+        if (!p.created_at) return false
+        const romeDay = new Date(p.created_at).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+        if (dateRange.from && romeDay < dateRange.from) return false
+        if (dateRange.to && romeDay > dateRange.to) return false
+        return true
+      })
+    }
     // Search multi-token: nome cliente, telefono, modello veicolo,
     // marca/categoria, targa, motivo, sconto note. Tokenizza per spazi
     // e richiede CHE OGNI TOKEN compaia in almeno un campo (AND fra i
@@ -3110,7 +3125,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       }
       return sortDir === 'asc' ? va - vb : vb - va
     })
-  }, [preventivi, statusFilter, searchQuery, dateFilter, sortField, sortDir]
+  }, [preventivi, statusFilter, searchQuery, dateFilter, dateRange, sortField, sortDir]
   )
 
   // ─── RENDER ─────────────────────────────────────────────────────────────
@@ -3171,6 +3186,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
               </button>
             )}
           </div>
+        </div>
+        {/* 2026-06-01: filtro periodo Da/A — created_at in Europe/Rome */}
+        <div className="mb-4">
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
         </div>
         {/* Subtab Switch — nascosto per collaboratori (hanno solo
             `reservations-preventivi`) e quando admin ha spuntato
