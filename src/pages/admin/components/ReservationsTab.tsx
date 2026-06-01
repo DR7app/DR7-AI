@@ -1390,6 +1390,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
               if (maxTotal != null && afterRevenueNoExp > maxTotal) afterRevenueNoExp = maxTotal
               if (minTotal != null && afterRevenueNoExp < minTotal) afterRevenueNoExp = minTotal
+              // 2026-06-01: arrotonda la tariffa coeff-applicata PER GIORNO ai
+              // centesimi, come revenuePricingEngine (finalDailyRate). Arrotondare
+              // solo il totale faceva perdere 1 cent (es. 624,9975/g → 1249,99
+              // invece di 1250,00), poi amplificato dal +20% Contanti → 1499,99.
+              {
+                const _rd = data.rentalDays || 1
+                afterRevenueNoExp = (Math.round((afterRevenueNoExp / _rd) * 100) / 100) * _rd
+              }
               // 2026-05-27: experience + deliveryFees ora dentro extrasAtList/inCoeff
               // via sExp/sDel. Non aggiungerli di nuovo qui (double-count bug).
               const subtotal = Math.round((afterRevenueNoExp + extrasAtList) * 100) / 100
@@ -1550,6 +1558,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       let afterRevenueNoExp = listSubtotalNoExp * combinedCoeff
       if (maxTotal != null && afterRevenueNoExp > maxTotal) afterRevenueNoExp = maxTotal
       if (minTotal != null && afterRevenueNoExp < minTotal) afterRevenueNoExp = minTotal
+      // 2026-06-01: arrotonda la tariffa coeff-applicata PER GIORNO ai centesimi
+      // (vedi nota path auto_apply). Evita la perdita di 1 cent amplificata dal
+      // +20% Contanti (1249,99 → 1500,00 invece di 1499,99).
+      {
+        const _rd = revenueSuggestion.rentalDays || 1
+        afterRevenueNoExp = (Math.round((afterRevenueNoExp / _rd) * 100) / 100) * _rd
+      }
       // 2026-05-27: experience + deliveryFees ora in extrasAtList/InCoeff via sExp/sDel.
       const subtotal = Math.round((afterRevenueNoExp + extrasAtList) * 100) / 100
       const newTotal = formData.payment_method === 'Contanti' ? subtotal * 1.20 : subtotal
