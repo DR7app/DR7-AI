@@ -8915,8 +8915,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   }}
                   options={(() => {
                     const opts = paymentMethods.map(pm => ({ value: pm.label, label: pm.label }))
-                    // Keep legacy value visible if it's not in the curated list
-                    if (formData.payment_method && !opts.some(o => o.value === formData.payment_method)) {
+                    // 2026-06-01: dedup case/punctuation-insensitive. Prima
+                    // un booking salvato come "Nexi Pay by Link" e una opzione
+                    // curated "Nexi - Pay by Link" generavano DUE voci nel
+                    // dropdown ("Nexi - Pay by Link" + "Nexi Pay by Link").
+                    // Adesso confrontiamo le stringhe normalizzate (lowercase,
+                    // niente spazi/punteggiatura) prima di aggiungere il legacy.
+                    const norm = (s: string) => (s || '').toString().toLowerCase().replace(/[\s\-_]+/g, ' ').trim()
+                    if (formData.payment_method && !opts.some(o => norm(o.value) === norm(formData.payment_method))) {
                       opts.push({ value: formData.payment_method, label: formData.payment_method })
                     }
                     return opts
