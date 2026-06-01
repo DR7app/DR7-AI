@@ -7,6 +7,7 @@ import { buildBookingContext } from '../../../utils/adminLogHelpers'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -138,6 +139,9 @@ export default function UnpaidBookingsTab() {
   const [loading, setLoading] = useState(true)
   const [filterService, setFilterService] = useState<'all' | 'rental' | 'prime_wash'>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  // 2026-06-01: filtro periodo Da/A — su pickup_date dei booking
+  // associati al cliente. Cliente passa se ha almeno un booking nel range.
+  const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
   const [partialPayItemKey, setPartialPayItemKey] = useState<string | null>(null)
   const [partialPayValue, setPartialPayValue] = useState('')
   const [editAmountKey, setEditAmountKey] = useState<string | null>(null)
@@ -2227,6 +2231,21 @@ export default function UnpaidBookingsTab() {
       )
     }
 
+    // 2026-06-01: filtro periodo — cliente passa se almeno un booking
+    // (rental o prime_wash) ha pickup_date nel range.
+    if (dateRange.from || dateRange.to) {
+      groups = groups.filter(g => {
+        const allBks = [...(g.rentalBookings || []), ...(g.primeWashBookings || [])]
+        return allBks.some(bk => {
+          const d = String((bk as { pickup_date?: string }).pickup_date || '').slice(0, 10)
+          if (!d) return false
+          if (dateRange.from && d < dateRange.from) return false
+          if (dateRange.to && d > dateRange.to) return false
+          return true
+        })
+      })
+    }
+
     // Sort
     groups.sort((a, b) => {
       if (sortBy === 'amount') {
@@ -2239,7 +2258,7 @@ export default function UnpaidBookingsTab() {
 
     return groups
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookings, fatturaItemsMap, mitChargedMap, filterService, searchQuery, sortBy, sortDir])
+  }, [bookings, fatturaItemsMap, mitChargedMap, filterService, searchQuery, dateRange, sortBy, sortDir])
 
   // ── Stats ──────────────────────────────────────────────────────────────────
 
@@ -3253,6 +3272,10 @@ export default function UnpaidBookingsTab() {
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3 lg:gap-3">
           {/* Search */}
           <div className="relative flex-1 lg:max-w-md">
+            {/* 2026-06-01: filtro periodo Da/A (sopra la search bar) */}
+            <div className="mb-2">
+              <DateRangeFilter value={dateRange} onChange={setDateRange} />
+            </div>
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>

@@ -4,6 +4,7 @@ import { formatRomeDate } from '../../../utils/timezoneUtils'
 import { formatEUR } from '../../../utils/moneyUtils'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 
 interface PendingAddebito {
     id: string
@@ -87,6 +88,17 @@ export default function NexiTab() {
     // Date range filter — applied to the tokenized card's updated_at
     // (= when the card was last tokenized/refreshed).
     const [dateFilter, setDateFilter] = useState<'' | '7d' | '30d' | '90d' | 'year'>('')
+    // 2026-06-01: filtro periodo Da/A — su created_at/updated_at.
+    // Coexiste con il preset dateFilter (entrambi applicati).
+    const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
+    const matchesDateRange = (iso: string | null | undefined): boolean => {
+        if (!dateRange.from && !dateRange.to) return true
+        if (!iso) return true
+        const day = new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+        if (dateRange.from && day < dateRange.from) return false
+        if (dateRange.to && day > dateRange.to) return false
+        return true
+    }
     const filterMatches = (haystacks: (string | null | undefined)[], needle: string) => {
         const q = needle.trim().toLowerCase()
         if (!q) return true
@@ -114,6 +126,7 @@ export default function NexiTab() {
         filterMatches([c.full_name, c.email, c.phone, c.masked_pan, c.contract_id], search)
         && matchesCardType(c.card_type)
         && matchesDate(c.updated_at)
+        && matchesDateRange(c.updated_at)
     )
     const filteredTransactions = transactions.filter(tx =>
         filterMatches(
@@ -121,6 +134,7 @@ export default function NexiTab() {
             search,
         )
         && matchesDate(tx.created_at)
+        && matchesDateRange(tx.created_at)
     )
 
     async function runBackfill() {
@@ -951,6 +965,9 @@ export default function NexiTab() {
                         <option value="90d">Ultimi 90 giorni</option>
                         <option value="year">Ultimo anno</option>
                     </select>
+                    {/* 2026-06-01: periodo Da/A custom (DD/MM/YYYY) accanto al preset */}
+                    <DateRangeFilter value={dateRange} onChange={setDateRange} showPresets={false} compact />
+
                     <button
                         onClick={openPreauthLinkModal}
                         className="px-3 py-2 text-sm rounded-lg bg-dr7-gold text-black hover:bg-dr7-gold/85 font-semibold transition-colors"
