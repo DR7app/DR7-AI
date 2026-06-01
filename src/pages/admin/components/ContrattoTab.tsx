@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 
 interface Contract {
   id: string
@@ -141,6 +142,8 @@ export default function ContrattoTab() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  // 2026-06-01: filtro periodo Da/A — su created_at del contratto.
+  const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
 
   // Master contract template — Supabase Storage bucket 'templates' /
   // file 'master_contract.pdf'. Generate-contract.ts lo scarica con
@@ -943,8 +946,8 @@ export default function ContrattoTab() {
         </div>
       </details>
 
-      {/* Search Bar */}
-      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border">
+      {/* Search Bar + Period Filter */}
+      <div className="bg-theme-bg-secondary rounded-lg p-4 border border-theme-border space-y-3">
         <input
           type="text"
           placeholder="Cerca cliente..."
@@ -952,6 +955,8 @@ export default function ContrattoTab() {
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-4 py-2 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold transition-colors"
         />
+        {/* 2026-06-01: filtro periodo su created_at del contratto */}
+        <DateRangeFilter value={dateRange} onChange={setDateRange} />
       </div>
 
       {/* Contracts List */}
@@ -968,6 +973,13 @@ export default function ContrattoTab() {
       ) : (
         <div className="grid grid-cols-1 gap-4">
           {contracts.filter(contract => {
+            // 2026-06-01: filtro periodo Da/A su created_at (Europe/Rome)
+            if (dateRange.from || dateRange.to) {
+              if (!contract.created_at) return false
+              const day = new Date(contract.created_at).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+              if (dateRange.from && day < dateRange.from) return false
+              if (dateRange.to && day > dateRange.to) return false
+            }
             if (!searchQuery) return true
             const query = searchQuery.toLowerCase()
             return (
