@@ -84,6 +84,7 @@ import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import { decodificaCodiceFiscale } from '../../../utils/codiceFiscale'
 import CalcolaCFButton from '../../../components/CalcolaCFButton'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 import {
   classifyDriverTier,
   calculateAge,
@@ -1863,6 +1864,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   })
 
   const [bookingSearchQuery, setBookingSearchQuery] = useState('')
+  // 2026-06-01: filtro periodo (Da / A) condiviso con tutte le tab admin.
+  // Filtra per pickup_date — il campo "quando inizia il noleggio".
+  const [bookingDateRange, setBookingDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
+  // Helper: ritorna true se la prenotazione cade nel range (inclusive).
+  // Confronta su pickup_date in formato YYYY-MM-DD (timezone-agnostic).
+  const bookingPassesDate = (b: Booking): boolean => {
+    if (!bookingDateRange.from && !bookingDateRange.to) return true
+    const pickup = String(b.pickup_date || '').slice(0, 10) // YYYY-MM-DD
+    if (!pickup) return true // niente data → non filtrare via
+    if (bookingDateRange.from && pickup < bookingDateRange.from) return false
+    if (bookingDateRange.to && pickup > bookingDateRange.to) return false
+    return true
+  }
 
   // Quick Edit Customer Modal State
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -7228,6 +7242,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           />
         </div>
 
+        {/* 2026-06-01: filtro periodo per pickup_date — DD/MM/YYYY a DD/MM/YYYY */}
+        <div className="mb-4">
+          <DateRangeFilter value={bookingDateRange} onChange={setBookingDateRange} />
+        </div>
+
         {/* Quick Edit Customer Modal */}
         <NewClientModal
           isOpen={editModalOpen}
@@ -9657,6 +9676,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         {/* Mobile Card View */}
         <div className="lg:hidden space-y-3">
           {bookings.filter(booking => {
+            // 2026-06-01: filtro periodo prima della ricerca testuale.
+            if (!bookingPassesDate(booking)) return false
             // Search filter
             if (!bookingSearchQuery) return true
             const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
@@ -9691,6 +9712,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
           {/* Display bookings as cards on mobile */}
           {bookings.filter(booking => {
+            // 2026-06-01: filtro periodo prima della ricerca testuale.
+            if (!bookingPassesDate(booking)) return false
             // Search filter
             if (!bookingSearchQuery) return true
             const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
@@ -9882,6 +9905,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               <tbody>
                 {/* Display bookings from bookings table (single source of truth) */}
                 {bookings.filter(booking => {
+                  // 2026-06-01: filtro periodo prima della ricerca testuale.
+                  if (!bookingPassesDate(booking)) return false
                   // Search filter
                   if (!bookingSearchQuery) return true
                   const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
@@ -10074,6 +10099,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 })}
 
                 {bookings.filter(booking => {
+                  // 2026-06-01: filtro periodo prima della ricerca testuale.
+                  if (!bookingPassesDate(booking)) return false
                   // Search filter
                   if (!bookingSearchQuery) return true
                   const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
