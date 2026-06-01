@@ -163,25 +163,40 @@ export default function PayrollPeriodoView() {
                 })()
                 const oraria = oraExplicit > 0 ? oraExplicit : orariaDerived
                 const straord = Number(c?.paga_straordinario_eur || 0)
-                // 2026-05-22: soglia straordinari = priorita'
-                // 1) ore_soglia_straordinario esplicito sul contratto
-                // 2) ore_target_giornaliere del contratto
-                // 3) ore_target_settimanali / 5 (giorni lavorativi)
-                // 4) ore_target_mensili / 22
-                // 5) legacy op.ore_target_giornaliere
-                // 6) fallback 8h
-                const effectiveDailyHours = (() => {
-                    if (c?.ore_soglia_straordinario != null && c.ore_soglia_straordinario > 0) return c.ore_soglia_straordinario
-                    if (c?.ore_target_giornaliere != null && c.ore_target_giornaliere > 0) return c.ore_target_giornaliere
-                    if (c?.ore_target_settimanali != null && c.ore_target_settimanali > 0) return c.ore_target_settimanali / 5
-                    if (c?.ore_target_mensili != null && c.ore_target_mensili > 0) return c.ore_target_mensili / 22
-                    return op.ore_target_giornaliere || 8
-                })()
-                const sogliaMin = Math.round(effectiveDailyHours * 60)
+                // 2026-06-01: STRAORDINARIO = supera la soglia GIORNALIERA (8h)
+                // OPPURE la SETTIMANALE (40h) — qualunque venga superata, senza
+                // doppio conteggio. Stesso calcolo del CalcolaPagaSection del
+                // profilo operatore (devono coincidere). Prima qui si usava SOLO
+                // una soglia giornaliera implicita (settimanali/5) per-giorno:
+                // per Salvatore (40h/sett, 6×8h=48h) dava 0 straord — sbagliato,
+                // la settimana supera 40h ⇒ 8h di straordinario.
+                const dailyCapMin = Math.round(
+                    (c?.ore_soglia_straordinario
+                        ?? c?.ore_target_giornaliere
+                        ?? op.ore_target_giornaliere
+                        ?? 8) * 60
+                )
+                const weeklyCapMin = (c?.ore_target_settimanali != null && c.ore_target_settimanali > 0)
+                    ? Math.round(c.ore_target_settimanali * 60)
+                    : 0
+                const sogliaMin = weeklyCapMin > 0 ? weeklyCapMin : dailyCapMin
                 const straordEnabled = c?.straordinario_abilitato !== false && straord > 0 && sogliaMin > 0
 
+                // ISO week key (YYYY-Www) — raggruppa giorni nella stessa settimana
+                const isoWeekKey = (dateStr: string): string => {
+                    const d = new Date(dateStr + 'T12:00:00Z')
+                    const day = d.getUTCDay() || 7
+                    d.setUTCDate(d.getUTCDate() + 4 - day)
+                    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+                    const weekNum = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+                    return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`
+                }
+
                 if (dayMap) {
-                    dayMap.forEach(t => {
+                    // 1) minuti per giorno + straord giornaliero, raggruppati per settimana
+                    const weekTotal = new Map<string, number>()
+                    const weekDailyOT = new Map<string, number>()
+                    dayMap.forEach((t, dataKey) => {
                         if (!t.entrata) return
                         const end = t.uscita ? new Date(t.uscita).getTime() : new Date(t.entrata).getTime()
                         let m = Math.max(0, Math.round((end - new Date(t.entrata).getTime()) / 60000))
@@ -192,13 +207,24 @@ export default function PayrollPeriodoView() {
                         }
                         m = Math.max(0, m)
                         totalMinLav += m
-                        if (straordEnabled && m > sogliaMin) {
-                            minOrdinari += sogliaMin
-                            minStraord += m - sogliaMin
-                        } else {
-                            minOrdinari += m
+                        if (m <= 0) return
+                        const wk = isoWeekKey(dataKey)
+                        weekTotal.set(wk, (weekTotal.get(wk) || 0) + m)
+                        if (straordEnabled && dailyCapMin > 0 && m > dailyCapMin) {
+                            const dayOT = m - dailyCapMin
+                            weekDailyOT.set(wk, (weekDailyOT.get(wk) || 0) + dayOT)
+                            minStraord += dayOT
                         }
                     })
+                    // 2) straord settimanale residuo (oltre 40h, tolto il daily-OT)
+                    if (straordEnabled && weeklyCapMin > 0) {
+                        for (const [wk, total] of weekTotal) {
+                            const overWeek = total > weeklyCapMin ? total - weeklyCapMin : 0
+                            const alreadyDaily = weekDailyOT.get(wk) || 0
+                            minStraord += Math.max(0, overWeek - alreadyDaily)
+                        }
+                    }
+                    minOrdinari = Math.max(0, totalMinLav - minStraord)
                 }
 
                 const pagaOrd = (minOrdinari / 60) * oraria
