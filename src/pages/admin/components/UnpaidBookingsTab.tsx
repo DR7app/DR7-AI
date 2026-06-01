@@ -2235,7 +2235,7 @@ export default function UnpaidBookingsTab() {
     // (rental o prime_wash) ha pickup_date nel range.
     if (dateRange.from || dateRange.to) {
       groups = groups.filter(g => {
-        const allBks = [...(g.rentalBookings || []), ...(g.primeWashBookings || [])]
+        const allBks = [...(g.noleggioBookings || []), ...(g.primeWashBookings || [])]
         return allBks.some(bk => {
           const d = String((bk as { pickup_date?: string }).pickup_date || '').slice(0, 10)
           if (!d) return false
