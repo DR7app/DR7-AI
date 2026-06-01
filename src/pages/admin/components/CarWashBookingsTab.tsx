@@ -6,6 +6,7 @@ import NewClientModal from './NewClientModal'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import toast from 'react-hot-toast'
 import { logAdminAction } from '../../../utils/logAdminAction'
@@ -325,6 +326,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   })
 
   const [bookingSearchQuery, setBookingSearchQuery] = useState('')
+  // 2026-06-01: filtro periodo Da/A — filtra per appointment_date.
+  const [bookingDateRange, setBookingDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
+  const bookingPassesDate = (b: { appointment_date?: string | null }): boolean => {
+    if (!bookingDateRange.from && !bookingDateRange.to) return true
+    const d = String(b.appointment_date || '').slice(0, 10)
+    if (!d) return true
+    if (bookingDateRange.from && d < bookingDateRange.from) return false
+    if (bookingDateRange.to && d > bookingDateRange.to) return false
+    return true
+  }
 
   // Manual price override
   const [manualPrice, setManualPrice] = useState<string | null>(null)
@@ -2762,7 +2773,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       {/* Search Bar — nascosta durante la creazione di una nuova prenotazione
           (serve solo per cercare nello storico delle prenotazioni esistenti). */}
       {!showForm && (
-        <div className="mb-4">
+        <div className="mb-4 space-y-3">
           <input
             type="text"
             placeholder="Cerca per codice, nome, email, telefono, targa o veicolo..."
@@ -2770,6 +2781,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             onChange={(e) => setBookingSearchQuery(e.target.value)}
             className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold"
           />
+          {/* 2026-06-01: filtro periodo per appointment_date */}
+          <DateRangeFilter value={bookingDateRange} onChange={setBookingDateRange} />
         </div>
       )}
 
@@ -4518,6 +4531,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </thead>
                 <tbody>
                   {bookings.filter(booking => {
+                    if (!bookingPassesDate(booking)) return false
                     if (!bookingSearchQuery) return true
                     const norm = (s: string) => s.replace(/[\s\-\+\(\)]/g, '')
                     const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean).map(norm)
@@ -4664,6 +4678,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             {/* Mobile cards — Apple style */}
             <div className="lg:hidden space-y-3">
               {bookings.filter(booking => {
+                if (!bookingPassesDate(booking)) return false
                 if (!bookingSearchQuery) return true
                 const norm = (s: string) => s.replace(/[\s\-\+\(\)]/g, '')
                 const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean).map(norm)

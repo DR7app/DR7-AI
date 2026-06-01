@@ -7,6 +7,7 @@ import { buildMechanicalContext } from '../../../utils/adminLogHelpers'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
+import DateRangeFilter from '../../../components/DateRangeFilter'
 
 interface Customer {
   id: string
@@ -242,6 +243,16 @@ export default function MechanicalBookingTab() {
 
   // State for search query
   const [bookingSearchQuery, setBookingSearchQuery] = useState('')
+  // 2026-06-01: filtro periodo Da/A — filtra per appointment_date.
+  const [bookingDateRange, setBookingDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
+  const bookingPassesDate = (b: { appointment_date?: string | null }): boolean => {
+    if (!bookingDateRange.from && !bookingDateRange.to) return true
+    const d = String(b.appointment_date || '').slice(0, 10)
+    if (!d) return true
+    if (bookingDateRange.from && d < bookingDateRange.from) return false
+    if (bookingDateRange.to && d > bookingDateRange.to) return false
+    return true
+  }
 
   if (loading) {
     return (
@@ -264,8 +275,8 @@ export default function MechanicalBookingTab() {
         </button>
       </div>
 
-      {/* Search Bar */}
-      <div className="mb-4">
+      {/* Search Bar + Period Filter */}
+      <div className="mb-4 space-y-3">
         <input
           type="text"
           placeholder="Cerca per codice, nome, email, telefono, targa o veicolo..."
@@ -273,6 +284,8 @@ export default function MechanicalBookingTab() {
           onChange={(e) => setBookingSearchQuery(e.target.value)}
           className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold"
         />
+        {/* 2026-06-01: filtro periodo per appointment_date */}
+        <DateRangeFilter value={bookingDateRange} onChange={setBookingDateRange} />
       </div>
 
 
@@ -326,7 +339,8 @@ export default function MechanicalBookingTab() {
           </thead>
           <tbody>
             {bookings.filter(booking => {
-
+              // 2026-06-01: filtro periodo Da/A prima della ricerca testuale.
+              if (!bookingPassesDate(booking)) return false
               // Search filter — normalise BOTH the query AND the haystack the
               // same way (strip spaces, hyphens, plus, parentheses) so users
               // typing "DR7-2A37CACB" match the stored "dr72a37cacb" form.
