@@ -150,6 +150,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     customer_name: string | null
     appointment_time: string | null
     service_name: string | null
+    duration_minutes: number | null
   }[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -661,7 +662,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     ;(async () => {
       const { data, error } = await supabase
         .from('bookings')
-        .select('id, customer_name, appointment_time, service_name')
+        .select('id, customer_name, appointment_time, service_name, duration_minutes')
         .eq('service_type', 'car_wash')
         .not('status', 'in', '(cancelled,annullata,expired,completed,completata)')
         .gte('appointment_date', formData.appointment_date)
@@ -4165,8 +4166,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       const conflict = busyBookingsOnDate.find(b => {
                         const bookingTime = b.appointment_time
                         if (!bookingTime) return false
-                        const existingSvc = carWashServices.find(s => s.name === b.service_name)
-                        const existingDuration = existingSvc?.durationMinutes || 60
+                        // 2026-06-02: usa la durata SALVATA sulla prenotazione
+                        // (snapshot al momento della creazione). Prima derivavamo
+                        // la durata dal catalogo CORRENTE via service_name —
+                        // quindi un cambio di durata in Catalogo Prime Wash
+                        // ricalcolava retroattivamente il blocco di ogni
+                        // prenotazione passata, e bookings senza match nel
+                        // catalogo cadevano sul fallback 60 min.
+                        const existingDuration = b.duration_minutes
+                          ?? (carWashServices.find(s => s.name === b.service_name)?.durationMinutes)
+                          ?? 60
                         return checkTimeOverlap(newTime, newDuration, bookingTime, existingDuration as number)
                       })
                       if (!conflict) { setFormData({ ...formData, appointment_time: newTime }); return }
@@ -4217,9 +4226,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         for (const b of busyBookingsOnDate) {
                           const bookingTime = b.appointment_time
                           if (!bookingTime) continue
-                          const existingSvc = carWashServices.find(s => s.name === b.service_name)
-                          const existingDuration = existingSvc?.durationMinutes || 60
-                          if (checkTimeOverlap(slotTime, newDuration, bookingTime, existingDuration)) {
+                          // 2026-06-02: durata SALVATA sulla prenotazione
+                          // (snapshot al momento della creazione), non
+                          // dedotta dal catalogo corrente.
+                          const existingDuration = b.duration_minutes
+                            ?? (carWashServices.find(s => s.name === b.service_name)?.durationMinutes)
+                            ?? 60
+                          if (checkTimeOverlap(slotTime, newDuration, bookingTime, existingDuration as number)) {
                             return { busy: true, who: b.customer_name || 'altro cliente' }
                           }
                         }
