@@ -512,6 +512,11 @@ export default function CargosTab() {
             const rentalBookings = (rawBookings || []).filter((b: any) => {
                 if (b.service_type && b.service_type !== '' && b.service_type !== 'car_rental') return false
                 if ((b.vehicle_name || '').toLowerCase().includes('hummer')) return false
+                // 2026-06-02: NON mostrare nella lista "da inviare" quelle già
+                // trasmesse alla Polizia di Stato — altrimenti il conteggio non
+                // cala mai e, peggio, ri-selezionandole si rischia un invio
+                // DUPLICATO. (cargos_sent viene messo a true solo su invio riuscito.)
+                if (b.booking_details?.cargos_sent === true) return false
                 return true
             })
 
@@ -726,9 +731,11 @@ export default function CargosTab() {
                 })
             }
 
-            // Mark + persist the successful ones.
+            // Persist + REMOVE the successful ones from the "to send" list so
+            // the counter actually drops (e.g. 350 → 250 → …) and they can't be
+            // re-sent (duplicate). Failed/skipped ones stay (red) for fixing.
             if (sentOk.length > 0) {
-                setBookings(prev => prev.map(pb => sentOk.some(s => s.b.id === pb.id) ? { ...pb, cargosStatus: 'sent' as const } : pb))
+                const sentIds = new Set(sentOk.map(s => s.b.id))
                 for (const it of sentOk) {
                     try {
                         await supabase
@@ -745,6 +752,12 @@ export default function CargosTab() {
                         console.error('[CARGOS] Failed to persist cargos_sent for', it.b.id, e)
                     }
                 }
+                setBookings(prev => prev.filter(pb => !sentIds.has(pb.id)))
+                setSelectedIds(prev => {
+                    const next = new Set(prev)
+                    sentIds.forEach(id => next.delete(id))
+                    return next
+                })
             }
 
             const skipped = localInvalidCount + failDetails.length
