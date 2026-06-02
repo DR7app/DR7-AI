@@ -639,97 +639,92 @@ export default function CargosTab() {
             // Aligned [booking, record] items so per-index API results map back
             // to the right booking (Check/Send return arrays in input order).
             const items = localValid.map(b => ({ b, record: buildCargosRecord(b) }))
-            console.log('[CARGOS] Built', items.length, 'records (skipped', localInvalidCount, 'with missing data)')
 
-            // ── CHECK (server-side validation) ──────────────────────────────
-            const checkRes = await fetch('/.netlify/functions/cargos-api', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'check', records: items.map(i => i.record), password }),
-            })
-            const checkData = await checkRes.json()
-
-            // Top-level error (auth failure, etc.) — aborts the whole batch.
-            if (checkData.error) {
-                toast.error('Validazione CARGOS fallita: ' + checkData.error, { id: 'cargos-send' })
-                setSendResult({ success: 0, errors: items.length, details: checkData.error })
-                setSending(false)
-                return
-            }
-
-            const checkResults = Array.isArray(checkData.data) ? checkData.data : (Array.isArray(checkData) ? checkData : [])
-            if (checkResults.length === 0) {
-                const rawResp = JSON.stringify(checkData).substring(0, 300)
-                console.error('[CARGOS] Unexpected Check response format:', rawResp)
-                toast.error(`Risposta Check CARGOS inattesa: ${rawResp}`, { id: 'cargos-send', duration: 10000 })
-                setSendResult({ success: 0, errors: items.length, details: `Check risposta inattesa: ${rawResp}` })
-                setSending(false)
-                return
-            }
-
-            // Partition by Check result. Records that FAIL the Check are skipped
-            // (marked error) instead of blocking the whole batch.
-            const passed: typeof items = []
-            const checkFailDetails: string[] = []
-            items.forEach((it, idx) => {
-                const r = checkResults[idx]
-                if (r && r.esito === false) {
-                    const msg = r.errore?.error_description || r.errore?.error || (r.errore ? JSON.stringify(r.errore) : 'Errore validazione CARGOS')
-                    checkFailDetails.push(`${it.b.customer_name || it.b.id}: ${msg}`)
-                    setBookings(prev => prev.map(pb => pb.id === it.b.id ? { ...pb, cargosStatus: 'error' as const, cargosError: msg } : pb))
-                } else {
-                    passed.push(it)
-                }
-            })
-
-            if (passed.length === 0) {
-                toast.error('Validazione CARGOS fallita per tutti i record: ' + checkFailDetails.join('; '), { id: 'cargos-send', duration: 10000 })
-                setSendResult({ success: 0, errors: items.length, details: checkFailDetails.join('; ') })
-                setSending(false)
-                return
-            }
-
-            // ── SEND (only the records that passed Check) ───────────────────
-            const sendRes = await fetch('/.netlify/functions/cargos-api', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'send', records: passed.map(i => i.record), password }),
-            })
-            const sendData = await sendRes.json()
-            console.log('[CARGOS] Send response:', JSON.stringify(sendData).substring(0, 500))
-
-            if (sendData.error) {
-                toast.error('Invio CARGOS fallito: ' + sendData.error, { id: 'cargos-send' })
-                setSendResult({ success: 0, errors: passed.length, details: sendData.error })
-                setSending(false)
-                return
-            }
-
-            const sendResults = Array.isArray(sendData.data) ? sendData.data : (Array.isArray(sendData) ? sendData : [])
-            if (sendResults.length === 0) {
-                const rawResp = JSON.stringify(sendData).substring(0, 300)
-                console.error('[CARGOS] Unexpected Send response format:', rawResp)
-                toast.error(`Risposta CARGOS inattesa: ${rawResp}`, { id: 'cargos-send', duration: 10000 })
-                setSendResult({ success: 0, errors: passed.length, details: `Risposta inattesa: ${rawResp}` })
-                setSending(false)
-                return
-            }
-
-            // Map per-index Send results back to bookings.
-            const sentOk: typeof passed = []
-            const sendFailDetails: string[] = []
+            // 2026-06-02: CARGOS accetta MAX 100 righe per richiesta
+            // ("Dimensione del blocco eccessiva - Numero Massimo di righe
+            // consentito: 100"). Spezziamo Check+Send in blocchi da 100 e
+            // processiamo ogni blocco in modo indipendente: un blocco che
+            // fallisce non blocca gli altri.
+            const CHUNK_SIZE = 100
+            const sentOk: typeof items = []
+            const failDetails: string[] = []
             const txIds: string[] = []
-            passed.forEach((it, idx) => {
-                const r = sendResults[idx]
-                if (r && r.esito === true) {
-                    sentOk.push(it)
-                    if (r.transactionid) txIds.push(r.transactionid)
-                } else {
-                    const msg = r?.errore?.error_description || r?.errore?.error || (r?.errore ? JSON.stringify(r.errore) : 'Errore invio CARGOS')
-                    sendFailDetails.push(`${it.b.customer_name || it.b.id}: ${msg}`)
-                    setBookings(prev => prev.map(pb => pb.id === it.b.id ? { ...pb, cargosStatus: 'error' as const, cargosError: msg } : pb))
+
+            const markError = (id: string, msg: string) =>
+                setBookings(prev => prev.map(pb => pb.id === id ? { ...pb, cargosStatus: 'error' as const, cargosError: msg } : pb))
+            const failChunk = (chunk: typeof items, msg: string) =>
+                chunk.forEach(it => { failDetails.push(`${it.b.customer_name || it.b.id}: ${msg}`); markError(it.b.id, msg) })
+
+            const totalChunks = Math.ceil(items.length / CHUNK_SIZE)
+            for (let start = 0, ci = 1; start < items.length; start += CHUNK_SIZE, ci++) {
+                const chunk = items.slice(start, start + CHUNK_SIZE)
+                toast.loading(`Invio CARGOS — blocco ${ci}/${totalChunks} (${chunk.length} record)...`, { id: 'cargos-send' })
+
+                // ── CHECK ──
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                let checkData: any
+                try {
+                    const checkRes = await fetch('/.netlify/functions/cargos-api', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'check', records: chunk.map(i => i.record), password }),
+                    })
+                    checkData = await checkRes.json()
+                } catch (e) {
+                    failChunk(chunk, 'Errore rete Check: ' + (e instanceof Error ? e.message : String(e)))
+                    continue
                 }
-            })
+                const checkTopErr = checkData?.error
+                    || (checkData?.data && !Array.isArray(checkData.data) ? (checkData.data.error_description || checkData.data.error) : null)
+                if (checkTopErr) { failChunk(chunk, 'Check: ' + checkTopErr); continue }
+                const checkResults = Array.isArray(checkData?.data) ? checkData.data : (Array.isArray(checkData) ? checkData : [])
+                if (checkResults.length === 0) { failChunk(chunk, 'Check risposta inattesa: ' + JSON.stringify(checkData).substring(0, 150)); continue }
+
+                const passed: typeof items = []
+                chunk.forEach((it, idx) => {
+                    const r = checkResults[idx]
+                    if (r && r.esito === false) {
+                        const msg = r.errore?.error_description || r.errore?.error || (r.errore ? JSON.stringify(r.errore) : 'Errore validazione CARGOS')
+                        failDetails.push(`${it.b.customer_name || it.b.id}: ${msg}`)
+                        markError(it.b.id, msg)
+                    } else {
+                        passed.push(it)
+                    }
+                })
+                if (passed.length === 0) continue
+
+                // ── SEND (only records that passed Check in this block) ──
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                let sendData: any
+                try {
+                    const sendRes = await fetch('/.netlify/functions/cargos-api', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'send', records: passed.map(i => i.record), password }),
+                    })
+                    sendData = await sendRes.json()
+                } catch (e) {
+                    failChunk(passed, 'Errore rete Send: ' + (e instanceof Error ? e.message : String(e)))
+                    continue
+                }
+                const sendTopErr = sendData?.error
+                    || (sendData?.data && !Array.isArray(sendData.data) ? (sendData.data.error_description || sendData.data.error) : null)
+                if (sendTopErr) { failChunk(passed, 'Send: ' + sendTopErr); continue }
+                const sendResults = Array.isArray(sendData?.data) ? sendData.data : (Array.isArray(sendData) ? sendData : [])
+                if (sendResults.length === 0) { failChunk(passed, 'Send risposta inattesa: ' + JSON.stringify(sendData).substring(0, 150)); continue }
+
+                passed.forEach((it, idx) => {
+                    const r = sendResults[idx]
+                    if (r && r.esito === true) {
+                        sentOk.push(it)
+                        if (r.transactionid) txIds.push(r.transactionid)
+                    } else {
+                        const msg = r?.errore?.error_description || r?.errore?.error || (r?.errore ? JSON.stringify(r.errore) : 'Errore invio CARGOS')
+                        failDetails.push(`${it.b.customer_name || it.b.id}: ${msg}`)
+                        markError(it.b.id, msg)
+                    }
+                })
+            }
 
             // Mark + persist the successful ones.
             if (sentOk.length > 0) {
@@ -752,19 +747,19 @@ export default function CargosTab() {
                 }
             }
 
-            const skipped = localInvalidCount + checkFailDetails.length + sendFailDetails.length
+            const skipped = localInvalidCount + failDetails.length
             if (sentOk.length > 0) {
                 toast.success(
-                    `${sentOk.length} contratti inviati a CARGOS${skipped ? ` · ${skipped} da correggere (righe rosse)` : ''}. TX: ${txIds.join(', ') || 'OK'}`,
+                    `${sentOk.length} contratti inviati a CARGOS${skipped ? ` · ${skipped} da correggere (righe rosse)` : ''}. TX: ${txIds.slice(0, 5).join(', ') || 'OK'}${txIds.length > 5 ? '…' : ''}`,
                     { id: 'cargos-send', duration: 6000 }
                 )
             } else {
-                toast.error(`Nessun contratto inviato. ${sendFailDetails.join('; ')}`, { id: 'cargos-send', duration: 10000 })
+                toast.error(`Nessun contratto inviato. ${failDetails.slice(0, 3).join('; ')}${failDetails.length > 3 ? ` (+${failDetails.length - 3})` : ''}`, { id: 'cargos-send', duration: 10000 })
             }
             setSendResult({
                 success: sentOk.length,
                 errors: skipped,
-                details: [...checkFailDetails, ...sendFailDetails].join('; ') || undefined,
+                details: failDetails.join('; ') || undefined,
             })
         } catch (err: unknown) {
             const errMsg = err instanceof Error ? err.message : String(err)
