@@ -606,142 +606,166 @@ export default function CargosTab() {
 
         console.log('[CARGOS] Selected bookings:', selected.length)
 
-        // Validate all
-        let hasErrors = false
+        // 2026-06-02: invio NON più all-or-nothing. Prima un singolo record con
+        // dati mancanti bloccava l'INTERO batch (es. 350 prenotazioni → nessuna
+        // partiva). Ora separiamo i record validi da quelli incompleti: inviamo
+        // i validi e segnaliamo in rosso quelli da correggere, senza bloccare tutto.
         const updatedBookings = [...bookings]
+        const localValid: typeof selected = []
+        let localInvalidCount = 0
         for (const b of selected) {
             const issues = validateBookingForCargos(b)
             const errors = issues.filter(i => i.severity === 'error')
             if (errors.length > 0) {
                 const idx = updatedBookings.findIndex(ub => ub.id === b.id)
-                updatedBookings[idx] = { ...b, cargosStatus: 'error', cargosError: errors.map(e => e.message).join(', ') }
-                hasErrors = true
+                if (idx >= 0) updatedBookings[idx] = { ...b, cargosStatus: 'error', cargosError: errors.map(e => e.message).join(', ') }
+                localInvalidCount++
+            } else {
+                localValid.push(b)
             }
         }
+        if (localInvalidCount > 0) setBookings(updatedBookings)
 
-        if (hasErrors) {
-            setBookings(updatedBookings)
-            toast.error('Alcuni record hanno dati mancanti. Correggi prima di inviare.', { id: 'cargos-send' })
+        if (localValid.length === 0) {
+            toast.error('Tutti i record selezionati hanno dati mancanti. Correggi le righe in rosso.', { id: 'cargos-send' })
             return
         }
 
         setSending(true)
         setSendResult(null)
-        toast.loading(`Invio ${selected.length} contratti a CARGOS...`, { id: 'cargos-send' })
+        toast.loading(`Invio ${localValid.length} contratti a CARGOS${localInvalidCount ? ` (${localInvalidCount} saltati per dati mancanti)` : ''}...`, { id: 'cargos-send' })
 
         try {
-            // Build records
-            console.log('[CARGOS] Building records for', selected.length, 'bookings...')
-            const records = selected.map(b => buildCargosRecord(b))
-            console.log('[CARGOS] Records built, first record length:', records[0]?.length)
+            // Aligned [booking, record] items so per-index API results map back
+            // to the right booking (Check/Send return arrays in input order).
+            const items = localValid.map(b => ({ b, record: buildCargosRecord(b) }))
+            console.log('[CARGOS] Built', items.length, 'records (skipped', localInvalidCount, 'with missing data)')
 
-            // First validate with Check
-            console.log('[CARGOS] Calling Check API...')
+            // ── CHECK (server-side validation) ──────────────────────────────
             const checkRes = await fetch('/.netlify/functions/cargos-api', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'check', records, password }),
+                body: JSON.stringify({ action: 'check', records: items.map(i => i.record), password }),
             })
             const checkData = await checkRes.json()
-            console.log('[CARGOS] Check response:', JSON.stringify(checkData).substring(0, 500))
 
-            // Top-level error (auth failure, etc.)
+            // Top-level error (auth failure, etc.) — aborts the whole batch.
             if (checkData.error) {
-                toast.error('Validazione CARGOS fallita: ' + checkData.error)
-                setSendResult({ success: 0, errors: selected.length, details: checkData.error })
+                toast.error('Validazione CARGOS fallita: ' + checkData.error, { id: 'cargos-send' })
+                setSendResult({ success: 0, errors: items.length, details: checkData.error })
                 setSending(false)
                 return
             }
 
-            // Check per-record results: data is array of {esito, errore, transactionid}
             const checkResults = Array.isArray(checkData.data) ? checkData.data : (Array.isArray(checkData) ? checkData : [])
-
-            // If response is not an array or empty — unexpected format
             if (checkResults.length === 0) {
                 const rawResp = JSON.stringify(checkData).substring(0, 300)
                 console.error('[CARGOS] Unexpected Check response format:', rawResp)
-                toast.error(`Risposta Check CARGOS inattesa: ${rawResp}`, { duration: 10000 })
-                setSendResult({ success: 0, errors: selected.length, details: `Check risposta inattesa: ${rawResp}` })
+                toast.error(`Risposta Check CARGOS inattesa: ${rawResp}`, { id: 'cargos-send', duration: 10000 })
+                setSendResult({ success: 0, errors: items.length, details: `Check risposta inattesa: ${rawResp}` })
                 setSending(false)
                 return
             }
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const checkErrors = checkResults.filter((r: any) => r.esito === false)
-            if (checkErrors.length > 0) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const errorDetails = checkErrors.map((r: any) =>
-                    r.errore?.error_description || r.errore?.error || JSON.stringify(r.errore) || 'Errore sconosciuto'
-                ).join('; ')
-                toast.error('Validazione CARGOS fallita: ' + errorDetails, { duration: 8000 })
-                setSendResult({ success: 0, errors: checkErrors.length, details: errorDetails })
+            // Partition by Check result. Records that FAIL the Check are skipped
+            // (marked error) instead of blocking the whole batch.
+            const passed: typeof items = []
+            const checkFailDetails: string[] = []
+            items.forEach((it, idx) => {
+                const r = checkResults[idx]
+                if (r && r.esito === false) {
+                    const msg = r.errore?.error_description || r.errore?.error || (r.errore ? JSON.stringify(r.errore) : 'Errore validazione CARGOS')
+                    checkFailDetails.push(`${it.b.customer_name || it.b.id}: ${msg}`)
+                    setBookings(prev => prev.map(pb => pb.id === it.b.id ? { ...pb, cargosStatus: 'error' as const, cargosError: msg } : pb))
+                } else {
+                    passed.push(it)
+                }
+            })
+
+            if (passed.length === 0) {
+                toast.error('Validazione CARGOS fallita per tutti i record: ' + checkFailDetails.join('; '), { id: 'cargos-send', duration: 10000 })
+                setSendResult({ success: 0, errors: items.length, details: checkFailDetails.join('; ') })
                 setSending(false)
                 return
             }
 
-            // All records passed Check — now Send
+            // ── SEND (only the records that passed Check) ───────────────────
             const sendRes = await fetch('/.netlify/functions/cargos-api', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'send', records, password }),
+                body: JSON.stringify({ action: 'send', records: passed.map(i => i.record), password }),
             })
             const sendData = await sendRes.json()
-            console.log('[CARGOS] Send response:', JSON.stringify(sendData))
+            console.log('[CARGOS] Send response:', JSON.stringify(sendData).substring(0, 500))
 
-            // Top-level error
             if (sendData.error) {
-                toast.error('Invio CARGOS fallito: ' + sendData.error)
-                setSendResult({ success: 0, errors: selected.length, details: sendData.error })
-            } else {
-                // Check per-record results
-                const sendResults = Array.isArray(sendData.data) ? sendData.data : (Array.isArray(sendData) ? sendData : [])
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const sendErrors = sendResults.filter((r: any) => r.esito === false)
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const sendOk = sendResults.filter((r: any) => r.esito === true)
+                toast.error('Invio CARGOS fallito: ' + sendData.error, { id: 'cargos-send' })
+                setSendResult({ success: 0, errors: passed.length, details: sendData.error })
+                setSending(false)
+                return
+            }
 
-                // If response is not an array or empty — something unexpected
-                if (sendResults.length === 0) {
-                    const rawResp = JSON.stringify(sendData).substring(0, 300)
-                    console.error('[CARGOS] Unexpected Send response format:', rawResp)
-                    toast.error(`Risposta CARGOS inattesa: ${rawResp}`, { duration: 10000 })
-                    setSendResult({ success: 0, errors: selected.length, details: `Risposta inattesa: ${rawResp}` })
-                } else if (sendErrors.length > 0) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const errorDetails = sendErrors.map((r: any) =>
-                        r.errore?.error_description || r.errore?.error || JSON.stringify(r.errore) || 'Errore sconosciuto'
-                    ).join('; ')
-                    toast.error(`Errore invio: ${errorDetails}`, { duration: 8000 })
-                    setSendResult({ success: sendOk.length, errors: sendErrors.length, details: errorDetails })
+            const sendResults = Array.isArray(sendData.data) ? sendData.data : (Array.isArray(sendData) ? sendData : [])
+            if (sendResults.length === 0) {
+                const rawResp = JSON.stringify(sendData).substring(0, 300)
+                console.error('[CARGOS] Unexpected Send response format:', rawResp)
+                toast.error(`Risposta CARGOS inattesa: ${rawResp}`, { id: 'cargos-send', duration: 10000 })
+                setSendResult({ success: 0, errors: passed.length, details: `Risposta inattesa: ${rawResp}` })
+                setSending(false)
+                return
+            }
+
+            // Map per-index Send results back to bookings.
+            const sentOk: typeof passed = []
+            const sendFailDetails: string[] = []
+            const txIds: string[] = []
+            passed.forEach((it, idx) => {
+                const r = sendResults[idx]
+                if (r && r.esito === true) {
+                    sentOk.push(it)
+                    if (r.transactionid) txIds.push(r.transactionid)
                 } else {
-                    // Real success — mark as sent
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const txIds = sendResults.map((r: any) => r.transactionid).filter(Boolean).join(', ')
-                    toast.success(`${selected.length} contratti inviati a CARGOS! TX: ${txIds || 'OK'}`, { duration: 5000 })
-                    setSendResult({ success: selected.length, errors: 0, details: txIds || 'OK' })
+                    const msg = r?.errore?.error_description || r?.errore?.error || (r?.errore ? JSON.stringify(r.errore) : 'Errore invio CARGOS')
+                    sendFailDetails.push(`${it.b.customer_name || it.b.id}: ${msg}`)
+                    setBookings(prev => prev.map(pb => pb.id === it.b.id ? { ...pb, cargosStatus: 'error' as const, cargosError: msg } : pb))
+                }
+            })
 
-                    // Only mark as sent when we have actual successful results
-                    setBookings(prev => prev.map(b =>
-                        selectedIds.has(b.id) ? { ...b, cargosStatus: 'sent' as const } : b
-                    ))
-                    for (const b of selected) {
-                        try {
-                            await supabase
-                                .from('bookings')
-                                .update({
-                                    booking_details: {
-                                        ...b.booking_details,
-                                        cargos_sent: true,
-                                        cargos_sent_at: new Date().toISOString(),
-                                    }
-                                })
-                                .eq('id', b.id)
-                        } catch (e) {
-                            console.error('[CARGOS] Failed to persist cargos_sent for', b.id, e)
-                        }
+            // Mark + persist the successful ones.
+            if (sentOk.length > 0) {
+                setBookings(prev => prev.map(pb => sentOk.some(s => s.b.id === pb.id) ? { ...pb, cargosStatus: 'sent' as const } : pb))
+                for (const it of sentOk) {
+                    try {
+                        await supabase
+                            .from('bookings')
+                            .update({
+                                booking_details: {
+                                    ...it.b.booking_details,
+                                    cargos_sent: true,
+                                    cargos_sent_at: new Date().toISOString(),
+                                }
+                            })
+                            .eq('id', it.b.id)
+                    } catch (e) {
+                        console.error('[CARGOS] Failed to persist cargos_sent for', it.b.id, e)
                     }
                 }
             }
+
+            const skipped = localInvalidCount + checkFailDetails.length + sendFailDetails.length
+            if (sentOk.length > 0) {
+                toast.success(
+                    `${sentOk.length} contratti inviati a CARGOS${skipped ? ` · ${skipped} da correggere (righe rosse)` : ''}. TX: ${txIds.join(', ') || 'OK'}`,
+                    { id: 'cargos-send', duration: 6000 }
+                )
+            } else {
+                toast.error(`Nessun contratto inviato. ${sendFailDetails.join('; ')}`, { id: 'cargos-send', duration: 10000 })
+            }
+            setSendResult({
+                success: sentOk.length,
+                errors: skipped,
+                details: [...checkFailDetails, ...sendFailDetails].join('; ') || undefined,
+            })
         } catch (err: unknown) {
             const errMsg = err instanceof Error ? err.message : String(err)
             console.error('[CARGOS] handleSend error:', err)
