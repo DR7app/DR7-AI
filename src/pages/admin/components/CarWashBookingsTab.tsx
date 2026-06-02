@@ -960,6 +960,23 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       setBookings(bookingsData || [])
       setCustomers(dedupedCustomers)
       setCarWashServices(mappedServices)
+
+      // 2026-06-02: ri-sincronizza selectedService + selectedExtras col catalogo
+      // appena ricaricato. Senza questo blocco, dopo una modifica della durata
+      // in Catalogo Prime Wash il booking form continuava a calcolare l'orario
+      // di fine usando il vecchio durationMinutes (snapshot preso quando l'admin
+      // aveva cliccato il servizio nel dropdown). Adesso ogni reload del
+      // catalogo aggiorna il riferimento del servizio gia' scelto allo stesso
+      // id, prendendo la NUOVA durata / prezzo / nome.
+      setSelectedService(prev => {
+        if (!prev) return prev
+        const fresh = mappedServices.find(s => s.id === prev.id)
+        return fresh || prev
+      })
+      setSelectedExtras(prev => {
+        if (!prev || prev.length === 0) return prev
+        return prev.map(e => mappedServices.find(s => s.id === e.id) || e)
+      })
     } catch (error) {
       console.error('Failed to load data:', error)
     } finally {
