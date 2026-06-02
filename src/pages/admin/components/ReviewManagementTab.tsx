@@ -559,13 +559,32 @@ export default function ReviewManagementTab() {
         validita_giorni: String(gen.rental.valid_days),
       }
 
+      // 2026-06-02: risolvi la chiave REALE del template per LABEL.
+      // I template creati a mano in "Messaggi di Sistema Pro" hanno una key
+      // autogenerata (pro_custom_..._<timestamp>) e handled_events VUOTO, quindi
+      // la legacy key 'review_discount_code' non li trova mai → "template non
+      // configurato" anche se esiste. Cerchiamo per label "Codice Sconto
+      // Recensione" così l'admin può rinominare/ricreare senza rompere l'invio.
+      let resolvedTemplateKey = 'review_discount_code'
+      try {
+        const { data: tpl } = await supabase
+          .from('system_messages')
+          .select('message_key')
+          .ilike('label', '%codice sconto%recensione%')
+          .eq('is_enabled', true)
+          .limit(1)
+          .maybeSingle()
+        if (tpl?.message_key) resolvedTemplateKey = tpl.message_key as string
+      } catch {
+        // se la lookup fallisce, ripieghiamo sulla legacy key
+      }
+
       const sendRes = await fetch(`${NETLIFY_BASE}/send-whatsapp-notification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          // BUG FIX 2026-05-13: era 'pro_marketing_codice_sconto' hardcoded.
-          // Adesso legacy key + service_type='all' (marketing cross-servizio).
-          templateKey: 'review_discount_code',
+          // Chiave risolta per label (fallback alla legacy key).
+          templateKey: resolvedTemplateKey,
           booking: { service_type: 'all' },
           templateVars,
           customPhone: candidate.customer_phone,
@@ -575,7 +594,7 @@ export default function ReviewManagementTab() {
 
       toast.dismiss(toastId)
       if (sendData.skipped) {
-        toast.error(`Codici creati (${gen.rentalCode} / ${gen.carwashCode}) ma template per "review_discount_code" non configurato in Messaggi di Sistema Pro.`, { duration: 8000 })
+        toast.error(`Codici creati (${gen.rentalCode} / ${gen.carwashCode}) ma template "Codice Sconto Recensione" non trovato/abilitato in Messaggi di Sistema Pro.`, { duration: 8000 })
       } else if (!sendRes.ok) {
         toast.error(`Codici creati ma WhatsApp fallito: ${sendData.message || sendRes.statusText}`)
       } else {
