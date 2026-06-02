@@ -287,6 +287,7 @@ interface FooterCopy {
     contact_whatsapp_url: string
     contact_company_name: string
     contact_legal_address_it: string; contact_legal_address_en: string
+    contact_operative_address_it: string; contact_operative_address_en: string
     contact_capitale_sociale_it: string; contact_capitale_sociale_en: string
     contact_piva: string
     contact_disclaimer_it: string; contact_disclaimer_en: string
@@ -1696,24 +1697,51 @@ const INITIAL_CONTACT: ContactCopy = {
     map_title: '', map_iframe_url: '',
 }
 
+// Mirrors the website DEFAULT_FOOTER (utils/siteCopy.ts). Used as the seed
+// when no footer override is stored yet, so the editor shows the real live
+// values and saving never blanks the footer. Keep in sync with the website.
 const INITIAL_FOOTER: FooterCopy = {
-    network_title: '',
-    network_text_it: '', network_text_en: '',
-    social_links: [],
-    reviews_title: '',
-    reviews_text_it: '', reviews_text_en: '',
-    contact_title: '',
-    contact_whatsapp_number: '', contact_whatsapp_url: '',
-    contact_company_name: '',
-    contact_legal_address_it: '', contact_legal_address_en: '',
-    contact_capitale_sociale_it: '', contact_capitale_sociale_en: '',
-    contact_piva: '',
-    contact_disclaimer_it: '', contact_disclaimer_en: '',
-    division_links: [],
-    corporate_links: [],
-    legal_links: [],
-    bottom_brand_line: '',
-    bottom_copyright: '',
+    network_title: 'Join the DR7 Network',
+    network_text_it: 'Entra nel nostro ecosistema globale e segui i nostri canali social per contenuti esclusivi e aggiornamenti dal mondo DR7 Cagliari.',
+    network_text_en: 'Join our global ecosystem and follow our social channels for exclusive content and updates from the DR7 Cagliari world.',
+    social_links: [
+        { id: 'ig', label: 'Instagram', href: 'https://www.instagram.com/dubai_rent_7.0_s_p_a_', icon: 'instagram' },
+        { id: 'tt', label: 'Tiktok',    href: 'https://www.tiktok.com/@dr7luxuryempire',           icon: 'tiktok' },
+    ],
+    reviews_title: 'A Global Standard of Excellence',
+    reviews_text_it: 'DR7 Cagliari mantiene un rating impeccabile di 5.0/5.0 su quasi 300 recensioni verificate, confermandosi un punto di riferimento nel settore della luxury mobility.',
+    reviews_text_en: 'DR7 Cagliari maintains a flawless 5.0/5.0 rating across nearly 300 verified reviews, confirming itself as a benchmark in the luxury mobility sector.',
+    contact_title: 'Contact',
+    contact_whatsapp_number: '+39 345 790 5205',
+    contact_whatsapp_url: 'https://wa.me/393457905205',
+    contact_company_name: 'DR7 S.p.A.',
+    contact_legal_address_it: 'Sede Legale: Via del Fangario 25, 09122 Cagliari (CA) – Italia',
+    contact_legal_address_en: 'Registered Office: Via del Fangario 25, 09122 Cagliari (CA) – Italy',
+    contact_operative_address_it: 'Sede Operativa: Viale Marconi 229, 09131 Cagliari (CA) – Italia',
+    contact_operative_address_en: 'Operating Office: Viale Marconi 229, 09131 Cagliari (CA) – Italy',
+    contact_capitale_sociale_it: 'Capitale Sociale: € 1.000.000 i.v.',
+    contact_capitale_sociale_en: 'Share Capital: € 1,000,000 fully paid',
+    contact_piva: 'P.IVA / C.F.: 04104640927',
+    contact_disclaimer_it: 'Società appartenente al progetto di sviluppo\nDR7 HOLDING S.p.A.',
+    contact_disclaimer_en: 'Company belonging to the development project of\nDR7 HOLDING S.p.A.',
+    division_links: [
+        { id: 'div-1', label_it: 'Supercar & Luxury Division', label_en: 'Supercar & Luxury Division', to: '/supercar-luxury' },
+        { id: 'div-2', label_it: 'Prime Wash',                  label_en: 'Prime Wash',                  to: '/prime-wash' },
+        { id: 'div-3', label_it: 'Contattaci',                  label_en: 'Contact us',                  to: '/contact' },
+    ],
+    corporate_links: [
+        { id: 'corp-1', label_it: 'Corporate Overview',      label_en: 'Corporate Overview',      to: '/about' },
+        { id: 'corp-2', label_it: 'Press & Media',           label_en: 'Press & Media',           to: '/press' },
+        { id: 'corp-3', label_it: 'Careers & Opportunities', label_en: 'Careers & Opportunities', to: '/careers' },
+    ],
+    legal_links: [
+        { id: 'leg-1', label_it: 'Termini di Servizio', label_en: 'Terms of Service',    to: '/terms' },
+        { id: 'leg-2', label_it: 'Cookie Policy',       label_en: 'Cookie Policy',       to: '/cookie-policy' },
+        { id: 'leg-3', label_it: 'Privacy Policy',      label_en: 'Privacy Policy',      to: '/privacy' },
+        { id: 'leg-4', label_it: 'Cancellation Policy', label_en: 'Cancellation Policy', to: '/cancellation-policy' },
+    ],
+    bottom_brand_line: 'DR7 Cagliari – Global Mobility & Luxury Lifestyle Group',
+    bottom_copyright: '© 2024 - 2026 DR7 Cagliari. All Rights Reserved.',
 }
 
 const INITIAL_MEMBERSHIP: MembershipCopy = {
@@ -4029,6 +4057,8 @@ function FooterEditor({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Sede legale (IT)" value={copy.contact_legal_address_it} onChange={v => updateField('contact_legal_address_it', v)} />
                     <FieldText label="Registered office (EN)" value={copy.contact_legal_address_en} onChange={v => updateField('contact_legal_address_en', v)} />
+                    <FieldText label="Sede operativa (IT)" value={copy.contact_operative_address_it} onChange={v => updateField('contact_operative_address_it', v)} />
+                    <FieldText label="Operating office (EN)" value={copy.contact_operative_address_en} onChange={v => updateField('contact_operative_address_en', v)} />
                     <FieldText label="Capitale sociale (IT)" value={copy.contact_capitale_sociale_it} onChange={v => updateField('contact_capitale_sociale_it', v)} />
                     <FieldText label="Share capital (EN)" value={copy.contact_capitale_sociale_en} onChange={v => updateField('contact_capitale_sociale_en', v)} />
                 </div>
