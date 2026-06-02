@@ -128,20 +128,28 @@ const handler: Handler = async (event) => {
       };
     }
 
-    // 3. Anti-duplication check: no existing SENT request for this candidate
-    const { data: existingRequest } = await supabase
-      .from('review_requests')
-      .select('id')
-      .eq('candidate_id', candidateId)
-      .eq('send_status', 'SENT')
-      .limit(1);
+    // 3. Anti-duplication check: no existing SENT request for this candidate.
+    // 2026-06-02: BYPASS quando candidate.send_status === 'TO_SEND'. La
+    // direzione ha cliccato "Sblocca" sul candidato (che resetta
+    // candidate.send_status a TO_SEND) \u2014 vuole RI-inviare la richiesta.
+    // Prima il check guardava SOLO review_requests, quindi un candidato
+    // sbloccato veniva bloccato con 409 perche' la vecchia riga
+    // review_requests aveva ancora send_status='SENT'.
+    if (candidate.send_status !== 'TO_SEND') {
+      const { data: existingRequest } = await supabase
+        .from('review_requests')
+        .select('id')
+        .eq('candidate_id', candidateId)
+        .eq('send_status', 'SENT')
+        .limit(1);
 
-    if (existingRequest && existingRequest.length > 0) {
-      return {
-        statusCode: 409,
-        headers: getHeaders(event.headers.origin),
-        body: JSON.stringify({ error: 'Richiesta di recensione gi\u00e0 inviata per questo candidato' }),
-      };
+      if (existingRequest && existingRequest.length > 0) {
+        return {
+          statusCode: 409,
+          headers: getHeaders(event.headers.origin),
+          body: JSON.stringify({ error: 'Richiesta di recensione gi\u00e0 inviata per questo candidato' }),
+        };
+      }
     }
 
     // 4. Generate review link + load full marketing config so social-link
