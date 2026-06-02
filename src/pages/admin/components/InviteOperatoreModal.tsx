@@ -53,15 +53,7 @@ export const PERMISSION_SECTIONS: { name: string; tabs: { key: string; label: st
     { key: 'rilevazione-orari', label: 'Rilevazione Orari (Ore)' },
     { key: 'dashboard-kpi', label: 'Dashboard' },
   ]},
-  { name: 'Comunicazione', tabs: [
-    { key: 'com-email', label: 'E-mail' },
-    { key: 'com-pec', label: 'PEC' },
-    { key: 'com-whatsapp', label: 'WhatsApp' },
-    { key: 'com-sms', label: 'SMS' },
-    { key: 'com-chiamate', label: 'Chiamate' },
-    { key: 'com-chatgpt', label: 'Chat GPT' },
-    { key: 'com-aruba', label: 'Aruba' },
-  ]},
+  // 2026-06-02: sezione Comunicazione rimossa — placeholder vuoti.
   { name: 'Amministrazione', tabs: [
     { key: 'unpaid', label: 'In attesa di pagamento' },
     { key: 'cauzioni', label: 'Cauzioni' },
