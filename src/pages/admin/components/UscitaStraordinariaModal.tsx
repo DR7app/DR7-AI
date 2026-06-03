@@ -435,17 +435,27 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
             : `${c.cauzione.state}${c.cauzione.amount ? ` €${c.cauzione.amount}` : ''}`
           const noteInt = (c.note_integrative || noteIntegrative || '').trim() || '—'
           const motivazione = c.motivazioni.length ? c.motivazioni.join(', ') : '—'
+          // 2026-06-03: converte l'id del luogo (es. 'dr7_office',
+          // 'airport_cagliari') nella label leggibile dell'utente
+          // ('Viale Marconi, 229, 09131 Cagliari CA', 'Aeroporto Cagliari
+          // Elmas'). Senza questa map l'autista riceveva l'id grezzo nel
+          // WhatsApp invece del nome del posto.
+          const luogoLabel = (placeId: string): string => {
+            if (!placeId) return '—'
+            const opt = luogoOptionsFromPro.find(o => o.value === placeId)
+            return opt?.label || placeId
+          }
           const templateVars: Record<string, string> = {
             nome_autista: firstName,
             veicolo: driveV?.display_name || '',
             targa: driveV?.plate || c.plate || '—',
             data_ritiro: fmtDate(c.pickup_date),
             ora_ritiro: c.pickup_time || '—',
-            luogo_ritiro: c.pickup_place || '—',
+            luogo_ritiro: luogoLabel(c.pickup_place),
             indirizzo_ritiro: c.pickup_address || '—',
             data_riconsegna: fmtDate(c.dropoff_date),
             ora_riconsegna: c.dropoff_time || '—',
-            luogo_riconsegna: c.dropoff_place || '—',
+            luogo_riconsegna: luogoLabel(c.dropoff_place),
             indirizzo_riconsegna: c.dropoff_address || '—',
             motivazione_uscita: motivazione,
             booking_collegato: bookingRefStr,
