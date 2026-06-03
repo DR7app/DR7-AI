@@ -42,6 +42,7 @@ const ScadenzeTab = lazyWithRetry(() => import('./components/ScadenzeTab'))
 const ReportsTab = lazyWithRetry(() => import('./components/ReportsTab'))
 const ReportLavaggioTab = lazyWithRetry(() => import('./components/ReportLavaggioTab'))
 const ReportClientiTab = lazyWithRetry(() => import('./components/ReportClientiTab'))
+const ReportAutistiTab = lazyWithRetry(() => import('./components/ReportAutistiTab'))
 const ReportTrafficTab = lazyWithRetry(() => import('./components/ReportTrafficTab'))
 const ReportGoogleBusinessTab = lazyWithRetry(() => import('./components/ReportGoogleBusinessTab'))
 const ReportPenaliDanniTab = lazyWithRetry(() => import('./components/ReportPenaliDanniTab'))
@@ -69,7 +70,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -304,6 +305,7 @@ export default function AdminDashboard() {
       { tab: 'report-noleggio', label: 'Noleggio' },
       { tab: 'report-lavaggio', label: 'Lavaggio' },
       { tab: 'report-clienti', label: 'Clienti' },
+      { tab: 'report-autisti', label: 'Autisti' },
       { tab: 'report-penali-danni', label: 'Penali & Danni' },
       { tab: 'report-preventivi', label: 'Preventivi' },
       { tab: 'report-traffic', label: 'Rendimento Sito' },
@@ -417,6 +419,7 @@ export default function AdminDashboard() {
     'report-noleggio': 'Report Noleggio',
     'report-lavaggio': 'Report Lavaggio',
     'report-clienti': 'Report Clienti',
+    'report-autisti': 'Report Autisti',
     'report-traffic': 'Rendimento Sito',
     'report-gmb': 'Rendimento Google My Business',
     'report-penali-danni': 'Report Penali & Danni',
@@ -1016,6 +1019,7 @@ export default function AdminDashboard() {
           {activeTab === 'codice-sconto' && <CodiciScontoTab />}
           {activeTab === 'report-lavaggio' && (isTabRestricted('report-lavaggio') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportLavaggioTab />)}
           {activeTab === 'report-clienti' && (isTabRestricted('report-clienti') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportClientiTab />)}
+          {activeTab === 'report-autisti' && (isTabRestricted('report-autisti') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportAutistiTab />)}
           {activeTab === 'report-traffic' && (isTabRestricted('report-traffic') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportTrafficTab />)}
           {activeTab === 'report-gmb' && (isTabRestricted('report-gmb') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportGoogleBusinessTab />)}
           {activeTab === 'report-penali-danni' && <ReportPenaliDanniTab />}
