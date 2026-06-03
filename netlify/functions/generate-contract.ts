@@ -491,12 +491,17 @@ export const handler: Handler = async (event) => {
         const totalFromWebsitePackage = Number.isFinite(includedKmNum) && includedKmNum > 0 && includedKmNum < 9999 ? includedKmNum : 0
 
         // Calcolo del km totale che andra' sul contratto:
-        //  - Se admin shape (km_packages array > 0): base raw + somma pacchetti
-        //  - Else if website shape (kmPackage.includedKm > 0): usa direttamente quello
-        //  - Else: usa km_limit raw
+        //  - Admin shape (km_packages array > 0): km_limit GIA' INCLUDE
+        //    base + pacchetti (la form lo somma a save time dal 2026-05-18,
+        //    commit 0fa300d4). NON ri-aggiungere o usciamo con DOPPIO conteggio:
+        //    booking mostra 200km, contratto stampa 300km. Bug riportato
+        //    direzione 2026-06-03.
+        //  - Website shape (kmPackage.includedKm > 0): usa direttamente quello.
+        //  - Else: usa km_limit raw.
         let computedTotalKm = 0
         if (adminPackageKmTotal > 0) {
-            computedTotalKm = baseKmFromRaw + adminPackageKmTotal
+            // km_limit gia' include i pacchetti — usa direttamente baseKmFromRaw.
+            computedTotalKm = baseKmFromRaw
         } else if (totalFromWebsitePackage > 0) {
             computedTotalKm = totalFromWebsitePackage
         } else {
