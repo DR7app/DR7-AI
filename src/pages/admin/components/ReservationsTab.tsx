@@ -821,7 +821,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     total_amount: '0',
     amount_paid: '0',
     payment_status: 'unpaid',
-    payment_method: 'Nexi Pay by Link',
+    // 2026-06-03: il default NON deve essere "Nexi Pay by Link". Pre-selezionare
+    // il pay-by-link faceva sì che ogni prenotazione non modificata tentasse di
+    // inviare un link di pagamento (anche "Da Saldare Contanti" → errore "Totale
+    // non valido per generare il link"). Il link parte SOLO se l'admin sceglie
+    // esplicitamente un metodo pay-by-link (gate isNexiPayByLink).
+    payment_method: 'Contanti',
     currency: 'EUR',
     // 2nd Driver - Required fields for contract generation validation
     has_second_driver: false,
@@ -7116,7 +7121,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       amount_paid: '0',
       km_overage_fee: '', // si popola da Centralina quando si seleziona il veicolo
       payment_status: 'pending',
-      payment_method: 'Nexi Pay by Link',
+      // 2026-06-03: default NON pay-by-link (vedi nota sull'initial form). Il
+      // link parte solo se l'admin sceglie esplicitamente Nexi Pay by Link.
+      payment_method: 'Contanti',
       currency: 'EUR',
       has_second_driver: false,
       second_driver_id: '',
