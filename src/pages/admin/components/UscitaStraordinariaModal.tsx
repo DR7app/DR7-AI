@@ -303,6 +303,10 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
           vehicle_name: v?.display_name || '',
           vehicle_plate: c.plate || v?.plate || null,
           customer_name: `Uscita: ${label}`,
+          // bookings ha un CHECK (user_id IS NOT NULL OR guest_name <> ''):
+          // l'uscita è interna (nessun cliente) → usiamo guest_name per
+          // soddisfare il vincolo, altrimenti l'insert torna 400.
+          guest_name: `Uscita: ${label}`,
           pickup_date: pickIso,
           dropoff_date: dropIso,
           pickup_location: c.pickup_place || '',
@@ -390,7 +394,13 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
       onClose()
     } catch (e) {
       console.error('[UscitaStraordinaria] save error:', e)
-      toast.error('Errore salvataggio: ' + (e instanceof Error ? e.message : String(e)))
+      // Estrai un messaggio leggibile anche dagli errori PostgREST (oggetti
+      // con message/details/hint) invece del generico "[object Object]".
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const er = e as any
+      const msg = e instanceof Error ? e.message
+        : (er?.message || er?.details || er?.hint || er?.error || (er ? JSON.stringify(er) : 'Errore sconosciuto'))
+      toast.error('Errore salvataggio: ' + msg)
     } finally {
       setSaving(false)
     }
