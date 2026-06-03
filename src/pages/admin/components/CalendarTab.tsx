@@ -730,6 +730,8 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
 
                       // Check if this is an unavailability/mechanic booking
                       const isUnavailability = ['car_wash', 'mechanical_service', 'mechanical', 'internal_block'].includes(evt.booking.service_type || '')
+                      // Uscita Straordinaria = movimentazione interna → SEMPRE VERDE
+                      const isUscita = evt.booking.service_type === 'uscita_straordinaria'
                       // Unpaid booking = orange "IN ATTESA" (any service type: noleggio, car wash, mechanical)
                       const isPendingPayment = evt.booking.payment_status === 'pending'
                         || evt.booking.payment_status === 'unpaid'
@@ -749,6 +751,13 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                       } else if (isUnavailability) {
                         bgClass = "bg-orange-500/80"
                         borderClass = "border-orange-400/30"
+                      }
+
+                      // Uscita Straordinaria vince su tutto: verde, qualunque
+                      // sia lo stato pagamento (è una movimentazione interna).
+                      if (isUscita) {
+                        bgClass = "bg-emerald-600/85"
+                        borderClass = "border-emerald-400/50"
                       }
 
                       const top = 6 + (evt.laneIndex * (BAR_HEIGHT + 4))
@@ -789,7 +798,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                           <div className="px-2 flex flex-col justify-center h-full">
                             {!isCollaboratoreCal && (
                               <span className="font-bold text-[10px] truncate leading-tight">
-                                {(isPendingPayment && !isDaSaldareConfirmed) ? '⏳ IN ATTESA — ' : ''}{evt.booking.customer_name || evt.booking.booking_details?.customer?.fullName || evt.booking.guest_name || 'Cliente Sconosciuto'} • {(() => {
+                                {(isPendingPayment && !isDaSaldareConfirmed && !isUscita) ? '⏳ IN ATTESA — ' : ''}{evt.booking.customer_name || evt.booking.booking_details?.customer?.fullName || evt.booking.guest_name || 'Cliente Sconosciuto'} • {(() => {
                                   // Calculate drop-off day: if end time is exactly 00:00, use previous day
                                   const endHours = evt.endLocal.getHours()
                                   const endMinutes = evt.endLocal.getMinutes()
