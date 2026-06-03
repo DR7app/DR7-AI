@@ -435,28 +435,47 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
             : `${c.cauzione.state}${c.cauzione.amount ? ` €${c.cauzione.amount}` : ''}`
           const noteInt = (c.note_integrative || noteIntegrative || '').trim() || '—'
           const motivazione = c.motivazioni.length ? c.motivazioni.join(', ') : '—'
-          // 2026-06-03: converte l'id del luogo (es. 'dr7_office',
-          // 'airport_cagliari') nella label leggibile dell'utente
-          // ('Viale Marconi, 229, 09131 Cagliari CA', 'Aeroporto Cagliari
-          // Elmas'). Senza questa map l'autista riceveva l'id grezzo nel
-          // WhatsApp invece del nome del posto.
-          const luogoLabel = (placeId: string): string => {
-            if (!placeId) return '—'
+          // 2026-06-03: splitta il luogo in NOME (citta'/posto) + INDIRIZZO
+          // (via). Direzione vuole che il messaggio autista mostri:
+          //   Luogo ritiro: DR7 Office Cagliari
+          //   Indirizzo ritiro: Viale Marconi 229
+          // Prima il template sostituiva {luogo_ritiro} con l'id grezzo
+          // (es. 'dr7_office') oppure con tutto l'indirizzo concatenato.
+          // luogoParts() ritorna { name, address } per ogni location id.
+          const luogoParts = (placeId: string, freeAddress: string): { name: string; address: string } => {
+            if (!placeId) return { name: '—', address: freeAddress || '—' }
+            if (placeId === 'dr7_office') {
+              // Sede DR7 — hardcoded perche' la PickupLocation schema non
+              // separa name/address (label = solo indirizzo lungo).
+              return { name: 'DR7 Office Cagliari', address: 'Viale Marconi 229' }
+            }
+            if (placeId === 'domicilio') {
+              return { name: 'Domicilio', address: freeAddress || '—' }
+            }
+            // Pro locations (aeroporti, porti, hotel) — usiamo la label
+            // come name. La schema PickupLocation non ha address dedicato,
+            // quindi address resta '—' (o l'indirizzo libero se compilato).
             const opt = luogoOptionsFromPro.find(o => o.value === placeId)
-            return opt?.label || placeId
+            const baseLabel = opt?.label || placeId
+            // Rimuove il suffisso fee per il name (es. "Aeroporto Cagliari
+            // Elmas (+€27.00)" → "Aeroporto Cagliari Elmas").
+            const cleanName = baseLabel.replace(/\s*\(\+€[\d.,]+\)\s*$/, '').trim()
+            return { name: cleanName, address: freeAddress || '—' }
           }
+          const partenza = luogoParts(c.pickup_place, c.pickup_address)
+          const ritorno = luogoParts(c.dropoff_place, c.dropoff_address)
           const templateVars: Record<string, string> = {
             nome_autista: firstName,
             veicolo: driveV?.display_name || '',
             targa: driveV?.plate || c.plate || '—',
             data_ritiro: fmtDate(c.pickup_date),
             ora_ritiro: c.pickup_time || '—',
-            luogo_ritiro: luogoLabel(c.pickup_place),
-            indirizzo_ritiro: c.pickup_address || '—',
+            luogo_ritiro: partenza.name,
+            indirizzo_ritiro: partenza.address,
             data_riconsegna: fmtDate(c.dropoff_date),
             ora_riconsegna: c.dropoff_time || '—',
-            luogo_riconsegna: luogoLabel(c.dropoff_place),
-            indirizzo_riconsegna: c.dropoff_address || '—',
+            luogo_riconsegna: ritorno.name,
+            indirizzo_riconsegna: ritorno.address,
             motivazione_uscita: motivazione,
             booking_collegato: bookingRefStr,
             stato_pagamento: payStr,
