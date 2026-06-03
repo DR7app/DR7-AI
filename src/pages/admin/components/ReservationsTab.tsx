@@ -2795,6 +2795,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       toast.error(`Metodo di pagamento "${booking.payment_method || '—'}": niente link inviato. Cambia metodo a "Nexi - Pay by Link" se vuoi generarlo.`, { duration: 8000 })
       return
     }
+    // 2026-06-03 SAFETY GATE: se la prenotazione è già pagata NON si rigenera
+    // né si reinvia il link di pagamento (bug Fofana — cliente pagato riceveva
+    // di nuovo il link modificando/salvando la prenotazione).
+    if (['paid', 'succeeded', 'completed'].includes((booking.payment_status || '').toLowerCase())) {
+      toast.error('Prenotazione già pagata: nessun link di pagamento inviato.', { duration: 6000 })
+      return
+    }
     const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
     const custName = booking.booking_details?.customer?.fullName || booking.customer_name || 'Cliente'
     const custEmail = booking.customer_email || booking.booking_details?.customer?.email || ''
@@ -6119,21 +6126,27 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // by Link" as the payment method. For Contanti / Bonifico / Carta etc.
       // the customer will pay in person — sending a payment URL is wrong and
       // confusing.
-      const isPendingForLink = formData.payment_status === 'pending' || formData.payment_status === 'unpaid' || formData.payment_status === 'partial'
+      // 2026-06-03: REGOLA — se la prenotazione è già PAGATA non si invia MAI
+      // un link di pagamento, qualunque sia il metodo (anche "Nexi Pay by Link").
+      // Bug Fofana: creando/salvando una prenotazione PAGATA il cliente riceveva
+      // comunque il link. isAlreadyPaid è il guardrail esplicito.
+      const isAlreadyPaid = ['paid', 'succeeded', 'completed'].includes((formData.payment_status || '').toLowerCase())
+      const isPendingForLink = !isAlreadyPaid && (formData.payment_status === 'pending' || formData.payment_status === 'unpaid' || formData.payment_status === 'partial')
       const isPayByLinkMethod = isNexiPayByLink(formData.payment_method)
       // 2026-06-01: log diagnostico — direzione si lamenta che il link
-      // non parte su Da Saldare + Conferma. Logghiamo i 4 gating cosi'
+      // non parte su Da Saldare + Conferma. Logghiamo i gating cosi'
       // se uno e' false sappiamo subito quale.
       logger.log('[PayByLink GATE]', {
         editingId,
         formData_payment_status: formData.payment_status,
         formData_payment_method: formData.payment_method,
+        isAlreadyPaid,
         isPendingForLink,
         isPayByLinkMethod,
         hasInsertedBooking: !!insertedBooking,
-        willFire: !editingId && isPendingForLink && isPayByLinkMethod && !!insertedBooking,
+        willFire: !editingId && !isAlreadyPaid && isPendingForLink && isPayByLinkMethod && !!insertedBooking,
       })
-      if (!editingId && isPendingForLink && isPayByLinkMethod && insertedBooking) {
+      if (!editingId && !isAlreadyPaid && isPendingForLink && isPayByLinkMethod && insertedBooking) {
         try {
           // Use cents-based addition to avoid float drift, then convert to EUR
           // Subtract already paid amount for partial payments
