@@ -106,6 +106,9 @@ interface Customer {
     nexi_card_brand?: string
     nexi_card_type?: string
     nexi_contract_updated?: string
+    // Ruolo speciale: 'autista' = mostrato con badge AUTISTA e selezionabile
+    // in "+ Uscita Straordinaria".
+    role?: string
   }
 }
 
@@ -2623,6 +2626,12 @@ export default function CustomersTab() {
                         CARTA
                       </span>
                     )}
+                    {customer.metadata?.role === 'autista' && (
+                      <span title="Autista DR7 — selezionabile in + Uscita Straordinaria"
+                        className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-sky-500/20 text-sky-500 dark:text-sky-400 flex-shrink-0">
+                        AUTISTA
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                     {customer.tipo_cliente && (
@@ -2795,7 +2804,15 @@ export default function CustomersTab() {
                     />
                   </td>
                   <td className="px-4 py-3 text-sm text-theme-text-primary">
-                    {customer.full_name}
+                    <span className="inline-flex items-center gap-1.5">
+                      {customer.full_name}
+                      {customer.metadata?.role === 'autista' && (
+                        <span title="Autista DR7 — selezionabile in + Uscita Straordinaria"
+                          className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-sky-500/20 text-sky-500 dark:text-sky-400">
+                          AUTISTA
+                        </span>
+                      )}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-sm whitespace-nowrap">
                     <ClientStatusBadge tier={customer.status ?? undefined} customerId={customer.id} userId={customer.user_id} email={customer.email} />
