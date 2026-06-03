@@ -5,6 +5,7 @@ import { authFetch } from '../../../utils/authFetch'
 import Button from './Button'
 import Input from './Input'
 import Select from './Select'
+import AddressAutocomplete from './AddressAutocomplete'
 import {
   USCITA_SERVICE_TYPE,
   USCITA_MOTIVAZIONI,
@@ -46,6 +47,91 @@ function eurToCents(eur: string): number {
   const s = String(eur ?? '0').trim().replace(',', '.')
   const n = parseFloat(s)
   return Number.isFinite(n) ? Math.round(n * 100) : 0
+}
+
+// 24h HH:MM, granularità 15 min — stesso formato usato in tutta l'app (niente
+// picker nativo AM/PM con scroll dei minuti).
+const TIME_OPTIONS: { value: string; label: string }[] = (() => {
+  const opts = [{ value: '', label: '—' }]
+  for (let h = 0; h < 24; h++) {
+    for (const m of [0, 15, 30, 45]) {
+      const v = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+      opts.push({ value: v, label: v })
+    }
+  }
+  return opts
+})()
+
+interface BookingHit {
+  id: string
+  customer_name: string | null
+  vehicle_name: string | null
+  vehicle_plate: string | null
+  pickup_date: string | null
+}
+
+// "Collega a Booking": ricerca per cliente / veicolo / targa, come altrove.
+function BookingLinkPicker({ value, onChange }: { value: string | null; onChange: (id: string | null) => void }) {
+  const [q, setQ] = useState('')
+  const [results, setResults] = useState<BookingHit[]>([])
+  const [open, setOpen] = useState(false)
+  const [selected, setSelected] = useState<BookingHit | null>(null)
+
+  useEffect(() => {
+    if (selected) return
+    const term = q.trim()
+    if (term.length < 2) { setResults([]); return }
+    let cancel = false
+    const t = setTimeout(async () => {
+      const safe = term.replace(/[%,()]/g, ' ')
+      const { data } = await supabase
+        .from('bookings')
+        .select('id, customer_name, vehicle_name, vehicle_plate, pickup_date')
+        .not('status', 'in', '(cancelled,annullata)')
+        .or(`customer_name.ilike.%${safe}%,vehicle_name.ilike.%${safe}%,vehicle_plate.ilike.%${safe}%`)
+        .order('pickup_date', { ascending: false })
+        .limit(8)
+      if (!cancel) { setResults(data || []); setOpen(true) }
+    }, 250)
+    return () => { cancel = true; clearTimeout(t) }
+  }, [q, selected])
+
+  const pick = (b: BookingHit) => { setSelected(b); setOpen(false); setQ(''); onChange(b.id) }
+  const clear = () => { setSelected(null); setQ(''); onChange(null) }
+
+  if (selected || value) {
+    const label = selected
+      ? `${selected.customer_name || 'Cliente'} · ${selected.vehicle_name || ''}${selected.vehicle_plate ? ` (${selected.vehicle_plate})` : ''}`
+      : `Booking ${String(value).slice(0, 8).toUpperCase()}`
+    return (
+      <div className="flex items-center gap-2">
+        <span className="flex-1 truncate rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-theme-text-primary">{label}</span>
+        <button type="button" onClick={clear} className="text-xs text-red-400 hover:text-red-300">Scollega</button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative">
+      <input
+        value={q}
+        onChange={e => setQ(e.target.value)}
+        placeholder="Cerca per cliente, veicolo o targa…"
+        className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary"
+      />
+      {open && results.length > 0 && (
+        <div className="absolute z-30 mt-1 w-full max-h-56 overflow-auto rounded-lg border border-theme-border bg-theme-bg-primary shadow-xl">
+          {results.map(b => (
+            <button key={b.id} type="button" onClick={() => pick(b)}
+              className="block w-full text-left px-3 py-2 text-sm text-theme-text-primary hover:bg-theme-bg-tertiary border-b border-theme-border/40 last:border-0">
+              <span className="font-medium">{b.customer_name || 'Cliente'}</span>
+              <span className="text-theme-text-muted"> · {b.vehicle_name || ''}{b.vehicle_plate ? ` (${b.vehicle_plate})` : ''}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSaved }: Props) {
@@ -371,24 +457,34 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
                     <div className="text-xs font-semibold uppercase text-theme-text-muted">Partenza</div>
                     <div className="grid grid-cols-2 gap-2">
                       <Input label="Data" type="date" value={card.pickup_date} onChange={e => patchCard(card.localId, { pickup_date: e.target.value })} />
-                      <Input label="Ora" type="time" value={card.pickup_time} onChange={e => patchCard(card.localId, { pickup_time: e.target.value })} />
+                      <Select label="Ora" value={card.pickup_time} onChange={e => patchCard(card.localId, { pickup_time: e.target.value })} options={TIME_OPTIONS} />
                     </div>
                     <Select label="Luogo" value={card.pickup_place} onChange={e => patchCard(card.localId, { pickup_place: e.target.value })} options={luogoOptions} />
-                    <Input label="Indirizzo preciso" value={card.pickup_address} onChange={e => patchCard(card.localId, { pickup_address: e.target.value })} />
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-primary mb-2">Indirizzo preciso</label>
+                      <AddressAutocomplete value={card.pickup_address} onChange={v => patchCard(card.localId, { pickup_address: v })} placeholder="Via, civico, CAP, città" />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <div className="text-xs font-semibold uppercase text-theme-text-muted">Destinazione</div>
                     <div className="grid grid-cols-2 gap-2">
                       <Input label="Data" type="date" value={card.dropoff_date} onChange={e => patchCard(card.localId, { dropoff_date: e.target.value })} />
-                      <Input label="Ora" type="time" value={card.dropoff_time} onChange={e => patchCard(card.localId, { dropoff_time: e.target.value })} />
+                      <Select label="Ora" value={card.dropoff_time} onChange={e => patchCard(card.localId, { dropoff_time: e.target.value })} options={TIME_OPTIONS} />
                     </div>
                     <Select label="Luogo" value={card.dropoff_place} onChange={e => patchCard(card.localId, { dropoff_place: e.target.value })} options={luogoOptions} />
-                    <Input label="Indirizzo preciso" value={card.dropoff_address} onChange={e => patchCard(card.localId, { dropoff_address: e.target.value })} />
+                    <div>
+                      <label className="block text-sm font-medium text-theme-text-primary mb-2">Indirizzo preciso</label>
+                      <AddressAutocomplete value={card.dropoff_address} onChange={v => patchCard(card.localId, { dropoff_address: v })} placeholder="Via, civico, CAP, città" />
+                    </div>
                   </div>
                 </div>
 
-                {/* Linked booking */}
-                <Input label="Collega a Booking (ID / opzionale)" value={card.linked_booking_id || ''} onChange={e => patchCard(card.localId, { linked_booking_id: e.target.value || null })} placeholder="Se l'auto esce per servire questa prenotazione (no conflitto)" />
+                {/* Linked booking — ricerca per cliente / veicolo / targa */}
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-primary mb-2">Collega a Booking (opzionale)</label>
+                  <BookingLinkPicker value={card.linked_booking_id} onChange={id => patchCard(card.localId, { linked_booking_id: id })} />
+                  <p className="mt-1 text-[11px] text-theme-text-muted">Se l'auto esce per servire questa prenotazione, non viene segnalato conflitto.</p>
+                </div>
 
                 {/* Payment + Cauzione */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
