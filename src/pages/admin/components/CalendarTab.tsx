@@ -606,7 +606,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
             return (
               <div
                 key={row.vehicle.id}
-                className="flex border-b border-theme-border hover:bg-theme-bg-tertiary/30 transition-colors group relative"
+                className="flex border-b border-theme-border hover:bg-theme-bg-tertiary/30 transition-colors group relative min-w-max"
                 style={{ height: rowHeight }}
               >
                 {/* Left Sticky Column */}
@@ -647,8 +647,14 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                   </div>
                 </div>
 
-                {/* The Day Grid & Events Container */}
-                <div className="relative flex-1">
+                {/* The Day Grid & Events Container.
+                    2026-06-03: larghezza FISSA = giorni × CELL_WIDTH (come
+                    l'header), NON flex-1. Con flex-1 le celle si comprimevano
+                    al restringere la finestra mentre header/eventi restavano a
+                    45px/giorno → la riga "oggi" (blu) finiva sulla colonna
+                    sbagliata. Ora header, celle, riga oggi ed eventi usano la
+                    stessa griglia fissa e scorrono insieme. */}
+                <div className="relative shrink-0" style={{ width: daysArray.length * CELL_WIDTH }}>
 
                   {/* 1. Background Grid Cells */}
                   <div className="flex h-full absolute inset-0 z-0 pointer-events-none">
@@ -667,7 +673,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                         <div
                           key={day}
                           className={`
-                                border-r border-theme-border/40 h-full
+                                border-r border-theme-border/40 h-full shrink-0
                                 ${isToday ? 'bg-dr7-gold/20' : ''}
                                 ${isRedDay && !isToday ? 'bg-theme-text-primary/[0.03]' : ''}
                               `}
@@ -685,7 +691,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                     {daysArray.map((day) => (
                       <div
                         key={day}
-                        className="h-full hover:bg-theme-text-primary/5 cursor-pointer transition-colors"
+                        className="h-full shrink-0 hover:bg-theme-text-primary/5 cursor-pointer transition-colors"
                         style={{ width: CELL_WIDTH }}
                         onClick={() => {
                           const date = new Date(currentRomeComponents.year, currentRomeComponents.month, day, 10, 0, 0)
