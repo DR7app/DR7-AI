@@ -23,15 +23,60 @@
 
 // Requests whose duplicate within the window must be suppressed. Match is a
 // simple substring test on the URL, so both '/.netlify/functions/foo' and an
-// absolute 'https://site/.netlify/functions/foo' are covered. Add endpoints
-// here as new "send" actions appear.
+// absolute 'https://site/.netlify/functions/foo' are covered.
+//
+// ONLY side-effectful endpoints belong here — sends, payments/charges, and
+// create/generate actions where a double-click does real damage (duplicate
+// WhatsApp, double charge, duplicate invoice). Read/query endpoints
+// (get-*, list-*, *-report, lookup-*, calculate-*, *-search, check-sdi-*,
+// extract-*) are deliberately EXCLUDED: deduping a read would return a fake
+// { deduped:true } payload and break the screen. Add new SEND/CHARGE/CREATE
+// actions here; never add a read.
 const GUARDED_ENDPOINTS = [
+  // — Messaging / notifications —
   'send-whatsapp-notification',
   'send-booking-confirmation',
+  'send-checkin-checkout-whatsapp',
+  'send-whatsapp-campaign-chunk',
+  'send-review-request',
+  'send-wallet-otp',
+  'send-otp-preview',
+  'send-invoice-to-sdi',
+  'trigger-second-email',
+  'trigger-system-event',
+  'trigger-dr7-privilege',
+  'limitation-override-otp',
+  'emtn-otp-request',
+  // — Payments / Nexi charges —
   'nexi-pay-by-link',
   'nexi-create-preauth',
+  'nexi-capture-preauth',
+  'nexi-void-preauth',
+  'nexi-charge-mit',
   'nexi-nuovo-addebito',
+  'nexi-tokenize-backfill',
+  'nexi-forget-card',
+  'stop-addebito',
+  // — Document / invoice generation (create financial artifacts) —
+  'generate-invoice-from-booking',
+  'generate-invoice-pdf',
+  'generate-penalty-invoice',
+  'generate-nota-di-credito',
+  'generate-contract',
+  'generate-review-codes',
+  'process-multa',
+  'report-danni',
+  // — Customer / wallet / calendar mutations (create or move money) —
+  'customer-wallet-admin',
+  'save-customer',
+  'manage-customer',
+  'create-customer-invite',
   'submit-customer-invite',
+  'invite-operator',
+  'create-calendar-event',
+  'create-vehicle-unavailability-event',
+  'emtn-event-create',
+  'emtn-event-document',
 ] as const
 
 // How long after a successful identical send we keep dropping repeats.
