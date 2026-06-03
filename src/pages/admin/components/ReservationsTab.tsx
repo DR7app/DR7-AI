@@ -4122,7 +4122,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           // partira' dopo (per Nexi via callback, per Da Saldare quando
           // l'admin segna pagato manualmente). Direzione: non vogliamo
           // dare il contratto firmato al cliente prima che paghi.
-          if (extendData.extension_payment_status === 'paid') {
+          // 2026-06-03: se l'estensione NON ha un costo aggiuntivo (es. solo
+          // cambio data di cortesia, €0) non si rigenera il contratto né si
+          // reinvia il link di firma — richiesta utente: "se non inserisco un
+          // costo aggiuntivo non serve reinviare il link".
+          if (extendData.extension_payment_status === 'paid' && additionalAmount > 0) {
             try {
               // Stesso processo di una prenotazione: rigenera il contratto con
               // le nuove date e invia il LINK CONTRATTO tramite il flusso firma
@@ -4150,7 +4154,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               logger.warn('[handleConfirmExtend] Extension contract send failed (non-blocking):', contractErr)
             }
           } else {
-            logger.log('[handleConfirmExtend] Skipping contract generation — extension status =', extendData.extension_payment_status, '(contract sent only when paid)')
+            logger.log('[handleConfirmExtend] Skipping contract/link — extension status =', extendData.extension_payment_status, 'additionalAmount =', additionalAmount, '(contract+link only when paid AND costo aggiuntivo > 0)')
           }
         } else {
           logger.warn('[handleConfirmExtend] No customer phone — skipped customer notification')
