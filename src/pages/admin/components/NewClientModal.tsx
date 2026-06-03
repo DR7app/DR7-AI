@@ -85,6 +85,11 @@ interface ClientFormData {
 
 export default function NewClientModal({ isOpen, onClose, onClientCreated, initialData }: NewClientModalProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
+  // 2026-06-03: rileva se il caller (es. UscitaStraordinariaModal) sta
+  // creando un Autista — vediamo metadata.role='autista' nell'initialData.
+  // Usato per mostrare il badge AUTISTA in alto e per preservare il tag
+  // nel metadata salvato.
+  const isAutistaMode = (initialData?.metadata?.role === 'autista')
   const [formData, setFormData] = useState<ClientFormData>({
     tipo_cliente: 'persona_fisica',
     nazione: 'Italia',
@@ -425,7 +430,12 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         if (formData.sesso) customerData.sesso = formData.sesso
 
         // Metadata
+        // 2026-06-03: preservava metadata.role dal initialData (es.
+        // 'autista' quando si crea da UscitaStraordinariaModal). Prima
+        // il metadata veniva ricostruito da zero e qualsiasi badge passato
+        // dal caller veniva perso al salvataggio.
         customerData.metadata = {
+          ...(initialData?.metadata || {}),
           sesso: formData.sesso,
           provincia_nascita: formData.provincia_nascita,
           patente: {
@@ -868,9 +878,15 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             <div className="flex items-center gap-2 text-sm min-w-0">
               <span className="text-theme-text-muted hidden sm:inline">Lead & Clienti</span>
               <span className="text-theme-text-muted hidden sm:inline">/</span>
-              <span className="font-bold text-theme-text-primary truncate">{initialData ? 'Modifica Cliente' : 'Nuovo Cliente'}</span>
-              {!initialData && (
+              <span className="font-bold text-theme-text-primary truncate">{isAutistaMode ? 'Nuovo Autista' : (initialData ? 'Modifica Cliente' : 'Nuovo Cliente')}</span>
+              {!initialData && !isAutistaMode && (
                 <span className="px-2 py-0.5 rounded-full bg-dr7-gold/15 text-dr7-gold text-[10px] font-semibold uppercase tracking-wide shrink-0">Nuovo</span>
+              )}
+              {/* 2026-06-03: badge AUTISTA quando il caller pre-popola
+                  metadata.role='autista' (es. UscitaStraordinariaModal).
+                  Visivamente conferma che si sta creando un autista. */}
+              {isAutistaMode && (
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/40 text-[10px] font-semibold uppercase tracking-wide shrink-0">Autista</span>
               )}
             </div>
             <button onClick={handleClose} className="text-theme-text-muted hover:text-theme-text-primary text-2xl leading-none w-10 h-10 flex items-center justify-center rounded-full hover:bg-theme-bg-hover">&times;</button>
