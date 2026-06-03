@@ -475,13 +475,24 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                 }))
             }
 
-            // 4. Ore lavorate nel range
-            const { data: rangeEntries } = await supabase
+            // 4. Ore lavorate nel range.
+            // 2026-06-03: filtra per operatore_id quando l'utente loggato e' in
+            // REPORT_RESTRICTED_EMAILS. Prima la query prendeva TUTTE le righe
+            // timesheet — l'opList era filtrato a 1 persona ma totMinLav
+            // accumulava le ore dell'intero team. Risultato: ad Aleks (che non
+            // ha mai timbrato) usciva "330h lavorate / 240h target = 138%
+            // produttivita" perche' 330h era il totale di tutti gli altri.
+            const restrictedOpIds = (isRestrictedToOwn ? opIds : null)
+            let timesheetQuery = supabase
                 .from('timesheet_entries')
                 .select('operatore_id, tipo, timestamp, data')
                 .gte('data', rangeFrom)
                 .lte('data', rangeTo)
                 .order('timestamp', { ascending: true })
+            if (restrictedOpIds && restrictedOpIds.length > 0) {
+                timesheetQuery = timesheetQuery.in('operatore_id', restrictedOpIds)
+            }
+            const { data: rangeEntries } = await timesheetQuery
             const byOpDay = new Map<string, Map<string, { entrata: string | null; uscita: string | null; pi: string[]; pf: string[] }>>()
             for (const e of (rangeEntries || []) as { operatore_id: string; tipo: string; timestamp: string; data: string }[]) {
                 if (!byOpDay.has(e.operatore_id)) byOpDay.set(e.operatore_id, new Map())
