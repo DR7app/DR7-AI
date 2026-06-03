@@ -1606,11 +1606,19 @@ export default function UnpaidBookingsTab() {
         toast.success(`Fattura ${data.invoice?.numero_fattura || ''} generata!`)
       }
 
-      // 4. Fattura succeeded — NOW update booking in DB
+      // 4. Fattura succeeded — NOW update booking in DB.
+      // 2026-06-03 BUG FIX: oltre a payment_status, azzera il RESIDUO portando
+      // amount_paid = price_total (e booking_details.amountPaid). price_total
+      // include già le estensioni (handleConfirmExtend lo incrementa), quindi
+      // questo copre base + estensioni. Prima NON veniva aggiornato: la
+      // prenotazione risultava "pagata" ma il cliente vedeva ancora il residuo
+      // (es. €500) perché remaining = price_total - amountPaid restava > 0.
+      const totalCents = Number(booking.price_total || 0)
       const { error } = await supabase.from('bookings').update({
         payment_status: 'paid',
         status: 'confirmed',
-        booking_details: { ...booking.booking_details, extension_history: extensions }
+        amount_paid: totalCents,
+        booking_details: { ...booking.booking_details, amountPaid: totalCents, extension_history: extensions }
       }).eq('id', booking.id)
       if (error) throw error
       toast.success('Tutto segnato come pagato!')
