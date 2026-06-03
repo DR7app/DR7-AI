@@ -564,16 +564,43 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
     return grouped
   }, [filteredEvents])
 
-  // Assign lanes to prevent overlaps within each day
+  // 2026-06-03: assegnazione LANE basata sulla SOVRAPPOSIZIONE oraria, così
+  // due (o più) lavaggi nello stesso slot si vedono affiancati (side-by-side)
+  // invece di sovrapporsi. Prima laneIndex = indice nel giorno (non usato per
+  // il posizionamento) e i blocchi erano tutti inset-x-0 → uno copriva l'altro.
   const eventsWithLanes = useMemo(() => {
-    return filteredEvents.map(evt => {
-      const dayEvents = eventsByDay.get(evt.day) || []
-      const evtIndex = dayEvents.indexOf(evt)
-      return {
-        ...evt,
-        laneIndex: evtIndex
+    const meta = new Map<string, { laneIndex: number; laneCount: number }>()
+    for (const [, dayEventsRaw] of eventsByDay) {
+      const items = dayEventsRaw.map(evt => {
+        const [h, m] = String(evt.booking.appointment_time || '0:0').split(':').map(Number)
+        const start = (h || 0) * 60 + (m || 0)
+        return { evt, start, end: start + (evt.duration || 0) }
+      }).sort((a, b) => a.start - b.start || a.end - b.end)
+
+      // Greedy: assegna a ogni evento la prima lane libera (la cui ultima fine
+      // è <= inizio dell'evento corrente).
+      const laneEnds: number[] = []
+      const placed = items.map(it => {
+        let lane = laneEnds.findIndex(end => end <= it.start)
+        if (lane === -1) { lane = laneEnds.length; laneEnds.push(it.end) }
+        else laneEnds[lane] = it.end
+        return { it, lane }
+      })
+
+      // laneCount per evento = numero massimo di colonne usate dagli eventi che
+      // si sovrappongono a lui (così la larghezza è coerente nel cluster).
+      for (const p of placed) {
+        let cols = 1
+        for (const q of placed) {
+          if (q.it.start < p.it.end && q.it.end > p.it.start) cols = Math.max(cols, q.lane + 1)
+        }
+        meta.set(p.it.evt.booking.id, { laneIndex: p.lane, laneCount: cols })
       }
-    })
+    }
+    return filteredEvents.map(evt => ({
+      ...evt,
+      ...(meta.get(evt.booking.id) || { laneIndex: 0, laneCount: 1 }),
+    }))
   }, [filteredEvents, eventsByDay])
 
 
@@ -1010,6 +1037,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                           // If rientro overlaps with a client wash at same time, shift rientro up one slot
                           const hasClientOverlap = isRientro && startingBookings.some(b => !isRientroBooking(b.booking))
                           const topOffset = hasClientOverlap ? -(CELL_HEIGHT - 1) : 1
+                          // Side-by-side: ogni booking nel proprio sub-colonna
+                          // in base a laneIndex/laneCount (sovrapposizione oraria).
+                          const laneCount = Math.max(1, startEvt.laneCount || 1)
+                          const laneIndex = Math.min(startEvt.laneIndex || 0, laneCount - 1)
+                          const leftPct = (laneIndex / laneCount) * 100
+                          const widthPct = 100 / laneCount
 
                           // Color logic: rientro=blue, paid=green, pending pay-by-link=orange, unpaid=red.
                           // Gradient + soft shadow + hover lift for a polished look (mockup style).
@@ -1025,10 +1058,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                           return (
                           <div
                             key={startEvt.booking.id}
-                            className={`absolute inset-x-0 ${bgColor} border border-white/10 rounded-lg shadow-[0_4px_12px_-4px_rgba(0,0,0,0.5)] hover:shadow-[0_8px_24px_-6px_rgba(34,211,238,0.45)] hover:-translate-y-0.5 hover:brightness-110 transition-all duration-200 cursor-pointer ${hasClientOverlap ? 'z-[25]' : 'z-20'} overflow-hidden group/booking ring-0 hover:ring-1 hover:ring-cyan-300/40`}
+                            className={`absolute ${bgColor} border border-white/10 rounded-lg shadow-[0_4px_12px_-4px_rgba(0,0,0,0.5)] hover:shadow-[0_8px_24px_-6px_rgba(34,211,238,0.45)] hover:-translate-y-0.5 hover:brightness-110 transition-all duration-200 cursor-pointer ${hasClientOverlap ? 'z-[25]' : 'z-20'} overflow-hidden group/booking ring-0 hover:ring-1 hover:ring-cyan-300/40`}
                             style={{
                               height: `${(startEvt.duration / 5) * CELL_HEIGHT - 2}px`,
                               top: `${topOffset}px`,
+                              left: `calc(${leftPct}% + 1px)`,
+                              width: `calc(${widthPct}% - 2px)`,
                               ...(bookingHasNotes ? { boxShadow: 'inset 0 0 0 2.5px #FACC15', borderColor: '#FACC15' } : {})
                             }}
                             onClick={(e) => {
