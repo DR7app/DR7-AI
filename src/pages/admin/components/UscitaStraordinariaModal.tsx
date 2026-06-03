@@ -337,6 +337,11 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
         return {
           service_type: USCITA_SERVICE_TYPE,
           vehicle_type: 'car',
+          // 2026-06-03: bookings ha CHECK constraint
+          // (booking_source IN ('website','admin','api')). Senza questo
+          // valore l'insert tornava 400 silenzioso (PostgREST non
+          // verbalizza il check failed nel response body).
+          booking_source: 'admin',
           vehicle_id: c.vehicle_id,
           vehicle_name: v?.display_name || '',
           vehicle_plate: c.plate || v?.plate || null,
