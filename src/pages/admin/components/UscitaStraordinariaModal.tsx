@@ -451,29 +451,32 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
                 {/* Autisti for this card + vehicle to drive */}
                 <div>
                   <label className="block text-sm font-medium text-theme-text-primary mb-2">Autisti assegnati</label>
-                  <div className="flex flex-wrap gap-2">
-                    {autisti.length === 0 && <span className="text-xs text-theme-text-muted">Nessun autista — aggiungine uno sopra.</span>}
-                    {autisti.map(a => {
-                      const active = card.autista_ids.includes(a.id)
-                      return (
-                        <button key={a.id} type="button" onClick={() => toggleAutista(card, a.id)}
-                          className={`px-3 py-1 rounded-full text-xs font-medium border ${active ? 'bg-dr7-gold text-black border-dr7-gold' : 'bg-theme-bg-tertiary text-theme-text-secondary border-theme-border'}`}>
-                          {a.full_name}{!a.phone && ' (no tel.)'}
-                        </button>
-                      )
-                    })}
-                  </div>
+                  {/* Dropdown: scala con molti autisti. Seleziona → si aggiunge
+                      alla lista sotto (con veicolo da guidare + rimuovi). */}
+                  <select
+                    value=""
+                    onChange={e => { if (e.target.value) toggleAutista(card, e.target.value) }}
+                    className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary"
+                  >
+                    <option value="">+ Aggiungi autista…</option>
+                    {autisti.filter(a => !card.autista_ids.includes(a.id)).map(a => (
+                      <option key={a.id} value={a.id}>{a.full_name}{!a.phone ? ' (no tel.)' : ''}</option>
+                    ))}
+                  </select>
+                  {autisti.length === 0 && <p className="mt-1 text-xs text-theme-text-muted">Nessun autista — aggiungine uno con “+ Nuovo Autista”.</p>}
                   {card.autista_ids.length > 0 && (
                     <div className="mt-3 space-y-2">
                       {card.autista_ids.map(aid => {
                         const a = autisti.find(x => x.id === aid)
                         return (
-                          <div key={aid} className="flex items-center gap-2">
-                            <span className="text-xs text-theme-text-muted w-32 shrink-0 truncate">{a?.full_name || aid} guida:</span>
+                          <div key={aid} className="flex items-center gap-2 rounded-lg bg-theme-bg-tertiary/40 border border-theme-border px-2 py-1.5">
+                            <span className="text-xs font-medium text-theme-text-primary w-28 shrink-0 truncate">{a?.full_name || aid}</span>
+                            <span className="text-[11px] text-theme-text-muted shrink-0">guida:</span>
                             <select value={card.vehicle_to_drive[aid] || ''} onChange={e => patchCard(card.localId, { vehicle_to_drive: { ...card.vehicle_to_drive, [aid]: e.target.value } })}
-                              className="flex-1 bg-theme-bg-secondary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary">
+                              className="flex-1 min-w-0 bg-theme-bg-secondary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary">
                               {driveOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                             </select>
+                            <button type="button" onClick={() => toggleAutista(card, aid)} className="text-red-400 hover:text-red-300 text-base shrink-0 px-1 leading-none" title="Rimuovi autista">×</button>
                           </div>
                         )
                       })}

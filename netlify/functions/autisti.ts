@@ -99,6 +99,34 @@ export const handler: Handler = async (event) => {
             return { statusCode: 200, headers, body: JSON.stringify({ autista: { id, full_name, phone: telefono } }) }
         }
 
+        if (action === 'set_role') {
+            // Tagga / de-tagga un cliente esistente come autista (metadata.role).
+            const customerId = String(body.customerId || '').trim()
+            const isAutista = body.isAutista !== false // default true
+            if (!customerId) {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'customerId mancante' }) }
+            }
+            const { data: row, error: getErr } = await supabase
+                .from('customers_extended')
+                .select('metadata')
+                .eq('id', customerId)
+                .maybeSingle()
+            if (getErr) {
+                return { statusCode: 500, headers, body: JSON.stringify({ error: getErr.message }) }
+            }
+            const meta = (row?.metadata && typeof row.metadata === 'object') ? { ...row.metadata } : {}
+            if (isAutista) meta.role = 'autista'
+            else if (meta.role === 'autista') delete meta.role
+            const { error: updErr } = await supabase
+                .from('customers_extended')
+                .update({ metadata: meta })
+                .eq('id', customerId)
+            if (updErr) {
+                return { statusCode: 500, headers, body: JSON.stringify({ error: updErr.message }) }
+            }
+            return { statusCode: 200, headers, body: JSON.stringify({ ok: true, isAutista }) }
+        }
+
         return { statusCode: 400, headers, body: JSON.stringify({ error: `Unknown action: ${action}` }) }
     } catch (e) {
         console.error('[autisti] handler error:', e)

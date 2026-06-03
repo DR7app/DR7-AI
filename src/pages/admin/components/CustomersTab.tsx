@@ -500,6 +500,25 @@ export default function CustomersTab() {
     }
   }
 
+  // Tagga / de-tagga un cliente come AUTISTA (metadata.role). Una volta
+  // taggato compare con badge AUTISTA e nel dropdown di "+ Uscita Straordinaria".
+  async function toggleAutistaTag(customer: Customer) {
+    const makeAutista = customer.metadata?.role !== 'autista'
+    try {
+      const res = await authFetch('/.netlify/functions/autisti', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_role', customerId: customer.id, isAutista: makeAutista }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error('Errore: ' + (data.error || res.statusText)); return }
+      toast.success(makeAutista ? `${customer.full_name} segnato come Autista` : `${customer.full_name} rimosso dagli Autisti`)
+      loadCustomers()
+    } catch (e) {
+      toast.error('Errore: ' + (e instanceof Error ? e.message : String(e)))
+    }
+  }
+
   async function loadCustomers() {
     setLoading(true)
     try {
@@ -2713,6 +2732,14 @@ export default function CustomersTab() {
               </Button>
               <Button onClick={() => handleEdit(customer)} variant="secondary" className="text-xs py-1 px-2 bg-green-900 hover:bg-green-800 flex-1">
                 Modifica
+              </Button>
+              <Button
+                onClick={() => toggleAutistaTag(customer)}
+                variant="secondary"
+                className={`text-xs py-1 px-2 flex-1 ${customer.metadata?.role === 'autista' ? 'bg-sky-600/80 hover:bg-sky-600 text-white' : 'bg-theme-bg-primary hover:bg-theme-bg-hover text-theme-text-primary border border-theme-border'}`}
+                title={customer.metadata?.role === 'autista' ? 'Rimuovi tag Autista' : 'Segna come Autista (compare in + Uscita Straordinaria)'}
+              >
+                {customer.metadata?.role === 'autista' ? '★ Autista' : '+ Autista'}
               </Button>
               <Button onClick={() => handleDelete(customer.id)} variant="secondary" className="text-xs py-1 px-2 bg-red-900 hover:bg-red-800">
                 ×
