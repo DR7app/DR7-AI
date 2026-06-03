@@ -485,26 +485,34 @@ Ti chiediamo gentilmente di verificare tutti i dettagli prima dell'uscita e di r
 Grazie per la collaborazione.
 DR7`
           try {
-            // 1) Prova template Pro
-            const tplRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
+            // 2026-06-03: lookup template per LABEL (la modale Messaggi di
+            // Sistema Pro non espone il campo message_key — auto-generato dal
+            // backend al salvataggio). Direzione ha chiamato il template
+            // "Notifica Autista — Uscita Straordinaria". Stesso pattern di
+            // Preventivi / Status Promotion (memory: preventivi_template_keys.md).
+            const LABEL = 'Notifica Autista — Uscita Straordinaria'
+            const { data: tpl } = await supabase
+              .from('system_messages')
+              .select('message_body, is_enabled')
+              .eq('label', LABEL)
+              .maybeSingle()
+            let body = ''
+            if (tpl && tpl.is_enabled !== false && tpl.message_body) {
+              // Sostituisce manualmente le variabili — niente template engine
+              // server-side perche' qui passiamo customMessage.
+              body = tpl.message_body
+              for (const [k, v] of Object.entries(templateVars)) {
+                body = body.split(`{${k}}`).join(v)
+              }
+            } else {
+              // Fallback hardcoded col testo ufficiale direzione.
+              body = fallbackMsg
+            }
+            await fetch('/.netlify/functions/send-whatsapp-notification', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                customPhone: a.phone,
-                templateKey: 'pro_uscita_autista',
-                templateVars,
-              }),
+              body: JSON.stringify({ customPhone: a.phone, customMessage: body, type: 'Uscita Straordinaria Autista' }),
             })
-            const tplJson = await tplRes.json().catch(() => ({})) as { skipped?: boolean; reason?: string }
-            const skipped = tplJson?.skipped && tplJson?.reason === 'pro_template_unavailable'
-            if (skipped || !tplRes.ok) {
-              // 2) Fallback con messaggio hardcoded
-              await fetch('/.netlify/functions/send-whatsapp-notification', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ customPhone: a.phone, customMessage: fallbackMsg, type: 'Uscita Straordinaria Autista' }),
-              })
-            }
             notified++
           } catch (e) {
             console.warn('[UscitaStraordinaria] notifica autista fallita:', a.full_name, e)
