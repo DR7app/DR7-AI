@@ -196,7 +196,13 @@ interface OperatoriReportDashboardV2Props {
 // 2026-05-18 che gli dava pieno accesso al Report Operatori).
 // Tutti gli altri admin (Valerio, Ilenia, Ophe, eventuali futuri
 // 'direzione') mantengono la team-view classica.
-const REPORT_RESTRICTED_EMAILS = new Set<string>(['salvatore@dr7.app'])
+// 2026-06-03: aggiunti i 2 lavaggisti — vedono solo il proprio report
+// (ore, produttivita') nonostante abbiano permission 'operatori'.
+const REPORT_RESTRICTED_EMAILS = new Set<string>([
+    'salvatore@dr7.app',
+    'alessiocasula@dr7.app',
+    'alekskiszka@dr7.app',
+])
 
 export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriReportDashboardV2Props = {}) {
     const { hasRole, adminEmail } = useAdminRole()
