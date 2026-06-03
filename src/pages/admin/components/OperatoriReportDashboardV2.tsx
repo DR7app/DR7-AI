@@ -997,14 +997,32 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                         <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-3">
                             <div className="text-xs uppercase tracking-wider text-theme-text-muted mb-2">Valutazione Performance</div>
                             <div className="text-center mt-2">
-                                <div className="text-3xl font-bold text-amber-400">{(produttivitaMedia / 20).toFixed(1)}<span className="text-base text-theme-text-muted">/5</span></div>
-                                <div className="text-[10px] text-theme-text-muted mt-1">Basata su produttivita team</div>
-                                <div className="flex justify-center gap-0.5 mt-1">
-                                    {[1, 2, 3, 4, 5].map(i => {
-                                        const filled = (produttivitaMedia / 20) >= i
-                                        return <span key={i} className={filled ? 'text-amber-400' : 'text-theme-text-muted'}>★</span>
-                                    })}
-                                </div>
+                                {/* 2026-06-03: clamp a 5 stelle max. Prima
+                                    produttivita 138% → 6.9/5 stelle (impossibile).
+                                    Ora oltre target = 5/5 stelle piene + nota
+                                    "(oltre target X%)" cosi' il bonus over-target
+                                    resta visibile senza rompere la scala. */}
+                                {(() => {
+                                    const stars = Math.min(5, produttivitaMedia / 20)
+                                    return (
+                                        <>
+                                            <div className="text-3xl font-bold text-amber-400">
+                                                {stars.toFixed(1)}<span className="text-base text-theme-text-muted">/5</span>
+                                            </div>
+                                            <div className="text-[10px] text-theme-text-muted mt-1">
+                                                {produttivitaMedia > 100
+                                                    ? `Basata su produttivita team (${produttivitaMedia}%, oltre target)`
+                                                    : 'Basata su produttivita team'}
+                                            </div>
+                                            <div className="flex justify-center gap-0.5 mt-1">
+                                                {[1, 2, 3, 4, 5].map(i => {
+                                                    const filled = stars >= i
+                                                    return <span key={i} className={filled ? 'text-amber-400' : 'text-theme-text-muted'}>★</span>
+                                                })}
+                                            </div>
+                                        </>
+                                    )
+                                })()}
                             </div>
                         </div>
                         <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-3">
