@@ -458,6 +458,22 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
     })
   }, [processedRows, searchQuery, dateRange])
 
+  // 2026-06-03: il filtro "Da/A" prima filtrava solo le RIGHE (veicoli senza
+  // booking nel periodo) ma NON spostava la timeline, che restava sul mese
+  // corrente → cambiando le date "non succedeva niente" a schermo. Ora, quando
+  // si imposta una data "Da", il calendario NAVIGA al mese di quella data, così
+  // la ricerca per date muove davvero la vista (oltre a filtrare i veicoli).
+  useEffect(() => {
+    if (!dateRange.from) return
+    const [y, m, d] = dateRange.from.split('-').map(Number)
+    if (!y || !m) return
+    setCurrentDate(prev => {
+      // Evita loop / reset inutili: cambia solo se mese o anno differiscono.
+      if (prev.getFullYear() === y && prev.getMonth() === m - 1) return prev
+      return new Date(y, m - 1, d || 1)
+    })
+  }, [dateRange.from])
+
 
   // --- Render Helpers ---
 
