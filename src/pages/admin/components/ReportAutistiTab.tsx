@@ -1,7 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
+import { authFetch } from '../../../utils/authFetch'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { USCITA_SERVICE_TYPE, bookingStatusToUscitaStato } from '../../../utils/uscitaStraordinaria'
+
+interface AutistaLite { id: string; full_name: string; phone: string }
 
 interface VehicleLite { id: string; display_name: string; plate?: string | null }
 
@@ -30,6 +33,22 @@ export default function ReportAutistiTab() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [bookings, setBookings] = useState<any[]>([])
   const [vehicles, setVehicles] = useState<Map<string, VehicleLite>>(new Map())
+  const [autisti, setAutisti] = useState<AutistaLite[]>([])
+
+  // Tutti gli autisti registrati (anche senza attività nel periodo).
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await authFetch('/.netlify/functions/autisti', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'list' }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (res.ok && Array.isArray(data.autisti)) setAutisti(data.autisti)
+      } catch { /* non-blocking */ }
+    })()
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -97,18 +116,27 @@ export default function ReportAutistiTab() {
     return out
   }, [bookings, vehLabel])
 
-  // Per-autista summary
+  // Per-autista summary — parte da TUTTI gli autisti registrati (anche con 0
+  // movimenti nel periodo), poi aggancia i conteggi dei movimenti.
   const summary = useMemo(() => {
-    const m = new Map<string, { name: string; count: number; last: string | null }>()
+    const counts = new Map<string, { count: number; last: string | null; name: string }>()
     for (const r of rows) {
-      const cur = m.get(r.autistaId) || { name: r.autistaName, count: 0, last: null }
+      const cur = counts.get(r.autistaId) || { count: 0, last: null, name: r.autistaName }
       cur.count += 1
       if (r.date && (!cur.last || r.date > cur.last)) cur.last = r.date
       if (r.autistaName && r.autistaName !== '—') cur.name = r.autistaName
-      m.set(r.autistaId, cur)
+      counts.set(r.autistaId, cur)
     }
-    return Array.from(m.values()).sort((a, b) => b.count - a.count)
-  }, [rows])
+    const base = autisti.map(a => {
+      const c = counts.get(a.id)
+      return { id: a.id, name: a.full_name, phone: a.phone || '', count: c?.count || 0, last: c?.last || null }
+    })
+    // Autisti presenti nei movimenti ma non più nella lista (es. tag rimosso).
+    for (const [id, c] of counts) {
+      if (!base.some(b => b.id === id)) base.push({ id, name: c.name, phone: '', count: c.count, last: c.last })
+    }
+    return base.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+  }, [rows, autisti])
 
   const statoBadge = (s: string) => {
     const map: Record<string, string> = {
@@ -142,8 +170,8 @@ export default function ReportAutistiTab() {
           <div className="text-2xl font-bold text-theme-text-primary">{new Set(rows.map(r => r.bookingId)).size}</div>
         </div>
         <div className="rounded-xl border border-theme-border bg-theme-bg-secondary/40 p-4">
-          <div className="text-[11px] uppercase text-theme-text-muted">Autisti attivi</div>
-          <div className="text-2xl font-bold text-theme-text-primary">{summary.length}</div>
+          <div className="text-[11px] uppercase text-theme-text-muted">Autisti</div>
+          <div className="text-2xl font-bold text-theme-text-primary">{autisti.length}<span className="text-sm font-normal text-theme-text-muted"> ({summary.filter(s => s.count > 0).length} attivi)</span></div>
         </div>
         <div className="rounded-xl border border-theme-border bg-theme-bg-secondary/40 p-4">
           <div className="text-[11px] uppercase text-theme-text-muted">Periodo</div>
@@ -159,6 +187,7 @@ export default function ReportAutistiTab() {
             <thead>
               <tr className="text-left text-theme-text-muted text-xs uppercase">
                 <th className="px-4 py-2">Autista</th>
+                <th className="px-4 py-2">Telefono</th>
                 <th className="px-4 py-2">Movimenti</th>
                 <th className="px-4 py-2">Ultimo movimento</th>
               </tr>
@@ -167,12 +196,13 @@ export default function ReportAutistiTab() {
               {summary.map((s, i) => (
                 <tr key={i} className="border-t border-theme-border/40">
                   <td className="px-4 py-2 font-medium text-theme-text-primary">{s.name}</td>
-                  <td className="px-4 py-2 text-theme-text-primary">{s.count}</td>
+                  <td className="px-4 py-2 text-theme-text-secondary">{s.phone || '—'}</td>
+                  <td className="px-4 py-2"><span className={s.count > 0 ? 'text-theme-text-primary font-semibold' : 'text-theme-text-muted'}>{s.count}</span></td>
                   <td className="px-4 py-2 text-theme-text-secondary">{fmtDate(s.last)}</td>
                 </tr>
               ))}
               {summary.length === 0 && !loading && (
-                <tr><td colSpan={3} className="px-4 py-6 text-center text-theme-text-muted">Nessuna attività autista nel periodo.</td></tr>
+                <tr><td colSpan={4} className="px-4 py-6 text-center text-theme-text-muted">Nessun autista registrato. Tagga un cliente come Autista dalla scheda Clienti.</td></tr>
               )}
             </tbody>
           </table>
