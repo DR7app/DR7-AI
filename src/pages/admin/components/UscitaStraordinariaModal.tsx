@@ -338,7 +338,53 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
       const { error } = await supabase.from('bookings').insert(rows)
       if (error) throw error
 
-      toast.success(`Uscita Straordinaria salvata (${rows.length} veicolo${rows.length > 1 ? 'i' : ''}).`)
+      // Notifiche bot per-autista: ognuno riceve SOLO le sue attività.
+      const byAutista = new Map<string, UscitaVehicleCard[]>()
+      for (const c of valid) for (const aid of c.autista_ids) {
+        if (!byAutista.has(aid)) byAutista.set(aid, [])
+        byAutista.get(aid)!.push(c)
+      }
+      const fmtDT = (d: string, t: string) => (d ? `${d.split('-').reverse().join('/')}${t ? ` ${t}` : ''}` : '—')
+      let notified = 0
+      let noPhone = 0
+      for (const [aid, aCards] of byAutista) {
+        const a = autisti.find(x => x.id === aid)
+        if (!a) continue
+        if (!a.phone) { noPhone++; continue }
+        const lines: string[] = []
+        lines.push(`USCITA STRAORDINARIA${title.trim() ? ` — ${title.trim()}` : ''}`)
+        lines.push(`Ciao ${a.full_name.split(' ')[0]}, ecco le tue attività:`)
+        for (const c of aCards) {
+          const driveV = vehicles.find(v => v.id === (c.vehicle_to_drive[aid] || c.vehicle_id))
+          lines.push('')
+          lines.push(`• Veicolo: ${driveV?.display_name || ''}${driveV?.plate ? ` (${driveV.plate})` : ''}`)
+          if (c.motivazioni.length) lines.push(`  Motivo: ${c.motivazioni.join(', ')}`)
+          lines.push(`  Ritiro: ${fmtDT(c.pickup_date, c.pickup_time)}${c.pickup_place ? ` — ${c.pickup_place}` : ''}${c.pickup_address ? ` (${c.pickup_address})` : ''}`)
+          lines.push(`  Riconsegna: ${fmtDT(c.dropoff_date, c.dropoff_time)}${c.dropoff_place ? ` — ${c.dropoff_place}` : ''}${c.dropoff_address ? ` (${c.dropoff_address})` : ''}`)
+          const svc = c.servizi_extra.map(s => s.name).filter(Boolean)
+          if (svc.length) lines.push(`  Servizi: ${svc.join(', ')}`)
+          if (c.payment.state !== 'Non previsto') lines.push(`  Pagamento: ${c.payment.state}${c.payment.amount ? ` €${c.payment.amount}` : ''}`)
+          if (c.cauzione.state !== 'Non prevista') lines.push(`  Cauzione: ${c.cauzione.state}${c.cauzione.amount ? ` €${c.cauzione.amount}` : ''}`)
+          const nOp = c.note_operative || noteOperative
+          const nInt = c.note_integrative || noteIntegrative
+          if (nOp) lines.push(`  Note operative: ${nOp}`)
+          if (nInt) lines.push(`  Note: ${nInt}`)
+        }
+        try {
+          await fetch('/.netlify/functions/send-whatsapp-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ customPhone: a.phone, message: lines.join('\n') }),
+          })
+          notified++
+        } catch (e) {
+          console.warn('[UscitaStraordinaria] notifica autista fallita:', a.full_name, e)
+        }
+      }
+
+      const notifyMsg = notified > 0 ? ` · ${notified} autista notificat${notified > 1 ? 'i' : 'o'}` : ''
+      const noPhoneMsg = noPhone > 0 ? ` (${noPhone} senza telefono)` : ''
+      toast.success(`Uscita Straordinaria salvata (${rows.length} veicolo${rows.length > 1 ? 'i' : ''})${notifyMsg}${noPhoneMsg}.`)
       onSaved?.()
       onClose()
     } catch (e) {
