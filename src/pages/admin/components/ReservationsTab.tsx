@@ -71,6 +71,7 @@ import AddressAutocomplete from './AddressAutocomplete'
 import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
+import UscitaStraordinariaModal from './UscitaStraordinariaModal'
 import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import PenaltyModal from './PenaltyModal'
@@ -528,6 +529,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [showUscita, setShowUscita] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingOriginalPaymentStatus, setEditingOriginalPaymentStatus] = useState<string | null>(null) // Track if payment changed from unpaid → paid
   const [showAllVehicles, setShowAllVehicles] = useState(false) // Admin override to show all vehicles
@@ -7262,6 +7264,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         <ReservationsDashboardHeader
           bookings={bookings}
           onNewBooking={() => { resetForm(); setEditingId(null); newSession('booking_create'); setShowForm(true) }}
+          onNewUscita={() => setShowUscita(true)}
         />
 
         {/* Search Bar */}
@@ -7459,6 +7462,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               comboMessageRef.current = ''
             }
           }}
+        />
+
+        <UscitaStraordinariaModal
+          open={showUscita}
+          onClose={() => setShowUscita(false)}
+          vehicles={vehicles}
+          onSaved={() => loadData()}
         />
 
         {showForm && (
@@ -10741,9 +10751,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 function ReservationsDashboardHeader({
   bookings,
   onNewBooking,
+  onNewUscita,
 }: {
   bookings: Booking[]
   onNewBooking: () => void
+  onNewUscita: () => void
 }) {
   // Default al mese corrente in Europe/Rome.
   const nowRome = new Date()
@@ -10974,6 +10986,10 @@ function ReservationsDashboardHeader({
           <Button onClick={onNewBooking} className="text-sm">
             <span className="hidden sm:inline">+ Nuova Prenotazione</span>
             <span className="sm:hidden">+ Nuova</span>
+          </Button>
+          <Button onClick={onNewUscita} variant="secondary" className="text-sm border border-emerald-500/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10">
+            <span className="hidden sm:inline">+ Uscita Straordinaria</span>
+            <span className="sm:hidden">+ Uscita</span>
           </Button>
         </div>
       </div>
