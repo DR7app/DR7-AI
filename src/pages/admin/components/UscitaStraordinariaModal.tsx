@@ -458,15 +458,28 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
                       alla lista sotto (con veicolo da guidare + rimuovi). */}
                   <select
                     value=""
-                    onChange={e => { if (e.target.value) toggleAutista(card, e.target.value) }}
+                    onChange={e => {
+                      const v = e.target.value
+                      if (!v) return
+                      // 2026-06-03: opzione speciale "__new__" apre NewClientModal
+                      // direttamente dal dropdown invece di costringere l'admin a
+                      // tornare in alto al panel "+ Nuovo Autista". UX critica
+                      // quando la lista autisti e' vuota.
+                      if (v === '__new__') {
+                        setClientModalOpen(true)
+                        return
+                      }
+                      toggleAutista(card, v)
+                    }}
                     className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary"
                   >
                     <option value="">+ Aggiungi autista…</option>
+                    <option value="__new__">➕ Crea nuovo autista…</option>
                     {autisti.filter(a => !card.autista_ids.includes(a.id)).map(a => (
                       <option key={a.id} value={a.id}>{a.full_name}{!a.phone ? ' (no tel.)' : ''}</option>
                     ))}
                   </select>
-                  {autisti.length === 0 && <p className="mt-1 text-xs text-theme-text-muted">Nessun autista — aggiungine uno con “+ Nuovo Autista”.</p>}
+                  {autisti.length === 0 && <p className="mt-1 text-xs text-theme-text-muted">Nessun autista in archivio — seleziona “Crea nuovo autista” dal menu o usa il pulsante “+ Nuovo Autista” in alto.</p>}
                   {card.autista_ids.length > 0 && (
                     <div className="mt-3 space-y-2">
                       {card.autista_ids.map(aid => {
