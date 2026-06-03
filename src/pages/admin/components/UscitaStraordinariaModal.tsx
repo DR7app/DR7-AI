@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
@@ -152,6 +152,44 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
   // Tag metadata.role='autista' viene aggiunto automaticamente al salvataggio
   // via metadata pre-popolata.
   const [clientModalOpen, setClientModalOpen] = useState(false)
+
+  // 2026-06-03: Luoghi di Partenza/Destinazione presi da Centralina Pro
+  // (servizi.pickup_locations) — stessa lista del Booking form. Prima la
+  // tendina mostrava categorie (Gommista/Carrozzeria/Officina/ecc.) che sono
+  // gia' nel campo Motivazione → UX duplicata e sbagliata.
+  const [proLocations, setProLocations] = useState<Array<{ id: string; label: string; fee: number }>>([])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('centralina_pro_config')
+        .select('config')
+        .eq('id', 'main')
+        .maybeSingle()
+      if (cancelled) return
+      const cfg = (data?.config as { pickup_locations?: Array<{ id: string; label: string; is_active?: boolean; fee?: number; km?: number }>; delivery?: { price_per_km?: number } } | null) || {}
+      const rate = Number(cfg.delivery?.price_per_km) || 0
+      const list = (cfg.pickup_locations || [])
+        .filter(p => p.is_active !== false)
+        .map(p => ({
+          id: p.id,
+          label: p.label,
+          fee: p.fee != null ? Number(p.fee) : Math.round((Number(p.km) || 0) * rate * 100) / 100,
+        }))
+      setProLocations(list)
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  // LOCATIONS: stessa shape del Booking form. Built-ins + Pro + domicilio.
+  const luogoOptionsFromPro = useMemo(() => [
+    { value: 'dr7_office', label: 'Viale Marconi, 229, 09131 Cagliari CA' },
+    ...proLocations.map(p => ({
+      value: p.id,
+      label: p.fee > 0 ? `${p.label} (+€${p.fee.toFixed(2)})` : p.label,
+    })),
+    { value: 'domicilio', label: 'Consegna a domicilio (inserisci indirizzo)' },
+  ], [proLocations])
 
   const loadAutisti = useCallback(async () => {
     setLoadingAutisti(true)
@@ -407,7 +445,10 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
   }
 
   const vehicleOptions = [{ value: '', label: '— Seleziona veicolo —' }, ...vehicles.map(v => ({ value: v.id, label: `${v.display_name}${v.plate ? ` (${v.plate})` : ''}` }))]
-  const luogoOptions = [{ value: '', label: '—' }, ...USCITA_LUOGHI.map(l => ({ value: l, label: l }))]
+  // luogoOptions per le tendine Partenza/Destinazione: sorgente unica = Centralina Pro.
+  // Includiamo il placeholder vuoto in cima per "non selezionato".
+  const luogoOptions = [{ value: '', label: '—' }, ...luogoOptionsFromPro]
+  void USCITA_LUOGHI // legacy export: non piu' usato, conservato per backward-compat
 
   return (
     <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-black/50 p-2 sm:p-4">
@@ -534,11 +575,20 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
                       <Input label="Data" type="date" value={card.pickup_date} onChange={e => patchCard(card.localId, { pickup_date: e.target.value })} />
                       <Select label="Ora" value={card.pickup_time} onChange={e => patchCard(card.localId, { pickup_time: e.target.value })} options={TIME_OPTIONS} />
                     </div>
-                    <Select label="Luogo" value={card.pickup_place} onChange={e => patchCard(card.localId, { pickup_place: e.target.value })} options={luogoOptions} />
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-primary mb-2">Indirizzo preciso</label>
-                      <AddressAutocomplete value={card.pickup_address} onChange={v => patchCard(card.localId, { pickup_address: v })} placeholder="Via, civico, CAP, città" />
-                    </div>
+                    <Select label="Luogo" value={card.pickup_place} onChange={e => {
+                      const v = e.target.value
+                      // Se cambi via dal domicilio, pulisci l'indirizzo libero.
+                      patchCard(card.localId, { pickup_place: v, ...(v !== 'domicilio' ? { pickup_address: '' } : {}) })
+                    }} options={luogoOptions} />
+                    {/* 2026-06-03: AddressAutocomplete solo per "Consegna a
+                        domicilio", come nel Booking form. Per gli altri luoghi
+                        (aeroporti, sede DR7) l'indirizzo e' implicito. */}
+                    {card.pickup_place === 'domicilio' && (
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text-primary mb-2">Indirizzo</label>
+                        <AddressAutocomplete value={card.pickup_address} onChange={v => patchCard(card.localId, { pickup_address: v })} placeholder="Via, civico, CAP, città" />
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <div className="text-xs font-semibold uppercase text-theme-text-muted">Destinazione</div>
@@ -546,11 +596,16 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
                       <Input label="Data" type="date" value={card.dropoff_date} onChange={e => patchCard(card.localId, { dropoff_date: e.target.value })} />
                       <Select label="Ora" value={card.dropoff_time} onChange={e => patchCard(card.localId, { dropoff_time: e.target.value })} options={TIME_OPTIONS} />
                     </div>
-                    <Select label="Luogo" value={card.dropoff_place} onChange={e => patchCard(card.localId, { dropoff_place: e.target.value })} options={luogoOptions} />
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-primary mb-2">Indirizzo preciso</label>
-                      <AddressAutocomplete value={card.dropoff_address} onChange={v => patchCard(card.localId, { dropoff_address: v })} placeholder="Via, civico, CAP, città" />
-                    </div>
+                    <Select label="Luogo" value={card.dropoff_place} onChange={e => {
+                      const v = e.target.value
+                      patchCard(card.localId, { dropoff_place: v, ...(v !== 'domicilio' ? { dropoff_address: '' } : {}) })
+                    }} options={luogoOptions} />
+                    {card.dropoff_place === 'domicilio' && (
+                      <div>
+                        <label className="block text-sm font-medium text-theme-text-primary mb-2">Indirizzo</label>
+                        <AddressAutocomplete value={card.dropoff_address} onChange={v => patchCard(card.localId, { dropoff_address: v })} placeholder="Via, civico, CAP, città" />
+                      </div>
+                    )}
                   </div>
                 </div>
 
