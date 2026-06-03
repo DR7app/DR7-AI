@@ -138,8 +138,11 @@ function BookingLinkPicker({ value, onChange }: { value: string | null; onChange
 export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSaved }: Props) {
   const [title, setTitle] = useState('')
   const [stato, setStato] = useState<UscitaStato>('Programmata')
-  const [noteOperative, setNoteOperative] = useState('')
-  const [noteIntegrative, setNoteIntegrative] = useState('')
+  // 2026-06-03: rimosse le note globali a livello modal — direzione vuole
+  // UNA sola textarea "Note" per card. Le due variabili sotto restano per
+  // backward-compat coi reset (init/save) ma sono sempre stringa vuota.
+  const noteOperative = ''
+  const noteIntegrative = ''
   const [cards, setCards] = useState<UscitaVehicleCard[]>([emptyVehicleCard(uid())])
   const [saving, setSaving] = useState(false)
 
@@ -215,8 +218,7 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
     // Reset draft each time the modal opens.
     setTitle('')
     setStato('Programmata')
-    setNoteOperative('')
-    setNoteIntegrative('')
+    // 2026-06-03: noteOperative/noteIntegrative globali rimossi → niente reset.
     setCards([emptyVehicleCard(uid())])
     setClientModalOpen(false)
   }, [open, loadAutisti])
@@ -787,16 +789,14 @@ DR7`
                   ))}
                 </div>
 
-                {/* Notes */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-theme-text-primary mb-2">Note operative</label>
-                    <textarea value={card.note_operative} onChange={e => patchCard(card.localId, { note_operative: e.target.value })} rows={2} className="w-full bg-theme-bg-secondary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-theme-text-primary mb-2">Note integrative (in notifica autista)</label>
-                    <textarea value={card.note_integrative} onChange={e => patchCard(card.localId, { note_integrative: e.target.value })} rows={2} className="w-full bg-theme-bg-secondary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary" />
-                  </div>
+                {/* 2026-06-03: UNA sola textarea "Note" per card. Prima
+                    c'erano 4 campi (note_operative + note_integrative per
+                    card, e gli stessi due a livello globale) — direzione si
+                    lamentava della duplicazione. La nota va sia nel WhatsApp
+                    autista ({note_integrative}) sia nei booking_details. */}
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-primary mb-2">Note</label>
+                  <textarea value={card.note_integrative} onChange={e => patchCard(card.localId, { note_integrative: e.target.value, note_operative: e.target.value })} rows={3} placeholder="Indicazioni per l'autista, dettagli operativi, riferimenti…" className="w-full bg-theme-bg-secondary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary" />
                 </div>
               </div>
             )
@@ -805,18 +805,6 @@ DR7`
           <button type="button" onClick={addCard} className="w-full rounded-xl border border-dashed border-theme-border py-3 text-sm font-medium text-theme-text-secondary hover:text-theme-text-primary hover:border-dr7-gold">
             + Aggiungi veicolo / tratta
           </button>
-
-          {/* Global notes */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-theme-text-primary mb-2">Note operative (generali)</label>
-              <textarea value={noteOperative} onChange={e => setNoteOperative(e.target.value)} rows={2} className="w-full bg-theme-bg-secondary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-theme-text-primary mb-2">Note integrative (generali)</label>
-              <textarea value={noteIntegrative} onChange={e => setNoteIntegrative(e.target.value)} rows={2} className="w-full bg-theme-bg-secondary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary" />
-            </div>
-          </div>
         </div>
 
         {/* Footer */}
