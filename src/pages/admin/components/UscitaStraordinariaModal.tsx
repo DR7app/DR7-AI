@@ -6,6 +6,7 @@ import Button from './Button'
 import Input from './Input'
 import Select from './Select'
 import AddressAutocomplete from './AddressAutocomplete'
+import NewClientModal from './NewClientModal'
 import {
   USCITA_SERVICE_TYPE,
   USCITA_MOTIVAZIONI,
@@ -145,9 +146,12 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
   // Autisti registry (customers tagged metadata.role='autista')
   const [autisti, setAutisti] = useState<Autista[]>([])
   const [loadingAutisti, setLoadingAutisti] = useState(false)
-  const [showNewAutista, setShowNewAutista] = useState(false)
-  const [newAutista, setNewAutista] = useState({ nome: '', cognome: '', telefono: '' })
-  const [creatingAutista, setCreatingAutista] = useState(false)
+  // 2026-06-03: il vecchio mini-form inline (showNewAutista + handleCreateAutista)
+  // e' stato sostituito dal NewClientModal completo. Cosi' l'admin riempie tutti
+  // i campi del cliente (CF, indirizzo, ecc.) e seleziona il badge "Autista".
+  // Tag metadata.role='autista' viene aggiunto automaticamente al salvataggio
+  // via metadata pre-popolata.
+  const [clientModalOpen, setClientModalOpen] = useState(false)
 
   const loadAutisti = useCallback(async () => {
     setLoadingAutisti(true)
@@ -176,8 +180,7 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
     setNoteOperative('')
     setNoteIntegrative('')
     setCards([emptyVehicleCard(uid())])
-    setShowNewAutista(false)
-    setNewAutista({ nome: '', cognome: '', telefono: '' })
+    setClientModalOpen(false)
   }, [open, loadAutisti])
 
   if (!open) return null
@@ -211,30 +214,28 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
   const removeServizio = (card: UscitaVehicleCard, idx: number) =>
     patchCard(card.localId, { servizi_extra: card.servizi_extra.filter((_, i) => i !== idx) })
 
-  async function handleCreateAutista() {
-    const full = `${newAutista.nome} ${newAutista.cognome}`.trim()
-    if (!full) { toast.error('Inserisci almeno il nome'); return }
-    setCreatingAutista(true)
+  // 2026-06-03: handleCreateAutista (mini-form inline) sostituito da
+  // onClientCreated callback del NewClientModal. Quando l'admin salva il
+  // cliente con metadata.role='autista' pre-popolato, il modal si chiude
+  // e la lista autisti viene ricaricata automaticamente.
+  async function handleClientCreated(newClientId: string) {
+    // 1. Se il cliente appena creato e' un autista, lo aggancia subito
+    //    al tag via /.netlify/functions/autisti?action=toggle. Cosi'
+    //    chi non sapeva del badge metadata "role:autista" e' coperto
+    //    automaticamente.
     try {
-      const res = await authFetch('/.netlify/functions/autisti', {
+      await authFetch('/.netlify/functions/autisti', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create', ...newAutista }),
+        body: JSON.stringify({ action: 'set_role', customerId: newClientId, isAutista: true }),
       })
-      const data = await res.json().catch(() => ({}))
-      if (res.ok && data.autista) {
-        toast.success(`Autista "${data.autista.full_name}" creato`)
-        setAutisti(prev => [...prev, data.autista].sort((a, b) => a.full_name.localeCompare(b.full_name)))
-        setShowNewAutista(false)
-        setNewAutista({ nome: '', cognome: '', telefono: '' })
-      } else {
-        toast.error('Autista non creato: ' + (data.error || res.statusText))
-      }
-    } catch (e) {
-      toast.error('Errore: ' + (e instanceof Error ? e.message : String(e)))
-    } finally {
-      setCreatingAutista(false)
+    } catch (err) {
+      console.warn('[UscitaStraordinaria] set_role autista tag fallito (non fatale):', err)
     }
+    // 2. Ricarica la lista autisti — la nuova persona ora appare nel dropdown.
+    await loadAutisti()
+    setClientModalOpen(false)
+    toast.success('Autista creato e taggato')
   }
 
   const toIso = (date: string, time: string) => {
@@ -418,16 +419,18 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
           <div className="rounded-xl border border-theme-border bg-theme-bg-tertiary/30 p-3">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-sm font-semibold text-theme-text-primary">Autisti disponibili {loadingAutisti && <span className="text-theme-text-muted">(caricamento…)</span>}</span>
-              <button type="button" onClick={() => setShowNewAutista(v => !v)} className="text-xs underline text-dr7-gold">+ Nuovo Autista</button>
+              {/* 2026-06-03: apre NewClientModal con il tag autista pre-impostato
+                  invece del vecchio mini-form inline. Cosi' l'admin riempie tutti
+                  i campi (CF, indirizzo, patente, ecc.) e l'autista viene
+                  salvato in customers_extended come cliente completo + taggato. */}
+              <button
+                type="button"
+                onClick={() => setClientModalOpen(true)}
+                className="text-xs underline text-dr7-gold cursor-pointer"
+              >
+                + Nuovo Autista
+              </button>
             </div>
-            {showNewAutista && (
-              <div className="mb-3 grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
-                <Input label="Nome" value={newAutista.nome} onChange={e => setNewAutista(s => ({ ...s, nome: e.target.value }))} />
-                <Input label="Cognome" value={newAutista.cognome} onChange={e => setNewAutista(s => ({ ...s, cognome: e.target.value }))} />
-                <Input label="Telefono (WhatsApp)" value={newAutista.telefono} onChange={e => setNewAutista(s => ({ ...s, telefono: e.target.value }))} placeholder="+39…" />
-                <Button type="button" onClick={handleCreateAutista} disabled={creatingAutista} className="text-sm">{creatingAutista ? 'Salvataggio…' : 'Salva autista'}</Button>
-              </div>
-            )}
             <p className="text-[11px] text-theme-text-muted">Gli autisti selezionati per ogni veicolo riceveranno la notifica con il mezzo assegnato. Salvati nei Clienti/Lead con tag “Autista”.</p>
           </div>
 
@@ -620,6 +623,16 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
           <Button type="button" onClick={handleSave} disabled={saving}>{saving ? 'Salvataggio…' : 'Salva Uscita'}</Button>
         </div>
       </div>
+
+      {/* 2026-06-03: NewClientModal per creare un nuovo Autista. Pre-popolato
+          con metadata.role='autista' tramite initialData. Dopo il salvataggio
+          handleClientCreated forza il tag e ricarica la lista autisti. */}
+      <NewClientModal
+        isOpen={clientModalOpen}
+        onClose={() => setClientModalOpen(false)}
+        onClientCreated={handleClientCreated}
+        initialData={{ metadata: { role: 'autista' } }}
+      />
     </div>
   )
 }
