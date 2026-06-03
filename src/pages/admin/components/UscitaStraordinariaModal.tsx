@@ -392,41 +392,123 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
         if (!byAutista.has(aid)) byAutista.set(aid, [])
         byAutista.get(aid)!.push(c)
       }
-      const fmtDT = (d: string, t: string) => (d ? `${d.split('-').reverse().join('/')}${t ? ` ${t}` : ''}` : '—')
+      // 2026-06-03: notifica autista via template Pro (key pro_uscita_autista).
+      // Se il template non e' configurato in Messaggi di Sistema Pro, fallback
+      // a customMessage hardcoded col template ufficiale fornito direzione.
+      // Una notifica PER OGNI CARD (uscita assegnata) — l'autista riceve un
+      // messaggio per ciascun veicolo, ognuno con i suoi dettagli.
+      const fmtDate = (d: string) => (d ? d.split('-').reverse().join('/') : '—')
+      const lookupBookingRef = async (bookingId: string | null): Promise<string> => {
+        if (!bookingId) return '—'
+        try {
+          const { data } = await supabase
+            .from('bookings')
+            .select('id, customer_name, vehicle_name, vehicle_plate')
+            .eq('id', bookingId)
+            .maybeSingle()
+          if (!data) return `#${bookingId.slice(0, 8).toUpperCase()}`
+          const ref = `#${String(data.id).slice(0, 8).toUpperCase()}`
+          const who = data.customer_name || ''
+          const what = `${data.vehicle_name || ''}${data.vehicle_plate ? ` (${data.vehicle_plate})` : ''}`.trim()
+          return [ref, who, what].filter(Boolean).join(' · ')
+        } catch { return `#${bookingId.slice(0, 8).toUpperCase()}` }
+      }
       let notified = 0
       let noPhone = 0
       for (const [aid, aCards] of byAutista) {
         const a = autisti.find(x => x.id === aid)
         if (!a) continue
         if (!a.phone) { noPhone++; continue }
-        const lines: string[] = []
-        lines.push(`USCITA STRAORDINARIA${title.trim() ? ` — ${title.trim()}` : ''}`)
-        lines.push(`Ciao ${a.full_name.split(' ')[0]}, ecco le tue attività:`)
+        const firstName = (a.full_name || '').split(' ')[0] || a.full_name || 'Autista'
         for (const c of aCards) {
           const driveV = vehicles.find(v => v.id === (c.vehicle_to_drive[aid] || c.vehicle_id))
-          lines.push('')
-          lines.push(`• Veicolo: ${driveV?.display_name || ''}${driveV?.plate ? ` (${driveV.plate})` : ''}`)
-          if (c.motivazioni.length) lines.push(`  Motivo: ${c.motivazioni.join(', ')}`)
-          lines.push(`  Ritiro: ${fmtDT(c.pickup_date, c.pickup_time)}${c.pickup_place ? ` — ${c.pickup_place}` : ''}${c.pickup_address ? ` (${c.pickup_address})` : ''}`)
-          lines.push(`  Riconsegna: ${fmtDT(c.dropoff_date, c.dropoff_time)}${c.dropoff_place ? ` — ${c.dropoff_place}` : ''}${c.dropoff_address ? ` (${c.dropoff_address})` : ''}`)
-          const svc = c.servizi_extra.map(s => s.name).filter(Boolean)
-          if (svc.length) lines.push(`  Servizi: ${svc.join(', ')}`)
-          if (c.payment.state !== 'Non previsto') lines.push(`  Pagamento: ${c.payment.state}${c.payment.amount ? ` €${c.payment.amount}` : ''}`)
-          if (c.cauzione.state !== 'Non prevista') lines.push(`  Cauzione: ${c.cauzione.state}${c.cauzione.amount ? ` €${c.cauzione.amount}` : ''}`)
-          const nOp = c.note_operative || noteOperative
-          const nInt = c.note_integrative || noteIntegrative
-          if (nOp) lines.push(`  Note operative: ${nOp}`)
-          if (nInt) lines.push(`  Note: ${nInt}`)
-        }
-        try {
-          await fetch('/.netlify/functions/send-whatsapp-notification', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ customPhone: a.phone, message: lines.join('\n') }),
-          })
-          notified++
-        } catch (e) {
-          console.warn('[UscitaStraordinaria] notifica autista fallita:', a.full_name, e)
+          const bookingRefStr = await lookupBookingRef(c.linked_booking_id)
+          const svcExtras = c.servizi_extra
+            .map(s => [s.name, s.quantity > 1 ? `x${s.quantity}` : '', s.price ? `€${s.price}` : ''].filter(Boolean).join(' '))
+            .filter(Boolean)
+            .join(', ')
+          const payStr = c.payment.state === 'Non previsto'
+            ? 'Non previsto'
+            : `${c.payment.state}${c.payment.amount ? ` €${c.payment.amount}` : ''}`
+          const cauStr = c.cauzione.state === 'Non prevista'
+            ? 'Non prevista'
+            : `${c.cauzione.state}${c.cauzione.amount ? ` €${c.cauzione.amount}` : ''}`
+          const noteInt = (c.note_integrative || noteIntegrative || '').trim() || '—'
+          const motivazione = c.motivazioni.length ? c.motivazioni.join(', ') : '—'
+          const templateVars: Record<string, string> = {
+            nome_autista: firstName,
+            veicolo: driveV?.display_name || '',
+            targa: driveV?.plate || c.plate || '—',
+            data_ritiro: fmtDate(c.pickup_date),
+            ora_ritiro: c.pickup_time || '—',
+            luogo_ritiro: c.pickup_place || '—',
+            indirizzo_ritiro: c.pickup_address || '—',
+            data_riconsegna: fmtDate(c.dropoff_date),
+            ora_riconsegna: c.dropoff_time || '—',
+            luogo_riconsegna: c.dropoff_place || '—',
+            indirizzo_riconsegna: c.dropoff_address || '—',
+            motivazione_uscita: motivazione,
+            booking_collegato: bookingRefStr,
+            stato_pagamento: payStr,
+            stato_cauzione: cauStr,
+            servizi_extra: svcExtras || '—',
+            note_integrative: noteInt,
+          }
+          // Fallback hardcoded — testo ufficiale direzione 2026-06-03.
+          const fallbackMsg = `Salve ${templateVars.nome_autista},
+ti è stata assegnata una nuova uscita straordinaria.
+
+Dettagli incarico:
+• Veicolo assegnato: ${templateVars.veicolo}
+• Targa: ${templateVars.targa}
+• Data ritiro: ${templateVars.data_ritiro}
+• Ora ritiro: ${templateVars.ora_ritiro}
+• Luogo ritiro: ${templateVars.luogo_ritiro}
+• Indirizzo ritiro: ${templateVars.indirizzo_ritiro}
+• Data riconsegna: ${templateVars.data_riconsegna}
+• Ora riconsegna: ${templateVars.ora_riconsegna}
+• Luogo riconsegna: ${templateVars.luogo_riconsegna}
+• Indirizzo riconsegna: ${templateVars.indirizzo_riconsegna}
+• Motivazione uscita: ${templateVars.motivazione_uscita}
+• Booking collegato: ${templateVars.booking_collegato}
+
+Condizioni operative:
+• Pagamento: ${templateVars.stato_pagamento}
+• Cauzione: ${templateVars.stato_cauzione}
+• Servizi extra / experience: ${templateVars.servizi_extra}
+
+Note integrative:
+${templateVars.note_integrative}
+
+Ti chiediamo gentilmente di verificare tutti i dettagli prima dell'uscita e di rispettare gli orari indicati.
+
+Grazie per la collaborazione.
+DR7`
+          try {
+            // 1) Prova template Pro
+            const tplRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                customPhone: a.phone,
+                templateKey: 'pro_uscita_autista',
+                templateVars,
+              }),
+            })
+            const tplJson = await tplRes.json().catch(() => ({})) as { skipped?: boolean; reason?: string }
+            const skipped = tplJson?.skipped && tplJson?.reason === 'pro_template_unavailable'
+            if (skipped || !tplRes.ok) {
+              // 2) Fallback con messaggio hardcoded
+              await fetch('/.netlify/functions/send-whatsapp-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ customPhone: a.phone, customMessage: fallbackMsg, type: 'Uscita Straordinaria Autista' }),
+              })
+            }
+            notified++
+          } catch (e) {
+            console.warn('[UscitaStraordinaria] notifica autista fallita:', a.full_name, e)
+          }
         }
       }
 
