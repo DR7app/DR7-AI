@@ -756,6 +756,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   const [generatingContract, setGeneratingContract] = useState(false)
   const [autoProntaSending, setAutoProntaSending] = useState(false)
+  const autoProntaLockRef = useRef<Set<string>>(new Set())
   // Pre-auth disabled — Nexi capture not supported via Pay by Link API
 
   const isInitialEditLoad = useRef(false)
@@ -3014,8 +3015,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // ritiro. Invia il template Pro agganciato all'evento "Auto pronta Noleggio"
   // (legacy key rental_auto_pronta). Stesso pattern di Prime Wash.
   async function handleAutoPronta(booking: Booking) {
-    if (autoProntaSending) return
+    // Synchronous lock keyed by booking — state guards are async and let a
+    // fast double-click through, sending the WhatsApp twice.
+    if (autoProntaLockRef.current.has(booking.id) || autoProntaSending) return
     if (booking.booking_details?.auto_pronta_sent_at) { toast('Cliente già notificato (Auto Pronta)'); return }
+    autoProntaLockRef.current.add(booking.id)
     const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
     if (!custPhone) { toast.error('Numero di telefono cliente mancante — impossibile inviare WhatsApp'); return }
     const custName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente'
@@ -3056,6 +3060,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     } catch (err: unknown) {
       toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)), { id: toastId })
     } finally {
+      autoProntaLockRef.current.delete(booking.id)
       setAutoProntaSending(false)
     }
   }

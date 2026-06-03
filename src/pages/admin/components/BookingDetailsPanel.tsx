@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
@@ -22,13 +22,17 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
   const [resolvedCustomer, setResolvedCustomer] = useState<{ name?: string; phone?: string; email?: string } | null>(null)
   const [autoProntaSending, setAutoProntaSending] = useState(false)
   const [autoProntaSent, setAutoProntaSent] = useState<boolean>(!!booking.booking_details?.auto_pronta_sent_at)
+  // Synchronous lock: state updates are async, so a fast double-click would
+  // slip past the `autoProntaSending` check below. The ref flips immediately.
+  const autoProntaLock = useRef(false)
 
   // "Auto Pronta": notifica WhatsApp al cliente che il veicolo è pronto al
   // ritiro. Invia il template Pro agganciato all'evento "Auto pronta Noleggio"
   // (legacy key rental_auto_pronta → resolver per handled_events/service_type).
   // Stesso pattern del bottone Auto Pronta di Prime Wash (CarWashBookingsTab).
   async function handleAutoPronta() {
-    if (autoProntaSending || autoProntaSent) return
+    if (autoProntaLock.current || autoProntaSending || autoProntaSent) return
+    autoProntaLock.current = true
     const custPhone = booking.customer_phone || resolvedCustomer?.phone || booking.booking_details?.customer?.phone
     if (!custPhone) { toast.error('Numero di telefono cliente mancante — impossibile inviare WhatsApp'); return }
     const custName = booking.customer_name || resolvedCustomer?.name || booking.booking_details?.customer?.fullName || 'Cliente'
@@ -73,6 +77,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
     } catch (err: unknown) {
       toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)), { id: toastId })
     } finally {
+      autoProntaLock.current = false
       setAutoProntaSending(false)
     }
   }

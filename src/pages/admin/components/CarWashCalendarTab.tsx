@@ -162,9 +162,13 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   // Disabilita finche' WhatsApp + update DB sono in flight, ed evita doppio
   // send se direzione clicca due volte di fila.
   const [sendingReady, setSendingReady] = useState<string | null>(null)
+  // Synchronous lock — `sendingReady` state updates async, so a fast
+  // double-click would slip through and send the WhatsApp twice.
+  const autoProntaLockRef = useRef<Set<string>>(new Set())
 
   async function handleAutoPronta(booking: CarWashBooking) {
-    if (sendingReady === booking.id) return
+    if (autoProntaLockRef.current.has(booking.id) || sendingReady === booking.id) return
+    autoProntaLockRef.current.add(booking.id)
     setSendingReady(booking.id)
     const phone = booking.customer_phone || booking.booking_details?.customer?.phone || ''
     const fullName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente'
@@ -235,6 +239,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       logger.error('[Auto Pronta] failed:', msg)
       toast.error('Errore: ' + msg)
     } finally {
+      autoProntaLockRef.current.delete(booking.id)
       setSendingReady(null)
     }
   }

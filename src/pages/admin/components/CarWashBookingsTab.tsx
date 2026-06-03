@@ -1255,14 +1255,19 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   // istantaneamente prima del refetch.
   const [autoProntaSentIds, setAutoProntaSentIds] = useState<Set<string>>(new Set())
   const [autoProntaSending, setAutoProntaSending] = useState<Set<string>>(new Set())
+  // Synchronous lock — the Set state above updates async, so a fast
+  // double-click would slip through and send the WhatsApp twice.
+  const autoProntaLockRef = useRef<Set<string>>(new Set())
 
   const isAutoProntaSent = (booking: CarWashBooking) =>
     autoProntaSentIds.has(booking.id) || !!booking.booking_details?.auto_pronta_sent_at
 
   async function handleAutoPronta(booking: CarWashBooking) {
     if (!booking.id) return
+    if (autoProntaLockRef.current.has(booking.id)) return
     if (isAutoProntaSent(booking)) return
     if (autoProntaSending.has(booking.id)) return
+    autoProntaLockRef.current.add(booking.id)
 
     const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
     if (!custPhone) {
@@ -1330,6 +1335,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       const errMsg = err instanceof Error ? err.message : String(err)
       toast.error('Errore: ' + errMsg, { id: toastId })
     } finally {
+      autoProntaLockRef.current.delete(booking.id)
       setAutoProntaSending(prev => { const next = new Set(prev); next.delete(booking.id); return next })
     }
   }
