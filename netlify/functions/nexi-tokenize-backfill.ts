@@ -150,14 +150,23 @@ export const handler: Handler = async (event) => {
         // `cust` later.
 
         // Skip only when the row already has BOTH a contract id AND a
-        // masked pan. The previous condition also skipped when the
-        // contract_id matched the order id even with no PAN saved — that
-        // left transactions like Alessio Manzali's stuck without a card
-        // number, since their contract_id IS the order id.
+        // masked pan AND brand+type. Previously we skipped as soon as the
+        // PAN was saved, which left cards with empty nexi_card_type /
+        // nexi_card_brand stuck without their financial type (cred/deb/
+        // prepaid) and brand (Visa/MC). Direzione's complaint 2026-06-02:
+        // "tante carte nel tab Nexi senza tipo". Now we re-fetch when
+        // either type or brand is missing.
         const existingContract = cust?.metadata?.nexi_contract_id
         const txMeta = (tx.metadata || {}) as Record<string, unknown>
         const txAlreadyHasPan = typeof txMeta.nexi_card_masked_pan === 'string' && (txMeta.nexi_card_masked_pan as string).length > 0
-        if (cust && existingContract && cust.metadata?.nexi_card_masked_pan && txAlreadyHasPan) {
+        const custMeta = (cust?.metadata || {}) as Record<string, unknown>
+        const custHasType = typeof custMeta.nexi_card_type === 'string' && (custMeta.nexi_card_type as string).length > 0
+        const custHasBrand = typeof custMeta.nexi_card_brand === 'string' && (custMeta.nexi_card_brand as string).length > 0
+        const txHasType = typeof txMeta.nexi_card_type === 'string' && (txMeta.nexi_card_type as string).length > 0
+        const txHasBrand = typeof txMeta.nexi_card_brand === 'string' && (txMeta.nexi_card_brand as string).length > 0
+        const fullyPopulated = (!cust || (existingContract && custMeta.nexi_card_masked_pan && custHasType && custHasBrand))
+            && txAlreadyHasPan && txHasType && txHasBrand
+        if (fullyPopulated) {
             skipped++
             continue
         }

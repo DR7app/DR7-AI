@@ -1039,21 +1039,50 @@ export default function NexiTab() {
                                                         {card.masked_pan}
                                                     </span>
                                                 )}
-                                                {card.circuit && (
-                                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-dr7-gold/10 text-dr7-gold border-dr7-gold/30 uppercase">
-                                                        {card.circuit}
-                                                    </span>
-                                                )}
-                                                {card.card_type && (
-                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${
-                                                        card.card_type === 'credit' ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' :
-                                                        card.card_type === 'debit' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' :
-                                                        card.card_type === 'prepaid' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' :
-                                                        'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'
-                                                    }`}>
-                                                        {card.card_type}
-                                                    </span>
-                                                )}
+                                                {/* 2026-06-02: badge brand + tipo finanziario mostrati
+                                                    SEMPRE. Se Nexi/BIN lookup non hanno valorizzato i
+                                                    campi, ricaviamo il brand dalla prima cifra del PAN
+                                                    (4=Visa, 5=MC, 3=Amex/Diners) e marchiamo il tipo
+                                                    "Sconosciuto" cosi' direzione vede subito quali
+                                                    carte vanno rilookuppate. */}
+                                                {(() => {
+                                                    const rawBrand = (card.card_brand || card.circuit || '').toLowerCase()
+                                                    const panFirst = (card.masked_pan || '').replace(/\D/g, '').charAt(0)
+                                                    const derivedBrand = !rawBrand && panFirst
+                                                        ? (panFirst === '4' ? 'visa'
+                                                            : panFirst === '5' || panFirst === '2' ? 'mastercard'
+                                                            : panFirst === '3' ? 'amex'
+                                                            : '')
+                                                        : ''
+                                                    const brandLabel = rawBrand || derivedBrand || 'Brand sconosciuto'
+                                                    const brandKnown = !!(rawBrand || derivedBrand)
+                                                    return (
+                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${
+                                                            brandKnown
+                                                                ? 'bg-dr7-gold/10 text-dr7-gold border-dr7-gold/30'
+                                                                : 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'
+                                                        }`}>
+                                                            {brandLabel}
+                                                        </span>
+                                                    )
+                                                })()}
+                                                {(() => {
+                                                    const t = (card.card_type || '').toLowerCase()
+                                                    const label = t === 'credit' ? 'Credito'
+                                                        : t === 'debit' ? 'Debito'
+                                                        : t === 'prepaid' ? 'Prepagata'
+                                                        : 'Tipo sconosciuto'
+                                                    return (
+                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${
+                                                            t === 'credit' ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' :
+                                                            t === 'debit' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' :
+                                                            t === 'prepaid' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' :
+                                                            'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'
+                                                        }`}>
+                                                            {label}
+                                                        </span>
+                                                    )
+                                                })()}
                                             </div>
                                             <div className="text-xs text-theme-text-muted mt-0.5">
                                                 {card.email}{card.phone ? ` · ${card.phone}` : ''}
