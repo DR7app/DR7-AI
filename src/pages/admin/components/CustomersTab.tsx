@@ -2892,6 +2892,14 @@ export default function CustomersTab() {
                       >
                         Modifica
                       </Button>
+                      <Button
+                        onClick={() => toggleAutistaTag(customer)}
+                        variant="secondary"
+                        className={`text-xs py-1 px-3 ${customer.metadata?.role === 'autista' ? 'bg-sky-600/80 hover:bg-sky-600 text-white' : 'bg-theme-bg-primary hover:bg-theme-bg-hover text-theme-text-primary border border-theme-border'}`}
+                        title={customer.metadata?.role === 'autista' ? 'Rimuovi tag Autista' : 'Segna come Autista (compare in + Uscita Straordinaria)'}
+                      >
+                        {customer.metadata?.role === 'autista' ? '★ Autista' : '+ Autista'}
+                      </Button>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm">
