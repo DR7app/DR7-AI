@@ -17,6 +17,8 @@ interface BookingDetail {
   payment_method: string
   penalty_amount?: number
   danni_amount?: number
+  // 2026-06-04: quota di noleggio ancora da saldare (prorata al periodo)
+  da_saldare?: number
 }
 
 interface VehicleReport {
@@ -40,6 +42,8 @@ interface VehicleReport {
   rentalRevenue: number
   penaltyRevenue: number
   danniRevenue: number
+  // 2026-06-04: quota noleggio non incassata (da saldare), prorata al periodo
+  daSaldareRevenue?: number
   totalRevenue: number
   // 2026-05-24: incassi anticipati per veicolo
   anticipatedRevenue?: number
@@ -75,6 +79,8 @@ interface VehicleReportData {
   totalRentalRevenue: number
   totalPenaltyRevenue: number
   totalDanniRevenue: number
+  // 2026-06-04: totale noleggio ancora da saldare (somma prorata)
+  totalDaSaldare?: number
   totalRevenue: number
   // 2026-05-24: incassi anticipati = pagati nel periodo ma rental futuro
   totalAnticipatedRevenue?: number
@@ -400,11 +406,12 @@ export default function ReportsTab() {
     const totalPenaltyRevenue = vehicles.reduce((s, v) => s + v.penaltyRevenue, 0)
     const totalDanniRevenue = vehicles.reduce((s, v) => s + v.danniRevenue, 0)
     const totalAnticipatedRevenue = vehicles.reduce((s, v) => s + (v.anticipatedRevenue || 0), 0)
+    const totalDaSaldare = vehicles.reduce((s, v) => s + (v.daSaldareRevenue || 0), 0)
     const totalRevenue = vehicles.reduce((s, v) => s + v.totalRevenue, 0)
     const avgUtil = vehicles.length > 0
       ? vehicles.reduce((s, v) => s + v.utilizationRate, 0) / vehicles.length
       : 0
-    return { totalRented, totalRentalRevenue, totalPenaltyRevenue, totalDanniRevenue, totalAnticipatedRevenue, totalRevenue, avgUtil, count: vehicles.length }
+    return { totalRented, totalRentalRevenue, totalPenaltyRevenue, totalDanniRevenue, totalAnticipatedRevenue, totalDaSaldare, totalRevenue, avgUtil, count: vehicles.length }
   }
 
   function formatPercent(rate: number): string {
@@ -469,6 +476,10 @@ export default function ReportsTab() {
       </th>
       <th className="text-right px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('danniRevenue')}>
         Danni {sortField === 'danniRevenue' && (sortDir === 'asc' ? '↑' : '↓')}
+      </th>
+      {/* 2026-06-04: Da Saldare — quota noleggio non ancora incassata (rosso) */}
+      <th className="text-right px-4 py-3 cursor-pointer hover:text-theme-text-primary" onClick={() => handleSort('daSaldareRevenue' as keyof VehicleReport)}>
+        Da Saldare {sortField === ('daSaldareRevenue' as keyof VehicleReport) && (sortDir === 'asc' ? '↑' : '↓')}
       </th>
       {/* 2026-05-28: colonna Anticipato sempre visibile (prima era solo
           nel dettaglio espanso). Allineata a Ricavo noleggio anticipato. */}
@@ -564,10 +575,24 @@ export default function ReportsTab() {
             <span className="text-theme-text-muted">Ricavo danni</span>
             <span className="text-red-400 font-semibold">{formatCurrency(v.danniRevenue)}</span>
           </div>
+          {/* 2026-06-04: Da saldare — quota noleggio non ancora incassata, in rosso */}
+          {(v.daSaldareRevenue || 0) > 0 && (
+            <div className="flex justify-between">
+              <span className="text-theme-text-muted">Da saldare</span>
+              <span className="text-red-500 font-semibold">{formatCurrency(v.daSaldareRevenue || 0)}</span>
+            </div>
+          )}
           <div className="flex justify-between pt-1 border-t border-theme-border/50">
             <span className="text-theme-text-muted font-bold">Ricavo TOTALE</span>
             <span className="text-dr7-gold font-bold">{formatCurrency(v.totalRevenue + (v.anticipatedRevenue || 0))}</span>
           </div>
+          {/* Totale Complessivo = ricavo incassato + da saldare, riga rosso chiaro */}
+          {(v.daSaldareRevenue || 0) > 0 && (
+            <div className="flex justify-between -mx-2 px-2 py-1 rounded bg-red-500/10 border border-red-500/20">
+              <span className="text-red-600 dark:text-red-300 font-bold">Totale Complessivo</span>
+              <span className="text-red-600 dark:text-red-300 font-bold">{formatCurrency(v.totalRevenue + (v.anticipatedRevenue || 0) + (v.daSaldareRevenue || 0))}</span>
+            </div>
+          )}
         </div>
         {/* Expanded booking details — same data as the desktop expanded
             row (Cliente, Ritiro, Riconsegna, GG Tot/Mese, Pagamento,
@@ -595,10 +620,11 @@ export default function ReportsTab() {
                 ? (b.total_price / b.billable_days) * daysInMonthClamped
                 : b.total_price
               const revInMonth = Math.round((rentalInMonth + pen + dan) * 100) / 100
+              const daSaldare = b.da_saldare || 0
               return (
                 <div
                   key={b.booking_id}
-                  className="bg-theme-bg-primary/30 rounded p-2 text-xs"
+                  className={`rounded p-2 text-xs ${daSaldare > 0 ? 'bg-red-500/5 border border-red-500/20' : 'bg-theme-bg-primary/30'}`}
                   onClick={e => e.stopPropagation()}
                 >
                   {/* Header: customer + payment badge */}
@@ -644,12 +670,28 @@ export default function ReportsTab() {
                     </div>
                   )}
 
+                  {/* Da saldare (only if > 0) — quota noleggio non incassata, rosso */}
+                  {daSaldare > 0 && (
+                    <div className="flex justify-between mb-1.5">
+                      <span className="text-theme-text-muted">Da saldare</span>
+                      <span className="text-red-500 font-semibold">{formatCurrency(daSaldare)}</span>
+                    </div>
+                  )}
+
                   {/* Ricavo Mese — somma di noleggio (prorato) + penale + danni.
                       Coerente con la colonna "Ricavo Mese" della tabella desktop. */}
                   <div className="flex justify-between pt-1.5 border-t border-theme-border/40">
                     <span className="text-theme-text-muted font-semibold">Ricavo Mese</span>
                     <span className="text-dr7-gold font-bold">{formatCurrency(revInMonth)}</span>
                   </div>
+
+                  {/* Totale Complessivo = Ricavo Mese + da saldare, riga rosso chiaro */}
+                  {daSaldare > 0 && (
+                    <div className="flex justify-between mt-1 -mx-2 px-2 py-1 rounded bg-red-500/10 border border-red-500/20">
+                      <span className="text-red-600 dark:text-red-300 font-bold">Totale Complessivo</span>
+                      <span className="text-red-600 dark:text-red-300 font-bold">{formatCurrency(Math.round((revInMonth + daSaldare) * 100) / 100)}</span>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -733,14 +775,24 @@ export default function ReportsTab() {
           <td className="text-right px-4 py-3 text-theme-text-primary font-semibold">{formatCurrency(v.rentalRevenue)}</td>
           <td className="text-right px-4 py-3 text-yellow-400 font-semibold">{v.penaltyRevenue > 0 ? formatCurrency(v.penaltyRevenue) : '-'}</td>
           <td className="text-right px-4 py-3 text-red-400 font-semibold">{v.danniRevenue > 0 ? formatCurrency(v.danniRevenue) : '-'}</td>
+          {/* 2026-06-04: Da Saldare — quota non incassata, rosso pieno */}
+          <td className="text-right px-4 py-3 text-red-500 font-semibold">{(v.daSaldareRevenue || 0) > 0 ? formatCurrency(v.daSaldareRevenue || 0) : '-'}</td>
           {/* 2026-05-28: Anticipato sempre visibile (cyan come nel breakdown
               mobile). Mostra '-' se 0 per coerenza con Penali/Danni. */}
           <td className="text-right px-4 py-3 text-cyan-400 font-semibold">{(v.anticipatedRevenue || 0) > 0 ? formatCurrency(v.anticipatedRevenue || 0) : '-'}</td>
-          <td className="text-right px-4 py-3 text-dr7-gold font-bold">{formatCurrency(v.totalRevenue + (v.anticipatedRevenue || 0))}</td>
+          {/* TOTALE: ricavo incassato; quando c'è da saldare mostra il Totale
+              Complessivo (incassato + da saldare) con riga rosso chiaro. */}
+          {(v.daSaldareRevenue || 0) > 0 ? (
+            <td className="text-right px-4 py-3 font-bold bg-red-500/10 text-red-600 dark:text-red-300" title={`Ricavo incassato ${formatCurrency(v.totalRevenue + (v.anticipatedRevenue || 0))} + da saldare ${formatCurrency(v.daSaldareRevenue || 0)}`}>
+              {formatCurrency(v.totalRevenue + (v.anticipatedRevenue || 0) + (v.daSaldareRevenue || 0))}
+            </td>
+          ) : (
+            <td className="text-right px-4 py-3 text-dr7-gold font-bold">{formatCurrency(v.totalRevenue + (v.anticipatedRevenue || 0))}</td>
+          )}
         </tr>
         {isExpanded && v.bookings && v.bookings.length > 0 && (
           <tr key={`${v.vehicleId}-details`}>
-            <td colSpan={12} className="px-4 py-2 bg-theme-bg-primary/30">
+            <td colSpan={13} className="px-4 py-2 bg-theme-bg-primary/30">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-theme-text-muted">
@@ -753,6 +805,7 @@ export default function ReportsTab() {
                     <th className="text-right py-1 px-2">Totale</th>
                     <th className="text-right py-1 px-2">Penali</th>
                     <th className="text-right py-1 px-2">Danni</th>
+                    <th className="text-right py-1 px-2">Da Saldare</th>
                     <th className="text-right py-1 px-2">Ricavo Mese</th>
                   </tr>
                 </thead>
@@ -761,8 +814,9 @@ export default function ReportsTab() {
                     const badge = getPaymentBadge(b.payment_status, b.payment_method)
                     const pen = b.penalty_amount || 0
                     const dan = b.danni_amount || 0
+                    const daSaldare = b.da_saldare || 0
                     return (
-                      <tr key={b.booking_id} className="border-t border-theme-border/30">
+                      <tr key={b.booking_id} className={`border-t border-theme-border/30 ${daSaldare > 0 ? 'bg-red-500/5' : ''}`}>
                         <td className="py-1 px-2 text-theme-text-primary font-medium">{b.customer_name}</td>
                         <td className="py-1 px-2 text-theme-text-muted">{formatDateIT(b.start_at)}</td>
                         <td className="py-1 px-2 text-theme-text-muted">{formatDateIT(b.end_at)}</td>
@@ -780,12 +834,15 @@ export default function ReportsTab() {
                         <td className={`text-right py-1 px-2 font-semibold ${dan > 0 ? 'text-red-400' : 'text-theme-text-muted'}`}>
                           {dan > 0 ? formatCurrency(dan) : '—'}
                         </td>
-                        <td className="text-right py-1 px-2 text-dr7-gold">
+                        <td className={`text-right py-1 px-2 font-semibold ${daSaldare > 0 ? 'text-red-500' : 'text-theme-text-muted'}`}>
+                          {daSaldare > 0 ? formatCurrency(daSaldare) : '—'}
+                        </td>
+                        <td className={`text-right py-1 px-2 font-bold ${daSaldare > 0 ? 'bg-red-500/10 text-red-600 dark:text-red-300' : 'text-dr7-gold'}`}>
                           {formatCurrency(
                             (b.billable_days > 0
                               ? (b.total_price / b.billable_days) * Math.min(b.days_in_month, b.billable_days)
                               : b.total_price)
-                            + pen + dan
+                            + pen + dan + daSaldare
                           )}
                         </td>
                       </tr>
@@ -1017,6 +1074,14 @@ export default function ReportsTab() {
                 <p className="text-2xl font-bold text-red-400">{formatCurrency(vehicleData.totalDanniRevenue)}</p>
               </div>
             )}
+            {/* 2026-06-04: Da Saldare — totale noleggio non ancora incassato (rosso) */}
+            {(vehicleData.totalDaSaldare || 0) > 0 && (
+              <div className="bg-red-500/5 rounded-xl border border-red-500/30 p-4">
+                <p className="text-xs text-theme-text-muted">Da Saldare</p>
+                <p className="text-2xl font-bold text-red-500">{formatCurrency(vehicleData.totalDaSaldare || 0)}</p>
+                <p className="text-[10px] text-red-500/80 mt-0.5">ancora da incassare</p>
+              </div>
+            )}
             <div className="bg-theme-bg-secondary/50 rounded-xl border border-dr7-gold/30 p-4">
               <p className="text-xs text-theme-text-muted">Ricavo TOTALE</p>
               <p className="text-2xl font-bold text-dr7-gold">{formatCurrency(vehicleData.totalRevenue + (vehicleData.totalAnticipatedRevenue || 0))}</p>
@@ -1024,6 +1089,14 @@ export default function ReportsTab() {
                 <p className="text-[10px] text-cyan-400 mt-0.5">di cui {formatCurrency(vehicleData.totalAnticipatedRevenue || 0)} anticipato</p>
               )}
             </div>
+            {/* Totale Complessivo = ricavo incassato + da saldare (riga rosso chiaro) */}
+            {(vehicleData.totalDaSaldare || 0) > 0 && (
+              <div className="bg-red-500/10 rounded-xl border border-red-500/30 p-4">
+                <p className="text-xs text-theme-text-muted">Totale Complessivo</p>
+                <p className="text-2xl font-bold text-red-600 dark:text-red-300">{formatCurrency(vehicleData.totalRevenue + (vehicleData.totalAnticipatedRevenue || 0) + (vehicleData.totalDaSaldare || 0))}</p>
+                <p className="text-[10px] text-theme-text-muted mt-0.5">incassato + da saldare</p>
+              </div>
+            )}
             {/* 2026-05-24: Incassi anticipati SEMPRE visibile cosi' l'admin
                 vede chiaramente il valore anche quando e' 0 (e capisce che
                 la metrica viene calcolata). */}
@@ -1122,6 +1195,11 @@ export default function ReportsTab() {
                     <span className="text-theme-text-muted">
                       Ricavo anticipato: <span className="font-bold text-cyan-400">{formatCurrency(summary.totalAnticipatedRevenue)}</span>
                     </span>
+                    {summary.totalDaSaldare > 0 && (
+                      <span className="text-theme-text-muted">
+                        Da saldare: <span className="font-bold text-red-500">{formatCurrency(summary.totalDaSaldare)}</span>
+                      </span>
+                    )}
                   </div>
                 </div>
                 {/* Desktop Table - hidden on mobile */}

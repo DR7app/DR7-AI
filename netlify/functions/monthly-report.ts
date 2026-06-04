@@ -396,6 +396,11 @@ async function generateVehicleReport(
     let rentalRevenue = 0
     let penaltyRevenue = 0
     let danniRevenue = 0
+    // 2026-06-04: "Da Saldare" — quota di noleggio NON ancora incassata
+    // (prenotazioni da saldare / acconti parziali), proporzionata ai giorni
+    // nel periodo come il ricavo. Tracciata a parte dal ricavo (che resta solo
+    // incassato); la UI la mostra in rosso e la somma in un Totale Complessivo.
+    let daSaldareRevenue = 0
     // 2026-05-24: Incassi anticipati — booking pagati nel periodo report
     // ma con rental in un mese FUTURO. Permettono all'admin di vedere il
     // cash-in reale del mese, separato dal fatturato attribuito alle date
@@ -573,6 +578,13 @@ async function generateVehicleReport(
         // Proporziona l'incassato ai giorni nel periodo (come il prezzo pieno).
         rentalRevenue += (collectedEur / totalBookingDays) * overlapDays
       }
+      // 2026-06-04: quota di noleggio ancora DA SALDARE = prezzo pieno − incassato,
+      // proporzionata ai giorni nel periodo (stessa logica del ricavo). 0 se pagato.
+      const uncollectedEur = Math.max(0, bookingRevenue - collectedEur)
+      const daSaldareMonth = totalBookingDays > 0
+        ? (uncollectedEur / totalBookingDays) * overlapDays
+        : uncollectedEur
+      daSaldareRevenue += daSaldareMonth
 
       // Customer name from top-level or booking_details
       const customerName = booking.customer_name
@@ -635,6 +647,8 @@ async function generateVehicleReport(
         payment_method: booking.payment_method || '-',
         penalty_amount: Math.round(bookingPenaltyAmount * 100) / 100,
         danni_amount: Math.round(bookingDanniAmount * 100) / 100,
+        // 2026-06-04: quota di noleggio ancora da saldare (prorata al periodo)
+        da_saldare: Math.round(daSaldareMonth * 100) / 100,
       })
 
       if (debug) {
@@ -713,6 +727,8 @@ async function generateVehicleReport(
       rentalRevenue: Math.round(rentalRevenue * 100) / 100,
       penaltyRevenue: Math.round(penaltyRevenue * 100) / 100,
       danniRevenue: Math.round(danniRevenue * 100) / 100,
+      // 2026-06-04: da saldare (quota non incassata), tracciato a parte dal ricavo
+      daSaldareRevenue: Math.round(daSaldareRevenue * 100) / 100,
       totalRevenue: Math.round((rentalRevenue + penaltyRevenue + danniRevenue) * 100) / 100,
       // 2026-05-24: incassi anticipati (booking pagati nel periodo ma rental in mese futuro)
       anticipatedRevenue: Math.round(anticipatedRevenue * 100) / 100,
@@ -776,6 +792,7 @@ async function generateVehicleReport(
       totalRentalRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + v.rentalRevenue, 0) * 100) / 100,
       totalPenaltyRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + v.penaltyRevenue, 0) * 100) / 100,
       totalDanniRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + v.danniRevenue, 0) * 100) / 100,
+      totalDaSaldare: Math.round(cleanReports.reduce((sum: number, v: any) => sum + (v.daSaldareRevenue || 0), 0) * 100) / 100,
       totalRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + v.totalRevenue, 0) * 100) / 100,
       // 2026-05-24: somma di tutti gli incassi anticipati del periodo,
       // tracciati a parte dal totalRevenue (che resta attribuito ai mesi
