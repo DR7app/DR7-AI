@@ -4660,14 +4660,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           : { available: true }
                         const isAvailable = result.available
                         const isSelected = courtesyVehicle?.id === vehicle.id
+                        // 2026-06-04: l'auto occupata resta SELEZIONABILE — la
+                        // scelta in conflitto è ammessa ma richiede l'OTP
+                        // direzionale al salvataggio (courtesyConflict gate).
                         return (
                           <button key={vehicle.id} type="button"
-                            disabled={!isAvailable && !isSelected}
                             onClick={() => setCourtesyVehicle(vehicle)}
                             className={`text-left rounded-lg border p-3 transition-colors ${
                               isSelected ? 'border-sky-400 bg-sky-400/15'
                               : isAvailable ? 'border-theme-border bg-theme-bg-tertiary hover:border-sky-400 hover:bg-sky-400/5'
-                              : 'border-rose-500/30 bg-rose-500/5 opacity-60 cursor-not-allowed'
+                              : 'border-amber-500/40 bg-amber-500/5 hover:border-amber-400 hover:bg-amber-500/10'
                             }`}>
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
@@ -4677,13 +4679,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                               <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                                 isSelected ? 'bg-sky-400 text-black border-sky-400'
                                 : isAvailable ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                                : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                                : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
                               }`}>
-                                {isSelected ? 'Selezionata' : isAvailable ? (courtesyWindow ? 'Disponibile' : 'Provvisoria') : 'Occupata'}
+                                {isSelected ? 'Selezionata' : isAvailable ? (courtesyWindow ? 'Disponibile' : 'Provvisoria') : 'Occupata · OTP'}
                               </span>
                             </div>
-                            {!isAvailable && !isSelected && 'reason' in result && result.reason && (
-                              <p className="text-[10px] text-rose-400 mt-1 line-clamp-2">{result.reason}</p>
+                            {!isAvailable && (
+                              <p className="text-[10px] text-amber-400 mt-1 line-clamp-2">
+                                {'reason' in result && result.reason ? result.reason : 'Veicolo occupato nella finestra'} — la selezione richiede OTP direzionale.
+                              </p>
                             )}
                           </button>
                         )
