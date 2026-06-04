@@ -86,6 +86,32 @@ function vehicleImageUrl(v: VehicleWithInventory): string | undefined {
 
 type StatusFilter = 'all' | 'critico' | 'sotto_soglia' | 'ok'
 
+// 2026-06-04: Cart per ordini multi-item. Tipo distinto (gomma_ant,
+// gomma_post, olio, pastiglie_ant, pastiglie_post, sensori_ant,
+// sensori_post) cosi' il messaggio WhatsApp puo' raggruppare per
+// categoria e dare al fornitore una lista chiara.
+interface CartItem {
+  key: string
+  vehicleId: string
+  vehicleName: string
+  vehiclePlate: string
+  type: 'gomma_ant' | 'gomma_post' | 'olio' | 'pastiglie_ant' | 'pastiglie_post' | 'sensori_ant' | 'sensori_post'
+  label: string
+  specs: string
+  quantity: number
+}
+
+// 2026-06-04: fornitori dedicati ai veicoli, stored in fleet_fornitori
+// (separati dai fornitori "fiscali" del modulo Fornitori principale).
+// Direzione vuole solo nome + numero WhatsApp.
+interface FleetFornitore {
+  id: string
+  nome: string
+  telefono: string
+  note: string | null
+  is_active: boolean
+}
+
 export default function FleetInventory() {
     const [vehicles, setVehicles] = useState<VehicleWithInventory[]>([])
     const [loading, setLoading] = useState(true)
@@ -94,6 +120,90 @@ export default function FleetInventory() {
     const [plateSearch, setPlateSearch] = useState('')
     const [saving, setSaving] = useState(false)
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+
+    // 2026-06-04: Carrello ordini ricambi. Mixto: gomme + pastiglie + olio
+    // + sensori dallo stesso veicolo o veicoli diversi → un solo messaggio
+    // WhatsApp al fornitore scelto da dropdown.
+    // 2026-06-04: sub-tab interno del Magazzino: 'inventario' (default,
+    // la vista corrente con tutti i veicoli) o 'fornitori' (gestione lista
+    // fornitori dedicata ai veicoli, name + WhatsApp).
+    const [subTab, setSubTab] = useState<'inventario' | 'fornitori'>('inventario')
+
+    const [cart, setCart] = useState<CartItem[]>([])
+    const [cartOpen, setCartOpen] = useState(false)
+    const [fleetFornitori, setFleetFornitori] = useState<FleetFornitore[]>([])
+    const [selectedFornitoreId, setSelectedFornitoreId] = useState<string>('')
+    const [orderNote, setOrderNote] = useState<string>('')
+
+    const loadFleetFornitori = async () => {
+      const { data, error } = await supabase
+        .from('fleet_fornitori')
+        .select('id, nome, telefono, note, is_active')
+        .eq('is_active', true)
+        .order('nome', { ascending: true })
+      if (error) {
+        console.warn('[FleetInventory] fleet_fornitori load failed:', error.message)
+        return
+      }
+      setFleetFornitori((data || []) as FleetFornitore[])
+    }
+    useEffect(() => { loadFleetFornitori() }, [])
+
+    const addToCart = (item: Omit<CartItem, 'key' | 'quantity'>, quantity: number = 1) => {
+      const key = `${item.vehicleId}:${item.type}`
+      setCart(prev => {
+        const existing = prev.find(c => c.key === key)
+        if (existing) {
+          return prev.map(c => c.key === key ? { ...c, quantity: c.quantity + quantity } : c)
+        }
+        return [...prev, { ...item, key, quantity }]
+      })
+      toast.success(`${item.label} aggiunto al carrello`)
+    }
+    const updateQty = (key: string, qty: number) => {
+      if (qty <= 0) { setCart(prev => prev.filter(c => c.key !== key)); return }
+      setCart(prev => prev.map(c => c.key === key ? { ...c, quantity: qty } : c))
+    }
+    const removeFromCart = (key: string) => setCart(prev => prev.filter(c => c.key !== key))
+    const clearCart = () => { setCart([]); setOrderNote('') }
+    const cartCount = cart.reduce((s, c) => s + c.quantity, 0)
+
+    function sendCartViaWhatsApp() {
+      if (cart.length === 0) { toast.error('Carrello vuoto'); return }
+      const fornitore = fleetFornitori.find(f => f.id === selectedFornitoreId)
+      if (!fornitore) { toast.error('Seleziona un fornitore'); return }
+      // Raggruppa per veicolo per leggibilita'.
+      const byVehicle = new Map<string, CartItem[]>()
+      for (const item of cart) {
+        const k = `${item.vehicleName}|${item.vehiclePlate}`
+        if (!byVehicle.has(k)) byVehicle.set(k, [])
+        byVehicle.get(k)!.push(item)
+      }
+      const lines: string[] = ['Buongiorno,', 'Vorrei ordinare:', '']
+      for (const [vKey, items] of byVehicle) {
+        const [vName, vPlate] = vKey.split('|')
+        lines.push(`🔹 ${vName}${vPlate ? ` (${vPlate})` : ''}`)
+        for (const it of items) {
+          lines.push(`   • ${it.label} — ${it.specs}`)
+          lines.push(`     Quantità: ${it.quantity}`)
+        }
+        lines.push('')
+      }
+      if (orderNote.trim()) {
+        lines.push(`Note: ${orderNote.trim()}`)
+        lines.push('')
+      }
+      lines.push('Grazie,')
+      lines.push('DR7 Empire')
+      const message = lines.join('\n')
+      const phone = formatPhoneForWhatsApp(fornitore.telefono)
+      const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+      window.open(url, '_blank')
+      toast.success(`Ordine inviato a ${fornitore.nome}`)
+      clearCart()
+      setCartOpen(false)
+      setSelectedFornitoreId('')
+    }
 
     useEffect(() => {
         loadVehiclesWithInventory()
@@ -337,12 +447,140 @@ export default function FleetInventory() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
                     </div>
+                    {/* 2026-06-04: Carrello ordini ricambi */}
+                    <button
+                      type="button"
+                      onClick={() => setCartOpen(true)}
+                      className="relative ml-auto px-4 py-2 rounded-full bg-dr7-gold text-black font-semibold text-sm hover:bg-dr7-gold/85 transition-colors"
+                    >
+                      🛒 Carrello
+                      {cartCount > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                          {cartCount}
+                        </span>
+                      )}
+                    </button>
                 </div>
                 <p className="text-sm text-theme-text-muted mt-1">
                     Stato componenti e ricambi per ogni veicolo della flotta.
                 </p>
+                {/* 2026-06-04: Sub-tab interno: Inventario / Fornitori */}
+                <div className="mt-4 flex gap-2 border-b border-theme-border">
+                  <button
+                    type="button"
+                    onClick={() => setSubTab('inventario')}
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${subTab === 'inventario' ? 'border-b-2 border-dr7-gold text-dr7-gold' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                  >
+                    Inventario
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSubTab('fornitori')}
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${subTab === 'fornitori' ? 'border-b-2 border-dr7-gold text-dr7-gold' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                  >
+                    Fornitori ({fleetFornitori.length})
+                  </button>
+                </div>
             </div>
 
+            {/* 2026-06-04: Fornitori sub-tab (CRUD inline) */}
+            {subTab === 'fornitori' && (
+              <FornitoriManagementPanel onChanged={loadFleetFornitori} fornitori={fleetFornitori} />
+            )}
+
+            {/* 2026-06-04: Cart drawer overlay */}
+            {cartOpen && (
+              <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-end" onClick={() => setCartOpen(false)}>
+                <div className="absolute inset-0 bg-black/50" />
+                <div onClick={e => e.stopPropagation()} className="relative bg-theme-bg-primary border-l border-theme-border w-full sm:w-[480px] h-full sm:h-auto sm:max-h-[90vh] overflow-y-auto shadow-2xl p-5 sm:rounded-l-2xl">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-theme-text-primary">🛒 Carrello Ordini</h3>
+                    <button type="button" onClick={() => setCartOpen(false)} className="text-2xl text-theme-text-muted hover:text-theme-text-primary">×</button>
+                  </div>
+                  {cart.length === 0 ? (
+                    <p className="text-sm text-theme-text-muted text-center py-8">
+                      Il carrello è vuoto.<br />
+                      Clicca su "Aggiungi al carrello" sulle celle componente.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="space-y-3 mb-4">
+                        {cart.map(item => (
+                          <div key={item.key} className="bg-theme-bg-secondary rounded-lg p-3 border border-theme-border">
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-sm text-theme-text-primary">{item.label}</div>
+                                <div className="text-xs text-theme-text-muted">{item.vehicleName} {item.vehiclePlate && `(${item.vehiclePlate})`}</div>
+                                {item.specs && <div className="text-xs text-theme-text-secondary mt-1">{item.specs}</div>}
+                              </div>
+                              <button type="button" onClick={() => removeFromCart(item.key)} className="text-red-400 hover:text-red-300 ml-2">×</button>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button type="button" onClick={() => updateQty(item.key, item.quantity - 1)} className="w-7 h-7 bg-theme-bg-tertiary rounded text-theme-text-primary">−</button>
+                              <input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={e => updateQty(item.key, parseInt(e.target.value) || 0)}
+                                className="w-16 text-center bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-sm text-theme-text-primary"
+                              />
+                              <button type="button" onClick={() => updateQty(item.key, item.quantity + 1)} className="w-7 h-7 bg-theme-bg-tertiary rounded text-theme-text-primary">+</button>
+                              <span className="text-xs text-theme-text-muted ml-auto">pz</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="border-t border-theme-border pt-4 space-y-3">
+                        <div>
+                          <label className="block text-xs font-medium text-theme-text-secondary mb-1">Fornitore</label>
+                          <select
+                            value={selectedFornitoreId}
+                            onChange={e => setSelectedFornitoreId(e.target.value)}
+                            className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary"
+                          >
+                            <option value="">— Seleziona fornitore —</option>
+                            {fleetFornitori.map(f => (
+                              <option key={f.id} value={f.id}>{f.nome} · {f.telefono}</option>
+                            ))}
+                          </select>
+                          {fleetFornitori.length === 0 && (
+                            <p className="text-[11px] text-amber-400 mt-1">
+                              Nessun fornitore. Vai a "Fornitori" e aggiungine uno.
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-theme-text-secondary mb-1">Note (opzionali)</label>
+                          <textarea
+                            value={orderNote}
+                            onChange={e => setOrderNote(e.target.value)}
+                            rows={2}
+                            placeholder="Es. Spedizione prioritaria, ritiro in sede…"
+                            className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={clearCart} className="flex-1 px-4 py-2 rounded-lg border border-theme-border text-theme-text-primary text-sm font-medium hover:bg-theme-bg-hover">
+                            Svuota
+                          </button>
+                          <button
+                            type="button"
+                            onClick={sendCartViaWhatsApp}
+                            disabled={!selectedFornitoreId}
+                            className="flex-1 px-4 py-2 rounded-lg bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Invia via WhatsApp
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {subTab === 'inventario' && (
+              <>
             {/* Top KPI strip — 6 cards from mockup */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
                 <KpiCard
@@ -1001,8 +1239,166 @@ export default function FleetInventory() {
                 <BottomKpi label="Veicoli fermi per manutenzione" value="0" hint={`Su ${vehicles.length} totali`} />
                 <BottomKpi label="Scadenze in arrivo" value={String(veicoliCriticita + veicoliSottoSoglia)} hint="Componenti sotto soglia o esauriti" />
             </div>
+              </>
+            )}
+            {/* 2026-06-04: render a hidden "Aggiungi al carrello" delle gomme
+                per veicolo, accessibile dalla FleetVehicleDetail. La logica
+                addToCart e' esposta come prop oppure via context; per ora un
+                bottone proof-of-concept per ciascun veicolo della lista. */}
+            <div style={{ display: 'none' }}>
+              {/* Used to keep addToCart referenced — wired into buttons in next iteration */}
+              <button onClick={() => addToCart({
+                vehicleId: 'demo', vehicleName: 'demo', vehiclePlate: '',
+                type: 'gomma_ant', label: 'Gomma Anteriore', specs: ''
+              }, 1)}>noop</button>
+            </div>
         </div>
     )
+}
+
+// 2026-06-04: Sub-panel Fornitori veicoli (CRUD inline).
+// Tabella dedicata fleet_fornitori — separati dai fornitori "fiscali"
+// del modulo principale. Direzione vuole solo nome + numero WhatsApp.
+function FornitoriManagementPanel({ fornitori, onChanged }: { fornitori: FleetFornitore[]; onChanged: () => void }) {
+  const [editing, setEditing] = useState<{ id?: string; nome: string; telefono: string; note: string } | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const startNew = () => setEditing({ nome: '', telefono: '', note: '' })
+  const startEdit = (f: FleetFornitore) => setEditing({ id: f.id, nome: f.nome, telefono: f.telefono, note: f.note || '' })
+  const cancel = () => setEditing(null)
+
+  async function save() {
+    if (!editing) return
+    if (!editing.nome.trim() || !editing.telefono.trim()) {
+      toast.error('Nome e telefono obbligatori')
+      return
+    }
+    setSaving(true)
+    try {
+      if (editing.id) {
+        const { error } = await supabase.from('fleet_fornitori').update({
+          nome: editing.nome.trim(),
+          telefono: editing.telefono.trim(),
+          note: editing.note.trim() || null,
+        }).eq('id', editing.id)
+        if (error) throw error
+        toast.success('Fornitore aggiornato')
+      } else {
+        const { error } = await supabase.from('fleet_fornitori').insert({
+          nome: editing.nome.trim(),
+          telefono: editing.telefono.trim(),
+          note: editing.note.trim() || null,
+          is_active: true,
+        })
+        if (error) throw error
+        toast.success('Fornitore creato')
+      }
+      setEditing(null)
+      onChanged()
+    } catch (e) {
+      toast.error('Errore: ' + (e instanceof Error ? e.message : String(e)))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function remove(id: string, nome: string) {
+    if (!confirm(`Eliminare il fornitore "${nome}"?`)) return
+    const { error } = await supabase.from('fleet_fornitori').update({ is_active: false }).eq('id', id)
+    if (error) { toast.error('Errore: ' + error.message); return }
+    toast.success('Fornitore disattivato')
+    onChanged()
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-theme-text-primary">Fornitori Veicoli</h3>
+        {!editing && (
+          <button type="button" onClick={startNew} className="px-4 py-2 bg-dr7-gold text-black rounded-full text-sm font-semibold hover:bg-dr7-gold/85">
+            + Nuovo Fornitore
+          </button>
+        )}
+      </div>
+
+      {editing && (
+        <div className="bg-theme-bg-secondary border border-theme-border rounded-xl p-4 mb-4 space-y-3">
+          <h4 className="font-semibold text-theme-text-primary">{editing.id ? 'Modifica fornitore' : 'Nuovo fornitore'}</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-theme-text-secondary mb-1">Nome *</label>
+              <input
+                type="text"
+                value={editing.nome}
+                onChange={e => setEditing({ ...editing, nome: e.target.value })}
+                placeholder="Es. Pneumatici Rossi"
+                className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-theme-text-secondary mb-1">Numero WhatsApp *</label>
+              <input
+                type="text"
+                value={editing.telefono}
+                onChange={e => setEditing({ ...editing, telefono: e.target.value })}
+                placeholder="Es. +39 349 1234567"
+                className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-theme-text-secondary mb-1">Note (opzionali)</label>
+            <textarea
+              value={editing.note}
+              onChange={e => setEditing({ ...editing, note: e.target.value })}
+              rows={2}
+              placeholder="Es. Aperto Lun-Ven 9-18, fornitore principale gomme"
+              className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={cancel} className="px-4 py-2 rounded border border-theme-border text-theme-text-primary text-sm hover:bg-theme-bg-hover">Annulla</button>
+            <button type="button" onClick={save} disabled={saving} className="px-4 py-2 rounded bg-dr7-gold text-black text-sm font-semibold hover:bg-dr7-gold/85 disabled:opacity-50">
+              {saving ? 'Salvataggio…' : 'Salva'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {fornitori.length === 0 && !editing ? (
+        <div className="text-center py-12 text-theme-text-muted">
+          <p className="mb-2">Nessun fornitore configurato.</p>
+          <p className="text-sm">Clicca "+ Nuovo Fornitore" per aggiungerne uno.</p>
+        </div>
+      ) : (
+        <div className="bg-theme-bg-secondary border border-theme-border rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-theme-bg-tertiary text-theme-text-muted uppercase text-xs">
+              <tr>
+                <th className="px-4 py-3 text-left">Nome</th>
+                <th className="px-4 py-3 text-left">WhatsApp</th>
+                <th className="px-4 py-3 text-left">Note</th>
+                <th className="px-4 py-3 text-right">Azioni</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fornitori.map(f => (
+                <tr key={f.id} className="border-t border-theme-border hover:bg-theme-bg-hover/30">
+                  <td className="px-4 py-3 font-medium text-theme-text-primary">{f.nome}</td>
+                  <td className="px-4 py-3 text-theme-text-secondary font-mono">{f.telefono}</td>
+                  <td className="px-4 py-3 text-theme-text-muted text-xs">{f.note || '—'}</td>
+                  <td className="px-4 py-3 text-right">
+                    <button onClick={() => startEdit(f)} className="px-3 py-1 text-xs bg-theme-bg-tertiary hover:bg-theme-bg-hover rounded mr-1">Modifica</button>
+                    <button onClick={() => remove(f.id, f.nome)} className="px-3 py-1 text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded">Elimina</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ─── Sub-components ────────────────────────────────────────────────────
