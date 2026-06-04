@@ -15,7 +15,6 @@ import { getPaletteForCategory } from '../../../utils/categoryPalettes'
 // --- Configuration ---
 const CELL_WIDTH = 45 // Fixed width for day cells
 const MIN_ROW_HEIGHT = 60
-const BAR_HEIGHT = 30
 
 interface ProCategory { id: string; label: string }
 
@@ -657,12 +656,12 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
         {/* B. Vehicle Rows */}
         <div className="min-w-max pb-2">
           {visibleRows.map((row) => {
-            // 2026-06-04: NON rimpicciolire la griglia. L'altezza riga resta
-            // quella naturale (>= MIN_ROW_HEIGHT, basata sulle lane), e cresce
-            // solo per RIEMPIRE l'area se ci sono pochi veicoli (fitRowHeight).
-            // Mai sotto la naturale → celle/barre restano leggibili.
-            const naturalHeight = Math.max(MIN_ROW_HEIGHT, (row.laneCount * (BAR_HEIGHT + 4)) + 12)
-            const rowHeight = Math.max(naturalHeight, fitRowHeight)
+            // 2026-06-04: TUTTI i veicoli nello schermo senza scroll → altezza
+            // riga = fitRowHeight (area / numero veicoli). Le barre si scalano
+            // dentro la riga (laneH) per non sbordare.
+            const laneCount = Math.max(1, row.laneCount)
+            const rowHeight = fitRowHeight
+            const laneH = Math.max(12, (rowHeight - 6) / laneCount)
 
             return (
               <div
@@ -814,7 +813,8 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                         borderClass = "border-sky-400/50 border-dashed"
                       }
 
-                      const top = 6 + (evt.laneIndex * (BAR_HEIGHT + 4))
+                      const top = 3 + (evt.laneIndex * laneH)
+                      const barH = Math.max(10, laneH - 2)
 
                       // Clamp bar to visible grid area to avoid browser rendering limits
                       // (bars with left=-44955 width=46305 exceed max texture size ~16384px)
@@ -838,7 +838,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                             left: clampedLeft,
                             width: finalWidth,
                             top: top,
-                            height: BAR_HEIGHT,
+                            height: barH,
                             ...(bookingHasNotes ? { boxShadow: 'inset 0 0 0 2.5px #FACC15', borderColor: '#FACC15' } : {}),
                             ...(isCollaboratoreCal ? { cursor: 'default' } : {}),
                           }}
