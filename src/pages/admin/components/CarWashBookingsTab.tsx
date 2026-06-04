@@ -235,6 +235,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   // Salva. Quando l'OTP è approvato il useEffect ripete createBooking(force)
   // così l'operatore non deve premere di nuovo Salva.
   const pendingCreateBookingRef = useRef<{ force: boolean } | null>(null)
+  // 2026-06-03: true quando il gate OTP auto-di-cortesia apre il modal, così il
+  // resume hook ri-esegue handleSubmit dopo l'approvazione.
+  const pendingCortesiaResumeRef = useRef<boolean>(false)
   // Set right before wash.delete OTP fires — so otpDetails can show full
   // booking context (customer, servizio, veicolo, importo, stato) to direzione.
   const pendingDeleteBookingRef = useRef<CarWashBooking | null>(null)
@@ -290,6 +293,19 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     if (confirmOk) {
       pendingCreateBookingRef.current = null
       createBooking(pending.force)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [override.overrideCodes])
+
+  // 2026-06-03: resume di handleSubmit quando l'OTP auto-di-cortesia
+  // (cortesia_durata_extra) viene approvato. Il gate sta dentro handleSubmit
+  // PRIMA della validazione slot, quindi ri-eseguiamo handleSubmit: il check
+  // ora trova hasOverride('cortesia_durata_extra')=true e prosegue.
+  useEffect(() => {
+    if (override.overrideCodes.has('cortesia_durata_extra')
+        && pendingCortesiaResumeRef.current) {
+      pendingCortesiaResumeRef.current = false
+      handleSubmit()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [override.overrideCodes])
@@ -639,6 +655,62 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       durationMin: supercarExperienceDurationMin,
     }
   })()
+
+  // ─── PRIME COURTESY DRIVE (auto di cortesia) ────────────────────────────
+  // 2026-06-03: l'auto di cortesia deve durare quanto il LAVAGGIO, arrotondato
+  // all'ora superiore (45min→1h, lavaggio<1h→1h, 2h→2h, 2h10→3h). L'admin può
+  // alzare la durata oltre quella del lavaggio, ma in quel caso (o in caso di
+  // conflitto auto) serve l'OTP direzionale (cortesia_durata_extra /
+  // carwash_slot_occupied). L'extra è "Prime Courtesy Drive" con price_options
+  // 1h..7h, distinto da Supercar/Icon Experience.
+  const PRIME_COURTESY_RE = /prime\s*courtesy|courtesy\s*drive|auto\s*(di\s*)?cortesia/i
+  const primeCourtesyExtra = selectedExtras.find(e => PRIME_COURTESY_RE.test(e.name))
+  const primeCourtesyOption = primeCourtesyExtra
+    ? extraPriceOptions[primeCourtesyExtra.id] || null
+    : null
+  // Minuti scelti per la cortesia (dall'opzione Nh selezionata).
+  const courtesyChosenMin = (() => {
+    if (!primeCourtesyOption) return 0
+    const lbl = primeCourtesyOption.label.toLowerCase().trim()
+    const hMatch = lbl.match(/(\d+(?:[.,]\d+)?)\s*h/)
+    if (hMatch) return Math.round(parseFloat(hMatch[1].replace(',', '.')) * 60)
+    const mMatch = lbl.match(/(\d+)\s*min/)
+    if (mMatch) return parseInt(mMatch[1])
+    return 60
+  })()
+  // Durata del SOLO lavaggio (totale meno i minuti della cortesia stessa, così
+  // la cortesia non "gonfia" il proprio target).
+  const washOnlyMin = (() => {
+    const total = getTotalDuration()
+    return Math.max(0, total - courtesyChosenMin)
+  })()
+  // Ore di cortesia AUTO = ceil(lavaggio/60), minimo 1h. ceil solo se SUPERA
+  // l'ora intera (60min→1h, 61min→2h) — confermato da direzione.
+  const courtesyAutoHours = Math.max(1, Math.ceil(washOnlyMin / 60))
+  const courtesyAutoMin = courtesyAutoHours * 60
+  // L'admin ha scelto PIÙ ore di cortesia del lavaggio → richiede OTP.
+  const courtesyExceedsWash = !!primeCourtesyExtra && courtesyChosenMin > courtesyAutoMin
+
+  // Auto-seleziona l'opzione Nh della cortesia = durata lavaggio (ceil ora).
+  // Parte quando l'admin aggiunge l'extra cortesia o cambia la durata lavaggio,
+  // SOLO se non ha ancora scelto un'opzione (così non sovrascrive un override
+  // manuale dell'admin verso l'alto). Cerca l'opzione il cui label = "{Nh}".
+  useEffect(() => {
+    if (!primeCourtesyExtra) return
+    if (extraPriceOptions[primeCourtesyExtra.id]) return // admin ha già scelto
+    const opts = primeCourtesyExtra.price_options || []
+    if (opts.length === 0) return
+    const targetLbl = `${courtesyAutoHours}h`
+    const match = opts.find(o => o.label.toLowerCase().replace(/\s/g, '') === targetLbl)
+      || opts.find(o => {
+        const m = o.label.toLowerCase().match(/(\d+)\s*h/)
+        return m && parseInt(m[1]) === courtesyAutoHours
+      })
+    if (match) {
+      setExtraPriceOptions(prev => ({ ...prev, [primeCourtesyExtra.id]: match }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [primeCourtesyExtra?.id, courtesyAutoHours])
 
   // Load fleet for the active experience tier (supercar OR hypercar).
   // Re-runs whenever the tier changes so toggling between Supercar and
@@ -2303,6 +2375,30 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
       const totalDuration = getTotalDuration()
       const serviceNames = buildServiceNames()
+
+      // ===== AUTO DI CORTESIA: OTP se durata > lavaggio =====
+      // 2026-06-03: se l'admin ha scelto un'auto di cortesia (Prime Courtesy
+      // Drive) con durata SUPERIORE a quella del lavaggio (arrotondata all'ora),
+      // serve l'OTP direzionale prima di salvare. Operatori con bypass passano
+      // direttamente; gli altri vedono il modal e il save riprende dopo
+      // l'approvazione (resume hook). Il conflitto auto è gestito separatamente
+      // dal gate carwash_slot_occupied più sotto (entrambi possono concatenarsi).
+      if (courtesyExceedsWash && !override.hasOverride('cortesia_durata_extra')) {
+        const reqH = Math.round(courtesyChosenMin / 60 * 10) / 10
+        const washH = Math.round(washOnlyMin / 60 * 10) / 10
+        const bypassed = override.requestOverride(
+          'cortesia_durata_extra',
+          `Auto di cortesia di ${reqH}h su un lavaggio di ${washH}h (auto: ${courtesyAutoHours}h). Durata superiore al lavaggio: richiede autorizzazione direzionale.`,
+        )
+        if (!bypassed) {
+          // Modal aperto — il save riprende dopo l'OTP via resume hook.
+          pendingCortesiaResumeRef.current = true
+          setSubmitting(false)
+          submitLockRef.current = false
+          return
+        }
+        // bypassed=true: per-operator bypass attivo, proseguiamo.
+      }
 
       // ===== SCHEDULING RULES VALIDATION =====
       // Enforce non-negotiable scheduling rules for WASH events
@@ -5585,6 +5681,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           // cancellata.
           pendingCreateBookingRef.current = null
           pendingEditBookingRef.current = null
+          pendingCortesiaResumeRef.current = false
           setPendingForeignCategory(null)
           override.cancelLimitation()
         }}

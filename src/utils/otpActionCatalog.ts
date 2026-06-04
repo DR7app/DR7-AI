@@ -57,6 +57,14 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
     wired: true,
   },
   {
+    id: 'cortesia_durata_extra',
+    label: 'Auto di cortesia oltre la durata del lavaggio',
+    used_in: 'Prime Wash > Prime Courtesy Drive con durata superiore al lavaggio',
+    reason: 'L\'auto di cortesia dura piu\' del lavaggio: serve autorizzazione direzionale.',
+    group: 'Lavaggio',
+    wired: true,
+  },
+  {
     id: 'slot_unavailable',
     label: 'Forza prenotazione su slot occupato',
     used_in: 'Salva prenotazione su slot non disponibile',
