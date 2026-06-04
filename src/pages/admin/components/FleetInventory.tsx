@@ -233,13 +233,34 @@ export default function FleetInventory() {
         // Fallback hardcoded — niente emoji.
         body = `Buongiorno,\nVorrei ordinare:\n\n${ordineDettagli}\n\n${noteBlock}Grazie,\nDR7 Empire`
       }
-      const phone = formatPhoneForWhatsApp(fornitore.telefono)
-      const url = `https://wa.me/${phone}?text=${encodeURIComponent(body)}`
-      window.open(url, '_blank')
-      toast.success(`Ordine inviato a ${fornitore.nome}`)
-      clearCart()
-      setCartOpen(false)
-      setSelectedFornitoreId('')
+      // 2026-06-04: invio diretto via Green API (send-whatsapp-notification),
+      // come tutti gli altri WhatsApp transactional dell'app. Niente piu'
+      // window.open(wa.me/…) che apriva una nuova tab e costringeva l'admin
+      // a cliccare manualmente "Invia" su WhatsApp Web.
+      try {
+        const res = await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customPhone: fornitore.telefono,
+            customMessage: body,
+            type: 'Ordine Ricambi Magazzino',
+          }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok || data?.success === false) {
+          const errMsg = data?.error || data?.message || `HTTP ${res.status}`
+          toast.error(`Errore invio WhatsApp: ${errMsg}`, { duration: 8000 })
+          return
+        }
+        toast.success(`Ordine inviato a ${fornitore.nome} via WhatsApp`)
+        clearCart()
+        setCartOpen(false)
+        setSelectedFornitoreId('')
+      } catch (err) {
+        const m = err instanceof Error ? err.message : String(err)
+        toast.error(`Errore invio: ${m}`, { duration: 8000 })
+      }
     }
 
     useEffect(() => {
