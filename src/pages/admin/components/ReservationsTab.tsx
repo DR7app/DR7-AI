@@ -10723,11 +10723,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
                     >
                       <option value="">-- Seleziona --</option>
-                      <option value="Bonifico">Bonifico</option>
-                      <option value="Contanti">Contanti</option>
-                      <option value="Carta di Credito / bancomat">Carta di Credito / bancomat</option>
-                      <option value="Credit Wallet">Credit Wallet</option>
-                      <option value="Paypal">Paypal</option>
+                      {paymentMethods.map(pm => (
+                        <option key={pm.key} value={pm.label}>{pm.label}</option>
+                      ))}
+                      {extendData.extension_payment_method && !paymentMethods.some(pm => pm.label === extendData.extension_payment_method) && (
+                        <option value={extendData.extension_payment_method}>{extendData.extension_payment_method}</option>
+                      )}
                     </select>
                   </div>
                 )}

@@ -10,6 +10,7 @@ import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
 import { logger } from '../../../utils/logger'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 
 // 2026-05-22: Premium telemetry restyle scoped to this page only.
 // 2026-05-27: gated to dark mode only — overriding theme vars in light
@@ -246,6 +247,8 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   }
   const [editingBooking, setEditingBooking] = useState<CarWashBooking | null>(null)
   const saveEditLockRef = useRef(false)
+  // 2026-06-04: metodi pagamento dalla fonte unica (Centralina Pro), non piu' hardcoded.
+  const paymentMethods = usePaymentMethods()
 
   // Edit modal: services catalog + selections
   const [carWashServices, setCarWashServices] = useState<CarWashService[]>([])
@@ -1616,14 +1619,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                   className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                 >
                   <option value="">-- Seleziona metodo --</option>
-                  <option value="Contanti">Contanti</option>
-                  <option value="POS">POS</option>
-                  <option value="Carta di credito">Carta di credito</option>
-                  <option value="Carta di debito">Carta di debito</option>
-                  <option value="Bonifico">Bonifico</option>
-                  <option value="Nexi Pay by Link">Nexi Pay by Link</option>
-                  <option value="Wallet">Wallet</option>
-                  <option value="Gift Card">Gift Card</option>
+                  {paymentMethods.map(pm => (
+                    <option key={pm.key} value={pm.label}>{pm.label}</option>
+                  ))}
+                  {(editingBooking.booking_details?.paymentMethod || editingBooking.payment_method) && !paymentMethods.some(pm => pm.label === (editingBooking.booking_details?.paymentMethod || editingBooking.payment_method)) && (
+                    <option value={editingBooking.booking_details?.paymentMethod || editingBooking.payment_method}>{editingBooking.booking_details?.paymentMethod || editingBooking.payment_method}</option>
+                  )}
                 </select>
               </div>
             </div>
@@ -1662,6 +1663,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                         price_total: updatedPrice,
                         status: editingBooking.status,
                         payment_status: editingBooking.payment_status,
+                        payment_method: editingBooking.payment_method || null,
                         booking_details: {
                           ...(editingBooking.booking_details || {}),
                           cartItems: editService ? editCartItems : (editingBooking.booking_details?.cartItems || []),
@@ -1670,6 +1672,19 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                       .eq('id', editingBooking.id)
 
                     if (error) throw error
+
+                    // 2026-06-04: propaga stato + metodo pagamento ai blocchi
+                    // shadow collegati (auto di cortesia / supercar) così segnare
+                    // pagato qui aggiorna anche il Noleggio.
+                    try {
+                      const paid = ['paid', 'completed', 'succeeded'].includes((editingBooking.payment_status || '').toLowerCase())
+                      await supabase.from('bookings').update({
+                        payment_status: paid ? 'paid' : 'pending',
+                        payment_method: editingBooking.payment_method || null,
+                      }).contains('booking_details', { parent_carwash_booking_id: editingBooking.id })
+                    } catch (payErr) {
+                      console.error('[CarWashCalendar] shadow payment cascade failed:', payErr)
+                    }
 
                     toast.success('Prenotazione aggiornata!')
                     setEditingBooking(null)

@@ -8,6 +8,7 @@ import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import DateRangeFilter from '../../../components/DateRangeFilter'
+import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -175,6 +176,8 @@ export default function UnpaidBookingsTab() {
     onConfirm: (method: string) => void | Promise<void>
   } | null>(null)
   const [selectedPayMethod, setSelectedPayMethod] = useState<string>('Contanti')
+  // 2026-06-04: metodi pagamento dalla fonte unica (Centralina Pro).
+  const paymentMethods = usePaymentMethods()
 
   function askPaymentMethod(description: string, onConfirm: (method: string) => void | Promise<void>) {
     setSelectedPayMethod('Contanti')
@@ -519,6 +522,21 @@ export default function UnpaidBookingsTab() {
 
   // ── Payment & Delete functions (preserved) ─────────────────────────────────
 
+  // 2026-06-04: quando un lavaggio Prime Wash viene segnato pagato da qui,
+  // propaga stato + metodo ai blocchi shadow collegati (auto di cortesia /
+  // supercar) via parent_carwash_booking_id. Per i noleggi normali non c'è
+  // nessuna riga collegata → no-op innocuo.
+  async function propagatePaidToCarwashShadows(bookingId: string, paid: boolean, method?: string | null) {
+    try {
+      await supabase.from('bookings').update({
+        payment_status: paid ? 'paid' : 'pending',
+        payment_method: method || null,
+      }).contains('booking_details', { parent_carwash_booking_id: bookingId })
+    } catch (e) {
+      console.error('[UnpaidBookings] shadow payment cascade failed:', e)
+    }
+  }
+
   async function updatePaymentStatus(bookingId: string, newStatus: string, paymentMethod?: string) {
     try {
       // When marking paid, also set amount_paid = price_total so the calendar
@@ -556,6 +574,7 @@ export default function UnpaidBookingsTab() {
         .eq('id', bookingId)
 
       if (error) throw error
+      await propagatePaidToCarwashShadows(bookingId, newStatus === 'paid', paymentMethod)
       toast.success('Stato pagamento aggiornato!')
       {
         const { data: bookingForLog } = await supabase
@@ -1621,6 +1640,7 @@ export default function UnpaidBookingsTab() {
         booking_details: { ...booking.booking_details, amountPaid: totalCents, extension_history: extensions }
       }).eq('id', booking.id)
       if (error) throw error
+      await propagatePaidToCarwashShadows(booking.id, true, booking.payment_method)
       toast.success('Tutto segnato come pagato!')
       logAdminAction('mark_booking_extensions_paid', 'booking', booking.id, buildBookingContext(booking))
 
@@ -1835,6 +1855,8 @@ export default function UnpaidBookingsTab() {
         const pwUpdate: Record<string, unknown> = { payment_status: 'paid', status: 'confirmed' }
         if (paymentMethod) pwUpdate.payment_method = paymentMethod
         await supabase.from('bookings').update(pwUpdate).eq('id', pwId)
+        // Propaga ai blocchi cortesia/supercar collegati a questo lavaggio.
+        await propagatePaidToCarwashShadows(pwId, true, paymentMethod)
 
         // DR7 Privilege — fire-and-forget per lavaggio. Backend idempotente.
         fetch('/.netlify/functions/trigger-dr7-privilege', {
@@ -3897,11 +3919,12 @@ export default function UnpaidBookingsTab() {
                 onChange={e => setSelectedPayMethod(e.target.value)}
                 className="w-full px-3 py-2 bg-theme-bg-primary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-green-500"
               >
-                <option value="Contanti">Contanti</option>
-                <option value="Bonifico">Bonifico</option>
-                <option value="Carta di Credito / bancomat">Carta di Credito / bancomat</option>
-                <option value="Credit Wallet">Credit Wallet</option>
-                <option value="Paypal">Paypal</option>
+                {paymentMethods.map(pm => (
+                  <option key={pm.key} value={pm.label}>{pm.label}</option>
+                ))}
+                {selectedPayMethod && !paymentMethods.some(pm => pm.label === selectedPayMethod) && (
+                  <option value={selectedPayMethod}>{selectedPayMethod}</option>
+                )}
               </select>
             </div>
             <div className="flex justify-end gap-2 pt-2">
