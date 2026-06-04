@@ -1363,29 +1363,49 @@ export default function FleetInventory() {
                         })}
                     </SidebarPanel>
 
-                    {/* Azioni rapide */}
-                    <SidebarPanel title="Azioni Rapide">
-                        <div className="grid grid-cols-2 gap-2">
-                            {[
-                                // 2026-06-04: "Ordina Ricambi" ora apre il carrello.
-                                // Gli altri bottoni restano placeholder finche'
-                                // i moduli relativi non sono attivi.
-                                { label: 'Nuovo Intervento', icon: '+', onClick: () => toast('Funzione in arrivo', { icon: 'ℹ️' }) },
-                                { label: `Ordina Ricambi${cartCount > 0 ? ` (${cartCount})` : ''}`, icon: '🛒', onClick: () => setCartOpen(true) },
-                                { label: 'Storia Report', icon: '📊', onClick: () => toast('Funzione in arrivo', { icon: 'ℹ️' }) },
-                                { label: 'Stato Magazzino', icon: '📦', onClick: () => toast('Funzione in arrivo', { icon: 'ℹ️' }) },
-                            ].map(a => (
-                                <button
-                                    key={a.label}
-                                    type="button"
-                                    onClick={a.onClick}
-                                    className="text-xs px-2 py-2 rounded border border-theme-border bg-theme-bg-primary hover:bg-theme-bg-hover text-theme-text-secondary hover:text-theme-text-primary"
-                                >
-                                    <span className="block">{a.icon}</span>
-                                    <span className="block mt-0.5">{a.label}</span>
-                                </button>
-                            ))}
-                        </div>
+                    {/* 2026-06-04: Carrello in sidebar destra al posto del
+                        pannello "Azioni Rapide" (i cui 3 pulsanti placeholder
+                        non avevano funzioni reali). Mostra preview items +
+                        CTA per aprire il drawer. */}
+                    <SidebarPanel title={`Carrello Ordini${cartCount > 0 ? ` (${cartCount})` : ''}`}>
+                        {cart.length === 0 ? (
+                            <div className="text-xs text-theme-text-muted italic py-2">
+                                Aggiungi ricambi cliccando "+ Carrello" sui componenti dei veicoli.
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {cart.slice(0, 4).map(item => (
+                                    <div key={item.key} className="text-xs flex items-start gap-2 border-b border-theme-border/40 pb-1.5 last:border-0">
+                                        <span className="font-bold text-dr7-gold tabular-nums shrink-0">{item.quantity}×</span>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-medium text-theme-text-primary truncate">{item.label}</div>
+                                            <div className="text-theme-text-muted truncate">{item.vehicleName}{item.vehiclePlate ? ` (${item.vehiclePlate})` : ''}</div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeFromCart(item.key)}
+                                            className="text-red-400 hover:text-red-300 text-base leading-none px-1"
+                                            title="Rimuovi"
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                ))}
+                                {cart.length > 4 && (
+                                    <div className="text-[11px] text-theme-text-muted italic">
+                                        +{cart.length - 4} altri item…
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => setCartOpen(true)}
+                            disabled={cart.length === 0}
+                            className="mt-3 w-full px-3 py-2 rounded-lg bg-dr7-gold hover:bg-dr7-gold/85 text-black font-semibold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                            {cart.length === 0 ? 'Carrello vuoto' : `Apri Carrello (${cartCount} pezzi)`}
+                        </button>
                     </SidebarPanel>
 
                     {/* Prossimi interventi — placeholder; needs intervento schema */}
