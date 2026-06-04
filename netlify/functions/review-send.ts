@@ -27,7 +27,7 @@ const getHeaders = (origin?: string) => ({
  * Cleans a phone number to Green API format (e.g. 393457905205)
  */
 function cleanPhone(phone: string): string {
-  let cleaned = phone.replace(/[\s\-\+\(\)]/g, '');
+  let cleaned = phone.replace(/\D/g, '');
   if (cleaned.startsWith('00')) {
     cleaned = cleaned.substring(2);
   }

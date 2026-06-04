@@ -11,7 +11,7 @@ const SIGNING_BASE_URL = process.env.SIGNING_BASE_URL || 'https://trustera360.ap
 
 function cleanPhone(phone: string): string | null {
     if (!phone) return null
-    let clean = phone.replace(/[\s\-\+\(\)]/g, '')
+    let clean = phone.replace(/\D/g, '')
     if (clean.startsWith('00')) clean = clean.substring(2)
     if (clean.length === 10 && clean.startsWith('3')) clean = '39' + clean
     if (clean.length < 10) return null

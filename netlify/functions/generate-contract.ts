@@ -203,7 +203,7 @@ export const handler: Handler = async (event) => {
         // 3. Fallback: Try by phone number (multiple format variations)
         if (!customer && resolvedPhone) {
             console.log('[generate-contract] Fallback: Fetching by phone from customers_extended...', resolvedPhone)
-            let phone = resolvedPhone.replace(/[\s\-\+\(\)]/g, '')
+            let phone = resolvedPhone.replace(/\D/g, '')
             if (phone.startsWith('00')) phone = phone.substring(2)
             if (phone.length === 10 && phone.startsWith('3')) phone = '39' + phone
             // Try exact match, with prefix, and without prefix

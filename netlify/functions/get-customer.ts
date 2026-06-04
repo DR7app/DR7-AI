@@ -63,7 +63,7 @@ export const handler: Handler = async (event) => {
 
         if (!customer && phone) {
             // Normalize phone before lookup
-            let normPhone = phone.replace(/[\s\-\+\(\)]/g, '');
+            let normPhone = phone.replace(/\D/g, '');
             if (normPhone.startsWith('00')) normPhone = normPhone.substring(2);
             if (normPhone.length === 10) normPhone = '39' + normPhone;
 

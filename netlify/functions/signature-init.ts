@@ -14,7 +14,7 @@ const SIGNING_BASE_URL = process.env.SIGNING_BASE_URL || 'https://trustera360.ap
 const TOKEN_EXPIRY_HOURS = 12
 
 function cleanPhone(phone: string): string {
-    let cleaned = phone.replace(/[\s\-\+\(\)]/g, '')
+    let cleaned = phone.replace(/\D/g, '')
     if (cleaned.startsWith('00')) cleaned = cleaned.substring(2)
     if (cleaned.length === 10 && cleaned.startsWith('3')) cleaned = '39' + cleaned
     return cleaned

@@ -118,7 +118,7 @@ export const handler: Handler = async (event) => {
             const greenInstance = process.env.GREEN_API_INSTANCE_ID
             const greenToken = process.env.GREEN_API_TOKEN
             if (!greenInstance || !greenToken) throw new Error('Green API non configurata')
-            const normPhone = phone.replace(/[\s\-+()]/g, '').replace(/^00/, '')
+            const normPhone = phone.replace(/\D/g, '').replace(/^00/, '')
             const chatId = `${normPhone.length === 10 ? '39' + normPhone : normPhone}@c.us`
             const url = `https://api.green-api.com/waInstance${greenInstance}/sendMessage/${greenToken}`
             const res = await fetch(url, {

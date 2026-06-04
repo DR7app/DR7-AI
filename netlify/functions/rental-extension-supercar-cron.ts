@@ -50,7 +50,7 @@ function isTomorrowRome(d: Date, now: Date = new Date()): boolean {
 
 function normalizePhone(raw: string | null | undefined): string {
     if (!raw) return ''
-    let phone = raw.replace(/[\s\-+()]/g, '')
+    let phone = raw.replace(/\D/g, '')
     if (phone.startsWith('00')) phone = phone.substring(2)
     if (phone.length === 10) phone = '39' + phone
     return phone

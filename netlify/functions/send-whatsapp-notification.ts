@@ -374,7 +374,12 @@ const handler: Handler = async (event) => {
   }
 
   // Clean phone number - Green API format: 393457905205 (no + or spaces)
-  targetPhone = targetPhone.replace(/[\s\-\+\(\)]/g, '');
+  // 2026-06-04: rimuovi TUTTO ciò che non è una cifra, non solo spazi/-/+/().
+  // I numeri incollati portano spesso caratteri Unicode invisibili (es. il
+  // mark direzionale U+202D/U+200E, zero-width space) che la vecchia regex
+  // lasciava nel chatId: Green API rifiutava l'invio (errore 500 su un singolo
+  // destinatario "che ha WhatsApp"). \D li elimina tutti, ovunque siano.
+  targetPhone = targetPhone.replace(/\D/g, '');
   // Handle 00 international prefix (e.g., 00393921900763)
   if (targetPhone.startsWith('00')) {
     targetPhone = targetPhone.substring(2);

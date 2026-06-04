@@ -8,7 +8,7 @@ const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
 
 function cleanPhone(phone: string): string | null {
   if (!phone) return null;
-  let clean = phone.replace(/[\s\-\+\(\)]/g, '');
+  let clean = phone.replace(/\D/g, '');
   if (clean.startsWith('00')) clean = clean.substring(2);
   if (clean.length === 10) clean = '39' + clean;
   return clean;

@@ -11,7 +11,7 @@ const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
 
 function normalizePhone(phone: string): string {
-  let cleaned = phone.replace(/[\s\-\+\(\)]/g, '');
+  let cleaned = phone.replace(/\D/g, '');
   if (cleaned.startsWith('00')) cleaned = cleaned.substring(2);
   if (cleaned.length === 10) cleaned = '39' + cleaned;
   return cleaned;

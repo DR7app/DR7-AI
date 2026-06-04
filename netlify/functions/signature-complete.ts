@@ -423,7 +423,7 @@ export const handler: Handler = async (event) => {
                     customerPhone = cust?.telefono || ''
                 }
                 if (customerPhone) {
-                    let cleanPhone = customerPhone.replace(/[\s\-\+\(\)]/g, '')
+                    let cleanPhone = customerPhone.replace(/\D/g, '')
                     if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
                     if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
 
@@ -497,7 +497,7 @@ export const handler: Handler = async (event) => {
                                 console.log(`[signature-complete] broadcast skipped (no phone): ${recipient.signer_name}`)
                                 continue
                             }
-                            let cleanPhone = rawPhone.replace(/[\s\-\+\(\)]/g, '')
+                            let cleanPhone = rawPhone.replace(/\D/g, '')
                             if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
                             if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
                             try {
@@ -593,7 +593,7 @@ export const handler: Handler = async (event) => {
                             vehiclePlate: fullBooking?.vehicle_plate || fullBooking?.booking_details?.vehicle?.plate,
                         })
                         if (confBody) {
-                            let cleanConfPhone = customerPhone.replace(/[\s\-\+\(\)]/g, '')
+                            let cleanConfPhone = customerPhone.replace(/\D/g, '')
                             if (cleanConfPhone.startsWith('00')) cleanConfPhone = cleanConfPhone.substring(2)
                             if (cleanConfPhone.length === 10) cleanConfPhone = '39' + cleanConfPhone
 

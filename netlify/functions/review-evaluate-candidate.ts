@@ -77,7 +77,7 @@ async function checkDuplicate(sourceRecordId: string, serviceType: ServiceType) 
 
 // Check if this customer already has ANY review candidate (by phone or email)
 async function checkCustomerAlreadyExists(record: any): Promise<boolean> {
-  const phone = record.customer_phone?.replace(/[\s\-\+\(\)]/g, '');
+  const phone = record.customer_phone?.replace(/\D/g, '');
   const email = record.customer_email?.trim().toLowerCase();
 
   if (phone && phone.length >= 6) {

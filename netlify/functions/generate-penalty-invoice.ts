@@ -357,7 +357,7 @@ export const handler: Handler = async (event) => {
 
                 const customerPhone = invoice.customer_phone || resolvedPhone || ''
                 if (customerPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
-                    let cleanPhone = customerPhone.replace(/[\s\-\+\(\)]/g, '')
+                    let cleanPhone = customerPhone.replace(/\D/g, '')
                     if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
                     if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
 

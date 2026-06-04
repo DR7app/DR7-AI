@@ -134,7 +134,7 @@ export const handler: Handler = async (event) => {
         }
 
         const channel: 'whatsapp' = 'whatsapp'
-        let cleanPhone = customerPhone.replace(/[\s\-\+\(\)]/g, '')
+        let cleanPhone = customerPhone.replace(/\D/g, '')
         if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
         if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
 

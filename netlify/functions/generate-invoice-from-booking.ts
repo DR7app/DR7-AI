@@ -885,7 +885,7 @@ export const handler: Handler = async (event) => {
                 const customerPhone = invoice.customer_phone || resolvedPhone || ''
                 if (customerPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
                     // Normalize phone: strip +, spaces, dashes, parens → remove leading 00 → if 10 digits prepend 39
-                    let cleanPhone = customerPhone.replace(/[\s\-\+\(\)]/g, '')
+                    let cleanPhone = customerPhone.replace(/\D/g, '')
                     if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
                     if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
 
@@ -1225,7 +1225,7 @@ async function sendWalletFatturaPdfAndWhatsApp(
             return publicUrl
         }
 
-        let cleanPhone = String(customerPhone).replace(/[\s\-\+\(\)]/g, '')
+        let cleanPhone = String(customerPhone).replace(/\D/g, '')
         if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
         if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
 
