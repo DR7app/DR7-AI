@@ -609,7 +609,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     if (s.category === 'moto') return false
     return true
   })
-  const extraServices = filteredByTab.filter(s => s.category === 'extra' || s.category === 'experience')
+  // 2026-06-04: separa gli EXPERIENCE (Prime Courtesy Drive, Supercar, Icon)
+  // dagli extra normali. Gli Experience vanno scelti nell'ULTIMO step (dopo
+  // data+ora) così la disponibilità del veicolo è reale. Gli extra normali
+  // (cera, cerchi, nano, ...) restano nello step Extra.
+  const normalExtraServices = filteredByTab.filter(s => s.category === 'extra')
+  const experienceServices = filteredByTab.filter(s => s.category === 'experience')
 
   const servicesByCategory = mainServices.reduce<Record<string, CarWashService[]>>((acc, s) => {
     if (!acc[s.category]) acc[s.category] = []
@@ -634,7 +639,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const experienceTier: 'supercar' | 'hypercar' | null = supercarExperienceExtra
     ? (/icon\s*experience/i.test(supercarExperienceExtra.name) ? 'hypercar' : 'supercar')
     : null
-  const experienceTierLabel = experienceTier === 'hypercar' ? 'hypercar' : 'supercar'
   // Parse duration from option label "1h" / "2h" / "30min" → minutes.
   const supercarExperienceDurationMin = (() => {
     if (!supercarExperienceOption) return 0
@@ -3782,7 +3786,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
           {/* ===== STEP 2: Extras ===== */}
           {currentStep === 2 && (() => {
-            const availableExtras = extraServices.filter(e => e.id !== selectedService?.id)
+            // 2026-06-04: solo extra NORMALI qui (Experience spostati allo step 3).
+            const availableExtras = normalExtraServices.filter(e => e.id !== selectedService?.id)
             const recommendedExtras = availableExtras.slice(0, 2)
             const bundleSum = availableExtras.reduce((s, e) => {
               const opt = extraPriceOptions[e.id]
@@ -4148,199 +4153,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </aside>
               </div>
 
-              {/* ─── Supercar Experience picker (also rendered in step 3) ───
-                  Visible the moment a Supercar/Icon Experience extra has a
-                  duration option selected. If date+time aren't picked yet,
-                  the operator can still pre-select the car; availability is
-                  re-checked in step 3 against the actual appointment time. */}
-              {supercarExperienceExtra && supercarExperienceOption && (
-                <div className="rounded-xl border border-dr7-gold/40 bg-dr7-gold/5 p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div>
-                      <h4 className="text-sm font-semibold text-dr7-gold">
-                        Scegli la {experienceTier === 'hypercar' ? 'hypercar' : 'supercar'} per {supercarExperienceExtra.name}
-                      </h4>
-                      <p className="text-xs text-theme-text-muted mt-0.5">
-                        Durata {supercarExperienceOption.label}
-                        {supercarExperienceWindow
-                          ? ` · finestra ${supercarExperienceWindow.pickupTime}–${supercarExperienceWindow.returnTime}`
-                          : ' · imposta data e ora in step 3 per verificare la disponibilità'}
-                      </p>
-                    </div>
-                    {experienceVehicle && (
-                      <button
-                        type="button"
-                        onClick={() => setExperienceVehicle(null)}
-                        className="text-xs text-theme-text-muted hover:text-theme-text-primary border border-theme-border rounded-full px-3 py-1"
-                      >
-                        Cambia veicolo
-                      </button>
-                    )}
-                  </div>
-
-                  {supercarFleet.length === 0 ? (
-                    <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded p-3">
-                      Nessun veicolo della flotta {experienceTierLabel} trovato. Apri <strong>Veicoli</strong>: ogni auto da mostrare qui deve avere
-                      <code className="bg-theme-bg-tertiary px-1 mx-1 rounded">category</code>
-                      = <code className="bg-theme-bg-tertiary px-1 rounded">{experienceTier === 'hypercar' ? 'hypercar' : 'exotic'}</code>
-                      {' '}(o un nome che contiene "{experienceTier === 'hypercar' ? 'hyper' : 'supercar'}")
-                      e stato diverso da <code className="bg-theme-bg-tertiary px-1 mx-1 rounded">retired</code>.
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {supercarFleet.map(vehicle => {
-                        const availabilityVehicle: AvailabilityVehicle = {
-                          id: vehicle.id,
-                          display_name: vehicle.display_name,
-                          plate: vehicle.plate,
-                          status: (vehicle.status === 'available' || vehicle.status === 'rented' || vehicle.status === 'maintenance' || vehicle.status === 'retired') ? vehicle.status : 'available',
-                          daily_rate: vehicle.daily_rate,
-                          category: (vehicle.category as AvailabilityVehicle['category']) || undefined,
-                          metadata: vehicle.metadata as AvailabilityVehicle['metadata'],
-                          created_at: '',
-                          updated_at: '',
-                        }
-                        // If the appointment window isn't set yet, treat as
-                        // available (provisional). Final availability is
-                        // re-checked in step 3 once date+time are confirmed.
-                        const result = supercarExperienceWindow
-                          ? isVehicleAvailable(
-                              availabilityVehicle,
-                              supercarExperienceWindow.pickupDate,
-                              supercarExperienceWindow.returnDate,
-                              supercarExperienceWindow.pickupTime,
-                              supercarExperienceWindow.returnTime,
-                              supercarFleetBookings,
-                            )
-                          : { available: true }
-                        const isAvailable = result.available
-                        const isSelected = experienceVehicle?.id === vehicle.id
-                        return (
-                          <button
-                            key={vehicle.id}
-                            type="button"
-                            disabled={!isAvailable && !isSelected}
-                            onClick={() => setExperienceVehicle(vehicle)}
-                            className={`text-left rounded-lg border p-3 transition-colors ${
-                              isSelected
-                                ? 'border-dr7-gold bg-dr7-gold/15'
-                                : isAvailable
-                                ? 'border-theme-border bg-theme-bg-tertiary hover:border-dr7-gold hover:bg-dr7-gold/5'
-                                : 'border-rose-500/30 bg-rose-500/5 opacity-60 cursor-not-allowed'
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <p className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</p>
-                                {vehicle.plate && <p className="text-[11px] font-mono text-theme-text-muted">{vehicle.plate}</p>}
-                              </div>
-                              <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                isSelected
-                                  ? 'bg-dr7-gold text-black border-dr7-gold'
-                                  : isAvailable
-                                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                                  : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
-                              }`}>
-                                {isSelected ? 'Selezionata' : isAvailable ? (supercarExperienceWindow ? 'Disponibile' : 'Provvisoria') : 'Occupata'}
-                              </span>
-                            </div>
-                            {!isAvailable && !isSelected && 'reason' in result && result.reason && (
-                              <p className="text-[10px] text-rose-400 mt-1 line-clamp-2">{result.reason}</p>
-                            )}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-
-                  {!experienceVehicle && (
-                    <p className="text-xs text-amber-400">Seleziona la supercar per completare la prenotazione.</p>
-                  )}
-                </div>
-              )}
-
-              {/* ─── Prime Courtesy Drive picker (auto di cortesia) ───
-                  2026-06-03: scegli QUALSIASI veicolo disponibile come auto di
-                  cortesia. Il veicolo scelto viene bloccato in calendario per la
-                  finestra (appuntamento + durata cortesia). */}
-              {primeCourtesyExtra && (
-                <div className="rounded-xl border border-sky-400/40 bg-sky-400/5 p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div>
-                      <h4 className="text-sm font-semibold text-sky-400">Scegli l'auto di cortesia</h4>
-                      <p className="text-xs text-theme-text-muted mt-0.5">
-                        Durata {Math.round((courtesyWindow?.durationMin ?? courtesyAutoMin) / 60 * 10) / 10}h
-                        {courtesyWindow
-                          ? ` · finestra ${courtesyWindow.pickupTime}–${courtesyWindow.returnTime}`
-                          : ' · imposta data e ora in step 3 per verificare la disponibilità'}
-                      </p>
-                    </div>
-                    {courtesyVehicle && (
-                      <button type="button" onClick={() => setCourtesyVehicle(null)}
-                        className="text-xs text-theme-text-muted hover:text-theme-text-primary border border-theme-border rounded-full px-3 py-1">
-                        Cambia veicolo
-                      </button>
-                    )}
-                  </div>
-                  {courtesyFleet.length === 0 ? (
-                    <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded p-3">
-                      Nessun veicolo in flotta. Apri <strong>Veicoli</strong> e aggiungi auto con stato diverso da <code className="bg-theme-bg-tertiary px-1 rounded">retired</code>.
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {courtesyFleet.map(vehicle => {
-                        const availabilityVehicle: AvailabilityVehicle = {
-                          id: vehicle.id,
-                          display_name: vehicle.display_name,
-                          plate: vehicle.plate,
-                          status: (vehicle.status === 'available' || vehicle.status === 'rented' || vehicle.status === 'maintenance' || vehicle.status === 'retired') ? vehicle.status : 'available',
-                          daily_rate: vehicle.daily_rate,
-                          category: (vehicle.category as AvailabilityVehicle['category']) || undefined,
-                          metadata: vehicle.metadata as AvailabilityVehicle['metadata'],
-                          created_at: '',
-                          updated_at: '',
-                        }
-                        const result = courtesyWindow
-                          ? isVehicleAvailable(availabilityVehicle, courtesyWindow.pickupDate, courtesyWindow.returnDate, courtesyWindow.pickupTime, courtesyWindow.returnTime, courtesyFleetBookings)
-                          : { available: true }
-                        const isAvailable = result.available
-                        const isSelected = courtesyVehicle?.id === vehicle.id
-                        return (
-                          <button key={vehicle.id} type="button"
-                            disabled={!isAvailable && !isSelected}
-                            onClick={() => setCourtesyVehicle(vehicle)}
-                            className={`text-left rounded-lg border p-3 transition-colors ${
-                              isSelected ? 'border-sky-400 bg-sky-400/15'
-                              : isAvailable ? 'border-theme-border bg-theme-bg-tertiary hover:border-sky-400 hover:bg-sky-400/5'
-                              : 'border-rose-500/30 bg-rose-500/5 opacity-60 cursor-not-allowed'
-                            }`}>
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <p className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</p>
-                                {vehicle.plate && <p className="text-[11px] font-mono text-theme-text-muted">{vehicle.plate}</p>}
-                              </div>
-                              <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                isSelected ? 'bg-sky-400 text-black border-sky-400'
-                                : isAvailable ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                                : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
-                              }`}>
-                                {isSelected ? 'Selezionata' : isAvailable ? (courtesyWindow ? 'Disponibile' : 'Provvisoria') : 'Occupata'}
-                              </span>
-                            </div>
-                            {!isAvailable && !isSelected && 'reason' in result && result.reason && (
-                              <p className="text-[10px] text-rose-400 mt-1 line-clamp-2">{result.reason}</p>
-                            )}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                  {!courtesyVehicle && (
-                    <p className="text-xs text-amber-400">Seleziona l'auto di cortesia (facoltativo: lascia vuoto se non assegni un veicolo).</p>
-                  )}
-                </div>
-              )}
-
               {/* Navigation */}
               <div className="flex justify-between items-center pt-4 border-t border-theme-border">
                 <button
@@ -4631,6 +4443,53 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </div>
               </div>
 
+              {/* ─── EXPERIENCE: selezione (Cortesia / Supercar / Icon) ─────
+                  2026-06-04: spostata QUI (ultimo step, dopo data+ora) così la
+                  disponibilità del veicolo è reale. Si scelgono l'experience e
+                  la durata; sotto compaiono i picker veicolo (supercar/cortesia). */}
+              {experienceServices.length > 0 && (
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
+                  <h4 className="text-sm font-semibold text-emerald-400">Experience (facoltativo)</h4>
+                  <p className="text-xs text-theme-text-muted -mt-1">Auto di cortesia, Supercar o Icon Experience. Scegli la durata; la disponibilità del veicolo viene verificata sull'orario qui sopra.</p>
+                  <div className="space-y-2">
+                    {experienceServices.map(exp => {
+                      const isSel = selectedExtras.some(x => x.id === exp.id)
+                      const chosenOpt = extraPriceOptions[exp.id]
+                      return (
+                        <div key={exp.id} className={`rounded-lg border p-3 ${isSel ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-theme-border bg-theme-bg-tertiary'}`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-semibold text-theme-text-primary">{exp.name}</span>
+                            <button type="button"
+                              onClick={() => {
+                                if (isSel) {
+                                  setSelectedExtras(prev => prev.filter(x => x.id !== exp.id))
+                                  setExtraPriceOptions(prev => { const n = { ...prev }; delete n[exp.id]; return n })
+                                } else {
+                                  setSelectedExtras(prev => [...prev, exp])
+                                }
+                              }}
+                              className={`px-3 py-1 rounded text-xs font-semibold ${isSel ? 'bg-emerald-500 text-black' : 'bg-theme-bg-secondary text-theme-text-secondary border border-theme-border'}`}>
+                              {isSel ? 'Aggiunto' : 'Aggiungi'}
+                            </button>
+                          </div>
+                          {isSel && (exp.price_options?.length ?? 0) > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {exp.price_options!.map(opt => (
+                                <button key={opt.label} type="button"
+                                  onClick={() => setExtraPriceOptions(prev => ({ ...prev, [exp.id]: opt }))}
+                                  className={`px-2.5 py-1 rounded text-xs font-medium ${chosenOpt?.label === opt.label ? 'bg-emerald-500 text-black' : 'bg-theme-bg-secondary text-theme-text-secondary border border-theme-border hover:border-emerald-500'}`}>
+                                  {opt.label} · €{opt.price.toFixed(2)}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* ─── Supercar Experience: vehicle picker ───────────────────
                   Visible only when a Supercar/Icon Experience extra is
                   selected with a duration option AND date+time are set.
@@ -4726,6 +4585,89 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
                   {!experienceVehicle && (
                     <p className="text-xs text-amber-400">Seleziona un veicolo per completare la prenotazione del Supercar Experience.</p>
+                  )}
+                </div>
+              )}
+
+              {/* ─── Prime Courtesy Drive picker (auto di cortesia) ───
+                  2026-06-04: spostato in step 3 (dopo data+ora) così la
+                  disponibilità è reale. Scegli QUALSIASI veicolo disponibile come
+                  auto di cortesia; il veicolo scelto viene bloccato in calendario
+                  per la finestra (appuntamento + durata cortesia). */}
+              {primeCourtesyExtra && (
+                <div className="rounded-xl border border-sky-400/40 bg-sky-400/5 p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                      <h4 className="text-sm font-semibold text-sky-400">Scegli l'auto di cortesia</h4>
+                      <p className="text-xs text-theme-text-muted mt-0.5">
+                        Durata {Math.round((courtesyWindow?.durationMin ?? courtesyAutoMin) / 60 * 10) / 10}h
+                        {courtesyWindow
+                          ? ` · finestra ${courtesyWindow.pickupTime}–${courtesyWindow.returnTime}`
+                          : ' · imposta data e ora per verificare la disponibilità'}
+                      </p>
+                    </div>
+                    {courtesyVehicle && (
+                      <button type="button" onClick={() => setCourtesyVehicle(null)}
+                        className="text-xs text-theme-text-muted hover:text-theme-text-primary border border-theme-border rounded-full px-3 py-1">
+                        Cambia veicolo
+                      </button>
+                    )}
+                  </div>
+                  {courtesyFleet.length === 0 ? (
+                    <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded p-3">
+                      Nessun veicolo in flotta. Apri <strong>Veicoli</strong> e aggiungi auto con stato diverso da <code className="bg-theme-bg-tertiary px-1 rounded">retired</code>.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {courtesyFleet.map(vehicle => {
+                        const availabilityVehicle: AvailabilityVehicle = {
+                          id: vehicle.id,
+                          display_name: vehicle.display_name,
+                          plate: vehicle.plate,
+                          status: (vehicle.status === 'available' || vehicle.status === 'rented' || vehicle.status === 'maintenance' || vehicle.status === 'retired') ? vehicle.status : 'available',
+                          daily_rate: vehicle.daily_rate,
+                          category: (vehicle.category as AvailabilityVehicle['category']) || undefined,
+                          metadata: vehicle.metadata as AvailabilityVehicle['metadata'],
+                          created_at: '',
+                          updated_at: '',
+                        }
+                        const result = courtesyWindow
+                          ? isVehicleAvailable(availabilityVehicle, courtesyWindow.pickupDate, courtesyWindow.returnDate, courtesyWindow.pickupTime, courtesyWindow.returnTime, courtesyFleetBookings)
+                          : { available: true }
+                        const isAvailable = result.available
+                        const isSelected = courtesyVehicle?.id === vehicle.id
+                        return (
+                          <button key={vehicle.id} type="button"
+                            disabled={!isAvailable && !isSelected}
+                            onClick={() => setCourtesyVehicle(vehicle)}
+                            className={`text-left rounded-lg border p-3 transition-colors ${
+                              isSelected ? 'border-sky-400 bg-sky-400/15'
+                              : isAvailable ? 'border-theme-border bg-theme-bg-tertiary hover:border-sky-400 hover:bg-sky-400/5'
+                              : 'border-rose-500/30 bg-rose-500/5 opacity-60 cursor-not-allowed'
+                            }`}>
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</p>
+                                {vehicle.plate && <p className="text-[11px] font-mono text-theme-text-muted">{vehicle.plate}</p>}
+                              </div>
+                              <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                isSelected ? 'bg-sky-400 text-black border-sky-400'
+                                : isAvailable ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                              }`}>
+                                {isSelected ? 'Selezionata' : isAvailable ? (courtesyWindow ? 'Disponibile' : 'Provvisoria') : 'Occupata'}
+                              </span>
+                            </div>
+                            {!isAvailable && !isSelected && 'reason' in result && result.reason && (
+                              <p className="text-[10px] text-rose-400 mt-1 line-clamp-2">{result.reason}</p>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {!courtesyVehicle && (
+                    <p className="text-xs text-amber-400">Seleziona l'auto di cortesia (facoltativo: lascia vuoto se non assegni un veicolo).</p>
                   )}
                 </div>
               )}
