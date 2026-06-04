@@ -534,6 +534,9 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
             <button onClick={() => navigateMonth('prev')} className="px-3 py-1 bg-theme-text-primary/5 hover:bg-theme-text-primary/10 rounded border border-theme-border/50 text-sm text-theme-text-primary/90 hover:text-theme-text-primary">Prec</button>
             <button onClick={() => navigateMonth('next')} className="px-3 py-1 bg-theme-text-primary/5 hover:bg-theme-text-primary/10 rounded border border-theme-border/50 text-sm text-theme-text-primary/90 hover:text-theme-text-primary">Succ</button>
           </div>
+          {/* 2026-06-04: filtro date spostato QUI (stessa riga) per liberare
+              spazio verticale — prima era una riga separata sotto. */}
+          <div className="hidden md:block"><DateRangeFilter value={dateRange} onChange={setDateRange} compact /></div>
         </div>
 
 
@@ -592,10 +595,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
           />
         </div>
       </div>
-      {/* 2026-06-01: filtro periodo Da/A — overlap con i booking del veicolo */}
-      <div className="px-4 py-1 bg-theme-bg-primary/20 backdrop-blur-md border-b border-theme-border/30">
-        <DateRangeFilter value={dateRange} onChange={setDateRange} compact />
-      </div>
+      {/* filtro periodo spostato nella control bar (sopra) per liberare spazio */}
 
       {/* 2. Scrollable Calendar Area */}
       <div className="flex-1 overflow-auto relative flex flex-col w-full" ref={gridRef}>
@@ -687,21 +687,21 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                       </svg>
                     )}
                   </div>
-                  <div className="flex flex-col overflow-hidden min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm text-theme-text-primary truncate" title={row.vehicle.display_name}>{row.vehicle.display_name}</span>
+                  <div className="flex flex-col overflow-hidden min-w-0 leading-tight">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-medium text-sm text-theme-text-primary truncate leading-tight" title={row.vehicle.display_name}>{row.vehicle.display_name}</span>
                       {row.vehicle.category && (() => {
                         const palette = getPaletteForCategory(row.vehicle.category, proCategories)
                         const proLabel = proCategories.find(c => c.id === row.vehicle.category)?.label
                         const tagText = (proLabel || (row.vehicle.category === 'aziendali' ? 'AZIENDALE' : row.vehicle.category)).toUpperCase()
                         return (
-                          <span className={`text-[9px] px-2 py-0.5 rounded uppercase font-bold tracking-wider ${palette.pillBg} ${palette.pillText}`}>
+                          <span className={`text-[8px] px-1.5 py-0 rounded uppercase font-bold leading-tight whitespace-nowrap shrink-0 ${palette.pillBg} ${palette.pillText}`}>
                             {tagText}
                           </span>
                         )
                       })()}
                     </div>
-                    <span className="text-xs text-theme-text-muted font-mono">{row.vehicle.plate || '-'}</span>
+                    <span className="text-[11px] text-theme-text-muted font-mono leading-tight">{row.vehicle.plate || '-'}</span>
                   </div>
                 </div>
 
