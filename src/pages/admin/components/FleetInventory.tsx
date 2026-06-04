@@ -737,9 +737,33 @@ export default function FleetInventory() {
                                             <div className="w-full h-1 rounded-full bg-theme-bg-tertiary overflow-hidden mt-0.5">
                                                 <div className="h-full" style={{ width: `${cPct}%`, background: color }} />
                                             </div>
-                                            {c.qty === 0 && (
-                                                <button onClick={() => sendWhatsAppOrder(vehicle, c.type)} className="mt-1 w-full px-1 py-0.5 rounded text-[9px] font-medium bg-red-600 hover:bg-red-700 text-white">Ordina</button>
-                                            )}
+                                            {/* 2026-06-04: Sostituito "Ordina" diretto → "+ Carrello".
+                                                Aggiunge l'item al carrello multi-fornitore in alto. Visibile
+                                                SEMPRE (non solo qty===0) cosi' direzione puo' ordinare
+                                                anche pezzi non ancora esauriti per rifornimento programmato. */}
+                                            <button
+                                              onClick={() => {
+                                                const typeMap: Record<typeof c.type, { label: string; type: CartItem['type'] }> = {
+                                                  oil: { label: 'Olio Motore', type: 'olio' },
+                                                  pastiglie_ant: { label: 'Pastiglie Anteriori', type: 'pastiglie_ant' },
+                                                  pastiglie_post: { label: 'Pastiglie Posteriori', type: 'pastiglie_post' },
+                                                  sensori_ant: { label: 'Sensori Anteriori', type: 'sensori_ant' },
+                                                  sensori_post: { label: 'Sensori Posteriori', type: 'sensori_post' },
+                                                }
+                                                const info = typeMap[c.type]
+                                                addToCart({
+                                                  vehicleId: vehicle.id,
+                                                  vehicleName: vehicle.display_name,
+                                                  vehiclePlate: vehicle.plate || '',
+                                                  type: info.type,
+                                                  label: info.label,
+                                                  specs: c.model !== '—' ? c.model : '',
+                                                }, 1)
+                                              }}
+                                              className={`mt-1 w-full px-1 py-0.5 rounded text-[9px] font-medium transition-colors ${c.qty === 0 ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-dr7-gold/80 hover:bg-dr7-gold text-black'}`}
+                                            >
+                                              + Carrello
+                                            </button>
                                         </div>
                                     )
                                 })}
@@ -748,10 +772,59 @@ export default function FleetInventory() {
                                 {/* Scadenza cell — placeholder */}
                                 <div className="text-right text-theme-text-muted text-xs">—</div>
                                 {/* Azioni cell */}
-                                <div className="text-right">
-                                    <button onClick={() => startEditing(vehicle)} className="px-2 py-1 rounded-full text-[10px] font-semibold bg-blue-600 hover:bg-blue-700 text-white">
+                                <div className="text-right space-y-1">
+                                    <button onClick={() => startEditing(vehicle)} className="block ml-auto px-2 py-1 rounded-full text-[10px] font-semibold bg-blue-600 hover:bg-blue-700 text-white">
                                         {editingVehicle === vehicle.id ? 'Chiudi' : 'Modifica'}
                                     </button>
+                                    {/* 2026-06-04: Aggiungi gomme al carrello — letto da vehicle.metadata.tire_specs */}
+                                    {(() => {
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      const m = (vehicle.metadata as any) || {}
+                                      const tireSpecs = m.tire_specs || {}
+                                      const frontSize = tireSpecs.front_size || ''
+                                      const frontModel = tireSpecs.front_model || ''
+                                      const rearSize = tireSpecs.rear_size || ''
+                                      const rearModel = tireSpecs.rear_model || ''
+                                      const hasFront = !!(frontSize || frontModel)
+                                      const hasRear = !!(rearSize || rearModel)
+                                      if (!hasFront && !hasRear) return null
+                                      return (
+                                        <>
+                                          {hasFront && (
+                                            <button
+                                              onClick={() => addToCart({
+                                                vehicleId: vehicle.id,
+                                                vehicleName: vehicle.display_name,
+                                                vehiclePlate: vehicle.plate || '',
+                                                type: 'gomma_ant',
+                                                label: 'Gomma Anteriore',
+                                                specs: [frontSize, frontModel].filter(Boolean).join(' — ') || '',
+                                              }, 1)}
+                                              className="block ml-auto px-2 py-0.5 rounded-full text-[9px] font-medium bg-dr7-gold/20 text-dr7-gold hover:bg-dr7-gold/30 transition-colors"
+                                              title={`Aggiungi gomma anteriore al carrello: ${frontSize} ${frontModel}`}
+                                            >
+                                              + Gomma Ant
+                                            </button>
+                                          )}
+                                          {hasRear && (
+                                            <button
+                                              onClick={() => addToCart({
+                                                vehicleId: vehicle.id,
+                                                vehicleName: vehicle.display_name,
+                                                vehiclePlate: vehicle.plate || '',
+                                                type: 'gomma_post',
+                                                label: 'Gomma Posteriore',
+                                                specs: [rearSize, rearModel].filter(Boolean).join(' — ') || '',
+                                              }, 1)}
+                                              className="block ml-auto px-2 py-0.5 rounded-full text-[9px] font-medium bg-dr7-gold/20 text-dr7-gold hover:bg-dr7-gold/30 transition-colors"
+                                              title={`Aggiungi gomma posteriore al carrello: ${rearSize} ${rearModel}`}
+                                            >
+                                              + Gomma Post
+                                            </button>
+                                          )}
+                                        </>
+                                      )
+                                    })()}
                                 </div>
                             </div>
 
