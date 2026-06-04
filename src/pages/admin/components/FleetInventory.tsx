@@ -186,14 +186,17 @@ export default function FleetInventory() {
         byVehicle.get(k)!.push(item)
       }
       // 2026-06-04: costruisce {ordine_dettagli} multi-line per il template.
-      // Niente emoji (renderizzano male su alcuni client WhatsApp).
+      // - Niente emoji (renderizzano male su alcuni client WhatsApp).
+      // - Niente `>` come prefix veicolo: WhatsApp lo interpreta come
+      //   blockquote markdown → barra grigia verticale incoerente. Uso
+      //   *Bold* (sintassi WhatsApp ufficiale) per il nome del veicolo.
       const detailLines: string[] = []
       for (const [vKey, items] of byVehicle) {
         const [vName, vPlate] = vKey.split('|')
-        detailLines.push(`> ${vName}${vPlate ? ` (${vPlate})` : ''}`)
+        detailLines.push(`*${vName}${vPlate ? ` (${vPlate})` : ''}*`)
         for (const it of items) {
           const specs = it.specs ? ` — ${it.specs}` : ''
-          detailLines.push(`   - ${it.label}${specs}`)
+          detailLines.push(`   • ${it.label}${specs}`)
           detailLines.push(`     Quantità: ${it.quantity}`)
         }
         detailLines.push('')
