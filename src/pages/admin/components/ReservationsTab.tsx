@@ -9796,6 +9796,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             return normalisedWords.every(word => searchText.includes(word))
           }).map((booking) => {
             const isCarWash = booking.service_type === 'car_wash'
+            // 2026-06-04: riga "auto di cortesia" (shadow rental del Prime Wash).
+            // Non è un noleggio pagato: badge dedicato, niente "Pagato".
+            const isCourtesy = booking.booking_details?.is_courtesy_block === true
             return (
               <div
                 key={`booking-card-${booking.id}`}
@@ -9813,6 +9816,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     </div>
                     <div className="text-sm text-theme-text-muted">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
                   </div>
+                  {isCourtesy ? (
+                    <span className="px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap bg-sky-500/20 text-sky-300 border border-sky-500/40">
+                      AUTO DI CORTESIA
+                    </span>
+                  ) : (
                   <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' ||
                     booking.payment_status === 'paid' ||
                     booking.payment_status === 'succeeded' ||
@@ -9831,6 +9839,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                       ? `Parziale €${((booking.amount_paid || 0) / 100).toFixed(0)}`
                       : 'Non Pagato'}
                   </span>
+                  )}
                 </div>
 
                 <div className="mb-2">
@@ -9842,6 +9851,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                     ) : (
                       <>
                         <span className="text-sm">{booking.vehicle_name}</span>
+                        {isCourtesy && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30">
+                            Cortesia
+                          </span>
+                        )}
                       </>
                     )}
                   </div>
@@ -9986,6 +10000,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                 }).map((booking) => {
                   const isCarWash = booking.service_type === 'car_wash'
                   const isCancelled = booking.status === 'cancelled' || booking.status === 'annullata'
+                  const isCourtesy = booking.booking_details?.is_courtesy_block === true
                   return (
                     <tr
                       key={`booking-${booking.id}`}
@@ -10018,6 +10033,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                           <div className="flex flex-col">
                             <span className="flex items-center gap-2">
                               <span>{booking.vehicle_name}</span>
+                              {isCourtesy && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30">
+                                  Cortesia
+                                </span>
+                              )}
                             </span>
                             {booking.vehicle_plate && (
                               <span className="text-xs text-theme-text-muted">Targa: {booking.vehicle_plate}</span>
@@ -10040,6 +10060,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                         }
                       </td>
                       <td className="px-3 py-3 text-sm whitespace-nowrap">
+                        {isCourtesy ? (
+                          <span className="px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap bg-sky-500/20 text-sky-300 border border-sky-500/40">
+                            AUTO DI CORTESIA
+                          </span>
+                        ) : (
                         <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' ||
                           booking.payment_status === 'paid' ||
                           booking.payment_status === 'succeeded' ||
@@ -10058,6 +10083,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                             ? `Parziale €${((booking.amount_paid || 0) / 100).toFixed(0)}`
                             : 'Non Pagato'}
                         </span>
+                        )}
                       </td>
                       <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
                         {canViewFinancials || userEmail === 'dubai.rent7.0srl@gmail.com' ? `€${(booking.price_total / 100).toFixed(2)}` : '***'}
