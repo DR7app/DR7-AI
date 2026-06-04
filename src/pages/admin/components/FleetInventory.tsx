@@ -168,7 +168,7 @@ export default function FleetInventory() {
     const clearCart = () => { setCart([]); setOrderNote('') }
     const cartCount = cart.reduce((s, c) => s + c.quantity, 0)
 
-    function sendCartViaWhatsApp() {
+    async function sendCartViaWhatsApp() {
       if (cart.length === 0) { toast.error('Carrello vuoto'); return }
       const fornitore = fleetFornitori.find(f => f.id === selectedFornitoreId)
       if (!fornitore) { toast.error('Seleziona un fornitore'); return }
@@ -179,25 +179,56 @@ export default function FleetInventory() {
         if (!byVehicle.has(k)) byVehicle.set(k, [])
         byVehicle.get(k)!.push(item)
       }
-      const lines: string[] = ['Buongiorno,', 'Vorrei ordinare:', '']
+      // 2026-06-04: costruisce {ordine_dettagli} multi-line per il template.
+      // Niente emoji (renderizzano male su alcuni client WhatsApp).
+      const detailLines: string[] = []
       for (const [vKey, items] of byVehicle) {
         const [vName, vPlate] = vKey.split('|')
-        lines.push(`🔹 ${vName}${vPlate ? ` (${vPlate})` : ''}`)
+        detailLines.push(`> ${vName}${vPlate ? ` (${vPlate})` : ''}`)
         for (const it of items) {
-          lines.push(`   • ${it.label} — ${it.specs}`)
-          lines.push(`     Quantità: ${it.quantity}`)
+          const specs = it.specs ? ` — ${it.specs}` : ''
+          detailLines.push(`   - ${it.label}${specs}`)
+          detailLines.push(`     Quantità: ${it.quantity}`)
         }
-        lines.push('')
+        detailLines.push('')
       }
-      if (orderNote.trim()) {
-        lines.push(`Note: ${orderNote.trim()}`)
-        lines.push('')
+      const ordineDettagli = detailLines.join('\n').trimEnd()
+      const noteBlock = orderNote.trim() ? `Note: ${orderNote.trim()}\n` : ''
+      const today = new Date()
+      const dataIt = today.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })
+      const oraIt = today.toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false })
+      const templateVars: Record<string, string> = {
+        ordine_dettagli: ordineDettagli,
+        note: noteBlock.trim() || '—',
+        fornitore_nome: fornitore.nome,
+        data: dataIt,
+        ora: oraIt,
+        items_count: String(cart.reduce((s, c) => s + c.quantity, 0)),
       }
-      lines.push('Grazie,')
-      lines.push('DR7 Empire')
-      const message = lines.join('\n')
+      // 2026-06-04: cerca template Pro per LABEL (admin non setta key direttamente).
+      const LABEL = 'Ordine Ricambi — Magazzino'
+      let body = ''
+      try {
+        const { data: tpl } = await supabase
+          .from('system_messages')
+          .select('message_body, is_enabled')
+          .eq('label', LABEL)
+          .maybeSingle()
+        if (tpl && tpl.is_enabled !== false && tpl.message_body) {
+          body = tpl.message_body
+          for (const [k, v] of Object.entries(templateVars)) {
+            body = body.split(`{${k}}`).join(v)
+          }
+        }
+      } catch (e) {
+        console.warn('[Magazzino cart] template lookup failed:', e)
+      }
+      if (!body) {
+        // Fallback hardcoded — niente emoji.
+        body = `Buongiorno,\nVorrei ordinare:\n\n${ordineDettagli}\n\n${noteBlock}Grazie,\nDR7 Empire`
+      }
       const phone = formatPhoneForWhatsApp(fornitore.telefono)
-      const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+      const url = `https://wa.me/${phone}?text=${encodeURIComponent(body)}`
       window.open(url, '_blank')
       toast.success(`Ordine inviato a ${fornitore.nome}`)
       clearCart()
@@ -447,19 +478,9 @@ export default function FleetInventory() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
                     </div>
-                    {/* 2026-06-04: Carrello ordini ricambi */}
-                    <button
-                      type="button"
-                      onClick={() => setCartOpen(true)}
-                      className="relative ml-auto px-4 py-2 rounded-full bg-dr7-gold text-black font-semibold text-sm hover:bg-dr7-gold/85 transition-colors"
-                    >
-                      🛒 Carrello
-                      {cartCount > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center font-bold">
-                          {cartCount}
-                        </span>
-                      )}
-                    </button>
+                    {/* 2026-06-04: Carrello vive nel pannello "Azioni Rapide"
+                        (sidebar destra) → bottone "Ordina Ricambi". Niente
+                        bottone duplicato qua in alto. */}
                 </div>
                 <p className="text-sm text-theme-text-muted mt-1">
                     Stato componenti e ricambi per ogni veicolo della flotta.
@@ -773,7 +794,19 @@ export default function FleetInventory() {
                                 <div className="text-right text-theme-text-muted text-xs">—</div>
                                 {/* Azioni cell */}
                                 <div className="text-right space-y-1">
-                                    <button onClick={() => startEditing(vehicle)} className="block ml-auto px-2 py-1 rounded-full text-[10px] font-semibold bg-blue-600 hover:bg-blue-700 text-white">
+                                    <button
+                                      onClick={() => {
+                                        // 2026-06-04: toggle. Prima startEditing risettava
+                                        // l'id stesso → click "Chiudi" non chiudeva nulla.
+                                        if (editingVehicle === vehicle.id) {
+                                          setEditingVehicle(null)
+                                          setEditForm({})
+                                        } else {
+                                          startEditing(vehicle)
+                                        }
+                                      }}
+                                      className="block ml-auto px-2 py-1 rounded-full text-[10px] font-semibold bg-blue-600 hover:bg-blue-700 text-white"
+                                    >
                                         {editingVehicle === vehicle.id ? 'Chiudi' : 'Modifica'}
                                     </button>
                                     {/* 2026-06-04: Aggiungi gomme al carrello — letto da vehicle.metadata.tire_specs */}
@@ -1237,15 +1270,18 @@ export default function FleetInventory() {
                     <SidebarPanel title="Azioni Rapide">
                         <div className="grid grid-cols-2 gap-2">
                             {[
-                                { label: 'Nuovo Intervento', icon: '+' },
-                                { label: 'Ordina Ricambi', icon: '🛒' },
-                                { label: 'Storia Report', icon: '📊' },
-                                { label: 'Stato Magazzino', icon: '📦' },
+                                // 2026-06-04: "Ordina Ricambi" ora apre il carrello.
+                                // Gli altri bottoni restano placeholder finche'
+                                // i moduli relativi non sono attivi.
+                                { label: 'Nuovo Intervento', icon: '+', onClick: () => toast('Funzione in arrivo', { icon: 'ℹ️' }) },
+                                { label: `Ordina Ricambi${cartCount > 0 ? ` (${cartCount})` : ''}`, icon: '🛒', onClick: () => setCartOpen(true) },
+                                { label: 'Storia Report', icon: '📊', onClick: () => toast('Funzione in arrivo', { icon: 'ℹ️' }) },
+                                { label: 'Stato Magazzino', icon: '📦', onClick: () => toast('Funzione in arrivo', { icon: 'ℹ️' }) },
                             ].map(a => (
                                 <button
                                     key={a.label}
                                     type="button"
-                                    onClick={() => toast('Funzione in arrivo', { icon: 'ℹ️' })}
+                                    onClick={a.onClick}
                                     className="text-xs px-2 py-2 rounded border border-theme-border bg-theme-bg-primary hover:bg-theme-bg-hover text-theme-text-secondary hover:text-theme-text-primary"
                                 >
                                     <span className="block">{a.icon}</span>
