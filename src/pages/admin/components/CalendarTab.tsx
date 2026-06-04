@@ -298,9 +298,15 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
   // sinistra) / giorni. Usata ovunque (header, celle, eventi) → resta tutto
   // allineato e il totale = larghezza area. Fallback al valore fisso prima
   // della misurazione o su schermi troppo stretti (min 22px → scroll solo lì).
-  const LEFT_COL_W = 300
   const [gridW, setGridW] = useState(0)
   const [gridH, setGridH] = useState(0)
+  // 2026-06-04: su viewport stretti (mobile) il layout "tutto a schermo" rendeva
+  // il calendario ILLEGGIBILE — colonna veicolo fissa a 300px (83% di un telefono)
+  // + celle giorno compresse al minimo di 22px. In modalità narrow usiamo una
+  // colonna sinistra stretta, celle a larghezza fissa leggibile (con scroll
+  // orizzontale) e righe più alte (con scroll verticale) invece di comprimere.
+  const isNarrow = gridW > 0 && gridW < 640
+  const LEFT_COL_W = isNarrow ? 104 : 300
   useEffect(() => {
     const el = gridRef.current
     if (!el) return
@@ -318,10 +324,13 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
   }, [loading])
   const cellWidth = useMemo(() => {
     if (!gridW) return CELL_WIDTH
+    // Mobile: NON comprimere il mese intero a schermo (celle da 22px illeggibili).
+    // Larghezza fissa leggibile + scroll orizzontale naturale del contenitore.
+    if (isNarrow) return 46
     const avail = gridW - LEFT_COL_W
     if (avail <= 0 || daysInMonth <= 0) return CELL_WIDTH
     return Math.max(22, Math.floor(avail / daysInMonth))
-  }, [gridW, daysInMonth])
+  }, [gridW, daysInMonth, isNarrow, LEFT_COL_W])
 
   const navigateMonth = (dir: 'prev' | 'next') => {
     setCurrentDate(p => {
@@ -496,8 +505,10 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
   const fitRowHeight = useMemo(() => {
     const n = visibleRows.length
     if (!gridH || n === 0) return MIN_ROW_HEIGHT
-    return Math.max(28, Math.floor((gridH - HEADER_ROW_H - 20) / n))
-  }, [gridH, visibleRows.length])
+    // Mobile: righe più alte e leggibili (con scroll verticale) invece di
+    // schiacciare tutti i veicoli nell'altezza dello schermo.
+    return Math.max(isNarrow ? 56 : 28, Math.floor((gridH - HEADER_ROW_H - 20) / n))
+  }, [gridH, visibleRows.length, isNarrow])
 
   // 2026-06-03: il filtro "Da/A" prima filtrava solo le RIGHE (veicoli senza
   // booking nel periodo) ma NON spostava la timeline, che restava sul mese
@@ -603,8 +614,11 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
         {/* A. Sticky Header Row */}
         <div className="flex sticky top-0 z-[40] bg-theme-bg-primary shadow-md min-w-max h-[42px] border-b border-theme-border/30">
           {/* Header Spacer for Left Column */}
-          <div className="sticky left-0 w-[300px] z-[41] bg-theme-bg-primary border-r border-theme-border/30 flex items-center px-4 font-bold text-xs text-theme-text-muted uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_var(--color-theme-shadow)]">
-            Veicolo / Targa
+          <div
+            className={`sticky left-0 z-[41] shrink-0 bg-theme-bg-primary border-r border-theme-border/30 flex items-center font-bold text-xs text-theme-text-muted uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_var(--color-theme-shadow)] ${isNarrow ? 'px-2' : 'px-4'}`}
+            style={{ width: LEFT_COL_W }}
+          >
+            <span className="truncate">{isNarrow ? 'Veicolo' : 'Veicolo / Targa'}</span>
           </div>
 
           {/* Day Columns Header */}
@@ -670,11 +684,14 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                 style={{ height: rowHeight }}
               >
                 {/* Left Sticky Column */}
-                <div className="sticky left-0 w-[300px] z-[30] bg-theme-bg-primary/95 group-hover:bg-theme-bg-secondary/95 border-r border-theme-border/30 flex items-center gap-3 px-4 backdrop-blur-sm shrink-0 shadow-[4px_0_10px_-2px_var(--color-theme-shadow)]">
+                <div
+                  className={`sticky left-0 z-[30] bg-theme-bg-primary/95 group-hover:bg-theme-bg-secondary/95 border-r border-theme-border/30 flex items-center backdrop-blur-sm shrink-0 shadow-[4px_0_10px_-2px_var(--color-theme-shadow)] ${isNarrow ? 'gap-1.5 px-2' : 'gap-3 px-4'}`}
+                  style={{ width: LEFT_COL_W }}
+                >
                   {/* Vehicle image (from vehicles.metadata.image set in VehiclesTab).
                       Fallback to a generic SVG car silhouette so the row layout stays
                       consistent for vehicles that don't have an image uploaded yet. */}
-                  <div className="w-9 h-6 shrink-0 rounded bg-theme-bg-tertiary border border-theme-border/40 overflow-hidden flex items-center justify-center">
+                  <div className={`w-9 h-6 shrink-0 rounded bg-theme-bg-tertiary border border-theme-border/40 overflow-hidden items-center justify-center ${isNarrow ? 'hidden' : 'flex'}`}>
                     {row.vehicle.metadata?.image ? (
                       <img
                         src={row.vehicle.metadata.image}
