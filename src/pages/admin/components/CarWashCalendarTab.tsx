@@ -770,25 +770,28 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         <KpiCard icon="fire" accent="rose" label="Saturazione" value={`${kpis.occ}%`} sub={kpis.occ >= 85 ? 'Alta' : kpis.occ >= 50 ? 'Media' : 'Bassa'} />
       </div>
 
-      {/* View tabs + date display + Oggi button — dark pill row, cyan accent. */}
-      <div className="relative z-10 flex flex-wrap items-center gap-3 px-3 py-1 border-b border-theme-border bg-theme-bg-secondary dark:bg-black/20 backdrop-blur-md">
-        <div className="flex items-center gap-2 bg-theme-bg-primary/30 rounded-full p-1 border border-theme-border/40">
+      {/* 2026-06-04: toolbar UNICA — unite le due righe che mostravano entrambe
+          il mese. Vista + navigazione + Oggi + conteggio + ricerca + azioni su
+          una sola riga (flex-wrap), per liberare spazio sopra la griglia. */}
+      <div className="relative z-10 flex flex-wrap items-center gap-2 px-3 py-1 border-b border-theme-border bg-theme-bg-secondary dark:bg-black/20 backdrop-blur-md">
+        <div className="flex items-center gap-1 bg-theme-bg-primary/30 rounded-full p-0.5 border border-theme-border/40">
           {(['giorno', 'settimana', 'mese'] as const).map(v => (
             <button
               key={v}
               onClick={() => setViewMode(v)}
-              className={`px-4 py-1.5 rounded-full text-xs font-semibold capitalize transition-all border ${
+              className={`px-3 py-1 rounded-full text-xs font-semibold capitalize transition-all border ${
                 viewMode === v
                   ? 'border-cyan-400 text-cyan-400 bg-transparent shadow-[0_0_0_1px_rgba(34,211,238,0.4)]'
-                  : 'border-transparent text-theme-text-primary hover:text-theme-text-primary hover:bg-theme-text-primary/5'
+                  : 'border-transparent text-theme-text-primary hover:bg-theme-text-primary/5'
               }`}
             >
               {v}
             </button>
           ))}
         </div>
-        <div className="flex-1 text-center text-sm font-medium text-theme-text-primary capitalize">
-          {viewMode === 'giorno' && currentDate.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        <button onClick={() => navigateMonth('prev')} className="px-2 py-1 rounded border border-theme-border/50 text-xs bg-theme-text-primary/5 hover:bg-theme-text-primary/10 text-theme-text-primary/90">◄</button>
+        <span className="text-sm font-medium text-theme-text-primary capitalize whitespace-nowrap">
+          {viewMode === 'giorno' && currentDate.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}
           {viewMode === 'settimana' && (() => {
             const start = new Date(currentDate)
             const dow = (start.getDay() + 6) % 7
@@ -796,123 +799,68 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
             const end = new Date(start)
             end.setDate(end.getDate() + 6)
             const f = (d: Date) => d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })
-            return `Settimana del ${f(start)} – ${f(end)}`
+            return `${f(start)} – ${f(end)}`
           })()}
           {viewMode === 'mese' && currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setCurrentDate(new Date())}
-            className="px-3 py-1.5 rounded-full text-xs font-semibold bg-theme-bg-primary/40 text-theme-text-primary border border-theme-border/50 hover:bg-theme-bg-primary/60 transition-colors"
-          >
-            Oggi
-          </button>
-          <button
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-theme-bg-primary/40 text-theme-text-primary border border-theme-border/50 hover:bg-theme-bg-primary/60 transition-colors"
-            title="Filtri (in arrivo)"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M6 12h12M10 20h4" />
-            </svg>
-            Filtri
-          </button>
-          {onNewBooking && (
-            <button
-              onClick={() => {
-                const today = new Date()
-                const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-                onNewBooking(dateStr, '10:00')
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-cyan-500 text-white shadow-lg shadow-cyan-500/30 hover:bg-cyan-600 transition-colors"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              Nuova Prenotazione
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* 1. Control Bar */}
-      <div className="relative z-10 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 px-3 py-1.5 bg-theme-bg-secondary dark:bg-black/25 backdrop-blur-md border-b border-theme-border shadow-sm">
-        <div className="flex items-center gap-3 sm:gap-4">
-          <h2 className="text-sm font-light text-theme-text-primary capitalize w-32 sm:w-40">
-            {currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
-          </h2>
-          <div className="flex gap-1.5 sm:gap-2">
-            <button onClick={() => navigateMonth('prev')} className="px-2 sm:px-3 py-2 bg-theme-text-primary/5 hover:bg-theme-text-primary/10 rounded border border-theme-border/50 text-xs sm:text-sm text-theme-text-primary/90 hover:text-theme-text-primary">◄</button>
-            <button onClick={() => navigateMonth('next')} className="px-2 sm:px-3 py-2 bg-theme-text-primary/5 hover:bg-theme-text-primary/10 rounded border border-theme-border/50 text-xs sm:text-sm text-theme-text-primary/90 hover:text-theme-text-primary">►</button>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
-          {(() => {
-            // Filter bookings to the active view's range so the count/total
-            // shown next to the navigation arrows reflects what the grid
-            // actually displays (mese / settimana / giorno).
-            const inRange = (b: CarWashBooking): boolean => {
-              const bd = new Date(b.appointment_date)
-              if (viewMode === 'giorno') {
-                return bd.getFullYear() === currentDate.getFullYear()
-                  && bd.getMonth() === currentDate.getMonth()
-                  && bd.getDate() === currentDate.getDate()
-              }
-              if (viewMode === 'settimana') {
-                const dow = (currentDate.getDay() + 6) % 7
-                const start = new Date(currentDate)
-                start.setHours(0, 0, 0, 0)
-                start.setDate(currentDate.getDate() - dow)
-                const end = new Date(start)
-                end.setDate(start.getDate() + 7)
-                return bd >= start && bd < end
-              }
-              return bd.getMonth() === currentDate.getMonth()
-                && bd.getFullYear() === currentDate.getFullYear()
+        </span>
+        <button onClick={() => navigateMonth('next')} className="px-2 py-1 rounded border border-theme-border/50 text-xs bg-theme-text-primary/5 hover:bg-theme-text-primary/10 text-theme-text-primary/90">►</button>
+        <button onClick={() => setCurrentDate(new Date())} className="px-3 py-1 rounded-full text-xs font-semibold bg-theme-bg-primary/40 text-theme-text-primary border border-theme-border/50 hover:bg-theme-bg-primary/60">Oggi</button>
+        {(() => {
+          const inRange = (b: CarWashBooking): boolean => {
+            const bd = new Date(b.appointment_date)
+            if (viewMode === 'giorno') {
+              return bd.getFullYear() === currentDate.getFullYear() && bd.getMonth() === currentDate.getMonth() && bd.getDate() === currentDate.getDate()
             }
-            const list = bookings.filter(inRange)
-            const rangeLabel = viewMode === 'giorno' ? 'Giorno' : viewMode === 'settimana' ? 'Settimana' : 'Mese'
-            const total = list.reduce((s, b) => s + (b.price_total || 0), 0)
-            return (
-              <>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-theme-text-muted">{rangeLabel}:</span>
-                  <span className="text-cyan-700 dark:text-cyan-300 font-bold text-xs sm:text-sm">
-                    {list.length} lavaggi
-                  </span>
-                </div>
-                {canViewFinancials && !hideFinancials && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-theme-text-muted">Fatturato:</span>
-                    <span className="text-green-700 dark:text-green-400 font-bold text-xs sm:text-sm">
-                      <FinancialData type="total">
-                        €{(total / 100).toFixed(2)}
-                      </FinancialData>
-                    </span>
-                  </div>
-                )}
-              </>
-            )
-          })()}
-          {canViewFinancials && (
-            <button
-              onClick={() => setHideFinancials(!hideFinancials)}
-              className={`px-3 py-2 rounded text-xs font-semibold transition-colors ${hideFinancials
-                ? 'bg-green-600 text-white hover:bg-green-700'
-                : 'bg-cyan-500 text-white hover:bg-[#0A8FA3]'
-                }`}
-            >
-              {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
-            </button>
-          )}
-          <input
-            type="text"
-            placeholder="Cerca..."
-            className="bg-theme-bg-primary/20 border border-theme-border/50 rounded-full px-4 py-2 text-sm w-full sm:w-64 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-cyan-400/50"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-          />
-        </div>
+            if (viewMode === 'settimana') {
+              const dow = (currentDate.getDay() + 6) % 7
+              const start = new Date(currentDate); start.setHours(0, 0, 0, 0); start.setDate(currentDate.getDate() - dow)
+              const end = new Date(start); end.setDate(start.getDate() + 7)
+              return bd >= start && bd < end
+            }
+            return bd.getMonth() === currentDate.getMonth() && bd.getFullYear() === currentDate.getFullYear()
+          }
+          const list = bookings.filter(inRange)
+          const total = list.reduce((s, b) => s + (b.price_total || 0), 0)
+          return (
+            <span className="text-xs text-theme-text-muted whitespace-nowrap">
+              <span className="text-cyan-700 dark:text-cyan-300 font-bold">{list.length}</span> lavaggi
+              {canViewFinancials && !hideFinancials && (
+                <> · <FinancialData type="total"><span className="text-green-700 dark:text-green-400 font-bold">€{(total / 100).toFixed(2)}</span></FinancialData></>
+              )}
+            </span>
+          )
+        })()}
+        <div className="flex-1" />
+        <input
+          type="text"
+          placeholder="Cerca..."
+          className="bg-theme-bg-primary/20 border border-theme-border/50 rounded-full px-3 py-1 text-sm w-36 sm:w-52 text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-cyan-400/50"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+        />
+        {canViewFinancials && (
+          <button
+            onClick={() => setHideFinancials(!hideFinancials)}
+            className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${hideFinancials ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-cyan-500 text-white hover:bg-[#0A8FA3]'}`}
+          >
+            {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
+          </button>
+        )}
+        {onNewBooking && (
+          <button
+            onClick={() => {
+              const today = new Date()
+              const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+              onNewBooking(dateStr, '10:00')
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-cyan-500 text-white shadow-lg shadow-cyan-500/30 hover:bg-cyan-600 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Nuova
+          </button>
+        )}
       </div>
 
       {/* 2026-06-01: filtro periodo Da/A su appointment_date */}
