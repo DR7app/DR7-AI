@@ -719,19 +719,19 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       <motion.div
         whileHover={{ y: -2 }}
         transition={{ type: 'spring', stiffness: 320, damping: 22 }}
-        className="group relative flex-1 min-w-[160px] flex items-center gap-3 rounded-xl p-3 overflow-hidden bg-theme-bg-tertiary dark:bg-[linear-gradient(135deg,rgba(20,28,45,0.85)_0%,rgba(10,15,25,0.85)_100%)] border border-theme-border shadow-[0_8px_24px_-12px_rgba(0,0,0,0.15)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_8px_24px_-12px_rgba(0,0,0,0.6)] backdrop-blur-md hover:border-cyan-400/30 transition-all"
+        className="group relative flex-1 min-w-[140px] flex items-center gap-2 rounded-lg px-2.5 py-1.5 overflow-hidden bg-theme-bg-tertiary dark:bg-[linear-gradient(135deg,rgba(20,28,45,0.85)_0%,rgba(10,15,25,0.85)_100%)] border border-theme-border shadow-[0_8px_24px_-12px_rgba(0,0,0,0.15)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_8px_24px_-12px_rgba(0,0,0,0.6)] backdrop-blur-md hover:border-cyan-400/30 transition-all"
       >
         {/* sheen on hover */}
         <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-        <div className={`relative w-10 h-10 rounded-lg flex items-center justify-center border ${accentBg[accent]} shrink-0`}>
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+        <div className={`relative w-7 h-7 rounded-md flex items-center justify-center border ${accentBg[accent]} shrink-0`}>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d={iconPath[icon]} />
           </svg>
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-theme-text-muted font-semibold">{label}</div>
-          <div className="text-xl font-bold text-theme-text-primary tabular-nums leading-tight tracking-tight">{value}</div>
-          <div className="flex items-center gap-2 text-[10px] mt-0.5 truncate">
+        <div className="flex-1 min-w-0 leading-tight">
+          <div className="text-[9px] uppercase tracking-[0.12em] text-theme-text-muted font-semibold truncate">{label}</div>
+          <div className="text-base font-bold text-theme-text-primary tabular-nums leading-tight tracking-tight">{value}</div>
+          <div className="flex items-center gap-1.5 text-[9px] truncate">
             {delta && <span className={deltaColor(delta)}>{delta} vs ieri</span>}
             {sub && <span className="text-theme-text-muted truncate">{sub}</span>}
           </div>
@@ -761,7 +761,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       </div>
 
       {/* 0. KPI Strip — telemetry widgets row */}
-      <div className="relative z-10 flex flex-wrap gap-2 sm:gap-3 p-3 sm:p-4 border-b border-theme-border bg-theme-bg-secondary dark:bg-black/20 backdrop-blur-md">
+      <div className="relative z-10 flex flex-wrap gap-2 px-3 py-1.5 border-b border-theme-border bg-theme-bg-secondary dark:bg-black/20 backdrop-blur-md">
         <KpiCard icon="cars" accent="emerald" label="Lavaggi Oggi" value={String(kpis.lavaggi)} delta={kpis.lavaggiDelta} />
         <KpiCard icon="clock" accent="blue" label="Slot Occupati" value={`${kpis.occ}%`} delta={kpis.occDelta} sub={`${formatDuration(kpis.bookedMin)} / ${formatDuration(kpis.openMin)}`} />
         <KpiCard icon="slot" accent="cyan" label="Slot Liberi" value={String(kpis.freeSlots)} sub={`${formatDuration(kpis.freeMin)} disp.`} />
@@ -771,7 +771,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       </div>
 
       {/* View tabs + date display + Oggi button — dark pill row, cyan accent. */}
-      <div className="relative z-10 flex flex-wrap items-center gap-3 px-3 sm:px-4 py-2.5 border-b border-theme-border bg-theme-bg-secondary dark:bg-black/20 backdrop-blur-md">
+      <div className="relative z-10 flex flex-wrap items-center gap-3 px-3 py-1 border-b border-theme-border bg-theme-bg-secondary dark:bg-black/20 backdrop-blur-md">
         <div className="flex items-center gap-2 bg-theme-bg-primary/30 rounded-full p-1 border border-theme-border/40">
           {(['giorno', 'settimana', 'mese'] as const).map(v => (
             <button
@@ -835,9 +835,9 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       </div>
 
       {/* 1. Control Bar */}
-      <div className="relative z-10 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 p-3 sm:p-4 bg-theme-bg-secondary dark:bg-black/25 backdrop-blur-md border-b border-theme-border shadow-sm">
+      <div className="relative z-10 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 px-3 py-1.5 bg-theme-bg-secondary dark:bg-black/25 backdrop-blur-md border-b border-theme-border shadow-sm">
         <div className="flex items-center gap-3 sm:gap-4">
-          <h2 className="text-base sm:text-xl font-light text-theme-text-primary capitalize w-32 sm:w-48">
+          <h2 className="text-sm font-light text-theme-text-primary capitalize w-32 sm:w-40">
             {currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
           </h2>
           <div className="flex gap-1.5 sm:gap-2">
@@ -916,13 +916,13 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       </div>
 
       {/* 2026-06-01: filtro periodo Da/A su appointment_date */}
-      <div className="px-3 sm:px-4 py-2 bg-theme-bg-primary/20 backdrop-blur-md border-b border-theme-border/30">
+      <div className="px-3 py-1 bg-theme-bg-primary/20 backdrop-blur-md border-b border-theme-border/30">
         <DateRangeFilter value={dateRange} onChange={setDateRange} compact />
       </div>
 
       {/* Compact legend — same colour codes used by the booking cards in the
           grid below. Wraps on small screens, no fixed sidebar. */}
-      <div className="relative z-10 hidden md:flex items-center gap-3 px-3 sm:px-4 py-2 bg-theme-bg-secondary dark:bg-black/20 backdrop-blur-md border-b border-theme-border text-[11px] flex-wrap">
+      <div className="relative z-10 hidden md:flex items-center gap-3 px-3 py-0.5 bg-theme-bg-secondary dark:bg-black/20 backdrop-blur-md border-b border-theme-border text-[11px] flex-wrap">
         <span className="text-theme-text-muted uppercase tracking-wider font-semibold">Legenda</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /><span className="text-theme-text-primary">Pagato</span></span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-amber-500" /><span className="text-theme-text-primary">Link Nexi inviato</span></span>
