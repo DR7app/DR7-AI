@@ -6069,23 +6069,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           .single()
 
         if (isConflictError(bookingError)) {
-          const proceed = window.confirm(
-            'CONFLITTO: questo veicolo risulta già prenotato in questo periodo.\n\n' +
-            'Vuoi salvare comunque la prenotazione (doppia prenotazione forzata)?'
-          )
-          if (proceed) {
-            const forcedData = {
-              ...bookingData,
-              booking_details: { ...(bookingData as any).booking_details, allow_double_booking: true },
-              updated_at: new Date().toISOString(),
-            }
-            ;({ data, error: bookingError } = await supabase
-              .from('bookings')
-              .update(forcedData)
-              .eq('id', editingId)
-              .select()
-              .single())
+          // 2026-06-04: nessun popup di conferma. La direzione vuole salvare
+          // SEMPRE anche in conflitto — riproviamo automaticamente col flag.
+          const forcedData = {
+            ...bookingData,
+            booking_details: { ...(bookingData as any).booking_details, allow_double_booking: true },
+            updated_at: new Date().toISOString(),
           }
+          ;({ data, error: bookingError } = await supabase
+            .from('bookings')
+            .update(forcedData)
+            .eq('id', editingId)
+            .select()
+            .single())
         }
 
         if (bookingError) {
@@ -6151,21 +6147,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           .single()
 
         if (isConflictError(bookingError)) {
-          const proceed = window.confirm(
-            'CONFLITTO: questo veicolo risulta già prenotato in questo periodo.\n\n' +
-            'Vuoi salvare comunque la prenotazione (doppia prenotazione forzata)?'
-          )
-          if (proceed) {
-            const forcedData = {
-              ...bookingData,
-              booking_details: { ...(bookingData as any).booking_details, allow_double_booking: true },
-            }
-            ;({ data, error: bookingError } = await supabase
-              .from('bookings')
-              .insert([forcedData])
-              .select()
-              .single())
+          // 2026-06-04: nessun popup di conferma. La direzione vuole creare
+          // SEMPRE anche in conflitto — riproviamo automaticamente col flag.
+          const forcedData = {
+            ...bookingData,
+            booking_details: { ...(bookingData as any).booking_details, allow_double_booking: true },
           }
+          ;({ data, error: bookingError } = await supabase
+            .from('bookings')
+            .insert([forcedData])
+            .select()
+            .single())
         }
 
         if (bookingError) {
