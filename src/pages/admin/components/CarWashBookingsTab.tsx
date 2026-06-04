@@ -181,6 +181,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [selectedService, setSelectedService] = useState<CarWashService | null>(null)
   const [selectedPriceOption, setSelectedPriceOption] = useState<{ label: string; price: number } | null>(null)
   const [selectedExtras, setSelectedExtras] = useState<CarWashService[]>([])
+  // Tiene l'id del servizio principale selezionato così il re-sync catalogo
+  // (loadData) può rimappare l'opzione di prezzo principale senza closure stale.
+  const selectedServiceIdRef = useRef<string | null>(null)
   const [extraPriceOptions, setExtraPriceOptions] = useState<Record<string, { label: string; price: number }>>({})
   const [extraQuantities, setExtraQuantities] = useState<Record<string, number>>({})
   const [customPrice, setCustomPrice] = useState('')
@@ -1120,12 +1123,38 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       // id, prendendo la NUOVA durata / prezzo / nome.
       setSelectedService(prev => {
         if (!prev) return prev
+        selectedServiceIdRef.current = prev.id
         const fresh = mappedServices.find(s => s.id === prev.id)
         return fresh || prev
       })
       setSelectedExtras(prev => {
         if (!prev || prev.length === 0) return prev
         return prev.map(e => mappedServices.find(s => s.id === e.id) || e)
+      })
+
+      // 2026-06-04 BUG FIX: ri-sincronizza anche le OPZIONI DI PREZZO scelte
+      // (1h/2h/... di Cortesia, Supercar, Icon Experience) col catalogo fresco.
+      // Prima il blocco sopra aggiornava il servizio/extra ma NON l'opzione di
+      // prezzo già selezionata: cambiando il prezzo di Cortesia/Icon in Catalogo
+      // mentre la form era aperta, il booking salvava ancora il PREZZO VECCHIO
+      // (snapshot preso al click). Ora rimappiamo ogni opzione scelta sul prezzo
+      // aggiornato dell'opzione con lo stesso label nel catalogo nuovo.
+      const freshOptionByLabel = (serviceId: string, label: string): { label: string; price: number } | null => {
+        const svc = mappedServices.find(s => s.id === serviceId)
+        const opt = svc?.price_options?.find(o => o.label === label)
+        return opt ? { label: opt.label, price: opt.price } : null
+      }
+      setSelectedPriceOption(prev => {
+        if (!prev || !selectedServiceIdRef.current) return prev
+        return freshOptionByLabel(selectedServiceIdRef.current, prev.label) || prev
+      })
+      setExtraPriceOptions(prev => {
+        if (!prev || Object.keys(prev).length === 0) return prev
+        const next: Record<string, { label: string; price: number }> = {}
+        for (const [extraId, opt] of Object.entries(prev)) {
+          next[extraId] = freshOptionByLabel(extraId, opt.label) || opt
+        }
+        return next
       })
     } catch (error) {
       console.error('Failed to load data:', error)
