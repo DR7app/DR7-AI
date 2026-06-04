@@ -5325,6 +5325,33 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         return
                       }
                     }
+                    // 2026-06-03: OTP auto-di-cortesia anche in MODIFICA. Se
+                    // l'admin imposta una durata Prime Courtesy Drive superiore
+                    // al lavaggio (arrotondato all'ora), serve l'OTP direzionale.
+                    {
+                      const editCourtesyExtra = editExtras.find(e => PRIME_COURTESY_RE.test(e.name))
+                      if (editCourtesyExtra && !isTestBooking(editingBooking)
+                          && !override.hasOverride('cortesia_durata_extra')) {
+                        const optLbl = (editExtraPriceOptions[editCourtesyExtra.id]?.label || '').toLowerCase()
+                        const chosenMin = (() => {
+                          const h = optLbl.match(/(\d+(?:[.,]\d+)?)\s*h/)
+                          if (h) return Math.round(parseFloat(h[1].replace(',', '.')) * 60)
+                          const m = optLbl.match(/(\d+)\s*min/)
+                          return m ? parseInt(m[1]) : 60
+                        })()
+                        const editTotal = getEditTotalDuration()
+                        const editWashOnly = Math.max(0, editTotal - chosenMin)
+                        const editAutoMin = Math.max(1, Math.ceil(editWashOnly / 60)) * 60
+                        if (chosenMin > editAutoMin) {
+                          override.requestOverride(
+                            'cortesia_durata_extra',
+                            `Auto di cortesia di ${Math.round(chosenMin / 60 * 10) / 10}h su un lavaggio di ${Math.round(editWashOnly / 60 * 10) / 10}h. Durata superiore al lavaggio: richiede autorizzazione direzionale.`,
+                            `wash_edit_${editingBooking?.id}`,
+                          )
+                          return
+                        }
+                      }
+                    }
                     try {
                       // Rebuild cart items from edit selections (with price options + quantities)
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
