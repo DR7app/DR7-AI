@@ -16,6 +16,21 @@ import { getPaletteForCategory } from '../../../utils/categoryPalettes'
 const CELL_WIDTH = 45 // Fixed width for day cells
 const MIN_ROW_HEIGHT = 60
 
+// 2026-06-04: stile (colore/etichetta) per la vista mobile "Apple Calendar".
+// Riusa la stessa logica di stato del Gantt (cortesia/uscita/da-saldare/attesa/
+// servizio/confermato) ma restituisce classi per dot + bordo card dell'agenda.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mobileEventStyle(b: any): { dot: string; bar: string; label: string } {
+  const pending = b?.payment_status === 'pending' || b?.payment_status === 'unpaid' || b?.status === 'pending_payment'
+  const manual = b?.booking_details?.manually_confirmed === true
+  if (b?.booking_details?.is_courtesy_block) return { dot: 'bg-sky-500', bar: 'border-l-sky-500', label: 'Cortesia' }
+  if (b?.service_type === 'uscita_straordinaria') return { dot: 'bg-emerald-600', bar: 'border-l-emerald-600', label: 'Uscita' }
+  if (pending && manual) return { dot: 'bg-red-600', bar: 'border-l-red-600', label: 'Da saldare' }
+  if (pending) return { dot: 'bg-yellow-500', bar: 'border-l-yellow-500', label: 'In attesa' }
+  if (['car_wash', 'mechanical_service', 'mechanical', 'internal_block'].includes(b?.service_type || '')) return { dot: 'bg-orange-500', bar: 'border-l-orange-500', label: 'Servizio' }
+  return { dot: 'bg-dr7-gold', bar: 'border-l-dr7-gold', label: 'Confermato' }
+}
+
 interface ProCategory { id: string; label: string }
 
 interface Vehicle {
@@ -306,7 +321,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
   // colonna sinistra stretta, celle a larghezza fissa leggibile (con scroll
   // orizzontale) e righe più alte (con scroll verticale) invece di comprimere.
   const isNarrow = gridW > 0 && gridW < 640
-  const LEFT_COL_W = isNarrow ? 104 : 300
+  const LEFT_COL_W = isNarrow ? 128 : 300
   useEffect(() => {
     const el = gridRef.current
     if (!el) return
@@ -510,6 +525,21 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
     return Math.max(isNarrow ? 56 : 28, Math.floor((gridH - HEADER_ROW_H - 20) / n))
   }, [gridH, visibleRows.length, isNarrow])
 
+  // ── Vista mobile stile Apple Calendar ───────────────────────────────────────
+  // Giorno selezionato nella griglia mese; default = oggi se nel mese corrente.
+  const [selectedDay, setSelectedDay] = useState<number>(new Date().getDate())
+  useEffect(() => {
+    const t = new Date()
+    const inMonth = t.getMonth() === currentRomeComponents.month && t.getFullYear() === currentRomeComponents.year
+    setSelectedDay(inMonth ? t.getDate() : 1)
+  }, [currentRomeComponents.month, currentRomeComponents.year])
+
+  // Tutti gli eventi del mese (appiattiti con il veicolo), per griglia + agenda.
+  const allEventsFlat = useMemo(
+    () => visibleRows.flatMap(r => r.events.map(e => ({ evt: e, vehicle: r.vehicle }))),
+    [visibleRows],
+  )
+
   // 2026-06-03: il filtro "Da/A" prima filtrava solo le RIGHE (veicoli senza
   // booking nel periodo) ma NON spostava la timeline, che restava sul mese
   // corrente → cambiando le date "non succedeva niente" a schermo. Ora, quando
@@ -529,6 +559,120 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
 
   // --- Render Helpers ---
 
+  // Vista mobile stile Apple Calendar: griglia mese (tap = seleziona giorno) +
+  // agenda delle prenotazioni del giorno selezionato. Sostituisce il Gantt sui
+  // telefoni, dove la timeline veicoli×giorni è illeggibile.
+  const renderMobileCalendar = () => {
+    const { year, month } = currentRomeComponents
+    const overlapsDay = (evt: CalendarEvent, day: number) => {
+      const ds = new Date(year, month, day, 0, 0, 0).getTime()
+      const de = new Date(year, month, day + 1, 0, 0, 0).getTime()
+      return evt.startLocal.getTime() < de && evt.endLocal.getTime() > ds
+    }
+    // Conteggio/stili per i puntini di ogni giorno della griglia.
+    const dotsForDay = (day: number) => {
+      const styles = allEventsFlat.filter(({ evt }) => overlapsDay(evt, day)).map(({ evt }) => mobileEventStyle(evt.booking).dot)
+      return Array.from(new Set(styles)).slice(0, 3)
+    }
+    // Agenda del giorno selezionato (ordinata per orario di ritiro).
+    const agenda = allEventsFlat
+      .filter(({ evt }) => overlapsDay(evt, selectedDay))
+      .sort((a, b) => a.evt.startLocal.getTime() - b.evt.startLocal.getTime())
+
+    // Allineamento griglia: settimana inizia lunedì.
+    const firstWeekday = new Date(year, month, 1).getDay() // 0=Dom..6=Sab
+    const leadBlanks = (firstWeekday + 6) % 7
+    const cells: (number | null)[] = [
+      ...Array.from({ length: leadBlanks }, () => null),
+      ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+    ]
+    const today = new Date()
+    const isTodayDay = (day: number) =>
+      today.getDate() === day && today.getMonth() === month && today.getFullYear() === year
+
+    const selDate = new Date(year, month, selectedDay)
+    const selLabel = selDate.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })
+
+    return (
+      <div className="w-full">
+        {/* Griglia mese */}
+        <div className="px-2 pt-2">
+          <div className="grid grid-cols-7 mb-1">
+            {['L', 'M', 'M', 'G', 'V', 'S', 'D'].map((d, i) => (
+              <div key={i} className="text-center text-[11px] font-semibold text-theme-text-muted py-1">{d}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-y-1">
+            {cells.map((day, i) => {
+              if (day == null) return <div key={`b${i}`} />
+              const d = new Date(year, month, day)
+              const isRed = !!getHolidayForDate(d) || isSunday(d)
+              const isToday = isTodayDay(day)
+              const isSel = day === selectedDay
+              const dots = dotsForDay(day)
+              return (
+                <button
+                  key={day}
+                  onClick={() => setSelectedDay(day)}
+                  className="flex flex-col items-center justify-start pt-1 pb-0.5 min-h-[44px] rounded-lg active:bg-theme-bg-tertiary/40"
+                >
+                  <span className={`flex items-center justify-center w-7 h-7 rounded-full text-sm font-semibold
+                    ${isToday ? 'bg-dr7-gold text-white' : isSel ? 'bg-theme-text-primary/15 text-theme-text-primary ring-1 ring-dr7-gold' : isRed ? 'text-red-500' : 'text-theme-text-primary'}`}>
+                    {day}
+                  </span>
+                  <span className="flex gap-0.5 h-1.5 mt-0.5">
+                    {dots.map((c, j) => <span key={j} className={`w-1 h-1 rounded-full ${c}`} />)}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Agenda del giorno selezionato */}
+        <div className="mt-3 border-t border-theme-border">
+          <div className="flex items-center justify-between px-4 py-2 sticky top-0 bg-theme-bg-primary z-10">
+            <span className="text-sm font-bold text-theme-text-primary capitalize">{selLabel}</span>
+            <span className="text-[11px] text-theme-text-muted">{agenda.length} {agenda.length === 1 ? 'prenotazione' : 'prenotazioni'}</span>
+          </div>
+          <div className="px-3 pb-4 space-y-2">
+            {agenda.length === 0 && (
+              <div className="text-center text-theme-text-muted text-sm py-8">Nessuna prenotazione</div>
+            )}
+            {agenda.map(({ evt, vehicle }) => {
+              const st = mobileEventStyle(evt.booking)
+              const cust = evt.booking.customer_name || evt.booking.booking_details?.customer?.fullName || evt.booking.guest_name || 'Cliente Sconosciuto'
+              return (
+                <button
+                  key={evt.id}
+                  onClick={() => setSelectedBooking(evt.booking)}
+                  className={`w-full text-left bg-theme-bg-secondary border border-theme-border border-l-4 ${st.bar} rounded-lg p-3 active:bg-theme-bg-tertiary/40`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-sm text-theme-text-primary truncate">{vehicle.display_name}</span>
+                    <span className={`text-[10px] uppercase font-bold tracking-wide text-white px-1.5 py-0.5 rounded shrink-0 ${st.dot}`}>{st.label}</span>
+                  </div>
+                  <div className="text-[11px] text-theme-text-muted font-mono">{vehicle.plate || '—'}</div>
+                  <div className="text-sm text-theme-text-primary mt-1 truncate">{cust}</div>
+                  <div className="text-[11px] text-theme-text-muted mt-1">
+                    {formatRomeDate(evt.startLocal, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    {' → '}
+                    {formatRomeDate(evt.endLocal, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </button>
+              )
+            })}
+            <button
+              onClick={() => onNewBooking?.('', new Date(year, month, selectedDay, 10, 0, 0))}
+              className="w-full text-center text-sm font-semibold text-dr7-gold border border-dashed border-dr7-gold/40 rounded-lg py-2.5 active:bg-dr7-gold/10"
+            >
+              + Nuova prenotazione
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (loading) return <div className="p-8 text-center animate-pulse">Caricamento Calendario...</div>
 
@@ -610,6 +754,8 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
 
       {/* 2. Scrollable Calendar Area */}
       <div className="flex-1 overflow-auto relative flex flex-col w-full" ref={gridRef}>
+
+        {isNarrow ? renderMobileCalendar() : (<>
 
         {/* A. Sticky Header Row */}
         <div className="flex sticky top-0 z-[40] bg-theme-bg-primary shadow-md min-w-max h-[42px] border-b border-theme-border/30">
@@ -930,6 +1076,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
           )}
         </div>
 
+        </>)}
       </div>
 
       {/* Booking Details Panel */}

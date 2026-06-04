@@ -589,6 +589,10 @@ export default function NexiTab() {
             toast.error(`Errore diagnostica: ${msg}`)
         }
     }
+    // 2026-06-04: il bottone Diagnostica è stato rimosso ma diagnoseCard resta
+    // come utility per debug futuro. Reference no-op per non far fallire il
+    // build (tsc noUnusedLocals) senza eliminare la funzione.
+    void diagnoseCard
 
     // Bulk: verifica tutte le carte contro Nexi e pulisce gli orfani.
     const [bulkCleanupRunning, setBulkCleanupRunning] = useState(false)
