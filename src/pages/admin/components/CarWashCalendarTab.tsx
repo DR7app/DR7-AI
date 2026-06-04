@@ -496,8 +496,10 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
     window.addEventListener('resize', update)
     return () => { cancelAnimationFrame(raf); clearTimeout(t); ro.disconnect(); window.removeEventListener('resize', update) }
   }, [loading])
+  // 2026-06-04: NON comprimere la griglia (slot leggibili). cellH non scende
+  // mai sotto CELL_HEIGHT (10px) → resta leggibile; cresce solo se c'è spazio.
   const cellH = useMemo(
-    () => (calGridH ? Math.max(4, Math.floor((calGridH - DAYHDR_H) / SLOT_COUNT)) : CELL_HEIGHT),
+    () => (calGridH ? Math.max(CELL_HEIGHT, Math.floor((calGridH - DAYHDR_H) / SLOT_COUNT)) : CELL_HEIGHT),
     [calGridH],
   )
 
@@ -750,7 +752,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   return (
     <div
       style={TELEMETRY_VARS}
-      className="relative flex flex-col h-[calc(100vh-240px)] sm:h-[calc(100vh-200px)] rounded-2xl border border-theme-border dark:border-cyan-400/10 shadow-[0_0_60px_-10px_rgba(34,211,238,0.10)] overflow-hidden bg-theme-bg-primary dark:bg-[radial-gradient(ellipse_at_top,_rgba(34,211,238,0.07)_0%,_transparent_55%),linear-gradient(180deg,#0a0d14_0%,#070a10_100%)]"
+      className="relative flex flex-col h-[calc(100vh-104px)] overflow-hidden bg-theme-bg-primary dark:bg-[radial-gradient(ellipse_at_top,_rgba(34,211,238,0.07)_0%,_transparent_55%),linear-gradient(180deg,#0a0d14_0%,#070a10_100%)]"
     >
       {/* Ambient cyan glow — decorative, sits behind everything */}
       <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">

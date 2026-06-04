@@ -960,7 +960,7 @@ export default function AdminDashboard() {
         )}
 
         {/* Content */}
-        <main className="flex-1 p-3 sm:p-6 lg:p-8 bg-theme-bg-secondary">
+        <main className={`flex-1 bg-theme-bg-secondary ${(activeTab === 'calendar' || activeTab === 'carwash-calendar') ? 'p-0' : 'p-3 sm:p-6 lg:p-8'}`}>
           <Suspense fallback={<TabLoader />}>
           <div>
           {activeTab === 'reservations' && (

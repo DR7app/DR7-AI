@@ -15,6 +15,7 @@ import { getPaletteForCategory } from '../../../utils/categoryPalettes'
 // --- Configuration ---
 const CELL_WIDTH = 45 // Fixed width for day cells
 const MIN_ROW_HEIGHT = 60
+const BAR_HEIGHT = 30
 
 interface ProCategory { id: string; label: string }
 
@@ -522,7 +523,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
   if (loading) return <div className="p-8 text-center animate-pulse">Caricamento Calendario...</div>
 
   return (
-    <div className="flex flex-col h-[calc(100vh-130px)] bg-transparent rounded-xl border border-theme-border/30 shadow-2xl overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-104px)] bg-transparent overflow-hidden">
 
       {/* 1. Control Bar */}
       <div className="flex justify-between items-center px-4 py-2 bg-theme-bg-primary/20 backdrop-blur-md border-b border-theme-border/30 z-10 shadow-sm">
@@ -656,10 +657,12 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
         {/* B. Vehicle Rows */}
         <div className="min-w-max pb-2">
           {visibleRows.map((row) => {
-            // 2026-06-04: altezza riga = fitRowHeight (riempie l'area senza
-            // scroll verticale). Le barre si scalano dentro la riga via laneH.
-            const rowHeight = fitRowHeight
-            const laneH = Math.max(14, (rowHeight - 8) / Math.max(1, row.laneCount))
+            // 2026-06-04: NON rimpicciolire la griglia. L'altezza riga resta
+            // quella naturale (>= MIN_ROW_HEIGHT, basata sulle lane), e cresce
+            // solo per RIEMPIRE l'area se ci sono pochi veicoli (fitRowHeight).
+            // Mai sotto la naturale → celle/barre restano leggibili.
+            const naturalHeight = Math.max(MIN_ROW_HEIGHT, (row.laneCount * (BAR_HEIGHT + 4)) + 12)
+            const rowHeight = Math.max(naturalHeight, fitRowHeight)
 
             return (
               <div
@@ -811,10 +814,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                         borderClass = "border-sky-400/50 border-dashed"
                       }
 
-                      // 2026-06-04: barra scalata su laneH (altezza riga / lane)
-                      // così le righe stanno nella pagina senza scroll verticale.
-                      const top = 4 + (evt.laneIndex * laneH)
-                      const barH = Math.max(12, laneH - 2)
+                      const top = 6 + (evt.laneIndex * (BAR_HEIGHT + 4))
 
                       // Clamp bar to visible grid area to avoid browser rendering limits
                       // (bars with left=-44955 width=46305 exceed max texture size ~16384px)
@@ -838,7 +838,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                             left: clampedLeft,
                             width: finalWidth,
                             top: top,
-                            height: barH,
+                            height: BAR_HEIGHT,
                             ...(bookingHasNotes ? { boxShadow: 'inset 0 0 0 2.5px #FACC15', borderColor: '#FACC15' } : {}),
                             ...(isCollaboratoreCal ? { cursor: 'default' } : {}),
                           }}
