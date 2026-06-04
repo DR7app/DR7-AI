@@ -783,6 +783,15 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                         borderClass = "border-emerald-400/50"
                       }
 
+                      // 2026-06-03: AUTO DI CORTESIA (Prime Courtesy Drive) →
+                      // stile distinto azzurro. È una shadow rental row che blocca
+                      // il veicolo per la durata della cortesia.
+                      const isCourtesy = evt.booking.booking_details?.is_courtesy_block === true
+                      if (isCourtesy) {
+                        bgClass = "bg-sky-500/80"
+                        borderClass = "border-sky-400/50 border-dashed"
+                      }
+
                       const top = 6 + (evt.laneIndex * (BAR_HEIGHT + 4))
 
                       // Clamp bar to visible grid area to avoid browser rendering limits
@@ -821,7 +830,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                           <div className="px-2 flex flex-col justify-center h-full">
                             {!isCollaboratoreCal && (
                               <span className="font-bold text-[10px] truncate leading-tight">
-                                {(isPendingPayment && !isDaSaldareConfirmed && !isUscita) ? '⏳ IN ATTESA — ' : ''}{evt.booking.customer_name || evt.booking.booking_details?.customer?.fullName || evt.booking.guest_name || 'Cliente Sconosciuto'} • {(() => {
+                                {isCourtesy ? '🚗 CORTESIA — ' : ''}{(isPendingPayment && !isDaSaldareConfirmed && !isUscita) ? '⏳ IN ATTESA — ' : ''}{evt.booking.customer_name || evt.booking.booking_details?.customer?.fullName || evt.booking.guest_name || 'Cliente Sconosciuto'} • {(() => {
                                   // Calculate drop-off day: if end time is exactly 00:00, use previous day
                                   const endHours = evt.endLocal.getHours()
                                   const endMinutes = evt.endLocal.getMinutes()
