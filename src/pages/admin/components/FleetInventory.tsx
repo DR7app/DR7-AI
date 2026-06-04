@@ -117,6 +117,12 @@ export default function FleetInventory() {
     const [loading, setLoading] = useState(true)
     const [editingVehicle, setEditingVehicle] = useState<string | null>(null)
     const [editForm, setEditForm] = useState<Partial<VehicleInventory>>({})
+    // 2026-06-04: tire specs sono salvati su vehicles.metadata.tire_specs
+    // (NON su fleet_vehicle_inventory). State separato dal editForm perche'
+    // il type Partial<VehicleInventory> non li include.
+    const [tireForm, setTireForm] = useState<{ front_size: string; front_model: string; rear_size: string; rear_model: string }>({
+      front_size: '', front_model: '', rear_size: '', rear_model: '',
+    })
     const [plateSearch, setPlateSearch] = useState('')
     const [saving, setSaving] = useState(false)
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -320,8 +326,33 @@ export default function FleetInventory() {
                 if (error) throw error
             }
 
+            // 2026-06-04: salva anche tire_specs su vehicles.metadata.
+            // Preserva tutti gli altri campi metadata (image, current_km, ecc.)
+            // mergiando in modo sicuro.
+            const vehicleRow = vehicles.find(v => v.id === vehicleId)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const existingMeta = (vehicleRow?.metadata as any) || {}
+            const newMeta = {
+              ...existingMeta,
+              tire_specs: {
+                ...(existingMeta.tire_specs || {}),
+                front_size: tireForm.front_size.trim() || null,
+                front_model: tireForm.front_model.trim() || null,
+                rear_size: tireForm.rear_size.trim() || null,
+                rear_model: tireForm.rear_model.trim() || null,
+              },
+            }
+            const { error: vehErr } = await supabase
+              .from('vehicles')
+              .update({ metadata: newMeta })
+              .eq('id', vehicleId)
+            if (vehErr) {
+              console.warn('[FleetInventory] tire_specs save failed (non-fatale):', vehErr.message)
+            }
+
             setEditingVehicle(null)
             setEditForm({})
+            setTireForm({ front_size: '', front_model: '', rear_size: '', rear_model: '' })
             await loadVehiclesWithInventory()
         } catch (error: unknown) {
             console.error('Error saving inventory:', error)
@@ -333,6 +364,16 @@ export default function FleetInventory() {
 
     function startEditing(vehicle: VehicleWithInventory) {
         setEditingVehicle(vehicle.id)
+        // 2026-06-04: pre-fill tire specs da metadata
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const m = (vehicle.metadata as any) || {}
+        const ts = m.tire_specs || {}
+        setTireForm({
+          front_size: ts.front_size || '',
+          front_model: ts.front_model || '',
+          rear_size: ts.rear_size || '',
+          rear_model: ts.rear_model || '',
+        })
         setEditForm({
             oil_type: vehicle.inventory?.oil_type || '',
             oil_quantity: vehicle.inventory?.oil_quantity || 0,
@@ -1099,10 +1140,66 @@ export default function FleetInventory() {
                                         </div>
                                     </div>
 
+                                    {/* 2026-06-04: Sezione Gomme — modifica + aggiungi. Salvata su
+                                        vehicles.metadata.tire_specs. Visibile a tutti i veicoli,
+                                        anche quelli senza specs gia' settate (così direzione puo'
+                                        aggiungerle). */}
+                                    <div className="border-b border-theme-border pb-4">
+                                        <h4 className="font-semibold text-theme-text-primary mb-3">Gomme</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <div className="text-xs uppercase tracking-wider text-theme-text-muted">Anteriori</div>
+                                                <div>
+                                                    <label className="block text-xs text-theme-text-muted mb-1">Misura</label>
+                                                    <input
+                                                        type="text"
+                                                        value={tireForm.front_size}
+                                                        onChange={e => setTireForm(prev => ({ ...prev, front_size: e.target.value }))}
+                                                        placeholder="es. 245/35 R19"
+                                                        className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs text-theme-text-muted mb-1">Modello</label>
+                                                    <input
+                                                        type="text"
+                                                        value={tireForm.front_model}
+                                                        onChange={e => setTireForm(prev => ({ ...prev, front_model: e.target.value }))}
+                                                        placeholder="es. Pirelli P Zero"
+                                                        className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <div className="text-xs uppercase tracking-wider text-theme-text-muted">Posteriori</div>
+                                                <div>
+                                                    <label className="block text-xs text-theme-text-muted mb-1">Misura</label>
+                                                    <input
+                                                        type="text"
+                                                        value={tireForm.rear_size}
+                                                        onChange={e => setTireForm(prev => ({ ...prev, rear_size: e.target.value }))}
+                                                        placeholder="es. 305/35 R20"
+                                                        className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs text-theme-text-muted mb-1">Modello</label>
+                                                    <input
+                                                        type="text"
+                                                        value={tireForm.rear_model}
+                                                        onChange={e => setTireForm(prev => ({ ...prev, rear_model: e.target.value }))}
+                                                        placeholder="es. Michelin Pilot Sport 4S"
+                                                        className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     {/* Action Buttons */}
                                     <div className="flex justify-end gap-3 pt-2">
                                         <button
-                                            onClick={() => { setEditingVehicle(null); setEditForm({}) }}
+                                            onClick={() => { setEditingVehicle(null); setEditForm({}); setTireForm({ front_size: '', front_model: '', rear_size: '', rear_model: '' }) }}
                                             className="px-4 py-2 bg-theme-bg-hover hover:bg-theme-bg-tertiary text-theme-text-primary rounded-lg"
                                         >
                                             Annulla
