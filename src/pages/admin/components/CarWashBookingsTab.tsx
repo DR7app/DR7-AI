@@ -4971,6 +4971,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         {booking.booking_details?.additionalService && (
                           <div className="text-xs text-theme-text-muted truncate">+ {booking.booking_details.additionalService}</div>
                         )}
+                        {/* 2026-06-04: chip Experience scelti (cortesia / supercar / icon) */}
+                        {booking.booking_details?.courtesy_drive && (
+                          <span className="inline-block mt-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30">
+                            Auto di cortesia{booking.booking_details.courtesy_drive.vehicle_name ? ` · ${booking.booking_details.courtesy_drive.vehicle_name}` : ''}
+                          </span>
+                        )}
+                        {booking.booking_details?.supercar_experience && (
+                          <span className="inline-block mt-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-dr7-gold/15 text-dr7-gold border border-dr7-gold/30">
+                            {booking.booking_details.supercar_experience.service_name || 'Experience'}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm text-theme-text-primary">
                         <div>
@@ -5107,6 +5118,21 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         <span className="text-theme-text-muted text-xs">Servizio</span>
                         <span className="text-theme-text-primary text-xs font-medium text-right max-w-[60%] truncate">{booking.service_name}</span>
                       </div>
+                      {/* 2026-06-04: Experience scelti (cortesia / supercar / icon) */}
+                      {(booking.booking_details?.courtesy_drive || booking.booking_details?.supercar_experience) && (
+                        <div className="px-3.5 py-2.5 flex items-center justify-end gap-1.5 flex-wrap border-b border-theme-border/20">
+                          {booking.booking_details?.courtesy_drive && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30">
+                              Auto di cortesia{booking.booking_details.courtesy_drive.vehicle_name ? ` · ${booking.booking_details.courtesy_drive.vehicle_name}` : ''}
+                            </span>
+                          )}
+                          {booking.booking_details?.supercar_experience && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-dr7-gold/15 text-dr7-gold border border-dr7-gold/30">
+                              {booking.booking_details.supercar_experience.service_name || 'Experience'}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <div className="px-3.5 py-2.5 flex items-center justify-between border-b border-theme-border/20">
                         <span className="text-theme-text-muted text-xs">Data</span>
                         <span className="text-theme-text-primary text-xs font-medium">
