@@ -764,12 +764,12 @@ DR7`
 
                 {/* Servizi extra — sezione in evidenza (importante per
                     experience: champagne, allestimenti, transfer luxury…). */}
-                <div className="rounded-xl border-2 border-dr7-gold/40 bg-dr7-gold/[0.06] p-3">
+                <div className="rounded-xl border-2 border-theme-border bg-theme-bg-tertiary/40 p-3">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-dr7-gold text-lg leading-none">★</span>
+                    <span className="text-theme-text-primary text-lg leading-none">★</span>
                     <label className="text-base font-bold text-theme-text-primary">Servizi Extra / Experience</label>
                     {card.servizi_extra.length > 0 && (
-                      <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-dr7-gold/20 text-dr7-gold">{card.servizi_extra.length}</span>
+                      <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-theme-bg-tertiary text-theme-text-primary border border-theme-border">{card.servizi_extra.length}</span>
                     )}
                   </div>
                   {card.servizi_extra.map((s, i) => (
@@ -794,7 +794,7 @@ DR7`
                   <button
                     type="button"
                     onClick={() => addServizio(card)}
-                    className="w-full mt-1 py-2.5 rounded-lg border-2 border-dashed border-dr7-gold/60 text-dr7-gold font-bold text-sm hover:bg-dr7-gold/15 hover:border-dr7-gold transition-colors"
+                    className="w-full mt-1 py-2.5 rounded-lg border-2 border-dashed border-theme-border text-theme-text-primary font-bold text-sm hover:bg-theme-bg-hover hover:border-theme-text-muted transition-colors"
                   >
                     + Aggiungi servizio extra
                   </button>
