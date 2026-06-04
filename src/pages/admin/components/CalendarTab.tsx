@@ -15,7 +15,6 @@ import { getPaletteForCategory } from '../../../utils/categoryPalettes'
 // --- Configuration ---
 const CELL_WIDTH = 45 // Fixed width for day cells
 const MIN_ROW_HEIGHT = 60
-const BAR_HEIGHT = 30
 
 interface ProCategory { id: string; label: string }
 
@@ -301,10 +300,11 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
   // della misurazione o su schermi troppo stretti (min 22px → scroll solo lì).
   const LEFT_COL_W = 300
   const [gridW, setGridW] = useState(0)
+  const [gridH, setGridH] = useState(0)
   useEffect(() => {
     const el = gridRef.current
     if (!el) return
-    const update = () => setGridW(el.clientWidth)
+    const update = () => { setGridW(el.clientWidth); setGridH(el.clientHeight) }
     update()
     const ro = new ResizeObserver(update)
     ro.observe(el)
@@ -481,6 +481,18 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
     })
   }, [processedRows, searchQuery, dateRange])
 
+  // 2026-06-04: altezza riga DINAMICA così TUTTE le righe veicolo stanno nella
+  // pagina senza scroll VERTICALE. = (altezza area - header) / numero veicoli.
+  // Le barre dentro la riga si scalano in base a questa altezza (vedi laneH nel
+  // render), quindi niente sbordo. Min 30px: oltre un certo numero di veicoli
+  // su schermo piccolo lo scroll è inevitabile, ma per la flotta tipica ci sta.
+  const HEADER_ROW_H = 42
+  const fitRowHeight = useMemo(() => {
+    const n = visibleRows.length
+    if (!gridH || n === 0) return MIN_ROW_HEIGHT
+    return Math.max(30, Math.floor((gridH - HEADER_ROW_H - 8) / n))
+  }, [gridH, visibleRows.length])
+
   // 2026-06-03: il filtro "Da/A" prima filtrava solo le RIGHE (veicoli senza
   // booking nel periodo) ma NON spostava la timeline, che restava sul mese
   // corrente → cambiando le date "non succedeva niente" a schermo. Ora, quando
@@ -636,11 +648,12 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
         </div>
 
         {/* B. Vehicle Rows */}
-        <div className="min-w-max pb-32"> {/* Extra padding bottom for tooltips */}
+        <div className="min-w-max pb-2">
           {visibleRows.map((row) => {
-            // Calculate dynamic height based on lanes
-            const extraPadding = 12 // Top/Bottom padding
-            const rowHeight = Math.max(MIN_ROW_HEIGHT, (row.laneCount * (BAR_HEIGHT + 4)) + extraPadding)
+            // 2026-06-04: altezza riga = fitRowHeight (riempie l'area senza
+            // scroll verticale). Le barre si scalano dentro la riga via laneH.
+            const rowHeight = fitRowHeight
+            const laneH = Math.max(14, (rowHeight - 8) / Math.max(1, row.laneCount))
 
             return (
               <div
@@ -792,7 +805,10 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                         borderClass = "border-sky-400/50 border-dashed"
                       }
 
-                      const top = 6 + (evt.laneIndex * (BAR_HEIGHT + 4))
+                      // 2026-06-04: barra scalata su laneH (altezza riga / lane)
+                      // così le righe stanno nella pagina senza scroll verticale.
+                      const top = 4 + (evt.laneIndex * laneH)
+                      const barH = Math.max(12, laneH - 2)
 
                       // Clamp bar to visible grid area to avoid browser rendering limits
                       // (bars with left=-44955 width=46305 exceed max texture size ~16384px)
@@ -816,7 +832,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                             left: clampedLeft,
                             width: finalWidth,
                             top: top,
-                            height: BAR_HEIGHT,
+                            height: barH,
                             ...(bookingHasNotes ? { boxShadow: 'inset 0 0 0 2.5px #FACC15', borderColor: '#FACC15' } : {}),
                             ...(isCollaboratoreCal ? { cursor: 'default' } : {}),
                           }}
