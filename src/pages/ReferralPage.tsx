@@ -45,7 +45,7 @@ export default function ReferralPage() {
       <header className="border-b border-white/10 bg-[#0d0d1a]/80 backdrop-blur-md">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/rentora-dark.jpeg" alt="DR7 Empire" className="h-14" />
+            <img src="/rentora-dark.jpeg" alt="DR7" className="h-14" />
           </div>
           {participantId && (
             <button
@@ -108,7 +108,7 @@ export default function ReferralPage() {
       {/* Footer */}
       <footer className="border-t border-white/10 mt-16">
         <div className="max-w-4xl mx-auto px-4 py-6 text-center text-gray-600 text-sm">
-          DR7 Empire &copy; {new Date().getFullYear()} — Tutti i diritti riservati
+          DR7 &copy; {new Date().getFullYear()} — Tutti i diritti riservati
         </div>
       </footer>
     </div>

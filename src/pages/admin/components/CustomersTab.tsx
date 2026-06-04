@@ -2537,7 +2537,7 @@ export default function CustomersTab() {
                   const link: string = invite.url
 
                   // 2. Send the link via Green API (the same bot used for all WhatsApp sends)
-                  const message = `Ciao! 👋\n\nPer registrarti su DR7 Empire compila il modulo a questo link:\n${link}\n\nIl link è valido 7 giorni.\n\nA presto,\nDR7 Empire`
+                  const message = `Ciao! 👋\n\nPer registrarti su DR7 compila il modulo a questo link:\n${link}\n\nIl link è valido 7 giorni.\n\nA presto,\nDR7`
                   const sendRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

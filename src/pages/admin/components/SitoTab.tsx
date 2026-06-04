@@ -3847,7 +3847,7 @@ function AboutEditor({
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-theme-border">
-                    <FieldText label='Outro principale (IT) — es. "Benvenuti in DR7 Empire"' value={copy.story_outro_main_it} onChange={v => updateField('story_outro_main_it', v)} />
+                    <FieldText label='Outro principale (IT) — es. "Benvenuti in DR7"' value={copy.story_outro_main_it} onChange={v => updateField('story_outro_main_it', v)} />
                     <FieldText label="Outro principale (EN)" value={copy.story_outro_main_en} onChange={v => updateField('story_outro_main_en', v)} />
                     <FieldTextArea label="Outro sub (IT)" value={copy.story_outro_sub_it} onChange={v => updateField('story_outro_sub_it', v)} />
                     <FieldTextArea label="Outro sub (EN)" value={copy.story_outro_sub_en} onChange={v => updateField('story_outro_sub_en', v)} />

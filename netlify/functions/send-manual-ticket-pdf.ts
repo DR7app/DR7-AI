@@ -139,10 +139,10 @@ export const handler: Handler = async (event) => {
         console.log(`[send-manual-ticket-pdf] Sending email to customer: ${email}`)
 
         await transporter.sendMail({
-            from: '"DR7 Empire" <info@dr7.app>',
+            from: '"DR7" <info@dr7.app>',
             to: email,
             subject: `Il Tuo Biglietto - LOTTERIA DR7 (#${String(ticketNumber).padStart(4, '0')})`,
-            text: `Grazie per l'acquisto!\n\nIn allegato trovi il tuo biglietto della lotteria DR7 Empire.\n\nNumero Biglietto: #${String(ticketNumber).padStart(4, '0')}\n\nIn bocca al lupo!\nDR7 Empire`,
+            text: `Grazie per l'acquisto!\n\nIn allegato trovi il tuo biglietto della lotteria DR7.\n\nNumero Biglietto: #${String(ticketNumber).padStart(4, '0')}\n\nIn bocca al lupo!\nDR7`,
             attachments: [{
                 filename: `Biglietto_Lotteria_${ticketNumber}.pdf`,
                 content: pdfBuffer

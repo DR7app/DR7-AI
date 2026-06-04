@@ -40,7 +40,7 @@ export const handler: Handler = async (event) => {
 
       try {
         const { error } = await resend.emails.send({
-          from: 'DR7 Empire <info@dr7.app>',
+          from: 'DR7 <info@dr7.app>',
           to: booking.email,
           subject: "Come è stata la tua esperienza con DR7?",
           html: `

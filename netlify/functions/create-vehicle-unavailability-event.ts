@@ -65,7 +65,7 @@ ${unavailability.reason ? `Motivo: ${unavailability.reason}` : ''}
 Periodo: ${unavailability.unavailableFrom} - ${unavailability.unavailableUntil}
 
 ━━━━━━━━━━━━━━━
-Impostato da DR7 Empire Admin
+Impostato da DR7 Admin
     `.trim(),
     start: {
       date: unavailability.unavailableFrom, // All-day event

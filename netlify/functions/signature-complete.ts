@@ -452,7 +452,7 @@ export const handler: Handler = async (event) => {
                             // Caption includes booking ref + signing timestamp so the
                             // customer (and the admin reviewing the chat) can visually
                             // distinguish a re-signed contract from a previous one.
-                            caption: `${contract ? 'Contratto' : 'Documento'} ${docIdentifier} firmato il ${signedAtRome} - DR7 Empire`
+                            caption: `${contract ? 'Contratto' : 'Documento'} ${docIdentifier} firmato il ${signedAtRome} - DR7`
                         })
                     })
 
@@ -489,7 +489,7 @@ export const handler: Handler = async (event) => {
                         console.log('[signature-complete] All signers complete — broadcasting final PDF to everyone')
                         const cacheBustedUrl = `${signedPdfUrl}${signedPdfUrl.includes('?') ? '&' : '?'}v=${Date.now()}&final=1`
                         const finalFileName = `${docIdentifier}_firmato_completo.pdf`
-                        const finalCaption = `Contratto ${docIdentifier} firmato da TUTTE le parti il ${signedAtRome} — DR7 Empire`
+                        const finalCaption = `Contratto ${docIdentifier} firmato da TUTTE le parti il ${signedAtRome} — DR7`
                         const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
                         for (const recipient of allReqs || []) {
                             const rawPhone = String(recipient.signer_phone || '')

@@ -44,7 +44,7 @@ function getExpirationAlarmHTML(cauzioni: any[]): string {
     return `
     <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 900px; margin: 0 auto; background-color: #000000; color: #ffffff; padding: 40px 20px;">
       <div style="text-align: center; margin-bottom: 30px;">
-        <img src="https://dr7-empire-admin.netlify.app/DR7logo1.png" alt="DR7 Empire" style="height: 60px;" />
+        <img src="https://dr7-empire-admin.netlify.app/DR7logo1.png" alt="DR7" style="height: 60px;" />
       </div>
       
       <h1 style="color: #ff9900; font-size: 24px; margin-bottom: 20px; text-align: center;">⏰ ALLARME SCADENZA CAUZIONE</h1>
@@ -77,7 +77,7 @@ function getExpirationAlarmHTML(cauzioni: any[]): string {
 
       <div style="border-top: 1px solid #333; padding-top: 20px; margin-top: 30px; text-align: center;">
         <p style="font-size: 14px; color: #999999; margin: 0;">
-          Sistema Automatico Allarmi Cauzione – DR7 Empire Admin
+          Sistema Automatico Allarmi Cauzione – DR7 Admin
         </p>
         <p style="font-size: 12px; color: #666666; margin-top: 10px;">
           Le scadenze sono calcolate automaticamente escludendo weekend e festività italiane
@@ -138,7 +138,7 @@ const scheduledHandler: Handler = async (event) => {
         const adminEmail = process.env.ADMIN_EMAIL || 'info@dr7.app'
 
         await transporter.sendMail({
-            from: '"DR7 Empire Allarmi" <info@dr7.app>',
+            from: '"DR7 Allarmi" <info@dr7.app>',
             to: adminEmail,
             subject: `⏰ SCADENZA CAUZIONE: ${expiringCauzioni.length} cauzione/i in scadenza OGGI`,
             html: getExpirationAlarmHTML(enrichedCauzioni),

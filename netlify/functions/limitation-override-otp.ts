@@ -377,7 +377,7 @@ export const handler: Handler = async (event) => {
 
       const resend = new Resend(apiKey)
       const { error: emailError } = await resend.emails.send({
-        from: 'DR7 Empire <info@dr7.app>',
+        from: 'DR7 <info@dr7.app>',
         to: await getOtpRecipient(),
         subject: `[Autorizzazione] ${operatorName} chiede: ${operazioneUmana} — OTP ${code}`,
         html: `
@@ -450,7 +450,7 @@ export const handler: Handler = async (event) => {
               Dubai Rent 7.0 S.p.A. &middot; Cagliari, Sardegna &middot; <a href="https://www.dr7empire.com" style="color: #adb5bd; text-decoration: none;">www.dr7empire.com</a>
             </p>
             <p style="margin: 6px 0 0; font-size: 10px; color: #c7ced3; text-align: center;">
-              Questa email e' generata automaticamente dal sistema DR7 Empire. Non rispondere a questo messaggio.
+              Questa email e' generata automaticamente dal sistema DR7. Non rispondere a questo messaggio.
             </p>
           </div>
         `

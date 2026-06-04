@@ -117,7 +117,7 @@ export const handler: Handler = async (event) => {
             }
         }
         const mailOptions = {
-            from: '"DR7 Empire" <info@dr7.app>',
+            from: '"DR7" <info@dr7.app>',
             to: recipientEmail,
             subject: subjectFromTpl || `Contratto Noleggio DR7 — ${booking.vehicle_name}`,
             text: bodyText,

@@ -216,7 +216,7 @@ export default function FirmaPage() {
                 <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
                     <div className="text-5xl mb-4">&#8987;</div>
                     <h1 className="text-2xl font-bold text-gray-800 mb-2">Link Scaduto</h1>
-                    <p className="text-gray-600">Il link di firma e scaduto. Contatta DR7 Empire per ricevere un nuovo link.</p>
+                    <p className="text-gray-600">Il link di firma e scaduto. Contatta DR7 per ricevere un nuovo link.</p>
                 </div>
             </div>
         )

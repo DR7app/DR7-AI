@@ -268,7 +268,7 @@ function renderEmailHtml(p: SamplePayload, code: string, operatorName: string, o
       <tr><td style="padding: 3px 8px 3px 0; color: #495057;">Inviato a</td><td style="padding: 3px 0;">${escapeHtml(recipient)}</td></tr>
     </table>
     <p style="margin: 16px 0 0; font-size: 11px; color: #adb5bd; text-align: center;">Dubai Rent 7.0 S.p.A. &middot; Cagliari, Sardegna &middot; <a href="https://www.dr7empire.com" style="color: #adb5bd; text-decoration: none;">www.dr7empire.com</a></p>
-    <p style="margin: 6px 0 0; font-size: 10px; color: #c7ced3; text-align: center;">Questa email e' generata automaticamente dal sistema DR7 Empire. Non rispondere a questo messaggio.</p>
+    <p style="margin: 6px 0 0; font-size: 10px; color: #c7ced3; text-align: center;">Questa email e' generata automaticamente dal sistema DR7. Non rispondere a questo messaggio.</p>
   </div>`
 }
 
@@ -349,7 +349,7 @@ export const handler: Handler = async (event) => {
   const resend = new Resend(apiKey)
   const html = renderEmailHtml(payload, sample, operatorName, operatorEmail, recipient)
   const { error: emailError } = await resend.emails.send({
-    from: 'DR7 Empire <info@dr7.app>',
+    from: 'DR7 <info@dr7.app>',
     to: recipient,
     subject: `[ANTEPRIMA OTP] ${operatorName} chiede: ${codeToLabel[payload.limitationCode] || payload.limitationMessage.split('.')[0]} — Codice fittizio ${FAKE_CODE}`,
     html,

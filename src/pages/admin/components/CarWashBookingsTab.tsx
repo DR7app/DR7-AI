@@ -1925,8 +1925,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       appointment_time: formData.appointment_time,
       pickup_date: appointmentDateTime,
       dropoff_date: appointmentDateTime,
-      pickup_location: 'DR7 Empire - Car Wash',
-      dropoff_location: 'DR7 Empire - Car Wash',
+      pickup_location: 'DR7 - Car Wash',
+      dropoff_location: 'DR7 - Car Wash',
       price_total: Math.round(totalPrice * 100),
       currency: 'EUR',
       // Pay by Link: pending status + Nexi method so cron auto-cancels after 1h.
@@ -1995,8 +1995,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           guest_phone: customerPhone || null,
           pickup_date: startIso,
           dropoff_date: endIso,
-          pickup_location: 'DR7 Empire - Supercar Experience',
-          dropoff_location: 'DR7 Empire - Supercar Experience',
+          pickup_location: 'DR7 - Supercar Experience',
+          dropoff_location: 'DR7 - Supercar Experience',
           // Price 0: cost lives on the parent carwash booking; the shadow
           // row is purely for blocking. Status 'confirmed' so isVehicleAvailable
           // counts it (filter excludes cancelled/completed).
@@ -2069,8 +2069,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           guest_phone: customerPhone || null,
           pickup_date: startIso,
           dropoff_date: endIso,
-          pickup_location: 'DR7 Empire - Auto di Cortesia',
-          dropoff_location: 'DR7 Empire - Auto di Cortesia',
+          pickup_location: 'DR7 - Auto di Cortesia',
+          dropoff_location: 'DR7 - Auto di Cortesia',
           price_total: 0,
           currency: 'EUR',
           status: 'confirmed',
@@ -2460,8 +2460,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           pickupTime: formData.appointment_time,
           returnDate: endDateStr,
           returnTime: endTimeStr,
-          pickupLocation: 'DR7 Empire - Car Wash',
-          returnLocation: 'DR7 Empire - Car Wash',
+          pickupLocation: 'DR7 - Car Wash',
+          returnLocation: 'DR7 - Car Wash',
           totalPrice: totalPrice,
           bookingId: data.id
         })

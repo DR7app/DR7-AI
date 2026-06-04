@@ -96,7 +96,7 @@ export const handler: Handler = async (event) => {
                     .replace(/{cognome}/g, customer.cognome || '')
 
                 const mailOptions = {
-                    from: '"DR7 Empire" <info@dr7.app>',
+                    from: '"DR7" <info@dr7.app>',
                     to: customer.email,
                     subject: subject,
                     html: `

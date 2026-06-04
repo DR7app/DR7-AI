@@ -67,7 +67,7 @@ Pickup: ${booking.pickupLocation}
 Return: ${booking.returnLocation}
 
 ━━━━━━━━━━━━━━━
-DR7 Empire Admin Booking
+DR7 Admin Booking
     `.trim(),
     start: {
       dateTime: startDateTime,

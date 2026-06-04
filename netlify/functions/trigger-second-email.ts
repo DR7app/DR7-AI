@@ -173,7 +173,7 @@ export const handler: Handler = async (event) => {
 
         const resend = new Resend(process.env.RESEND_API_KEY)
         const { data: emailData, error: emailError } = await resend.emails.send({
-            from: 'DR7 Empire <info@dr7.app>',
+            from: 'DR7 <info@dr7.app>',
             to: addebito.customer_email,
             subject: `Comunicazione formale addebito in corso - Contratto ${addebito.contract_number}`,
             html: pdfAttached

@@ -279,7 +279,7 @@ const handler: Handler = async (event) => {
 
         const resend = new Resend(resendApiKey);
         const { error: resendError } = await resend.emails.send({
-          from: 'DR7 Empire <info@dr7.app>',
+          from: 'DR7 <info@dr7.app>',
           to: candidate.customer_email,
           subject: emailSubject || 'Come \u00e8 stata la tua esperienza con DR7?',
           html: emailBody,

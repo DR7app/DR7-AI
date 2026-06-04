@@ -78,7 +78,7 @@ export const handler: Handler = async (event) => {
         const emailHtml = `<pre style="font-family: Arial, sans-serif; white-space: pre-wrap;">${emailBody}</pre>`
 
         const { error: emailError } = await resend.emails.send({
-            from: 'DR7 Empire <info@dr7.app>',
+            from: 'DR7 <info@dr7.app>',
             to: customerEmail,
             subject: emailSubject,
             html: emailHtml,

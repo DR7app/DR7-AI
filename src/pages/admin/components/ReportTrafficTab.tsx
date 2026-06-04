@@ -266,7 +266,7 @@ export default function ReportTrafficTab() {
             i dati. Devi aggiungerlo come <strong>Viewer</strong> nella property GA4.
           </p>
           <div className="text-xs leading-relaxed space-y-1.5 opacity-90 mb-3">
-            <div><strong>1.</strong> Apri Google Analytics → entra nella property <code className="font-mono bg-rose-500/20 px-1 rounded">{data.permissionIssue.propertyId}</code> (DR7 Empire).</div>
+            <div><strong>1.</strong> Apri Google Analytics → entra nella property <code className="font-mono bg-rose-500/20 px-1 rounded">{data.permissionIssue.propertyId}</code> (DR7).</div>
             <div><strong>2.</strong> Vai su <strong>Admin (rotellina) → Property settings → Property Access Management</strong>.</div>
             <div><strong>3.</strong> Clicca <strong>+ Add user</strong>, incolla l'email qui sotto, ruolo <strong>Viewer</strong>, deseleziona "Notify by email".</div>
             <div><strong>4.</strong> Salva. Torna qui e ricarica la pagina (1-2 min per la propagazione).</div>
@@ -507,7 +507,7 @@ export default function ReportTrafficTab() {
 
       {/* Footer */}
       <div className="text-[10px] text-theme-text-muted/50 text-center pt-2 border-t border-theme-border/40">
-        Fonte: Google Analytics Data API · property {data?.configured ? '✓' : 'non configurata'} · DR7 Empire
+        Fonte: Google Analytics Data API · property {data?.configured ? '✓' : 'non configurata'} · DR7
       </div>
     </div>
   )

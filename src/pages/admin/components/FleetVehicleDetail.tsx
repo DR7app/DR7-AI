@@ -495,7 +495,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                 `Telaio: ${editedVehicle.chassis_number || 'N/A'}\n` +
                                                 `KM Attuali: ${editedVehicle.current_km?.toLocaleString() || 0}\n` +
                                                 `Ultimo Tagliando: ${editedVehicle.last_service_km?.toLocaleString() || 0} km\n\n` +
-                                                `Cordiali saluti,\nDR7 Empire`
+                                                `Cordiali saluti,\nDR7`
                                             )
                                             window.open(`mailto:?subject=${subject}&body=${body}`, '_blank')
                                         }}
@@ -551,7 +551,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                                 `Anteriori: ${tireInfo.front_size || 'N/A'} - ${tireInfo.front_model || 'N/A'}\n` +
                                                 `Posteriori: ${tireInfo.rear_size || 'N/A'} - ${tireInfo.rear_model || 'N/A'}\n\n` +
                                                 `Quantità richiesta: ___\n\n` +
-                                                `Cordiali saluti,\nDR7 Empire`
+                                                `Cordiali saluti,\nDR7`
                                             )
                                             window.open(`mailto:?subject=${subject}&body=${body}`, '_blank')
                                         }}

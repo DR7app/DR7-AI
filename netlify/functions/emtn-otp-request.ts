@@ -84,7 +84,7 @@ export const handler: Handler = async (event) => {
             if (!apiKey) throw new Error('RESEND_API_KEY mancante')
             const resend = new Resend(apiKey)
             await resend.emails.send({
-                from: 'DR7 Empire <info@dr7.app>',
+                from: 'DR7 <info@dr7.app>',
                 to: email,
                 subject: 'EMTN — Codice di autorizzazione consultazione',
                 html: `

@@ -82,7 +82,7 @@ const handler: Handler = async (event) => {
                 orderId,
                 amount: amountCents.toString(),
                 currency: 'EUR',
-                description: description || 'Addebito DR7 Empire'
+                description: description || 'Addebito DR7'
             },
             contractId,
             captureType: captureType || 'IMPLICIT' // IMPLICIT = charge now, EXPLICIT = pre-auth hold

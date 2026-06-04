@@ -184,14 +184,14 @@ export default function RegistrazioneClientePage() {
         return <Centered>
             <h1 className="text-2xl font-bold text-red-600 mb-2">Link non utilizzabile</h1>
             <p className="text-gray-600">{reason}</p>
-            <p className="text-sm text-gray-500 mt-4">Contatta DR7 Empire per un nuovo link di registrazione.</p>
+            <p className="text-sm text-gray-500 mt-4">Contatta DR7 per un nuovo link di registrazione.</p>
         </Centered>
     }
 
     if (step === 'done') {
         return <Centered>
             <h1 className="text-3xl font-bold text-emerald-700 mb-2">Registrazione completata</h1>
-            <p className="text-gray-600">Grazie. Il team DR7 Empire verificherà i documenti caricati al più presto.</p>
+            <p className="text-gray-600">Grazie. Il team DR7 verificherà i documenti caricati al più presto.</p>
         </Centered>
     }
 
@@ -313,7 +313,7 @@ export default function RegistrazioneClientePage() {
 function Header() {
     return (
         <div className="text-center mb-6">
-            <div className="text-3xl font-bold text-amber-700">DR7 Empire</div>
+            <div className="text-3xl font-bold text-amber-700">DR7</div>
             <p className="text-sm text-gray-600 mt-1">Registrazione cliente</p>
         </div>
     )

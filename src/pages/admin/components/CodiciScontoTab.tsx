@@ -234,7 +234,7 @@ export default function CodiciScontoTab() {
             : `€${Number(code.value_amount).toFixed(2)}`
         const minSpend = code.minimum_spend ? `\nSpesa minima: €${Number(code.minimum_spend).toFixed(2)}` : ''
         setSendMessage(
-            `Ciao! 🎁\n\nEcco il tuo codice sconto DR7 di ${valore} su ${scope}:\n\n*${code.code}*\n\nValido fino al ${valido}.${minSpend}\n\nLo puoi usare al check-out su www.dr7empire.com\n\nGrazie,\nDR7 Empire`
+            `Ciao! 🎁\n\nEcco il tuo codice sconto DR7 di ${valore} su ${scope}:\n\n*${code.code}*\n\nValido fino al ${valido}.${minSpend}\n\nLo puoi usare al check-out su www.dr7empire.com\n\nGrazie,\nDR7`
         )
         // Carica clienti se non già pronti
         if (sendCustomers.length === 0) {

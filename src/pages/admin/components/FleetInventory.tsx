@@ -234,7 +234,7 @@ export default function FleetInventory() {
       }
       if (!body) {
         // Fallback hardcoded — niente emoji.
-        body = `Buongiorno,\nVorrei ordinare:\n\n${ordineDettagli}\n\n${noteBlock}Grazie,\nDR7 Empire`
+        body = `Buongiorno,\nVorrei ordinare:\n\n${ordineDettagli}\n\n${noteBlock}Grazie,\nDR7`
       }
       // 2026-06-04: invio diretto via Green API (send-whatsapp-notification),
       // come tutti gli altri WhatsApp transactional dell'app. Niente piu'
@@ -444,23 +444,23 @@ export default function FleetInventory() {
         if (itemType === 'oil') {
             phone = inv?.oil_supplier_phone || ''
             const oilType = inv?.oil_type || 'Olio motore'
-            message = `Buongiorno,\n\nVorrei ordinare:\n\n*Olio Motore*\nTipo: ${oilType}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7 Empire`
+            message = `Buongiorno,\n\nVorrei ordinare:\n\n*Olio Motore*\nTipo: ${oilType}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7`
         } else if (itemType === 'pastiglie_ant') {
             phone = inv?.pastiglie_ant_supplier_phone || ''
             const model = inv?.pastiglie_ant_model || 'Pastiglie freno anteriori'
-            message = `Buongiorno,\n\nVorrei ordinare:\n\n*Pastiglie Freno Anteriori*\nModello: ${model}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7 Empire`
+            message = `Buongiorno,\n\nVorrei ordinare:\n\n*Pastiglie Freno Anteriori*\nModello: ${model}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7`
         } else if (itemType === 'pastiglie_post') {
             phone = inv?.pastiglie_post_supplier_phone || ''
             const model = inv?.pastiglie_post_model || 'Pastiglie freno posteriori'
-            message = `Buongiorno,\n\nVorrei ordinare:\n\n*Pastiglie Freno Posteriori*\nModello: ${model}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7 Empire`
+            message = `Buongiorno,\n\nVorrei ordinare:\n\n*Pastiglie Freno Posteriori*\nModello: ${model}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7`
         } else if (itemType === 'sensori_ant') {
             phone = inv?.sensori_ant_supplier_phone || ''
             const model = inv?.sensori_ant_model || 'Sensori anteriori'
-            message = `Buongiorno,\n\nVorrei ordinare:\n\n*Sensori Anteriori*\nModello: ${model}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7 Empire`
+            message = `Buongiorno,\n\nVorrei ordinare:\n\n*Sensori Anteriori*\nModello: ${model}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7`
         } else if (itemType === 'sensori_post') {
             phone = inv?.sensori_post_supplier_phone || ''
             const model = inv?.sensori_post_model || 'Sensori posteriori'
-            message = `Buongiorno,\n\nVorrei ordinare:\n\n*Sensori Posteriori*\nModello: ${model}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7 Empire`
+            message = `Buongiorno,\n\nVorrei ordinare:\n\n*Sensori Posteriori*\nModello: ${model}\nVeicolo: ${vehicle.display_name}\nTarga: ${vehicle.plate || 'N/A'}\n\nGrazie,\nDR7`
         }
 
         if (!phone) {

@@ -44,16 +44,16 @@ export const handler: Handler = async (event) => {
         const resend = new Resend(apiKey)
 
         const { data, error } = await resend.emails.send({
-            from: 'DR7 Empire <info@dr7.app>',
+            from: 'DR7 <info@dr7.app>',
             to: email,
-            subject: '✅ Test Email - DR7 Empire',
+            subject: '✅ Test Email - DR7',
             html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                     <h1 style="color: #D4AF37;">✅ Email Test Successful!</h1>
                     <p>If you're reading this, your email configuration is working correctly.</p>
                     <p><strong>From:</strong> info@dr7.app</p>
                     <p><strong>Service:</strong> Resend</p>
-                    <p style="color: #666; font-size: 12px; margin-top: 30px;">DR7 Empire - Email Test</p>
+                    <p style="color: #666; font-size: 12px; margin-top: 30px;">DR7 - Email Test</p>
                 </div>
             `
         })

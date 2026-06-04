@@ -71,7 +71,7 @@ export const handler: Handler = async (event) => {
         orderId,
         amount: amountCents.toString(),
         currency: 'EUR',
-        description: description || 'Pagamento DR7 Empire',
+        description: description || 'Pagamento DR7',
         customerInfo: {
           cardHolderEmail: customerEmail || '',
           cardHolderName: customerName || '',
@@ -144,7 +144,7 @@ export const handler: Handler = async (event) => {
         amount_cents: amountCents,
         status: 'pending',
         payment_link: paymentUrl,
-        description: description || 'Pagamento DR7 Empire',
+        description: description || 'Pagamento DR7',
         customer_email: customerEmail || null,
         contract_id: orderId.slice(0, 18),
         metadata: {

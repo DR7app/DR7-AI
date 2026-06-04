@@ -9,7 +9,7 @@ const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL |
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 // Business context for Claude
-const SYSTEM_PROMPT = `Sei l'assistente virtuale di DR7 Empire, un'azienda di noleggio auto di lusso, supercar, e servizi premium a Dubai e in Italia.
+const SYSTEM_PROMPT = `Sei l'assistente virtuale di DR7, un'azienda di noleggio auto di lusso, supercar, e servizi premium a Dubai e in Italia.
 
 SERVIZI OFFERTI:
 - Noleggio auto di lusso e supercar (Ferrari, Lamborghini, Porsche, etc.)

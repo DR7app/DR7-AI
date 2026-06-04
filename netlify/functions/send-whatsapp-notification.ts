@@ -17,7 +17,7 @@ function wrapAsEmailHtml(plainText: string): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1d1d1f;">
 <div style="max-width:600px;margin:24px auto;background:#fff;border-radius:12px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,0.04);">
 <div style="font-size:14px;line-height:1.6;">${withBreaks}</div>
-<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e5ea;font-size:12px;color:#6e6e73;">DR7 Empire &mdash; Cagliari</div>
+<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e5ea;font-size:12px;color:#6e6e73;">DR7 &mdash; Cagliari</div>
 </div>
 </body></html>`;
 }
@@ -25,7 +25,7 @@ function wrapAsEmailHtml(plainText: string): string {
 async function sendEmailViaResend(to: string, subject: string, html: string): Promise<{ ok: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return { ok: false, error: 'RESEND_API_KEY missing' };
-  const fromAddress = process.env.RESEND_FROM || 'DR7 Empire <noreply@dr7.app>';
+  const fromAddress = process.env.RESEND_FROM || 'DR7 <noreply@dr7.app>';
   try {
     const resp = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -916,7 +916,7 @@ const handler: Handler = async (event) => {
             booking?.booking_details?.customer?.email ||
             null;
           if (recipientEmail && typeof recipientEmail === 'string' && recipientEmail.includes('@')) {
-            const subject = (emailMeta.email_subject?.trim?.()) || emailMeta.label || 'DR7 Empire';
+            const subject = (emailMeta.email_subject?.trim?.()) || emailMeta.label || 'DR7';
             const html = wrapAsEmailHtml(wrappedMessage);
             const sent = await sendEmailViaResend(recipientEmail, subject, html);
             if (sent.ok) {

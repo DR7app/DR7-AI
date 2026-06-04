@@ -2897,7 +2897,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       if (skipped || !waRes.ok) {
         logger.warn('[ResendPayByLink] Template Pro non disponibile — invio fallback hardcoded')
         const firstName = (custName || 'Cliente').split(' ')[0] || 'Cliente'
-        const fallbackMsg = `Ciao ${firstName},\n\nLa tua prenotazione DR7 e' confermata. Per completarla, paga ${totalEur} € entro 1 ora a questo link:\n\n${newPaymentLink}\n\nRif. prenotazione: ${bookingRef}\n\nGrazie,\nDR7 Empire`
+        const fallbackMsg = `Ciao ${firstName},\n\nLa tua prenotazione DR7 e' confermata. Per completarla, paga ${totalEur} € entro 1 ora a questo link:\n\n${newPaymentLink}\n\nRif. prenotazione: ${bookingRef}\n\nGrazie,\nDR7`
         const fbRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -6268,7 +6268,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   logger.warn('[PayByLink] Template Pro non disponibile — invio fallback hardcoded')
                   const custName = customerInfo?.full_name || 'Cliente'
                   const firstName = custName.split(' ')[0] || 'Cliente'
-                  const fallbackMsg = `Ciao ${firstName},\n\nLa tua prenotazione DR7 e' confermata. Per completarla, paga ${totalEur.toFixed(2)} € entro 1 ora a questo link:\n\n${linkData.paymentUrl}\n\nRif. prenotazione: ${insertedBooking.id.substring(0, 8).toUpperCase()}\n\nGrazie,\nDR7 Empire`
+                  const fallbackMsg = `Ciao ${firstName},\n\nLa tua prenotazione DR7 e' confermata. Per completarla, paga ${totalEur.toFixed(2)} € entro 1 ora a questo link:\n\n${linkData.paymentUrl}\n\nRif. prenotazione: ${insertedBooking.id.substring(0, 8).toUpperCase()}\n\nGrazie,\nDR7`
                   const fbRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

@@ -79,7 +79,7 @@ export const handler: Handler = async (event) => {
     const actionLabel = action === 'credit' ? 'CREDITO' : 'ADDEBITO'
 
     const { error: emailError } = await resend.emails.send({
-      from: 'DR7 Empire <info@dr7.app>',
+      from: 'DR7 <info@dr7.app>',
       to: await getOtpRecipient(),
       subject: `Codice Verifica Wallet - ${actionLabel} €${parseFloat(amount).toFixed(2)}`,
       html: `
