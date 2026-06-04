@@ -470,12 +470,16 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   // Stretch day cells to fill the row when only a few days are visible
   // (Giorno = 1 column, Settimana = up to 7 columns). For Mese we keep the
   // fixed 52px width so all ~30 days fit without crushing the layout.
-  const stretchCols = viewMode !== 'mese'
+  // 2026-06-04: SEMPRE stretch (anche Mese) così il calendario sta nella pagina
+  // senza scroll orizzontale. Le colonne giorno riempiono la larghezza (flex:1);
+  // gli eventi sono posizionati PER-CELLA (leftPct %), quindi restano allineati
+  // a qualunque larghezza. Prima il Mese usava 52px fissi × ~30 giorni → sforava.
+  const stretchCols = true
   const dayCellStyle: React.CSSProperties = stretchCols
-    ? { flex: 1, height: CELL_HEIGHT }
+    ? { flex: 1, minWidth: 0, height: CELL_HEIGHT }
     : { width: CELL_WIDTH, height: CELL_HEIGHT }
   const headerCellStyle: React.CSSProperties = stretchCols
-    ? { flex: 1, height: 50 }
+    ? { flex: 1, minWidth: 0, height: 50 }
     : { width: CELL_WIDTH, height: 50 }
 
   const navigateMonth = (dir: 'prev' | 'next') => {
