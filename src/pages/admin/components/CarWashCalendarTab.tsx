@@ -482,7 +482,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   // area - header giorni) / 109, misurata con ResizeObserver. Gli eventi
   // (durata/5 * cellH) e gli offset si scalano di conseguenza.
   const SLOT_COUNT = 109
-  const DAYHDR_H = 52
+  const DAYHDR_H = 34
   const [calGridH, setCalGridH] = useState(0)
   useEffect(() => {
     const el = calGridRef.current
@@ -496,10 +496,11 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
     window.addEventListener('resize', update)
     return () => { cancelAnimationFrame(raf); clearTimeout(t); ro.disconnect(); window.removeEventListener('resize', update) }
   }, [loading])
-  // 2026-06-04: NON comprimere la griglia (slot leggibili). cellH non scende
-  // mai sotto CELL_HEIGHT (10px) → resta leggibile; cresce solo se c'è spazio.
+  // 2026-06-04: altezza slot per FAR ENTRARE TUTTO nello schermo (no scroll).
+  // cellH = (altezza griglia - header) / 109. Min 4px così, anche su schermi
+  // piccoli, la giornata intera sta nella pagina.
   const cellH = useMemo(
-    () => (calGridH ? Math.max(CELL_HEIGHT, Math.floor((calGridH - DAYHDR_H) / SLOT_COUNT)) : CELL_HEIGHT),
+    () => (calGridH ? Math.max(4, Math.floor((calGridH - DAYHDR_H) / SLOT_COUNT)) : CELL_HEIGHT),
     [calGridH],
   )
 
@@ -507,8 +508,8 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
     ? { flex: 1, minWidth: 0, height: cellH }
     : { width: CELL_WIDTH, height: cellH }
   const headerCellStyle: React.CSSProperties = stretchCols
-    ? { flex: 1, minWidth: 0, height: 50 }
-    : { width: CELL_WIDTH, height: 50 }
+    ? { flex: 1, minWidth: 0, height: 32 }
+    : { width: CELL_WIDTH, height: 32 }
 
   const navigateMonth = (dir: 'prev' | 'next') => {
     // Step size depends on the active view: day in Giorno, 7 days in
@@ -889,7 +890,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         {/* A. Sticky Header Row - Days */}
         <div className={`flex sticky top-0 z-[40] bg-theme-bg-primary shadow-lg border-b border-theme-border/50 ${stretchCols ? 'w-full' : 'min-w-max'}`}>
           {/* Header Spacer for Time Column */}
-          <div className="sticky left-0 w-[70px] shrink-0 z-[41] bg-theme-bg-primary border-r border-theme-border/50 flex items-center justify-center font-bold text-xs text-theme-text-muted uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_var(--color-theme-shadow)]" style={{ height: '50px' }}>
+          <div className="sticky left-0 w-[70px] shrink-0 z-[41] bg-theme-bg-primary border-r border-theme-border/50 flex items-center justify-center font-bold text-xs text-theme-text-muted uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_var(--color-theme-shadow)]" style={{ height: '32px' }}>
             Orario
           </div>
 
@@ -920,12 +921,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                   )}
 
                   <span
-                    className={`text-sm font-bold ${isToday ? 'text-[#22d3ee]' : 'text-theme-text-primary/90'}`}
+                    className={`text-xs font-bold leading-none ${isToday ? 'text-[#22d3ee]' : 'text-theme-text-primary/90'}`}
                   >
                     {day}
                   </span>
                   <span
-                    className={`text-[9px] uppercase tracking-wide ${isToday ? 'text-[#22d3ee]/80' : 'text-theme-text-primary/50'}`}
+                    className={`text-[8px] uppercase tracking-wide leading-none ${isToday ? 'text-[#22d3ee]/80' : 'text-theme-text-primary/50'}`}
                   >
                     {d.toLocaleDateString('it-IT', { weekday: 'short' })}
                   </span>
