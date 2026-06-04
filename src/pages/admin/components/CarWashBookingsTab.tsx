@@ -899,6 +899,27 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courtesyWindow?.pickupDate, courtesyWindow?.pickupTime, courtesyWindow?.returnDate, courtesyWindow?.returnTime, courtesyFleet.length])
 
+  // L'auto di cortesia scelta è in conflitto con un'altra prenotazione nella
+  // finestra? Se sì serve l'OTP direzionale (come per la durata extra) e, una
+  // volta approvato, il blocco viene inserito comunque (il trigger DB salta i
+  // blocchi cortesia). 2026-06-04.
+  const courtesyConflict = (() => {
+    if (!primeCourtesyExtra || !courtesyVehicle || !courtesyWindow) return false
+    const av: AvailabilityVehicle = {
+      id: courtesyVehicle.id,
+      display_name: courtesyVehicle.display_name,
+      plate: courtesyVehicle.plate,
+      status: (courtesyVehicle.status === 'available' || courtesyVehicle.status === 'rented' || courtesyVehicle.status === 'maintenance' || courtesyVehicle.status === 'retired') ? courtesyVehicle.status : 'available',
+      daily_rate: courtesyVehicle.daily_rate,
+      category: (courtesyVehicle.category as AvailabilityVehicle['category']) || undefined,
+      metadata: courtesyVehicle.metadata as AvailabilityVehicle['metadata'],
+      created_at: '',
+      updated_at: '',
+    }
+    const r = isVehicleAvailable(av, courtesyWindow.pickupDate, courtesyWindow.returnDate, courtesyWindow.pickupTime, courtesyWindow.returnTime, courtesyFleetBookings)
+    return !r.available
+  })()
+
   // Reset chosen vehicle when the experience extra is removed or the
   // duration option changes (the previously-picked car may now be busy).
   useEffect(() => {
@@ -2563,12 +2584,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       // direttamente; gli altri vedono il modal e il save riprende dopo
       // l'approvazione (resume hook). Il conflitto auto è gestito separatamente
       // dal gate carwash_slot_occupied più sotto (entrambi possono concatenarsi).
-      if (courtesyExceedsWash && !override.hasOverride('cortesia_durata_extra')) {
+      if ((courtesyExceedsWash || courtesyConflict) && !override.hasOverride('cortesia_durata_extra')) {
         const reqH = Math.round(courtesyChosenMin / 60 * 10) / 10
         const washH = Math.round(washOnlyMin / 60 * 10) / 10
+        const motivi: string[] = []
+        if (courtesyExceedsWash) motivi.push(`durata ${reqH}h superiore al lavaggio ${washH}h (auto: ${courtesyAutoHours}h)`)
+        if (courtesyConflict) motivi.push(`veicolo ${courtesyVehicle?.display_name ?? ''} già occupato nella finestra ${courtesyWindow?.pickupTime ?? ''}–${courtesyWindow?.returnTime ?? ''}`)
         const bypassed = override.requestOverride(
           'cortesia_durata_extra',
-          `Auto di cortesia di ${reqH}h su un lavaggio di ${washH}h (auto: ${courtesyAutoHours}h). Durata superiore al lavaggio: richiede autorizzazione direzionale.`,
+          `Auto di cortesia: ${motivi.join(' e ')}. Richiede autorizzazione direzionale.`,
         )
         if (!bypassed) {
           // Modal aperto — il save riprende dopo l'OTP via resume hook.
