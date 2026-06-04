@@ -14,7 +14,6 @@ import {
   USCITA_SERVIZI_EXTRA,
   USCITA_PAYMENT_STATES,
   USCITA_CAUZIONE_STATES,
-  USCITA_STATI,
   uscitaStatoToBookingStatus,
   emptyVehicleCard,
   type UscitaStato,
@@ -311,7 +310,9 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
       // (excluding the linked booking the uscita serves).
       for (const c of valid) {
         const pickIso = toIso(c.pickup_date, c.pickup_time)
-        const dropIso = toIso(c.dropoff_date || c.pickup_date, c.dropoff_time) || pickIso
+        // 2026-06-04: data di ritorno opzionale (consegna/sola andata). Se
+        // manca, l'uscita è un evento di UN solo giorno → dropoff = pickup.
+        const dropIso = c.dropoff_date ? (toIso(c.dropoff_date, c.dropoff_time) || pickIso) : pickIso
         if (!pickIso) continue
         const { data: clash } = await supabase
           .from('bookings')
@@ -332,7 +333,8 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
       const rows = valid.map(c => {
         const v = vehicles.find(x => x.id === c.vehicle_id)
         const pickIso = toIso(c.pickup_date, c.pickup_time)
-        const dropIso = toIso(c.dropoff_date || c.pickup_date, c.dropoff_time) || pickIso
+        // 2026-06-04: ritorno opzionale → uscita di un solo giorno se assente.
+        const dropIso = c.dropoff_date ? (toIso(c.dropoff_date, c.dropoff_time) || pickIso) : pickIso
         const payStatus = paymentStatusForCard(c)
         const priceCents = c.payment.amount ? eurToCents(c.payment.amount) : 0
         const label = (title.trim() || c.motivazioni[0] || 'Uscita Straordinaria')
@@ -587,9 +589,11 @@ DR7`
 
         <div className="px-5 py-4 space-y-5">
           {/* Operation header fields */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* 2026-06-04: campo "Stato" rimosso dalla creazione — una nuova
+              uscita parte sempre come 'Programmata'. Lo stato si gestisce dopo,
+              dal calendario / lista. */}
+          <div className="grid grid-cols-1 gap-3">
             <Input label="Titolo uscita" value={title} onChange={e => setTitle(e.target.value)} placeholder="Es. Consegne mattina sabato" />
-            <Select label="Stato" value={stato} onChange={e => setStato(e.target.value as UscitaStato)} options={USCITA_STATI.map(s => ({ value: s, label: s }))} />
           </div>
 
           {/* Autisti registry */}
@@ -717,9 +721,9 @@ DR7`
                     )}
                   </div>
                   <div className="space-y-2">
-                    <div className="text-xs font-semibold uppercase text-theme-text-muted">Destinazione</div>
+                    <div className="text-xs font-semibold uppercase text-theme-text-muted">Destinazione <span className="normal-case font-normal text-theme-text-muted">— ritorno opzionale</span></div>
                     <div className="grid grid-cols-2 gap-2">
-                      <Input label="Data" type="date" value={card.dropoff_date} onChange={e => patchCard(card.localId, { dropoff_date: e.target.value })} />
+                      <Input label="Data (opzionale)" type="date" value={card.dropoff_date} onChange={e => patchCard(card.localId, { dropoff_date: e.target.value })} />
                       <Select label="Ora" value={card.dropoff_time} onChange={e => patchCard(card.localId, { dropoff_time: e.target.value })} options={TIME_OPTIONS} />
                     </div>
                     <Select label="Luogo" value={card.dropoff_place} onChange={e => {
