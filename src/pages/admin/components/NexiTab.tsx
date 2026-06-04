@@ -1067,20 +1067,59 @@ export default function NexiTab() {
                                                     )
                                                 })()}
                                                 {(() => {
+                                                    // 2026-06-04: il badge "Tipo" e' ora un dropdown
+                                                    // editabile inline. Nexi non espone cardType via API
+                                                    // (lo fa dal merchant dashboard via BIN classification
+                                                    // interna) e binlist.net rate-limita pesantemente.
+                                                    // Direzione puo' forzare credit/debit/prepaid da qui.
                                                     const t = (card.card_type || '').toLowerCase()
-                                                    const label = t === 'credit' ? 'Credito'
-                                                        : t === 'debit' ? 'Debito'
-                                                        : t === 'prepaid' ? 'Prepagata'
-                                                        : 'Tipo sconosciuto'
+                                                    const cls = t === 'credit' ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' :
+                                                        t === 'debit' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' :
+                                                        t === 'prepaid' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' :
+                                                        'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'
                                                     return (
-                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${
-                                                            t === 'credit' ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' :
-                                                            t === 'debit' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' :
-                                                            t === 'prepaid' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' :
-                                                            'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'
-                                                        }`}>
-                                                            {label}
-                                                        </span>
+                                                        <select
+                                                            value={t === 'credit' || t === 'debit' || t === 'prepaid' ? t : ''}
+                                                            onChange={async (e) => {
+                                                                const next = e.target.value
+                                                                if (!card.contract_id) return
+                                                                const prev = card.card_type
+                                                                // Optimistic UI: update list synchronously so the
+                                                                // badge changes color instantly. Roll back on error.
+                                                                setTokenizedCards(cards => cards.map(c =>
+                                                                    c.id === card.id ? { ...c, card_type: next } : c
+                                                                ))
+                                                                try {
+                                                                    const res = await authFetch('/.netlify/functions/nexi-set-card-type', {
+                                                                        method: 'POST',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({ contractId: card.contract_id, cardType: next || 'unknown' }),
+                                                                    })
+                                                                    const json = await res.json().catch(() => ({} as Record<string, unknown>))
+                                                                    if (!res.ok) {
+                                                                        setTokenizedCards(cards => cards.map(c =>
+                                                                            c.id === card.id ? { ...c, card_type: prev } : c
+                                                                        ))
+                                                                        toast.error(`Errore: ${(json as { error?: string }).error || res.status}`)
+                                                                    } else {
+                                                                        toast.success(next ? `Tipo carta impostato: ${next}` : 'Tipo carta azzerato')
+                                                                    }
+                                                                } catch (err: unknown) {
+                                                                    setTokenizedCards(cards => cards.map(c =>
+                                                                        c.id === card.id ? { ...c, card_type: prev } : c
+                                                                    ))
+                                                                    toast.error(`Errore: ${err instanceof Error ? err.message : 'sconosciuto'}`)
+                                                                }
+                                                            }}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold border uppercase cursor-pointer focus:outline-none focus:ring-1 focus:ring-dr7-gold ${cls}`}
+                                                            title="Imposta credito / debito / prepagata"
+                                                        >
+                                                            <option value="">Tipo sconosciuto</option>
+                                                            <option value="credit">Credito</option>
+                                                            <option value="debit">Debito</option>
+                                                            <option value="prepaid">Prepagata</option>
+                                                        </select>
                                                     )
                                                 })()}
                                             </div>
@@ -1115,15 +1154,10 @@ export default function NexiTab() {
                                                     Pre-autorizza
                                                 </button>
                                             )}
-                                            {!card.masked_pan && card.contract_id && (
-                                                <button
-                                                    onClick={() => diagnoseCard(card)}
-                                                    className="text-[11px] px-2 py-1 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25"
-                                                    title="Mostra cosa restituisce Nexi per questa carta"
-                                                >
-                                                    Diagnostica
-                                                </button>
-                                            )}
+                                            {/* 2026-06-04: bottone Diagnostica rimosso su richiesta utente.
+                                                Il dropdown "Tipo" inline copre il caso d'uso (forzare il
+                                                tipo carta). diagnoseCard() resta nel file come utility
+                                                in caso serva per debug futuro. */}
                                         </div>
                                     </div>
                                     {isExpanded && hasHistory && (

@@ -104,23 +104,64 @@ function classifyLocal(bin: string): BinResult | null {
     return null
 }
 
+// 2026-06-04: cache in-process. binlist.net e' fortemente rate-limitato
+// (~1 req/10s, restituisce 429 a raffica). Senza cache un backfill su 100
+// carte sparava 100 fetch consecutive e 95 fallivano. Adesso le risposte
+// (anche null/429) restano in memoria per la vita del processo Netlify —
+// piu' BIN ripetuti = piu' hit istantanei.
+const BINLIST_CACHE = new Map<string, BinResult | null>()
+let lastBinlistFetchAt = 0
+const BINLIST_MIN_INTERVAL_MS = 1100 // ~1 req/sec — sotto il loro rate
+
 async function classifyBinlist(bin: string): Promise<BinResult | null> {
-    try {
-        const res = await fetch(`https://lookup.binlist.net/${bin}`, {
-            headers: { 'Accept-Version': '3' },
-        })
-        if (!res.ok) return null
-        const data = await res.json() as { type?: string; scheme?: string }
-        const type = String(data.type || '').toLowerCase()
-        const brand = String(data.scheme || '').toLowerCase()
-        if (!type && !brand) return null
-        return {
-            type: (['credit', 'debit', 'prepaid'].includes(type) ? type : '') as BinResult['type'],
-            brand: (['visa', 'mastercard', 'amex', 'maestro', 'diners'].includes(brand) ? brand : '') as BinResult['brand'],
+    if (BINLIST_CACHE.has(bin)) return BINLIST_CACHE.get(bin) ?? null
+
+    // Sleep until we're outside the minimum interval since the last hit.
+    // Prevents bursting from concurrent backfill rows.
+    const now = Date.now()
+    const waitMs = BINLIST_MIN_INTERVAL_MS - (now - lastBinlistFetchAt)
+    if (waitMs > 0) await new Promise(r => setTimeout(r, waitMs))
+    lastBinlistFetchAt = Date.now()
+
+    // Retry on 429 once with backoff. Beyond that the BIN is treated as
+    // unknown for this session and cached so we don't keep hammering.
+    for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+            const res = await fetch(`https://lookup.binlist.net/${bin}`, {
+                headers: { 'Accept-Version': '3' },
+            })
+            if (res.status === 429) {
+                if (attempt === 0) {
+                    await new Promise(r => setTimeout(r, 3000))
+                    continue
+                }
+                BINLIST_CACHE.set(bin, null)
+                return null
+            }
+            if (!res.ok) {
+                BINLIST_CACHE.set(bin, null)
+                return null
+            }
+            const data = await res.json() as { type?: string; scheme?: string }
+            const type = String(data.type || '').toLowerCase()
+            const brand = String(data.scheme || '').toLowerCase()
+            if (!type && !brand) {
+                BINLIST_CACHE.set(bin, null)
+                return null
+            }
+            const result: BinResult = {
+                type: (['credit', 'debit', 'prepaid'].includes(type) ? type : '') as BinResult['type'],
+                brand: (['visa', 'mastercard', 'amex', 'maestro', 'diners'].includes(brand) ? brand : '') as BinResult['brand'],
+            }
+            BINLIST_CACHE.set(bin, result)
+            return result
+        } catch {
+            BINLIST_CACHE.set(bin, null)
+            return null
         }
-    } catch {
-        return null
     }
+    BINLIST_CACHE.set(bin, null)
+    return null
 }
 
 /**
