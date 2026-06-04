@@ -10237,6 +10237,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
               {/* Modal Content */}
               <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+                {/* 2026-06-04: banner auto di cortesia (shadow rental Prime Wash) */}
+                {selectedBooking.booking_details?.is_courtesy_block === true && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-sky-500/10 border border-sky-500/40">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40">
+                      AUTO DI CORTESIA
+                    </span>
+                    <span className="text-xs text-theme-text-secondary">
+                      Blocco veicolo collegato a un lavaggio Prime Wash — nessun pagamento dovuto.
+                    </span>
+                  </div>
+                )}
                 {/* Customer Info */}
                 <div className=" p-4 rounded-lg">
                   <h4 className="font-semibold text-theme-text-primary mb-3 flex items-center gap-2">

@@ -1338,6 +1338,19 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         console.error('[Supercar Experience] cascade-delete failed:', cascadeErr)
       }
 
+      // 2026-06-04: cascade anche per l'auto di cortesia + catch-all. Qualsiasi
+      // riga shadow collegata a questo lavaggio (parent_carwash_booking_id)
+      // viene rimossa, così l'auto si libera subito. Copre cortesia e supercar
+      // (anche prenotazioni vecchie senza back-ref) ed elimina TUTTE le righe,
+      // non solo la prima.
+      try {
+        await supabase.from('bookings').delete()
+          .contains('booking_details', { parent_carwash_booking_id: bookingId })
+        logger.log('[Prime Wash] Cascaded delete of all shadow blocks for', bookingId)
+      } catch (cascadeErr) {
+        console.error('[Prime Wash] courtesy/shadow cascade-delete failed:', cascadeErr)
+      }
+
       // Delete dependent records first (FK constraints)
       await supabase.from('contracts').delete().eq('booking_id', bookingId)
       await supabase.from('fatture').delete().eq('booking_id', bookingId)
