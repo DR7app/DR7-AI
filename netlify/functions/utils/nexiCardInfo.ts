@@ -30,6 +30,14 @@ export interface NexiCardInfo {
     maskedPan: string
     circuit: string
     cardType: string
+    /**
+     * 2026-06-04: BIN (first 6 digits) extracted from any field Nexi exposes.
+     * Used by the callback to feed lookupBin(): the previous
+     * `maskedPan.substring(0,6)` heuristic failed for tokenized PANs that
+     * return as `**** **** **** 1234` (no BIN visible), leaving the card
+     * "Sconosciuto" in the admin UI.
+     */
+    bin: string
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
@@ -42,19 +50,46 @@ function pickCardFields(source: unknown): NexiCardInfo | null {
         s.paymentMethod?.maskedPan
         || s.maskedPan
         || s.additionalData?.maskedPan
+        || s.paymentInstrument?.maskedPan
         || s.paymentInstrumentInfo
         || ''
     if (!maskedPan) return null
     const circuit: string =
         s.paymentMethod?.circuit
         || s.paymentCircuit
+        || s.paymentInstrument?.circuit
         || s.additionalData?.cardCircuit
+        || s.additionalData?.paymentCircuit
         || ''
+    // 2026-06-04: prima cercavamo solo `paymentMethod.cardType` / `cardType`.
+    // Nexi varia la struttura tra endpoint diversi (/operations, /orders/X,
+    // /build/cardData), quindi ora controlliamo TUTTI i path noti. Senza
+    // questo le carte tokenizzate finivano con cardType='' nel DB e la UI
+    // mostrava "Sconosciuto" anche quando Nexi ha l'info su prepaid/debit/credit.
     const cardType: string =
         s.paymentMethod?.cardType
+        || s.paymentMethod?.type
+        || s.paymentInstrument?.cardType
+        || s.paymentInstrument?.type
+        || s.additionalData?.cardType
         || s.cardType
         || ''
-    return { maskedPan, circuit, cardType }
+    // BIN (first 6 digits). Lookup priority: any explicit `bin` field >
+    // `cardBin` aliases > leading digits of the masked PAN (only when they
+    // actually start with digits — `**** *` returns empty after digit-only
+    // sanitisation).
+    const explicitBin: string =
+        s.paymentMethod?.bin
+        || s.paymentMethod?.cardBin
+        || s.paymentInstrument?.bin
+        || s.bin
+        || s.additionalData?.bin
+        || s.additionalData?.cardBin
+        || ''
+    const panDigits = (maskedPan.match(/\d+/g) || []).join('')
+    const binFromPan = panDigits.length >= 6 && /^\d{6}/.test(maskedPan.trim()) ? maskedPan.trim().substring(0, 6) : ''
+    const bin = (explicitBin || binFromPan).replace(/\D/g, '').substring(0, 6)
+    return { maskedPan, circuit, cardType, bin }
 }
 
 async function fetchOperationOnce(operationId: string, apiKey: string): Promise<unknown | null> {

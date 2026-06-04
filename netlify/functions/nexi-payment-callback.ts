@@ -1067,11 +1067,19 @@ const handler: Handler = async (event) => {
                         orderId: transaction.order_id,
                     });
                     if (card) {
-                        // BIN lookup for credit/debit/prepaid detection
+                        // BIN lookup for credit/debit/prepaid detection.
+                        // 2026-06-04: usa `card.bin` esposto da pickCardFields
+                        // (cerca anche in paymentMethod.bin, additionalData.bin,
+                        // ecc.). Fallback alle prime 6 cifre solo se il bin
+                        // esplicito manca — copre i PAN tipo `412345******1234`.
+                        // Senza, le carte mascherate `**** **** **** 1234`
+                        // restavano "Sconosciuto" in admin.
                         let binType = '';
                         let binBrand = '';
-                        if (card.maskedPan && card.maskedPan.length >= 6) {
-                            const binResult = await lookupBin(card.maskedPan.substring(0, 6));
+                        const binForLookup = card.bin
+                            || (card.maskedPan && /^\d{6}/.test(card.maskedPan.trim()) ? card.maskedPan.trim().substring(0, 6) : '');
+                        if (binForLookup && binForLookup.length >= 4) {
+                            const binResult = await lookupBin(binForLookup);
                             if (binResult) {
                                 binType = binResult.type; // credit, debit, prepaid
                                 binBrand = binResult.brand;
@@ -1082,9 +1090,10 @@ const handler: Handler = async (event) => {
                             nexi_card_circuit: card.circuit || paymentCircuit || '',
                             nexi_card_type: card.cardType || binType, // credit/debit/prepaid
                             nexi_card_brand: binBrand || card.circuit || paymentCircuit || '',
+                            nexi_card_bin: binForLookup || '',
                             nexi_card_updated: new Date().toISOString(),
                         }
-                        console.log(`[nexi-payment-callback] Card info: ${cardInfo.nexi_card_circuit} ${card.maskedPan} (${cardInfo.nexi_card_type})`);
+                        console.log(`[nexi-payment-callback] Card info: circuit=${cardInfo.nexi_card_circuit} pan=${card.maskedPan} type=${cardInfo.nexi_card_type} bin=${binForLookup} (nexi=${card.cardType || '∅'}, binlookup=${binType || '∅'})`);
                     } else {
                         console.warn(`[nexi-payment-callback] No card info recoverable for op=${operationId} order=${transaction.order_id} — wallet payment or Nexi never exposed PAN`);
                     }

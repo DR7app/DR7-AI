@@ -189,8 +189,13 @@ export const handler: Handler = async (event) => {
         const cardType = card.cardType
         let binType = ''
         let binBrand = ''
-        if (maskedPan && maskedPan.length >= 6) {
-            const bin = await lookupBin(maskedPan.substring(0, 6))
+        // 2026-06-04: stesso fix di nexi-payment-callback — usa il BIN
+        // esposto da pickCardFields (non solo le prime 6 cifre del PAN
+        // mascherato, che falliscono quando Nexi torna "**** **** **** 1234").
+        const binForLookup = card.bin
+            || (maskedPan && /^\d{6}/.test(maskedPan.trim()) ? maskedPan.trim().substring(0, 6) : '')
+        if (binForLookup && binForLookup.length >= 4) {
+            const bin = await lookupBin(binForLookup)
             if (bin) { binType = bin.type; binBrand = bin.brand }
         }
 
@@ -206,6 +211,7 @@ export const handler: Handler = async (event) => {
             nexi_card_circuit: circuit,
             nexi_card_type: cardType || binType,
             nexi_card_brand: binBrand || circuit,
+            nexi_card_bin: binForLookup || '',
             nexi_card_updated: new Date().toISOString(),
         }
 
