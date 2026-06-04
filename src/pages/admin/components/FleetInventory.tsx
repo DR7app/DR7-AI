@@ -1460,21 +1460,15 @@ export default function FleetInventory() {
                         })()}
                     </SidebarPanel>
 
-                    {/* Suggerimenti Smart */}
+                    {/* Suggerimenti Smart — 2026-06-04: rimosso il bottone
+                        "Genera Ordine Ricambi" (era placeholder con toast).
+                        Il flusso ordine ora passa dal pannello "Carrello
+                        Ordini" qua sopra. Resta solo il messaggio informativo. */}
                     <SidebarPanel title="Suggerimenti Smart">
                         {veicoliCriticita > 0 ? (
-                            <>
-                                <p className="text-xs text-theme-text-secondary mb-3">
-                                    {veicoliCriticita} veicol{veicoliCriticita === 1 ? 'o ha' : 'i hanno'} componenti esauriti. Ordina ora per evitare fermi forzati.
-                                </p>
-                                <button
-                                    type="button"
-                                    onClick={() => toast('Apri lista fornitori dai veicoli con criticita', { icon: 'ℹ️' })}
-                                    className="w-full px-3 py-2 rounded-lg bg-dr7-gold text-black text-xs font-semibold hover:opacity-90"
-                                >
-                                    Genera Ordine Ricambi
-                                </button>
-                            </>
+                            <p className="text-xs text-theme-text-secondary">
+                                {veicoliCriticita} veicol{veicoliCriticita === 1 ? 'o ha' : 'i hanno'} componenti esauriti. Aggiungi i ricambi al Carrello per ordinarli.
+                            </p>
                         ) : (
                             <p className="text-xs text-theme-text-muted italic">Tutto sotto controllo. Nessuna azione urgente richiesta.</p>
                         )}
