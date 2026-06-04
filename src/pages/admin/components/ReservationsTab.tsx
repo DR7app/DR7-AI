@@ -6048,18 +6048,45 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         '| price_total (with fees) =', bookingData.price_total,
         '→ EUR =', (bookingData.price_total / 100).toFixed(2))
 
+      // 2026-06-04: force-override conflitto doppia prenotazione. Il trigger DB
+      // prevent_overlapping_bookings rispetta booking_details.allow_double_booking
+      // = true. Quando il salvataggio fallisce con CONFLICT_DOUBLE_BOOKING (codice
+      // 23505) chiediamo conferma all'operatore e riproviamo una volta col flag.
+      const isConflictError = (e: { code?: string; message?: string } | null | undefined) =>
+        !!e && (e.code === '23505' || /CONFLICT_DOUBLE_BOOKING/i.test(e.message || ''))
+
       let insertedBooking
       if (editingId) {
         // Update existing booking - trigger will properly exclude current booking from conflict check
         // IMPORTANT: stamp updated_at on every save. The bookings table doesn't
         // have an auto-update trigger, so without this the column stays equal
         // to booked_at and we can't tell which bookings have been modified.
-        const { data, error: bookingError } = await supabase
+        let { data, error: bookingError } = await supabase
           .from('bookings')
           .update({ ...bookingData, updated_at: new Date().toISOString() })
           .eq('id', editingId)
           .select()
           .single()
+
+        if (isConflictError(bookingError)) {
+          const proceed = window.confirm(
+            'CONFLITTO: questo veicolo risulta già prenotato in questo periodo.\n\n' +
+            'Vuoi salvare comunque la prenotazione (doppia prenotazione forzata)?'
+          )
+          if (proceed) {
+            const forcedData = {
+              ...bookingData,
+              booking_details: { ...(bookingData as any).booking_details, allow_double_booking: true },
+              updated_at: new Date().toISOString(),
+            }
+            ;({ data, error: bookingError } = await supabase
+              .from('bookings')
+              .update(forcedData)
+              .eq('id', editingId)
+              .select()
+              .single())
+          }
+        }
 
         if (bookingError) {
           console.error('Failed to update booking:', bookingError)
@@ -6117,11 +6144,29 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       } else {
         // Create new booking - direct insert
         logger.log('Creating new booking...', showAllVehicles ? '(FORCE MODE)' : '')
-        const { data, error: bookingError } = await supabase
+        let { data, error: bookingError } = await supabase
           .from('bookings')
           .insert([bookingData])
           .select()
           .single()
+
+        if (isConflictError(bookingError)) {
+          const proceed = window.confirm(
+            'CONFLITTO: questo veicolo risulta già prenotato in questo periodo.\n\n' +
+            'Vuoi salvare comunque la prenotazione (doppia prenotazione forzata)?'
+          )
+          if (proceed) {
+            const forcedData = {
+              ...bookingData,
+              booking_details: { ...(bookingData as any).booking_details, allow_double_booking: true },
+            }
+            ;({ data, error: bookingError } = await supabase
+              .from('bookings')
+              .insert([forcedData])
+              .select()
+              .single())
+          }
+        }
 
         if (bookingError) {
           console.error('Failed to create booking:', bookingError)
@@ -6762,17 +6807,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         || (formData.payment_status === 'partial' && editPaidCentsForGate < editTotalCentsForGate)
       )
 
-      if (editHasBalanceOwed) {
-        logger.log('[Auto-Gen] Edit leaves balance owed — deferring contract regen + signing link until payment callback')
-      } else {
-        // Generate Contract PDF — AWAIT so signing link below finds the contract
-        logger.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id, editingId ? '(edit - regenerating)' : '(new)')
-        try {
-          await handleGenerateContract(insertedBooking, false)
-          logger.log('[Auto-Gen] ✅ Contract generated successfully')
-        } catch (err) {
-          console.error('[Auto-Gen] ⚠️ Failed to generate contract:', err)
-        }
+      // 2026-06-04: il CONTRATTO (PDF) si rigenera SEMPRE al salvataggio, sia su
+      // nuova prenotazione sia su modifica, ANCHE se resta un saldo dovuto. La
+      // direzione si lamentava che modificando una prenotazione il contratto non
+      // veniva più rigenerato (il vecchio gate editHasBalanceOwed lo saltava del
+      // tutto). Il deferral resta SOLO per il LINK DI FIRMA (vedi
+      // shouldSendSigningLink più sotto, che continua a usare editHasBalanceOwed):
+      // così il documento è sempre aggiornato ma al cliente non si chiede di
+      // firmare prima di aver pagato il saldo.
+      // Generate Contract PDF — AWAIT so signing link below finds the contract
+      logger.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id,
+        editingId ? '(edit - regenerating)' : '(new)',
+        editHasBalanceOwed ? '(saldo dovuto — link firma rimandato al pagamento)' : '')
+      try {
+        await handleGenerateContract(insertedBooking, false)
+        logger.log('[Auto-Gen] ✅ Contract generated successfully')
+      } catch (err) {
+        console.error('[Auto-Gen] ⚠️ Failed to generate contract:', err)
       }
 
       // Detect if payment status just changed from unpaid → paid (on edit)
