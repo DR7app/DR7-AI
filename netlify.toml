@@ -83,11 +83,15 @@
 [functions."fornitori-fatture-sync-cron"]
   schedule = "0 1 * * *"
 
-# Supercar rental extension reminder — fires at 18:00 Rome the day before drop-off
-# for rentals on exotic vehicles with duration ≥ 3 days. Two times cover both
-# CEST (16 UTC) and CET (17 UTC); the function gates inside on Rome hour == 18.
-[functions."rental-extension-supercar-cron"]
-  schedule = "0 16,17 * * *"
+# 2026-06-04: DISABILITATO per evitare DOPPIO INVIO. La "Richiesta prolungamento
+# SUPERCAR" è ora gestita dalla Programmazione (Messaggi di Sistema Pro →
+# before_dropoff 24h alle 09:00) tramite process-scheduled-system-messages-cron,
+# che ha in allowlist pro_custom_richiesta_prolungamento_supercar_1777711737784.
+# Tenere questo cron acceso significherebbe inviare il messaggio DUE volte
+# (qui alle 18:00 + dalla Programmazione alle 09:00). La function resta sul
+# filesystem come trigger manuale, ma SENZA schedule non viene registrata.
+# [functions."rental-extension-supercar-cron"]
+#   schedule = "0 16,17 * * *"
 
 # Wallet auto-recharge — fires hourly at :00. Per-customer gating on
 # wallet_recurring.day == today AND wallet_recurring.hour == current Rome

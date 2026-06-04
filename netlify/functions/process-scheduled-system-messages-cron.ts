@@ -434,7 +434,10 @@ const cronHandler = async () => {
     // (CSV) può sovrascrivere l'elenco se in futuro servono altri template.
     // NB: non esiste un caso "manda tutto" — se l'allowlist fosse vuota il cron
     // non manda nulla (fail-safe anti-incident).
-    const DEFAULT_ALLOWLIST = ['pro_custom_promemoria_ritiro_veicolo_1778334892254'];
+    const DEFAULT_ALLOWLIST = [
+        'pro_custom_promemoria_ritiro_veicolo_1778334892254',          // promemoria ritiro 24h prima del pickup
+        'pro_custom_richiesta_prolungamento_supercar_1777711737784',   // richiesta prolungamento 24h prima del dropoff
+    ];
     const allowlistRaw = (process.env.SCHEDULED_MSGS_ALLOWLIST || '').trim();
     const allowlist = allowlistRaw
         ? allowlistRaw.split(',').map(s => s.trim()).filter(Boolean)
@@ -658,7 +661,17 @@ const cronHandler = async () => {
                 const res = await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ booking, messageKey: tpl.message_key }),
+                    // 2026-06-04 BUG FIX: passare customPhone ESPLICITO.
+                    // send-whatsapp-notification NON ricava più il telefono da
+                    // booking.customer_phone (hardening post-incidente): senza
+                    // customPhone tornava sempre skipped → il "promemoria ritiro
+                    // 24h" non partiva (81 skip dal 2026-05-30).
+                    body: JSON.stringify({
+                        booking,
+                        messageKey: tpl.message_key,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        customPhone: booking.customer_phone || (booking.booking_details as any)?.customer?.phone || null,
+                    }),
                 });
 
                 const ok = res.ok;
