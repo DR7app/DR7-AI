@@ -2041,8 +2041,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           price_total: 0,
           currency: 'EUR',
           status: 'confirmed',
-          payment_status: 'paid',
-          payment_method: 'Supercar Experience (Prime Wash)',
+          // 2026-06-04: rispecchia il lavaggio (stato + metodo reale), niente
+          // voce fittizia "(Prime Wash)" che inquinava i dropdown pagamento.
+          payment_status: ['paid', 'completed', 'succeeded'].includes((formData.payment_status || '').toLowerCase()) ? 'paid' : 'pending',
+          payment_method: formData.payment_method || null,
           booking_details: {
             is_supercar_experience_block: true,
             parent_carwash_booking_id: data.id,
@@ -2093,6 +2095,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       try {
         const startIso = `${courtesyWindow.pickupDate}T${courtesyWindow.pickupTime}:00+02:00`
         const endIso = `${courtesyWindow.returnDate}T${courtesyWindow.returnTime}:00+02:00`
+        // 2026-06-04: il blocco cortesia RISPECCHIA lo stato pagamento del
+        // lavaggio. Se il lavaggio è "da saldare", anche la cortesia è pending;
+        // quando l'admin segna pagato il lavaggio, la cortesia passa a paid
+        // (propagazione nel "segna pagato" più sotto).
+        const washIsPaid = ['paid', 'completed', 'succeeded'].includes((formData.payment_status || '').toLowerCase())
         const courtesyShadow = {
           service_type: 'rental',
           service_name: `Auto di Cortesia — ${customerName}`,
@@ -2112,8 +2119,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           price_total: 0,
           currency: 'EUR',
           status: 'confirmed',
-          payment_status: 'paid',
-          payment_method: 'Auto di Cortesia (Prime Wash)',
+          payment_status: washIsPaid ? 'paid' : 'pending',
+          // Stesso metodo di pagamento del lavaggio (mai una voce fittizia).
+          payment_method: formData.payment_method || null,
           booking_details: {
             is_courtesy_block: true,
             parent_carwash_booking_id: data.id,
@@ -5767,6 +5775,47 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         }
                       } catch (cascadeErr) {
                         console.error('[Supercar Experience] cascade-edit failed:', cascadeErr)
+                      }
+
+                      // ─── Auto di Cortesia cascade on edit ─────────────
+                      // 2026-06-04: sincronizza la finestra del blocco cortesia
+                      // alla nuova data/ora del lavaggio (durata invariata) e
+                      // rispecchia lo stato annullato.
+                      try {
+                        const cd = (editingBooking.booking_details as { courtesy_drive?: { shadow_booking_id?: string | null; duration_minutes?: number } } | undefined)?.courtesy_drive
+                        const cShadowId = cd?.shadow_booking_id
+                        if (cShadowId && _apptIso && cd?.duration_minutes) {
+                          const start = new Date(_apptIso)
+                          const end = new Date(start.getTime() + cd.duration_minutes * 60_000)
+                          await supabase.from('bookings').update({
+                            pickup_date: start.toISOString(),
+                            dropoff_date: end.toISOString(),
+                            customer_name: editingBooking.customer_name,
+                            customer_email: editingBooking.customer_email,
+                            customer_phone: editingBooking.customer_phone,
+                            status: editingBooking.status === 'cancelled' || editingBooking.status === 'annullata'
+                              ? 'cancelled'
+                              : 'confirmed',
+                          }).eq('id', cShadowId)
+                          logger.log('[Auto Cortesia] Cascaded edit to shadow', cShadowId)
+                        }
+                      } catch (cascadeErr) {
+                        console.error('[Auto Cortesia] cascade-edit failed:', cascadeErr)
+                      }
+
+                      // ─── Pagamento → blocchi shadow (cortesia + supercar) ──
+                      // 2026-06-04: quando l'admin segna pagato (o cambia metodo)
+                      // il lavaggio, TUTTI i blocchi collegati rispecchiano stato
+                      // e metodo reali. Metodo SEMPRE dalla fonte unica (form),
+                      // mai voci fittizie. Un'unica update per parent id.
+                      try {
+                        const editPaid = ['paid', 'completed', 'succeeded'].includes((editingBooking.payment_status || '').toLowerCase())
+                        await supabase.from('bookings').update({
+                          payment_status: editPaid ? 'paid' : 'pending',
+                          payment_method: editingBooking.payment_method || null,
+                        }).contains('booking_details', { parent_carwash_booking_id: editingBooking.id })
+                      } catch (payErr) {
+                        console.error('[Prime Wash] shadow payment cascade failed:', payErr)
                       }
 
                       // Auto-generate fattura if payment changed to paid.
