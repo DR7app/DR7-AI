@@ -294,6 +294,29 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
 
   const daysArray = useMemo(() => Array.from({ length: daysInMonth }, (_, i) => i + 1), [daysInMonth])
 
+  // 2026-06-03: larghezza cella DINAMICA così il calendario STA NELLA PAGINA
+  // senza scroll orizzontale: cellWidth = (larghezza visibile - colonna
+  // sinistra) / giorni. Usata ovunque (header, celle, eventi) → resta tutto
+  // allineato e il totale = larghezza area. Fallback al valore fisso prima
+  // della misurazione o su schermi troppo stretti (min 22px → scroll solo lì).
+  const LEFT_COL_W = 300
+  const [gridW, setGridW] = useState(0)
+  useEffect(() => {
+    const el = gridRef.current
+    if (!el) return
+    const update = () => setGridW(el.clientWidth)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const cellWidth = useMemo(() => {
+    if (!gridW) return CELL_WIDTH
+    const avail = gridW - LEFT_COL_W
+    if (avail <= 0 || daysInMonth <= 0) return CELL_WIDTH
+    return Math.max(22, Math.floor(avail / daysInMonth))
+  }, [gridW, daysInMonth])
+
   const navigateMonth = (dir: 'prev' | 'next') => {
     setCurrentDate(p => {
       const n = new Date(p)
@@ -377,7 +400,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       const events: CalendarEvent[] = []
       vehicleBookings.forEach(b => {
         const evt = normalizeBooking(b, currentRomeComponents.year, currentRomeComponents.month, {
-          cellWidth: CELL_WIDTH,
+          cellWidth,
           daysInMonth
         })
         if (evt) events.push(evt)
@@ -426,7 +449,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
 
     return rows
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vehicles, bookings, currentRomeComponents, daysInMonth, proCategories])
+  }, [vehicles, bookings, currentRomeComponents, daysInMonth, proCategories, cellWidth])
 
   // Filter Rows for Display
   const visibleRows = useMemo(() => {
@@ -588,7 +611,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                     ${isToday ? 'bg-dr7-gold/40' : ''}
                   `}
                   style={{
-                    width: CELL_WIDTH,
+                    width: cellWidth,
                     boxShadow: isToday ? 'inset 2px 0 0 0 rgba(45, 138, 126, 0.7), inset -2px 0 0 0 rgba(45, 138, 126, 0.7)' : undefined
                   }}
                 >
@@ -670,7 +693,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                     45px/giorno → la riga "oggi" (blu) finiva sulla colonna
                     sbagliata. Ora header, celle, riga oggi ed eventi usano la
                     stessa griglia fissa e scorrono insieme. */}
-                <div className="relative shrink-0" style={{ width: daysArray.length * CELL_WIDTH }}>
+                <div className="relative shrink-0" style={{ width: daysArray.length * cellWidth }}>
 
                   {/* 1. Background Grid Cells */}
                   <div className="flex h-full absolute inset-0 z-0 pointer-events-none">
@@ -694,7 +717,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                                 ${isRedDay && !isToday ? 'bg-theme-text-primary/[0.03]' : ''}
                               `}
                           style={{
-                            width: CELL_WIDTH,
+                            width: cellWidth,
                             boxShadow: isToday ? 'inset 2px 0 0 0 rgba(45, 138, 126, 0.7), inset -2px 0 0 0 rgba(45, 138, 126, 0.7)' : undefined
                           }}
                         />
@@ -708,7 +731,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                       <div
                         key={day}
                         className="h-full shrink-0 hover:bg-theme-text-primary/5 cursor-pointer transition-colors"
-                        style={{ width: CELL_WIDTH }}
+                        style={{ width: cellWidth }}
                         onClick={() => {
                           const date = new Date(currentRomeComponents.year, currentRomeComponents.month, day, 10, 0, 0)
                           if (onNewBooking) onNewBooking(row.vehicle.id, date)
@@ -764,11 +787,11 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
 
                       // Clamp bar to visible grid area to avoid browser rendering limits
                       // (bars with left=-44955 width=46305 exceed max texture size ~16384px)
-                      const gridWidth = daysInMonth * CELL_WIDTH
+                      const gridWidth = daysInMonth * cellWidth
                       const clampedLeft = Math.max(0, evt.leftPx)
                       const rightEdge = evt.leftPx + evt.widthPx
                       const clampedRight = Math.min(gridWidth, rightEdge)
-                      const finalWidth = Math.max(CELL_WIDTH, clampedRight - clampedLeft)
+                      const finalWidth = Math.max(cellWidth, clampedRight - clampedLeft)
 
                       const bookingHasNotes = !!(evt.booking.booking_details?.notes && String(evt.booking.booking_details.notes).trim())
 
