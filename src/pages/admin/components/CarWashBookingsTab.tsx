@@ -5560,6 +5560,33 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   </div>
                 </div>
 
+                {/* 2026-06-04: Conferma Prenotazione anche in MODIFICA — stessa
+                    UX del create form. Quando il lavaggio è "Da Saldare", ticca
+                    per confermarlo: NON scade dopo 1h e in calendario appare in
+                    rosso col nome cliente invece di "Da Saldare". */}
+                {editingBooking.payment_status !== 'paid' && editingBooking.payment_status !== 'completed' && editingBooking.payment_status !== 'succeeded' && (
+                  <div className={`flex items-start gap-2 p-3 rounded-lg border ${editingBooking.booking_details?.manually_confirmed ? 'border-red-500 bg-red-900/10' : 'border-theme-border'}`}>
+                    <input
+                      type="checkbox"
+                      id="carwash_edit_confirm_booking"
+                      checked={editingBooking.booking_details?.manually_confirmed === true}
+                      onChange={(e) => setEditingBooking({
+                        ...editingBooking,
+                        booking_details: {
+                          ...(editingBooking.booking_details || {}),
+                          manually_confirmed: e.target.checked,
+                          ...(e.target.checked ? { manually_confirmed_at: new Date().toISOString() } : {}),
+                        },
+                      })}
+                      className="w-4 h-4 mt-0.5 text-red-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-red-500"
+                    />
+                    <label htmlFor="carwash_edit_confirm_booking" className="text-sm text-theme-text-secondary cursor-pointer">
+                      <span className="font-semibold text-red-400">Conferma Prenotazione</span>
+                      <span className="block text-xs text-theme-text-muted mt-0.5">La prenotazione NON scadr&agrave; dopo 1h. In calendario apparir&agrave; in rosso con il nome del cliente invece di &quot;Da Saldare&quot;.</span>
+                    </label>
+                  </div>
+                )}
+
                 {/* Notes */}
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Note</label>
@@ -5676,8 +5703,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       }
 
                       // If payment method changed away from Nexi Pay by Link, confirm the booking
-                      // so the auto-cancel cron doesn't cancel it
-                      const finalStatus = !isNexiPayByLink(editingBooking.payment_method) && editingBooking.status === 'pending'
+                      // so the auto-cancel cron doesn't cancel it.
+                      // 2026-06-04: anche se l'admin ticca "Conferma Prenotazione"
+                      // (manually_confirmed), forziamo lo stato a 'confirmed'.
+                      const finalStatus = (editingBooking.booking_details?.manually_confirmed === true
+                        || (!isNexiPayByLink(editingBooking.payment_method) && editingBooking.status === 'pending'))
                         ? 'confirmed'
                         : editingBooking.status
 
