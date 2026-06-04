@@ -154,6 +154,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   const [bookings, setBookings] = useState<CarWashBooking[]>([])
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
+  const calGridRef = useRef<HTMLDivElement>(null)
   const [searchQuery, setSearchQuery] = useState('')
   // 2026-06-01: filtro periodo Da/A su appointment_date.
   const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
@@ -475,9 +476,34 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   // gli eventi sono posizionati PER-CELLA (leftPct %), quindi restano allineati
   // a qualunque larghezza. Prima il Mese usava 52px fissi × ~30 giorni → sforava.
   const stretchCols = true
+
+  // 2026-06-04: altezza slot DINAMICA così la griglia oraria sta nella pagina
+  // senza scroll verticale. 109 slot da 5min (09:00→18:00): cellH = (altezza
+  // area - header giorni) / 109, misurata con ResizeObserver. Gli eventi
+  // (durata/5 * cellH) e gli offset si scalano di conseguenza.
+  const SLOT_COUNT = 109
+  const DAYHDR_H = 52
+  const [calGridH, setCalGridH] = useState(0)
+  useEffect(() => {
+    const el = calGridRef.current
+    if (!el) return
+    const update = () => setCalGridH(el.clientHeight)
+    update()
+    const raf = requestAnimationFrame(update)
+    const t = setTimeout(update, 150)
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    window.addEventListener('resize', update)
+    return () => { cancelAnimationFrame(raf); clearTimeout(t); ro.disconnect(); window.removeEventListener('resize', update) }
+  }, [loading])
+  const cellH = useMemo(
+    () => (calGridH ? Math.max(4, Math.floor((calGridH - DAYHDR_H) / SLOT_COUNT)) : CELL_HEIGHT),
+    [calGridH],
+  )
+
   const dayCellStyle: React.CSSProperties = stretchCols
-    ? { flex: 1, minWidth: 0, height: CELL_HEIGHT }
-    : { width: CELL_WIDTH, height: CELL_HEIGHT }
+    ? { flex: 1, minWidth: 0, height: cellH }
+    : { width: CELL_WIDTH, height: cellH }
   const headerCellStyle: React.CSSProperties = stretchCols
     ? { flex: 1, minWidth: 0, height: 50 }
     : { width: CELL_WIDTH, height: 50 }
@@ -908,7 +934,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       <div className="flex-1 flex overflow-hidden">
 
       {/* 2A. Scrollable Calendar Area */}
-      <div className="relative z-10 flex-1 overflow-auto flex flex-col w-full bg-theme-bg-primary dark:bg-[linear-gradient(180deg,#0a0d14_0%,#070a10_100%)]">
+      <div ref={calGridRef} className="relative z-10 flex-1 overflow-auto flex flex-col w-full bg-theme-bg-primary dark:bg-[linear-gradient(180deg,#0a0d14_0%,#070a10_100%)]">
 
         {/* A. Sticky Header Row - Days */}
         <div className={`flex sticky top-0 z-[40] bg-theme-bg-primary shadow-lg border-b border-theme-border/50 ${stretchCols ? 'w-full' : 'min-w-max'}`}>
@@ -974,7 +1000,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
               <div
                 key={timeString}
                 className={`flex ${isFullHour ? 'border-t-2 border-theme-border/70' : is15Min ? 'border-t border-theme-border/30' : ''}`}
-                style={{ height: CELL_HEIGHT }}
+                style={{ height: cellH }}
               >
                 {/* Time Label Column (Sticky Left) - only show label at 15-min intervals */}
                 <div
@@ -1045,7 +1071,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                           const bookingHasNotes = !isRientro && hasNotes(startEvt.booking)
                           // If rientro overlaps with a client wash at same time, shift rientro up one slot
                           const hasClientOverlap = isRientro && startingBookings.some(b => !isRientroBooking(b.booking))
-                          const topOffset = hasClientOverlap ? -(CELL_HEIGHT - 1) : 1
+                          const topOffset = hasClientOverlap ? -(cellH - 1) : 1
                           // Side-by-side: ogni booking nel proprio sub-colonna
                           // in base a laneIndex/laneCount (sovrapposizione oraria).
                           const laneCount = Math.max(1, startEvt.laneCount || 1)
@@ -1069,7 +1095,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                             key={startEvt.booking.id}
                             className={`absolute ${bgColor} border border-white/10 rounded-lg shadow-[0_4px_12px_-4px_rgba(0,0,0,0.5)] hover:shadow-[0_8px_24px_-6px_rgba(34,211,238,0.45)] hover:-translate-y-0.5 hover:brightness-110 transition-all duration-200 cursor-pointer ${hasClientOverlap ? 'z-[25]' : 'z-20'} overflow-hidden group/booking ring-0 hover:ring-1 hover:ring-cyan-300/40`}
                             style={{
-                              height: `${(startEvt.duration / 5) * CELL_HEIGHT - 2}px`,
+                              height: `${(startEvt.duration / 5) * cellH - 2}px`,
                               top: `${topOffset}px`,
                               left: `calc(${leftPct}% + 1px)`,
                               width: `calc(${widthPct}% - 2px)`,
