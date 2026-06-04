@@ -227,6 +227,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [supercarFleet, setSupercarFleet] = useState<SupercarFleetVehicle[]>([])
   const [supercarFleetBookings, setSupercarFleetBookings] = useState<AvailabilityBooking[]>([])
   const [experienceVehicle, setExperienceVehicle] = useState<SupercarFleetVehicle | null>(null)
+  // 2026-06-03: PRIME COURTESY DRIVE — flotta completa (qualsiasi veicolo
+  // disponibile) + veicolo scelto come auto di cortesia. Stessa meccanica del
+  // Supercar Experience: il veicolo scelto viene bloccato con una shadow rental
+  // row per la finestra della cortesia (appuntamento + durata).
+  const [courtesyFleet, setCourtesyFleet] = useState<SupercarFleetVehicle[]>([])
+  const [courtesyVehicle, setCourtesyVehicle] = useState<SupercarFleetVehicle | null>(null)
 
   // Buffer for an edit-click blocked by the paid_wash_modify OTP gate.
   // Resumed by the useEffect below once the override is approved.
@@ -691,6 +697,53 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   // L'admin ha scelto PIÙ ore di cortesia del lavaggio → richiede OTP.
   const courtesyExceedsWash = !!primeCourtesyExtra && courtesyChosenMin > courtesyAutoMin
 
+  // Finestra in cui l'auto di cortesia è impegnata: appuntamento + durata
+  // cortesia scelta (o auto). Usata per filtrare la disponibilità e per la
+  // shadow rental row di blocco.
+  const courtesyWindow = (() => {
+    if (!primeCourtesyExtra) return null
+    if (!formData.appointment_date || !formData.appointment_time) return null
+    const durMin = courtesyChosenMin > 0 ? courtesyChosenMin : courtesyAutoMin
+    const [y, mo, d] = formData.appointment_date.split('-').map(Number)
+    const [h, m] = formData.appointment_time.split(':').map(Number)
+    const start = new Date(y, mo - 1, d, h, m, 0)
+    if (isNaN(start.getTime())) return null
+    const end = new Date(start.getTime() + durMin * 60_000)
+    const fmtTime = (dt: Date) => `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`
+    const fmtDate = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+    return {
+      pickupDate: fmtDate(start), pickupTime: fmtTime(start),
+      returnDate: fmtDate(end), returnTime: fmtTime(end),
+      durationMin: durMin,
+    }
+  })()
+
+  // Carica TUTTA la flotta quando la cortesia è selezionata (qualsiasi veicolo
+  // disponibile può essere auto di cortesia). Esclude i veicoli retired.
+  useEffect(() => {
+    if (!primeCourtesyExtra) {
+      if (courtesyFleet.length > 0) setCourtesyFleet([])
+      if (courtesyVehicle) setCourtesyVehicle(null)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      const { data, error } = await supabase
+        .from('vehicles')
+        .select('id, display_name, plate, daily_rate, category, status, metadata')
+        .neq('status', 'retired')
+        .order('display_name', { ascending: true })
+      if (cancelled) return
+      if (error) {
+        console.error('[CarWashBookingsTab] failed to load courtesy fleet:', error)
+        return
+      }
+      setCourtesyFleet((data || []) as SupercarFleetVehicle[])
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [primeCourtesyExtra?.id])
+
   // Auto-seleziona l'opzione Nh della cortesia = durata lavaggio (ceil ora).
   // Parte quando l'admin aggiunge l'extra cortesia o cambia la durata lavaggio,
   // SOLO se non ha ancora scelto un'opzione (così non sovrascrive un override
@@ -814,6 +867,30 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     supercarExperienceWindow?.returnTime,
     supercarFleet.length,
   ])
+
+  // 2026-06-03: prenotazioni nella finestra della cortesia, per filtrare la
+  // disponibilità dei veicoli nel picker auto di cortesia.
+  const [courtesyFleetBookings, setCourtesyFleetBookings] = useState<AvailabilityBooking[]>([])
+  useEffect(() => {
+    if (!courtesyWindow || courtesyFleet.length === 0) { setCourtesyFleetBookings([]); return }
+    let cancelled = false
+    ;(async () => {
+      const start = new Date(`${courtesyWindow.pickupDate}T00:00:00+02:00`)
+      const end = new Date(`${courtesyWindow.returnDate}T23:59:59+02:00`)
+      start.setDate(start.getDate() - 1)
+      end.setDate(end.getDate() + 1)
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('id,vehicle_id,vehicle_plate,vehicle_name,customer_name,pickup_date,dropoff_date,status,service_type,payment_method,payment_status')
+        .lt('pickup_date', end.toISOString())
+        .gt('dropoff_date', start.toISOString())
+      if (cancelled) return
+      if (error) { console.error('[CarWashBookingsTab] courtesy window bookings load failed:', error); return }
+      setCourtesyFleetBookings((data || []) as AvailabilityBooking[])
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courtesyWindow?.pickupDate, courtesyWindow?.pickupTime, courtesyWindow?.returnDate, courtesyWindow?.returnTime, courtesyFleet.length])
 
   // Reset chosen vehicle when the experience extra is removed or the
   // duration option changes (the previously-picked car may now be busy).
@@ -1937,6 +2014,76 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         const msg = err instanceof Error ? err.message : String(err)
         console.error('[CarWashBookingsTab] supercar shadow insert exception:', err)
         toast.error(`Errore blocco supercar: ${msg}`)
+      }
+    }
+
+    // ─── Prime Courtesy Drive: shadow rental row (auto di cortesia) ──────
+    // 2026-06-03: blocca il veicolo scelto come auto di cortesia per la finestra
+    // (appuntamento + durata). service_type='rental' così la disponibilità
+    // (calendario + sito) lo considera occupato. is_courtesy_block=true per lo
+    // stile distinto in calendario. Collegato al lavaggio via parent_carwash_booking_id.
+    if (courtesyVehicle && courtesyWindow && primeCourtesyExtra) {
+      try {
+        const startIso = `${courtesyWindow.pickupDate}T${courtesyWindow.pickupTime}:00+02:00`
+        const endIso = `${courtesyWindow.returnDate}T${courtesyWindow.returnTime}:00+02:00`
+        const courtesyShadow = {
+          service_type: 'rental',
+          service_name: `Auto di Cortesia — ${customerName}`,
+          vehicle_name: courtesyVehicle.display_name,
+          vehicle_plate: courtesyVehicle.plate || null,
+          vehicle_id: courtesyVehicle.id,
+          customer_name: customerName,
+          customer_email: customerEmail || null,
+          customer_phone: customerPhone || null,
+          guest_name: customerName,
+          guest_email: customerEmail || null,
+          guest_phone: customerPhone || null,
+          pickup_date: startIso,
+          dropoff_date: endIso,
+          pickup_location: 'DR7 Empire - Auto di Cortesia',
+          dropoff_location: 'DR7 Empire - Auto di Cortesia',
+          price_total: 0,
+          currency: 'EUR',
+          status: 'confirmed',
+          payment_status: 'paid',
+          payment_method: 'Auto di Cortesia (Prime Wash)',
+          booking_details: {
+            is_courtesy_block: true,
+            parent_carwash_booking_id: data.id,
+            courtesy_duration_minutes: courtesyWindow.durationMin,
+            customer: { customerId: formData.customer_id },
+            createdBy: 'admin_panel_courtesy_drive',
+          },
+        }
+        const { data: courtesyRow, error: courtesyErr } = await supabase
+          .from('bookings')
+          .insert([courtesyShadow])
+          .select('id')
+          .single()
+        if (courtesyErr) {
+          console.error('[CarWashBookingsTab] failed to insert courtesy shadow rental:', courtesyErr)
+          toast.error(`Lavaggio creato ma blocco auto di cortesia fallito: ${courtesyErr.message}`)
+        } else {
+          await supabase.from('bookings').update({
+            booking_details: {
+              ...(data.booking_details || {}),
+              courtesy_drive: {
+                vehicle_id: courtesyVehicle.id,
+                vehicle_name: courtesyVehicle.display_name,
+                vehicle_plate: courtesyVehicle.plate || null,
+                duration_minutes: courtesyWindow.durationMin,
+                window_start: startIso,
+                window_end: endIso,
+                shadow_booking_id: courtesyRow.id,
+              },
+            },
+          }).eq('id', data.id)
+          toast.success(`Auto di cortesia ${courtesyVehicle.display_name} bloccata`)
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error('[CarWashBookingsTab] courtesy shadow insert exception:', err)
+        toast.error(`Errore blocco auto di cortesia: ${msg}`)
       }
     }
 
@@ -4079,6 +4226,88 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
                   {!experienceVehicle && (
                     <p className="text-xs text-amber-400">Seleziona la supercar per completare la prenotazione.</p>
+                  )}
+                </div>
+              )}
+
+              {/* ─── Prime Courtesy Drive picker (auto di cortesia) ───
+                  2026-06-03: scegli QUALSIASI veicolo disponibile come auto di
+                  cortesia. Il veicolo scelto viene bloccato in calendario per la
+                  finestra (appuntamento + durata cortesia). */}
+              {primeCourtesyExtra && (
+                <div className="rounded-xl border border-sky-400/40 bg-sky-400/5 p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                      <h4 className="text-sm font-semibold text-sky-400">Scegli l'auto di cortesia</h4>
+                      <p className="text-xs text-theme-text-muted mt-0.5">
+                        Durata {Math.round((courtesyWindow?.durationMin ?? courtesyAutoMin) / 60 * 10) / 10}h
+                        {courtesyWindow
+                          ? ` · finestra ${courtesyWindow.pickupTime}–${courtesyWindow.returnTime}`
+                          : ' · imposta data e ora in step 3 per verificare la disponibilità'}
+                      </p>
+                    </div>
+                    {courtesyVehicle && (
+                      <button type="button" onClick={() => setCourtesyVehicle(null)}
+                        className="text-xs text-theme-text-muted hover:text-theme-text-primary border border-theme-border rounded-full px-3 py-1">
+                        Cambia veicolo
+                      </button>
+                    )}
+                  </div>
+                  {courtesyFleet.length === 0 ? (
+                    <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded p-3">
+                      Nessun veicolo in flotta. Apri <strong>Veicoli</strong> e aggiungi auto con stato diverso da <code className="bg-theme-bg-tertiary px-1 rounded">retired</code>.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {courtesyFleet.map(vehicle => {
+                        const availabilityVehicle: AvailabilityVehicle = {
+                          id: vehicle.id,
+                          display_name: vehicle.display_name,
+                          plate: vehicle.plate,
+                          status: (vehicle.status === 'available' || vehicle.status === 'rented' || vehicle.status === 'maintenance' || vehicle.status === 'retired') ? vehicle.status : 'available',
+                          daily_rate: vehicle.daily_rate,
+                          category: (vehicle.category as AvailabilityVehicle['category']) || undefined,
+                          metadata: vehicle.metadata as AvailabilityVehicle['metadata'],
+                          created_at: '',
+                          updated_at: '',
+                        }
+                        const result = courtesyWindow
+                          ? isVehicleAvailable(availabilityVehicle, courtesyWindow.pickupDate, courtesyWindow.returnDate, courtesyWindow.pickupTime, courtesyWindow.returnTime, courtesyFleetBookings)
+                          : { available: true }
+                        const isAvailable = result.available
+                        const isSelected = courtesyVehicle?.id === vehicle.id
+                        return (
+                          <button key={vehicle.id} type="button"
+                            disabled={!isAvailable && !isSelected}
+                            onClick={() => setCourtesyVehicle(vehicle)}
+                            className={`text-left rounded-lg border p-3 transition-colors ${
+                              isSelected ? 'border-sky-400 bg-sky-400/15'
+                              : isAvailable ? 'border-theme-border bg-theme-bg-tertiary hover:border-sky-400 hover:bg-sky-400/5'
+                              : 'border-rose-500/30 bg-rose-500/5 opacity-60 cursor-not-allowed'
+                            }`}>
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-theme-text-primary truncate">{vehicle.display_name}</p>
+                                {vehicle.plate && <p className="text-[11px] font-mono text-theme-text-muted">{vehicle.plate}</p>}
+                              </div>
+                              <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                isSelected ? 'bg-sky-400 text-black border-sky-400'
+                                : isAvailable ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                              }`}>
+                                {isSelected ? 'Selezionata' : isAvailable ? (courtesyWindow ? 'Disponibile' : 'Provvisoria') : 'Occupata'}
+                              </span>
+                            </div>
+                            {!isAvailable && !isSelected && 'reason' in result && result.reason && (
+                              <p className="text-[10px] text-rose-400 mt-1 line-clamp-2">{result.reason}</p>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {!courtesyVehicle && (
+                    <p className="text-xs text-amber-400">Seleziona l'auto di cortesia (facoltativo: lascia vuoto se non assegni un veicolo).</p>
                   )}
                 </div>
               )}
