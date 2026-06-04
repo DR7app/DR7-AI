@@ -306,10 +306,16 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
     if (!el) return
     const update = () => { setGridW(el.clientWidth); setGridH(el.clientHeight) }
     update()
+    // Re-misura dopo che il layout si è assestato: alla prima misura l'altezza
+    // del grid flex-1 può essere ancora 0 (width già risolta) → le righe
+    // ricadevano su MIN 60px e compariva lo scroll verticale.
+    const raf = requestAnimationFrame(update)
+    const t = setTimeout(update, 150)
     const ro = new ResizeObserver(update)
     ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
+    window.addEventListener('resize', update)
+    return () => { cancelAnimationFrame(raf); clearTimeout(t); ro.disconnect(); window.removeEventListener('resize', update) }
+  }, [loading])
   const cellWidth = useMemo(() => {
     if (!gridW) return CELL_WIDTH
     const avail = gridW - LEFT_COL_W
@@ -490,7 +496,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
   const fitRowHeight = useMemo(() => {
     const n = visibleRows.length
     if (!gridH || n === 0) return MIN_ROW_HEIGHT
-    return Math.max(30, Math.floor((gridH - HEADER_ROW_H - 8) / n))
+    return Math.max(28, Math.floor((gridH - HEADER_ROW_H - 20) / n))
   }, [gridH, visibleRows.length])
 
   // 2026-06-03: il filtro "Da/A" prima filtrava solo le RIGHE (veicoli senza
@@ -516,10 +522,10 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
   if (loading) return <div className="p-8 text-center animate-pulse">Caricamento Calendario...</div>
 
   return (
-    <div className="flex flex-col h-[calc(100vh-200px)] bg-transparent rounded-xl border border-theme-border/30 shadow-2xl overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-130px)] bg-transparent rounded-xl border border-theme-border/30 shadow-2xl overflow-hidden">
 
       {/* 1. Control Bar */}
-      <div className="flex justify-between items-center p-4 bg-theme-bg-primary/20 backdrop-blur-md border-b border-theme-border/30 z-10 shadow-sm">
+      <div className="flex justify-between items-center px-4 py-2 bg-theme-bg-primary/20 backdrop-blur-md border-b border-theme-border/30 z-10 shadow-sm">
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-light text-theme-text-primary capitalize w-48">
             {currentDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}
@@ -587,7 +593,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
         </div>
       </div>
       {/* 2026-06-01: filtro periodo Da/A — overlap con i booking del veicolo */}
-      <div className="px-4 py-2 bg-theme-bg-primary/20 backdrop-blur-md border-b border-theme-border/30">
+      <div className="px-4 py-1 bg-theme-bg-primary/20 backdrop-blur-md border-b border-theme-border/30">
         <DateRangeFilter value={dateRange} onChange={setDateRange} compact />
       </div>
 
@@ -666,7 +672,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                   {/* Vehicle image (from vehicles.metadata.image set in VehiclesTab).
                       Fallback to a generic SVG car silhouette so the row layout stays
                       consistent for vehicles that don't have an image uploaded yet. */}
-                  <div className="w-12 h-9 shrink-0 rounded-md bg-theme-bg-tertiary border border-theme-border/40 overflow-hidden flex items-center justify-center">
+                  <div className="w-9 h-6 shrink-0 rounded bg-theme-bg-tertiary border border-theme-border/40 overflow-hidden flex items-center justify-center">
                     {row.vehicle.metadata?.image ? (
                       <img
                         src={row.vehicle.metadata.image}
@@ -676,7 +682,7 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
                         onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                       />
                     ) : (
-                      <svg className="w-6 h-6 text-theme-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+                      <svg className="w-4 h-4 text-theme-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 17h14M5 17a2 2 0 1 1-4 0M5 17a2 2 0 1 0 4 0m10 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0 4 0M3 13l2-6h14l2 6M3 13v4h18v-4M3 13h18"/>
                       </svg>
                     )}
