@@ -464,7 +464,12 @@ export default function NexiTab() {
         // forcing the admin to click "Recupera carte mancanti". Runs the
         // apply path of the backfill in background; if it saves anything
         // we refetch and the new PANs replace the empty rows in place.
-        fetchTokenizedCards().then(() => { autoSyncMissingPans() })
+        fetchTokenizedCards().then(async () => {
+            // First recover any missing PANs (so the BIN becomes visible),
+            // THEN auto-classify credit/debit/prepaid from the BIN/Nexi.
+            await autoSyncMissingPans()
+            await autoResolveCardTypes()
+        })
     }, [])
 
     async function diagnoseCard(card: TokenizedCard) {
@@ -699,6 +704,29 @@ export default function NexiTab() {
         } catch (err) {
             // Silent — manual "Recupera" button stays available as a fallback.
             console.warn('[NexiTab] Auto-sync missing PANs failed:', err)
+        }
+    }
+
+    // 2026-06-04: classifica AUTOMATICAMENTE credit/debit/prepaid dal BIN
+    // (prime 6 cifre del PAN mascherato) o, se il PAN nasconde il BIN,
+    // recuperandolo da Nexi (operations dell'ordine). Persiste il risultato
+    // così ai caricamenti successivi è già pronto. Non sovrascrive mai un
+    // tipo impostato a mano dal dropdown. Il dropdown resta come override.
+    async function autoResolveCardTypes() {
+        try {
+            const res = await authFetch('/.netlify/functions/nexi-resolve-card-types', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ limit: 80 }),
+            })
+            if (!res.ok) return
+            const data = await res.json().catch(() => ({}))
+            if ((data?.resolved || 0) > 0) {
+                await fetchTokenizedCards()
+            }
+        } catch (err) {
+            // Silent — il dropdown inline resta come fallback manuale.
+            console.warn('[NexiTab] Auto-resolve card types failed:', err)
         }
     }
 
@@ -1071,11 +1099,12 @@ export default function NexiTab() {
                                                     )
                                                 })()}
                                                 {(() => {
-                                                    // 2026-06-04: il badge "Tipo" e' ora un dropdown
-                                                    // editabile inline. Nexi non espone cardType via API
-                                                    // (lo fa dal merchant dashboard via BIN classification
-                                                    // interna) e binlist.net rate-limita pesantemente.
-                                                    // Direzione puo' forzare credit/debit/prepaid da qui.
+                                                    // 2026-06-04: il tipo carta viene risolto AUTOMATICAMENTE
+                                                    // al caricamento (autoResolveCardTypes → BIN del PAN o
+                                                    // recupero da Nexi). Questo dropdown resta come OVERRIDE
+                                                    // manuale: se l'auto-detection sbaglia o lascia
+                                                    // "Sconosciuto", la direzione forza credit/debit/prepaid
+                                                    // da qui (source 'manual', mai sovrascritto dall'auto).
                                                     const t = (card.card_type || '').toLowerCase()
                                                     const cls = t === 'credit' ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' :
                                                         t === 'debit' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' :
