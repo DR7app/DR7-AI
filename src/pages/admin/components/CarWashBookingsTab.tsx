@@ -899,26 +899,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courtesyWindow?.pickupDate, courtesyWindow?.pickupTime, courtesyWindow?.returnDate, courtesyWindow?.returnTime, courtesyFleet.length])
 
-  // L'auto di cortesia scelta è in conflitto con un'altra prenotazione nella
-  // finestra? Se sì serve l'OTP direzionale (come per la durata extra) e, una
-  // volta approvato, il blocco viene inserito comunque (il trigger DB salta i
-  // blocchi cortesia). 2026-06-04.
-  const courtesyConflict = (() => {
-    if (!primeCourtesyExtra || !courtesyVehicle || !courtesyWindow) return false
-    const av: AvailabilityVehicle = {
-      id: courtesyVehicle.id,
-      display_name: courtesyVehicle.display_name,
-      plate: courtesyVehicle.plate,
-      status: (courtesyVehicle.status === 'available' || courtesyVehicle.status === 'rented' || courtesyVehicle.status === 'maintenance' || courtesyVehicle.status === 'retired') ? courtesyVehicle.status : 'available',
-      daily_rate: courtesyVehicle.daily_rate,
-      category: (courtesyVehicle.category as AvailabilityVehicle['category']) || undefined,
-      metadata: courtesyVehicle.metadata as AvailabilityVehicle['metadata'],
-      created_at: '',
-      updated_at: '',
-    }
-    const r = isVehicleAvailable(av, courtesyWindow.pickupDate, courtesyWindow.returnDate, courtesyWindow.pickupTime, courtesyWindow.returnTime, courtesyFleetBookings)
-    return !r.available
-  })()
+  // 2026-06-05: il conflitto del veicolo di cortesia NON richiede più OTP né
+  // blocca il salvataggio. Il blocco è una shadow row con is_courtesy_block +
+  // allow_double_booking, quindi può sovrapporsi liberamente. L'OTP resta solo
+  // per la regola "durata cortesia > lavaggio" (courtesyExceedsWash). Il picker
+  // mostra comunque le auto occupate come "Occupata" ma restano selezionabili.
 
   // Reset chosen vehicle when the experience extra is removed or the
   // duration option changes (the previously-picked car may now be busy).
@@ -2607,22 +2592,23 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       const totalDuration = getTotalDuration()
       const serviceNames = buildServiceNames()
 
-      // ===== AUTO DI CORTESIA: OTP se durata > lavaggio =====
+      // ===== AUTO DI CORTESIA: OTP SOLO se durata > lavaggio =====
       // 2026-06-03: se l'admin ha scelto un'auto di cortesia (Prime Courtesy
       // Drive) con durata SUPERIORE a quella del lavaggio (arrotondata all'ora),
       // serve l'OTP direzionale prima di salvare. Operatori con bypass passano
       // direttamente; gli altri vedono il modal e il save riprende dopo
-      // l'approvazione (resume hook). Il conflitto auto è gestito separatamente
-      // dal gate carwash_slot_occupied più sotto (entrambi possono concatenarsi).
-      if ((courtesyExceedsWash || courtesyConflict) && !override.hasOverride('cortesia_durata_extra')) {
+      // l'approvazione (resume hook).
+      // 2026-06-05: il CONFLITTO veicolo NON richiede più OTP né blocca. Il
+      // blocco auto di cortesia è una shadow row con is_courtesy_block +
+      // allow_double_booking, quindi può sovrapporsi liberamente a un'altra
+      // prenotazione: nessun OTP, nessun blocco "ON CONFLICT". L'OTP resta
+      // SOLO per la regola di business "durata cortesia > lavaggio".
+      if (courtesyExceedsWash && !override.hasOverride('cortesia_durata_extra')) {
         const reqH = Math.round(courtesyChosenMin / 60 * 10) / 10
         const washH = Math.round(washOnlyMin / 60 * 10) / 10
-        const motivi: string[] = []
-        if (courtesyExceedsWash) motivi.push(`durata ${reqH}h superiore al lavaggio ${washH}h (auto: ${courtesyAutoHours}h)`)
-        if (courtesyConflict) motivi.push(`veicolo ${courtesyVehicle?.display_name ?? ''} già occupato nella finestra ${courtesyWindow?.pickupTime ?? ''}–${courtesyWindow?.returnTime ?? ''}`)
         const bypassed = override.requestOverride(
           'cortesia_durata_extra',
-          `Auto di cortesia: ${motivi.join(' e ')}. Richiede autorizzazione direzionale.`,
+          `Auto di cortesia: durata ${reqH}h superiore al lavaggio ${washH}h (auto: ${courtesyAutoHours}h). Richiede autorizzazione direzionale.`,
         )
         if (!bypassed) {
           // Modal aperto — il save riprende dopo l'OTP via resume hook.
@@ -4690,9 +4676,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           : { available: true }
                         const isAvailable = result.available
                         const isSelected = courtesyVehicle?.id === vehicle.id
-                        // 2026-06-04: l'auto occupata resta SELEZIONABILE — la
-                        // scelta in conflitto è ammessa ma richiede l'OTP
-                        // direzionale al salvataggio (courtesyConflict gate).
+                        // 2026-06-04: l'auto occupata resta SELEZIONABILE.
+                        // 2026-06-05: la scelta in conflitto è ammessa SENZA OTP
+                        // né blocco — il blocco cortesia si sovrappone liberamente.
                         return (
                           <button key={vehicle.id} type="button"
                             onClick={() => setCourtesyVehicle(vehicle)}
@@ -4711,12 +4697,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                 : isAvailable ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
                                 : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
                               }`}>
-                                {isSelected ? 'Selezionata' : isAvailable ? (courtesyWindow ? 'Disponibile' : 'Provvisoria') : 'Occupata · OTP'}
+                                {isSelected ? 'Selezionata' : isAvailable ? (courtesyWindow ? 'Disponibile' : 'Provvisoria') : 'Occupata'}
                               </span>
                             </div>
                             {!isAvailable && (
                               <p className="text-[10px] text-amber-400 mt-1 line-clamp-2">
-                                {'reason' in result && result.reason ? result.reason : 'Veicolo occupato nella finestra'} — la selezione richiede OTP direzionale.
+                                {'reason' in result && result.reason ? result.reason : 'Veicolo occupato nella finestra'} — il blocco cortesia si sovrappone comunque (nessun OTP).
                               </p>
                             )}
                           </button>
