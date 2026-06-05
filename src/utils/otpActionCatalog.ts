@@ -65,6 +65,14 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
     wired: true,
   },
   {
+    id: 'carwash_slot_occupied',
+    label: 'Forza slot lavaggio occupato',
+    used_in: 'Prime Wash > Slot lavaggio occupato / conflitto programmazione',
+    reason: 'Lo slot lavaggio scelto e occupato o viola una regola di programmazione: forzare richiede autorizzazione direzionale.',
+    group: 'Lavaggio',
+    wired: true,
+  },
+  {
     id: 'slot_unavailable',
     label: 'Forza prenotazione su slot occupato',
     used_in: 'Salva prenotazione su slot non disponibile',

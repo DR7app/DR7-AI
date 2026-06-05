@@ -2047,6 +2047,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           payment_method: formData.payment_method || null,
           booking_details: {
             is_supercar_experience_block: true,
+            // 2026-06-05: vedi nota gemella sul blocco auto di cortesia — il blocco
+            // supercar experience non deve MAI essere rifiutato per conflitto.
+            allow_double_booking: true,
             parent_carwash_booking_id: data.id,
             experience_label: supercarExperienceOption.label,
             experience_service_id: supercarExperienceExtra.id,
@@ -2124,6 +2127,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           payment_method: formData.payment_method || null,
           booking_details: {
             is_courtesy_block: true,
+            // 2026-06-05: belt-and-suspenders. Il trigger prevent_overlapping_bookings
+            // gia' bypassa is_courtesy_block, ma allow_double_booking garantisce che
+            // il blocco auto di cortesia NON venga MAI rifiutato per conflitto, anche
+            // se occupa un veicolo gia' prenotato (l'OTP cortesia_durata_extra ha gia'
+            // autorizzato la sovrapposizione a monte).
+            allow_double_booking: true,
             parent_carwash_booking_id: data.id,
             courtesy_duration_minutes: courtesyWindow.durationMin,
             customer: { customerId: formData.customer_id },
