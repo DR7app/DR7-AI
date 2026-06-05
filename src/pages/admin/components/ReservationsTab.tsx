@@ -6638,15 +6638,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             logger.log('[Save] Booking gia\' confermato in precedenza — salto reinvio conferma.')
             templateKey = null
           } else if (isPending) {
-            // 2026-05-22 BUG FIX: la conferma "Da Saldare" parte SEMPRE
-            // quando si salva un booking pending — qualunque sia il metodo
-            // (Contanti, Carta, Bonifico, Pay-by-Link, Wallet). Prima il
-            // gate richiedeva confirmBooking=true OR isPayByLink, quindi
-            // una booking Contanti + Da Saldare non spediva il messaggio
-            // e il cliente non sapeva che la prenotazione era registrata.
-            // Il template booking_confirmed_da_saldare contiene il dettaglio
-            // del metodo via {payment_info}.
-            templateKey = 'booking_confirmed_da_saldare'
+            // 2026-06-05: Da Saldare → il cliente riceve SOLO il link di
+            // pagamento (gestito dal blocco Pay-by-Link più sopra). La
+            // conferma "confermiamo la sua prenotazione" parte SOLO se
+            // l'admin spunta "Conferma Prenotazione". Senza la spunta NON
+            // si invia alcun messaggio di conferma.
+            // (Reverte il comportamento 2026-05-22 "parte sempre": la
+            // direzione vuole che la conferma sia gated sul checkbox.)
+            // Conferma + Da Saldare + Pay-by-Link → conferma + link insieme
+            // (dual message, vedi memoria dr7-conferma-pbl-dual-message).
+            templateKey = confirmBooking ? 'booking_confirmed_da_saldare' : null
           } else if (confirmBooking) {
             // Prima conferma con pagamento gia' registrato.
             templateKey = 'rental_new_customer'
