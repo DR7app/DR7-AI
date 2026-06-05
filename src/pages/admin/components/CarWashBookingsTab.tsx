@@ -210,6 +210,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [hiddenPlates, setHiddenPlates] = useState<Set<string>>(new Set())
   const [editingPlate, setEditingPlate] = useState<string | null>(null)
   const [editPlateValue, setEditPlateValue] = useState('')
+  const [editCustomerValue, setEditCustomerValue] = useState('')
   const [plateActionBusy, setPlateActionBusy] = useState(false)
   const [targaVehicleInfo, setTargaVehicleInfo] = useState<{ brand?: string; model?: string; year?: string; fuel?: string; powerCV?: string } | null>(null)
   const [targaNotFound, setTargaNotFound] = useState(false)
@@ -1096,40 +1097,58 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     catch { setHiddenPlates(prev); toast.error('Errore nel ripristino') }
   }
 
-  // Modifica = rinomina la targa su TUTTE le prenotazioni carwash che la hanno.
-  async function renamePlateEverywhere(oldPlate: string, newRaw: string) {
+  // Modifica = aggiorna targa E/O nome cliente su TUTTE le prenotazioni carwash
+  // che hanno la (vecchia) targa.
+  async function renamePlateEverywhere(oldPlate: string, newRaw: string, newCustomerRaw?: string) {
     const oldNorm = normPlate(oldPlate)
     const newNorm = normPlate(newRaw)
+    const newCustomer = (newCustomerRaw ?? '').trim()
     if (!newNorm) { toast.error('Targa non valida'); return }
-    if (newNorm === oldNorm) { setEditingPlate(null); setEditPlateValue(''); return }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const matchesPre = (bookings as any[]).filter((b) => {
+      const bd = b.booking_details || {}
+      const p = normPlate(b.vehicle_plate || bd.vehicle_plate || bd.targa || bd.plate || bd.vehicle?.plate || bd.vehicle?.targa || '')
+      return p === oldNorm
+    })
+    const currentCustomer = (matchesPre[0]?.customer_name || matchesPre[0]?.booking_details?.customer?.fullName || '').trim()
+    const plateChanged = newNorm !== oldNorm
+    const customerChanged = !!newCustomer && newCustomer !== currentCustomer
+    if (!plateChanged && !customerChanged) { setEditingPlate(null); setEditPlateValue(''); setEditCustomerValue(''); return }
     setPlateActionBusy(true)
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const matches = (bookings as any[]).filter((b) => {
-        const bd = b.booking_details || {}
-        const p = normPlate(b.vehicle_plate || bd.vehicle_plate || bd.targa || bd.plate || bd.vehicle?.plate || bd.vehicle?.targa || '')
-        return p === oldNorm
-      })
-      if (matches.length === 0) { toast.error('Nessuna prenotazione con questa targa'); setPlateActionBusy(false); return }
-      for (const b of matches) {
+      if (matchesPre.length === 0) { toast.error('Nessuna prenotazione con questa targa'); setPlateActionBusy(false); return }
+      for (const b of matchesPre) {
         const bd = { ...(b.booking_details || {}) }
-        if (normPlate(bd.vehicle_plate) === oldNorm) bd.vehicle_plate = newNorm
-        if (normPlate(bd.targa) === oldNorm) bd.targa = newNorm
-        if (normPlate(bd.plate) === oldNorm) bd.plate = newNorm
-        if (bd.vehicle) {
-          const v = { ...bd.vehicle }
-          if (normPlate(v.plate) === oldNorm) v.plate = newNorm
-          if (normPlate(v.targa) === oldNorm) v.targa = newNorm
-          bd.vehicle = v
+        if (plateChanged) {
+          if (normPlate(bd.vehicle_plate) === oldNorm) bd.vehicle_plate = newNorm
+          if (normPlate(bd.targa) === oldNorm) bd.targa = newNorm
+          if (normPlate(bd.plate) === oldNorm) bd.plate = newNorm
+          if (bd.vehicle) {
+            const v = { ...bd.vehicle }
+            if (normPlate(v.plate) === oldNorm) v.plate = newNorm
+            if (normPlate(v.targa) === oldNorm) v.targa = newNorm
+            bd.vehicle = v
+          }
         }
-        const { error } = await supabase.from('bookings').update({ vehicle_plate: newNorm, booking_details: bd }).eq('id', b.id)
+        if (customerChanged) {
+          if (bd.customer) bd.customer = { ...bd.customer, fullName: newCustomer }
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const update: any = { booking_details: bd }
+        if (plateChanged) update.vehicle_plate = newNorm
+        if (customerChanged) update.customer_name = newCustomer
+        const { error } = await supabase.from('bookings').update(update).eq('id', b.id)
         if (error) throw error
       }
-      toast.success(`Targa ${oldNorm} → ${newNorm} aggiornata su ${matches.length} prenotazion${matches.length === 1 ? 'e' : 'i'}`)
-      setEditingPlate(null); setEditPlateValue('')
+      const parts = [
+        plateChanged ? `targa ${oldNorm} → ${newNorm}` : '',
+        customerChanged ? `cliente → ${newCustomer}` : '',
+      ].filter(Boolean).join(', ')
+      toast.success(`${parts} aggiornato su ${matchesPre.length} prenotazion${matchesPre.length === 1 ? 'e' : 'i'}`)
+      setEditingPlate(null); setEditPlateValue(''); setEditCustomerValue('')
       await loadData()
     } catch {
-      toast.error('Errore aggiornamento targa')
+      toast.error('Errore aggiornamento')
     } finally {
       setPlateActionBusy(false)
     }
@@ -3470,20 +3489,32 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                 className="px-3 py-2 hover:bg-theme-bg-tertiary border-b border-theme-border/30 last:border-b-0"
                               >
                                 {isEditing ? (
-                                  <div className="flex items-center gap-2">
+                                  <div className="space-y-1.5">
                                     <input
                                       autoFocus
                                       value={editPlateValue}
                                       onChange={(e) => setEditPlateValue(e.target.value.toUpperCase())}
                                       onKeyDown={(e) => {
-                                        if (e.key === 'Enter') renamePlateEverywhere(v.plate, editPlateValue)
-                                        if (e.key === 'Escape') { setEditingPlate(null); setEditPlateValue('') }
+                                        if (e.key === 'Enter') renamePlateEverywhere(v.plate, editPlateValue, editCustomerValue)
+                                        if (e.key === 'Escape') { setEditingPlate(null); setEditPlateValue(''); setEditCustomerValue('') }
                                       }}
-                                      placeholder="Nuova targa"
-                                      className="flex-1 min-w-0 px-2 py-1 text-sm font-mono bg-theme-bg-tertiary border border-dr7-gold rounded text-theme-text-primary focus:outline-none"
+                                      placeholder="Targa"
+                                      className="w-full px-2 py-1 text-sm font-mono bg-theme-bg-tertiary border border-dr7-gold rounded text-theme-text-primary focus:outline-none"
                                     />
-                                    <button type="button" disabled={plateActionBusy} onClick={() => renamePlateEverywhere(v.plate, editPlateValue)} className="text-xs font-semibold text-emerald-500 px-2 py-1 disabled:opacity-50">Salva</button>
-                                    <button type="button" onClick={() => { setEditingPlate(null); setEditPlateValue('') }} className="text-xs text-theme-text-muted px-1 py-1">Annulla</button>
+                                    <input
+                                      value={editCustomerValue}
+                                      onChange={(e) => setEditCustomerValue(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') renamePlateEverywhere(v.plate, editPlateValue, editCustomerValue)
+                                        if (e.key === 'Escape') { setEditingPlate(null); setEditPlateValue(''); setEditCustomerValue('') }
+                                      }}
+                                      placeholder="Nome cliente"
+                                      className="w-full px-2 py-1 text-sm bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                                    />
+                                    <div className="flex items-center justify-end gap-2">
+                                      <button type="button" onClick={() => { setEditingPlate(null); setEditPlateValue(''); setEditCustomerValue('') }} className="text-xs text-theme-text-muted px-2 py-1">Annulla</button>
+                                      <button type="button" disabled={plateActionBusy} onClick={() => renamePlateEverywhere(v.plate, editPlateValue, editCustomerValue)} className="text-xs font-semibold text-emerald-500 px-2 py-1 disabled:opacity-50">Salva</button>
+                                    </div>
                                   </div>
                                 ) : (
                                   <div className="flex items-center justify-between gap-2">
@@ -3513,7 +3544,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                       )}
                                     </button>
                                     <div className="flex items-center gap-1 flex-shrink-0">
-                                      <button type="button" title="Modifica targa (aggiorna tutte le prenotazioni)" onClick={() => { setEditingPlate(v.plate); setEditPlateValue(v.plate) }} className="p-1.5 rounded hover:bg-theme-bg-hover text-theme-text-muted hover:text-dr7-gold">
+                                      <button type="button" title="Modifica targa e nome cliente (aggiorna tutte le prenotazioni)" onClick={() => { setEditingPlate(v.plate); setEditPlateValue(v.plate); setEditCustomerValue(v.customerName || '') }} className="p-1.5 rounded hover:bg-theme-bg-hover text-theme-text-muted hover:text-dr7-gold">
                                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                       </button>
                                       <button type="button" title="Rimuovi dai suggerimenti" onClick={() => hidePlateFromList(v.plate)} className="p-1.5 rounded hover:bg-red-500/10 text-theme-text-muted hover:text-red-500">
