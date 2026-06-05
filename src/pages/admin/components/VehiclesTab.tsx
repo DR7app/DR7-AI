@@ -51,7 +51,7 @@ interface ProCategory { id: string; label: string }
 // dall'admin, poi fallback su un name-map che punta agli asset statici
 // pubblicati su dr7empire.com (rs3.jpeg, bmw-m3.jpeg, ecc.). Cosi\' anche
 // i veicoli senza upload mostrano la foto giusta.
-const WEBSITE_BASE_URL = 'https://dr7empire.com'
+const WEBSITE_BASE_URL = 'https://dr7.app'
 function nameBasedImage(name: string): string | undefined {
   const n = (name || '').toLowerCase()
   if (!n) return undefined

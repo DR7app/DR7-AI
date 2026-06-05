@@ -706,7 +706,7 @@ type MarketingConfig = {
 }
 
 const INITIAL_MARKETING: MarketingConfig = {
-  website_url: 'https://dr7empire.com',
+  website_url: 'https://dr7.app',
   google_review_link: 'https://g.page/r/CQwgJt7OYpsfEBM/review',
   instagram_url: 'https://instagram.com/dr7empire',
   facebook_url: 'https://facebook.com/dr7empire',

@@ -517,7 +517,7 @@ export async function passesCustomerFilters(tpl: any, booking: any, supabase: an
 
 export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHours = 1, syntheticBooking }: TriggerArgs): Promise<{ sent: number; skipped: number; errors: number }> {
     const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-    const baseUrl = process.env.URL || 'https://admin.dr7empire.com'
+    const baseUrl = process.env.URL || 'https://dr7ai.com'
 
     // 1. Carica la booking — oppure usa il syntheticBooking passato dal caller
     //    (per eventi cauzione/documenti/customer dove non c'e' una vera booking).

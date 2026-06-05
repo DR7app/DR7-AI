@@ -304,9 +304,9 @@ export default function ReviewsTab() {
                 `Buono sconto di *€10* per un lavaggio auto DR7\n\n` +
                 `CODICE SCONTO NOLEGGIO: *${rentalCode}*\n` +
                 `CODICE SCONTO LAVAGGIO: *${carwashCode}*\n\n` +
-                `(I codici sono validi 10 giorni. Spesa minima: €400 per il codice noleggio Supercar, €40 per il codice lavaggio. Validi esclusivamente per prenotazioni effettuate tramite www.dr7empire.com)\n\n` +
+                `(I codici sono validi 10 giorni. Spesa minima: €400 per il codice noleggio Supercar, €40 per il codice lavaggio. Validi esclusivamente per prenotazioni effettuate tramite www.dr7.app)\n\n` +
                 `Ti basterà inserire il codice al check-out della prenotazione per attivare il tuo credito. Saremo lieti di accompagnarti nella scelta 👇🏻\n\n` +
-                `www.dr7empire.com\n\n` +
+                `www.dr7.app\n\n` +
                 `Con Stima\n*DR7*`
 
             // Try copy to clipboard for the admin

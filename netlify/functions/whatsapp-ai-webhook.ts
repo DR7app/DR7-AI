@@ -21,7 +21,7 @@ SERVIZI OFFERTI:
 INFORMAZIONI UTILI:
 - Sede: Dubai e Italia
 - Contatto diretto: +39 345 790 5205
-- Sito web: dr7empire.com
+- Sito web: dr7.app
 - Orari: disponibili 24/7 per emergenze
 
 ISTRUZIONI:

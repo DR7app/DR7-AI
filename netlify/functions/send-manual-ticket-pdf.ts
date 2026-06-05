@@ -44,7 +44,7 @@ export const handler: Handler = async (event) => {
         // Load Logo (Dr7 Logo)
         let logoImage
         try {
-            const logoUrl = 'https://dr7empire.com/DR7logo1.png'
+            const logoUrl = 'https://dr7.app/DR7logo1.png'
             const logoBytes = await fetch(logoUrl).then(res => res.arrayBuffer())
             logoImage = await pdfDoc.embedPng(logoBytes)
         } catch (e) {

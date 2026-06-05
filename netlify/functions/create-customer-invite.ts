@@ -57,7 +57,7 @@ const handler: Handler = async (event) => {
         // Public-facing registration URL: clients should land on the website
         // (dr7empire.com), NOT the admin domain. PUBLIC_REGISTRATION_URL lets
         // ops override per-environment without redeploying code.
-        const baseUrl = process.env.PUBLIC_REGISTRATION_URL || 'https://dr7empire.com'
+        const baseUrl = process.env.PUBLIC_REGISTRATION_URL || 'https://dr7.app'
         const url = `${baseUrl}/registrazione-cliente/${token}`
 
         return {

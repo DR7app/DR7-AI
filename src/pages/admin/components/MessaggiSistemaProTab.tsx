@@ -759,7 +759,7 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
         scope: 'common',
         scopeNote: "Configurabili in Marketing → Social Links. Lì puoi anche aggiungere link personalizzati extra (es. {tiktok}, {youtube}); ognuno diventa una variabile dal titolo che gli dai.",
         items: [
-            { key: 'website', description: 'URL del sito DR7', example: 'https://dr7empire.com', aliases: ['sito'] },
+            { key: 'website', description: 'URL del sito DR7', example: 'https://dr7.app', aliases: ['sito'] },
             { key: 'review_link', description: 'Link recensione Google', example: 'https://g.page/r/.../review' },
             { key: 'instagram', description: 'URL profilo Instagram', example: 'https://instagram.com/dr7empire' },
             { key: 'facebook', description: 'URL pagina Facebook', example: 'https://facebook.com/dr7empire' },

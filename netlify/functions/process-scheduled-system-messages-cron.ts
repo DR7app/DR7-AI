@@ -232,7 +232,7 @@ async function fireToCustomer(
         ...extraVars,
     };
 
-    const baseUrl = process.env.URL || 'https://admin.dr7empire.com';
+    const baseUrl = process.env.URL || 'https://dr7ai.com';
     try {
         const res = await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
             method: 'POST',
@@ -657,7 +657,7 @@ const cronHandler = async () => {
 
             // Invia (claim ottenuto: questo è l'unico tick che invierà)
             try {
-                const baseUrl = process.env.URL || 'https://admin.dr7empire.com';
+                const baseUrl = process.env.URL || 'https://dr7ai.com';
                 const res = await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

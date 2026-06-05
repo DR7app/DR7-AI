@@ -90,7 +90,7 @@ export const handler: Handler = async (event) => {
                 html: `
                     <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                       <div style="background: #000; border-radius: 12px; padding: 24px 16px; text-align: center; margin-bottom: 30px;">
-                        <img src="https://admin.dr7empire.com/og-image.png" alt="DR7" style="height: 50px; display: block; margin: 0 auto;" />
+                        <img src="https://dr7ai.com/og-image.png" alt="DR7" style="height: 50px; display: block; margin: 0 auto;" />
                       </div>
                       <h2 style="color: #111; text-align: center;">Autorizzazione richiesta</h2>
                       <p style="color: #444; text-align: center;">

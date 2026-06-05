@@ -384,7 +384,7 @@ export const handler: Handler = async (event) => {
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; max-width: 640px; margin: 0 auto; padding: 24px; background: #fff;">
             <!-- Header brand -->
             <div style="background: #000; border-radius: 12px; padding: 28px 16px; text-align: center; margin-bottom: 24px;">
-              <img src="https://dr7empire.com/DR7logo1.png" alt="DR7" style="height: 56px; display: block; margin: 0 auto;" />
+              <img src="https://dr7.app/DR7logo1.png" alt="DR7" style="height: 56px; display: block; margin: 0 auto;" />
             </div>
 
             <!-- Subject line -->
@@ -447,7 +447,7 @@ export const handler: Handler = async (event) => {
               <tr><td style="padding: 3px 8px 3px 0; color: #495057;">Inviato a</td><td style="padding: 3px 0;">${escapeHtml(await getOtpRecipient())}</td></tr>
             </table>
             <p style="margin: 16px 0 0; font-size: 11px; color: #adb5bd; text-align: center;">
-              Dubai Rent 7.0 S.p.A. &middot; Cagliari, Sardegna &middot; <a href="https://www.dr7empire.com" style="color: #adb5bd; text-decoration: none;">www.dr7empire.com</a>
+              Dubai Rent 7.0 S.p.A. &middot; Cagliari, Sardegna &middot; <a href="https://www.dr7.app" style="color: #adb5bd; text-decoration: none;">www.dr7.app</a>
             </p>
             <p style="margin: 6px 0 0; font-size: 10px; color: #c7ced3; text-align: center;">
               Questa email e' generata automaticamente dal sistema DR7. Non rispondere a questo messaggio.

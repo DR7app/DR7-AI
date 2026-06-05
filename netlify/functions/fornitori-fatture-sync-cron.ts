@@ -9,7 +9,7 @@ import type { Handler } from '@netlify/functions'
  * Schedule: ogni notte alle 03:00 Rome (definita in netlify.toml).
  */
 const handler: Handler = async () => {
-    const baseUrl = process.env.URL || 'https://admin.dr7empire.com'
+    const baseUrl = process.env.URL || 'https://dr7ai.com'
     try {
         // Fire-and-forget: il background function risponde 202 subito.
         await fetch(`${baseUrl}/.netlify/functions/fornitori-fatture-sync-background`, {

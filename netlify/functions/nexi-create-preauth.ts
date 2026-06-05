@@ -53,7 +53,7 @@ const handler: Handler = async (event) => {
         // Convert amount to cents
         const amountCents = Math.round(amount * 100);
 
-        const siteUrl = process.env.URL || 'https://admin.dr7empire.com';
+        const siteUrl = process.env.URL || 'https://dr7ai.com';
 
         // Calculate expiration: use hours if specified, otherwise 7 days
         const expirationDate = new Date();

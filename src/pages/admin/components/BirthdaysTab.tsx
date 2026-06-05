@@ -52,7 +52,7 @@ export default function BirthdaysTab() {
     // Storage: centralina_pro_config.config.marketing.website_url.
     // Sostituito nel template via il placeholder canonico {website_url} con
     // alias retro-compat {website} / {link} / {sito}.
-    const [websiteUrl, setWebsiteUrl] = useState('https://dr7empire.com')
+    const [websiteUrl, setWebsiteUrl] = useState('https://dr7.app')
 
     // Generate unique discount code
     function generateDiscountCode(): string {
@@ -174,7 +174,7 @@ export default function BirthdaysTab() {
         try {
             // Carica l'URL del sito impostato in admin → Marketing →
             // Social Links (UI). Storage: centralina_pro_config.config.marketing.
-            // Cade su https://dr7empire.com solo se il setting non c'è.
+            // Cade su https://dr7.app solo se il setting non c'è.
             try {
                 const { data: cfgRow } = await supabase
                     .from('centralina_pro_config')

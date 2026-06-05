@@ -226,7 +226,7 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
                 usage_conditions: formData.usage_conditions || null,
                 customer_email: formData.customer_email.trim().toLowerCase() || null,
                 customer_phone: formData.customer_phone.trim() || null,
-                qr_url: `https://dr7empire.com/promo/${formData.code.toUpperCase().trim()}`,
+                qr_url: `https://dr7.app/promo/${formData.code.toUpperCase().trim()}`,
                 status: 'active',
                 updated_at: new Date().toISOString(),
             }

@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js'
 // — array of strings, one per line. Changes apply to next generated invoice.
 const DEFAULT_INVOICE_FOOTER_LINES = [
     'Dubai rent 7.0 S.p.A. - Iscr. reg. imp.: 04104640927',
-    'Tel: 3457905205 | Email: Info@dr7.app | PEC: dubai.rent7.0srl@legalmail.it | Website: www.dr7empire.com',
+    'Tel: 3457905205 | Email: Info@dr7.app | PEC: dubai.rent7.0srl@legalmail.it | Website: www.dr7.app',
     'Socio unico - Cap. soc. 50.000,00 € | Regime Fiscale: Ordinario',
 ]
 
@@ -89,7 +89,7 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Uint8Arr
     // --- Logo ---
     let logoImage: any = null
     try {
-        const logoBytes = await fetch('https://dr7empire.com/DR7logo1.png').then(res => res.arrayBuffer())
+        const logoBytes = await fetch('https://dr7.app/DR7logo1.png').then(res => res.arrayBuffer())
         logoImage = await pdfDoc.embedPng(logoBytes)
     } catch (e) {
         console.error('[invoice-pdf] Failed to load logo:', e)

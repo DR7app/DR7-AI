@@ -44,7 +44,7 @@ interface VehicleWithInventory extends Vehicle {
 // Vehicle photo: legge metadata.image (upload da admin) e fallback su un
 // name-map di asset statici pubblicati su dr7empire.com, allineato con
 // VehiclesTab cosi' i veicoli senza upload mostrano comunque la foto giusta.
-const WEBSITE_BASE = 'https://dr7empire.com'
+const WEBSITE_BASE = 'https://dr7.app'
 function nameBasedVehicleImage(name: string): string | undefined {
     const n = (name || '').toLowerCase()
     if (!n) return undefined

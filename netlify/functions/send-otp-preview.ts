@@ -229,7 +229,7 @@ function renderEmailHtml(p: SamplePayload, code: string, operatorName: string, o
       ANTEPRIMA EMAIL OTP &middot; Codice fittizio "${FAKE_CODE}" &middot; Nessuna autorizzazione reale generata
     </div>
     <div style="background: #000; border-radius: 12px; padding: 28px 16px; text-align: center; margin-bottom: 24px;">
-      <img src="https://dr7empire.com/DR7logo1.png" alt="DR7" style="height: 56px; display: block; margin: 0 auto;" />
+      <img src="https://dr7.app/DR7logo1.png" alt="DR7" style="height: 56px; display: block; margin: 0 auto;" />
     </div>
     <p style="margin: 0 0 6px; font-size: 12px; color: #6c757d; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700;">Richiesta di autorizzazione direzionale</p>
     <h1 style="margin: 0 0 8px; font-size: 22px; color: #111; line-height: 1.3;">${escapeHtml(operatorName)} sta chiedendo la tua autorizzazione.</h1>
@@ -267,7 +267,7 @@ function renderEmailHtml(p: SamplePayload, code: string, operatorName: string, o
       <tr><td style="padding: 3px 8px 3px 0; color: #495057;">Tipo flusso</td><td style="padding: 3px 0;">${escapeHtml(flowTypeLabel)}</td></tr>
       <tr><td style="padding: 3px 8px 3px 0; color: #495057;">Inviato a</td><td style="padding: 3px 0;">${escapeHtml(recipient)}</td></tr>
     </table>
-    <p style="margin: 16px 0 0; font-size: 11px; color: #adb5bd; text-align: center;">Dubai Rent 7.0 S.p.A. &middot; Cagliari, Sardegna &middot; <a href="https://www.dr7empire.com" style="color: #adb5bd; text-decoration: none;">www.dr7empire.com</a></p>
+    <p style="margin: 16px 0 0; font-size: 11px; color: #adb5bd; text-align: center;">Dubai Rent 7.0 S.p.A. &middot; Cagliari, Sardegna &middot; <a href="https://www.dr7.app" style="color: #adb5bd; text-decoration: none;">www.dr7.app</a></p>
     <p style="margin: 6px 0 0; font-size: 10px; color: #c7ced3; text-align: center;">Questa email e' generata automaticamente dal sistema DR7. Non rispondere a questo messaggio.</p>
   </div>`
 }

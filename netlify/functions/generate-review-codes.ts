@@ -102,7 +102,7 @@ export const handler: Handler = async (event) => {
       scope: SUPERCAR_CODE.scope,
       minimum_spend: SUPERCAR_CODE.minimum_spend,
       valid_until: buildExpiry(SUPERCAR_CODE.validity_days),
-      qr_url: `https://dr7empire.com/promo/${supercarCode}`,
+      qr_url: `https://dr7.app/promo/${supercarCode}`,
     }
 
     const lavaggioRow = {
@@ -112,7 +112,7 @@ export const handler: Handler = async (event) => {
       scope: LAVAGGIO_CODE.scope,
       minimum_spend: LAVAGGIO_CODE.minimum_spend,
       valid_until: buildExpiry(LAVAGGIO_CODE.validity_days),
-      qr_url: `https://dr7empire.com/promo/${lavaggioCode}`,
+      qr_url: `https://dr7.app/promo/${lavaggioCode}`,
     }
 
     const { error: insertErr } = await supabase

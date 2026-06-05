@@ -332,7 +332,7 @@ export default function FleetVehiclePanoramica({ vehicle, alerts }: FleetVehicle
         }
         // Name-based fallback (kept in sync with FleetInventory.nameBasedVehicleImage)
         const n = (vehicle.display_name || '').toLowerCase()
-        const base = 'https://dr7empire.com'
+        const base = 'https://dr7.app'
         if (n.includes('rs3')) return `${base}/rs3.jpeg`
         if (n.includes('m340')) return `${base}/bmw-m340i.jpeg`
         if (n.includes('m3')) return `${base}/bmw-m3.jpeg`

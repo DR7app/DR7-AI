@@ -234,7 +234,7 @@ export default function CodiciScontoTab() {
             : `€${Number(code.value_amount).toFixed(2)}`
         const minSpend = code.minimum_spend ? `\nSpesa minima: €${Number(code.minimum_spend).toFixed(2)}` : ''
         setSendMessage(
-            `Ciao! 🎁\n\nEcco il tuo codice sconto DR7 di ${valore} su ${scope}:\n\n*${code.code}*\n\nValido fino al ${valido}.${minSpend}\n\nLo puoi usare al check-out su www.dr7empire.com\n\nGrazie,\nDR7`
+            `Ciao! 🎁\n\nEcco il tuo codice sconto DR7 di ${valore} su ${scope}:\n\n*${code.code}*\n\nValido fino al ${valido}.${minSpend}\n\nLo puoi usare al check-out su www.dr7.app\n\nGrazie,\nDR7`
         )
         // Carica clienti se non già pronti
         if (sendCustomers.length === 0) {
@@ -953,7 +953,7 @@ export default function CodiciScontoTab() {
                         <div id="qr-print-area" className="flex flex-col items-center gap-4">
                             <div className="bg-white p-4 rounded-xl">
                                 <QRCodeSVG
-                                    value={`https://dr7empire.com/promo/${selectedCodeForQR.code}`}
+                                    value={`https://dr7.app/promo/${selectedCodeForQR.code}`}
                                     size={200}
                                 />
                             </div>

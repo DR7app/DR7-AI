@@ -150,7 +150,7 @@ const cancelHandler: Handler = async () => {
             const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone;
             if (custPhone) {
                 try {
-                    const r = await fetch(`${process.env.URL || 'https://admin.dr7empire.com'}/.netlify/functions/send-whatsapp-notification`, {
+                    const r = await fetch(`${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/send-whatsapp-notification`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({

@@ -1,7 +1,7 @@
 /**
  * Debug endpoint: lista i nomi dei campi AcroForm del PDF master_contract.
  *
- * Apri https://admin.dr7empire.com/.netlify/functions/list-contract-fields
+ * Apri https://dr7ai.com/.netlify/functions/list-contract-fields
  * in un browser per vedere tutti i field name esatti del template PDF.
  * Serve per scoprire come nominare i field nel data map di generate-contract.
  *

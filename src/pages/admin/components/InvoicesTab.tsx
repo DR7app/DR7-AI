@@ -222,7 +222,7 @@ export default function InvoicesTab() {
           <div class="info-line">Telefono: 345 790 5205</div>
           <div class="info-line">📧 info@dr7.app</div>
           <div class="info-line">PEC: dubai.rent7.0srl@legalmail.it</div>
-          <div class="info-line">🌐 www.dr7empire.com</div>
+          <div class="info-line">🌐 www.dr7.app</div>
         </div>
 
         <div class="customer-info">

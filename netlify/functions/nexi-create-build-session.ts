@@ -59,8 +59,8 @@ export const handler: Handler = async (event) => {
     const expiresAt = new Date(sentAt.getTime() + expirationHours * 60 * 60 * 1000)
 
     // Website payment page URL
-    const websiteBase = 'https://dr7empire.com'
-    const adminBase = process.env.URL || 'https://admin.dr7empire.com'
+    const websiteBase = 'https://dr7.app'
+    const adminBase = process.env.URL || 'https://dr7ai.com'
 
     // Create XPay Build session
     const buildUrl = `${NEXI_BASE_URL}/orders/build`

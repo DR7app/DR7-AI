@@ -269,7 +269,7 @@ export default function InviteOperatoreModal({ open, onClose, onCreated }: Props
 
         {/* Credentials screen — shown after successful creation */}
         {created && (() => {
-          const adminUrl = (typeof window !== 'undefined' ? window.location.origin : 'https://admin.dr7empire.com')
+          const adminUrl = (typeof window !== 'undefined' ? window.location.origin : 'https://dr7ai.com')
           const credsText = `Ciao ${created.nome},\n\nEcco le tue credenziali DR7 Admin:\nLink: ${adminUrl}\nEmail: ${created.email}\nPassword: ${created.password}\n\nPotrai cambiare la password dal tuo profilo dopo il primo accesso.`
           return (
             <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
