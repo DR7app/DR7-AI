@@ -407,7 +407,10 @@ export default function CargosTab() {
     const [bookings, setBookings] = useState<BookingForCargos[]>([])
     const [loading, setLoading] = useState(false)
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-    const [viewMode, setViewMode] = useState<'all' | 'date'>('all')
+    const [viewMode, setViewMode] = useState<'all' | 'date' | 'range'>('all')
+    // 2026-06-05: ricerca per intervallo di date (data inizio noleggio).
+    const [rangeFrom, setRangeFrom] = useState('')
+    const [rangeTo, setRangeTo] = useState('')
 
     // Send status
     const [sending, setSending] = useState(false)
@@ -501,6 +504,17 @@ export default function CargosTab() {
                 query = query
                     .gte('pickup_date', startOfDay.toISOString())
                     .lte('pickup_date', endOfDay.toISOString())
+            } else if (viewMode === 'range') {
+                // Intervallo data inizio noleggio (estremi inclusi). Applica solo
+                // i limiti impostati, così "solo da" o "solo a" funzionano comunque.
+                if (rangeFrom) {
+                    const start = new Date(rangeFrom); start.setHours(0, 0, 0, 0)
+                    query = query.gte('pickup_date', start.toISOString())
+                }
+                if (rangeTo) {
+                    const end = new Date(rangeTo); end.setHours(23, 59, 59, 999)
+                    query = query.lte('pickup_date', end.toISOString())
+                }
             }
 
             const { data: rawBookings, error } = await query
@@ -590,7 +604,7 @@ export default function CargosTab() {
         } finally {
             setLoading(false)
         }
-    }, [exportDate, viewMode])
+    }, [exportDate, viewMode, rangeFrom, rangeTo])
 
     // Auto-load bookings on mount and when filters change
     useEffect(() => {
@@ -1083,6 +1097,10 @@ export default function CargosTab() {
                                 onClick={() => setViewMode('date')}
                                 className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${viewMode === 'date' ? 'bg-dr7-gold text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
                             >Per data</button>
+                            <button
+                                onClick={() => setViewMode('range')}
+                                className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${viewMode === 'range' ? 'bg-dr7-gold text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover'}`}
+                            >Per intervallo</button>
                         </div>
                         {viewMode === 'date' && <div className="flex flex-col sm:flex-row items-end gap-3">
                             <div className="flex-1">
@@ -1090,6 +1108,21 @@ export default function CargosTab() {
                                 {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                                 <Input type="date" value={exportDate} onChange={(e: any) => setExportDate(e.target.value)} />
                             </div>
+                        </div>}
+                        {viewMode === 'range' && <div className="flex flex-col sm:flex-row items-end gap-3">
+                            <div className="flex-1">
+                                <label className="block text-xs font-medium text-theme-text-muted mb-1.5 uppercase tracking-wider">Dal (data inizio noleggio)</label>
+                                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                                <Input type="date" value={rangeFrom} max={rangeTo || undefined} onChange={(e: any) => setRangeFrom(e.target.value)} />
+                            </div>
+                            <div className="flex-1">
+                                <label className="block text-xs font-medium text-theme-text-muted mb-1.5 uppercase tracking-wider">Al</label>
+                                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                                <Input type="date" value={rangeTo} min={rangeFrom || undefined} onChange={(e: any) => setRangeTo(e.target.value)} />
+                            </div>
+                            {(rangeFrom || rangeTo) && (
+                                <button onClick={() => { setRangeFrom(''); setRangeTo('') }} className="px-3 py-2 text-xs text-theme-text-muted hover:text-theme-text-primary whitespace-nowrap">Azzera</button>
+                            )}
                         </div>}
                     </div>
 
