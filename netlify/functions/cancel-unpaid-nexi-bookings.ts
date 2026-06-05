@@ -137,13 +137,16 @@ const cancelHandler: Handler = async () => {
             console.log(`[cancel-unpaid-nexi] Cancelled booking ${booking.id} (${booking.customer_name}), link deactivated: ${linkDeactivated}`);
 
             // 3. Notify customer via WhatsApp — route attraverso templateKey
-            //    'website_booking_cancelled_customer' che risolve a
-            //    pro_annullamento_cliente (Messaggi di Sistema Pro).
-            //    2026-05-28: prima usava il legacy 'booking_cancelled_whatsapp'
-            //    con renderTemplate locale, quindi modificare il template Pro
-            //    NON cambiava il messaggio inviato dalla cron. Adesso entrambi
-            //    i path (manual delete + unpaid-nexi cron) usano lo stesso
-            //    template editabile da admin.
+            //    'booking_cancelled_whatsapp' che risolve a
+            //    pro_annullamento_cliente (Messaggi di Sistema Pro):
+            //    "...annullata poiché il sistema non ha rilevato l'avvenuto
+            //    pagamento." — il messaggio CORRETTO per il mancato pagamento.
+            //    2026-06-05 FIX: prima usava 'website_booking_cancelled_customer'
+            //    che, via handled_events, risolveva al template
+            //    "Prenotazione Annullata da sito" → "annullata come da Sua
+            //    richiesta". Sbagliato: il cliente NON ha richiesto nulla, il
+            //    link è semplicemente scaduto. Quel key resta per le
+            //    cancellazioni iniziate dal cliente sul sito.
             const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone;
             if (custPhone) {
                 try {
@@ -151,7 +154,7 @@ const cancelHandler: Handler = async () => {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            templateKey: 'website_booking_cancelled_customer',
+                            templateKey: 'booking_cancelled_whatsapp',
                             customPhone: custPhone,
                             isCustomerMessage: true,
                             booking: {
