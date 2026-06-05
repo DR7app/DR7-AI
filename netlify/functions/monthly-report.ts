@@ -246,25 +246,31 @@ async function generateVehicleReport(
     .gte('data_emissione', monthStartISO)
     .lte('data_emissione', monthEndISO)
 
-  // Build a map: booking_id -> array of penalty fatture
-  const fatturePenaltyMap = new Map<string, any[]>()
-  const fattureDanniMap = new Map<string, any[]>()
+  // Build maps: booking_id -> EUR sum of penali / danni.
+  // 2026-06-05 FIX: prima si sommava l'INTERO importo_totale della fattura sia
+  // ai penali sia ai danni se la fattura conteneva ANCHE un solo item di quel
+  // tipo. Una fattura mista (es. Michael Manca: Penale €500 + Danno €976 =
+  // €1476) finiva €1476 in penali E €1476 in danni — stesso importo doppiato.
+  // Ora si sommano gli importi PER SINGOLO ITEM in base alla descrizione.
+  const fatturePenaltyMap = new Map<string, number>()
+  const fattureDanniMap = new Map<string, number>()
   ;(fatture || []).forEach(f => {
     if (!f.booking_id) return
     const items = f.items || []
-    // Check if any item description contains penale/penalty or danno/danni
-    const hasPenalty = items.some((i: any) => /penal/i.test(i.description || ''))
-    const hasDanni = items.some((i: any) => /dann/i.test(i.description || ''))
-    if (hasPenalty) {
-      const arr = fatturePenaltyMap.get(f.booking_id) || []
-      arr.push(f)
-      fatturePenaltyMap.set(f.booking_id, arr)
-    }
-    if (hasDanni) {
-      const arr = fattureDanniMap.get(f.booking_id) || []
-      arr.push(f)
-      fattureDanniMap.set(f.booking_id, arr)
-    }
+    let penSum = 0
+    let danSum = 0
+    items.forEach((i: any) => {
+      const desc = i.description || ''
+      const amt = parseFloat(i.amountPaid ?? i.total ?? 0) || 0
+      if (amt <= 0) return
+      // "Penale - ..." → penali, "Danno - ..." → danni. Un item non puo'
+      // contare in entrambi (penal ha priorita', ma le descrizioni sono
+      // mutuamente esclusive nella pratica).
+      if (/penal/i.test(desc)) penSum += amt
+      else if (/dann/i.test(desc)) danSum += amt
+    })
+    if (penSum > 0) fatturePenaltyMap.set(f.booking_id, (fatturePenaltyMap.get(f.booking_id) || 0) + penSum)
+    if (danSum > 0) fattureDanniMap.set(f.booking_id, (fattureDanniMap.get(f.booking_id) || 0) + danSum)
   })
 
   // STEP 1: Filter to ONLY real rental bookings
@@ -609,21 +615,15 @@ async function generateVehicleReport(
         })
       }
 
-      // Also check fatture table for penalty/danni invoices not in booking_details
-      const penaltyFatture = fatturePenaltyMap.get(booking.id) || []
-      let bookingPenaltyFromFatture = 0
-      penaltyFatture.forEach((f: any) => {
-        bookingPenaltyFromFatture += parseFloat(f.importo_totale || 0)
-      })
+      // Also check fatture table for penalty/danni invoices not in booking_details.
+      // 2026-06-05: i valori sono gia' sommati PER ITEM (penale vs danno) nei
+      // map sopra, quindi una fattura mista non doppia piu' l'importo.
+      const bookingPenaltyFromFatture = fatturePenaltyMap.get(booking.id) || 0
       // Use the higher of the two sources (avoid double-counting)
       const bookingPenaltyAmount = Math.max(bookingPenaltyFromDetails, bookingPenaltyFromFatture)
       penaltyRevenue += bookingPenaltyAmount
 
-      const danniFatture = fattureDanniMap.get(booking.id) || []
-      let bookingDanniFromFatture = 0
-      danniFatture.forEach((f: any) => {
-        bookingDanniFromFatture += parseFloat(f.importo_totale || 0)
-      })
+      const bookingDanniFromFatture = fattureDanniMap.get(booking.id) || 0
       const bookingDanniAmount = Math.max(bookingDanniFromDetails, bookingDanniFromFatture)
       danniRevenue += bookingDanniAmount
 
