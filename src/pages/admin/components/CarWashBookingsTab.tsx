@@ -203,6 +203,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const [lookingUpTarga, setLookingUpTarga] = useState(false)
   const [showExistingPlatesList, setShowExistingPlatesList] = useState(false)
   const [existingPlatesSearch, setExistingPlatesSearch] = useState('')
+  // 2026-06-05: gestione lista targhe suggerite (storico Prime Wash).
+  // - Elimina = nascondi dai suggerimenti (reversibile, salvato in app_settings,
+  //   condiviso fra admin). Non tocca le prenotazioni.
+  // - Modifica = rinomina la targa su TUTTE le prenotazioni carwash che la hanno.
+  const [hiddenPlates, setHiddenPlates] = useState<Set<string>>(new Set())
+  const [editingPlate, setEditingPlate] = useState<string | null>(null)
+  const [editPlateValue, setEditPlateValue] = useState('')
+  const [plateActionBusy, setPlateActionBusy] = useState(false)
   const [targaVehicleInfo, setTargaVehicleInfo] = useState<{ brand?: string; model?: string; year?: string; fuel?: string; powerCV?: string } | null>(null)
   const [targaNotFound, setTargaNotFound] = useState(false)
   // OTP override for manual category selection
@@ -1045,6 +1053,87 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     setEditExtraPriceOptions(priceOpts)
     setEditExtraQuantities(qtys)
   }, [editingBooking, carWashServices])
+
+  // ── Gestione lista targhe suggerite ────────────────────────────────────────
+  const normPlate = (p: string) => String(p || '').toUpperCase().replace(/\s+/g, '').trim()
+
+  // Carica le targhe nascoste (condivise via app_settings).
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('app_settings').select('value').eq('key', 'carwash_hidden_plates').maybeSingle()
+      if (data?.value) {
+        try {
+          const arr = JSON.parse(data.value)
+          if (Array.isArray(arr)) setHiddenPlates(new Set(arr.map((p: string) => normPlate(p))))
+        } catch { /* valore non valido — ignora */ }
+      }
+    })()
+  }, [])
+
+  async function persistHiddenPlates(next: Set<string>) {
+    const { error } = await supabase.from('app_settings').upsert(
+      { key: 'carwash_hidden_plates', value: JSON.stringify([...next]), updated_at: new Date().toISOString() },
+      { onConflict: 'key' },
+    )
+    if (error) throw error
+  }
+
+  // Elimina dalla lista = nascondi dai suggerimenti (non tocca le prenotazioni).
+  async function hidePlateFromList(plate: string) {
+    const norm = normPlate(plate)
+    const prev = hiddenPlates
+    const next = new Set(prev); next.add(norm)
+    setHiddenPlates(next)
+    try { await persistHiddenPlates(next); toast.success(`Targa ${norm} rimossa dai suggerimenti`) }
+    catch { setHiddenPlates(prev); toast.error('Errore: targa non rimossa') }
+  }
+
+  // Ripristina tutte le targhe nascoste.
+  async function restoreHiddenPlates() {
+    const prev = hiddenPlates
+    setHiddenPlates(new Set())
+    try { await persistHiddenPlates(new Set()); toast.success('Targhe nascoste ripristinate') }
+    catch { setHiddenPlates(prev); toast.error('Errore nel ripristino') }
+  }
+
+  // Modifica = rinomina la targa su TUTTE le prenotazioni carwash che la hanno.
+  async function renamePlateEverywhere(oldPlate: string, newRaw: string) {
+    const oldNorm = normPlate(oldPlate)
+    const newNorm = normPlate(newRaw)
+    if (!newNorm) { toast.error('Targa non valida'); return }
+    if (newNorm === oldNorm) { setEditingPlate(null); setEditPlateValue(''); return }
+    setPlateActionBusy(true)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const matches = (bookings as any[]).filter((b) => {
+        const bd = b.booking_details || {}
+        const p = normPlate(b.vehicle_plate || bd.vehicle_plate || bd.targa || bd.plate || bd.vehicle?.plate || bd.vehicle?.targa || '')
+        return p === oldNorm
+      })
+      if (matches.length === 0) { toast.error('Nessuna prenotazione con questa targa'); setPlateActionBusy(false); return }
+      for (const b of matches) {
+        const bd = { ...(b.booking_details || {}) }
+        if (normPlate(bd.vehicle_plate) === oldNorm) bd.vehicle_plate = newNorm
+        if (normPlate(bd.targa) === oldNorm) bd.targa = newNorm
+        if (normPlate(bd.plate) === oldNorm) bd.plate = newNorm
+        if (bd.vehicle) {
+          const v = { ...bd.vehicle }
+          if (normPlate(v.plate) === oldNorm) v.plate = newNorm
+          if (normPlate(v.targa) === oldNorm) v.targa = newNorm
+          bd.vehicle = v
+        }
+        const { error } = await supabase.from('bookings').update({ vehicle_plate: newNorm, booking_details: bd }).eq('id', b.id)
+        if (error) throw error
+      }
+      toast.success(`Targa ${oldNorm} → ${newNorm} aggiornata su ${matches.length} prenotazion${matches.length === 1 ? 'e' : 'i'}`)
+      setEditingPlate(null); setEditPlateValue('')
+      await loadData()
+    } catch {
+      toast.error('Errore aggiornamento targa')
+    } finally {
+      setPlateActionBusy(false)
+    }
+  }
 
   async function loadData() {
     setLoading(true)
@@ -3335,7 +3424,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             || bd.vehicle?.targa
                             || ''
                         const plate = String(rawPlate).toUpperCase().replace(/\s+/g, '').trim()
-                        if (!plate || seen.has(plate)) return null
+                        if (!plate || seen.has(plate) || hiddenPlates.has(plate)) return null
                         seen.add(plate)
                         return {
                             plate,
@@ -3373,42 +3462,79 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                               {q ? 'Nessuna corrispondenza.' : 'Nessuna targa nello storico Prime Wash.'}
                             </div>
                           ) : (
-                            filtered.slice(0, 100).map((v, i) => (
-                              <button
+                            filtered.slice(0, 100).map((v, i) => {
+                              const isEditing = editingPlate === v.plate
+                              return (
+                              <div
                                 key={`${v.plate}-${i}`}
-                                type="button"
-                                onClick={() => {
-                                  setVehiclePlate(v.plate)
-                                  if (v.makeModel && !vehicleMakeModel) setVehicleMakeModel(v.makeModel)
-                                  setShowExistingPlatesList(false)
-                                  setExistingPlatesSearch('')
-                                  // Riconoscimento automatico subito dopo selezione
-                                  setTimeout(() => {
-                                    const btn = document.querySelector<HTMLButtonElement>('button[data-targa-lookup]')
-                                    if (btn) btn.click()
-                                  }, 50)
-                                }}
-                                className="w-full px-3 py-2 text-left hover:bg-theme-bg-tertiary border-b border-theme-border/30 last:border-b-0 flex items-center justify-between gap-2"
+                                className="px-3 py-2 hover:bg-theme-bg-tertiary border-b border-theme-border/30 last:border-b-0"
                               >
-                                <div className="min-w-0 flex-1">
+                                {isEditing ? (
                                   <div className="flex items-center gap-2">
-                                    <span className="font-mono font-bold text-dr7-gold text-sm">{v.plate}</span>
-                                    {v.makeModel && (
-                                      <span className="text-xs text-theme-text-secondary truncate">{v.makeModel}</span>
-                                    )}
+                                    <input
+                                      autoFocus
+                                      value={editPlateValue}
+                                      onChange={(e) => setEditPlateValue(e.target.value.toUpperCase())}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') renamePlateEverywhere(v.plate, editPlateValue)
+                                        if (e.key === 'Escape') { setEditingPlate(null); setEditPlateValue('') }
+                                      }}
+                                      placeholder="Nuova targa"
+                                      className="flex-1 min-w-0 px-2 py-1 text-sm font-mono bg-theme-bg-tertiary border border-dr7-gold rounded text-theme-text-primary focus:outline-none"
+                                    />
+                                    <button type="button" disabled={plateActionBusy} onClick={() => renamePlateEverywhere(v.plate, editPlateValue)} className="text-xs font-semibold text-emerald-500 px-2 py-1 disabled:opacity-50">Salva</button>
+                                    <button type="button" onClick={() => { setEditingPlate(null); setEditPlateValue('') }} className="text-xs text-theme-text-muted px-1 py-1">Annulla</button>
                                   </div>
-                                  {v.customerName && (
-                                    <div className="text-[11px] text-theme-text-muted truncate">{v.customerName}</div>
-                                  )}
-                                </div>
-                                <svg className="w-3.5 h-3.5 text-theme-text-muted flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                              </button>
-                            ))
+                                ) : (
+                                  <div className="flex items-center justify-between gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setVehiclePlate(v.plate)
+                                        if (v.makeModel && !vehicleMakeModel) setVehicleMakeModel(v.makeModel)
+                                        setShowExistingPlatesList(false)
+                                        setExistingPlatesSearch('')
+                                        // Riconoscimento automatico subito dopo selezione
+                                        setTimeout(() => {
+                                          const btn = document.querySelector<HTMLButtonElement>('button[data-targa-lookup]')
+                                          if (btn) btn.click()
+                                        }, 50)
+                                      }}
+                                      className="min-w-0 flex-1 text-left"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-mono font-bold text-dr7-gold text-sm">{v.plate}</span>
+                                        {v.makeModel && (
+                                          <span className="text-xs text-theme-text-secondary truncate">{v.makeModel}</span>
+                                        )}
+                                      </div>
+                                      {v.customerName && (
+                                        <div className="text-[11px] text-theme-text-muted truncate">{v.customerName}</div>
+                                      )}
+                                    </button>
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                      <button type="button" title="Modifica targa (aggiorna tutte le prenotazioni)" onClick={() => { setEditingPlate(v.plate); setEditPlateValue(v.plate) }} className="p-1.5 rounded hover:bg-theme-bg-hover text-theme-text-muted hover:text-dr7-gold">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                      </button>
+                                      <button type="button" title="Rimuovi dai suggerimenti" onClick={() => hidePlateFromList(v.plate)} className="p-1.5 rounded hover:bg-red-500/10 text-theme-text-muted hover:text-red-500">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                              )
+                            })
                           )}
                         </div>
-                        <div className="px-3 py-1.5 text-[10px] text-theme-text-muted border-t border-theme-border flex justify-between">
-                          <span>{filtered.length} targh{filtered.length === 1 ? 'a' : 'e'} {q ? 'filtrate' : 'totali'}</span>
-                          <button type="button" onClick={() => setShowExistingPlatesList(false)} className="hover:text-theme-text-primary">Chiudi</button>
+                        <div className="px-3 py-1.5 text-[10px] text-theme-text-muted border-t border-theme-border flex justify-between items-center gap-2">
+                          <span className="truncate">
+                            {filtered.length} targh{filtered.length === 1 ? 'a' : 'e'} {q ? 'filtrate' : 'totali'}
+                            {hiddenPlates.size > 0 && (
+                              <> · <button type="button" onClick={restoreHiddenPlates} className="underline hover:text-theme-text-primary">{hiddenPlates.size} nascoste — ripristina</button></>
+                            )}
+                          </span>
+                          <button type="button" onClick={() => setShowExistingPlatesList(false)} className="hover:text-theme-text-primary flex-shrink-0">Chiudi</button>
                         </div>
                       </div>
                     )
