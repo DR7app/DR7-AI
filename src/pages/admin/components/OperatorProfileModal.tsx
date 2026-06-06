@@ -11,7 +11,7 @@
  * lavorati, minuti pausa), then renders the same visual language
  * already used in the team dashboard.
  */
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
@@ -81,6 +81,12 @@ export default function OperatorProfileModal({
     onClose: () => void
 }) {
     const [period, setPeriod] = useState<Period>('30gg')
+    // 2026-06-06: il periodo di default di "Calcola Paga" deve rispecchiare la
+    // frequenza di stipendio del contratto: operatore pagato a SETTIMANA
+    // (stipendio_frequenza='settimanale', es. Ophelie) → default 7 giorni, non
+    // 30. Applicato UNA sola volta al caricamento del contratto; dopo l'utente
+    // puo' cambiare liberamente i pulsanti periodo.
+    const autoPeriodApplied = useRef(false)
     const [customFrom, setCustomFrom] = useState<string>(() => {
         const d = new Date(); d.setDate(d.getDate() - 29)
         return toRomeDate(d)
@@ -105,12 +111,19 @@ export default function OperatorProfileModal({
         ;(async () => {
             const { data } = await supabase
                 .from('operatore_contratto')
-                .select('ore_target_giornaliere, ore_target_settimanali, ore_target_mensili')
+                .select('ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, stipendio_frequenza')
                 .eq('operatore_id', operatore.id)
                 .eq('attivo', true)
                 .maybeSingle()
             if (cancelled) return
-            const c = data as { ore_target_giornaliere?: number | null; ore_target_settimanali?: number | null; ore_target_mensili?: number | null } | null
+            const c = data as { ore_target_giornaliere?: number | null; ore_target_settimanali?: number | null; ore_target_mensili?: number | null; stipendio_frequenza?: 'settimanale' | 'mensile' | null } | null
+            // 2026-06-06: default periodo Calcola Paga dalla frequenza stipendio.
+            // settimanale → 7gg, mensile → 30gg (default gia' impostato). Solo
+            // al primo caricamento, cosi' non sovrascrive le scelte dell'utente.
+            if (!autoPeriodApplied.current) {
+                autoPeriodApplied.current = true
+                if (c?.stipendio_frequenza === 'settimanale') setPeriod('7gg')
+            }
             if (c?.ore_target_giornaliere && c.ore_target_giornaliere > 0) {
                 setTargetGran('giornaliera')
                 setTargetValueHours(c.ore_target_giornaliere)
