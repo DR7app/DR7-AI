@@ -117,7 +117,7 @@ async function handleBulkEvaluate(body: any, origin?: string) {
 
   // Cap at 100 to avoid timeouts
   const ids = sourceRecordIds.slice(0, 100);
-  const evaluateUrl = `${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/review-evaluate-candidate`;
+  const evaluateUrl = `${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/review-evaluate-candidate`;
 
   const results: Array<{ sourceRecordId: string; success: boolean; candidate?: any; error?: string }> = [];
 

@@ -106,9 +106,9 @@ const handler: Handler = async (event) => {
         actionType: 'PAY',
         amount: amountCents.toString(),
         language: 'ita',
-        resultUrl: `${process.env.URL || 'https://dr7admin.netlify.app'}/referral?topup=success&order=${orderId}`,
-        cancelUrl: `${process.env.URL || 'https://dr7admin.netlify.app'}/referral?topup=cancelled&order=${orderId}`,
-        notificationUrl: `${process.env.URL || 'https://dr7admin.netlify.app'}/.netlify/functions/referral-topup-callback`,
+        resultUrl: `${process.env.URL || 'https://platform.dr7ai.com'}/referral?topup=success&order=${orderId}`,
+        cancelUrl: `${process.env.URL || 'https://platform.dr7ai.com'}/referral?topup=cancelled&order=${orderId}`,
+        notificationUrl: `${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/referral-topup-callback`,
       },
     };
 

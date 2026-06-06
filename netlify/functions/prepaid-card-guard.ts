@@ -237,7 +237,7 @@ export async function notifyPrepaidBlocked(params: {
     bookingRef?: string
     amount?: string
 }) {
-    const baseUrl = process.env.URL || 'https://dr7ai.com'
+    const baseUrl = process.env.URL || 'https://platform.dr7ai.com'
 
     // Notify customer — body EXCLUSIVELY from Messaggi di Sistema Pro.
     if (params.customerPhone) {

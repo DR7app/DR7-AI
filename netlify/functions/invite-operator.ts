@@ -83,7 +83,7 @@ const handler: Handler = async (event) => {
   //    dal proprio profilo (/reset-password classico).
   //  - password assente → inviteUserByEmail, l'operatore riceve un'email
   //    con un link per impostare la sua password (flusso storico).
-  const baseUrl = process.env.URL || 'https://dr7ai.com'
+  const baseUrl = process.env.URL || 'https://platform.dr7ai.com'
   const redirectTo = `${baseUrl}/reset-password`
 
   let newUserId: string

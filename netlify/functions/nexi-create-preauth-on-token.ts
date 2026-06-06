@@ -52,7 +52,7 @@ const handler: Handler = async (event) => {
 
         const orderId = `PT${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.slice(0, 18)
         const amountCents = Math.round(amount * 100)
-        const siteUrl = process.env.URL || 'https://dr7ai.com'
+        const siteUrl = process.env.URL || 'https://platform.dr7ai.com'
 
         // Link scade in expirationHours (default 24h) per pagamento;
         // l'auth hold poi resta secondo le regole del circuito carte.

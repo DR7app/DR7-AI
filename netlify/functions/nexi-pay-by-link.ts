@@ -109,9 +109,9 @@ const handler: Handler = async (event) => {
                 amount: amountCents.toString(),
                 language: 'ita',
                 expirationDate: nexiExpirationStr,
-                resultUrl: `${process.env.URL || 'https://dr7ai.com'}/payment-success?order=${orderId}`,
-                cancelUrl: `${process.env.URL || 'https://dr7ai.com'}/payment-cancelled?order=${orderId}`,
-                notificationUrl: `${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/nexi-payment-callback`,
+                resultUrl: `${process.env.URL || 'https://platform.dr7ai.com'}/payment-success?order=${orderId}`,
+                cancelUrl: `${process.env.URL || 'https://platform.dr7ai.com'}/payment-cancelled?order=${orderId}`,
+                notificationUrl: `${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/nexi-payment-callback`,
                 // Tokenize the card on every successful pay-by-link payment
                 // so that future merchant-initiated charges (sforo, danni,
                 // addebiti) can run against the same card without asking

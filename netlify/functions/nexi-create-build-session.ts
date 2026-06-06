@@ -60,7 +60,7 @@ export const handler: Handler = async (event) => {
 
     // Website payment page URL
     const websiteBase = 'https://dr7.app'
-    const adminBase = process.env.URL || 'https://dr7ai.com'
+    const adminBase = process.env.URL || 'https://platform.dr7ai.com'
 
     // Create XPay Build session
     const buildUrl = `${NEXI_BASE_URL}/orders/build`

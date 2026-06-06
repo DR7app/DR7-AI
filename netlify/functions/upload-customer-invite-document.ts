@@ -98,7 +98,7 @@ const handler: Handler = async (event) => {
 
         // Best-effort: kick off auto-verify in the background
         try {
-            const baseUrl = process.env.URL || 'https://dr7ai.com'
+            const baseUrl = process.env.URL || 'https://platform.dr7ai.com'
             await fetch(`${baseUrl}/.netlify/functions/auto-verify-document`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

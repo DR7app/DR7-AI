@@ -241,7 +241,7 @@ const handler: Handler = async (event) => {
                         const rbDescription = transaction.description || `${rbCausale} DR7 — ${rbVehicle || 'Prenotazione'} — ${rbName}`;
 
                         // Generate a fresh Pay-by-Link (1-hour expiry, same as admin flow)
-                        const linkRes = await fetch(`${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/nexi-pay-by-link`, {
+                        const linkRes = await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/nexi-pay-by-link`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -298,7 +298,7 @@ const handler: Handler = async (event) => {
                                 if (retryMsg === null) {
                                     console.warn('[nexi-payment-callback] Template "pro_richiesta_pagamento" missing/disabled — skipping auto-retry send');
                                 } else {
-                                    await fetch(`${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/send-whatsapp-notification`, {
+                                    await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/send-whatsapp-notification`, {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({
@@ -435,7 +435,7 @@ const handler: Handler = async (event) => {
                         allItems.push({ label: paymentPurpose === 'danni' ? 'Danni' : 'Penali', amount: transaction.amount_cents / 100, quantity: 1 });
                     }
 
-                    const invoiceRes = await fetch(`${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/generate-penalty-invoice`, {
+                    const invoiceRes = await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/generate-penalty-invoice`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
                         body: JSON.stringify({
@@ -479,7 +479,7 @@ const handler: Handler = async (event) => {
                     if (customerMsg === null) {
                         console.log('[nexi-payment-callback] Template "payment_received_damages" missing/disabled — skipping send');
                     } else {
-                        await fetch(`${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/send-whatsapp-notification`, {
+                        await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/send-whatsapp-notification`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -593,7 +593,7 @@ const handler: Handler = async (event) => {
                 // nessuno se ne accorgesse.
                 try {
                     const extensionAmountEur = transaction.amount_cents / 100;
-                    const invRes = await fetch(`${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/generate-invoice-from-booking`, {
+                    const invRes = await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/generate-invoice-from-booking`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
                         body: JSON.stringify({ bookingId: booking.id, includeIVA: true, extensionAmount: extensionAmountEur })
@@ -614,7 +614,7 @@ const handler: Handler = async (event) => {
                 // l'auto-fattura non aggiorna i campi durata. Stesso pattern
                 // del flusso topup qui sotto.
                 try {
-                    const contractRes = await fetch(`${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/generate-contract`, {
+                    const contractRes = await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/generate-contract`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
                         body: JSON.stringify({ bookingId: booking.id })
@@ -629,7 +629,7 @@ const handler: Handler = async (event) => {
                             .limit(1)
                             .maybeSingle();
                         if (contractRow?.id) {
-                            await fetch(`${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/signature-init`, {
+                            await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/signature-init`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ contractId: contractRow.id, bookingId: booking.id })
@@ -657,7 +657,7 @@ const handler: Handler = async (event) => {
                     if (customerMsg === null) {
                         console.log('[nexi-payment-callback] Template "payment_received_extension" missing/disabled — skipping send');
                     } else {
-                        await fetch(`${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/send-whatsapp-notification`, {
+                        await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/send-whatsapp-notification`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -678,7 +678,7 @@ const handler: Handler = async (event) => {
                             .eq('id', booking.id)
                             .single();
                         if (fullBooking) {
-                            await fetch(`${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/send-whatsapp-notification`, {
+                            await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/send-whatsapp-notification`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
@@ -808,7 +808,7 @@ const handler: Handler = async (event) => {
 
                         // Contratto figlia + signature-init. NESSUNA fattura figlia.
                         try {
-                            const cRes = await fetch(`${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/generate-contract`, {
+                            const cRes = await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/generate-contract`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
                                 body: JSON.stringify({ bookingId: child.id })
@@ -822,7 +822,7 @@ const handler: Handler = async (event) => {
                                     .limit(1)
                                     .maybeSingle();
                                 if (cRow?.id) {
-                                    await fetch(`${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/signature-init`, {
+                                    await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/signature-init`, {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({ contractId: cRow.id, bookingId: child.id })
@@ -857,7 +857,7 @@ const handler: Handler = async (event) => {
                 // (saldo genitore + estensione/i). Le voci/descrizione le costruisce
                 // generate-invoice-from-booking dal booking, spiegando cos'è.
                 try {
-                    await fetch(`${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/generate-invoice-from-booking`, {
+                    await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/generate-invoice-from-booking`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
                         body: JSON.stringify({ bookingId: booking.id, includeIVA: true, extensionAmount: topupAmountEur })
@@ -871,7 +871,7 @@ const handler: Handler = async (event) => {
                 // and re-send the signing link (old signed version was already
                 // cleared by generate-contract).
                 try {
-                    const contractRes = await fetch(`${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/generate-contract`, {
+                    const contractRes = await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/generate-contract`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
                         body: JSON.stringify({ bookingId: booking.id })
@@ -888,7 +888,7 @@ const handler: Handler = async (event) => {
                             .limit(1)
                             .maybeSingle();
                         if (contractRow?.id) {
-                            await fetch(`${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/signature-init`, {
+                            await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/signature-init`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ contractId: contractRow.id, bookingId: booking.id })
@@ -913,7 +913,7 @@ const handler: Handler = async (event) => {
                     const amountEur = topupAmountEur.toFixed(2);
                     const customerMsg = await renderTemplate('payment_received_extension', { custName, amountEur });
                     if (customerMsg) {
-                        await fetch(`${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/send-whatsapp-notification`, {
+                        await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/send-whatsapp-notification`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ customPhone: custPhone, customMessage: customerMsg })
@@ -932,7 +932,7 @@ const handler: Handler = async (event) => {
                             .eq('id', booking.id)
                             .single();
                         if (fullBooking) {
-                            await fetch(`${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/send-whatsapp-notification`, {
+                            await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/send-whatsapp-notification`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
@@ -1206,7 +1206,7 @@ const handler: Handler = async (event) => {
 
                 // Send booking confirmation to customer via WhatsApp — uses Messaggi di Sistema templates
                 const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone;
-                const baseUrl = process.env.URL || 'https://dr7ai.com';
+                const baseUrl = process.env.URL || 'https://platform.dr7ai.com';
                 if (custPhone) {
                     // Mark payment as received so templates render "Pagato" via payment_status
                     const bookingForMsg = { ...booking, payment_status: 'succeeded', payment_method: booking.payment_method || 'Nexi Pay by Link' };
@@ -1292,7 +1292,7 @@ const handler: Handler = async (event) => {
                     }
 
                     try {
-                    const baseUrl = process.env.URL || 'https://dr7ai.com';
+                    const baseUrl = process.env.URL || 'https://platform.dr7ai.com';
                     const contractRes = await fetch(`${baseUrl}/.netlify/functions/generate-contract`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1338,7 +1338,7 @@ const handler: Handler = async (event) => {
                 // Auto-generate fattura for paid booking
                 try {
                     const adminToken = process.env.ADMIN_API_TOKEN || '';
-                    const invRes = await fetch(`${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/generate-invoice-from-booking`, {
+                    const invRes = await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/generate-invoice-from-booking`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1486,7 +1486,7 @@ const handler: Handler = async (event) => {
                                 if (customerMsg === null) {
                                     console.log('[nexi-payment-callback] Template "wallet_bonus_credit" missing/disabled — skipping send');
                                 } else {
-                                    await fetch(`${process.env.URL || 'https://dr7ai.com'}/.netlify/functions/send-whatsapp-notification`, {
+                                    await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/send-whatsapp-notification`, {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({

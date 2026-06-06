@@ -27,7 +27,7 @@ export const handler: Handler = async (event) => {
     const { bookingId } = JSON.parse(event.body || '{}')
     if (!bookingId) return { statusCode: 400, headers, body: '{"error":"Missing bookingId"}' }
 
-    const baseUrl = process.env.URL || 'https://dr7ai.com'
+    const baseUrl = process.env.URL || 'https://platform.dr7ai.com'
     const authHeader = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN}` }
 
     // Verify booking exists

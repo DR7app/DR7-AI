@@ -10,6 +10,8 @@ const supabase = createClient(supabaseUrl, supabaseServiceRoleKey)
 const ALLOWED_ORIGINS = [
   // 2026-06-05: migrazione dominio (admin -> dr7ai.com, sito -> dr7.app).
   // Additivo: nuovi e vecchi domini insieme durante la transizione.
+  // 2026-06-06: admin ora su platform.dr7ai.com (dr7ai.com = landing CRM).
+  'https://platform.dr7ai.com',
   'https://dr7ai.com',
   'https://www.dr7ai.com',
   'https://dr7.app',

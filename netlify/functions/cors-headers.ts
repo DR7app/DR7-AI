@@ -8,6 +8,9 @@ const ALLOWED_ORIGINS = [
   // Aggiunti A FIANCO dei vecchi così entrambi funzionano durante la
   // transizione. dr7.app deve essere qui perché il SITO chiama funzioni
   // dell'admin (post-booking-webhook, nexi-pay-by-link).
+  // 2026-06-06: l'admin ora gira su platform.dr7ai.com (dr7ai.com e' la landing
+  // CRM). Messo PRIMO così e' anche l'origin di fallback di getCorsOrigin.
+  'https://platform.dr7ai.com',
   'https://dr7ai.com',
   'https://www.dr7ai.com',
   'https://dr7.app',
