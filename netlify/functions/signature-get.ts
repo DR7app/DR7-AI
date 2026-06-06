@@ -20,7 +20,7 @@ export const handler: Handler = async (event) => {
         // Fetch signature request
         const { data: sigRequest, error } = await supabase
             .from('signature_requests')
-            .select('id, contract_id, signer_name, signer_email, status, token_expires_at, signed_pdf_url, signed_at, document_url, document_name')
+            .select('id, contract_id, booking_id, signer_name, signer_email, status, token_expires_at, signed_pdf_url, signed_at, document_url, document_name')
             .eq('token', token)
             .single()
 
@@ -42,12 +42,32 @@ export const handler: Handler = async (event) => {
         let secondDriverName: string | null = null
         let existingMarketingConsent: boolean | null = null
 
-        if (sigRequest.contract_id) {
-            const { data: contractData } = await supabase
-                .from('contracts')
-                .select('contract_number, pdf_url, customer_name, vehicle_name, rental_start_date, rental_end_date, booking_id')
-                .eq('id', sigRequest.contract_id)
-                .single()
+        if (sigRequest.contract_id || sigRequest.booking_id) {
+            // 2026-06-06: mostra SEMPRE la riga contratto più recente della
+            // prenotazione (allineato a signature-init/-complete). Così, anche
+            // se la richiesta è stata creata puntando a una riga vecchia o
+            // l'admin ha rigenerato il contratto dopo l'invio, Trustera carica
+            // la versione aggiornata e non quella obsoleta.
+            const COLS = 'id, contract_number, pdf_url, customer_name, vehicle_name, rental_start_date, rental_end_date, booking_id'
+            let contractData: any = null
+            if (sigRequest.booking_id) {
+                const { data } = await supabase
+                    .from('contracts')
+                    .select(COLS)
+                    .eq('booking_id', sigRequest.booking_id)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle()
+                contractData = data
+            }
+            if (!contractData && sigRequest.contract_id) {
+                const { data } = await supabase
+                    .from('contracts')
+                    .select(COLS)
+                    .eq('id', sigRequest.contract_id)
+                    .maybeSingle()
+                contractData = data
+            }
             contract = contractData
 
             // Check if booking has a second driver, and fetch existing marketing consent

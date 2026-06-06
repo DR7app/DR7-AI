@@ -152,6 +152,30 @@ export const handler: Handler = async (event) => {
 
         console.log(`[signature-init] Using contract id=${contract.id} number="${contract.contract_number}" booking_id="${contract.booking_id}"`)
 
+        // 2026-06-06: NORMALIZZA alla riga contratto PIÙ RECENTE della
+        // prenotazione. Una prenotazione può avere più righe in `contracts`
+        // (duplicati legacy: booking_id ha un indice ma NESSUN vincolo unique).
+        // generate-contract aggiorna SEMPRE la riga più recente per created_at,
+        // ma il contractId passato dalla UI (ContrattoTab ordina per updated_at)
+        // può puntare a una versione VECCHIA. Se la firma partisse da quella,
+        // Trustera mostrerebbe il PDF vecchio anche dopo 10 rigenerazioni.
+        // Allineiamo init → get → complete sulla stessa riga (la più recente)
+        // così PDF e original_pdf_hash combaciano sempre con la versione fresca.
+        const latestBookingId = bookingId || contract.booking_id
+        if (latestBookingId) {
+            const { data: latestContract } = await supabase
+                .from('contracts')
+                .select('*')
+                .eq('booking_id', latestBookingId)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle()
+            if (latestContract && latestContract.id !== contract.id) {
+                console.log(`[signature-init] Overriding stale contract ${contract.id} → latest ${latestContract.id} (booking ${latestBookingId})`)
+            }
+            if (latestContract) contract = latestContract
+        }
+
         // Refuse to send a signing link for a cancelled booking. Otherwise the
         // customer keeps receiving "Firma il contratto" WhatsApp messages for a
         // rental that no longer exists. This is the single bottleneck — every

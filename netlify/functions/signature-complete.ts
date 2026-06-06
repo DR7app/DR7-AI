@@ -58,16 +58,34 @@ export const handler: Handler = async (event) => {
         let pdfUrl: string | null = null
         let docIdentifier: string = sigRequest.id
 
-        if (sigRequest.contract_id) {
-            const { data: contractData } = await supabase
-                .from('contracts')
-                .select('*')
-                .eq('id', sigRequest.contract_id)
-                .single()
+        if (sigRequest.contract_id || sigRequest.booking_id) {
+            // 2026-06-06: firma SEMPRE la riga contratto più recente della
+            // prenotazione (allineato a signature-init/-get). Evita di firmare
+            // una versione vecchia quando esistono righe duplicate o il
+            // contratto è stato rigenerato dopo l'invio del link.
+            let contractData: any = null
+            if (sigRequest.booking_id) {
+                const { data } = await supabase
+                    .from('contracts')
+                    .select('*')
+                    .eq('booking_id', sigRequest.booking_id)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle()
+                contractData = data
+            }
+            if (!contractData && sigRequest.contract_id) {
+                const { data } = await supabase
+                    .from('contracts')
+                    .select('*')
+                    .eq('id', sigRequest.contract_id)
+                    .maybeSingle()
+                contractData = data
+            }
             contract = contractData
             pdfUrl = contract?.pdf_url
             docIdentifier = contract?.contract_number || sigRequest.contract_id
-            console.log(`[signature-complete] contract_id=${sigRequest.contract_id} pdf_url=${pdfUrl} signed_pdf_url(before)=${contract?.signed_pdf_url}`)
+            console.log(`[signature-complete] resolved contract id=${contract?.id} (req.contract_id=${sigRequest.contract_id} booking_id=${sigRequest.booking_id}) pdf_url=${pdfUrl} signed_pdf_url(before)=${contract?.signed_pdf_url}`)
         } else {
             // Standalone document
             pdfUrl = sigRequest.document_url
@@ -319,15 +337,17 @@ export const handler: Handler = async (event) => {
             })
             .eq('id', sigRequest.id)
 
-        // Update contract record (only if this is a contract-based signature)
-        if (sigRequest.contract_id) {
+        // Update contract record (only if this is a contract-based signature).
+        // Usa la riga RISOLTA (la più recente) — non il contract_id grezzo della
+        // richiesta, che potrebbe puntare a una riga duplicata vecchia.
+        if (contract?.id) {
             await supabase
                 .from('contracts')
                 .update({
                     signed_pdf_url: signedPdfUrl,
                     updated_at: signedAt.toISOString()
                 })
-                .eq('id', sigRequest.contract_id)
+                .eq('id', contract.id)
         }
 
         // Log final audit event
