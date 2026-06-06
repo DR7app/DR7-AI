@@ -9,31 +9,50 @@ function getDaysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate()
 }
 
-// Build a set of day numbers (1..N) from a date range overlapping the month
-function getDaySet(
-  start: Date,
-  end: Date,
-  monthStart: Date,
-  monthEnd: Date
-): Set<number> {
-  const days = new Set<number>()
-  const overlapStart = start > monthStart ? start : monthStart
-  const overlapEnd = end < monthEnd ? end : monthEnd
-  if (overlapStart > overlapEnd) return days
-  const cursor = new Date(overlapStart)
-  cursor.setHours(0, 0, 0, 0)
-  const endDay = new Date(overlapEnd)
-  endDay.setHours(0, 0, 0, 0)
-  // Exclude the last day (dropoff day = return day, not a rental day)
-  while (cursor < endDay) {
-    days.add(cursor.getDate())
-    cursor.setDate(cursor.getDate() + 1)
+// 2026-06-06: indici-giorno occupati DENTRO la finestra [fromISO, toISO]
+// (entrambi inclusivi come giorni interi). Sostituisce la vecchia logica a
+// "numero del giorno del mese" (1..31) che era ANCORATA A UN SOLO MESE (il mese
+// FROM): per i range a cavallo di piu' mesi — incluso il preset "Anno" — le
+// prenotazioni del secondo mese venivano scartate o conteggiate con numeri di
+// giorno errati (collisione tra es. 20-maggio e 20-giugno).
+//
+// Regole preservate dal vecchio calcolo:
+//  - giorno di RICONSEGNA escluso (l'auto rientra quel giorno → disponibile)
+//  - prenotazione mono-giorno (pickup == dropoff) = 1 giorno
+//  - clamp alla finestra del periodo
+// Gli indici sono relativi a fromISO (0 = primo giorno della finestra), quindi
+// sono UNICI su tutto il periodo. UTC-safe (niente problemi di DST).
+function occupiedDayIndices(startISO: string, endISO: string, fromISO: string, toISO: string): number[] {
+  const DAY = 86400000
+  const [sY, sM, sD] = startISO.substring(0, 10).split('-').map(Number)
+  const [eY, eM, eD] = endISO.substring(0, 10).split('-').map(Number)
+  const [fY, fM, fD] = fromISO.split('-').map(Number)
+  const [tY, tM, tD] = toISO.split('-').map(Number)
+  const startMs = Date.UTC(sY, sM - 1, sD)
+  const endMs = Date.UTC(eY, eM - 1, eD)
+  const fromMs = Date.UTC(fY, fM - 1, fD)
+  const toMs = Date.UTC(tY, tM - 1, tD)
+  // Ultima NOTTE occupata = giorno prima della riconsegna; mono-giorno → 1 notte.
+  let lastOccMs = endMs - DAY
+  if (lastOccMs < startMs) lastOccMs = startMs
+  // Interseca [startMs, lastOccMs] con la finestra [fromMs, toMs].
+  const lo = Math.max(startMs, fromMs)
+  const hi = Math.min(lastOccMs, toMs)
+  const out: number[] = []
+  for (let ms = lo; ms <= hi; ms += DAY) {
+    out.push(Math.round((ms - fromMs) / DAY))
   }
-  // If start == end (same-day booking), count at least 1 day
-  if (days.size === 0) {
-    days.add(overlapStart.getDate())
-  }
-  return days
+  return out
+}
+
+// Formatta una Date come ISO locale YYYY-MM-DD (NO toISOString che converte in
+// UTC e sposta -1 giorno per Europe/Rome). Usata per portare le date di
+// manutenzione nello stesso spazio "indici-giorno" del noleggio.
+function dateToISOLocal(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 /**
@@ -424,55 +443,37 @@ async function generateVehicleReport(
       const pickupDate = pickupDateRaw.substring(0, 10)
       const dropoffDate = dropoffDateRaw.substring(0, 10)
 
-      // Parse to numbers
-      const pYear = parseInt(pickupDate.substring(0, 4))
-      const pMonth = parseInt(pickupDate.substring(5, 7))
-      const pDay = parseInt(pickupDate.substring(8, 10))
+      // Total booking days for revenue proration (shared function, UTC-safe)
+      const totalBookingDays = computeBillableDays(pickupDateRaw, dropoffDateRaw)
 
-      const dYear = parseInt(dropoffDate.substring(0, 4))
-      const dMonth = parseInt(dropoffDate.substring(5, 7))
-      const dDay = parseInt(dropoffDate.substring(8, 10))
+      // 2026-06-06: occupazione calcolata su INDICI-GIORNO assoluti della
+      // finestra [from,to], NON piu' su numeri del giorno del mese ancorati a
+      // un singolo mese. Cosi' i range a cavallo di piu' mesi (incl. il preset
+      // "Anno", che prima conteggiava solo gennaio) contano TUTTI i giorni nel
+      // periodo, non solo quelli del mese FROM. occ conta gia' le notti dentro
+      // la finestra (riconsegna esclusa, mono-giorno = 1).
+      const occ = occupiedDayIndices(pickupDate, dropoffDate, monthStartISO, monthEndISO)
 
-      // Debug log for specific vehicles
       if (debug || vPlate === 'GT006DG') {
         console.log(`[DEBUG] Vehicle ${vPlate}: booking ${booking.id}`)
-        console.log(`  Raw pickup: "${pickupDateRaw}" -> "${pickupDate}" -> Y:${pYear} M:${pMonth} D:${pDay}`)
-        console.log(`  Raw dropoff: "${dropoffDateRaw}" -> "${dropoffDate}" -> Y:${dYear} M:${dMonth} D:${dDay}`)
-        console.log(`  Report month: ${year}-${monthNum}, daysInMonth: ${daysInMonth}`)
+        console.log(`  pickup "${pickupDateRaw}" dropoff "${dropoffDateRaw}"`)
+        console.log(`  Periodo ${monthStartISO} → ${monthEndISO} (${daysInMonth}gg) — giorni occupati nella finestra: ${occ.length}`)
       }
 
-      // Calculate which days of THIS month are covered
-      // Month we're reporting on: year, monthNum (1-12)
-
-      // Find start day in this month
-      let startDay: number
-      if (pYear < year || (pYear === year && pMonth < monthNum)) {
-        // Pickup was before this month - starts on day 1
-        startDay = 1
-      } else if (pYear === year && pMonth === monthNum) {
-        // Pickup is in this month
-        startDay = pDay
-      } else {
-        // 2026-05-24: Pickup e' DOPO questo mese. La logica originale
-        // confrontava pYear/pMonth vs year/monthNum del periodo. Per
-        // range custom (es. 1mag → 31lug) monthNum = mese FROM = 5,
-        // quindi una booking con pickup giugno (pMonth=6) entrava qui
-        // erroneamente. Adesso usiamo monthEnd come confine assoluto:
-        // anticipo SOLO se pickupDate > monthEnd reale del periodo.
-        // 2026-05-24: ANTICIPO = pagato nel periodo + rental in mese FUTURO
-        // rispetto alla fine del periodo. Esempio: report di MAGGIO + booking
-        // pagata 23 mag con pickup 5 lug → anticipo. Booking pagata 23 mag
-        // con pickup 30 mag → NON anticipo (e' un rental del mese).
-        const pickupAbs = new Date(`${pickupDateRaw.slice(0, 10)}T00:00:00`)
+      // Nessun giorno occupato nella finestra: la prenotazione non tocca il
+      // periodo come noleggio. Puo' pero' essere un ANTICIPO: pagata NEL periodo
+      // ma con pickup DOPO la fine del periodo (rental futuro).
+      // 2026-05-24: ANTICIPO = pagato nel periodo + rental in mese FUTURO
+      // rispetto alla fine del periodo. Es: report di MAGGIO + booking pagata
+      // 23 mag con pickup 5 lug → anticipo. Pagata 23 mag con pickup 30 mag →
+      // NON anticipo (e' un rental del mese, ha giorni occupati nella finestra).
+      if (occ.length === 0) {
+        const pickupAbs = new Date(`${pickupDate}T00:00:00`)
         const isPickupAfterPeriod = pickupAbs > monthEnd
         if (!isPickupAfterPeriod) {
-          // Pickup e' DENTRO il periodo o uguale al monthEnd — niente anticipo,
-          // il booking verra' processato dai mesi successivi del loop.
-          // Per il mese corrente, il booking dovrebbe essere gia' stato
-          // processato dal ramo if precedente. Se finiamo qui significa
-          // logica di fall-through inattesa — log e skip.
+          // dropoff sul/prima dell'inizio finestra (auto gia' rientrata): niente.
           if (debug || vPlate === 'GT006DG') {
-            console.log(`  SKIPPED (no anticipo): pickup ${pickupDateRaw} dentro periodo [${monthStartISO} → ${monthEndISO}]`)
+            console.log(`  SKIPPED (no anticipo): 0 giorni nel periodo e pickup non futuro`)
           }
           return
         }
@@ -513,55 +514,13 @@ async function generateVehicleReport(
         return
       }
 
-      // Find end day in this month
-      // NOTE: Dropoff day is NOT counted - car is returned that day, so it's available
-      let endDay: number
-      if (dYear > year || (dYear === year && dMonth > monthNum)) {
-        // Dropoff is after this month - car is rented until end of month
-        endDay = daysInMonth
-      } else if (dYear === year && dMonth === monthNum) {
-        // Dropoff is in this month - don't count the dropoff day itself
-        endDay = dDay - 1
-        // Same-day booking in this month: count 1 day
-        // Cross-month checkout (pickup was before this month): 0 days in this month
-        if (endDay < startDay) {
-          if (pYear === year && pMonth === monthNum) {
-            endDay = startDay
-          } else {
-            if (debug || vPlate === 'GT006DG') {
-              console.log(`  SKIPPED: cross-month checkout, no occupied days in ${year}-${monthNum}`)
-            }
-            return
-          }
-        }
-      } else {
-        // Dropoff was before this month - skip this booking
-        if (debug || vPlate === 'GT006DG') {
-          console.log(`  SKIPPED: dropoff (${dYear}-${dMonth}) is before report month (${year}-${monthNum})`)
-        }
-        return
-      }
-
-      if (debug || vPlate === 'GT006DG') {
-        console.log(`  Calculated: startDay=${startDay}, endDay=${endDay}, adding days ${startDay}-${endDay}`)
-      }
-
-      // Add days to the set (for maintenance exclusion) and sum total
-      const overlapDaysRaw = endDay - startDay + 1
-      // Total booking days for revenue proration (shared function, UTC-safe)
-      const totalBookingDays = computeBillableDays(pickupDateRaw, dropoffDateRaw)
-      // 2026-05-30 BUG FIX: overlapDaysRaw conta i giorni di CALENDARIO toccati
-      // (giorno ritiro + giorno riconsegna entrambi inclusi → "endDay-startDay+1"),
-      // mentre i giorni FATTURABILI sono il diff secco (notti). Per una
-      // prenotazione 30/05→01/06: billable = 2, ma overlapRaw = 2 (in maggio) o
-      // fino a 3 in mesi a cavallo → la proporzione (ricavo/billable)*overlap
-      // gonfiava il ricavo sopra l'incassato (€1499.99/2*3 = €2249.99, caso
-      // Bartoli). I giorni-nel-mese non possono superare i giorni fatturabili.
-      const overlapDays = Math.min(overlapDaysRaw, totalBookingDays)
+      // 2026-05-30 BUG FIX (preservato): i giorni-nel-periodo non possono
+      // superare i giorni FATTURABILI (notti). occ conta gia' le notti dentro
+      // la finestra, quindi e' <= billable; il clamp resta come guardia
+      // esplicita dell'invariante (caso Bartoli, €1499.99/2*3 = €2249.99).
+      const overlapDays = Math.min(occ.length, totalBookingDays)
       rentedDaysTotal += overlapDays
-      for (let d = startDay; d <= endDay; d++) {
-        rentedDays.add(d)
-      }
+      occ.forEach(idx => rentedDays.add(idx))
 
       // price_total may be numeric or string (wallet RPC casts to numeric)
       const rawPrice = booking.price_total
@@ -661,8 +620,11 @@ async function generateVehicleReport(
           dropoff_date_raw: dropoffDateRaw,
           pickup_date_parsed: pickupDate,
           dropoff_date_parsed: dropoffDate,
-          parsed: { pYear, pMonth, pDay, dYear, dMonth, dDay },
-          calculated: { startDay, endDay },
+          // 2026-06-06: occupazione ora su indici-giorno della finestra
+          // (relativi a from), non piu' su numeri del giorno del mese.
+          occupiedDayIndices: occ,
+          windowFrom: monthStartISO,
+          windowTo: monthEndISO,
           service_type: booking.service_type,
           status: booking.status,
           overlapDays,
@@ -677,7 +639,15 @@ async function generateVehicleReport(
     if (meta.unavailable_from && meta.unavailable_until) {
       const unavailStart = new Date(meta.unavailable_from)
       const unavailEnd = new Date(meta.unavailable_until)
-      const days = getDaySet(unavailStart, unavailEnd, monthStart, monthEnd)
+      // 2026-06-06: stesso spazio "indici-giorno della finestra" del noleggio
+      // (prima getDaySet usava numeri del giorno del mese, che collidevano tra
+      // mesi diversi nei range a cavallo, rompendo la priorita' rental>manut.).
+      const days = occupiedDayIndices(
+        dateToISOLocal(unavailStart),
+        dateToISOLocal(unavailEnd),
+        monthStartISO,
+        monthEndISO,
+      )
       days.forEach(d => maintenanceDays.add(d))
     }
 
