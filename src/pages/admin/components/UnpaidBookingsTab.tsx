@@ -491,9 +491,15 @@ export default function UnpaidBookingsTab() {
         if (penalties.some((p: any) => {
           const unpaid = !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial' || p.paymentStatus === 'nexi_pay_by_link'
           if (!unpaid) return false
-          const amt = Number(p.amount ?? p.total ?? 0)
-          const paid = Number(p.amountPaid ?? 0)
-          return (amt - paid) > 0
+          // 2026-06-06: usare il TOTALE reale (p.total, o amount×quantity) meno
+          // lo sconto — NON p.amount, che e' il prezzo UNITARIO. Una penale con
+          // quantity>1 (es. Sforo Km 43×9=387, amount=9, amountPaid=300) veniva
+          // letta come amt=9 < paid=300 => "pagata", facendo sparire la
+          // prenotazione PAGATA da Da Saldare nonostante il residuo aperto.
+          const total = Number(p.total) || (Number(p.amount) || 0) * (Number(p.quantity) || 1)
+          const discount = Number(p.discount) || 0
+          const paid = Number(p.amountPaid) || 0
+          return (total - discount - paid) > 0
         })) return true
 
         const danni = booking.booking_details?.danni || []
@@ -501,9 +507,12 @@ export default function UnpaidBookingsTab() {
         if (danni.some((d: any) => {
           const unpaid = !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial' || d.paymentStatus === 'nexi_pay_by_link'
           if (!unpaid) return false
-          const amt = Number(d.amount ?? d.total ?? 0)
-          const paid = Number(d.amountPaid ?? 0)
-          return (amt - paid) > 0
+          // 2026-06-06: stesso fix delle penali — usa il totale reale (total o
+          // amount×quantity) meno lo sconto, non d.amount (prezzo unitario).
+          const total = Number(d.total) || (Number(d.amount) || 0) * (Number(d.quantity) || 1)
+          const discount = Number(d.discount) || 0
+          const paid = Number(d.amountPaid) || 0
+          return (total - discount - paid) > 0
         })) return true
 
         // Only keep for fattura items if the booking itself is NOT paid
