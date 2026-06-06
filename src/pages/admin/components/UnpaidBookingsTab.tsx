@@ -1315,9 +1315,14 @@ export default function UnpaidBookingsTab() {
         // the fattura renders Subtotal / Sconto / Totale correctly.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const invoiceItems = pending.map((item: any) => {
+          // 2026-06-06: fatturare il TOTALE della penale (prezzo pieno), non il
+          // solo residuo. I pagamenti parziali ("Parziale") NON emettono
+          // fattura, quindi fatturando solo il residuo l'acconto gia' incassato
+          // (es. 300 su 387) non verrebbe MAI fatturato. Lo sconto viaggia a
+          // parte come discountAmount (vedi commento sopra), cosi' Subtotale /
+          // Sconto / Totale restano corretti.
           const total = item.total || (item.amount || 0) * (item.quantity || 1)
-          const remaining = total - (item.amountPaid || 0)
-          return { label: item.label, amount: remaining, quantity: 1 }
+          return { label: item.label, amount: total, quantity: 1 }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         }).filter((i: any) => i.amount > 0)
 
@@ -2111,9 +2116,13 @@ export default function UnpaidBookingsTab() {
       .filter(({ item }: any) => {
         const unpaid = !item.paymentStatus || item.paymentStatus === 'pending' || item.paymentStatus === 'partial' || item.paymentStatus === 'nexi_pay_by_link'
         if (!unpaid) return false
-        const amt = Number(item.amount ?? item.total ?? 0)
-        const paid = Number(item.amountPaid ?? 0)
-        return (amt - paid) > 0
+        // 2026-06-06: usa il totale reale (total o amount×quantity) meno sconto,
+        // NON item.amount (prezzo unitario). Stesso bug del filtro insoluti
+        // (~riga 491): una penale con quantity>1 (Sforo Km 43×9) spariva.
+        const total = Number(item.total) || (Number(item.amount) || 0) * (Number(item.quantity) || 1)
+        const discount = Number(item.discount) || 0
+        const paid = Number(item.amountPaid) || 0
+        return (total - discount - paid) > 0
       })
   }
 
