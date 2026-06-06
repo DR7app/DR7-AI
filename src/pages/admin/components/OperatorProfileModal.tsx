@@ -1468,8 +1468,12 @@ function minutesToHourInput(min: number): string {
  * configurare il contratto.
  */
 function QuickPagaCalc({ days, rangeLabel }: { days: DayBreakdown[]; rangeLabel: string }) {
-    const [oraria, setOraria] = useState<string>('10')
-    const [straord, setStraord] = useState<string>('15')
+    // 2026-06-06: campi VUOTI di default → niente paga "fantasma". Prima erano
+    // pre-riempiti a 10/15 e mostravano un totale (es. €161.25) anche se l'admin
+    // non aveva inserito nulla. Ora il totale resta €0 finche' non si digita una
+    // paga oraria. Soglia straord lasciata a 8h (e' una soglia, non un importo).
+    const [oraria, setOraria] = useState<string>('')
+    const [straord, setStraord] = useState<string>('')
     const [sogliaH, setSogliaH] = useState<string>('8')
     const oraNum = Number(oraria.replace(',', '.')) || 0
     const straordNum = Number(straord.replace(',', '.')) || 0
@@ -1498,12 +1502,12 @@ function QuickPagaCalc({ days, rangeLabel }: { days: DayBreakdown[]; rangeLabel:
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
                 <label className="block">
                     <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">Paga oraria (€/h)</span>
-                    <input type="number" step="0.01" value={oraria} onChange={(e) => setOraria(e.target.value)}
+                    <input type="number" step="0.01" value={oraria} onChange={(e) => setOraria(e.target.value)} placeholder="es. 10.00"
                         className="w-full bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-sm text-theme-text-primary mt-1" />
                 </label>
                 <label className="block">
                     <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">Straordinario (€/h)</span>
-                    <input type="number" step="0.01" value={straord} onChange={(e) => setStraord(e.target.value)}
+                    <input type="number" step="0.01" value={straord} onChange={(e) => setStraord(e.target.value)} placeholder="es. 15.00"
                         className="w-full bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-sm text-theme-text-primary mt-1" />
                 </label>
                 <label className="block">
