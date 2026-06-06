@@ -55,6 +55,40 @@ function dateToISOLocal(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
+// 2026-06-06: separa una lista di addebiti (penali o danni da
+// booking_details.penalties / .danni) nella parte gia' PAGATA (→ Ricavo) e
+// nella parte ANCORA DA SALDARE (→ colonna "Da Saldare").
+//
+// Bug risolto: prima si sommava `amountPaid || total` di OGNI voce dentro al
+// Ricavo Penali/Danni — quindi anche una penale 'pending'/'nexi_pay_by_link'
+// (da saldare) finiva nel ricavo come se incassata, e NON compariva da nessuna
+// parte come "rimanente da pagare" (caso Zucca €87). Ora:
+//   - paymentStatus 'paid'  → tutto nel pagato (amountPaid, o total se assente)
+//   - altrimenti            → solo l'eventuale acconto (amountPaid) e' pagato,
+//                             il resto e' da saldare
+// Gestisce le varie forme dei dati: total, amount*quantity, amountPaid.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function splitCharges(arr: any): { paid: number; remaining: number } {
+  let paid = 0
+  let remaining = 0
+  if (!Array.isArray(arr)) return { paid, remaining }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  arr.forEach((c: any) => {
+    const explicitTotal = parseFloat(c.total ?? 0) || 0
+    const fromQty = (parseFloat(c.amount ?? 0) || 0) * (parseFloat(c.quantity ?? 0) || 0)
+    const apRaw = parseFloat(c.amountPaid ?? 0) || 0
+    // Totale della voce: total esplicito, altrimenti amount*quantity, altrimenti
+    // l'importo pagato (caso limite di voci che riportano solo amountPaid).
+    const total = explicitTotal > 0 ? explicitTotal : (fromQty > 0 ? fromQty : apRaw)
+    if (total <= 0) return
+    const ps = String(c.paymentStatus || '').toLowerCase()
+    const paidPart = ps === 'paid' ? (apRaw > 0 ? apRaw : total) : apRaw
+    paid += Math.min(paidPart, total)
+    remaining += Math.max(0, total - paidPart)
+  })
+  return { paid, remaining }
+}
+
 /**
  * Compute billable days for a booking.
  * Business rule: start day inclusive, checkout (end) day exclusive.
@@ -470,48 +504,57 @@ async function generateVehicleReport(
       if (occ.length === 0) {
         const pickupAbs = new Date(`${pickupDate}T00:00:00`)
         const isPickupAfterPeriod = pickupAbs > monthEnd
-        if (!isPickupAfterPeriod) {
-          // dropoff sul/prima dell'inizio finestra (auto gia' rientrata): niente.
-          if (debug || vPlate === 'GT006DG') {
-            console.log(`  SKIPPED (no anticipo): 0 giorni nel periodo e pickup non futuro`)
+        if (isPickupAfterPeriod) {
+          // ANTICIPO: pickup nel FUTURO rispetto alla fine del periodo. Se pagato
+          // nel periodo lo classifichiamo come incasso anticipato, poi USCIAMO
+          // (un noleggio futuro non e' un noleggio del periodo corrente).
+          const isPaid = ['paid', 'completed', 'succeeded'].includes(String(booking.payment_status || '').toLowerCase())
+          if (isPaid) {
+            // Estraggo data pagamento: priorita' nexi_paid_at (esatta),
+            // poi updated_at (admin "Segna Pagato" o callback Nexi), poi
+            // created_at come ultimo fallback.
+            const paidAtISO = (booking.booking_details?.nexi_paid_at as string | undefined)
+              || (booking.updated_at as string | undefined)
+              || (booking.created_at as string | undefined)
+              || ''
+            const paidAt = paidAtISO ? new Date(paidAtISO) : null
+            // Anticipo VALIDO solo se: paid e' nel periodo report E pickup e' DOPO la fine del periodo.
+            if (paidAt && paidAt >= monthStart && paidAt <= monthEnd) {
+              const rawPriceAnt = booking.price_total
+              const anticipoEur = (typeof rawPriceAnt === 'string' ? parseFloat(rawPriceAnt) : (rawPriceAnt || 0)) / 100
+              anticipatedRevenue += anticipoEur
+              anticipatedBookings.push({
+                booking_id: booking.id,
+                customer_name: booking.customer_name || booking.booking_details?.customer?.fullName || '-',
+                targa: vPlate || (booking.vehicle_plate || '').replace(/\s/g, '').toUpperCase() || '-',
+                pickup_date: pickupDateRaw,
+                dropoff_date: dropoffDateRaw,
+                total_price: anticipoEur,
+                paid_at: paidAtISO,
+                payment_method: booking.payment_method || '-',
+              })
+              if (debug || vPlate === 'GT006DG') {
+                console.log(`  ANTICIPO: pagato ${paidAtISO} (periodo ${monthStartISO}→${monthEndISO}), pickup ${pickupDateRaw} (futuro), €${anticipoEur}`)
+              }
+            } else if (debug || vPlate === 'GT006DG') {
+              console.log(`  SKIPPED (no anticipo): pickup futuro ma pagamento fuori periodo (paid ${paidAtISO})`)
+            }
+          } else if (debug || vPlate === 'GT006DG') {
+            console.log(`  SKIPPED (no anticipo): pickup futuro + non pagato (status=${booking.payment_status})`)
           }
           return
         }
-        const isPaid = ['paid', 'completed', 'succeeded'].includes(String(booking.payment_status || '').toLowerCase())
-        if (isPaid) {
-          // Estraggo data pagamento: priorita' nexi_paid_at (esatta),
-          // poi updated_at (admin "Segna Pagato" o callback Nexi), poi
-          // created_at come ultimo fallback.
-          const paidAtISO = (booking.booking_details?.nexi_paid_at as string | undefined)
-            || (booking.updated_at as string | undefined)
-            || (booking.created_at as string | undefined)
-            || ''
-          const paidAt = paidAtISO ? new Date(paidAtISO) : null
-          // Anticipo VALIDO solo se: paid e' nel periodo report E pickup e' DOPO la fine del periodo.
-          if (paidAt && paidAt >= monthStart && paidAt <= monthEnd) {
-            const rawPriceAnt = booking.price_total
-            const anticipoEur = (typeof rawPriceAnt === 'string' ? parseFloat(rawPriceAnt) : (rawPriceAnt || 0)) / 100
-            anticipatedRevenue += anticipoEur
-            anticipatedBookings.push({
-              booking_id: booking.id,
-              customer_name: booking.customer_name || booking.booking_details?.customer?.fullName || '-',
-              targa: vPlate || (booking.vehicle_plate || '').replace(/\s/g, '').toUpperCase() || '-',
-              pickup_date: pickupDateRaw,
-              dropoff_date: dropoffDateRaw,
-              total_price: anticipoEur,
-              paid_at: paidAtISO,
-              payment_method: booking.payment_method || '-',
-            })
-            if (debug || vPlate === 'GT006DG') {
-              console.log(`  ANTICIPO: pagato ${paidAtISO} (periodo ${monthStartISO}→${monthEndISO}), pickup ${pickupDateRaw} (futuro), €${anticipoEur}`)
-            }
-          } else if (debug || vPlate === 'GT006DG') {
-            console.log(`  SKIPPED (no anticipo): pickup futuro ma pagamento fuori periodo (paid ${paidAtISO})`)
-          }
-        } else if (debug || vPlate === 'GT006DG') {
-          console.log(`  SKIPPED (no anticipo): pickup futuro + non pagato (status=${booking.payment_status})`)
+        // 2026-06-06 FIX (Zucca €87): 0 giorni-noleggio nel periodo MA pickup
+        // NON futuro → la prenotazione e' comunque rilevante (ha passato STEP 1).
+        // PRIMA qui si faceva `return`, scartando la prenotazione e con essa le
+        // sue penali/danni/da-saldare: una penale "da saldare" su una
+        // prenotazione senza notti nel periodo selezionato spariva del tutto e
+        // il conteggio Pren. non tornava con le righe mostrate. Adesso NON
+        // usciamo: proseguiamo con overlapDays=0 (ricavo noleggio 0) cosi'
+        // penali/danni/da-saldare vengono conteggiati e la riga compare.
+        if (debug || vPlate === 'GT006DG') {
+          console.log(`  0 giorni-noleggio nel periodo: conteggio solo penali/danni/da-saldare`)
         }
-        return
       }
 
       // 2026-05-30 BUG FIX (preservato): i giorni-nel-periodo non possono
@@ -557,34 +600,34 @@ async function generateVehicleReport(
         || booking.vehicle_name
         || '-'
 
-      // Sum danni and penalties from booking_details (amounts in EUR)
+      // 2026-06-06: penali/danni separati in PAGATO (→ Ricavo) e DA SALDARE
+      // (→ "Da Saldare"). Vedi splitCharges(): prima l'intero importo, anche
+      // 'pending'/'nexi_pay_by_link', finiva nel Ricavo e la parte da saldare
+      // (es. €87 Zucca) non compariva come rimanente da pagare.
       const details = booking.booking_details || {}
-      let bookingPenaltyFromDetails = 0
-      let bookingDanniFromDetails = 0
-      if (Array.isArray(details.danni)) {
-        details.danni.forEach((d: any) => {
-          const paid = parseFloat(d.amountPaid || d.total || 0)
-          if (paid > 0) bookingDanniFromDetails += paid
-        })
-      }
-      if (Array.isArray(details.penalties)) {
-        details.penalties.forEach((p: any) => {
-          const paid = parseFloat(p.amountPaid || p.total || 0)
-          if (paid > 0) bookingPenaltyFromDetails += paid
-        })
-      }
+      const penFromDetails = splitCharges(details.penalties)
+      const danFromDetails = splitCharges(details.danni)
 
-      // Also check fatture table for penalty/danni invoices not in booking_details.
-      // 2026-06-05: i valori sono gia' sommati PER ITEM (penale vs danno) nei
-      // map sopra, quindi una fattura mista non doppia piu' l'importo.
+      // Fatture penali/danni emesse nel periodo: importi gia' fatturati/incassati.
+      // 2026-06-05: gia' sommati PER ITEM (penale vs danno) nei map sopra, quindi
+      // una fattura mista non doppia piu' l'importo.
       const bookingPenaltyFromFatture = fatturePenaltyMap.get(booking.id) || 0
-      // Use the higher of the two sources (avoid double-counting)
-      const bookingPenaltyAmount = Math.max(bookingPenaltyFromDetails, bookingPenaltyFromFatture)
-      penaltyRevenue += bookingPenaltyAmount
-
       const bookingDanniFromFatture = fattureDanniMap.get(booking.id) || 0
-      const bookingDanniAmount = Math.max(bookingDanniFromDetails, bookingDanniFromFatture)
+
+      // PAGATO: il maggiore tra booking_details e fatture (evita doppi conteggi
+      // quando la stessa penale e' presente in entrambe le fonti).
+      const bookingPenaltyAmount = Math.max(penFromDetails.paid, bookingPenaltyFromFatture)
+      const bookingDanniAmount = Math.max(danFromDetails.paid, bookingDanniFromFatture)
+      penaltyRevenue += bookingPenaltyAmount
       danniRevenue += bookingDanniAmount
+
+      // DA SALDARE: parte non ancora incassata di penali/danni (da booking_details:
+      // 'pending' / 'nexi_pay_by_link' / acconto parziale). Si somma alla quota di
+      // noleggio da saldare e compare nella colonna "Da Saldare" (es. €87 Zucca).
+      const penaltyDaSaldare = penFromDetails.remaining
+      const danniDaSaldare = danFromDetails.remaining
+      const chargesDaSaldare = penaltyDaSaldare + danniDaSaldare
+      daSaldareRevenue += chargesDaSaldare
 
       // Per-booking detail (always included in output)
       // Note: declared AFTER penali/danni sums so each row carries its own
@@ -606,8 +649,10 @@ async function generateVehicleReport(
         payment_method: booking.payment_method || '-',
         penalty_amount: Math.round(bookingPenaltyAmount * 100) / 100,
         danni_amount: Math.round(bookingDanniAmount * 100) / 100,
-        // 2026-06-04: quota di noleggio ancora da saldare (prorata al periodo)
-        da_saldare: Math.round(daSaldareMonth * 100) / 100,
+        // 2026-06-04: quota di noleggio ancora da saldare (prorata al periodo).
+        // 2026-06-06: + penali/danni ancora da saldare (es. €87 Zucca), cosi'
+        // la colonna "Da Saldare" della riga mostra TUTTO il rimanente da pagare.
+        da_saldare: Math.round((daSaldareMonth + chargesDaSaldare) * 100) / 100,
       })
 
       if (debug) {
