@@ -1,5 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
+// 2026-06-06: calendario a griglia per intervalli arbitrari (random range),
+// reso da noi quindi sempre in italiano dd/mm/yyyy (no <input type="date">
+// che segue il locale OS). Affianca i campi testo europei esistenti.
+import CalendarRangePicker from '../../../components/admin/CalendarRangePicker'
 
 interface ProCategory { id: string; label: string }
 
@@ -1005,6 +1009,20 @@ export default function ReportsTab() {
                 }}
                 onBlur={() => { setToDraft(isoToEU(customTo)) }}
                 className="px-2 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-xs font-mono tabular-nums w-28"
+              />
+              {/* 2026-06-06: calendario cliccabile per intervalli arbitrari.
+                  Imposta preset='custom' e sincronizza customFrom/To + i draft
+                  dei campi testo europei, esattamente come la digitazione. */}
+              <CalendarRangePicker
+                from={customFrom}
+                to={customTo}
+                onChange={(f, t) => {
+                  setRangePreset('custom')
+                  setCustomFrom(f)
+                  setCustomTo(t)
+                  setFromDraft(isoToEU(f))
+                  setToDraft(isoToEU(t))
+                }}
               />
             </div>
           </div>
