@@ -135,6 +135,9 @@ export default function CustomersTab() {
   const [showNewClientModal, setShowNewClientModal] = useState(false)
   const [viewingCustomerDetails, setViewingCustomerDetails] = useState<Customer | null>(null)
   const [reportCustomerId, setReportCustomerId] = useState<string | null>(null)
+  // Cliente per cui mostrare il modale Addebito (importo + scelta carta) dalla
+  // riga della lista Clienti.
+  const [addebitoCustomer, setAddebitoCustomer] = useState<Customer | null>(null)
 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
 
@@ -2733,6 +2736,11 @@ export default function CustomersTab() {
               <button onClick={() => setReportCustomerId(customer.id)} className="text-xs py-1 px-2 bg-theme-bg-primary hover:bg-theme-bg-hover text-theme-text-primary border border-theme-border rounded-full font-medium transition-colors flex-1">
                 Scheda
               </button>
+              {listCardsFromMetadata(customer.metadata).length > 0 && (
+                <Button onClick={() => setAddebitoCustomer(customer)} variant="secondary" className="text-xs py-1 px-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-700/50 flex-1" title="Addebita un importo su una carta del cliente (debito)">
+                  Addebito
+                </Button>
+              )}
               <Button onClick={() => handleViewCustomerDetails(customer)} variant="secondary" className="text-xs py-1 px-2 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold flex-1">
                 Dettagli
               </Button>
@@ -3034,6 +3042,29 @@ export default function CustomersTab() {
           customerId={reportCustomerId}
           onClose={() => setReportCustomerId(null)}
         />
+      )}
+
+      {/* Addebito rapido dalla riga Clienti: importo + scelta carta. */}
+      {addebitoCustomer && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4" onClick={() => setAddebitoCustomer(null)}>
+          <div className="bg-theme-bg-primary w-full max-w-sm rounded-lg shadow-xl border border-theme-border" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-theme-border flex justify-between items-center">
+              <h3 className="text-sm font-bold text-dr7-gold truncate pr-2">
+                Addebito — {addebitoCustomer.full_name || `${addebitoCustomer.nome || ''} ${addebitoCustomer.cognome || ''}`.trim() || addebitoCustomer.email}
+              </h3>
+              <button onClick={() => setAddebitoCustomer(null)} className="text-theme-text-muted hover:text-theme-text-primary text-2xl leading-none" aria-label="Chiudi">×</button>
+            </div>
+            <div className="p-4">
+              <CustomerAddebitoButton
+                autoOpen
+                cards={listCardsFromMetadata(addebitoCustomer.metadata)}
+                customerEmail={addebitoCustomer.email}
+                customerName={addebitoCustomer.full_name || `${addebitoCustomer.nome || ''} ${addebitoCustomer.cognome || ''}`.trim()}
+                onDone={() => setAddebitoCustomer(null)}
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

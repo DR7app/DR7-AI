@@ -20,17 +20,19 @@ interface CustomerAddebitoButtonProps {
     bookingId?: string | null
     /** Pre-select this card (e.g. the one that paid the booking). */
     defaultContractId?: string | null
+    /** Start with the form already open (e.g. when rendered inside a modal). */
+    autoOpen?: boolean
     onDone?: () => void
 }
 
 export default function CustomerAddebitoButton({
-    cards, customerEmail, customerName, bookingId, defaultContractId, onDone,
+    cards, customerEmail, customerName, bookingId, defaultContractId, autoOpen, onDone,
 }: CustomerAddebitoButtonProps) {
     const initialCard = (defaultContractId && cards.some(c => c.contractId === defaultContractId))
         ? defaultContractId
         : (cards.find(c => c.isDefault)?.contractId || cards[0]?.contractId || '')
 
-    const [open, setOpen] = useState(false)
+    const [open, setOpen] = useState(!!autoOpen)
     const [amount, setAmount] = useState('')
     const [causale, setCausale] = useState('')
     const [contractId, setContractId] = useState(initialCard)
