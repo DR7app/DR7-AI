@@ -13,6 +13,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { requireAuth } from './require-auth'
 import { getCorsOrigin } from './cors-headers'
+import { listCards } from './utils/nexiCards'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -36,6 +37,7 @@ interface TokenizedCard {
     card_type: string
     card_brand: string
     updated_at: string
+    is_default: boolean
     paid_total_cents: number
     paid_count: number
     payments: CardPayment[]
@@ -68,23 +70,28 @@ const handler: Handler = async (event) => {
             .not('metadata->nexi_contract_id', 'is', null)
             .order('updated_at', { ascending: false })
 
-        const cards: TokenizedCard[] = (customers || []).map((c: Record<string, unknown>) => {
+        // One row PER tokenized card. listCards() reads metadata.nexi_cards and,
+        // for customers still on the legacy single-card shape, synthesizes one
+        // card from the flat keys (migrate-on-read) — so old data shows too.
+        const cards: TokenizedCard[] = (customers || []).flatMap((c: Record<string, unknown>) => {
             const meta = (c.metadata || {}) as Record<string, unknown>
-            return {
-                id: String(c.id || ''),
-                full_name: [c.nome, c.cognome].filter(Boolean).join(' ') || '',
+            const fullName = [c.nome, c.cognome].filter(Boolean).join(' ') || ''
+            return listCards(meta).map(card => ({
+                id: `${String(c.id || '')}:${card.contractId}`,
+                full_name: fullName,
                 email: String(c.email || ''),
                 phone: String(c.telefono || ''),
-                contract_id: String(meta.nexi_contract_id || ''),
-                masked_pan: String(meta.nexi_card_masked_pan || ''),
-                circuit: String(meta.nexi_card_circuit || ''),
-                card_type: String(meta.nexi_card_type || ''),
-                card_brand: String(meta.nexi_card_brand || ''),
-                updated_at: String(meta.nexi_contract_updated || c.updated_at || ''),
+                contract_id: card.contractId,
+                masked_pan: String(card.maskedPan || ''),
+                circuit: String(card.circuit || ''),
+                card_type: String(card.cardType || ''),
+                card_brand: String(card.brand || ''),
+                updated_at: String(card.lastUsedAt || card.addedAt || c.updated_at || ''),
+                is_default: !!card.isDefault,
                 paid_total_cents: 0,
                 paid_count: 0,
                 payments: [],
-            }
+            }))
         })
 
         // Source 2 — nexi_transactions with a non-null contract_id and a
@@ -122,6 +129,7 @@ const handler: Handler = async (event) => {
                     card_type: String(meta.card_type || meta.nexi_card_type || ''),
                     card_brand: String(meta.card_brand || meta.nexi_card_brand || ''),
                     updated_at: String(tx.updated_at || ''),
+                    is_default: false,
                     paid_total_cents: 0,
                     paid_count: 0,
                     payments: [],

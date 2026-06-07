@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { getCorsOrigin } from './cors-headers'
 import { requireAuth } from './require-auth'
+import { removeCard } from './utils/nexiCards'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -116,9 +117,11 @@ const handler: Handler = async (event) => {
                     .maybeSingle()
 
                 if (cust) {
-                    const m = { ...(cust.metadata as Record<string, unknown> || {}) }
-                    delete m.nexi_contract_id
-                    delete m.nexi_contract_updated
+                    // Remove ONLY the orphan card from the array (reassigns the
+                    // default to the most-recent remaining card and clears the
+                    // flat keys only if no card is left). Other tokenized cards
+                    // for this customer are preserved.
+                    const m = removeCard(cust.metadata as Record<string, unknown>, o.contractId) as Record<string, unknown>
                     m.nexi_contract_orphan_removed_at = new Date().toISOString()
                     m.nexi_contract_orphan_reason = o.reason
                     await supabase

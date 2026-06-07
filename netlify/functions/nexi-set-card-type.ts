@@ -21,6 +21,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { requireAuth } from './require-auth'
 import { getCorsOrigin } from './cors-headers'
+import { updateCardFields } from './utils/nexiCards'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -67,27 +68,37 @@ const handler: Handler = async (event) => {
     let customerRows = 0
     let txRows = 0
 
-    // ── Customers extended: update every row whose metadata.nexi_contract_id matches.
-    const { data: customers } = await supabase
+    // ── Customers extended: update the matching card. The contractId may be
+    //    the flat/default card OR live inside the nexi_cards array, so match
+    //    both and patch just that card (updateCardFields mirrors to the flat
+    //    keys only when the patched card is the default).
+    const seenCust = new Set<string>()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const custTargets: Array<{ id: string; metadata: any }> = []
+    const { data: custByFlat } = await supabase
         .from('customers_extended')
         .select('id, metadata')
         .eq('metadata->>nexi_contract_id', contractId)
-
-    if (customers && customers.length > 0) {
-        for (const c of customers) {
-            const meta = (c.metadata || {}) as Record<string, unknown>
-            const nextMeta = {
-                ...meta,
-                nexi_card_type: cardType,
-                nexi_card_type_source: cardType ? 'manual' : '',
-                nexi_card_type_set_at: cardType ? nowIso : '',
-            }
-            await supabase
-                .from('customers_extended')
-                .update({ metadata: nextMeta, updated_at: nowIso })
-                .eq('id', c.id)
-            customerRows++
-        }
+    const { data: custByArray } = await supabase
+        .from('customers_extended')
+        .select('id, metadata')
+        .filter('metadata->nexi_cards', 'cs', JSON.stringify([{ contractId }]))
+    for (const c of ([...(custByFlat || []), ...(custByArray || [])] as Array<{ id: string; metadata: unknown }>)) {
+        if (seenCust.has(c.id)) continue
+        seenCust.add(c.id)
+        custTargets.push(c)
+    }
+    for (const c of custTargets) {
+        const nextMeta = updateCardFields(c.metadata, contractId, {
+            cardType: cardType || undefined,
+            cardTypeSource: cardType ? 'manual' : undefined,
+            cardTypeSetAt: cardType ? nowIso : undefined,
+        })
+        await supabase
+            .from('customers_extended')
+            .update({ metadata: nextMeta, updated_at: nowIso })
+            .eq('id', c.id)
+        customerRows++
     }
 
     // ── Nexi transactions: same override propagated so the UI list endpoint

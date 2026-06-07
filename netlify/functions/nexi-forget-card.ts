@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { getCorsOrigin } from './cors-headers'
 import { requireAuth } from './require-auth'
+import { removeCard } from './utils/nexiCards'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -36,17 +37,29 @@ const handler: Handler = async (event) => {
 
         let affected = 0
 
-        // 1) Pulisce customers_extended: trova ogni cliente con
-        //    metadata.nexi_contract_id == contractId e rimuove la chiave.
-        const { data: customers } = await supabase
+        // 1) Pulisce customers_extended: trova ogni cliente che referenzia
+        //    questo contractId — sia come carta flat/default sia DENTRO
+        //    l'array metadata.nexi_cards (multi-carta). removeCard toglie la
+        //    carta dall'array e, se era la default, promuove la piu' recente
+        //    rimasta (o azzera le chiavi flat se non resta nessuna carta).
+        const seen = new Set<string>()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const targets: Array<{ id: string; metadata: any }> = []
+        const { data: byFlat } = await supabase
             .from('customers_extended')
             .select('id, metadata')
             .filter('metadata->>nexi_contract_id', 'eq', contractId)
-
-        for (const c of (customers || [])) {
-            const m = { ...(c.metadata || {}) }
-            delete m.nexi_contract_id
-            delete m.nexi_contract_updated
+        const { data: byArray } = await supabase
+            .from('customers_extended')
+            .select('id, metadata')
+            .filter('metadata->nexi_cards', 'cs', JSON.stringify([{ contractId }]))
+        for (const c of ([...(byFlat || []), ...(byArray || [])] as Array<{ id: string; metadata: unknown }>)) {
+            if (seen.has(c.id)) continue
+            seen.add(c.id)
+            targets.push(c)
+        }
+        for (const c of targets) {
+            const m = removeCard(c.metadata, contractId)
             const { error } = await supabase
                 .from('customers_extended')
                 .update({ metadata: m, updated_at: new Date().toISOString() })

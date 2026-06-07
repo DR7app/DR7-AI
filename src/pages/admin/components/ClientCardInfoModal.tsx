@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../supabaseClient'
+import { listCardsFromMetadata, type NexiCardView } from '../../../utils/nexiCards'
+import CardAddebitoButton from './CardAddebitoButton'
 
 interface ClientCardInfoModalProps {
     customerId: string | null
@@ -12,12 +14,7 @@ interface CustomerCardData {
     full_name: string
     email: string | null
     phone: string | null
-    nexi_contract_id?: string
-    nexi_card_masked_pan?: string
-    nexi_card_circuit?: string
-    nexi_card_brand?: string
-    nexi_card_type?: string
-    nexi_contract_updated?: string
+    cards: NexiCardView[]
 }
 
 function buildFullName(c: Record<string, unknown>): string {
@@ -107,23 +104,23 @@ export default function ClientCardInfoModal({ customerId, customerEmail, custome
                     return
                 }
                 const m = (row.metadata || {}) as Record<string, unknown>
-                let contractId = m.nexi_contract_id as string | undefined
-                let maskedPan = m.nexi_card_masked_pan as string | undefined
-                let circuit = m.nexi_card_circuit as string | undefined
-                let brand = m.nexi_card_brand as string | undefined
-                let cardType = m.nexi_card_type as string | undefined
-                let updated = m.nexi_contract_updated as string | undefined
+                let cards = listCardsFromMetadata(m)
 
-                if (!contractId && row.email) {
+                // Legacy fallback: no card on the customer row — recover a
+                // contract id from a completed Nexi transaction by email.
+                if (cards.length === 0 && row.email) {
                     const tx = await fetchNexiTxByEmail(row.email)
                     if (cancelled) return
                     if (tx?.contract_id) {
-                        contractId = tx.contract_id
                         const txMeta = (tx.metadata || {}) as Record<string, unknown>
-                        maskedPan = maskedPan || (txMeta.card_masked_pan as string | undefined) || (txMeta.nexi_card_masked_pan as string | undefined)
-                        circuit = circuit || (txMeta.card_circuit as string | undefined) || (txMeta.nexi_card_circuit as string | undefined)
-                        brand = brand || (txMeta.card_brand as string | undefined) || (txMeta.nexi_card_brand as string | undefined)
-                        cardType = cardType || (txMeta.card_type as string | undefined) || (txMeta.nexi_card_type as string | undefined)
+                        cards = [{
+                            contractId: tx.contract_id,
+                            maskedPan: (txMeta.card_masked_pan as string) || (txMeta.nexi_card_masked_pan as string) || undefined,
+                            circuit: (txMeta.card_circuit as string) || (txMeta.nexi_card_circuit as string) || undefined,
+                            brand: (txMeta.card_brand as string) || (txMeta.nexi_card_brand as string) || undefined,
+                            cardType: (txMeta.card_type as string) || (txMeta.nexi_card_type as string) || undefined,
+                            isDefault: true,
+                        }]
                     }
                 }
 
@@ -131,12 +128,7 @@ export default function ClientCardInfoModal({ customerId, customerEmail, custome
                     full_name: buildFullName(row as Record<string, unknown>),
                     email: row.email || null,
                     phone: row.telefono || null,
-                    nexi_contract_id: contractId,
-                    nexi_card_masked_pan: maskedPan,
-                    nexi_card_circuit: circuit,
-                    nexi_card_brand: brand,
-                    nexi_card_type: cardType,
-                    nexi_contract_updated: updated,
+                    cards,
                 })
                 setLoading(false)
             })
@@ -166,8 +158,8 @@ export default function ClientCardInfoModal({ customerId, customerEmail, custome
     // riuscito a popolarlo) — è una decorazione, non il segnale principale.
     // NexiTab, CustomersTab, CauzioniTab e ReportClienteModal usano la stessa
     // regola: basta nexi_contract_id per considerare la carta su file.
-    const isTokenized = !!data?.nexi_contract_id
-    const circuitLabel = data?.nexi_card_circuit || data?.nexi_card_brand || ''
+    const cards = data?.cards || []
+    const isTokenized = cards.length > 0
 
     return (
         <div className="fixed inset-0 bg-theme-bg-primary bg-opacity-75 flex items-end sm:items-center justify-center z-[60] p-0 sm:p-4">
@@ -204,39 +196,59 @@ export default function ClientCardInfoModal({ customerId, customerEmail, custome
 
                             <div className="border-t border-theme-border pt-4">
                                 <div className="text-xs uppercase tracking-wide text-theme-text-muted mb-2">
-                                    Carta su file
+                                    {cards.length > 1 ? `Carte su file (${cards.length})` : 'Carta su file'}
                                 </div>
 
                                 {isTokenized ? (
-                                    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
-                                        <div className="flex items-center gap-2 flex-wrap mb-2">
-                                            <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-emerald-500/15 text-emerald-400 border-emerald-500/40 uppercase">
-                                                Tokenizzata
-                                            </span>
-                                            {circuitLabel && (
-                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-dr7-gold/10 text-dr7-gold border-dr7-gold/30 uppercase">
-                                                    {circuitLabel}
-                                                </span>
-                                            )}
-                                            {data.nexi_card_type && (
-                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${
-                                                    data.nexi_card_type === 'credit' ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' :
-                                                    data.nexi_card_type === 'debit' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' :
-                                                    data.nexi_card_type === 'prepaid' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' :
-                                                    'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'
-                                                }`}>
-                                                    {data.nexi_card_type}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="font-mono text-lg text-theme-text-primary">
-                                            {data.nexi_card_masked_pan || '•••• •••• •••• ••••'}
-                                        </div>
-                                        {data.nexi_contract_updated && (
-                                            <div className="text-xs text-theme-text-muted mt-2">
-                                                Aggiornata: {new Date(data.nexi_contract_updated).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })}
-                                            </div>
-                                        )}
+                                    <div className="space-y-3">
+                                        {cards.map((card) => {
+                                            const circuitLabel = card.circuit || card.brand || ''
+                                            return (
+                                                <div key={card.contractId} className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
+                                                    <div className="flex items-center gap-2 flex-wrap mb-2">
+                                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-emerald-500/15 text-emerald-400 border-emerald-500/40 uppercase">
+                                                            Tokenizzata
+                                                        </span>
+                                                        {card.isDefault && (
+                                                            <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-dr7-gold/15 text-dr7-gold border-dr7-gold/40 uppercase">
+                                                                Predefinita
+                                                            </span>
+                                                        )}
+                                                        {circuitLabel && (
+                                                            <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-dr7-gold/10 text-dr7-gold border-dr7-gold/30 uppercase">
+                                                                {circuitLabel}
+                                                            </span>
+                                                        )}
+                                                        {card.cardType && (
+                                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${
+                                                                card.cardType === 'credit' ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' :
+                                                                card.cardType === 'debit' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' :
+                                                                card.cardType === 'prepaid' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' :
+                                                                'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'
+                                                            }`}>
+                                                                {card.cardType}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="font-mono text-lg text-theme-text-primary">
+                                                        {card.maskedPan || '•••• •••• •••• ••••'}
+                                                    </div>
+                                                    {card.lastUsedAt && (
+                                                        <div className="text-xs text-theme-text-muted mt-2">
+                                                            Aggiornata: {new Date(card.lastUsedAt).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })}
+                                                        </div>
+                                                    )}
+                                                    <div className="mt-3">
+                                                        <CardAddebitoButton
+                                                            contractId={card.contractId}
+                                                            customerEmail={data?.email}
+                                                            customerName={data?.full_name}
+                                                            cardLabel={card.maskedPan || circuitLabel || undefined}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
                                     </div>
                                 ) : (
                                     <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">

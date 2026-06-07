@@ -3,6 +3,7 @@ import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import { requireAuth } from './require-auth'
+import { applyTokenizedCardUpdate } from './utils/nexiCards'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -193,7 +194,7 @@ const handler: Handler = async (event) => {
                     const { data: cust } = await supabase.from('customers_extended').select('metadata').eq('id', customerId).maybeSingle()
                     if (cust) {
                         await supabase.from('customers_extended').update({
-                            metadata: { ...(cust.metadata || {}), nexi_contract_id: responseContractId, nexi_contract_updated: new Date().toISOString() },
+                            metadata: applyTokenizedCardUpdate(cust.metadata, { nexi_contract_id: responseContractId, nexi_contract_updated: new Date().toISOString() }),
                             updated_at: new Date().toISOString(),
                         }).eq('id', customerId)
                     }
@@ -201,7 +202,7 @@ const handler: Handler = async (event) => {
                     const { data: cust } = await supabase.from('customers_extended').select('id, metadata').eq('email', String(customerEmail).toLowerCase().trim()).maybeSingle()
                     if (cust) {
                         await supabase.from('customers_extended').update({
-                            metadata: { ...(cust.metadata || {}), nexi_contract_id: responseContractId, nexi_contract_updated: new Date().toISOString() },
+                            metadata: applyTokenizedCardUpdate(cust.metadata, { nexi_contract_id: responseContractId, nexi_contract_updated: new Date().toISOString() }),
                             updated_at: new Date().toISOString(),
                         }).eq('id', cust.id)
                     }
@@ -216,7 +217,7 @@ const handler: Handler = async (event) => {
                     const { data: cust } = await supabase.from('customers_extended').select('metadata').eq('id', customerId).maybeSingle()
                     if (cust && (cust.metadata as Record<string, unknown> | null)?.nexi_contract_id === contractId) {
                         await supabase.from('customers_extended').update({
-                            metadata: { ...(cust.metadata || {}), nexi_contract_updated: new Date().toISOString() },
+                            metadata: applyTokenizedCardUpdate(cust.metadata, { nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() }),
                             updated_at: new Date().toISOString(),
                         }).eq('id', customerId)
                     }

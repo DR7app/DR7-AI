@@ -4,6 +4,7 @@ import { formatRomeDate } from '../../../utils/timezoneUtils'
 import { formatEUR } from '../../../utils/moneyUtils'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
+import CardAddebitoButton from './CardAddebitoButton'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 
 interface PendingAddebito {
@@ -1193,6 +1194,17 @@ export default function NexiTab() {
                                                 in caso serva per debug futuro. */}
                                         </div>
                                     </div>
+                                    {card.contract_id && (
+                                        <div className="mt-2">
+                                            <CardAddebitoButton
+                                                contractId={card.contract_id}
+                                                customerEmail={card.email}
+                                                customerName={card.full_name}
+                                                cardLabel={card.masked_pan || card.circuit || undefined}
+                                                onDone={fetchAllAddebiti}
+                                            />
+                                        </div>
+                                    )}
                                     {isExpanded && hasHistory && (
                                         <div className="mt-3 pl-2 border-l-2 border-emerald-500/30 space-y-1.5">
                                             {payments.map((p, i) => (

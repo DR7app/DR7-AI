@@ -32,6 +32,7 @@ import { requireAuth } from './require-auth'
 import { getCorsOrigin } from './cors-headers'
 import { lookupBin } from './utils/binLookup'
 import { fetchNexiCardInfo } from './utils/nexiCardInfo'
+import { listCards, updateCardFields, type NexiCard } from './utils/nexiCards'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -88,18 +89,22 @@ const handler: Handler = async (event) => {
 
     for (const c of (customers || []) as Record<string, unknown>[]) {
         const meta = (c.metadata || {}) as Record<string, unknown>
-        const cid = String(meta.nexi_contract_id || '')
-        if (!cid) continue
-        if (onlyContractId && cid !== onlyContractId) continue
-        if (!byContract.has(cid)) {
-            byContract.set(cid, {
-                contractId: cid,
-                maskedPan: String(meta.nexi_card_masked_pan || ''),
-                circuit: String(meta.nexi_card_circuit || ''),
-                cardType: String(meta.nexi_card_type || ''),
-                cardTypeSource: String(meta.nexi_card_type_source || ''),
-                cardBrand: String(meta.nexi_card_brand || ''),
-            })
+        // Iterate EVERY tokenized card (multi-card array; falls back to the
+        // legacy single flat card via listCards' migrate-on-read).
+        for (const card of listCards(meta)) {
+            const cid = card.contractId
+            if (!cid) continue
+            if (onlyContractId && cid !== onlyContractId) continue
+            if (!byContract.has(cid)) {
+                byContract.set(cid, {
+                    contractId: cid,
+                    maskedPan: String(card.maskedPan || ''),
+                    circuit: String(card.circuit || ''),
+                    cardType: String(card.cardType || ''),
+                    cardTypeSource: String(card.cardTypeSource || ''),
+                    cardBrand: String(card.brand || ''),
+                })
+            }
         }
     }
 
@@ -211,28 +216,42 @@ const handler: Handler = async (event) => {
             Object.entries(patch).filter(([k]) => !TYPE_KEYS.includes(k))
         )
 
-        const applyPatch = async (table: 'customers_extended' | 'nexi_transactions', id: string, meta: Record<string, unknown>) => {
-            const usePatch = (meta.nexi_card_type_source === 'manual' && patch.nexi_card_type)
-                ? patchWithoutType
-                : patch
-            if (Object.keys(usePatch).length === 0) return
-            await supabase.from(table).update({ metadata: { ...meta, ...usePatch }, updated_at: nowIso }).eq('id', id)
-        }
+        // Map the learned flat patch to NexiCard fields for the array update.
+        const cardPatch: Partial<NexiCard> = {}
+        if (resolvedType) { cardPatch.cardType = resolvedType; cardPatch.cardTypeSource = 'auto'; cardPatch.cardTypeSetAt = nowIso }
+        if (resolvedBrand && !card.cardBrand) cardPatch.brand = resolvedBrand
+        if (resolvedPan && !card.maskedPan) cardPatch.maskedPan = resolvedPan
+        if (resolvedCircuit && !card.circuit) cardPatch.circuit = resolvedCircuit
 
-        const { data: custRows } = await supabase
-            .from('customers_extended')
-            .select('id, metadata')
+        // customers_extended: patch the specific card INSIDE the array
+        // (updateCardFields mirrors to the flat keys only when it's the default
+        // card). Match both the flat-default row and any row whose nexi_cards
+        // array contains this contractId.
+        const seenCust = new Set<string>()
+        const { data: custByFlat } = await supabase
+            .from('customers_extended').select('id, metadata')
             .eq('metadata->>nexi_contract_id', card.contractId)
-        for (const r of (custRows || [])) {
-            await applyPatch('customers_extended', String(r.id), (r.metadata || {}) as Record<string, unknown>)
+        const { data: custByArray } = await supabase
+            .from('customers_extended').select('id, metadata')
+            .filter('metadata->nexi_cards', 'cs', JSON.stringify([{ contractId: card.contractId }]))
+        for (const r of ([...(custByFlat || []), ...(custByArray || [])] as Array<{ id: string; metadata: unknown }>)) {
+            if (seenCust.has(String(r.id))) continue
+            seenCust.add(String(r.id))
+            const nextMeta = updateCardFields(r.metadata as Record<string, unknown>, card.contractId, cardPatch)
+            await supabase.from('customers_extended').update({ metadata: nextMeta, updated_at: nowIso }).eq('id', r.id)
         }
 
+        // nexi_transactions has no array — keep the flat merge (respecting any
+        // manual override already on the row).
         const { data: txRows } = await supabase
             .from('nexi_transactions')
             .select('id, metadata')
             .eq('contract_id', card.contractId)
         for (const r of (txRows || [])) {
-            await applyPatch('nexi_transactions', String(r.id), (r.metadata || {}) as Record<string, unknown>)
+            const meta = (r.metadata || {}) as Record<string, unknown>
+            const usePatch = (meta.nexi_card_type_source === 'manual' && patch.nexi_card_type) ? patchWithoutType : patch
+            if (Object.keys(usePatch).length === 0) continue
+            await supabase.from('nexi_transactions').update({ metadata: { ...meta, ...usePatch }, updated_at: nowIso }).eq('id', r.id)
         }
 
         if (resolvedType) results.push({ contractId: card.contractId, cardType: resolvedType, brand: resolvedBrand, method })

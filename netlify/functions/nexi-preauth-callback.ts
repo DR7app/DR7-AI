@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { applyTokenizedCardUpdate } from './utils/nexiCards';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -186,7 +187,7 @@ const handler: Handler = async (event) => {
                             const { data: cust } = await supabase.from('customers_extended').select('id, metadata').eq('id', custId).maybeSingle();
                             if (cust) {
                                 await supabase.from('customers_extended').update({
-                                    metadata: { ...(cust.metadata || {}), nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() },
+                                    metadata: applyTokenizedCardUpdate(cust.metadata, { nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() }),
                                     updated_at: new Date().toISOString()
                                 }).eq('id', cust.id);
                                 saved = true;
@@ -197,7 +198,7 @@ const handler: Handler = async (event) => {
                             const { data: custByEmail } = await supabase.from('customers_extended').select('id, metadata').eq('email', custEmail).maybeSingle();
                             if (custByEmail) {
                                 await supabase.from('customers_extended').update({
-                                    metadata: { ...(custByEmail.metadata || {}), nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() },
+                                    metadata: applyTokenizedCardUpdate(custByEmail.metadata, { nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() }),
                                     updated_at: new Date().toISOString()
                                 }).eq('id', custByEmail.id);
                                 console.log(`[nexi-preauth-callback] Saved contractId ${contractId} on customer ${custByEmail.id} (by email)`);

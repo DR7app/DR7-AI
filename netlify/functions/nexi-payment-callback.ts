@@ -7,6 +7,7 @@ import { renderTemplate } from './utils/messageTemplates';
 import { getClubCashbackPct } from './utils/dr7ClubCashback';
 import { fetchNexiCardInfo } from './utils/nexiCardInfo';
 import { lookupBin as lookupBinShared } from './utils/binLookup';
+import { applyTokenizedCardUpdate } from './utils/nexiCards';
 import { getAdminNotificationPhone } from './utils/notificationPhone';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
@@ -464,7 +465,7 @@ const handler: Handler = async (event) => {
                         const { data: custByEmail } = await supabase.from('customers_extended').select('id, metadata').eq('email', custEmail).maybeSingle();
                         if (custByEmail) {
                             await supabase.from('customers_extended').update({
-                                metadata: { ...(custByEmail.metadata || {}), nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() },
+                                metadata: applyTokenizedCardUpdate(custByEmail.metadata, { nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() }),
                                 updated_at: new Date().toISOString()
                             }).eq('id', custByEmail.id);
                         }
@@ -1128,7 +1129,7 @@ const handler: Handler = async (event) => {
                         const { data: cust } = await supabase.from('customers_extended').select('id, metadata').eq('id', custId).maybeSingle();
                         if (cust) {
                             await supabase.from('customers_extended').update({
-                                metadata: { ...(cust.metadata || {}), ...metadataUpdate },
+                                metadata: applyTokenizedCardUpdate(cust.metadata, metadataUpdate),
                                 updated_at: new Date().toISOString()
                             }).eq('id', cust.id);
                             savedOnCustomer = true;
@@ -1174,7 +1175,7 @@ const handler: Handler = async (event) => {
 
                         if (custByPhone) {
                             await supabase.from('customers_extended').update({
-                                metadata: { ...(custByPhone.metadata || {}), ...metadataUpdate },
+                                metadata: applyTokenizedCardUpdate(custByPhone.metadata, metadataUpdate),
                                 updated_at: new Date().toISOString()
                             }).eq('id', custByPhone.id);
                             savedOnCustomer = true;
@@ -1191,7 +1192,7 @@ const handler: Handler = async (event) => {
                             .maybeSingle();
                         if (custByEmail) {
                             await supabase.from('customers_extended').update({
-                                metadata: { ...(custByEmail.metadata || {}), ...metadataUpdate },
+                                metadata: applyTokenizedCardUpdate(custByEmail.metadata, metadataUpdate),
                                 updated_at: new Date().toISOString()
                             }).eq('id', custByEmail.id);
                             savedOnCustomer = true;
