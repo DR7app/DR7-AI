@@ -4,7 +4,7 @@ import { formatRomeDate } from '../../../utils/timezoneUtils'
 import { formatEUR } from '../../../utils/moneyUtils'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
-import CardAddebitoButton from './CardAddebitoButton'
+import CustomerAddebitoButton from './CustomerAddebitoButton'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 
 interface PendingAddebito {
@@ -61,6 +61,7 @@ interface TokenizedCard {
     card_type: string
     card_brand: string
     updated_at: string
+    is_default?: boolean
     paid_total_cents?: number
     paid_count?: number
     payments?: CardPayment[]
@@ -1196,11 +1197,18 @@ export default function NexiTab() {
                                     </div>
                                     {card.contract_id && (
                                         <div className="mt-2">
-                                            <CardAddebitoButton
-                                                contractId={card.contract_id}
+                                            <CustomerAddebitoButton
+                                                cards={(card.email ? tokenizedCards.filter(tc => tc.email === card.email && tc.contract_id) : [card]).map(tc => ({
+                                                    contractId: tc.contract_id,
+                                                    maskedPan: tc.masked_pan || undefined,
+                                                    circuit: tc.circuit || undefined,
+                                                    cardType: tc.card_type || undefined,
+                                                    brand: tc.card_brand || undefined,
+                                                    isDefault: tc.is_default,
+                                                }))}
+                                                defaultContractId={card.contract_id}
                                                 customerEmail={card.email}
                                                 customerName={card.full_name}
-                                                cardLabel={card.masked_pan || card.circuit || undefined}
                                                 onDone={fetchAllAddebiti}
                                             />
                                         </div>
