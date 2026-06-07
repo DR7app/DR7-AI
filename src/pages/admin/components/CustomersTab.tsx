@@ -6,7 +6,7 @@ import NewClientModal from './NewClientModal'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import ReportClienteModal from './ReportClienteModal'
-import CardAddebitoButton from './CardAddebitoButton'
+import CustomerAddebitoButton from './CustomerAddebitoButton'
 import { listCardsFromMetadata } from '../../../utils/nexiCards'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import DateRangeFilter from '../../../components/DateRangeFilter'
@@ -2080,16 +2080,13 @@ export default function CustomersTab() {
                             <p className="font-mono text-[11px] text-theme-text-secondary break-all">{card.contractId}</p>
                           </div>
                         </div>
-                        <div className="mt-3">
-                          <CardAddebitoButton
-                            contractId={card.contractId}
-                            customerEmail={viewingCustomerDetails.email}
-                            customerName={custName}
-                            cardLabel={card.maskedPan || card.circuit || undefined}
-                          />
-                        </div>
                       </div>
                     ))}
+                    <CustomerAddebitoButton
+                      cards={cards}
+                      customerEmail={viewingCustomerDetails.email}
+                      customerName={custName}
+                    />
                   </div>
                 )
               })()}

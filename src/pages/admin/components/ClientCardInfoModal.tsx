@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { listCardsFromMetadata, type NexiCardView } from '../../../utils/nexiCards'
-import CardAddebitoButton from './CardAddebitoButton'
+import CustomerAddebitoButton from './CustomerAddebitoButton'
 
 interface ClientCardInfoModalProps {
     customerId: string | null
@@ -238,17 +238,14 @@ export default function ClientCardInfoModal({ customerId, customerEmail, custome
                                                             Aggiornata: {new Date(card.lastUsedAt).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })}
                                                         </div>
                                                     )}
-                                                    <div className="mt-3">
-                                                        <CardAddebitoButton
-                                                            contractId={card.contractId}
-                                                            customerEmail={data?.email}
-                                                            customerName={data?.full_name}
-                                                            cardLabel={card.maskedPan || circuitLabel || undefined}
-                                                        />
-                                                    </div>
                                                 </div>
                                             )
                                         })}
+                                        <CustomerAddebitoButton
+                                            cards={cards}
+                                            customerEmail={data?.email}
+                                            customerName={data?.full_name}
+                                        />
                                     </div>
                                 ) : (
                                     <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">

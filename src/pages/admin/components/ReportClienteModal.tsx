@@ -5,7 +5,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { listCardsFromMetadata } from '../../../utils/nexiCards'
-import CardAddebitoButton from './CardAddebitoButton'
+import CustomerAddebitoButton from './CustomerAddebitoButton'
 
 interface ReportClienteProps {
   customerId: string
@@ -1373,16 +1373,13 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                           {card.circuit && <span className="uppercase">{card.circuit}</span>}
                           {card.cardType && <span className="text-theme-text-muted/70">· {card.cardType}</span>}
                         </div>
-                        <div className="mt-2">
-                          <CardAddebitoButton
-                            contractId={card.contractId}
-                            customerEmail={customer.email}
-                            customerName={customerName}
-                            cardLabel={card.maskedPan || card.circuit || undefined}
-                          />
-                        </div>
                       </div>
                     ))}
+                    <CustomerAddebitoButton
+                      cards={cards}
+                      customerEmail={customer.email}
+                      customerName={customerName}
+                    />
                   </div>
                 )
               })()}
