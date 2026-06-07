@@ -5806,8 +5806,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           ...(editingId ? (() => {
             const existingBooking = bookings.find(b => b.id === editingId)
             const bd = existingBooking?.booking_details
+            // 2026-06-06: quando una modifica salda interamente la prenotazione
+            // (payment_status = 'paid'), marca come 'paid' anche le estensioni
+            // ancora 'pending'/'partial'/'nexi_pay_by_link' in extension_history.
+            // Senza questo il totale risulta pagato ma la prenotazione resta in
+            // "Da Saldare", perche' UnpaidBookingsTab segnala qualsiasi estensione
+            // non saldata (caso Bartoli: €2500 incassati ma 2 estensioni pending).
+            const isFullyPaidEdit = formData.payment_status === 'paid'
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const settledExtensionHistory = (isFullyPaidEdit && Array.isArray(bd?.extension_history))
+              ? bd!.extension_history.map((ext: any) => (
+                  (ext?.payment_status === 'pending' || ext?.payment_status === 'partial' || ext?.payment_status === 'nexi_pay_by_link')
+                    ? { ...ext, payment_status: 'paid', amount_paid: ext?.additional_amount ?? ext?.amount_paid, paid_at: new Date().toISOString() }
+                    : ext
+                ))
+              : bd?.extension_history
             return bd ? {
-              extension_history: bd.extension_history,
+              extension_history: settledExtensionHistory,
               extension_contracts: bd.extension_contracts,
               contract_generated_at: bd.contract_generated_at,
               depositOption: bd.depositOption,
