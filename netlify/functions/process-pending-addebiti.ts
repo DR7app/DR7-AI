@@ -280,81 +280,98 @@ const processHandler: Handler = async () => {
         }
 
         try {
-            let currentAmountCents = addebito.amount_cents
             const minAmountCents = 50 // €0.50 minimum
             let charged = false
             let lastError = ''
             let attempts = 0
+            let chargedAmountCents = 0
+            let usedContractId: string = addebito.contract_id
 
-            // Auto-retry with -10% each attempt, 1 second delay between
-            while (currentAmountCents >= minAmountCents) {
-                const amountEur = currentAmountCents / 100
-                attempts++
-                console.log(`[process-pending-addebiti] Attempt #${attempts} — €${amountEur.toFixed(2)} for addebito ${addebito.id}`)
+            // Carte da provare in CASCATA, UNA ALLA VOLTA. Per OGNI carta
+            // eseguiamo l'INTERO ladder -10% partendo dall'importo pieno
+            // (1800, poi 1620, 1458, ... fino al minimo). Se la carta esaurisce
+            // il ladder senza accettare, passiamo alla carta successiva e
+            // ripartiamo dall'importo pieno. La prima carta+importo che accetta
+            // vince e ci fermiamo (totale prelevato = un solo addebito).
+            const cascadeCards: string[] = Array.isArray(addebito.cascade_contract_ids) && addebito.cascade_contract_ids.length > 0
+                ? addebito.cascade_contract_ids.filter((x: unknown) => typeof x === 'string' && x)
+                : [addebito.contract_id]
 
-                try {
-                    const result = await chargeMit({
-                        contractId: addebito.contract_id,
-                        amount: amountEur,
-                        description: `Addebito: ${addebito.causale} - Contratto ${addebito.contract_number}`,
-                        bookingId: addebito.booking_id || null,
-                        customerEmail: addebito.customer_email,
-                        customerName: addebito.customer_name,
-                    })
+            for (const cid of cascadeCards) {
+                if (charged) break
+                let currentAmountCents = addebito.amount_cents
+                while (currentAmountCents >= minAmountCents) {
+                    const amountEur = currentAmountCents / 100
+                    attempts++
+                    console.log(`[process-pending-addebiti] Attempt #${attempts} — €${amountEur.toFixed(2)} carta ...${String(cid).slice(-6)} for addebito ${addebito.id}`)
+                    let ok = false
+                    try {
+                        const r = await chargeMit({
+                            contractId: cid,
+                            amount: amountEur,
+                            description: `Addebito: ${addebito.causale} - Contratto ${addebito.contract_number}`,
+                            bookingId: addebito.booking_id || null,
+                            customerEmail: addebito.customer_email,
+                            customerName: addebito.customer_name,
+                        })
+                        if (r.success) { ok = true }
+                        else { lastError = r.error || 'DECLINED'; console.log(`[process-pending-addebiti] ❌ €${amountEur.toFixed(2)} carta ...${String(cid).slice(-6)} rifiutato: ${lastError}`) }
+                    } catch (fetchErr: any) {
+                        lastError = fetchErr.message
+                        console.log(`[process-pending-addebiti] ❌ €${amountEur.toFixed(2)} carta ...${String(cid).slice(-6)} errore: ${lastError}`)
+                    }
 
-                    if (result.success) {
-                        console.log(`[process-pending-addebiti] ✅ Charged €${amountEur.toFixed(2)} (attempt #${attempts}) for addebito ${addebito.id}`)
-                        const remainingCents = addebito.amount_cents - currentAmountCents
-                        await supabase.from('pending_addebiti').update({
-                            status: 'charged',
-                            charged_at: new Date().toISOString(),
-                            charge_count: (addebito.charge_count || 0) + attempts,
-                            charged_amount_cents: currentAmountCents,
-                            error_message: remainingCents > 0
-                                ? `Addebitato €${amountEur.toFixed(2)} di €${(addebito.amount_cents / 100).toFixed(2)} — rimanente €${(remainingCents / 100).toFixed(2)} riprogrammato`
-                                : (attempts > 1 ? `Addebitato €${amountEur.toFixed(2)} dopo ${attempts} tentativi` : null),
-                        }).eq('id', addebito.id)
-
-                        // If partial charge, create new addebito for the remaining amount (skip emails, go straight to charge)
-                        if (remainingCents >= 50) {
-                            const nextChargeAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // retry in 30 days
-                            await supabase.from('pending_addebiti').insert({
-                                transaction_id: null,
-                                booking_id: addebito.booking_id,
-                                customer_name: addebito.customer_name,
-                                customer_email: addebito.customer_email,
-                                contract_number: addebito.contract_number,
-                                contract_id: addebito.contract_id,
-                                amount_cents: remainingCents,
-                                causale: `Rimanente da addebito parziale — €${(remainingCents / 100).toFixed(2)}`,
-                                status: 'second_email_sent', // skip emails, go straight to charge phase
-                                email_sent_at: addebito.email_sent_at,
-                                second_email_sent_at: new Date().toISOString(),
-                                charge_after: addebito.charge_after,
-                                mit_charge_after: nextChargeAt,
-                                recurring: true,
-                                interval_hours: 720, // 30 days
-                                photo_urls: addebito.photo_urls,
-                                charge_count: 0,
-                            })
-                            console.log(`[process-pending-addebiti] Created follow-up addebito for remaining €${(remainingCents / 100).toFixed(2)}`)
-                        }
-
+                    if (ok) {
+                        chargedAmountCents = currentAmountCents
+                        usedContractId = cid
                         charged = true
                         break
-                    } else {
-                        lastError = result.error || 'DECLINED'
-                        console.log(`[process-pending-addebiti] ❌ €${amountEur.toFixed(2)} rifiutato: ${lastError}`)
                     }
-                } catch (fetchErr: any) {
-                    lastError = fetchErr.message
-                    console.log(`[process-pending-addebiti] ❌ €${amountEur.toFixed(2)} errore: ${lastError}`)
-                }
 
-                // Reduce by 10% and retry quickly
-                currentAmountCents = Math.round(currentAmountCents * 0.9)
-                if (currentAmountCents >= minAmountCents) {
-                    await new Promise(r => setTimeout(r, 200))
+                    // Reduce by 10% and retry quickly on the SAME card
+                    currentAmountCents = Math.round(currentAmountCents * 0.9)
+                    if (currentAmountCents >= minAmountCents) await new Promise(r => setTimeout(r, 200))
+                }
+            }
+
+            if (charged) {
+                const amountEur = chargedAmountCents / 100
+                console.log(`[process-pending-addebiti] ✅ Charged €${amountEur.toFixed(2)} (attempt #${attempts}, carta ...${String(usedContractId).slice(-6)}) for addebito ${addebito.id}`)
+                const remainingCents = addebito.amount_cents - chargedAmountCents
+                await supabase.from('pending_addebiti').update({
+                    status: 'charged',
+                    charged_at: new Date().toISOString(),
+                    charge_count: (addebito.charge_count || 0) + attempts,
+                    charged_amount_cents: chargedAmountCents,
+                    error_message: remainingCents > 0
+                        ? `Addebitato €${amountEur.toFixed(2)} di €${(addebito.amount_cents / 100).toFixed(2)} — rimanente €${(remainingCents / 100).toFixed(2)} riprogrammato`
+                        : (attempts > 1 ? `Addebitato €${amountEur.toFixed(2)} dopo ${attempts} tentativi` : null),
+                }).eq('id', addebito.id)
+
+                // If partial charge, create new addebito for the remaining amount (skip emails, go straight to charge)
+                if (remainingCents >= 50) {
+                    const nextChargeAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // retry in 30 days
+                    await supabase.from('pending_addebiti').insert({
+                        transaction_id: null,
+                        booking_id: addebito.booking_id,
+                        customer_name: addebito.customer_name,
+                        customer_email: addebito.customer_email,
+                        contract_number: addebito.contract_number,
+                        contract_id: usedContractId,
+                        ...(addebito.cascade_contract_ids ? { cascade_contract_ids: addebito.cascade_contract_ids } : {}),
+                        amount_cents: remainingCents,
+                        causale: `Rimanente da addebito parziale — €${(remainingCents / 100).toFixed(2)}`,
+                        status: 'second_email_sent', // skip emails, go straight to charge phase
+                        email_sent_at: addebito.email_sent_at,
+                        second_email_sent_at: new Date().toISOString(),
+                        charge_after: addebito.charge_after,
+                        mit_charge_after: nextChargeAt,
+                        recurring: true,
+                        interval_hours: 720, // 30 days
+                        photo_urls: addebito.photo_urls,
+                        charge_count: 0,
+                    })
+                    console.log(`[process-pending-addebiti] Created follow-up addebito for remaining €${(remainingCents / 100).toFixed(2)}`)
                 }
             }
 

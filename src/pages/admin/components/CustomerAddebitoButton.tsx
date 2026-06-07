@@ -28,14 +28,16 @@ interface CustomerAddebitoButtonProps {
 export default function CustomerAddebitoButton({
     cards, customerEmail, customerName, bookingId, defaultContractId, autoOpen, onDone,
 }: CustomerAddebitoButtonProps) {
-    const initialCard = (defaultContractId && cards.some(c => c.contractId === defaultContractId))
+    const defaultCid = (defaultContractId && cards.some(c => c.contractId === defaultContractId))
         ? defaultContractId
         : (cards.find(c => c.isDefault)?.contractId || cards[0]?.contractId || '')
 
     const [open, setOpen] = useState(!!autoOpen)
     const [amount, setAmount] = useState('')
     const [causale, setCausale] = useState('')
-    const [contractId, setContractId] = useState(initialCard)
+    // Carte selezionate per l'addebito. Default: la carta predefinita. Si
+    // possono selezionare piu' carte (o tutte): la cascata le prova in ordine.
+    const [selected, setSelected] = useState<Record<string, boolean>>(defaultCid ? { [defaultCid]: true } : {})
     const [sending, setSending] = useState(false)
 
     if (cards.length === 0) return null
@@ -46,11 +48,20 @@ export default function CustomerAddebitoButton({
         return `${pan}${extra ? ` — ${extra}` : ''}${c.isDefault ? ' (predefinita)' : ''}`
     }
 
-    const canSubmit = !!contractId && !!customerEmail && parseFloat(amount) > 0 && !sending
+    // Carte selezionate NELL'ORDINE della lista (la cascata parte dalla prima).
+    const orderedSelected = cards.filter(c => selected[c.contractId]).map(c => c.contractId)
+    const allSelected = cards.length > 0 && orderedSelected.length === cards.length
+    const canSubmit = orderedSelected.length > 0 && !!customerEmail && parseFloat(amount) > 0 && !sending
+
+    const toggleCard = (cid: string) => setSelected(s => ({ ...s, [cid]: !s[cid] }))
+    const toggleAll = () => {
+        if (allSelected) setSelected(defaultCid ? { [defaultCid]: true } : {})
+        else setSelected(Object.fromEntries(cards.map(c => [c.contractId, true])))
+    }
 
     async function submit() {
         if (!customerEmail) { toast.error('Email cliente mancante'); return }
-        if (!contractId) { toast.error('Seleziona una carta'); return }
+        if (orderedSelected.length === 0) { toast.error('Seleziona almeno una carta'); return }
         const amt = parseFloat(amount)
         if (!amt || amt <= 0) { toast.error('Inserisci un importo valido'); return }
 
@@ -65,7 +76,8 @@ export default function CustomerAddebitoButton({
                     customerEmail,
                     amount: amt.toFixed(2),
                     causale: causale.trim() || `Addebito - ${customerName || customerEmail}`,
-                    contractId,
+                    contractId: orderedSelected[0],
+                    contractIds: orderedSelected.length > 1 ? orderedSelected : undefined,
                 }),
             })
             const data = await res.json().catch(() => ({}))
@@ -118,18 +130,29 @@ export default function CustomerAddebitoButton({
                 />
             </div>
 
-            {/* 2) Scelta carta */}
+            {/* 2) Scelta carta/e — selezione multipla, cascata in ordine */}
             <div>
-                <label className="text-[11px] text-theme-text-muted">Carta da addebitare</label>
-                <select
-                    value={contractId}
-                    onChange={e => setContractId(e.target.value)}
-                    className="w-full mt-1 px-2 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
-                >
+                <div className="flex items-center justify-between">
+                    <label className="text-[11px] text-theme-text-muted">Carta/e da addebitare</label>
+                    {cards.length > 1 && (
+                        <button type="button" onClick={toggleAll} className="text-[11px] text-dr7-gold hover:underline">
+                            {allSelected ? 'Deseleziona tutte' : 'Seleziona tutte'}
+                        </button>
+                    )}
+                </div>
+                <div className="mt-1 space-y-1 max-h-40 overflow-y-auto">
                     {cards.map(c => (
-                        <option key={c.contractId} value={c.contractId}>{cardLabel(c)}</option>
+                        <label key={c.contractId} className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border text-sm cursor-pointer">
+                            <input type="checkbox" checked={!!selected[c.contractId]} onChange={() => toggleCard(c.contractId)} className="accent-dr7-gold" />
+                            <span className="text-theme-text-primary truncate">{cardLabel(c)}</span>
+                        </label>
                     ))}
-                </select>
+                </div>
+                {orderedSelected.length > 1 && (
+                    <div className="text-[10px] text-theme-text-muted mt-1">
+                        Cascata: prova in ordine dall'alto e si ferma alla prima carta che accetta (per ogni carta: importo pieno, poi −10%, ecc.).
+                    </div>
+                )}
             </div>
 
             {/* 3) Causale */}

@@ -38,6 +38,7 @@ export const handler: Handler = async (event) => {
             amount,
             causale,
             contractId,
+            contractIds,
             recurring,
             intervalHours,
             photoUrls,
@@ -94,7 +95,11 @@ export const handler: Handler = async (event) => {
             customer_name: customerName || '',
             customer_email: customerEmail,
             contract_number: contractRef,
-            contract_id: contractId || null,
+            contract_id: contractId || (Array.isArray(contractIds) ? contractIds[0] : null) || null,
+            // Cascata multi-carta: lista ordinata di carte da provare (la prima
+            // che accetta vince). Inclusa SOLO con 2+ carte: cosi' gli addebiti
+            // a carta singola funzionano anche se la colonna non esiste ancora.
+            ...((Array.isArray(contractIds) && contractIds.filter(Boolean).length > 1) ? { cascade_contract_ids: contractIds.filter(Boolean) } : {}),
             amount_cents: Math.round(parseFloat(amount) * 100),
             causale: causale,
             status: 'email_sent',
