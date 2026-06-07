@@ -20,6 +20,7 @@ import { requireAuth } from './require-auth'
 import { getCorsOrigin } from './cors-headers'
 import { fetchNexiCardInfo } from './utils/nexiCardInfo'
 import { lookupBin as lookupBinShared } from './utils/binLookup'
+import { applyTokenizedCardUpdate, listCards } from './utils/nexiCards'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -164,8 +165,13 @@ export const handler: Handler = async (event) => {
         const custHasBrand = typeof custMeta.nexi_card_brand === 'string' && (custMeta.nexi_card_brand as string).length > 0
         const txHasType = typeof txMeta.nexi_card_type === 'string' && (txMeta.nexi_card_type as string).length > 0
         const txHasBrand = typeof txMeta.nexi_card_brand === 'string' && (txMeta.nexi_card_brand as string).length > 0
+        // Multi-card: non saltare se questa carta (tx.contract_id) NON è ancora
+        // nell'array nexi_cards del cliente — va aggiunta anche se i campi flat
+        // sono già pieni per un'ALTRA carta. (Caso Fofana: piu' carte usate, ma
+        // solo l'ultima salvata sul profilo perche' prima si sovrascriveva.)
+        const inArray = !cust || listCards(cust.metadata).some(c => c.contractId === tx.contract_id)
         const fullyPopulated = (!cust || (existingContract && custMeta.nexi_card_masked_pan && custHasType && custHasBrand))
-            && txAlreadyHasPan && txHasType && txHasBrand
+            && txAlreadyHasPan && txHasType && txHasBrand && inArray
         if (fullyPopulated) {
             skipped++
             continue
@@ -219,9 +225,12 @@ export const handler: Handler = async (event) => {
             results.push({ orderId, email, status: cust ? 'would_save' : 'would_save_tx_only', detail: `${maskedPan} (${circuit})` })
         } else {
             if (cust) {
+                // UPSERT nell'array nexi_cards (NON sovrascrivere): aggiunge la
+                // carta senza cambiare la predefinita. Cosi' recuperiamo TUTTE
+                // le carte storiche del cliente, non solo l'ultima.
                 await supabase
                     .from('customers_extended')
-                    .update({ metadata: { ...(cust.metadata || {}), ...metadataUpdate }, updated_at: new Date().toISOString() })
+                    .update({ metadata: applyTokenizedCardUpdate(cust.metadata, metadataUpdate, { makeDefault: false }), updated_at: new Date().toISOString() })
                     .eq('id', cust.id)
             } else {
                 // No matching customer: log it but still write to the
