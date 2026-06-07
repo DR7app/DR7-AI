@@ -166,11 +166,12 @@ export function applyTokenizedCardUpdate(
     if (makeDefault) next = next.map(c => ({ ...c, isDefault: c.contractId === contractId }))
     else if (!next.some(c => c.isDefault)) next = next.map((c, i) => ({ ...c, isDefault: i === 0 }))
 
-    // Mirror default → flat, then layer any extra non-card keys from flatUpdate
-    // (e.g. nexi_card_bin, nexi_card_updated) so nothing the caller sent is lost.
-    const mirrored = mirrorDefaultToFlat(base, next)
-    const extra: Meta = { ...flatUpdate }
-    return { ...mirrored, ...extra, nexi_cards: next }
+    // Mirror the DEFAULT card → flat keys. We deliberately do NOT re-spread
+    // flatUpdate on top: when this upsert is NOT for the default card (e.g. a
+    // backfill adding a 2nd card), spreading its possibly-empty flat fields
+    // would clobber the REAL default's flat PAN/type. The flat keys come solely
+    // from mirrorDefaultToFlat (driven by whichever card is default).
+    return mirrorDefaultToFlat(base, next)
 }
 
 /** Patch descriptive fields of one card (by contractId) — e.g. card-type resolution. */

@@ -186,6 +186,27 @@ export const handler: Handler = async (event) => {
         })
         if (!card) {
             nexiNotFound++
+            // Nessun dettaglio fresco da Nexi, ma se c'e' un contract_id e un
+            // cliente registriamo COMUNQUE il token nell'array nexi_cards (cosi'
+            // la carta e' selezionabile per l'addebito anche senza PAN). Usa i
+            // dati gia' presenti sulla transazione (circuito/tipo).
+            const cidOnly = typeof tx.contract_id === 'string' ? tx.contract_id : ''
+            if (cust && cidOnly && !listCards(cust.metadata).some(c => c.contractId === cidOnly)) {
+                if (!dryRun) {
+                    const m2 = applyTokenizedCardUpdate(cust.metadata, {
+                        nexi_contract_id: cidOnly,
+                        nexi_contract_updated: new Date().toISOString(),
+                        nexi_card_masked_pan: (txMeta.nexi_card_masked_pan as string) || (txMeta.masked_pan as string) || '',
+                        nexi_card_circuit: (txMeta.nexi_card_circuit as string) || (txMeta.circuit as string) || '',
+                        nexi_card_type: (txMeta.nexi_card_type as string) || (txMeta.card_type as string) || '',
+                        nexi_card_brand: (txMeta.nexi_card_brand as string) || (txMeta.card_brand as string) || '',
+                    }, { makeDefault: false })
+                    await supabase.from('customers_extended').update({ metadata: m2, updated_at: new Date().toISOString() }).eq('id', cust.id)
+                    saved++
+                }
+                results.push({ orderId, email, status: dryRun ? 'would_save_token_only' : 'saved_token_only', detail: `token ...${cidOnly.slice(-6)} (senza PAN Nexi)` })
+                continue
+            }
             results.push({ orderId, email, status: 'no_nexi_details' })
             continue
         }
@@ -259,7 +280,7 @@ export const handler: Handler = async (event) => {
             mode: dryRun ? 'dry_run' : 'apply',
             scanned: txs.length,
             saved: dryRun ? 0 : saved,
-            would_save: dryRun ? results.filter(r => r.status === 'would_save').length : 0,
+            would_save: dryRun ? results.filter(r => r.status === 'would_save' || r.status === 'would_save_token_only').length : 0,
             skipped,
             no_customer_match: customerNotFound,
             no_nexi_data: nexiNotFound,
