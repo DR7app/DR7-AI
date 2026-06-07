@@ -6,6 +6,8 @@ import NewClientModal from './NewClientModal'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import ReportClienteModal from './ReportClienteModal'
+import CardAddebitoButton from './CardAddebitoButton'
+import { listCardsFromMetadata } from '../../../utils/nexiCards'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { useClientStatus } from '../../../contexts/ClientStatusContext'
@@ -2042,45 +2044,55 @@ export default function CustomersTab() {
               </div>
 
 
-              {/* Carta salvata in Nexi (tokenizzata).
-                  Se presente, possiamo addebitare direttamente: il cliente
-                  e' candidato per noleggio SENZA cauzione fisica. */}
-              {viewingCustomerDetails.metadata?.nexi_contract_id && (
-                <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded-lg p-4">
-                  <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-300 mb-3 flex items-center justify-between border-b border-emerald-200 dark:border-emerald-900 pb-2">
-                    <span>Carta salvata (Nexi)</span>
-                    <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-200 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200">
-                      Sicuro per senza cauzione
-                    </span>
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <span className="text-theme-text-muted text-xs">Numero (mascherato):</span>
-                      <p className="font-mono font-semibold text-theme-text-primary">
-                        {viewingCustomerDetails.metadata.nexi_card_masked_pan || '—'}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-theme-text-muted text-xs">Circuito / Brand:</span>
-                      <p className="font-medium text-theme-text-primary">
-                        {[viewingCustomerDetails.metadata.nexi_card_circuit, viewingCustomerDetails.metadata.nexi_card_brand].filter(Boolean).join(' · ') || '—'}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-theme-text-muted text-xs">Tipo carta:</span>
-                      <p className="font-medium text-theme-text-primary">
-                        {viewingCustomerDetails.metadata.nexi_card_type || '—'}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-theme-text-muted text-xs">Contract ID:</span>
-                      <p className="font-mono text-[11px] text-theme-text-secondary break-all">
-                        {viewingCustomerDetails.metadata.nexi_contract_id}
-                      </p>
-                    </div>
+              {/* Carte salvate in Nexi (tokenizzate) — multi-carta.
+                  Se presenti, possiamo addebitare direttamente (debito reale):
+                  il cliente e' candidato per noleggio SENZA cauzione fisica.
+                  Ogni carta ha il proprio bottone Addebita. */}
+              {(() => {
+                const cards = listCardsFromMetadata(viewingCustomerDetails.metadata)
+                if (cards.length === 0) return null
+                const custName = viewingCustomerDetails.full_name || `${viewingCustomerDetails.nome || ''} ${viewingCustomerDetails.cognome || ''}`.trim()
+                return (
+                  <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded-lg p-4 space-y-4">
+                    <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-300 flex items-center justify-between border-b border-emerald-200 dark:border-emerald-900 pb-2">
+                      <span>{cards.length > 1 ? `Carte salvate (Nexi) — ${cards.length}` : 'Carta salvata (Nexi)'}</span>
+                      <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-200 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200">
+                        Sicuro per senza cauzione
+                      </span>
+                    </h4>
+                    {cards.map((card) => (
+                      <div key={card.contractId} className="border-t border-emerald-200/60 dark:border-emerald-900/60 pt-3 first:border-t-0 first:pt-0">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <span className="text-theme-text-muted text-xs">Numero (mascherato):</span>
+                            <p className="font-mono font-semibold text-theme-text-primary">{card.maskedPan || '—'}</p>
+                          </div>
+                          <div>
+                            <span className="text-theme-text-muted text-xs">Circuito / Brand:</span>
+                            <p className="font-medium text-theme-text-primary">{[card.circuit, card.brand].filter(Boolean).join(' · ') || '—'}</p>
+                          </div>
+                          <div>
+                            <span className="text-theme-text-muted text-xs">Tipo carta:</span>
+                            <p className="font-medium text-theme-text-primary">{card.cardType || '—'}{card.isDefault ? ' · predefinita' : ''}</p>
+                          </div>
+                          <div>
+                            <span className="text-theme-text-muted text-xs">Contract ID:</span>
+                            <p className="font-mono text-[11px] text-theme-text-secondary break-all">{card.contractId}</p>
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <CardAddebitoButton
+                            contractId={card.contractId}
+                            customerEmail={viewingCustomerDetails.email}
+                            customerName={custName}
+                            cardLabel={card.maskedPan || card.circuit || undefined}
+                          />
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              )}
+                )
+              })()}
 
               {/* Note */}
               {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}

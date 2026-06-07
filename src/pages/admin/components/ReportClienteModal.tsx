@@ -4,6 +4,8 @@
  */
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
+import { listCardsFromMetadata } from '../../../utils/nexiCards'
+import CardAddebitoButton from './CardAddebitoButton'
 
 interface ReportClienteProps {
   customerId: string
@@ -1348,22 +1350,42 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                 </div>
               </div>
 
-              {/* Carta tokenizzata */}
-              {customer.metadata?.nexi_contract_id && (
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Carta su file</h3>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold uppercase">Tokenizzata</span>
+              {/* Carte tokenizzate (multi-carta) — ogni carta ha il bottone
+                  Addebita (debito reale, non pre-autorizzazione). */}
+              {(() => {
+                const cards = listCardsFromMetadata(customer.metadata)
+                if (cards.length === 0) return null
+                return (
+                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
+                        {cards.length > 1 ? `Carte su file (${cards.length})` : 'Carta su file'}
+                      </h3>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold uppercase">Tokenizzata</span>
+                    </div>
+                    {cards.map((card) => (
+                      <div key={card.contractId} className="border-t border-emerald-500/15 pt-2 first:border-t-0 first:pt-0">
+                        <div className="font-mono text-sm text-theme-text-primary">
+                          {card.maskedPan || '•••• •••• •••• ••••'}
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-1 text-[10px] text-theme-text-muted">
+                          {card.isDefault && <span className="px-1.5 py-0.5 rounded bg-dr7-gold/15 text-dr7-gold border border-dr7-gold/30 uppercase font-bold">Predefinita</span>}
+                          {card.circuit && <span className="uppercase">{card.circuit}</span>}
+                          {card.cardType && <span className="text-theme-text-muted/70">· {card.cardType}</span>}
+                        </div>
+                        <div className="mt-2">
+                          <CardAddebitoButton
+                            contractId={card.contractId}
+                            customerEmail={customer.email}
+                            customerName={customerName}
+                            cardLabel={card.maskedPan || card.circuit || undefined}
+                          />
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="font-mono text-sm text-theme-text-primary">
-                    {customer.metadata.nexi_card_masked_pan || '•••• •••• •••• ••••'}
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-1 text-[10px] text-theme-text-muted">
-                    {customer.metadata.nexi_card_circuit && <span className="uppercase">{customer.metadata.nexi_card_circuit}</span>}
-                    {customer.metadata.nexi_card_type && <span className="text-theme-text-muted/70">· {customer.metadata.nexi_card_type}</span>}
-                  </div>
-                </div>
-              )}
+                )
+              })()}
             </div>
           </aside>
         </div>
