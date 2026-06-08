@@ -691,6 +691,37 @@ export default function NexiTab() {
         }
     }
 
+    // Elimina una carta tokenizzata dal cliente (la toglie dall'array
+    // nexi_cards / chiavi flat tramite nexi-forget-card e riassegna la
+    // predefinita). Le transazioni passate restano per lo storico.
+    async function deleteCard(card: TokenizedCard) {
+        const label = card.masked_pan || card.circuit || `...${card.contract_id.slice(-6)}`
+        if (!confirm(
+            `Eliminare la carta ${label}${card.full_name ? ` di ${card.full_name}` : ''}?\n\n` +
+            `La carta verra' rimossa dall'elenco e non sara' piu' addebitabile.\n` +
+            `Le transazioni passate restano nello storico.`
+        )) return
+        const toastId = toast.loading('Eliminazione carta...')
+        try {
+            const res = await authFetch('/.netlify/functions/nexi-forget-card', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contractId: card.contract_id })
+            })
+            const data = await res.json().catch(() => ({}))
+            toast.dismiss(toastId)
+            if (res.ok && data.success) {
+                toast.success('Carta eliminata')
+                await fetchTokenizedCards()
+            } else {
+                toast.error(data.error || 'Eliminazione fallita')
+            }
+        } catch (err) {
+            toast.dismiss(toastId)
+            toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)))
+        }
+    }
+
     async function autoSyncMissingPans() {
         try {
             const res = await authFetch('/.netlify/functions/nexi-tokenize-backfill', {
@@ -1187,6 +1218,15 @@ export default function NexiTab() {
                                                     title="Crea pre-autorizzazione (blocca fondi senza addebitare)"
                                                 >
                                                     Pre-autorizza
+                                                </button>
+                                            )}
+                                            {card.contract_id && (
+                                                <button
+                                                    onClick={() => deleteCard(card)}
+                                                    className="text-[11px] px-2 py-1 rounded bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/25 whitespace-nowrap"
+                                                    title="Elimina questa carta tokenizzata"
+                                                >
+                                                    Elimina
                                                 </button>
                                             )}
                                             {/* 2026-06-04: bottone Diagnostica rimosso su richiesta utente.
