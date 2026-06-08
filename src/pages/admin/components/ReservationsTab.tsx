@@ -5150,7 +5150,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // 2026-05-18: solo Città + Costo sono richiesti. Indirizzo completo
       // (via/CAP/provincia) e' opzionale — l'utente vuole poter mettere
       // solo "Cagliari" senza dover compilare l'indirizzo intero.
-      if (formData.delivery_enabled) {
+      // Solo per CONSEGNA A DOMICILIO (indirizzo libero) servono Città+Costo.
+      // Per i luoghi nominati (aeroporti: Cagliari, Alghero, ...) i campi sono
+      // auto-compilati dal dropdown (label + fee da LOCATIONS): NON richiedere
+      // la città, altrimenti i ritiri/riconsegne in aeroporto diversi da
+      // Cagliari (es. Alghero) venivano bloccati con "Città mancante" (2026-06-08).
+      if (formData.delivery_enabled && formData.pickup_location === 'domicilio') {
         const deliveryMissing: string[] = []
         if (!formData.delivery_city.trim()) deliveryMissing.push('Città (consegna)')
         if (!formData.delivery_fee || parseFloat(formData.delivery_fee) < 0) deliveryMissing.push('Costo consegna')
@@ -5170,7 +5175,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
       // ===== VALIDATION: Home Pickup fields =====
       // 2026-05-18: solo Città + Costo sono richiesti per ritiro a domicilio.
-      if (formData.pickup_enabled) {
+      // Come sopra: la città è richiesta SOLO per il ritiro a domicilio
+      // (indirizzo libero). Per i luoghi nominati (aeroporti) è auto-compilata
+      // dal dropdown, quindi non bloccare (bug Alghero 2026-06-08).
+      if (formData.pickup_enabled && formData.dropoff_location === 'domicilio') {
         const pickupMissing: string[] = []
         if (!formData.pickup_city.trim()) pickupMissing.push('Città (ritiro)')
         if (!formData.pickup_fee || parseFloat(formData.pickup_fee) < 0) pickupMissing.push('Costo ritiro')
