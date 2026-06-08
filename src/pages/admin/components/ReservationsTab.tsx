@@ -2303,13 +2303,20 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // "Kasko Base" invece di RCA). Ripieghiamo sulla prima opzione VALIDA
       // della categoria (RCA se presente, è la base per ogni categoria).
       if (!isCurrentOptionValid && availableOptions.length > 0) {
-        const fallbackId = (availableOptions.find(opt => opt.id === 'RCA')?.id
-          || availableOptions[0]?.id
-          || 'KASKO_BASE') as KaskoTier
+        // Prefer a RCA option (match by id OR by name, since Centralina ids are
+        // random hashes), else the first valid option for the category.
+        const rca = availableOptions.find(opt => opt.id === 'RCA' || /^rca\b/i.test(opt.label || ''))
+        const fallbackId = (rca?.id || availableOptions[0]?.id || 'KASKO_BASE') as KaskoTier
         setFormData(prev => ({ ...prev, insurance_option: fallbackId }))
       }
     }
-  }, [formData.vehicle_id, vehicles, formData.insurance_option, customerTier])
+    // rentalConfig + configOverlay MUST be deps: la config Centralina spesso
+    // carica DOPO la selezione del veicolo. Senza queste dipendenze l'effetto
+    // non si ri-eseguiva al caricamento config, e per categorie non-legacy
+    // (scooter/urban/suv_luxury...) restava il fallback overlay (supercars
+    // Kasko Base) invece dell'RCA della categoria — il booking salvava
+    // l'assicurazione sbagliata in modo intermittente (bug 2026-06-08).
+  }, [formData.vehicle_id, vehicles, formData.insurance_option, customerTier, rentalConfig, configOverlay])
 
   // Auto-set sforo (km_overage_fee) based on config overrides > vehicle type
   useEffect(() => {
