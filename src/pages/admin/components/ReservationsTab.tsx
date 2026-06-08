@@ -532,13 +532,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [showUscita, setShowUscita] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingOriginalPaymentStatus, setEditingOriginalPaymentStatus] = useState<string | null>(null) // Track if payment changed from unpaid → paid
-  // Autista (consegna/ritiro fuori sede): se assegnato, la prenotazione si
-  // conferma SENZA contratto e si avvisa l'autista. La lista arriva da
-  // /autisti (clienti taggati metadata.role='autista').
+  // Autisti (consegna/ritiro fuori sede): si puo' assegnare un autista DIVERSO
+  // per il luogo di RITIRO (consegna al cliente) e per il luogo di RICONSEGNA
+  // (ritiro dal cliente). Se almeno uno e' assegnato, la prenotazione si
+  // conferma SENZA contratto e gli autisti ricevono l'avviso. La lista arriva
+  // da /autisti (clienti taggati metadata.role='autista').
   const [autisti, setAutisti] = useState<{ id: string; full_name: string; phone: string }[]>([])
   const [autistiLoading, setAutistiLoading] = useState(false)
-  const [selectedAutista, setSelectedAutista] = useState<{ id: string; full_name: string; phone: string } | null>(null)
-  const [showAutistaPicker, setShowAutistaPicker] = useState(false)
+  const [autistaRitiro, setAutistaRitiro] = useState<{ id: string; full_name: string; phone: string } | null>(null)
+  const [autistaRiconsegna, setAutistaRiconsegna] = useState<{ id: string; full_name: string; phone: string } | null>(null)
   const [showAllVehicles, setShowAllVehicles] = useState(false) // Admin override to show all vehicles
 
   // Limitation Override (OTP-based director approval)
@@ -965,6 +967,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     garante_phone: '',
     garante_email: '',
   })
+
+  // Carica la lista autisti quando il luogo di ritiro o riconsegna NON e' la
+  // sede DR7 (serve un autista per quel tratto).
+  useEffect(() => {
+    if ((formData.pickup_location !== 'dr7_office' || formData.dropoff_location !== 'dr7_office') && autisti.length === 0 && !autistiLoading) {
+      loadAutisti()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.pickup_location, formData.dropoff_location])
 
   // Revenue Management — dynamic price suggestion (uses PricingTrace from backend)
   const [revenueSuggestion, setRevenueSuggestion] = useState<{
@@ -3890,8 +3901,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     newSession('booking_edit')
     // Carica l'autista eventualmente assegnato a questa prenotazione.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setSelectedAutista(((booking as any).booking_details?.autista as { id: string; full_name: string; phone: string } | null) || null)
-    setShowAutistaPicker(false)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const _bdAut = (booking as any).booking_details || {}
+    setAutistaRitiro((_bdAut.autista_ritiro as { id: string; full_name: string; phone: string } | null) || (_bdAut.autista as { id: string; full_name: string; phone: string } | null) || null)
+    setAutistaRiconsegna((_bdAut.autista_riconsegna as { id: string; full_name: string; phone: string } | null) || null)
     setEditingOriginalPaymentStatus(booking.payment_status || 'pending')
     setConfirmBooking(booking.booking_details?.manually_confirmed === true)
     setShowForm(true)
@@ -4750,7 +4763,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // Nessun cliente selezionato ma c'e' un autista → la prenotazione e'
         // intestata all'AUTISTA (e' anch'esso un record customers_extended,
         // quindi il flusso sotto lo risolve come cliente).
-        const targetId = overrideCustomerId || formData.customer_id || (selectedAutista ? selectedAutista.id : '')
+        const _fallbackAutista = autistaRitiro || autistaRiconsegna
+        const targetId = overrideCustomerId || formData.customer_id || (_fallbackAutista ? _fallbackAutista.id : '')
 
         if (!targetId) {
           alert('Seleziona un cliente (o assegna un autista)')
@@ -5892,7 +5906,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           source: 'admin_manual',
           // Autista assegnato (consegna/ritiro fuori sede). Se presente, la
           // prenotazione e' confermata SENZA contratto.
-          autista: selectedAutista || null,
+          autista_ritiro: autistaRitiro || null,
+          autista_riconsegna: autistaRiconsegna || null,
           // Driver Tier
           driver_tier: customerTier?.tier || null,
           driver_age: customerTier?.driverAge || null,
@@ -6859,8 +6874,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       logger.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id,
         editingId ? '(edit - regenerating)' : '(new)',
         editHasBalanceOwed ? '(saldo dovuto — link firma rimandato al pagamento)' : '')
-      if (selectedAutista) {
-        // Autista assegnato (consegna/ritiro fuori sede): NESSUN contratto.
+      const hasAnyAutista = !!(autistaRitiro || autistaRiconsegna)
+      if (hasAnyAutista) {
+        // Almeno un autista assegnato (consegna/ritiro fuori sede): NESSUN contratto.
         logger.log('[Auto-Gen] Autista assegnato — salto generazione contratto per', insertedBooking.id)
       } else {
         try {
@@ -6871,28 +6887,36 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
       }
 
-      // Avvisa l'AUTISTA assegnato via WhatsApp (incarico consegna/ritiro).
-      // Salta se l'autista E' anche l'intestatario (riceve gia' la conferma).
-      if (selectedAutista?.phone && insertedBooking?.id && customerId !== selectedAutista.id) {
-        try {
-          const idShort = String(insertedBooking.id).slice(0, 8).toUpperCase()
-          const plate = vehicle?.plate || vehicle?.targa || ''
-          const autMsg = `*INCARICO AUTISTA - DR7*\n\n`
-            + `Ciao ${(selectedAutista.full_name || '').split(' ')[0]},\n`
-            + `ti e' stato assegnato un incarico:\n\n`
-            + `*Rif:* DR7-${idShort}\n`
-            + `*Cliente:* ${customerInfo?.full_name || 'N/A'}\n`
-            + `*Veicolo:* ${vehicle?.display_name || 'N/A'}${plate ? ` (${plate})` : ''}\n`
-            + `*Ritiro:* ${pickupLocationLabel}${formData.pickup_date ? ` - ${formData.pickup_date}${formData.pickup_time ? ' ' + formData.pickup_time : ''}` : ''}\n`
-            + `*Riconsegna:* ${dropoffLocationLabel}${formData.return_date ? ` - ${formData.return_date}${formData.return_time ? ' ' + formData.return_time : ''}` : ''}`
-          await fetch('/.netlify/functions/send-whatsapp-notification', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ customPhone: selectedAutista.phone, customMessage: autMsg }),
-          })
-          logger.log('[Auto-Gen] ✅ Avviso autista inviato a', selectedAutista.phone)
-        } catch (autErr) {
-          console.error('[Auto-Gen] ⚠️ Avviso autista fallito:', autErr)
+      // Avvisa gli AUTISTI assegnati via WhatsApp (un messaggio per autista, con
+      // il/i tratto/i assegnato/i). Salta l'autista che e' anche l'intestatario
+      // (riceve gia' la conferma) e raggruppa se lo stesso autista fa entrambi.
+      if (hasAnyAutista && insertedBooking?.id) {
+        const idShort = String(insertedBooking.id).slice(0, 8).toUpperCase()
+        const plate = vehicle?.plate || vehicle?.targa || ''
+        const veic = `${vehicle?.display_name || 'N/A'}${plate ? ` (${plate})` : ''}`
+        type Leg = { label: string; luogo: string; quando: string }
+        const groups: Record<string, { aut: { id: string; full_name: string; phone: string }; legs: Leg[] }> = {}
+        const addLeg = (aut: { id: string; full_name: string; phone: string } | null, leg: Leg) => {
+          if (!aut) return
+          if (!groups[aut.id]) groups[aut.id] = { aut, legs: [] }
+          groups[aut.id].legs.push(leg)
+        }
+        addLeg(autistaRitiro, { label: 'RITIRO (consegna al cliente)', luogo: pickupLocationLabel, quando: `${formData.pickup_date || ''}${formData.pickup_time ? ' ' + formData.pickup_time : ''}`.trim() })
+        addLeg(autistaRiconsegna, { label: 'RICONSEGNA (ritiro dal cliente)', luogo: dropoffLocationLabel, quando: `${formData.return_date || ''}${formData.return_time ? ' ' + formData.return_time : ''}`.trim() })
+        for (const { aut, legs } of Object.values(groups)) {
+          if (!aut.phone || aut.id === customerId) continue
+          let autMsg = `*INCARICO AUTISTA - DR7*\n\nCiao ${(aut.full_name || '').split(' ')[0]},\nti e' stato assegnato:\n\n*Rif:* DR7-${idShort}\n*Cliente:* ${customerInfo?.full_name || 'N/A'}\n*Veicolo:* ${veic}\n`
+          for (const l of legs) autMsg += `\n*${l.label}*\nLuogo: ${l.luogo}${l.quando ? `\nQuando: ${l.quando}` : ''}\n`
+          try {
+            await fetch('/.netlify/functions/send-whatsapp-notification', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ customPhone: aut.phone, customMessage: autMsg }),
+            })
+            logger.log('[Auto-Gen] ✅ Avviso autista inviato a', aut.phone)
+          } catch (autErr) {
+            console.error('[Auto-Gen] ⚠️ Avviso autista fallito:', autErr)
+          }
         }
       }
 
@@ -7146,7 +7170,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // ha la macchina, quindi deve firmare ora; non si aspetta il pagamento.
       // (Il deferral resta solo per gli EDIT con saldo dovuto, sotto.)
       const shouldSendSigningLink = !!insertedBooking?.id
-        && !selectedAutista       // autista assegnato → nessun contratto, nessun link di firma
+        && !(autistaRitiro || autistaRiconsegna)  // autista assegnato → nessun contratto, nessun link di firma
         && !editHasBalanceOwed  // defer signing link until after payment on edits with balance
         && (currentlyPaid || wasOriginallyPaid || confirmBooking)
       if (shouldSendSigningLink) {
@@ -7219,8 +7243,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
   function resetForm() {
     setCustomerTier(null)
-    setSelectedAutista(null)
-    setShowAutistaPicker(false)
+    setAutistaRitiro(null)
+    setAutistaRiconsegna(null)
     editFormSnapshotRef.current = null
     setTotalLock(false)
     // 2026-05-18: pulizia stato OTP residuo per evitare auto-resume su
@@ -8255,45 +8279,44 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
                   assegnato, la prenotazione si conferma SENZA contratto e
                   l'autista riceve un avviso WhatsApp. */}
               {(formData.pickup_location !== 'dr7_office' || formData.dropoff_location !== 'dr7_office') && (
-                <div className="md:col-span-2 p-3 rounded-lg border border-dr7-gold/40 bg-dr7-gold/5">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-dr7-gold">Autista (consegna/ritiro fuori sede)</p>
-                      <p className="text-[11px] text-theme-text-muted">Assegna un autista: la prenotazione viene confermata SENZA contratto e l'autista riceve l'avviso.</p>
-                    </div>
-                    {!showAutistaPicker && !selectedAutista && (
-                      <button
-                        type="button"
-                        onClick={() => { setShowAutistaPicker(true); if (autisti.length === 0) loadAutisti() }}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-dr7-gold/20 text-dr7-gold border border-dr7-gold/40 hover:bg-dr7-gold/30 whitespace-nowrap"
-                      >
-                        + Autista
-                      </button>
-                    )}
+                <div className="md:col-span-2 p-3 rounded-lg border border-dr7-gold/40 bg-dr7-gold/5 space-y-3">
+                  <div>
+                    <p className="text-sm font-semibold text-dr7-gold">Autista (consegna/ritiro fuori sede)</p>
+                    <p className="text-[11px] text-theme-text-muted">Assegna un autista per ogni tratto fuori sede (puo' essere diverso). Con almeno un autista la prenotazione si conferma SENZA contratto e l'autista riceve l'avviso.</p>
                   </div>
-                  {selectedAutista && (
-                    <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-theme-bg-secondary border border-theme-border px-3 py-2">
-                      <span className="text-sm text-theme-text-primary truncate">
-                        Autista: <b>{selectedAutista.full_name}</b>{selectedAutista.phone ? ` · ${selectedAutista.phone}` : ''}
-                      </span>
-                      <button type="button" onClick={() => setSelectedAutista(null)} className="text-xs text-red-400 hover:underline whitespace-nowrap">Rimuovi</button>
-                    </div>
+
+                  {autistiLoading && <p className="text-xs text-theme-text-muted">Caricamento autisti...</p>}
+                  {!autistiLoading && autisti.length === 0 && (
+                    <p className="text-[11px] text-amber-400">Nessun autista. Taggane uno in Clienti con "+ Autista".</p>
                   )}
-                  {showAutistaPicker && !selectedAutista && (
-                    <div className="mt-2">
-                      {autistiLoading ? (
-                        <p className="text-xs text-theme-text-muted">Caricamento autisti...</p>
-                      ) : autisti.length === 0 ? (
-                        <p className="text-[11px] text-amber-400">Nessun autista. Taggane uno in Clienti con "+ Autista".</p>
-                      ) : (
-                        <select
-                          className="w-full px-2 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
-                          value=""
-                          onChange={(e) => { const a = autisti.find(x => x.id === e.target.value); if (a) { setSelectedAutista(a); setShowAutistaPicker(false) } }}
-                        >
-                          <option value="">Seleziona autista...</option>
-                          {autisti.map(a => <option key={a.id} value={a.id}>{a.full_name}{a.phone ? ` · ${a.phone}` : ''}</option>)}
-                        </select>
+
+                  {!autistiLoading && autisti.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {formData.pickup_location !== 'dr7_office' && (
+                        <div>
+                          <label className="text-[11px] text-theme-text-muted">Autista RITIRO (consegna al cliente)</label>
+                          <select
+                            className="w-full mt-1 px-2 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
+                            value={autistaRitiro?.id || ''}
+                            onChange={(e) => setAutistaRitiro(autisti.find(a => a.id === e.target.value) || null)}
+                          >
+                            <option value="">— Nessun autista —</option>
+                            {autisti.map(a => <option key={a.id} value={a.id}>{a.full_name}{a.phone ? ` · ${a.phone}` : ''}</option>)}
+                          </select>
+                        </div>
+                      )}
+                      {formData.dropoff_location !== 'dr7_office' && (
+                        <div>
+                          <label className="text-[11px] text-theme-text-muted">Autista RICONSEGNA (ritiro dal cliente)</label>
+                          <select
+                            className="w-full mt-1 px-2 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
+                            value={autistaRiconsegna?.id || ''}
+                            onChange={(e) => setAutistaRiconsegna(autisti.find(a => a.id === e.target.value) || null)}
+                          >
+                            <option value="">— Nessun autista —</option>
+                            {autisti.map(a => <option key={a.id} value={a.id}>{a.full_name}{a.phone ? ` · ${a.phone}` : ''}</option>)}
+                          </select>
+                        </div>
                       )}
                     </div>
                   )}
