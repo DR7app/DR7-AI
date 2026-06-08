@@ -287,21 +287,21 @@ const processHandler: Handler = async () => {
             let chargedAmountCents = 0
             let usedContractId: string = addebito.contract_id
 
-            // Carte da provare in CASCATA, UNA ALLA VOLTA. Per OGNI carta
-            // eseguiamo l'INTERO ladder -10% partendo dall'importo pieno
-            // (1800, poi 1620, 1458, ... fino al minimo). Se la carta esaurisce
-            // il ladder senza accettare, passiamo alla carta successiva e
-            // ripartiamo dall'importo pieno. La prima carta+importo che accetta
-            // vince e ci fermiamo (totale prelevato = un solo addebito).
+            // CASCATA per IMPORTO, poi per carta. Per ogni importo del ladder
+            // -10% (prima l'importo PIENO, poi -10%, ...) proviamo TUTTE le carte
+            // in ordine; la prima che accetta vince. Si scende del 10% SOLO se
+            // NESSUNA carta accetta l'importo corrente. Esempio (2 carte, €10):
+            // 10 su carta1, 10 su carta2; se entrambe rifiutano -> 9 su carta1,
+            // 9 su carta2; ecc. Cosi' NON preleviamo un importo ridotto dalla
+            // prima carta quando la seconda potrebbe pagare l'intero importo.
             const cascadeCards: string[] = Array.isArray(addebito.cascade_contract_ids) && addebito.cascade_contract_ids.length > 0
                 ? addebito.cascade_contract_ids.filter((x: unknown) => typeof x === 'string' && x)
                 : [addebito.contract_id]
 
-            for (const cid of cascadeCards) {
-                if (charged) break
-                let currentAmountCents = addebito.amount_cents
-                while (currentAmountCents >= minAmountCents) {
-                    const amountEur = currentAmountCents / 100
+            let currentAmountCents = addebito.amount_cents
+            while (currentAmountCents >= minAmountCents && !charged) {
+                const amountEur = currentAmountCents / 100
+                for (const cid of cascadeCards) {
                     attempts++
                     console.log(`[process-pending-addebiti] Attempt #${attempts} — €${amountEur.toFixed(2)} carta ...${String(cid).slice(-6)} for addebito ${addebito.id}`)
                     let ok = false
@@ -327,11 +327,13 @@ const processHandler: Handler = async () => {
                         charged = true
                         break
                     }
-
-                    // Reduce by 10% and retry quickly on the SAME card
-                    currentAmountCents = Math.round(currentAmountCents * 0.9)
-                    if (currentAmountCents >= minAmountCents) await new Promise(r => setTimeout(r, 200))
+                    if (cascadeCards.length > 1) await new Promise(r => setTimeout(r, 200))
                 }
+
+                if (charged) break
+                // Nessuna carta ha accettato l'importo corrente: scendi del 10%.
+                currentAmountCents = Math.round(currentAmountCents * 0.9)
+                if (currentAmountCents >= minAmountCents) await new Promise(r => setTimeout(r, 200))
             }
 
             if (charged) {
