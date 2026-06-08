@@ -5157,7 +5157,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Cagliari (es. Alghero) venivano bloccati con "Città mancante" (2026-06-08).
       if (formData.delivery_enabled && formData.pickup_location === 'domicilio') {
         const deliveryMissing: string[] = []
-        if (!formData.delivery_city.trim()) deliveryMissing.push('Città (consegna)')
+        // Basta l'indirizzo OPPURE la città — non bloccare se l'operatore ha
+        // compilato la via ma non il campo Città separato (2026-06-08).
+        if (!formData.delivery_city.trim() && !formData.delivery_street.trim()) deliveryMissing.push('Indirizzo o Città (consegna)')
         if (!formData.delivery_fee || parseFloat(formData.delivery_fee) < 0) deliveryMissing.push('Costo consegna')
         if (deliveryMissing.length > 0) {
           setTimeout(() => {
@@ -5180,7 +5182,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // dal dropdown, quindi non bloccare (bug Alghero 2026-06-08).
       if (formData.pickup_enabled && formData.dropoff_location === 'domicilio') {
         const pickupMissing: string[] = []
-        if (!formData.pickup_city.trim()) pickupMissing.push('Città (ritiro)')
+        // Basta l'indirizzo OPPURE la città (vedi nota consegna sopra).
+        if (!formData.pickup_city.trim() && !formData.pickup_street.trim()) pickupMissing.push('Indirizzo o Città (ritiro)')
         if (!formData.pickup_fee || parseFloat(formData.pickup_fee) < 0) pickupMissing.push('Costo ritiro')
         if (pickupMissing.length > 0) {
           setTimeout(() => {
