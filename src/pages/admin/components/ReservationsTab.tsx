@@ -4747,10 +4747,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       } else {
         // Existing customer
         // If we have an override ID (from modal), use it. Otherwise verify formData.
-        const targetId = overrideCustomerId || formData.customer_id
+        // Nessun cliente selezionato ma c'e' un autista → la prenotazione e'
+        // intestata all'AUTISTA (e' anch'esso un record customers_extended,
+        // quindi il flusso sotto lo risolve come cliente).
+        const targetId = overrideCustomerId || formData.customer_id || (selectedAutista ? selectedAutista.id : '')
 
         if (!targetId) {
-          alert('Seleziona un cliente')
+          alert('Seleziona un cliente (o assegna un autista)')
           submitLockRef.current = false
           return
         }
@@ -6869,7 +6872,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // Avvisa l'AUTISTA assegnato via WhatsApp (incarico consegna/ritiro).
-      if (selectedAutista?.phone && insertedBooking?.id) {
+      // Salta se l'autista E' anche l'intestatario (riceve gia' la conferma).
+      if (selectedAutista?.phone && insertedBooking?.id && customerId !== selectedAutista.id) {
         try {
           const idShort = String(insertedBooking.id).slice(0, 8).toUpperCase()
           const plate = vehicle?.plate || vehicle?.targa || ''
