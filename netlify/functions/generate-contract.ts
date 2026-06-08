@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { PDFDocument, rgb, StandardFonts, PDFName, PDFArray, PDFDict, PDFString, PDFHexString } from 'pdf-lib'
 import { requireAuth } from './require-auth'
 import { computeRentalBillingDays } from './utils/computeRentalBillingDays'
+import { createHash } from 'crypto'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -1584,6 +1585,40 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                 .in('status', ['pending', 'otp_sent', 'otp_verified'])
         } catch (cleanupErr) {
             console.warn('[generate-contract] Failed to supersede old signature_requests:', cleanupErr)
+        }
+
+        // 8a-bis. Supersede le firme GIA' APPOSTE che ora sono su una versione
+        // OBSOLETA del PDF. Bug (confermato 2026-06-08, casi DR71698 Bartoli /
+        // DR71689 Demontis): dopo "modifica prenotazione -> rigenera -> rinvia",
+        // generate-contract azzera contracts.signed_pdf_url ma le vecchie
+        // signature_requests restavano 'signed' con il loro PDF firmato VECCHIO.
+        // Risultato: il booking risultava ancora "firmato" e signature-get /
+        // TrusteraTab servivano il contratto firmato con i DATI VECCHI.
+        // Confrontiamo l'hash del PDF appena rigenerato con l'original_pdf_hash
+        // di ogni firma: se DIVERSO i dati sono cambiati -> la firma e' obsoleta
+        // e va superseded (il cliente deve rifirmare la nuova versione). Se
+        // UGUALE (rigenerazione senza modifiche dati: es. callback pagamento,
+        // caso Fofana 2026-05-30) la firma resta valida. Stessa logica hash gia'
+        // usata da signature-init per decidere chi deve rifirmare.
+        try {
+            const newPdfHash = createHash('sha256').update(Buffer.from(pdfBytes)).digest('hex')
+            const { data: signedReqs } = await supabase
+                .from('signature_requests')
+                .select('id, original_pdf_hash')
+                .eq('booking_id', bookingId)
+                .eq('status', 'signed')
+            const obsolete = (signedReqs || []).filter(
+                r => r.original_pdf_hash && r.original_pdf_hash !== newPdfHash
+            )
+            if (obsolete.length > 0) {
+                await supabase
+                    .from('signature_requests')
+                    .update({ status: 'superseded', updated_at: new Date().toISOString() })
+                    .in('id', obsolete.map(r => r.id))
+                console.log(`[generate-contract] Superseded ${obsolete.length} firma/e su PDF obsoleto (booking ${bookingId}) — richiesta nuova firma`)
+            }
+        } catch (obsoleteErr) {
+            console.warn('[generate-contract] Failed to supersede obsolete signed requests:', obsoleteErr)
         }
 
         // 8b. Update Booking with contract URL (optional but good for direct access)
