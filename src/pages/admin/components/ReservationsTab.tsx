@@ -4767,14 +4767,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       } else {
         // Existing customer
         // If we have an override ID (from modal), use it. Otherwise verify formData.
-        // Nessun cliente selezionato ma c'e' un autista → la prenotazione e'
-        // intestata all'AUTISTA (e' anch'esso un record customers_extended,
-        // quindi il flusso sotto lo risolve come cliente).
-        const _fallbackAutista = autistaRitiro || autistaRiconsegna
-        const targetId = overrideCustomerId || formData.customer_id || (_fallbackAutista ? _fallbackAutista.id : '')
+        // L'autista e' SEMPRE aggiuntivo: serve comunque un cliente intestatario
+        // (e' lui che firma il contratto). L'autista riceve solo l'avviso.
+        const targetId = overrideCustomerId || formData.customer_id
 
         if (!targetId) {
-          alert('Seleziona un cliente (o assegna un autista)')
+          alert('Seleziona un cliente')
           submitLockRef.current = false
           return
         }
@@ -5725,13 +5723,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // Create or update vehicle rental booking in bookings table (for website availability blocking)
       // Note: vehicle is already declared above in scheduling validation block
 
-      // Get location labels — use actual address for domicilio, not the dropdown placeholder
+      // Get location labels — use actual address for domicilio, not the dropdown placeholder.
+      // 2026-06-08: rimuovi il suffisso " (+€XX.XX)" dei label dropdown (LOCATIONS)
+      // dai testi che finiscono nel contratto/messaggio: il prezzo del luogo va
+      // nel riepilogo/totale, non nel nome del luogo (e confondeva su totale 0).
+      const stripFee = (s: string) => s.replace(/\s*\(\+\s*€[\d.,]+\)\s*$/, '').trim()
       const pickupLocationLabel = formData.pickup_location === 'domicilio'
         ? `${formData.delivery_street || ''}, ${formData.delivery_city || ''}${formData.delivery_zip ? ' ' + formData.delivery_zip : ''}${formData.delivery_province ? ' ' + formData.delivery_province : ''}`.trim().replace(/^,\s*/, '') || 'Consegna a domicilio'
-        : LOCATIONS.find(l => l.value === formData.pickup_location)?.label || formData.pickup_location
+        : stripFee(LOCATIONS.find(l => l.value === formData.pickup_location)?.label || formData.pickup_location)
       const dropoffLocationLabel = formData.dropoff_location === 'domicilio'
         ? `${formData.pickup_street || ''}, ${formData.pickup_city || ''}${formData.pickup_zip ? ' ' + formData.pickup_zip : ''}${formData.pickup_province ? ' ' + formData.pickup_province : ''}`.trim().replace(/^,\s*/, '') || 'Ritiro a domicilio'
-        : LOCATIONS.find(l => l.value === formData.dropoff_location)?.label || formData.dropoff_location
+        : stripFee(LOCATIONS.find(l => l.value === formData.dropoff_location)?.label || formData.dropoff_location)
 
       // SIMPLIFIED TIMEZONE HANDLING: Construct ISO strings directly
       // This ensures times entered in the admin panel are stored EXACTLY as entered
@@ -6900,17 +6902,15 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       logger.log('[Auto-Gen] Generating contract for booking:', insertedBooking.id,
         editingId ? '(edit - regenerating)' : '(new)',
         editHasBalanceOwed ? '(saldo dovuto — link firma rimandato al pagamento)' : '')
+      // Il CONTRATTO va SEMPRE generato per il CLIENTE, anche quando c'e' un
+      // autista. L'autista NON firma alcun contratto (riceve solo l'avviso del
+      // suo incarico, sotto), ma il cliente firma normalmente.
       const hasAnyAutista = !!(autistaRitiro || autistaRiconsegna)
-      if (hasAnyAutista) {
-        // Almeno un autista assegnato (consegna/ritiro fuori sede): NESSUN contratto.
-        logger.log('[Auto-Gen] Autista assegnato — salto generazione contratto per', insertedBooking.id)
-      } else {
-        try {
-          await handleGenerateContract(insertedBooking, false)
-          logger.log('[Auto-Gen] ✅ Contract generated successfully')
-        } catch (err) {
-          console.error('[Auto-Gen] ⚠️ Failed to generate contract:', err)
-        }
+      try {
+        await handleGenerateContract(insertedBooking, false)
+        logger.log('[Auto-Gen] ✅ Contract generated successfully')
+      } catch (err) {
+        console.error('[Auto-Gen] ⚠️ Failed to generate contract:', err)
       }
 
       // Avvisa gli AUTISTI assegnati via WhatsApp (un messaggio per autista, con
@@ -7196,7 +7196,6 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // ha la macchina, quindi deve firmare ora; non si aspetta il pagamento.
       // (Il deferral resta solo per gli EDIT con saldo dovuto, sotto.)
       const shouldSendSigningLink = !!insertedBooking?.id
-        && !(autistaRitiro || autistaRiconsegna)  // autista assegnato → nessun contratto, nessun link di firma
         && !editHasBalanceOwed  // defer signing link until after payment on edits with balance
         && (currentlyPaid || wasOriginallyPaid || confirmBooking)
       if (shouldSendSigningLink) {
@@ -9893,9 +9892,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               const showRiepilogo = formData.delivery_enabled || formData.pickup_enabled || kmEntries.length > 0
               if (!showRiepilogo) return null
               const totalAmountCents = eurToCents(formData.total_amount || '0')
-              const deliveryCents = formData.delivery_enabled ? eurToCents(formData.delivery_fee || '0') : 0
-              const pickupCents = formData.pickup_enabled ? eurToCents(formData.pickup_fee || '0') : 0
-              const kmCostCents = Math.round(kmPackagesCost * 100)
+              // Se il totale e' 0 (prenotazione gratuita, es. autista) il
+              // riepilogo mostra 0 OVUNQUE: niente fee "fantasma" (consegna/
+              // ritiro/pacchetti) sopra a un totale azzerato.
+              const isFreeTotal = totalAmountCents === 0
+              const deliveryCents = isFreeTotal ? 0 : (formData.delivery_enabled ? eurToCents(formData.delivery_fee || '0') : 0)
+              const pickupCents = isFreeTotal ? 0 : (formData.pickup_enabled ? eurToCents(formData.pickup_fee || '0') : 0)
+              const kmCostCents = isFreeTotal ? 0 : Math.round(kmPackagesCost * 100)
               // Noleggio base = total - tutti gli extra mostrati come righe sotto.
               const baseCents = Math.max(0, totalAmountCents - kmCostCents - deliveryCents - pickupCents)
               return (
