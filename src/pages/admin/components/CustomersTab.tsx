@@ -7,6 +7,7 @@ import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import ReportClienteModal from './ReportClienteModal'
 import CustomerAddebitoButton from './CustomerAddebitoButton'
+import CardDeleteButton from './CardDeleteButton'
 import { listCardsFromMetadata } from '../../../utils/nexiCards'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import DateRangeFilter from '../../../components/DateRangeFilter'
@@ -138,6 +139,8 @@ export default function CustomersTab() {
   // Cliente per cui mostrare il modale Addebito (importo + scelta carta) dalla
   // riga della lista Clienti.
   const [addebitoCustomer, setAddebitoCustomer] = useState<Customer | null>(null)
+  // Carte eliminate (nascoste subito dopo il delete, prima del refetch).
+  const [deletedCardIds, setDeletedCardIds] = useState<Set<string>>(new Set())
 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
 
@@ -2052,7 +2055,7 @@ export default function CustomersTab() {
                   il cliente e' candidato per noleggio SENZA cauzione fisica.
                   Ogni carta ha il proprio bottone Addebita. */}
               {(() => {
-                const cards = listCardsFromMetadata(viewingCustomerDetails.metadata)
+                const cards = listCardsFromMetadata(viewingCustomerDetails.metadata).filter(c => !deletedCardIds.has(c.contractId))
                 if (cards.length === 0) return null
                 const custName = viewingCustomerDetails.full_name || `${viewingCustomerDetails.nome || ''} ${viewingCustomerDetails.cognome || ''}`.trim()
                 return (
@@ -2082,6 +2085,13 @@ export default function CustomersTab() {
                             <span className="text-theme-text-muted text-xs">Contract ID:</span>
                             <p className="font-mono text-[11px] text-theme-text-secondary break-all">{card.contractId}</p>
                           </div>
+                        </div>
+                        <div className="flex justify-end mt-2">
+                          <CardDeleteButton
+                            contractId={card.contractId}
+                            cardLabel={card.maskedPan || card.circuit || undefined}
+                            onDeleted={(cid) => setDeletedCardIds(s => new Set(s).add(cid))}
+                          />
                         </div>
                       </div>
                     ))}

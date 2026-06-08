@@ -6,6 +6,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { listCardsFromMetadata } from '../../../utils/nexiCards'
 import CustomerAddebitoButton from './CustomerAddebitoButton'
+import CardDeleteButton from './CardDeleteButton'
 
 interface ReportClienteProps {
   customerId: string
@@ -51,6 +52,7 @@ type TabId = 'stato' | 'anagrafica' | 'storico' | 'economica'
 
 export default function ReportClienteModal({ customerId, onClose }: ReportClienteProps) {
   const [customer, setCustomer] = useState<CustomerData | null>(null)
+  const [deletedCardIds, setDeletedCardIds] = useState<Set<string>>(new Set())
   const [bookings, setBookings] = useState<BookingRecord[]>([])
   const [walletBalance, setWalletBalance] = useState(0)
   const [walletTxs, setWalletTxs] = useState<WalletTx[]>([])
@@ -1353,7 +1355,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
               {/* Carte tokenizzate (multi-carta) — ogni carta ha il bottone
                   Addebita (debito reale, non pre-autorizzazione). */}
               {(() => {
-                const cards = listCardsFromMetadata(customer.metadata)
+                const cards = listCardsFromMetadata(customer.metadata).filter(c => !deletedCardIds.has(c.contractId))
                 if (cards.length === 0) return null
                 return (
                   <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-3">
@@ -1365,13 +1367,22 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                     </div>
                     {cards.map((card) => (
                       <div key={card.contractId} className="border-t border-emerald-500/15 pt-2 first:border-t-0 first:pt-0">
-                        <div className="font-mono text-sm text-theme-text-primary">
-                          {card.maskedPan || '•••• •••• •••• ••••'}
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-1 text-[10px] text-theme-text-muted">
-                          {card.isDefault && <span className="px-1.5 py-0.5 rounded bg-dr7-gold/15 text-dr7-gold border border-dr7-gold/30 uppercase font-bold">Predefinita</span>}
-                          {card.circuit && <span className="uppercase">{card.circuit}</span>}
-                          {card.cardType && <span className="text-theme-text-muted/70">· {card.cardType}</span>}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="font-mono text-sm text-theme-text-primary truncate">
+                              {card.maskedPan || '•••• •••• •••• ••••'}
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1 text-[10px] text-theme-text-muted">
+                              {card.isDefault && <span className="px-1.5 py-0.5 rounded bg-dr7-gold/15 text-dr7-gold border border-dr7-gold/30 uppercase font-bold">Predefinita</span>}
+                              {card.circuit && <span className="uppercase">{card.circuit}</span>}
+                              {card.cardType && <span className="text-theme-text-muted/70">· {card.cardType}</span>}
+                            </div>
+                          </div>
+                          <CardDeleteButton
+                            contractId={card.contractId}
+                            cardLabel={card.maskedPan || card.circuit || undefined}
+                            onDeleted={(cid) => setDeletedCardIds(s => new Set(s).add(cid))}
+                          />
                         </div>
                       </div>
                     ))}

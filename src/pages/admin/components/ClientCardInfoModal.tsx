@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { listCardsFromMetadata, type NexiCardView } from '../../../utils/nexiCards'
 import CustomerAddebitoButton from './CustomerAddebitoButton'
+import CardDeleteButton from './CardDeleteButton'
 
 interface ClientCardInfoModalProps {
     customerId: string | null
@@ -35,6 +36,7 @@ export default function ClientCardInfoModal({ customerId, customerEmail, custome
     const [loading, setLoading] = useState(false)
     const [data, setData] = useState<CustomerCardData | null>(null)
     const [error, setError] = useState<string | null>(null)
+    const [deletedCardIds, setDeletedCardIds] = useState<Set<string>>(new Set())
 
     useEffect(() => {
         if (!customerId) return
@@ -158,7 +160,7 @@ export default function ClientCardInfoModal({ customerId, customerEmail, custome
     // riuscito a popolarlo) — è una decorazione, non il segnale principale.
     // NexiTab, CustomersTab, CauzioniTab e ReportClienteModal usano la stessa
     // regola: basta nexi_contract_id per considerare la carta su file.
-    const cards = data?.cards || []
+    const cards = (data?.cards || []).filter(c => !deletedCardIds.has(c.contractId))
     const isTokenized = cards.length > 0
 
     return (
@@ -238,6 +240,13 @@ export default function ClientCardInfoModal({ customerId, customerEmail, custome
                                                             Aggiornata: {new Date(card.lastUsedAt).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })}
                                                         </div>
                                                     )}
+                                                    <div className="flex justify-end mt-2">
+                                                        <CardDeleteButton
+                                                            contractId={card.contractId}
+                                                            cardLabel={card.maskedPan || circuitLabel || undefined}
+                                                            onDeleted={(cid) => setDeletedCardIds(s => new Set(s).add(cid))}
+                                                        />
+                                                    </div>
                                                 </div>
                                             )
                                         })}
