@@ -281,29 +281,30 @@ const processHandler: Handler = async () => {
 
         try {
             const minAmountCents = 50 // €0.50 minimum
-            let charged = false
             let lastError = ''
             let attempts = 0
-            let chargedAmountCents = 0
-            let usedContractId: string = addebito.contract_id
 
-            // CASCATA per IMPORTO, poi per carta. Per ogni importo del ladder
-            // -10% (prima l'importo PIENO, poi -10%, ...) proviamo TUTTE le carte
-            // in ordine; la prima che accetta vince. Si scende del 10% SOLO se
-            // NESSUNA carta accetta l'importo corrente. Esempio (2 carte, €10):
-            // 10 su carta1, 10 su carta2; se entrambe rifiutano -> 9 su carta1,
-            // 9 su carta2; ecc. Cosi' NON preleviamo un importo ridotto dalla
-            // prima carta quando la seconda potrebbe pagare l'intero importo.
+            // CASCATA SEQUENZIALE CON ACCUMULO. Si prova la PRIMA carta col
+            // ladder -10% partendo dall'importo da incassare; appena accetta un
+            // importo lo si incassa e si passa alla carta SUCCESSIVA per il
+            // RIMANENTE. Es: deve 10, carta1 ha solo ~1 -> incassa ~1 da carta1,
+            // poi prova ~9 (il resto) su carta2 col suo ladder, ecc. Cosi' si
+            // raccoglie il piu' possibile distribuendo sulle carte.
             const cascadeCards: string[] = Array.isArray(addebito.cascade_contract_ids) && addebito.cascade_contract_ids.length > 0
                 ? addebito.cascade_contract_ids.filter((x: unknown) => typeof x === 'string' && x)
                 : [addebito.contract_id]
 
-            let currentAmountCents = addebito.amount_cents
-            while (currentAmountCents >= minAmountCents && !charged) {
-                const amountEur = currentAmountCents / 100
-                for (const cid of cascadeCards) {
+            let remainingCents = addebito.amount_cents
+            let collectedCents = 0
+            const usedCards: string[] = []
+
+            for (const cid of cascadeCards) {
+                if (remainingCents < minAmountCents) break
+                let amount = remainingCents
+                while (amount >= minAmountCents) {
                     attempts++
-                    console.log(`[process-pending-addebiti] Attempt #${attempts} — €${amountEur.toFixed(2)} carta ...${String(cid).slice(-6)} for addebito ${addebito.id}`)
+                    const amountEur = amount / 100
+                    console.log(`[process-pending-addebiti] Attempt #${attempts} — €${amountEur.toFixed(2)} carta ...${String(cid).slice(-6)} (rimane €${(remainingCents / 100).toFixed(2)}) for addebito ${addebito.id}`)
                     let ok = false
                     try {
                         const r = await chargeMit({
@@ -322,36 +323,34 @@ const processHandler: Handler = async () => {
                     }
 
                     if (ok) {
-                        chargedAmountCents = currentAmountCents
-                        usedContractId = cid
-                        charged = true
-                        break
+                        collectedCents += amount
+                        remainingCents -= amount
+                        usedCards.push(cid)
+                        console.log(`[process-pending-addebiti] ✅ Incassato €${amountEur.toFixed(2)} da carta ...${String(cid).slice(-6)} — rimane €${(remainingCents / 100).toFixed(2)}`)
+                        break // passa alla carta successiva per il RIMANENTE
                     }
-                    if (cascadeCards.length > 1) await new Promise(r => setTimeout(r, 200))
+                    // Questa carta ha rifiutato l'importo: scendi del 10% e riprova.
+                    amount = Math.round(amount * 0.9)
+                    if (amount >= minAmountCents) await new Promise(r => setTimeout(r, 200))
                 }
-
-                if (charged) break
-                // Nessuna carta ha accettato l'importo corrente: scendi del 10%.
-                currentAmountCents = Math.round(currentAmountCents * 0.9)
-                if (currentAmountCents >= minAmountCents) await new Promise(r => setTimeout(r, 200))
             }
 
+            const charged = collectedCents > 0
             if (charged) {
-                const amountEur = chargedAmountCents / 100
-                console.log(`[process-pending-addebiti] ✅ Charged €${amountEur.toFixed(2)} (attempt #${attempts}, carta ...${String(usedContractId).slice(-6)}) for addebito ${addebito.id}`)
-                const remainingCents = addebito.amount_cents - chargedAmountCents
+                const fully = remainingCents < minAmountCents
+                console.log(`[process-pending-addebiti] ✅ Totale incassato €${(collectedCents / 100).toFixed(2)} di €${(addebito.amount_cents / 100).toFixed(2)} su ${usedCards.length} carta/e for addebito ${addebito.id}`)
                 await supabase.from('pending_addebiti').update({
                     status: 'charged',
                     charged_at: new Date().toISOString(),
                     charge_count: (addebito.charge_count || 0) + attempts,
-                    charged_amount_cents: chargedAmountCents,
-                    error_message: remainingCents > 0
-                        ? `Addebitato €${amountEur.toFixed(2)} di €${(addebito.amount_cents / 100).toFixed(2)} — rimanente €${(remainingCents / 100).toFixed(2)} riprogrammato`
-                        : (attempts > 1 ? `Addebitato €${amountEur.toFixed(2)} dopo ${attempts} tentativi` : null),
+                    charged_amount_cents: collectedCents,
+                    error_message: fully
+                        ? (usedCards.length > 1 ? `Incassato €${(collectedCents / 100).toFixed(2)} su ${usedCards.length} carte` : (attempts > 1 ? `Incassato €${(collectedCents / 100).toFixed(2)} dopo ${attempts} tentativi` : null))
+                        : `Incassato €${(collectedCents / 100).toFixed(2)} di €${(addebito.amount_cents / 100).toFixed(2)} su ${usedCards.length} cart${usedCards.length === 1 ? 'a' : 'e'} — rimanente €${(remainingCents / 100).toFixed(2)} riprogrammato`,
                 }).eq('id', addebito.id)
 
-                // If partial charge, create new addebito for the remaining amount (skip emails, go straight to charge)
-                if (remainingCents >= 50) {
+                // Rimanente non incassato (carte esaurite): riprogramma un follow-up.
+                if (remainingCents >= minAmountCents) {
                     const nextChargeAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // retry in 30 days
                     await supabase.from('pending_addebiti').insert({
                         transaction_id: null,
@@ -359,7 +358,7 @@ const processHandler: Handler = async () => {
                         customer_name: addebito.customer_name,
                         customer_email: addebito.customer_email,
                         contract_number: addebito.contract_number,
-                        contract_id: usedContractId,
+                        contract_id: cascadeCards[0],
                         ...(addebito.cascade_contract_ids ? { cascade_contract_ids: addebito.cascade_contract_ids } : {}),
                         amount_cents: remainingCents,
                         causale: `Rimanente da addebito parziale — €${(remainingCents / 100).toFixed(2)}`,
