@@ -6583,6 +6583,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const templateVars = {
             '{customer_name}': customerInfo?.full_name || 'Cliente',
             '{nome}': (customerInfo?.full_name || 'Cliente').split(' ')[0],
+            // {autista} = nome/i (solo primo nome) dell'autista assegnato a
+            // ritiro/riconsegna, cosi' il cliente sa chi gli consegna/ritira.
+            '{autista}': (() => {
+              const names = [autistaRitiro?.full_name, autistaRiconsegna?.full_name]
+                .filter(Boolean)
+                .map(n => String(n).split(' ')[0])
+              return [...new Set(names)].join(' / ')
+            })(),
             '{booking_id}': insertedBooking?.id?.substring(0, 8).toUpperCase() || '',
             '{vehicle_name}': vehicle?.display_name || '',
             '{plate}': vehicle?.plate || '',

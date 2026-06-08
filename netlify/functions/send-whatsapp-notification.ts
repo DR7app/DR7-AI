@@ -257,6 +257,14 @@ const handler: Handler = async (event) => {
             targa: booking.vehicle_plate || booking.booking_details?.vehicle?.plate || '',
             service_name: booking.service_name || booking.booking_details?.serviceName || booking.booking_details?.service_name || '',
             servizio: booking.service_name || booking.booking_details?.serviceName || '',
+            // {autista} = primo nome dell'autista assegnato a ritiro/riconsegna.
+            autista: (() => {
+              const bd = booking.booking_details || {};
+              const names = [bd.autista_ritiro?.full_name, bd.autista_riconsegna?.full_name, bd.autista?.full_name]
+                .filter(Boolean)
+                .map((n: string) => String(n).split(' ')[0]);
+              return [...new Set(names)].join(' / ');
+            })(),
           };
           // mergedVars stay authoritative (custom DB vars + caller templateVars)
           // — booking-derived only fills the gaps.
