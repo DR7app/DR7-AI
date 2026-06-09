@@ -6920,6 +6920,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         const idShort = String(insertedBooking.id).slice(0, 8).toUpperCase()
         const plate = vehicle?.plate || vehicle?.targa || ''
         const veic = `${vehicle?.display_name || 'N/A'}${plate ? ` (${plate})` : ''}`
+        // Data in formato europeo DD/MM/YYYY (formData.*_date e' YYYY-MM-DD).
+        const itDate = (d: string) => (d && /^\d{4}-\d{2}-\d{2}/.test(d)) ? d.slice(0, 10).split('-').reverse().join('/') : (d || '')
         type Leg = { label: string; luogo: string; quando: string }
         const groups: Record<string, { aut: { id: string; full_name: string; phone: string }; legs: Leg[] }> = {}
         const addLeg = (aut: { id: string; full_name: string; phone: string } | null, leg: Leg) => {
@@ -6927,8 +6929,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           if (!groups[aut.id]) groups[aut.id] = { aut, legs: [] }
           groups[aut.id].legs.push(leg)
         }
-        addLeg(autistaRitiro, { label: 'RITIRO (consegna al cliente)', luogo: pickupLocationLabel, quando: `${formData.pickup_date || ''}${formData.pickup_time ? ' ' + formData.pickup_time : ''}`.trim() })
-        addLeg(autistaRiconsegna, { label: 'RICONSEGNA (ritiro dal cliente)', luogo: dropoffLocationLabel, quando: `${formData.return_date || ''}${formData.return_time ? ' ' + formData.return_time : ''}`.trim() })
+        addLeg(autistaRitiro, { label: 'RITIRO (consegna al cliente)', luogo: pickupLocationLabel, quando: `${itDate(formData.pickup_date)}${formData.pickup_time ? ' alle ' + formData.pickup_time : ''}`.trim() })
+        addLeg(autistaRiconsegna, { label: 'RICONSEGNA (ritiro dal cliente)', luogo: dropoffLocationLabel, quando: `${itDate(formData.return_date)}${formData.return_time ? ' alle ' + formData.return_time : ''}`.trim() })
         for (const { aut, legs } of Object.values(groups)) {
           if (!aut.phone || aut.id === customerId) continue
           let autMsg = `*INCARICO AUTISTA - DR7*\n\nCiao ${(aut.full_name || '').split(' ')[0]},\nti e' stato assegnato:\n\n*Rif:* DR7-${idShort}\n*Cliente:* ${customerInfo?.full_name || 'N/A'}\n*Veicolo:* ${veic}\n`
