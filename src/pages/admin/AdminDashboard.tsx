@@ -273,19 +273,15 @@ export default function AdminDashboard() {
       { tab: 'gestione-danni', label: 'Danni & Penali' },
       { tab: 'gestione-multe', label: 'Multe' },
       { tab: 'cargos', label: 'Cargos' },
-    ] },
-    { name: 'Prime Wash', tabs: [
-      { tab: 'carwash', label: 'Prenotazioni' },
-      { tab: 'carwash-calendar', label: 'Calendario' },
-      { tab: 'carwash-catalog', label: 'Catalogo' },
-    ] },
-    { name: 'Flotta', tabs: [
-      // 'fleet' (Gestione Flotta) rimosso 2026-05-22: duplicato di
-      // Veicoli, che gia' copre il caso d'uso. La tab restava solo a
-      // confondere l'utente.
+      // 2026-06-10: sezione "Flotta" spostata DENTRO Noleggio.
       { tab: 'vehicles', label: 'Veicoli' },
       { tab: 'magazzino', label: 'Magazzino' },
       { tab: 'gps-keyless', label: 'GPS Flotta' },
+    ] },
+    { name: 'Lavaggio & Meccanica', tabs: [
+      { tab: 'carwash', label: 'Prenotazioni' },
+      { tab: 'carwash-calendar', label: 'Calendario' },
+      { tab: 'carwash-catalog', label: 'Catalogo' },
     ] },
     { name: 'Clienti', tabs: [
       { tab: 'customers', label: 'Lead' },
@@ -349,9 +345,8 @@ export default function AdminDashboard() {
   // render with a generic dot icon.
   const SECTION_META: Record<string, { group: 'core' | 'gestione' | 'sistemi'; icon: React.ReactNode }> = {
     'Noleggio':        { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 13l1-3a4 4 0 014-3h8a4 4 0 014 3l1 3v5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-1H7v1a1 1 0 01-1 1H4a1 1 0 01-1-1v-5z"/> },
-    'Prime Wash':      { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 2v6m0 0l-3-3m3 3l3-3M5 12a7 7 0 1014 0c0-3-2-5-7-10-5 5-7 7-7 10z"/> },
-    'Flotta':          { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M5 17h14M5 17v-6l2-5h10l2 5v6M5 17a2 2 0 11-4 0 2 2 0 014 0zm14 0a2 2 0 114 0 2 2 0 01-4 0z"/> },
-    'Clienti':         { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-5.13a4 4 0 11-8 0 4 4 0 018 0zm6 4a3 3 0 11-6 0 3 3 0 016 0z"/> },
+    'Lavaggio & Meccanica': { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 2v6m0 0l-3-3m3 3l3-3M5 12a7 7 0 1014 0c0-3-2-5-7-10-5 5-7 7-7 10z"/> },
+    'Clienti':         { group: 'gestione', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-5.13a4 4 0 11-8 0 4 4 0 018 0zm6 4a3 3 0 11-6 0 3 3 0 016 0z"/> },
     'Marketing':       { group: 'gestione', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/> },
     'Report':          { group: 'gestione', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/> },
     'Amministrazione':{ group: 'sistemi', icon: <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></> },
