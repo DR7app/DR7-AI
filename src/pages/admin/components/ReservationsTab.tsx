@@ -2318,21 +2318,27 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // l'assicurazione sbagliata in modo intermittente (bug 2026-06-08).
   }, [formData.vehicle_id, vehicles, formData.insurance_option, customerTier, rentalConfig, configOverlay])
 
-  // Default KM ILLIMITATI per le categorie configurate come illimitate in
-  // Centralina (tabella km vuota → getKmIncluded ritorna 'unlimited'). Sono
-  // tipicamente Urban (id scooter) e Flotta Aziendale (id supercar_elit): per
-  // queste il form deve partire con km ILLIMITATI, NON con 100 km di default
-  // (richiesta 2026-06-10). Driven dal config: nessun id hardcoded — se segni
-  // un'altra categoria come illimitata, eredita lo stesso comportamento.
-  // Solo su NUOVA prenotazione: in modifica si rispetta il valore salvato.
+  // Default KM in base alla CATEGORIA del veicolo selezionato:
+  //  - categorie configurate come illimitate in Centralina (tabella km vuota →
+  //    getKmIncluded === 'unlimited', cioè Urban/scooter e Flotta Aziendale/
+  //    supercar_elit) → default km ILLIMITATI;
+  //  - tutte le altre → km a tabella (NON illimitati).
+  // Si RI-IMPOSTA a ogni cambio veicolo (in entrambe le direzioni): senza il
+  // reset a false, una volta scelto un veicolo unlimited restava illimitato per
+  // TUTTE le categorie successive (bug 2026-06-10). È solo un DEFAULT: dopo,
+  // l'operatore può spuntare/togliere "illimitati" a mano (non viene risovrascritto
+  // perché unlimited_km non è tra le dipendenze). Solo su NUOVA prenotazione.
   useEffect(() => {
     if (!formData.vehicle_id || editingId || !rentalConfig) return
     const v = vehicles.find(x => x.id === formData.vehicle_id)
     if (!v) return
     const cat = v.category || '_global'
-    if (getKmIncluded(rentalConfig, 1, cat) === 'unlimited') {
-      setFormData(prev => prev.unlimited_km ? prev : ({ ...prev, unlimited_km: true, km_limit: 'Illimitati' }))
-    }
+    const catUnlimited = getKmIncluded(rentalConfig, 1, cat) === 'unlimited'
+    setFormData(prev => prev.unlimited_km === catUnlimited
+      ? prev
+      : (catUnlimited
+          ? { ...prev, unlimited_km: true, km_limit: 'Illimitati' }
+          : { ...prev, unlimited_km: false }))
   }, [formData.vehicle_id, vehicles, rentalConfig, editingId])
 
   // Auto-set sforo (km_overage_fee) based on config overrides > vehicle type
