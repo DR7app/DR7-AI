@@ -2318,6 +2318,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // l'assicurazione sbagliata in modo intermittente (bug 2026-06-08).
   }, [formData.vehicle_id, vehicles, formData.insurance_option, customerTier, rentalConfig, configOverlay])
 
+  // Default KM ILLIMITATI per le categorie configurate come illimitate in
+  // Centralina (tabella km vuota → getKmIncluded ritorna 'unlimited'). Sono
+  // tipicamente Urban (id scooter) e Flotta Aziendale (id supercar_elit): per
+  // queste il form deve partire con km ILLIMITATI, NON con 100 km di default
+  // (richiesta 2026-06-10). Driven dal config: nessun id hardcoded — se segni
+  // un'altra categoria come illimitata, eredita lo stesso comportamento.
+  // Solo su NUOVA prenotazione: in modifica si rispetta il valore salvato.
+  useEffect(() => {
+    if (!formData.vehicle_id || editingId || !rentalConfig) return
+    const v = vehicles.find(x => x.id === formData.vehicle_id)
+    if (!v) return
+    const cat = v.category || '_global'
+    if (getKmIncluded(rentalConfig, 1, cat) === 'unlimited') {
+      setFormData(prev => prev.unlimited_km ? prev : ({ ...prev, unlimited_km: true, km_limit: 'Illimitati' }))
+    }
+  }, [formData.vehicle_id, vehicles, rentalConfig, editingId])
+
   // Auto-set sforo (km_overage_fee) based on config overrides > vehicle type
   useEffect(() => {
     if (formData.vehicle_id && !editingId) {
