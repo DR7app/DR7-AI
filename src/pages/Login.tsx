@@ -73,18 +73,13 @@ export default function Login() {
         <div className="rounded-2xl px-6 sm:px-10 pt-10 pb-8 border border-dr7-gold/40 relative shadow-2xl shadow-dr7-gold/10 bg-theme-bg-primary">
           {/* Logo */}
           <div className="flex justify-center mb-8">
-            {/* Logo DR7: versione chiara (sfondo bianco) in LIGHT theme,
-                versione scura (sfondo nero) in DARK theme. Lo sfondo solido si
-                fonde con bg-theme-bg-primary del box login. */}
+            {/* Logo DR7 trasparente (SENZA sfondo): nero+glow ciano su tema
+                chiaro, neon ciano su tema scuro. Un'unica immagine che si
+                adatta a entrambi i temi — niente riquadro bianco/nero. */}
             <img
-              src="/dr7-login-light.png"
+              src="/dr7-logo.png"
               alt="DR7 A.I."
-              className="block dark:hidden h-32 sm:h-36 w-auto max-w-full object-contain"
-            />
-            <img
-              src="/dr7-login-dark.png"
-              alt="DR7 A.I."
-              className="hidden dark:block h-32 sm:h-36 w-auto max-w-full object-contain"
+              className="h-32 sm:h-36 w-auto max-w-full object-contain"
             />
           </div>
 
