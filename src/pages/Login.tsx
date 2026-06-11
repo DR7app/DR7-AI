@@ -79,7 +79,7 @@ export default function Login() {
             <img
               src="/dr7-logo.png"
               alt="DR7 A.I."
-              className="h-32 sm:h-36 w-auto max-w-full object-contain"
+              className="h-14 sm:h-16 w-auto max-w-[200px] object-contain"
             />
           </div>
 
