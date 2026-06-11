@@ -518,8 +518,17 @@ async function generateVehicleReport(
               || (booking.created_at as string | undefined)
               || ''
             const paidAt = paidAtISO ? new Date(paidAtISO) : null
-            // Anticipo VALIDO solo se: paid e' nel periodo report E pickup e' DOPO la fine del periodo.
-            if (paidAt && paidAt >= monthStart && paidAt <= monthEnd) {
+            // Anticipo VALIDO solo se: pagato nel periodo E noleggio in un MESE
+            // DIVERSO (successivo) dal mese del PAGAMENTO. Regola direzione
+            // (2026-06): "anticipo" = SOLO prenotazioni per un altro mese. Un
+            // pagamento per un noleggio dello STESSO mese NON e' anticipo (prima,
+            // su range giornalieri/settimanali, lo era per "pickup > fine periodo").
+            const pickupDt = new Date(pickupDateRaw)
+            const isCrossMonth = !!paidAt && (
+              pickupDt.getFullYear() > paidAt.getFullYear() ||
+              (pickupDt.getFullYear() === paidAt.getFullYear() && pickupDt.getMonth() > paidAt.getMonth())
+            )
+            if (paidAt && isCrossMonth && paidAt >= monthStart && paidAt <= monthEnd) {
               const rawPriceAnt = booking.price_total
               const anticipoEur = (typeof rawPriceAnt === 'string' ? parseFloat(rawPriceAnt) : (rawPriceAnt || 0)) / 100
               anticipatedRevenue += anticipoEur
