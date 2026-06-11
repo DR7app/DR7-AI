@@ -451,18 +451,20 @@ export default function AdminDashboard() {
             horizontally. object-contain + matched max-width/max-height
             lets the browser preserve aspect ratio inside the sidebar's
             narrow ~140px inner panel without flex shrinking it. */}
-        {/* Logo tile: bg SEMPRE nera in entrambi i temi cosi' il PNG (che
-            ha sfondo nero) si fonde sempre. La X close usa colori chiari
-            perche' sta sopra al nero. */}
-        <div className="relative px-3 py-3 flex items-center justify-center bg-black">
+        {/* Logo trasparente come la pagina di login: il PNG (dr7-logo.png,
+            sfondo trasparente) si appoggia direttamente sul tema corrente
+            (bg-theme-bg-primary) — nero+glow ciano su tema chiaro, neon
+            ciano su tema scuro. Niente piu' rettangolo nero. La X close usa
+            colori theme-aware perche' ora sta sopra allo sfondo del tema. */}
+        <div className="relative px-3 py-3 flex items-center justify-center">
           <img
-            src="/DR7logo1.png"
+            src="/dr7-logo.png"
             alt="DR7 A.I."
             className="max-h-10 max-w-[120px] w-auto h-auto object-contain"
           />
           <button
             onClick={() => setSidebarOpen(false)}
-            className="absolute right-1 top-1/2 -translate-y-1/2 text-white/60 hover:text-white min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg"
+            className="absolute right-1 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
