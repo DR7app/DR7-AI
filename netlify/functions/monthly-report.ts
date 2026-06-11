@@ -284,13 +284,27 @@ async function generateVehicleReport(
   // wiped out all credit-wallet bookings (book_with_credits doesn't always
   // populate vehicle_plate at the top level). Move the TEST-plate exclusion
   // into the JS filter below so NULLs are kept.
-  const { data: allBookings, error: bookingsError } = await supabase
-    .from('bookings')
-    .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, appointment_date, payment_status, payment_method, customer_name, customer_email, created_at, updated_at')
-    .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active'])
-    .or('customer_email.is.null,customer_email.neq.admin@dr7.app')
+  // 2026-06-12 FIX: PostgREST caps ogni singola request a 1000 righe. Senza
+  // paginazione, appena la tabella bookings supera le 1000 righe (1117 il
+  // 2026-06-12) il report ne riceveva solo 1000 in ordine arbitrario e
+  // SCARTAVA silenziosamente il resto → prenotazioni reali (confermate e
+  // pagate) sparivano dal Report Noleggio. Ora si pagina finche' esaurito.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allBookings: any[] = []
+  for (let pageStart = 0; ; pageStart += 1000) {
+    const { data: page, error: bookingsError } = await supabase
+      .from('bookings')
+      .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, appointment_date, payment_status, payment_method, customer_name, customer_email, created_at, updated_at')
+      .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active'])
+      .or('customer_email.is.null,customer_email.neq.admin@dr7.app')
+      .order('created_at', { ascending: false })
+      .range(pageStart, pageStart + 999)
 
-  if (bookingsError) throw bookingsError
+    if (bookingsError) throw bookingsError
+    if (!page || page.length === 0) break
+    allBookings.push(...page)
+    if (page.length < 1000) break
+  }
 
   // Fetch penalty/danni fatture for the month (to catch penalties not saved in booking_details)
   const { data: fatture } = await supabase
