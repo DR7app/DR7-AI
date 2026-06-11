@@ -30,6 +30,10 @@ export interface AcceptConfirmArgs {
     payment_method: string
     payment_status: 'pending' | 'paid'
     amount_paid_eur: number
+    // "Conferma Prenotazione" (red box) — stesso significato di ReservationsTab:
+    // la booking non scade dopo 1h, appare in rosso col nome cliente in
+    // calendario e fa partire conferma + contratto come una prenotazione.
+    confirm_booking: boolean
 }
 
 /** Imperative open helper. Call from anywhere — no React state involved. */
@@ -52,6 +56,7 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
     const [paymentMethod, setPaymentMethod] = useState('Contanti')
     const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid'>('pending')
     const [amountPaid, setAmountPaid] = useState('0')
+    const [confirmBooking, setConfirmBooking] = useState(false)
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
@@ -64,6 +69,7 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
             setPaymentMethod('Contanti')
             setPaymentStatus('pending')
             setAmountPaid('0')
+            setConfirmBooking(false)
             setSubmitting(false)
             setError(null)
         }
@@ -102,6 +108,8 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
                 payment_method: paymentMethod,
                 payment_status: paymentStatus,
                 amount_paid_eur: paymentStatus === 'paid' ? (preventivo.total_final ?? 0) : amt,
+                // Paid → sempre confermata. Da saldare → solo se la red box è spuntata.
+                confirm_booking: paymentStatus === 'paid' ? true : confirmBooking,
             })
             setPreventivo(null)
         } catch (err: unknown) {
@@ -193,6 +201,25 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
                             className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
                         />
                         <p className="text-xs text-theme-text-muted mt-1">Lascia 0 se nulla e' stato ancora pagato.</p>
+                    </div>
+                )}
+
+                {/* Conferma Prenotazione — stessa red box di ReservationsTab.
+                    Solo per "Da saldare": le accettazioni "Pagato" sono già
+                    confermate automaticamente. */}
+                {paymentStatus === 'pending' && (
+                    <div className={`flex items-start gap-2 p-3 rounded-lg border mb-4 ${confirmBooking ? 'border-red-500 bg-red-900/10' : 'border-theme-border'}`}>
+                        <input
+                            type="checkbox"
+                            id="preventivo_confirm_booking"
+                            checked={confirmBooking}
+                            onChange={(e) => setConfirmBooking(e.target.checked)}
+                            className="w-4 h-4 mt-0.5 text-red-600 bg-theme-bg-tertiary border-theme-border-light rounded focus:ring-red-500"
+                        />
+                        <label htmlFor="preventivo_confirm_booking" className="text-sm text-theme-text-secondary cursor-pointer">
+                            <span className="font-semibold text-red-400">Conferma Prenotazione</span>
+                            <span className="block text-xs text-theme-text-muted mt-0.5">La prenotazione NON scadrà dopo 1h. In calendario apparirà in rosso con il nome del cliente invece di "Da Saldare". Invia conferma + contratto al cliente.</span>
+                        </label>
                     </div>
                 )}
 

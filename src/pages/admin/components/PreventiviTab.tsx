@@ -2802,8 +2802,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     payment_method: string
     payment_status: 'pending' | 'paid'
     amount_paid_eur: number
+    confirm_booking: boolean
   }) {
-    const { preventivo, customer_id, payment_method, payment_status, amount_paid_eur } = args
+    const { preventivo, customer_id, payment_method, payment_status, amount_paid_eur, confirm_booking } = args
 
     const p = preventivi.find(x => x.id === preventivo.id)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2859,7 +2860,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       dropoff_date: p.dropoff_date,
       price_total: totalCents,
       currency: 'EUR',
-      status: isPaid ? 'confirmed' : 'pending',
+      // "Conferma Prenotazione" (red box) → status 'confirmed' anche se Da
+      // Saldare: in calendario appare in rosso col nome cliente e il cron
+      // cancel-unpaid-nexi-bookings (filtra status='pending') la ignora.
+      status: (isPaid || confirm_booking) ? 'confirmed' : 'pending',
       payment_status,
       payment_method,
       amount_paid: paidCents,
@@ -2877,6 +2881,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       booking_details: {
         from_preventivo: p.id,
         source: 'admin_preventivo_accept',
+        // Segna la conferma manuale (red box) così la regola anti-duplicato
+        // della conferma noleggio funziona come in ReservationsTab e la
+        // booking resta confermata in calendario.
+        manually_confirmed: !!confirm_booking || isPaid,
         customer: {
           fullName: customerName,
           email: customerEmail,
@@ -3039,6 +3047,127 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       } catch (linkErr: unknown) {
         const msg = linkErr instanceof Error ? linkErr.message : String(linkErr)
         toast.error('Errore Pay by Link: ' + msg, { duration: 10000 })
+      }
+    }
+
+    // ─── "Conferma": invia tutto come una prenotazione ──────────────────────
+    // Stessa pipeline di ReservationsTab quando "Conferma Prenotazione" è
+    // spuntata (o l'accettazione è già Pagata): conferma WhatsApp al cliente,
+    // notifica admin, contratto PDF + link di firma, e fattura + DR7 Privilege
+    // se pagata. Per Da Saldare + Nexi il link di pagamento è già partito sopra
+    // (dual message conferma + link).
+    if ((confirm_booking || isPaid) && inserted?.id) {
+      const bookingId = inserted.id
+      const ref = bookingId.substring(0, 8).toUpperCase()
+      const firstName = customerName.split(' ')[0] || 'Cliente'
+      const fmtDate = (iso: string) => { try { return new Date(iso).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }) } catch { return iso } }
+      const fmtTime = (iso: string) => { try { return new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' }) } catch { return '' } }
+      const payStatusLabel = isPaid ? 'Pagato' : 'Da saldare'
+      const templateVars: Record<string, string> = {
+        '{customer_name}': customerName,
+        '{nome}': firstName,
+        '{booking_id}': ref,
+        '{booking_ref}': ref,
+        '{vehicle_name}': p.vehicle_name || '',
+        '{plate}': p.vehicle_plate || '',
+        '{pickup_date}': fmtDate(p.pickup_date),
+        '{pickup_time}': fmtTime(p.pickup_date),
+        '{dropoff_date}': fmtDate(p.dropoff_date),
+        '{dropoff_time}': fmtTime(p.dropoff_date),
+        '{insurance}': p.insurance_option || '',
+        '{km_info}': preventivoUnlimited ? 'Illimitati' : (preventivoKmLimit && preventivoKmLimit !== 'Illimitati' ? `${preventivoKmLimit} km` : 'Illimitati'),
+        '{total}': (p.total_final ?? totalCents / 100).toFixed(2),
+        '{payment_method}': payment_method,
+        '{payment_status}': payStatusLabel,
+        '{payment_info}': payment_method ? `${payment_method} · ${payStatusLabel}` : payStatusLabel,
+        '{pagamento}': payment_method ? `${payment_method} · ${payStatusLabel}` : payStatusLabel,
+        '{deposit}': '€0',
+        '{notes}': '',
+        '{payment_link}': '',
+        '{link}': '',
+        '{expiry}': '1 ora',
+      }
+
+      // 1) Conferma WhatsApp al cliente — rental_new_customer (pagato) oppure
+      //    booking_confirmed_da_saldare (da saldare), come ReservationsTab.
+      if (customerPhone) {
+        const tplKey = isPaid ? 'rental_new_customer' : 'booking_confirmed_da_saldare'
+        fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customPhone: customerPhone,
+            booking: { id: bookingId, service_type: 'car_rental' },
+            templateKey: tplKey,
+            templateVars,
+          }),
+        }).catch(() => {})
+      }
+
+      // 2) Notifica admin (opt-in → admin_whatsapp_phone server-side)
+      fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          notifyAdmin: true,
+          booking: {
+            id: bookingId,
+            service_type: 'car_rental',
+            isEdit: false,
+            customer_name: customerName,
+            customer_email: customerEmail,
+            customer_phone: customerPhone,
+            vehicle_name: p.vehicle_name,
+            pickup_date: p.pickup_date,
+            dropoff_date: p.dropoff_date,
+            price_total: totalCents,
+            payment_status,
+            payment_method,
+          },
+        }),
+      }).catch(() => {})
+
+      // 3) Contratto PDF + link di firma
+      try {
+        const cRes = await authFetch('/.netlify/functions/generate-contract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId }),
+        })
+        if (cRes.ok) {
+          const { data: contractRow } = await supabase
+            .from('contracts')
+            .select('id')
+            .eq('booking_id', bookingId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          if (contractRow?.id) {
+            await fetch('/.netlify/functions/signature-init', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contractId: contractRow.id, bookingId }),
+            }).catch(() => {})
+          }
+        } else {
+          console.warn('[Preventivi] generate-contract non ok:', cRes.status)
+        }
+      } catch (cErr) {
+        console.error('[Preventivi] contratto/firma fallito:', cErr)
+      }
+
+      // 4) Fattura + DR7 Privilege — solo se pagata
+      if (isPaid) {
+        authFetch('/.netlify/functions/generate-invoice-from-booking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId, includeIVA: true }),
+        }).catch(() => {})
+        authFetch('/.netlify/functions/trigger-dr7-privilege', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId, kind: 'noleggio' }),
+        }).catch(() => {})
       }
     }
 
