@@ -2849,6 +2849,18 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       : (typeof p.km_limit === 'number' && p.km_limit > 0 ? p.km_limit : 0)
     const preventivoUnlimited = !!p.unlimited_km || (p.unlimited_km_total || 0) > 0
 
+    // Luogo ritiro/riconsegna — se il preventivo non ha un indirizzo, default
+    // all'ufficio DR7 (Viale Marconi 229, Cagliari). 'domicilio' usa l'indirizzo
+    // custom. Stessa logica del messaggio preventivo (vedi ~riga 2456).
+    const pExtras = (p.extras_detail || {}) as Record<string, unknown>
+    const resolvePreventivoLoc = (locId: unknown, customAddr: unknown): string => {
+      const loc = String(locId || 'dr7_office')
+      if (loc === 'domicilio') return String(customAddr || 'Domicilio')
+      return LOCATIONS.find(l => l.value === loc)?.label || loc
+    }
+    const pickupLocationLabel = resolvePreventivoLoc(pExtras.pickup_location, pExtras.delivery_address)
+    const dropoffLocationLabel = resolvePreventivoLoc(pExtras.dropoff_location, pExtras.pickup_address)
+
     const bookingPayload = {
       // user_id satisfies the bookings_user_or_guest_check constraint
       // (existing ConvertPreventivoModal does the same).
@@ -2858,6 +2870,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       vehicle_plate: p.vehicle_plate,
       pickup_date: p.pickup_date,
       dropoff_date: p.dropoff_date,
+      pickup_location: pickupLocationLabel,
+      dropoff_location: dropoffLocationLabel,
       price_total: totalCents,
       currency: 'EUR',
       // "Conferma Prenotazione" (red box) → status 'confirmed' anche se Da
@@ -3074,6 +3088,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         '{pickup_time}': fmtTime(p.pickup_date),
         '{dropoff_date}': fmtDate(p.dropoff_date),
         '{dropoff_time}': fmtTime(p.dropoff_date),
+        '{pickup_location}': pickupLocationLabel,
+        '{dropoff_location}': dropoffLocationLabel,
         '{insurance}': p.insurance_option || '',
         '{km_info}': preventivoUnlimited ? 'Illimitati' : (preventivoKmLimit && preventivoKmLimit !== 'Illimitati' ? `${preventivoKmLimit} km` : 'Illimitati'),
         '{total}': (p.total_final ?? totalCents / 100).toFixed(2),
@@ -3097,7 +3113,15 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customPhone: customerPhone,
-            booking: { id: bookingId, service_type: 'car_rental' },
+            booking: {
+              id: bookingId,
+              service_type: 'car_rental',
+              vehicle_name: p.vehicle_name,
+              vehicle_plate: p.vehicle_plate,
+              pickup_location: pickupLocationLabel,
+              dropoff_location: dropoffLocationLabel,
+              price_total: totalCents,
+            },
             templateKey: tplKey,
             templateVars,
           }),
@@ -3120,6 +3144,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             vehicle_name: p.vehicle_name,
             pickup_date: p.pickup_date,
             dropoff_date: p.dropoff_date,
+            pickup_location: pickupLocationLabel,
+            dropoff_location: dropoffLocationLabel,
             price_total: totalCents,
             payment_status,
             payment_method,
