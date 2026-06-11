@@ -5849,10 +5849,19 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // appare come confermato (rosso col nome cliente, non "Da Saldare").
         // payment_status resta 'unpaid' per far vedere "Da saldare" finche'
         // il cliente non paga il link. Allineato a CarWashBookingsTab.
-        status: (!editingId && confirmBooking)
-          ? 'confirmed'
-          : (!editingId && isNexiPayByLink(formData.payment_method) && formData.payment_status !== 'paid')
-            ? 'pending' : formData.status === 'pending_payment' ? 'pending' : (formData.status || 'confirmed'),
+        // 2026-06-12 FIX: la conferma deve valere ANCHE in modifica. Prima
+        // (!editingId && confirmBooking) onorava il check SOLO in creazione:
+        // confermando in EDIT, manually_confirmed=true finiva nei booking_details
+        // ma lo status restava 'pending' → il cron cancel-unpaid-nexi-bookings
+        // (filtra status='pending') la cancellava dopo 1h anche se confermata.
+        // Ora: se conferma e' spuntata e lo status risulterebbe 'pending', si
+        // porta a 'confirmed', SENZA declassare booking gia' active/completed.
+        status: (() => {
+          const base = (!editingId && isNexiPayByLink(formData.payment_method) && formData.payment_status !== 'paid')
+            ? 'pending'
+            : formData.status === 'pending_payment' ? 'pending' : (formData.status || 'confirmed')
+          return (confirmBooking && base === 'pending') ? 'confirmed' : base
+        })(),
         // 2026-05-30: NON forzare 'unpaid' quando l'admin ha registrato un
         // ACCONTO (partial). Solo le booking senza nulla pagato partono 'unpaid';
         // le 'partial' mantengono lo stato così l'acconto resta visibile e il
