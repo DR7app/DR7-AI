@@ -1320,6 +1320,25 @@ interface HeaderCopy {
     business_heading_it: string; business_heading_en: string
     digital_heading_it: string; digital_heading_en: string
     contact_cta_it: string; contact_cta_en: string
+    // Menu principale (redesign): 9 voci, titolo + sottotitolo IT/EN.
+    menu_mobilita_title_it?: string; menu_mobilita_title_en?: string
+    menu_mobilita_sub_it?: string; menu_mobilita_sub_en?: string
+    menu_mare_title_it?: string; menu_mare_title_en?: string
+    menu_mare_sub_it?: string; menu_mare_sub_en?: string
+    menu_aria_title_it?: string; menu_aria_title_en?: string
+    menu_aria_sub_it?: string; menu_aria_sub_en?: string
+    menu_property_title_it?: string; menu_property_title_en?: string
+    menu_property_sub_it?: string; menu_property_sub_en?: string
+    menu_servizi_title_it?: string; menu_servizi_title_en?: string
+    menu_servizi_sub_it?: string; menu_servizi_sub_en?: string
+    menu_club_title_it?: string; menu_club_title_en?: string
+    menu_club_sub_it?: string; menu_club_sub_en?: string
+    menu_business_title_it?: string; menu_business_title_en?: string
+    menu_business_sub_it?: string; menu_business_sub_en?: string
+    menu_digital_title_it?: string; menu_digital_title_en?: string
+    menu_digital_sub_it?: string; menu_digital_sub_en?: string
+    menu_contatti_title_it?: string; menu_contatti_title_en?: string
+    menu_contatti_sub_it?: string; menu_contatti_sub_en?: string
     popup_title_it: string; popup_title_en: string
     popup_subtitle_it: string; popup_subtitle_en: string
 }
@@ -1337,6 +1356,24 @@ const INITIAL_HEADER: HeaderCopy = {
     business_heading_it: '', business_heading_en: '',
     digital_heading_it: '', digital_heading_en: '',
     contact_cta_it: '', contact_cta_en: '',
+    menu_mobilita_title_it: '', menu_mobilita_title_en: '',
+    menu_mobilita_sub_it: '', menu_mobilita_sub_en: '',
+    menu_mare_title_it: '', menu_mare_title_en: '',
+    menu_mare_sub_it: '', menu_mare_sub_en: '',
+    menu_aria_title_it: '', menu_aria_title_en: '',
+    menu_aria_sub_it: '', menu_aria_sub_en: '',
+    menu_property_title_it: '', menu_property_title_en: '',
+    menu_property_sub_it: '', menu_property_sub_en: '',
+    menu_servizi_title_it: '', menu_servizi_title_en: '',
+    menu_servizi_sub_it: '', menu_servizi_sub_en: '',
+    menu_club_title_it: '', menu_club_title_en: '',
+    menu_club_sub_it: '', menu_club_sub_en: '',
+    menu_business_title_it: '', menu_business_title_en: '',
+    menu_business_sub_it: '', menu_business_sub_en: '',
+    menu_digital_title_it: '', menu_digital_title_en: '',
+    menu_digital_sub_it: '', menu_digital_sub_en: '',
+    menu_contatti_title_it: '', menu_contatti_title_en: '',
+    menu_contatti_sub_it: '', menu_contatti_sub_en: '',
     popup_title_it: '', popup_title_en: '',
     popup_subtitle_it: '', popup_subtitle_en: '',
 }
@@ -5642,6 +5679,9 @@ function ConfirmationSuccessEditor({ copy, setCopy }: { copy: ConfirmationSucces
 // popup labels, aria) is editable here.
 function HeaderEditor({ copy, setCopy }: { copy: HeaderCopy; setCopy: (next: HeaderCopy) => void }) {
     const update = <K extends keyof HeaderCopy>(key: K, value: HeaderCopy[K]) => setCopy({ ...copy, [key]: value })
+    // Lettura/scrittura per le chiavi dinamiche del menu (menu_<id>_*).
+    const menuVal = (k: string): string => (copy as Record<string, string | undefined>)[k] ?? ''
+    const setMenu = (k: string, v: string) => setCopy({ ...copy, [k]: v } as HeaderCopy)
     return (
         <div className="space-y-6">
             <p className="text-[13px] text-theme-text-secondary">
@@ -5694,6 +5734,28 @@ function HeaderEditor({ copy, setCopy }: { copy: HeaderCopy; setCopy: (next: Hea
             </section>
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <h3 className="text-[14px] font-semibold text-theme-text-primary">Menu principale — voci (nuovo design)</h3>
+                <p className="text-[12px] text-theme-text-secondary">
+                    Le 9 voci del menu mobile (immagine + icona oro + titolo + sottotitolo). Modifica titolo e
+                    sottotitolo in IT/EN. <strong>Lascia vuoto per usare il testo predefinito</strong> indicato tra
+                    parentesi. Le immagini e le destinazioni delle voci restano gestite nel sito.
+                </p>
+                <div className="space-y-5">
+                    {MENU_ITEM_FIELDS.map(f => (
+                        <div key={f.key} className="border border-theme-border rounded-xl p-4 bg-theme-bg-secondary space-y-3">
+                            <h4 className="text-[12px] font-semibold uppercase tracking-wide text-theme-text-primary">{f.name}</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FieldText label={`Titolo IT (def: ${f.titleIt})`} value={menuVal(`menu_${f.key}_title_it`)} onChange={v => setMenu(`menu_${f.key}_title_it`, v)} />
+                                <FieldText label={`Titolo EN (def: ${f.titleEn})`} value={menuVal(`menu_${f.key}_title_en`)} onChange={v => setMenu(`menu_${f.key}_title_en`, v)} />
+                                <FieldText label={`Sottotitolo IT (def: ${f.subIt})`} value={menuVal(`menu_${f.key}_sub_it`)} onChange={v => setMenu(`menu_${f.key}_sub_it`, v)} />
+                                <FieldText label={`Sottotitolo EN (def: ${f.subEn})`} value={menuVal(`menu_${f.key}_sub_en`)} onChange={v => setMenu(`menu_${f.key}_sub_en`, v)} />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </section>
+
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Popup prenotazione (apre dal drawer)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldText label="Titolo popup (IT)" value={copy.popup_title_it} onChange={v => update('popup_title_it', v)} />
@@ -5705,6 +5767,21 @@ function HeaderEditor({ copy, setCopy }: { copy: HeaderCopy; setCopy: (next: Hea
         </div>
     )
 }
+
+// Voci del menu principale del sito (nuovo design) editabili da Header.
+// I default mostrati qui combaciano con i fallback hardcoded nel sito
+// (components/layout/Header.tsx). key -> prefisso chiavi menu_<key>_*.
+const MENU_ITEM_FIELDS: { key: string; name: string; titleIt: string; titleEn: string; subIt: string; subEn: string }[] = [
+    { key: 'mobilita', name: 'Mobilità', titleIt: 'Mobilità', titleEn: 'Mobility', subIt: 'Auto esclusive per ogni esperienza su strada', subEn: 'Exclusive cars for every experience on the road' },
+    { key: 'mare', name: 'Mare', titleIt: 'Mare', titleEn: 'Sea', subIt: 'Yacht, barche e esperienze esclusive in mare', subEn: 'Yachts, boats and exclusive experiences at sea' },
+    { key: 'aria', name: 'Aria', titleIt: 'Aria', titleEn: 'Air', subIt: 'Voli privati ed elicotteri per viaggiare senza confini', subEn: 'Private jets and helicopters to travel without limits' },
+    { key: 'property', name: 'Property', titleIt: 'Property', titleEn: 'Property', subIt: 'Ville, appartamenti e residenze selezionate in tutto il mondo', subEn: 'Villas, apartments and residences selected worldwide' },
+    { key: 'servizi', name: 'Servizi', titleIt: 'Servizi', titleEn: 'Services', subIt: 'Servizi su misura per uno stile di vita esclusivo', subEn: 'Tailored services for an exclusive lifestyle' },
+    { key: 'club', name: 'DR7 Club', titleIt: 'DR7 Club', titleEn: 'DR7 Club', subIt: 'Accesso esclusivo, eventi riservati e vantaggi unici', subEn: 'Exclusive access, private events and unique benefits' },
+    { key: 'business', name: 'Business', titleIt: 'Business', titleEn: 'Business', subIt: 'Soluzioni corporate e noleggi a lungo termine', subEn: 'Corporate solutions and long-term rentals' },
+    { key: 'digital', name: 'Digital Innovation', titleIt: 'Digital Innovation', titleEn: 'Digital Innovation', subIt: 'Digital Asset & Token Creation', subEn: 'Digital Asset & Token Creation' },
+    { key: 'contatti', name: 'Contattaci', titleIt: 'Contattaci', titleEn: 'Contact Us', subIt: 'Siamo a tua disposizione', subEn: 'We are at your service' },
+]
 
 // ─── SignUp editor (registrazione cliente — Azienda / Persona Fisica / PA) ─
 function SignUpEditor({ copy, setCopy }: { copy: SignUpCopy; setCopy: (next: SignUpCopy) => void }) {
