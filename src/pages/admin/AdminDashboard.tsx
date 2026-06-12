@@ -52,6 +52,7 @@ const GestioneDanniTab = lazyWithRetry(() => import('./components/GestioneDanniT
 const CargosTab = lazyWithRetry(() => import('./components/CargosTab'))
 const TrusteraTab = lazyWithRetry(() => import('./components/TrusteraTab'))
 const CarWashCatalogTab = lazyWithRetry(() => import('./components/CarWashCatalogTab'))
+const NoleggioServiceTab = lazyWithRetry(() => import('./components/NoleggioServiceTab'))
 const OperatoriTab = lazyWithRetry(() => import('./components/OperatoriTab'))
 const RilevazioneOrariTab = lazyWithRetry(() => import('./components/RilevazioneOrariTab'))
 const DashboardTab = lazyWithRetry(() => import('./components/DashboardTab'))
@@ -70,7 +71,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-preventivi'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -265,7 +266,7 @@ export default function AdminDashboard() {
   type SubTab = { tab: TabType; label: string; titleLabel?: string; superadminOnly?: boolean; subView?: 'bookings' | 'preventivi'; permKey?: string }
   const [rentalSubView, setRentalSubView] = useState<'bookings' | 'preventivi'>('bookings')
   const SECTIONS: { name: string; tabs: SubTab[] }[] = [
-    { name: 'Noleggio', tabs: [
+    { name: 'Noleggio Terra', tabs: [
       { tab: 'reservations', label: 'Noleggio', titleLabel: 'Prenotazioni', subView: 'bookings' },
       { tab: 'reservations', label: 'Preventivi', subView: 'preventivi', permKey: 'reservations-preventivi' },
       { tab: 'calendar', label: 'Calendario' },
@@ -277,6 +278,18 @@ export default function AdminDashboard() {
       { tab: 'vehicles', label: 'Veicoli' },
       { tab: 'magazzino', label: 'Magazzino' },
       { tab: 'gps-keyless', label: 'GPS Flotta' },
+    ] },
+    { name: 'Noleggio Mare', tabs: [
+      { tab: 'mare-bookings', label: 'Prenotazioni' },
+      { tab: 'mare-calendar', label: 'Calendario' },
+      { tab: 'mare-catalog', label: 'Catalogo' },
+      { tab: 'mare-preventivi', label: 'Preventivi' },
+    ] },
+    { name: 'Noleggio Aria', tabs: [
+      { tab: 'aria-bookings', label: 'Prenotazioni' },
+      { tab: 'aria-calendar', label: 'Calendario' },
+      { tab: 'aria-catalog', label: 'Catalogo' },
+      { tab: 'aria-preventivi', label: 'Preventivi' },
     ] },
     { name: 'Lavaggio & Meccanica', tabs: [
       { tab: 'carwash', label: 'Prenotazioni' },
@@ -330,8 +343,8 @@ export default function AdminDashboard() {
     { name: 'Sito', tabs: [
       { tab: 'sito', label: 'Sito' },
     ] },
-    { name: 'Trustera', tabs: [
-      { tab: 'trustera', label: 'Trustera' },
+    { name: 'DR7 Trust', tabs: [
+      { tab: 'trustera', label: 'DR7 Trust' },
     ] },
     { name: 'E.M.T.N.', tabs: [
       { tab: 'emtn', label: 'E.M.T.N.' },
@@ -344,14 +357,16 @@ export default function AdminDashboard() {
   // GESTIONE, SISTEMI) + an icon. Missing entries default to 'sistemi' and
   // render with a generic dot icon.
   const SECTION_META: Record<string, { group: 'core' | 'gestione' | 'sistemi'; icon: React.ReactNode }> = {
-    'Noleggio':        { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 13l1-3a4 4 0 014-3h8a4 4 0 014 3l1 3v5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-1H7v1a1 1 0 01-1 1H4a1 1 0 01-1-1v-5z"/> },
+    'Noleggio Terra':  { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 13l1-3a4 4 0 014-3h8a4 4 0 014 3l1 3v5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-1H7v1a1 1 0 01-1 1H4a1 1 0 01-1-1v-5z"/> },
+    'Noleggio Mare':   { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 17l1-4h14l1 4M5 13l7-9 7 9M12 4v9"/> },
+    'Noleggio Aria':   { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 5h18M12 5v3M7 11h8a3 3 0 013 3v2H6a2 2 0 01-2-2v-1a2 2 0 012-2zm9 7l3 3"/> },
     'Lavaggio & Meccanica': { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 2v6m0 0l-3-3m3 3l3-3M5 12a7 7 0 1014 0c0-3-2-5-7-10-5 5-7 7-7 10z"/> },
     'Clienti':         { group: 'gestione', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-5.13a4 4 0 11-8 0 4 4 0 018 0zm6 4a3 3 0 11-6 0 3 3 0 016 0z"/> },
     'Marketing':       { group: 'gestione', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/> },
     'Report':          { group: 'gestione', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/> },
     'Amministrazione':{ group: 'sistemi', icon: <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></> },
     'Centralina Pro':  { group: 'sistemi', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M13 10V3L4 14h7v7l9-11h-7z"/> },
-    'Trustera':        { group: 'sistemi', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/> },
+    'DR7 Trust':       { group: 'sistemi', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/> },
     'E.M.T.N.':        { group: 'sistemi', icon: <><circle cx="12" cy="12" r="9" strokeWidth={1.7}/><path strokeWidth={1.7} d="M3 12h18M12 3a15 15 0 010 18M12 3a15 15 0 000 18"/></> },
     'Sito':            { group: 'sistemi', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/> },
   }
@@ -391,7 +406,15 @@ export default function AdminDashboard() {
     'gestione-danni': 'Gestione Danni & Penali',
     'gestione-multe': 'Gestione Multe',
     'cargos': 'Cargos',
-    'trustera': 'Trustera',
+    'trustera': 'DR7 Trust',
+    'mare-bookings': 'Prenotazioni Noleggio Mare',
+    'mare-calendar': 'Calendario Noleggio Mare',
+    'mare-catalog': 'Catalogo Noleggio Mare',
+    'mare-preventivi': 'Preventivi Noleggio Mare',
+    'aria-bookings': 'Prenotazioni Noleggio Aria',
+    'aria-calendar': 'Calendario Noleggio Aria',
+    'aria-catalog': 'Catalogo Noleggio Aria',
+    'aria-preventivi': 'Preventivi Noleggio Aria',
     'emtn': 'E.M.T.N.',
     'gestione-otp': 'Gestione OTP',
     'verifica-documenti': 'Verifica Documenti',
@@ -991,6 +1014,14 @@ export default function AdminDashboard() {
             />
           )}
           {activeTab === 'carwash-catalog' && <CarWashCatalogTab />}
+          {activeTab === 'mare-bookings' && <NoleggioServiceTab serviceType="boat_rental" view="bookings" labels={{ title: 'Noleggio Mare', asset: 'Barca', assetPlural: 'Barche' }} />}
+          {activeTab === 'mare-calendar' && <NoleggioServiceTab serviceType="boat_rental" view="calendar" labels={{ title: 'Noleggio Mare', asset: 'Barca', assetPlural: 'Barche' }} />}
+          {activeTab === 'mare-catalog' && <NoleggioServiceTab serviceType="boat_rental" view="catalog" labels={{ title: 'Noleggio Mare', asset: 'Barca', assetPlural: 'Barche' }} />}
+          {activeTab === 'mare-preventivi' && <NoleggioServiceTab serviceType="boat_rental" view="preventivi" labels={{ title: 'Noleggio Mare', asset: 'Barca', assetPlural: 'Barche' }} />}
+          {activeTab === 'aria-bookings' && <NoleggioServiceTab serviceType="heli_rental" view="bookings" labels={{ title: 'Noleggio Aria', asset: 'Elicottero', assetPlural: 'Elicotteri' }} />}
+          {activeTab === 'aria-calendar' && <NoleggioServiceTab serviceType="heli_rental" view="calendar" labels={{ title: 'Noleggio Aria', asset: 'Elicottero', assetPlural: 'Elicotteri' }} />}
+          {activeTab === 'aria-catalog' && <NoleggioServiceTab serviceType="heli_rental" view="catalog" labels={{ title: 'Noleggio Aria', asset: 'Elicottero', assetPlural: 'Elicotteri' }} />}
+          {activeTab === 'aria-preventivi' && <NoleggioServiceTab serviceType="heli_rental" view="preventivi" labels={{ title: 'Noleggio Aria', asset: 'Elicottero', assetPlural: 'Elicotteri' }} />}
           {activeTab === 'fattura' && (isTabRestricted('fattura') ? <PlaceholderTab title="Accesso non autorizzato" /> : <FatturaTab />)}
           {activeTab === 'contratto' && <ContrattoTab />}
           {activeTab === 'cauzioni' && (isTabRestricted('cauzioni') ? <PlaceholderTab title="Accesso non autorizzato" /> : <CauzioniTab />)}
