@@ -849,7 +849,45 @@ export default function NexiTab() {
 
             if (!response.ok) throw new Error(data.error || 'Failed to fetch messages')
 
-            setTransactions(data.transactions || [])
+            const nexiTx: NexiTransaction[] = data.transactions || []
+
+            // 2026-06-12: includi anche le RICARICHE CREDIT WALLET pagate con
+            // carta (tabella credit_wallet_purchases). Passano da un flusso Nexi
+            // separato (nexi-callback.js) che NON scrive nexi_transactions, quindi
+            // prima NON comparivano qui pur essendo incassi Nexi reali. Merge
+            // non-bloccante: se fallisce, restano i soli ordini Nexi standard.
+            let walletTx: NexiTransaction[] = []
+            try {
+                const { data: rech } = await supabase
+                    .from('credit_wallet_purchases')
+                    .select('id, nexi_order_id, recharge_amount, package_name, payment_status, customer_email, customer_name, payment_completed_at, created_at')
+                    .not('nexi_order_id', 'is', null)
+                    .order('created_at', { ascending: false })
+                    .limit(500)
+                walletTx = (rech || []).map((r: Record<string, unknown>) => {
+                    const ps = String(r.payment_status || '').toLowerCase()
+                    const status: NexiTransaction['status'] =
+                        ['succeeded', 'paid', 'completed'].includes(ps) ? 'completed'
+                        : ps === 'pending' ? 'pending' : 'failed'
+                    const eur = Number(r.recharge_amount || 0)
+                    const who = String(r.customer_name || r.customer_email || '').trim()
+                    return {
+                        id: String(r.id),
+                        created_at: String(r.payment_completed_at || r.created_at || ''),
+                        order_id: String(r.nexi_order_id || ''),
+                        amount_cents: Math.round(eur * 100),
+                        status,
+                        description: `Ricarica Wallet${who ? ' — ' + who : ''}${r.package_name ? ' · ' + r.package_name : ''}`,
+                        customer_email: String(r.customer_email || ''),
+                    } as NexiTransaction
+                })
+            } catch (wErr) {
+                console.warn('[NexiTab] merge ricariche wallet fallito (non-bloccante):', wErr)
+            }
+
+            const combined = [...nexiTx, ...walletTx].sort((a, b) =>
+                String(b.created_at || '').localeCompare(String(a.created_at || '')))
+            setTransactions(combined)
         } catch (err: unknown) {
           const _errMsg = err instanceof Error ? err.message : String(err)
             setError(_errMsg)
