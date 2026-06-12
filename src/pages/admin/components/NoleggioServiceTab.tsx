@@ -8,7 +8,7 @@
 import { useState, useEffect, useMemo, useCallback, type ReactNode } from 'react'
 import { supabase } from '../../../supabaseClient'
 
-export type NoleggioServiceType = 'boat_rental' | 'heli_rental'
+export type NoleggioServiceType = 'boat_rental' | 'heli_rental' | 'stay_rental'
 export type NoleggioView = 'bookings' | 'calendar' | 'catalog' | 'preventivi'
 
 export interface NoleggioServiceLabels {

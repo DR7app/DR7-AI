@@ -71,7 +71,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-preventivi'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-preventivi' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-preventivi'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -291,6 +291,12 @@ export default function AdminDashboard() {
       { tab: 'aria-catalog', label: 'Catalogo' },
       { tab: 'aria-preventivi', label: 'Preventivi' },
     ] },
+    { name: 'Soggiorni & Ospitalità', tabs: [
+      { tab: 'stay-bookings', label: 'Prenotazioni' },
+      { tab: 'stay-calendar', label: 'Calendario' },
+      { tab: 'stay-catalog', label: 'Catalogo' },
+      { tab: 'stay-preventivi', label: 'Preventivi' },
+    ] },
     { name: 'Lavaggio & Meccanica', tabs: [
       { tab: 'carwash', label: 'Prenotazioni' },
       { tab: 'carwash-calendar', label: 'Calendario' },
@@ -360,6 +366,7 @@ export default function AdminDashboard() {
     'Noleggio Terra':  { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 13l1-3a4 4 0 014-3h8a4 4 0 014 3l1 3v5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-1H7v1a1 1 0 01-1 1H4a1 1 0 01-1-1v-5z"/> },
     'Noleggio Mare':   { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 17l1-4h14l1 4M5 13l7-9 7 9M12 4v9"/> },
     'Noleggio Aria':   { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 5h18M12 5v3M7 11h8a3 3 0 013 3v2H6a2 2 0 01-2-2v-1a2 2 0 012-2zm9 7l3 3"/> },
+    'Soggiorni & Ospitalità': { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M3 11l9-7 9 7M5 9.5V20a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V9.5"/> },
     'Lavaggio & Meccanica': { group: 'core', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 2v6m0 0l-3-3m3 3l3-3M5 12a7 7 0 1014 0c0-3-2-5-7-10-5 5-7 7-7 10z"/> },
     'Clienti':         { group: 'gestione', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-5.13a4 4 0 11-8 0 4 4 0 018 0zm6 4a3 3 0 11-6 0 3 3 0 016 0z"/> },
     'Marketing':       { group: 'gestione', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/> },
@@ -415,6 +422,10 @@ export default function AdminDashboard() {
     'aria-calendar': 'Calendario Noleggio Aria',
     'aria-catalog': 'Catalogo Noleggio Aria',
     'aria-preventivi': 'Preventivi Noleggio Aria',
+    'stay-bookings': 'Prenotazioni Soggiorni & Ospitalità',
+    'stay-calendar': 'Calendario Soggiorni & Ospitalità',
+    'stay-catalog': 'Catalogo Soggiorni & Ospitalità',
+    'stay-preventivi': 'Preventivi Soggiorni & Ospitalità',
     'emtn': 'E.M.T.N.',
     'gestione-otp': 'Gestione OTP',
     'verifica-documenti': 'Verifica Documenti',
@@ -1022,6 +1033,10 @@ export default function AdminDashboard() {
           {activeTab === 'aria-calendar' && <NoleggioServiceTab serviceType="heli_rental" view="calendar" labels={{ title: 'Noleggio Aria', asset: 'Elicottero', assetPlural: 'Elicotteri' }} />}
           {activeTab === 'aria-catalog' && <NoleggioServiceTab serviceType="heli_rental" view="catalog" labels={{ title: 'Noleggio Aria', asset: 'Elicottero', assetPlural: 'Elicotteri' }} />}
           {activeTab === 'aria-preventivi' && <NoleggioServiceTab serviceType="heli_rental" view="preventivi" labels={{ title: 'Noleggio Aria', asset: 'Elicottero', assetPlural: 'Elicotteri' }} />}
+          {activeTab === 'stay-bookings' && <NoleggioServiceTab serviceType="stay_rental" view="bookings" labels={{ title: 'Soggiorni & Ospitalità', asset: 'Alloggio', assetPlural: 'Alloggi' }} />}
+          {activeTab === 'stay-calendar' && <NoleggioServiceTab serviceType="stay_rental" view="calendar" labels={{ title: 'Soggiorni & Ospitalità', asset: 'Alloggio', assetPlural: 'Alloggi' }} />}
+          {activeTab === 'stay-catalog' && <NoleggioServiceTab serviceType="stay_rental" view="catalog" labels={{ title: 'Soggiorni & Ospitalità', asset: 'Alloggio', assetPlural: 'Alloggi' }} />}
+          {activeTab === 'stay-preventivi' && <NoleggioServiceTab serviceType="stay_rental" view="preventivi" labels={{ title: 'Soggiorni & Ospitalità', asset: 'Alloggio', assetPlural: 'Alloggi' }} />}
           {activeTab === 'fattura' && (isTabRestricted('fattura') ? <PlaceholderTab title="Accesso non autorizzato" /> : <FatturaTab />)}
           {activeTab === 'contratto' && <ContrattoTab />}
           {activeTab === 'cauzioni' && (isTabRestricted('cauzioni') ? <PlaceholderTab title="Accesso non autorizzato" /> : <CauzioniTab />)}
