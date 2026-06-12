@@ -6325,6 +6325,22 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         })
       }
 
+      // 2026-06-12: rilevamento cambio orari. Modificare data/ora di ritiro o
+      // riconsegna è una modifica MATERIALE: il cliente deve ricevere la conferma
+      // aggiornata con i NUOVI orari e il contratto aggiornato da firmare, anche
+      // se la prenotazione era già confermata. Le modifiche non di orario (note,
+      // "segna pagato") mantengono l'anti-duplicato esistente.
+      const scheduleChanged = !!editingId && (() => {
+        const snap = editFormSnapshotRef.current as Record<string, unknown> | null
+        if (!snap) return false
+        return (
+          String(snap.pickup_date ?? '') !== String(formData.pickup_date ?? '')
+          || String(snap.pickup_time ?? '') !== String(formData.pickup_time ?? '')
+          || String(snap.return_date ?? '') !== String(formData.return_date ?? '')
+          || String(snap.return_time ?? '') !== String(formData.return_time ?? '')
+        )
+      })()
+
       // Generate Nexi Pay by Link only when the admin actually chose "Nexi Pay
       // by Link" as the payment method. For Contanti / Bonifico / Carta etc.
       // the customer will pay in person — sending a payment URL is wrong and
@@ -6789,10 +6805,18 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           const wasConfirmedAtLoad = prevSnap?._wasConfirmedAtLoad === true
 
           let templateKey: string | null
-          if (editingId && wasConfirmedAtLoad) {
+          if (editingId && wasConfirmedAtLoad && scheduleChanged) {
+            // Orari modificati su prenotazione già confermata: il cliente DEVE
+            // ricevere la conferma aggiornata con i NUOVI orari. Eccezione mirata
+            // all'anti-duplicato (commit 1189e43a) che altrimenti bloccava OGNI
+            // reinvio su edit, incluso un cambio orari materiale. Usa il template
+            // da-saldare se resta un saldo, altrimenti la conferma noleggio.
+            logger.log('[Save] Orari modificati — reinvio conferma con i nuovi orari.')
+            templateKey = isPending ? 'booking_confirmed_da_saldare' : 'rental_new_customer'
+          } else if (editingId && wasConfirmedAtLoad) {
             // Booking gia' stato confermato in precedenza — niente reinvio
-            // conferma su questa modifica, qualunque sia la transizione
-            // (da saldare -> paid, cambio data, aggiunta nota, ecc.).
+            // conferma su questa modifica non-orari (da saldare -> paid,
+            // aggiunta nota, ecc.).
             logger.log('[Save] Booking gia\' confermato in precedenza — salto reinvio conferma.')
             templateKey = null
           } else if (isPending) {
@@ -7267,7 +7291,9 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // (Il deferral resta solo per gli EDIT con saldo dovuto, sotto.)
       const shouldSendSigningLink = !!insertedBooking?.id
         && !editHasBalanceOwed  // defer signing link until after payment on edits with balance
-        && (currentlyPaid || wasOriginallyPaid || confirmBooking)
+        // scheduleChanged: orari modificati → il cliente deve firmare il contratto
+        // aggiornato con i nuovi orari (resta valido il deferral se c'è un saldo).
+        && (currentlyPaid || wasOriginallyPaid || confirmBooking || scheduleChanged)
       if (shouldSendSigningLink) {
         try {
           // Fetch the contract that was just generated for this booking

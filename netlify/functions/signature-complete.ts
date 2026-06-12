@@ -433,15 +433,23 @@ export const handler: Handler = async (event) => {
                     customerPhone = booking?.customer_phone || booking?.booking_details?.customer?.phone || ''
                 }
 
-                // For standalone documents, look up phone from customers_extended
+                // For standalone documents, look up phone from customers_extended.
+                // Case-insensitive: il signer_email può differire per maiuscole/
+                // spazi dal profilo salvato e un .eq esatto lo mancava in silenzio.
                 if (!customerPhone && sigRequest.signer_email) {
                     const { data: cust } = await supabase
                         .from('customers_extended')
                         .select('telefono')
-                        .eq('email', sigRequest.signer_email)
+                        .ilike('email', sigRequest.signer_email)
                         .maybeSingle()
                     customerPhone = cust?.telefono || ''
                 }
+                // Fallback finale: il telefono del firmatario catturato quando è
+                // stato inviato il link di firma. Garantisce che chi ha appena
+                // firmato riceva la SUA copia firmata anche se la prenotazione non
+                // ha telefono o la ricerca per email non trova nulla.
+                // (Bug: il firmatario non riceveva il contratto firmato.)
+                if (!customerPhone) customerPhone = String(sigRequest.signer_phone || '')
                 if (customerPhone) {
                     let cleanPhone = customerPhone.replace(/\D/g, '')
                     if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
