@@ -419,6 +419,7 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
       }
       let notified = 0
       let noPhone = 0
+      let templateMissing = false
       for (const [aid, aCards] of byAutista) {
         const a = autisti.find(x => x.id === aid)
         if (!a) continue
@@ -470,6 +471,9 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
           const ritorno = luogoParts(c.dropoff_place, c.dropoff_address)
           const templateVars: Record<string, string> = {
             nome_autista: firstName,
+            // 2026-06-12: titolo dell'uscita (campo "Titolo uscita" della modale)
+            // — variabile {titolo_corsa} inseribile nel template Pro.
+            titolo_corsa: (title.trim() || c.motivazioni[0] || 'Uscita Straordinaria'),
             veicolo: driveV?.display_name || '',
             targa: driveV?.plate || c.plate || '—',
             data_ritiro: fmtDate(c.pickup_date),
@@ -487,59 +491,26 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
             servizi_extra: svcExtras || '—',
             note_integrative: noteInt,
           }
-          // Fallback hardcoded — testo ufficiale direzione 2026-06-03.
-          const fallbackMsg = `Salve ${templateVars.nome_autista},
-ti è stata assegnata una nuova uscita straordinaria.
-
-Dettagli incarico:
-• Veicolo assegnato: ${templateVars.veicolo}
-• Targa: ${templateVars.targa}
-• Data ritiro: ${templateVars.data_ritiro}
-• Ora ritiro: ${templateVars.ora_ritiro}
-• Luogo ritiro: ${templateVars.luogo_ritiro}
-• Indirizzo ritiro: ${templateVars.indirizzo_ritiro}
-• Data riconsegna: ${templateVars.data_riconsegna}
-• Ora riconsegna: ${templateVars.ora_riconsegna}
-• Luogo riconsegna: ${templateVars.luogo_riconsegna}
-• Indirizzo riconsegna: ${templateVars.indirizzo_riconsegna}
-• Motivazione uscita: ${templateVars.motivazione_uscita}
-• Booking collegato: ${templateVars.booking_collegato}
-
-Condizioni operative:
-• Pagamento: ${templateVars.stato_pagamento}
-• Cauzione: ${templateVars.stato_cauzione}
-• Servizi extra / experience: ${templateVars.servizi_extra}
-
-Note integrative:
-${templateVars.note_integrative}
-
-Ti chiediamo gentilmente di verificare tutti i dettagli prima dell'uscita e di rispettare gli orari indicati.
-
-Grazie per la collaborazione.
-DR7`
           try {
-            // 2026-06-03: lookup template per LABEL (la modale Messaggi di
-            // Sistema Pro non espone il campo message_key — auto-generato dal
-            // backend al salvataggio). Direzione ha chiamato il template
-            // "Notifica Autista — Uscita Straordinaria". Stesso pattern di
-            // Preventivi / Status Promotion (memory: preventivi_template_keys.md).
+            // 2026-06-12: il CORPO arriva SEMPRE dal template Pro "Notifica
+            // Autista — Uscita Straordinaria" (Messaggi di Sistema Pro). NESSUN
+            // testo hardcoded: se il template manca o è disattivato NON si invia
+            // (l'admin deve configurarlo). Lookup per LABEL perché la modale Pro
+            // non espone message_key (auto-generato). Vedi preventivi_template_keys.
             const LABEL = 'Notifica Autista — Uscita Straordinaria'
             const { data: tpl } = await supabase
               .from('system_messages')
               .select('message_body, is_enabled')
               .eq('label', LABEL)
               .maybeSingle()
-            let body = ''
-            if (tpl && tpl.is_enabled !== false && tpl.message_body) {
-              // Sostituisce manualmente le variabili — niente template engine
-              // server-side perche' qui passiamo customMessage.
-              body = tpl.message_body
-              for (const [k, v] of Object.entries(templateVars)) {
-                body = body.split(`{${k}}`).join(v)
-              }
-            } else {
-              // Fallback hardcoded col testo ufficiale direzione.
-              body = fallbackMsg
+            if (!tpl || tpl.is_enabled === false || !tpl.message_body) {
+              templateMissing = true
+              continue // niente fallback hardcoded — il messaggio è solo Pro
+            }
+            // Sostituisce le variabili {chiave} col valore.
+            let body = tpl.message_body
+            for (const [k, v] of Object.entries(templateVars)) {
+              body = body.split(`{${k}}`).join(v)
             }
             await fetch('/.netlify/functions/send-whatsapp-notification', {
               method: 'POST',
@@ -556,6 +527,9 @@ DR7`
       const notifyMsg = notified > 0 ? ` · ${notified} autista notificat${notified > 1 ? 'i' : 'o'}` : ''
       const noPhoneMsg = noPhone > 0 ? ` (${noPhone} senza telefono)` : ''
       toast.success(`Uscita Straordinaria salvata (${rows.length} veicolo${rows.length > 1 ? 'i' : ''})${notifyMsg}${noPhoneMsg}.`)
+      if (templateMissing) {
+        toast.error('Template "Notifica Autista — Uscita Straordinaria" mancante o disattivato in Messaggi di Sistema Pro: nessuna notifica autista inviata. Configuralo (e attivalo) per abilitare l\'invio.', { duration: 11000 })
+      }
       onSaved?.()
       onClose()
     } catch (e) {

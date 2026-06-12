@@ -935,6 +935,31 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
             },
         ],
     },
+    {
+        label: 'Autista — Uscita Straordinaria',
+        scope: 'specific',
+        scopeNote: 'Solo nel template "Notifica Autista — Uscita Straordinaria" (inviato all\'autista al salvataggio di un\'uscita straordinaria).',
+        items: [
+            { key: 'titolo_corsa', description: 'Titolo dell\'uscita (campo "Titolo uscita"); se vuoto usa la prima motivazione.', example: 'Consegne mattina sabato' },
+            { key: 'nome_autista', description: "Nome dell'autista", example: 'Luca' },
+            { key: 'veicolo', description: 'Veicolo assegnato (modello)', example: 'Audi RS3' },
+            { key: 'targa', description: 'Targa del veicolo', example: 'AB123CD' },
+            { key: 'data_ritiro', description: 'Data ritiro', example: '12/05/2026' },
+            { key: 'ora_ritiro', description: 'Ora ritiro', example: '11:00' },
+            { key: 'luogo_ritiro', description: 'Luogo ritiro (nome)', example: 'DR7 Office Cagliari' },
+            { key: 'indirizzo_ritiro', description: 'Indirizzo ritiro', example: 'Viale Marconi 229' },
+            { key: 'data_riconsegna', description: 'Data riconsegna', example: '15/05/2026' },
+            { key: 'ora_riconsegna', description: 'Ora riconsegna', example: '10:00' },
+            { key: 'luogo_riconsegna', description: 'Luogo riconsegna (nome)', example: 'Aeroporto Cagliari Elmas' },
+            { key: 'indirizzo_riconsegna', description: 'Indirizzo riconsegna', example: '—' },
+            { key: 'motivazione_uscita', description: "Motivazione/i dell'uscita", example: 'Consegna cliente' },
+            { key: 'booking_collegato', description: 'Prenotazione collegata (rif. cliente/veicolo)', example: '#A1B2C3D4 · Marco · Audi RS3' },
+            { key: 'stato_pagamento', description: 'Stato pagamento previsto', example: 'Da incassare €450' },
+            { key: 'stato_cauzione', description: 'Stato cauzione prevista', example: 'Da bloccare €500' },
+            { key: 'servizi_extra', description: 'Servizi extra / experience', example: 'Lavaggio, Seggiolino' },
+            { key: 'note_integrative', description: 'Note integrative', example: 'Cliente arriva alle 9:30' },
+        ],
+    },
 ]
 
 function TemplateVarLegend({ defaultOpen = false }: { defaultOpen?: boolean } = {}) {
