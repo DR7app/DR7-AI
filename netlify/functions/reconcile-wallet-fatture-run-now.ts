@@ -1,5 +1,5 @@
 import { Handler } from '@netlify/functions'
-import { reconcileWalletFatture } from './reconcile-wallet-fatture-cron'
+import { reconcileWalletFatture } from './_reconcile-wallet-fatture'
 
 /**
  * Esecuzione MANUALE immediata della riconciliazione fatture ricariche wallet
