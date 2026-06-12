@@ -87,3 +87,90 @@ export async function reconcileWalletFatture(): Promise<ReconcileResult> {
 
   return result
 }
+
+/**
+ * Backstop per le fatture PRENOTAZIONE (stesso problema delle ricariche: la
+ * generazione nella callback Nexi e' best-effort e puo' fallire in silenzio).
+ * Ripesca le prenotazioni PAGATE recenti senza fattura e richiama
+ * generate-invoice-from-booking (auth-free con bookingId, IDEMPOTENTE: salta
+ * wallet/gift e metodi con auto-fattura OFF, non duplica se la fattura esiste).
+ */
+export async function reconcileBookingFatture(): Promise<ReconcileResult> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    throw new Error('missing supabase env (VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)')
+  }
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+
+  const sinceISO = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString()
+  const result: ReconcileResult = { checked: 0, generated: 0, backfilled: 0, alreadyOk: 0, failed: 0, failures: [] }
+
+  // Prenotazioni pagate recenti
+  const { data: bookings, error } = await supabase
+    .from('bookings')
+    .select('id, customer_name, payment_method, status, created_at')
+    .in('payment_status', ['paid', 'completed', 'succeeded'])
+    .gte('created_at', sinceISO)
+    .order('created_at', { ascending: false })
+    .limit(1000)
+  if (error) throw error
+
+  // Candidati: paganti reali. Escludo wallet/gift/credit (niente fattura per
+  // definizione), annullate e righe di servizio/test. generate-invoice-from-booking
+  // applica comunque le sue regole, ma cosi' evito chiamate inutili ripetute.
+  const candidates = (bookings || []).filter(b => {
+    const st = String(b.status || '').toLowerCase()
+    if (st === 'cancelled' || st === 'annullata') return false
+    const pm = String(b.payment_method || '').toLowerCase()
+    if (pm.includes('wallet') || pm.includes('gift') || pm.includes('credit')) return false
+    const cust = String(b.customer_name || '').toLowerCase()
+    if (cust.includes('admin dr7') || cust.includes('lavaggio rientro')) return false
+    return true
+  })
+  if (candidates.length === 0) return result
+
+  // Quali hanno gia' una fattura? (a blocchi di 200 id)
+  const ids = candidates.map(b => b.id)
+  const invoiced = new Set<string>()
+  for (let i = 0; i < ids.length; i += 200) {
+    const chunk = ids.slice(i, i + 200)
+    const { data: fatts } = await supabase.from('fatture').select('booking_id').in('booking_id', chunk)
+    ;(fatts || []).forEach((f: { booking_id: string | null }) => { if (f.booking_id) invoiced.add(f.booking_id) })
+  }
+
+  for (const b of candidates) {
+    result.checked++
+    if (invoiced.has(b.id)) { result.alreadyOk++; continue }
+    try {
+      const res = await fetch(`${ADMIN_URL}/.netlify/functions/generate-invoice-from-booking`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: b.id, includeIVA: true }),
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const j: any = await res.json().catch(() => ({}))
+      if (res.ok && (j.success || j.invoice || j.invoiceNumber || j.skipped)) {
+        if (j.skipped) {
+          // wallet/gift/contanti-off/non-prevista → legittimo, niente fattura
+          result.alreadyOk++
+        } else {
+          result.generated++
+          console.log(`[Booking Fattura Reconcile] OK ${b.id} (${b.customer_name}) → ${j.invoice?.numero_fattura || j.invoiceNumber || 'OK'}`)
+        }
+      } else {
+        result.failed++
+        const err = j?.error || j?.message || `HTTP ${res.status}`
+        result.failures.push({ purchaseId: b.id, customer: b.customer_name, error: String(err) })
+        console.error(`[Booking Fattura Reconcile] FAIL ${b.id}: ${err}`)
+      }
+    } catch (e) {
+      result.failed++
+      const msg = e instanceof Error ? e.message : String(e)
+      result.failures.push({ purchaseId: b.id, customer: b.customer_name, error: msg })
+      console.error(`[Booking Fattura Reconcile] FAIL ${b.id}: ${msg}`)
+    }
+  }
+
+  return result
+}
