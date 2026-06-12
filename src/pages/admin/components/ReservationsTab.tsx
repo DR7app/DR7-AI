@@ -3086,44 +3086,80 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     // Synchronous lock keyed by booking — state guards are async and let a
     // fast double-click through, sending the WhatsApp twice.
     if (autoProntaLockRef.current.has(booking.id) || autoProntaSending) return
-    if (booking.booking_details?.auto_pronta_sent_at) { toast('Cliente già notificato (Auto Pronta)'); return }
+    if (booking.booking_details?.auto_pronta_sent_at) { toast('Guidatori già notificati (Auto Pronta)'); return }
+
+    // 2026-06-12: l'Auto Pronta va a TUTTI i guidatori del noleggio (cliente
+    // principale + secondo guidatore), CIASCUNO col proprio nome. Il CORPO del
+    // messaggio arriva SEMPRE dal template Pro 'rental_auto_pronta' (Messaggi di
+    // Sistema Pro) — nessun testo hardcoded: cambiano solo le variabili (nome).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bd: any = booking.booking_details || {}
+    const firstNameOf = (full?: string) => (String(full || '').trim().split(/\s+/)[0] || 'Cliente')
+    const drivers: { phone: string; firstName: string }[] = []
+    const mainPhone = booking.customer_phone || bd.customer?.phone
+    if (mainPhone) drivers.push({ phone: String(mainPhone), firstName: firstNameOf(booking.customer_name || bd.customer?.fullName) })
+    const sd = bd.second_driver
+    if (sd?.phone) {
+      const sdFull = [sd.name, sd.surname].filter(Boolean).join(' ')
+      drivers.push({ phone: String(sd.phone), firstName: firstNameOf(sdFull || sd.name) })
+    }
+    // Dedup per numero (sole cifre): se il 2° guidatore coincide col cliente,
+    // si invia una sola volta.
+    const seen = new Set<string>()
+    const recipients = drivers.filter(d => {
+      const key = (d.phone || '').replace(/\D/g, '')
+      if (!key || seen.has(key)) return false
+      seen.add(key); return true
+    })
+    if (recipients.length === 0) { toast.error('Nessun numero guidatore disponibile — impossibile inviare WhatsApp'); return }
+
     autoProntaLockRef.current.add(booking.id)
-    const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
-    if (!custPhone) { toast.error('Numero di telefono cliente mancante — impossibile inviare WhatsApp'); return }
-    const custName = booking.customer_name || booking.booking_details?.customer?.fullName || 'Cliente'
-    const firstName = String(custName).split(' ')[0] || 'Cliente'
     const bookingRef = String(booking.id || '').substring(0, 8).toUpperCase()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const svcType = (booking as any).service_type || 'car_rental'
 
     setAutoProntaSending(true)
-    const toastId = toast.loading('Invio notifica AUTO PRONTA al cliente...')
+    const toastId = toast.loading(`Invio AUTO PRONTA a ${recipients.length} guidatore/i...`)
     try {
-      const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customPhone: custPhone,
-          templateKey: 'rental_auto_pronta',
-          booking: { service_type: svcType },
-          templateVars: {
-            customer_name: firstName, nome: firstName,
-            booking_id: bookingRef, booking_ref: bookingRef,
-            vehicle_name: booking.vehicle_name || '',
-            vehicle_plate: booking.vehicle_plate || '', targa: booking.vehicle_plate || '',
-          },
-          skipHeader: true,
-        }),
-      })
-      const waResult = await waResp.json().catch(() => ({}))
-      if (!waResp.ok || waResult?.skipped) {
+      let sent = 0
+      let failed = 0
+      let templateMissing = false
+      for (const d of recipients) {
+        const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customPhone: d.phone,
+            templateKey: 'rental_auto_pronta',
+            booking: { service_type: svcType },
+            templateVars: {
+              customer_name: d.firstName, nome: d.firstName,
+              booking_id: bookingRef, booking_ref: bookingRef,
+              vehicle_name: booking.vehicle_name || '',
+              vehicle_plate: booking.vehicle_plate || '', targa: booking.vehicle_plate || '',
+            },
+            skipHeader: true,
+          }),
+        }).catch(() => null)
+        const waResult = waResp ? await waResp.json().catch(() => ({})) : {}
+        // 'skipped' = template Pro mancante/non attivo → problema di config,
+        // inutile proseguire con gli altri guidatori.
+        if (waResult?.skipped) { templateMissing = true; break }
+        if (waResp && waResp.ok) sent++
+        else failed++
+      }
+      if (templateMissing) {
         toast.error('Nessun template "Auto pronta Noleggio" configurato in Messaggi di Sistema Pro. Verifica: template ATTIVO, body non vuoto, evento "Auto pronta Noleggio" tra gli eventi gestiti, Tipo servizio = Noleggio.', { id: toastId, duration: 12000 })
+        return
+      }
+      if (sent === 0) {
+        toast.error('Invio AUTO PRONTA fallito per tutti i guidatori', { id: toastId })
         return
       }
       const newDetails = { ...(booking.booking_details || {}), auto_pronta_sent_at: new Date().toISOString() }
       await supabase.from('bookings').update({ booking_details: newDetails }).eq('id', booking.id)
       setSelectedBooking(prev => (prev && prev.id === booking.id ? { ...prev, booking_details: newDetails } as Booking : prev))
-      toast.success('WhatsApp AUTO PRONTA inviato al cliente', { id: toastId })
+      toast.success(`WhatsApp AUTO PRONTA inviato a ${sent} guidatore/i${failed ? ` (${failed} falliti)` : ''}`, { id: toastId })
       logAdminAction('auto_pronta_sent', 'booking', booking.id, buildBookingContext(booking))
     } catch (err: unknown) {
       toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)), { id: toastId })
