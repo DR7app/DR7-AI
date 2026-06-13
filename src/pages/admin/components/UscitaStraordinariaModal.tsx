@@ -481,11 +481,25 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
             // (l'admin deve configurarlo). Lookup per LABEL perché la modale Pro
             // non espone message_key (auto-generato). Vedi preventivi_template_keys.
             const LABEL = 'Notifica Autista — Uscita Straordinaria'
-            const { data: tpl } = await supabase
+            // 1) lookup per LABEL esatta.
+            let { data: tpl } = await supabase
               .from('system_messages')
               .select('message_body, is_enabled')
               .eq('label', LABEL)
               .maybeSingle()
+            // 2) fallback ROBUSTO per prefisso message_key (il key e' stabile:
+            //    pro_custom_notifica_autista_uscita_straordinaria_<ts>), cosi' un
+            //    trattino/spazio diverso nella label NON fa mai mancare il template.
+            //    Resta comunque SOLO Pro: nessun testo hardcoded.
+            if (!tpl || tpl.is_enabled === false || !tpl.message_body) {
+              const { data: byKey } = await supabase
+                .from('system_messages')
+                .select('message_body, is_enabled')
+                .ilike('message_key', 'pro_custom_notifica_autista_uscita_straordinaria_%')
+                .limit(5)
+              const match = (byKey || []).find(r => r.is_enabled !== false && !!r.message_body)
+              if (match) tpl = match
+            }
             if (!tpl || tpl.is_enabled === false || !tpl.message_body) {
               templateMissing = true
               continue // niente fallback hardcoded — il messaggio è solo Pro
