@@ -2170,7 +2170,17 @@ export default function UnpaidBookingsTab() {
         || booking.payment_status === 'completed'
         || booking.payment_status === 'succeeded')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const hasUnpaidExtensions = (booking.booking_details?.extension_history || []).some((ext: any) => ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link')
+      // 2026-06-13: contano solo le estensioni con residuo > 0. Un'estensione
+      // €0 (Da Saldare = solo cambio data, nulla da pagare) NON deve far
+      // comparire il noleggio già pagato in questa tab. Allineato a
+      // getRemainingAmount / getPendingExtensions (che già filtrano il residuo 0).
+      const hasUnpaidExtensions = (booking.booking_details?.extension_history || []).some((ext: any) => {
+        const unpaid = ext.payment_status === 'pending' || ext.payment_status === 'partial' || ext.payment_status === 'nexi_pay_by_link'
+        if (!unpaid) return false
+        const amt = Number(ext.additional_amount) || 0
+        const paid = Number(ext.amount_paid) || 0
+        return (amt - paid) > 0
+      })
 
       if (mainIsUnpaid || hasUnpaidExtensions) {
         if (effectiveType === 'rental') {
