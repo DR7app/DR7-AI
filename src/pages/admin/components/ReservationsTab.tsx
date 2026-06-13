@@ -7045,19 +7045,64 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         }
         addLeg(autistaRitiro, { label: 'RITIRO (consegna al cliente)', luogo: pickupLocationLabel, quando: `${itDate(formData.pickup_date)}${formData.pickup_time ? ' alle ' + formData.pickup_time : ''}`.trim() })
         addLeg(autistaRiconsegna, { label: 'RICONSEGNA (ritiro dal cliente)', luogo: dropoffLocationLabel, quando: `${itDate(formData.return_date)}${formData.return_time ? ' alle ' + formData.return_time : ''}`.trim() })
-        for (const { aut, legs } of Object.values(groups)) {
-          if (!aut.phone || aut.id === customerId) continue
-          let autMsg = `*INCARICO AUTISTA - DR7*\n\nCiao ${(aut.full_name || '').split(' ')[0]},\nti e' stato assegnato:\n\n*Rif:* DR7-${idShort}\n*Cliente:* ${customerInfo?.full_name || 'N/A'}\n*Veicolo:* ${veic}\n`
-          for (const l of legs) autMsg += `\n*${l.label}*\nLuogo: ${l.luogo}${l.quando ? `\nQuando: ${l.quando}` : ''}\n`
-          try {
-            await fetch('/.netlify/functions/send-whatsapp-notification', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ customPhone: aut.phone, customMessage: autMsg }),
-            })
-            logger.log('[Auto-Gen] ✅ Avviso autista inviato a', aut.phone)
-          } catch (autErr) {
-            console.error('[Auto-Gen] ⚠️ Avviso autista fallito:', autErr)
+        // 2026-06-13: il messaggio autista NON e' piu' hardcoded. Arriva SEMPRE
+        // dal template Pro "Notifica Autista — Uscita Straordinaria" (lo STESSO
+        // della Uscita Straordinaria, come richiesto dalla direzione). Lookup per
+        // LABEL, fallback per prefisso message_key (robusto al trattino). Se il
+        // template manca/e' disattivato NON si invia nulla: niente testo hardcoded.
+        const AUT_LABEL = 'Notifica Autista — Uscita Straordinaria'
+        let autTpl: { message_body?: string; is_enabled?: boolean } | null = null
+        {
+          const { data: byLabel } = await supabase
+            .from('system_messages').select('message_body, is_enabled').eq('label', AUT_LABEL).maybeSingle()
+          autTpl = byLabel
+          if (!autTpl || autTpl.is_enabled === false || !autTpl.message_body) {
+            const { data: byKey } = await supabase
+              .from('system_messages').select('message_body, is_enabled')
+              .ilike('message_key', 'pro_custom_notifica_autista_uscita_straordinaria_%').limit(5)
+            const m = (byKey || []).find(r => r.is_enabled !== false && !!r.message_body)
+            if (m) autTpl = m
+          }
+        }
+        if (!autTpl || autTpl.is_enabled === false || !autTpl.message_body) {
+          toast.error('Template "Notifica Autista — Uscita Straordinaria" mancante/disattivato in Messaggi di Sistema Pro: nessun avviso autista inviato. Configuralo per abilitare l\'invio.', { duration: 11000 })
+        } else {
+          const tplBody = autTpl.message_body
+          for (const { aut, legs } of Object.values(groups)) {
+            if (!aut.phone || aut.id === customerId) continue
+            const hasRit = legs.some(l => l.label.startsWith('RITIRO'))
+            const hasRic = legs.some(l => l.label.startsWith('RICONSEGNA'))
+            const firstName = (aut.full_name || '').split(' ')[0] || aut.full_name || 'Autista'
+            const vars: Record<string, string> = {
+              nome_autista: firstName,
+              titolo_corsa: `Noleggio ${customerInfo?.full_name || ''}`.trim(),
+              veicolo: vehicle?.display_name || '',
+              targa: plate || '',
+              booking_id: `DR7-${idShort}`,
+              booking_collegato: `DR7-${idShort} · ${customerInfo?.full_name || 'N/A'} · ${veic}`,
+              data_ritiro: hasRit ? itDate(formData.pickup_date) : '',
+              ora_ritiro: hasRit ? (formData.pickup_time || '') : '',
+              luogo_ritiro: hasRit ? (pickupLocationLabel || '') : '',
+              indirizzo_ritiro: '',
+              data_riconsegna: hasRic ? itDate(formData.return_date) : '',
+              ora_riconsegna: hasRic ? (formData.return_time || '') : '',
+              luogo_riconsegna: hasRic ? (dropoffLocationLabel || '') : '',
+              indirizzo_riconsegna: '',
+              motivazione_uscita: '', stato_pagamento: '', stato_cauzione: '',
+              servizi_extra: '', note_integrative: '',
+            }
+            let autMsg = tplBody
+            for (const [k, v] of Object.entries(vars)) autMsg = autMsg.split(`{${k}}`).join(v)
+            try {
+              await fetch('/.netlify/functions/send-whatsapp-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ customPhone: aut.phone, customMessage: autMsg }),
+              })
+              logger.log('[Auto-Gen] ✅ Avviso autista (template Pro) inviato a', aut.phone)
+            } catch (autErr) {
+              console.error('[Auto-Gen] ⚠️ Avviso autista fallito:', autErr)
+            }
           }
         }
       }
