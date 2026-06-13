@@ -470,6 +470,7 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
             motivazione_uscita: motivazione,
             booking_collegato: bookingRefStr,
             stato_pagamento: payStr,
+            payment_status: payStr, // alias: il template puo' usare {payment_status} (nome standard) o {stato_pagamento}
             stato_cauzione: cauStr,
             servizi_extra: svcExtras || '—',
             note_integrative: noteInt,

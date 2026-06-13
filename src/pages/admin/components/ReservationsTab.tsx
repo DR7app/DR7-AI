@@ -7088,7 +7088,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               ora_riconsegna: hasRic ? (formData.return_time || '') : '',
               luogo_riconsegna: hasRic ? (dropoffLocationLabel || '') : '',
               indirizzo_riconsegna: '',
-              motivazione_uscita: '', stato_pagamento: '', stato_cauzione: '',
+              motivazione_uscita: '', stato_pagamento: '', payment_status: '', stato_cauzione: '',
               servizi_extra: '', note_integrative: '',
             }
             let autMsg = tplBody
