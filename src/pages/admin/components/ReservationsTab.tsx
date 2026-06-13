@@ -7075,6 +7075,17 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             const hasRit = legs.some(l => l.label.startsWith('RITIRO'))
             const hasRic = legs.some(l => l.label.startsWith('RICONSEGNA'))
             const firstName = (aut.full_name || '').split(' ')[0] || aut.full_name || 'Autista'
+            // 2026-06-13: SOLO le 3 "Condizioni operative" arrivano dal booking
+            // (pagamento, cauzione, servizi). Ritiro/riconsegna restano PER-TRATTA:
+            // l'autista del ritiro vede solo il ritiro, quello della riconsegna
+            // solo la riconsegna.
+            const payLabel = formData.payment_status === 'paid' ? 'Pagato'
+              : formData.payment_status === 'partial' ? 'Acconto parziale'
+              : formData.payment_status === 'pending' ? 'In attesa' : 'Da saldare'
+            const cauzioneLabel = formData.deposit_status === 'no_cauzione'
+              ? 'No Cauzione'
+              : (formData.deposit ? `€${formData.deposit}` : '—')
+            const serviziLabel = Object.keys(formData.experience_services || {}).join(', ') || '—'
             const vars: Record<string, string> = {
               nome_autista: firstName,
               titolo_corsa: `Noleggio ${customerInfo?.full_name || ''}`.trim(),
@@ -7090,8 +7101,12 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               ora_riconsegna: hasRic ? (formData.return_time || '') : '',
               luogo_riconsegna: hasRic ? (dropoffLocationLabel || '') : '',
               indirizzo_riconsegna: '',
-              motivazione_uscita: '', stato_pagamento: '', payment_status: '', stato_cauzione: '',
-              servizi_extra: '', note_integrative: '',
+              motivazione_uscita: '',
+              stato_pagamento: payLabel,
+              payment_status: payLabel,
+              stato_cauzione: cauzioneLabel,
+              servizi_extra: serviziLabel,
+              note_integrative: '',
             }
             let autMsg = tplBody
             for (const [k, v] of Object.entries(vars)) autMsg = autMsg.split(`{${k}}`).join(v)
