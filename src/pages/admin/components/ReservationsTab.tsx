@@ -7064,11 +7064,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             if (m) autTpl = m
           }
         }
+        console.log('[autista-debug] groups:', Object.values(groups).map(g => ({ id: g.aut.id, name: g.aut.full_name, phone: g.aut.phone, legs: g.legs.length })), 'customerId:', customerId, 'templateFound:', !!autTpl, 'enabled:', autTpl?.is_enabled, 'bodyLen:', autTpl?.message_body?.length)
         if (!autTpl || autTpl.is_enabled === false || !autTpl.message_body) {
           toast.error('Template "Notifica Autista — Uscita Straordinaria" mancante/disattivato in Messaggi di Sistema Pro: nessun avviso autista inviato. Configuralo per abilitare l\'invio.', { duration: 11000 })
         } else {
           const tplBody = autTpl.message_body
           for (const { aut, legs } of Object.values(groups)) {
+            console.log('[autista-debug] processing', aut.id, aut.full_name, 'phone=', JSON.stringify(aut.phone), 'isCustomer=', aut.id === customerId, '=> willSkip=', (!aut.phone || aut.id === customerId))
             if (!aut.phone || aut.id === customerId) continue
             const hasRit = legs.some(l => l.label.startsWith('RITIRO'))
             const hasRic = legs.some(l => l.label.startsWith('RICONSEGNA'))
@@ -7094,14 +7096,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             let autMsg = tplBody
             for (const [k, v] of Object.entries(vars)) autMsg = autMsg.split(`{${k}}`).join(v)
             try {
-              await fetch('/.netlify/functions/send-whatsapp-notification', {
+              const _r = await fetch('/.netlify/functions/send-whatsapp-notification', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ customPhone: aut.phone, customMessage: autMsg }),
               })
+              const _rt = await _r.text().catch(() => '')
+              console.log('[autista-debug] SEND to', aut.phone, 'HTTP', _r.status, _rt.slice(0, 200))
               logger.log('[Auto-Gen] ✅ Avviso autista (template Pro) inviato a', aut.phone)
             } catch (autErr) {
-              console.error('[Auto-Gen] ⚠️ Avviso autista fallito:', autErr)
+              console.error('[autista-debug] SEND FAILED to', aut.phone, autErr)
             }
           }
         }
