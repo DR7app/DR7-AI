@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import NewClientModal from './NewClientModal'
+import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
+import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import toast from 'react-hot-toast'
 import {
@@ -93,6 +95,8 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
     const submitLockRef = useRef(false)
     const [submitting, setSubmitting] = useState(false)
     const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false)
+    // OTP override (forza slot meccanica occupato — famiglia Prime Wash)
+    const override = useLimitationOverride()
 
     // New state for conflict detection
     const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([])
@@ -171,6 +175,21 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
         submitLockRef.current = true
         setSubmitting(true)
         try {
+            // 2026-06-13: forzatura slot meccanica occupato. La meccanica usa
+            // l'auto del cliente (nessun vehicle_id flotta) quindi NON c'è blocco
+            // DB: l'unico vincolo era il dropdown che nascondeva gli orari
+            // occupati. Ora l'operatore può scegliere QUALSIASI orario; se è
+            // occupato si chiede l'OTP direzione (gate carwash_slot_occupied,
+            // famiglia Prime Wash). Se la regola OTP è disattiva requestOverride
+            // bypassa e si salva direttamente — niente più blocco morto.
+            const slotIsOccupied = !!formData.appointment_time && !availableTimeSlots.includes(formData.appointment_time)
+            if (slotIsOccupied && !override.hasOverride('carwash_slot_occupied')) {
+                const reason = `Slot meccanica ${formData.appointment_time} del ${formData.appointment_date} occupato: forzare richiede autorizzazione direzionale.`
+                const bypassed = override.requestOverride('carwash_slot_occupied', reason)
+                if (!bypassed) return
+            }
+
+            let savedBookingId: string | undefined = editingId || undefined
             const customerId = formData.customer_id
 
             const customerInfo = customers.find(c => c.id === customerId)
@@ -224,6 +243,7 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                     .single()
 
                 if (error) throw error
+                savedBookingId = insertedBooking?.id
 
                 // Generate PDF invoice for mechanical service
                 try {
@@ -334,6 +354,10 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                 }
             }
 
+            // Registra (consuma) l'eventuale override OTP usato per forzare lo slot.
+            if (savedBookingId) {
+                try { await override.consumeAllOverrides(savedBookingId) } catch { /* non-blocking */ }
+            }
             onSave()
         } catch (error) {
             console.error('Failed to save booking:', error)
@@ -463,57 +487,52 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                                     ⚠️ Seleziona prima la data per vedere gli orari disponibili
                                 </p>
                             </div>
-                        ) : availableTimeSlots.length === 0 ? (
-                            <div className="p-4 bg-red-900/20 border border-red-600/50 rounded-lg">
-                                <p className="text-red-400 text-sm font-semibold mb-2">
-                                    ❌ Nessun orario disponibile per questa data
-                                </p>
-                                <p className="text-theme-text-secondary text-sm mb-3">
-                                    Tutti gli orari sono occupati da prenotazioni di lavaggio o meccanica.
-                                </p>
-                                {(() => {
-                                    const mechanicalDuration = 60
-                                    const nextSlots = findNextAvailableSlots(
-                                        TIME_SLOTS,
-                                        conflictingBookings,
-                                        mechanicalDuration,
-                                        3
-                                    )
-
-                                    if (nextSlots.length > 0) {
-                                        return (
-                                            <div className="mt-2">
-                                                <p className="text-green-400 text-sm font-semibold mb-1">
-                                                    ✅ Prossimi orari disponibili:
-                                                </p>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {nextSlots.map(slot => (
-                                                        <span key={slot} className="px-3 py-1 bg-green-900/30 border border-green-600/50 rounded text-green-300 text-sm">
-                                                            {formatTimeSlotWithDuration(slot, mechanicalDuration)}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                                <p className="text-theme-text-muted text-xs mt-2">
-                                                    Seleziona una data diversa per prenotare in questi orari
-                                                </p>
-                                            </div>
-                                        )
-                                    }
-                                    return null
-                                })()}
-                            </div>
                         ) : (
-                            <select
-                                required
-                                value={formData.appointment_time}
-                                onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
-                                className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary"
-                            >
-                                <option value="">Seleziona orario... ({availableTimeSlots.length} disponibili)</option>
-                                {availableTimeSlots.map(slot => (
-                                    <option key={slot} value={slot}>{slot}</option>
-                                ))}
-                            </select>
+                            <>
+                                <select
+                                    required
+                                    value={formData.appointment_time}
+                                    onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
+                                    className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary"
+                                >
+                                    <option value="">Seleziona orario... ({availableTimeSlots.length} liberi su {TIME_SLOTS.length})</option>
+                                    {TIME_SLOTS.map(slot => {
+                                        const occupied = !availableTimeSlots.includes(slot)
+                                        return (
+                                            <option key={slot} value={slot}>
+                                                {slot}{occupied ? ' — occupato (richiede autorizzazione)' : ''}
+                                            </option>
+                                        )
+                                    })}
+                                </select>
+                                {availableTimeSlots.length === 0 && (
+                                    <div className="mt-2 p-3 bg-amber-900/20 border border-amber-600/50 rounded-lg">
+                                        <p className="text-amber-400 text-sm font-semibold mb-1">
+                                            Tutti gli orari risultano occupati per questa data.
+                                        </p>
+                                        <p className="text-theme-text-secondary text-xs mb-2">
+                                            Puoi comunque forzare uno slot occupato: al salvataggio verra richiesta l'autorizzazione direzionale (OTP).
+                                        </p>
+                                        {(() => {
+                                            const mechanicalDuration = 60
+                                            const nextSlots = findNextAvailableSlots(TIME_SLOTS, conflictingBookings, mechanicalDuration, 3)
+                                            if (nextSlots.length === 0) return null
+                                            return (
+                                                <div className="mt-1">
+                                                    <p className="text-theme-text-muted text-xs mb-1">Prossimi orari liberi (suggeriti, in altre fasce/date):</p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {nextSlots.map(slot => (
+                                                            <span key={slot} className="px-3 py-1 bg-green-900/30 border border-green-600/50 rounded text-green-300 text-sm">
+                                                                {formatTimeSlotWithDuration(slot, mechanicalDuration)}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )
+                                        })()}
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
@@ -595,6 +614,18 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                 isOpen={isNewClientModalOpen}
                 onClose={() => setIsNewClientModalOpen(false)}
                 onClientCreated={handleClientCreated}
+            />
+
+            <LimitationOverrideModal
+                isOpen={override.limitationState.isOpen}
+                limitationCode={override.limitationState.limitationCode}
+                limitationMessage={override.limitationState.limitationMessage}
+                actionContext={override.limitationState.actionContext}
+                draftSessionId={override.draftSessionId}
+                flowType={override.flowType}
+                onClose={override.closeLimitation}
+                onCancel={override.cancelLimitation}
+                onOverrideApproved={override.handleOverrideApproved}
             />
         </div>
     )
