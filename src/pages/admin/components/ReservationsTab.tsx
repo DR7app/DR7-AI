@@ -4231,7 +4231,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
             // arriva "Pagato" anche quando in realta' deve ancora saldare
             // l'estensione (bug riportato 2026-05-28: extension Da Saldare
             // su booking originale paid -> messaggio "Pagato").
-            payment_status: extendData.extension_payment_status === 'paid'
+            // 2026-06-13: estensione a costo €0 = nulla da saldare = "pagata"
+            // anche se l'operatore lascia "Da Saldare". Il cliente deve vedere
+            // "Pagato" (non c'e' nulla da saldare).
+            payment_status: (extendData.extension_payment_status === 'paid' || additionalAmount === 0)
               ? 'paid'
               : 'pending',
             isEdit: false, // forza il template rental_new (conferma) invece di rental_modified
@@ -4253,15 +4256,16 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           }
 
           // 2026-05-28: contratto SOLO se estensione pagata. "Da Saldare"
-          // e "Nexi Pay by Link" attendono il pagamento — il contratto
-          // partira' dopo (per Nexi via callback, per Da Saldare quando
-          // l'admin segna pagato manualmente). Direzione: non vogliamo
+          // e "Nexi Pay by Link" CON COSTO > 0 attendono il pagamento — il
+          // contratto partira' dopo (per Nexi via callback, per Da Saldare
+          // quando l'admin segna pagato manualmente). Direzione: non vogliamo
           // dare il contratto firmato al cliente prima che paghi.
-          // 2026-06-03: se l'estensione NON ha un costo aggiuntivo (es. solo
-          // cambio data di cortesia, €0) non si rigenera il contratto né si
-          // reinvia il link di firma — richiesta utente: "se non inserisco un
-          // costo aggiuntivo non serve reinviare il link".
-          if (extendData.extension_payment_status === 'paid' && additionalAmount > 0) {
+          // 2026-06-13: un'estensione a costo €0 NON ha nulla da saldare, quindi
+          // e' "pagata" a tutti gli effetti -> il contratto aggiornato (nuove
+          // date) DEVE partire anche se lo stato e' "Da Saldare". (Supera la
+          // regola 2026-06-03 che saltava sempre il €0.)
+          const extensionEffectivelyPaid = extendData.extension_payment_status === 'paid' || additionalAmount === 0
+          if (extensionEffectivelyPaid) {
             try {
               // Stesso processo di una prenotazione: rigenera il contratto con
               // le nuove date e invia il LINK CONTRATTO tramite il flusso firma
@@ -4289,7 +4293,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
               logger.warn('[handleConfirmExtend] Extension contract send failed (non-blocking):', contractErr)
             }
           } else {
-            logger.log('[handleConfirmExtend] Skipping contract/link — extension status =', extendData.extension_payment_status, 'additionalAmount =', additionalAmount, '(contract+link only when paid AND costo aggiuntivo > 0)')
+            logger.log('[handleConfirmExtend] Skipping contract/link — extension status =', extendData.extension_payment_status, 'additionalAmount =', additionalAmount, '(contract+link parte se pagata OPPURE costo €0; salta solo Da Saldare/Nexi con costo > 0)')
           }
         } else {
           logger.warn('[handleConfirmExtend] No customer phone — skipped customer notification')
