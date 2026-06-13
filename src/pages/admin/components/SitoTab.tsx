@@ -5680,7 +5680,7 @@ function ConfirmationSuccessEditor({ copy, setCopy }: { copy: ConfirmationSucces
 function HeaderEditor({ copy, setCopy }: { copy: HeaderCopy; setCopy: (next: HeaderCopy) => void }) {
     const update = <K extends keyof HeaderCopy>(key: K, value: HeaderCopy[K]) => setCopy({ ...copy, [key]: value })
     // Lettura/scrittura per le chiavi dinamiche del menu (menu_<id>_*).
-    const menuVal = (k: string): string => (copy as Record<string, string | undefined>)[k] ?? ''
+    const menuVal = (k: string): string => (copy as unknown as Record<string, string | undefined>)[k] ?? ''
     const setMenu = (k: string, v: string) => setCopy({ ...copy, [k]: v } as HeaderCopy)
     return (
         <div className="space-y-6">
