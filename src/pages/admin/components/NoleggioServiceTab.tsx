@@ -5,7 +5,7 @@
 //
 // Prenotazioni + Calendario: tabella `bookings`.
 // Catalogo: tabella `noleggio_catalog`. Preventivi: tabella `noleggio_preventivi`.
-import { useState, useEffect, useMemo, useCallback, type ReactNode } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from 'react'
 import { supabase } from '../../../supabaseClient'
 
 export type NoleggioServiceType = 'boat_rental' | 'heli_rental' | 'stay_rental'
@@ -241,6 +241,29 @@ function CatalogView({ serviceType, labels }: { serviceType: NoleggioServiceType
   const [form, setForm] = useState<typeof EMPTY_CATALOG>(EMPTY_CATALOG)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const imageInputRef = useRef<HTMLInputElement | null>(null)
+
+  // Upload immagine come nel Catalogo Prime Wash: niente URL, solo file.
+  // Stesso bucket 'catalog-images', cartella dedicata al noleggio.
+  async function uploadImage(file: File) {
+    if (!file.type.startsWith('image/')) { setError('Solo file immagine (PNG, JPG, WEBP).'); return }
+    setUploadingImage(true); setError('')
+    try {
+      const ext = file.name.split('.').pop() || 'png'
+      const fileName = `noleggio-${serviceType}-${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage
+        .from('catalog-images')
+        .upload(`noleggio-catalog/${fileName}`, file, { cacheControl: '31536000', upsert: true })
+      if (upErr) throw upErr
+      const { data: urlData } = supabase.storage.from('catalog-images').getPublicUrl(`noleggio-catalog/${fileName}`)
+      setForm(prev => ({ ...prev, image_url: urlData?.publicUrl || '' }))
+    } catch (err: unknown) {
+      setError('Errore upload immagine: ' + (err as Error).message)
+    } finally {
+      setUploadingImage(false)
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -304,7 +327,19 @@ function CatalogView({ serviceType, labels }: { serviceType: NoleggioServiceType
             <input className={INPUT_CLS} placeholder={`Nome ${labels.asset.toLowerCase()}`} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
             <input className={INPUT_CLS} placeholder="Prezzo / giorno (€)" inputMode="decimal" value={form.price_per_day} onChange={e => setForm({ ...form, price_per_day: e.target.value })} />
             <input className={INPUT_CLS} placeholder="Capienza (persone)" inputMode="numeric" value={form.capacity} onChange={e => setForm({ ...form, capacity: e.target.value })} />
-            <input className={INPUT_CLS} placeholder="URL immagine (opzionale)" value={form.image_url} onChange={e => setForm({ ...form, image_url: e.target.value })} />
+            <div className="flex items-center gap-2">
+              <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+                onChange={e => { if (e.target.files?.[0]) { uploadImage(e.target.files[0]); e.target.value = '' } }} />
+              <button type="button" onClick={() => imageInputRef.current?.click()} disabled={uploadingImage} className={BTN_GHOST}>
+                {uploadingImage ? 'Caricamento…' : (form.image_url ? 'Cambia immagine' : 'Carica immagine')}
+              </button>
+              {form.image_url && (
+                <>
+                  <img src={form.image_url} alt="" className="w-10 h-10 object-cover rounded" />
+                  <button type="button" onClick={() => setForm({ ...form, image_url: '' })} className="text-red-400 text-xs">Rimuovi</button>
+                </>
+              )}
+            </div>
           </div>
           <textarea className={INPUT_CLS} placeholder="Descrizione (opzionale)" rows={2} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
           <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
