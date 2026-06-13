@@ -306,29 +306,12 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
       ids.map(id => { const a = autisti.find(x => x.id === id); return a ? { id: a.id, full_name: a.full_name, phone: a.phone } : { id, full_name: '', phone: '' } })
 
     try {
-      // Conflict check per card: same vehicle overlapping a non-cancelled booking
-      // (excluding the linked booking the uscita serves).
-      for (const c of valid) {
-        const pickIso = toIso(c.pickup_date, c.pickup_time)
-        // 2026-06-04: data di ritorno opzionale (consegna/sola andata). Se
-        // manca, l'uscita è un evento di UN solo giorno → dropoff = pickup.
-        const dropIso = c.dropoff_date ? (toIso(c.dropoff_date, c.dropoff_time) || pickIso) : pickIso
-        if (!pickIso) continue
-        const { data: clash } = await supabase
-          .from('bookings')
-          .select('id, customer_name, pickup_date, dropoff_date, booking_details')
-          .eq('vehicle_id', c.vehicle_id)
-          .not('status', 'in', '(cancelled,annullata)')
-          .lte('pickup_date', dropIso)
-          .gte('dropoff_date', pickIso)
-        const realClash = (clash || []).find(b => b.id !== c.linked_booking_id)
-        if (realClash) {
-          const v = vehicles.find(x => x.id === c.vehicle_id)
-          toast.error(`Veicolo ${v?.display_name || ''} già occupato nell'intervallo selezionato (${realClash.customer_name || 'prenotazione'}).`, { duration: 9000 })
-          setSaving(false)
-          return
-        }
-      }
+      // 2026-06-13: NESSUN blocco di conflitto. La direzione deve poter creare
+      // l'uscita straordinaria SEMPRE, anche se il veicolo risulta occupato
+      // nell'intervallo (sovrapposizione voluta). L'uscita straordinaria bypassa
+      // già il trigger DB prevent_overlapping_bookings (service_type), quindi il
+      // salvataggio va a buon fine. Richiesta esplicita utente: "devo poter fare
+      // quello che mi serve, niente più conflitti".
 
       const rows = valid.map(c => {
         const v = vehicles.find(x => x.id === c.vehicle_id)
