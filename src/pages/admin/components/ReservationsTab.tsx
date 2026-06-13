@@ -4111,10 +4111,28 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       }
 
       // Update the booking directly - NO validation checks
-      const { error: updateError } = await supabase
+      let { error: updateError } = await supabase
         .from('bookings')
         .update(bookingUpdate)
         .eq('id', extendingBooking.id)
+
+      // 2026-06-13: estendere la riconsegna può far sovrapporre la prenotazione
+      // a un'altra prenotazione back-to-back dello stesso veicolo -> il trigger
+      // DB prevent_overlapping_bookings solleva CONFLICT_DOUBLE_BOOKING (23505).
+      // La direzione vuole estendere comunque (stesso comportamento del
+      // salvataggio prenotazione): riproviamo una volta col flag
+      // allow_double_booking=true, che il trigger rispetta.
+      const isConflictError = !!updateError && ((updateError as { code?: string }).code === '23505' || /CONFLICT_DOUBLE_BOOKING/i.test(updateError.message || ''))
+      if (isConflictError) {
+        const forcedUpdate = {
+          ...bookingUpdate,
+          booking_details: { ...updatedBookingDetails, allow_double_booking: true },
+        }
+        ;({ error: updateError } = await supabase
+          .from('bookings')
+          .update(forcedUpdate)
+          .eq('id', extendingBooking.id))
+      }
 
       if (updateError) {
         console.error('[handleConfirmExtend] Update error:', updateError)
