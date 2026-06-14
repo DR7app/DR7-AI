@@ -7,7 +7,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
 
-const SIGNING_BASE_URL = process.env.SIGNING_BASE_URL || 'https://trustera360.app'
+const SIGNING_BASE_URL = process.env.SIGNING_BASE_URL || 'https://dr7trust.com'
 
 function cleanPhone(phone: string): string | null {
     if (!phone) return null

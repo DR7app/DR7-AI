@@ -2,7 +2,7 @@ import { Handler } from '@netlify/functions'
 import { sendToCargos } from './cargos-auto-send'
 
 /**
- * Endpoint called by trustera360.app after a contract is signed.
+ * Endpoint called by dr7trust.com after a contract is signed.
  * Triggers automatic CARGOS submission for the booking.
  */
 export const handler: Handler = async (event) => {
