@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 // 2026-06-06: calendario a griglia per intervalli arbitrari (random range),
 // reso da noi quindi sempre in italiano dd/mm/yyyy (no <input type="date">
@@ -189,6 +189,96 @@ function formatEUInput(raw: string): string {
   return digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4)
 }
 
+// 2026-06-15: Spese fisse mensili per veicolo (stipendi, rate auto, gestione…).
+// Libere: si possono aggiungere/togliere voci per ogni auto. Salvate in
+// vehicles.metadata.fixed_expenses. Margine = ricavo del periodo − spese fisse.
+type FixedExpense = { label: string; amount: number }
+
+function FixedExpensesEditor({ vehicleId, revenue, initial, onSave, saving, fmt }: {
+  vehicleId: string
+  revenue: number
+  initial: FixedExpense[]
+  onSave: (vehicleId: string, list: FixedExpense[]) => void
+  saving: boolean
+  fmt: (n: number) => string
+}) {
+  const [list, setList] = useState<FixedExpense[]>(initial)
+  const [newLabel, setNewLabel] = useState('')
+  const [newAmount, setNewAmount] = useState('')
+  const listRef = useRef<FixedExpense[]>(initial)
+  listRef.current = list
+  useEffect(() => { setList(initial) }, [initial])
+
+  const total = list.reduce((s, e) => s + (Number(e.amount) || 0), 0)
+  const margine = revenue - total
+  const parseAmt = (s: string) => Number(String(s).replace(/\./g, '').replace(',', '.')) || 0
+
+  function addRow() {
+    const label = newLabel.trim()
+    const amount = parseAmt(newAmount)
+    if (!label && !amount) return
+    const next = [...list, { label: label || 'Spesa', amount }]
+    setList(next); setNewLabel(''); setNewAmount(''); onSave(vehicleId, next)
+  }
+  function removeRow(i: number) {
+    const next = list.filter((_, j) => j !== i)
+    setList(next); onSave(vehicleId, next)
+  }
+  function editAmount(i: number, val: string) {
+    setList(prev => prev.map((e, j) => (j === i ? { ...e, amount: parseAmt(val) } : e)))
+  }
+  function editLabel(i: number, val: string) {
+    setList(prev => prev.map((e, j) => (j === i ? { ...e, label: val } : e)))
+  }
+
+  return (
+    <div onClick={e => e.stopPropagation()} className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-theme-text-muted">Spese Fisse Mensili</p>
+        {saving && <span className="text-[10px] text-theme-text-muted">Salvataggio…</span>}
+      </div>
+      {list.map((e, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <input
+            value={e.label}
+            onChange={ev => editLabel(i, ev.target.value)}
+            onBlur={() => onSave(vehicleId, listRef.current)}
+            className="flex-1 text-xs bg-theme-bg-tertiary border border-theme-border rounded px-2 py-0.5 text-theme-text-primary"
+          />
+          <input
+            value={String(e.amount)}
+            onChange={ev => editAmount(i, ev.target.value)}
+            onBlur={() => onSave(vehicleId, listRef.current)}
+            inputMode="decimal"
+            className="w-24 text-right text-xs bg-theme-bg-tertiary border border-theme-border rounded px-1 py-0.5 text-theme-text-primary"
+          />
+          <button onClick={() => removeRow(i)} className="text-red-400 hover:text-red-300 text-sm px-1" title="Rimuovi">×</button>
+        </div>
+      ))}
+      <div className="flex items-center gap-2 pt-1">
+        <input
+          value={newLabel}
+          onChange={e => setNewLabel(e.target.value)}
+          placeholder="Voce (es. Rata auto, Stipendio, Gestione)"
+          className="flex-1 text-xs bg-theme-bg-tertiary border border-theme-border rounded px-2 py-0.5 text-theme-text-primary"
+        />
+        <input
+          value={newAmount}
+          onChange={e => setNewAmount(e.target.value)}
+          placeholder="€/mese"
+          inputMode="decimal"
+          className="w-24 text-right text-xs bg-theme-bg-tertiary border border-theme-border rounded px-1 py-0.5 text-theme-text-primary"
+        />
+        <button onClick={addRow} className="text-xs px-2 py-0.5 rounded bg-dr7-gold/20 text-dr7-gold hover:bg-dr7-gold/30 whitespace-nowrap">+ Aggiungi</button>
+      </div>
+      <div className="flex items-center justify-between text-xs pt-1.5 mt-1 border-t border-theme-border">
+        <span className="text-theme-text-muted">Spese fisse: <span className="text-red-400 font-semibold">−{fmt(total)}</span></span>
+        <span className="text-theme-text-muted">Margine: <span className={margine >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>{fmt(margine)}</span></span>
+      </div>
+    </div>
+  )
+}
+
 export default function ReportsTab() {
   const now = new Date()
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -196,6 +286,44 @@ export default function ReportsTab() {
   // 2026-05-23: selectedMonth rimosso — sostituito da rangePreset + customFrom/To
   void currentMonth // kept var declaration but no longer used
   const [activeReport, setActiveReport] = useState<'vehicles' | 'washes' | 'cauzioni'>('vehicles')
+
+  // Spese fisse mensili per veicolo (vehicles.metadata.fixed_expenses).
+  const [fixedExpenses, setFixedExpenses] = useState<Record<string, FixedExpense[]>>({})
+  const [savingExpenses, setSavingExpenses] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase.from('vehicles').select('id, metadata')
+      if (cancelled || !data) return
+      const map: Record<string, FixedExpense[]> = {}
+      for (const veh of data as Array<{ id: string; metadata: unknown }>) {
+        const fx = (veh.metadata as { fixed_expenses?: unknown } | null)?.fixed_expenses
+        if (Array.isArray(fx)) {
+          map[veh.id] = fx
+            .filter((e): e is Record<string, unknown> => !!e && typeof e === 'object')
+            .map(e => ({ label: String(e.label ?? ''), amount: Number(e.amount) || 0 }))
+        }
+      }
+      setFixedExpenses(map)
+    })()
+    return () => { cancelled = true }
+  }, [])
+  async function saveFixedExpenses(vehicleId: string, list: FixedExpense[]) {
+    const clean = list
+      .map(e => ({ label: e.label.trim(), amount: Number(e.amount) || 0 }))
+      .filter(e => e.label !== '' || e.amount !== 0)
+    setFixedExpenses(prev => ({ ...prev, [vehicleId]: clean }))
+    setSavingExpenses(vehicleId)
+    try {
+      const { data: cur } = await supabase.from('vehicles').select('metadata').eq('id', vehicleId).single()
+      const meta = (cur?.metadata && typeof cur.metadata === 'object') ? (cur.metadata as Record<string, unknown>) : {}
+      await supabase.from('vehicles').update({ metadata: { ...meta, fixed_expenses: clean } }).eq('id', vehicleId)
+    } catch (err) {
+      console.error('[ReportsTab] saveFixedExpenses failed', err)
+    } finally {
+      setSavingExpenses(null)
+    }
+  }
 
   // 2026-05-23: range picker (oggi, 7gg, 30gg, mese corrente, anno, custom).
   // Backend ora accetta from+to oltre al legacy month=YYYY-MM. Quando preset
@@ -602,6 +730,18 @@ export default function ReportsTab() {
             row (Cliente, Ritiro, Riconsegna, GG Tot/Mese, Pagamento,
             Totale, Penali, Danni, Ricavo Mese) but stacked in cards so
             it's readable on mobile without horizontal scroll. */}
+        {isExpanded && (
+          <div className="mt-3 pt-3 border-t border-theme-border" onClick={e => e.stopPropagation()}>
+            <FixedExpensesEditor
+              vehicleId={v.vehicleId}
+              revenue={v.totalRevenue}
+              initial={fixedExpenses[v.vehicleId] || []}
+              onSave={saveFixedExpenses}
+              saving={savingExpenses === v.vehicleId}
+              fmt={formatCurrency}
+            />
+          </div>
+        )}
         {isExpanded && v.bookings && v.bookings.length > 0 && (
           <div className="mt-3 pt-3 border-t border-theme-border space-y-2">
             <p className="text-xs font-semibold text-theme-text-muted mb-1">Dettaglio Prenotazioni:</p>
@@ -794,6 +934,20 @@ export default function ReportsTab() {
             <td className="text-right px-4 py-3 text-dr7-gold font-bold">{formatCurrency(v.totalRevenue + (v.anticipatedRevenue || 0))}</td>
           )}
         </tr>
+        {isExpanded && (
+          <tr key={`${v.vehicleId}-spese`}>
+            <td colSpan={13} className="px-4 py-2 bg-theme-bg-primary/30">
+              <FixedExpensesEditor
+                vehicleId={v.vehicleId}
+                revenue={v.totalRevenue}
+                initial={fixedExpenses[v.vehicleId] || []}
+                onSave={saveFixedExpenses}
+                saving={savingExpenses === v.vehicleId}
+                fmt={formatCurrency}
+              />
+            </td>
+          </tr>
+        )}
         {isExpanded && v.bookings && v.bookings.length > 0 && (
           <tr key={`${v.vehicleId}-details`}>
             <td colSpan={13} className="px-4 py-2 bg-theme-bg-primary/30">
