@@ -2284,7 +2284,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           second_driver_total: p.second_driver_total > 0 ? formatEur(p.second_driver_total) : '',
           second_driver_daily: p.second_driver_total > 0 ? formatEur(p.second_driver_daily) : '',
           dr7_flex_line: lineDr7Flex,
-          cauzione_veicoli_line: lineCauzioneVeicoli,
+          'cauzione_veicolo_di_proprietà_line': lineCauzioneVeicoli,
+          cauzione_veicoli_line: lineCauzioneVeicoli, // alias legacy: vecchi template che usano ancora {cauzione_veicoli_line}
           delivery_line: lineDelivery,
           pickup_line: linePickup,
           experience_line: lineExperience,

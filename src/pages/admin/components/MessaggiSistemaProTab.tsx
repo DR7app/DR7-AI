@@ -889,7 +889,7 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
             { key: 'second_driver_total', description: 'Solo importo totale secondo guidatore. Vuoto se non aggiunto.', example: '€30,00' },
             { key: 'second_driver_daily', description: 'Solo tariffa unitaria (€/giorno se per_day, € fisso se flat). Vuoto se non aggiunto.', example: '€30,00' },
             { key: 'dr7_flex_line', description: 'Riga DR7 Flex', example: 'DR7 Flex = €54,00' },
-            { key: 'cauzione_veicoli_line', description: 'Riga cauzione veicolo di proprietà', example: 'Cauzione veicolo di proprietà = €1.500,00' },
+            { key: 'cauzione_veicolo_di_proprietà_line', description: 'Riga cauzione veicolo di proprietà', example: 'Cauzione veicolo di proprietà = €1.500,00' },
             { key: 'delivery_line', description: 'Riga consegna a domicilio', example: 'Consegna = €40,00' },
             { key: 'pickup_line', description: 'Riga ritiro a domicilio', example: 'Ritiro = €40,00' },
             { key: 'experience_line', description: 'Riga servizi experience', example: 'Servizi experience = €120,00' },
