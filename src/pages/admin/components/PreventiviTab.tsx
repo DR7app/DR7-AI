@@ -2202,7 +2202,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         const lineDr7Flex = (extras?.dr7_flex_total && Number(extras.dr7_flex_total) > 0)
           ? `DR7 Flex = ${formatEur(Number(extras.dr7_flex_total))}` : ''
         const lineCauzioneVeicoli = (extras?.cauzione_veicoli_total && Number(extras.cauzione_veicoli_total) > 0)
-          ? `Cauzione veicolo = ${formatEur(Number(extras.cauzione_veicoli_total))}` : ''
+          ? `Cauzione veicolo di proprietà = ${formatEur(Number(extras.cauzione_veicoli_total))}` : ''
         const lineDelivery = (extras?.delivery_fee && Number(extras.delivery_fee) > 0)
           ? `Consegna = ${formatEur(Number(extras.delivery_fee))}` : ''
         const linePickup = (extras?.pickup_fee && Number(extras.pickup_fee) > 0)
@@ -5365,7 +5365,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
             <input type="checkbox" checked={form.include_cauzione_veicoli} onChange={(e) => setForm(prev => ({ ...prev, include_cauzione_veicoli: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
             <span className="text-sm text-theme-text-primary">
-              Cauzione Veicolo ({formatEur(cauzioneVeicoliResolvedDaily)}/giorno)
+              Cauzione Veicolo di proprietà ({formatEur(cauzioneVeicoliResolvedDaily)}/giorno)
             </span>
           </label>
           <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
