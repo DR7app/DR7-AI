@@ -31,7 +31,7 @@ const ROLE_FAILSAFE: Record<string, ReadonlySet<AdminRoleTag>> = {
   // Salvatore gestisce il Sito CMS senza OTP — entry diretta in failsafe
   // su richiesta direzione 2026-05-13. Solo `sito-direzione`: bypassa
   // gestione_sito_access + gestione_sito_write; ogni altro OTP resta attivo.
-  'salvatore@dr7.app': new Set(['direzione', 'otp-admin', 'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
+  'salvatore@dr7.app': new Set(['payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
 }
 
 export interface AdminRole {
