@@ -26,6 +26,7 @@ interface NoleggioServiceTabProps {
 interface BookingRow {
   id: string
   customer_name: string | null
+  customer_phone: string | null
   vehicle_name: string | null
   vehicle_plate: string | null
   status: string | null
@@ -118,7 +119,7 @@ function useBookings(serviceType: NoleggioServiceType) {
       for (let start = 0; ; start += 1000) {
         const { data, error: e } = await supabase
           .from('bookings')
-          .select('id, customer_name, vehicle_name, vehicle_plate, status, payment_status, pickup_date, dropoff_date, price_total, created_at')
+          .select('id, customer_name, customer_phone, vehicle_name, vehicle_plate, status, payment_status, pickup_date, dropoff_date, price_total, created_at')
           .eq('service_type', serviceType)
           .order('pickup_date', { ascending: false })
           .range(start, start + 999)
@@ -175,58 +176,421 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
 }
 
 /* ------------------------------ CALENDARIO ------------------------------ */
+// Timeline per-asset (righe asset a sinistra · giorni del mese in alto · barre
+// prenotazione ritiro→riconsegna), stesso formato del Calendario Noleggio Terra
+// (CalendarTab.tsx). Versione "lean": niente centralina/realtime/netlify, solo
+// noleggio_catalog (righe) + bookings filtrate per service_type (barre).
+
+const CAL_CELL_W = 45 // larghezza colonna giorno
+const CAL_ROW_H = 56  // altezza riga asset
+const CAL_LEFT_W = 220 // larghezza colonna sinistra (asset)
+const CAL_HEADER_H = 42
+
+interface CalAsset { id: string; name: string; image_url: string | null }
+
+// Bucket di colore per la barra, in linea con la palette già usata nel file
+// (Badge): confermato/attivo = ciano, in attesa = ambra, cancellata = rosso.
+function barStyle(status: string | null, paymentStatus: string | null): { bar: string } {
+  const s = (status || '').toLowerCase()
+  if (s === 'cancelled' || s === 'annullata') return { bar: 'bg-red-500/70 border-red-400/50' }
+  if (s === 'completed' || s === 'completata') return { bar: 'bg-zinc-500/70 border-zinc-400/50' }
+  const pending = s === 'pending' || paymentStatus === 'pending' || paymentStatus === 'unpaid'
+  if (pending) return { bar: 'bg-amber-500/80 border-amber-400/50' }
+  // confirmed / active / confermata
+  return { bar: 'bg-cyan-500/80 border-cyan-400/50' }
+}
+
+// yyyy-mm-dd in fuso Europe/Rome a partire da un timestamp ISO (UTC).
+function romeYmd(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }) // en-CA → YYYY-MM-DD
+}
+// giorno del mese (1..31) in fuso Europe/Rome.
+function romeDayOfMonth(iso: string): number {
+  return parseInt(new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }).slice(8, 10), 10)
+}
+
+type CalBookingForm = {
+  id: string | null
+  customer_name: string
+  customer_phone: string
+  pickup_date: string // yyyy-mm-dd
+  pickup_time: string // HH:MM
+  dropoff_date: string
+  dropoff_time: string
+  price_eur: string
+  status: string
+}
+const CAL_STATUSES = ['pending', 'confirmed', 'active', 'completed', 'cancelled']
+const EMPTY_CAL_FORM: CalBookingForm = {
+  id: null, customer_name: '', customer_phone: '',
+  pickup_date: '', pickup_time: '10:00', dropoff_date: '', dropoff_time: '10:00',
+  price_eur: '', status: 'confirmed',
+}
 
 function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceType; labels: NoleggioServiceLabels }) {
-  const { bookings, loading } = useBookings(serviceType)
+  const { bookings, loading: bookingsLoading, reload } = useBookings(serviceType)
+  const [assets, setAssets] = useState<CalAsset[]>([])
+  const [assetsLoading, setAssetsLoading] = useState(false)
+  const [error, setError] = useState('')
   const [monthOffset, setMonthOffset] = useState(0)
-  const { cells, monthLabel } = useMemo(() => buildMonth(monthOffset, bookings), [monthOffset, bookings])
+
+  // Modal create/edit
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState<CalBookingForm>(EMPTY_CAL_FORM)
+  const [formAsset, setFormAsset] = useState<string>('') // vehicle_name pre-compilato
+  const [saving, setSaving] = useState(false)
+
+  const loadAssets = useCallback(async () => {
+    setAssetsLoading(true); setError('')
+    const { data, error: e } = await supabase
+      .from('noleggio_catalog')
+      .select('id, name, image_url, is_active')
+      .eq('service_type', serviceType)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .order('name', { ascending: true })
+    if (e) setError(missingTableHint(e.message))
+    else setAssets((data || []) as CalAsset[])
+    setAssetsLoading(false)
+  }, [serviceType])
+  useEffect(() => { loadAssets() }, [loadAssets])
+
+  // Mese visualizzato
+  const base = useMemo(() => { const b = new Date(); b.setDate(1); b.setMonth(b.getMonth() + monthOffset); return b }, [monthOffset])
+  const year = base.getFullYear(), month = base.getMonth()
+  const monthLabel = base.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+  const daysInMonth = useMemo(() => new Date(year, month + 1, 0).getDate(), [year, month])
+  const daysArray = useMemo(() => Array.from({ length: daysInMonth }, (_, i) => i + 1), [daysInMonth])
+  const monthYmdPrefix = `${year}-${String(month + 1).padStart(2, '0')}`
+
+  // Match barre → riga asset per nome (case-insensitive trim). Le prenotazioni
+  // senza asset corrispondente finiscono in "Altro / Non assegnato".
+  const { rowsByAsset, unassigned } = useMemo(() => {
+    const norm = (s: string | null | undefined) => (s || '').trim().toLowerCase()
+    const map = new Map<string, BookingRow[]>() // assetId → bookings
+    assets.forEach(a => map.set(a.id, []))
+    const nameToId = new Map<string, string>()
+    assets.forEach(a => nameToId.set(norm(a.name), a.id))
+    const orphans: BookingRow[] = []
+    bookings.forEach(b => {
+      const id = nameToId.get(norm(b.vehicle_name))
+      if (id) map.get(id)!.push(b)
+      else orphans.push(b)
+    })
+    return { rowsByAsset: map, unassigned: orphans }
+  }, [assets, bookings])
+
+  // Barre visibili nel mese per una lista di prenotazioni: clamp ai giorni del
+  // mese, posiziona left/width in px sulla griglia giorni.
+  const barsFor = useCallback((rows: BookingRow[]) => {
+    const out: { booking: BookingRow; left: number; width: number }[] = []
+    rows.forEach(b => {
+      if (!b.pickup_date) return
+      const pYmd = romeYmd(b.pickup_date)
+      const dYmd = b.dropoff_date ? romeYmd(b.dropoff_date) : pYmd
+      // overlap col mese visualizzato
+      if (dYmd < `${monthYmdPrefix}-01` || pYmd > `${monthYmdPrefix}-${String(daysInMonth).padStart(2, '0')}`) return
+      const startDay = pYmd.startsWith(monthYmdPrefix) ? romeDayOfMonth(b.pickup_date) : 1
+      const endDay = dYmd.startsWith(monthYmdPrefix) ? romeDayOfMonth(b.dropoff_date || b.pickup_date) : daysInMonth
+      const left = (startDay - 1) * CAL_CELL_W
+      const width = Math.max(CAL_CELL_W, (endDay - startDay + 1) * CAL_CELL_W)
+      out.push({ booking: b, left, width })
+    })
+    return out
+  }, [monthYmdPrefix, daysInMonth])
+
+  const today = new Date()
+  const isTodayDay = (day: number) =>
+    today.getDate() === day && today.getMonth() === month && today.getFullYear() === year
+
+  // --- Modal handlers ---
+  function openCreate(assetName: string, day: number) {
+    const ymd = `${monthYmdPrefix}-${String(day).padStart(2, '0')}`
+    const next = new Date(year, month, day + 1)
+    const nextYmd = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`
+    setForm({ ...EMPTY_CAL_FORM, pickup_date: ymd, dropoff_date: nextYmd })
+    setFormAsset(assetName)
+    setShowForm(true)
+  }
+  function openEdit(b: BookingRow, assetName: string) {
+    const pk = b.pickup_date ? new Date(b.pickup_date) : null
+    const dr = b.dropoff_date ? new Date(b.dropoff_date) : null
+    const ymd = (d: Date | null) => d ? d.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }) : ''
+    const hm = (d: Date | null) => d ? d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }) : '10:00'
+    setForm({
+      id: b.id,
+      customer_name: b.customer_name || '',
+      customer_phone: b.customer_phone || '',
+      pickup_date: ymd(pk), pickup_time: hm(pk),
+      dropoff_date: ymd(dr), dropoff_time: hm(dr),
+      price_eur: centsToEur(b.price_total || 0),
+      status: (b.status || 'confirmed'),
+    })
+    setFormAsset(assetName)
+    setShowForm(true)
+  }
+
+  // Combina data + ora (interpretate come Europe/Rome) in un ISO UTC.
+  function toIso(date: string, time: string): string | null {
+    if (!date) return null
+    // I valori sono digitati come ora locale Rome; salviamo UTC. Costruiamo
+    // la stringa con l'offset Rome corrente per quella data.
+    const naive = new Date(`${date}T${time || '00:00'}:00`)
+    if (Number.isNaN(naive.getTime())) return null
+    // Calcola offset Rome (minuti) per la data scelta e converte in UTC.
+    const romeOffsetMin = romeOffsetMinutes(date)
+    const utcMs = Date.UTC(
+      Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)),
+      Number((time || '00:00').slice(0, 2)), Number((time || '00:00').slice(3, 5)),
+    ) - romeOffsetMin * 60_000
+    return new Date(utcMs).toISOString()
+  }
+
+  async function saveBooking() {
+    if (!form.customer_name.trim()) { setError('Il nome cliente è obbligatorio.'); return }
+    const pickupIso = toIso(form.pickup_date, form.pickup_time)
+    const dropoffIso = toIso(form.dropoff_date, form.dropoff_time)
+    setSaving(true); setError('')
+    const payload = {
+      service_type: serviceType,
+      customer_name: form.customer_name.trim(),
+      customer_phone: form.customer_phone.trim() || null,
+      vehicle_name: formAsset,
+      pickup_date: pickupIso,
+      dropoff_date: dropoffIso,
+      price_total: eurToCents(form.price_eur),
+      status: form.status,
+    }
+    const { error: e } = form.id
+      ? await supabase.from('bookings').update(payload).eq('id', form.id)
+      : await supabase.from('bookings').insert({ ...payload, created_at: new Date().toISOString() })
+    setSaving(false)
+    if (e) { setError(e.message); return }
+    setShowForm(false); reload()
+  }
+  async function deleteBooking() {
+    if (!form.id) return
+    if (!window.confirm('Eliminare questa prenotazione?')) return
+    setSaving(true); setError('')
+    const { error: e } = await supabase.from('bookings').delete().eq('id', form.id)
+    setSaving(false)
+    if (e) { setError(e.message); return }
+    setShowForm(false); reload()
+  }
+
+  const loading = assetsLoading || bookingsLoading
+  const gridW = daysArray.length * CAL_CELL_W
+
   return (
     <div className="space-y-4">
       <Header title={`${labels.title} — Calendario`} action={
         <div className="flex items-center gap-2">
           <button onClick={() => setMonthOffset(o => o - 1)} className={BTN_GHOST}>‹</button>
-          <span className="text-sm text-theme-text-primary min-w-[140px] text-center capitalize">{monthLabel}</span>
+          <span className="text-sm text-theme-text-primary min-w-[160px] text-center capitalize">{monthLabel}</span>
           <button onClick={() => setMonthOffset(o => o + 1)} className={BTN_GHOST}>›</button>
         </div>
       } />
+      {error && <ErrorBox msg={error} />}
       {loading && <div className="text-theme-text-muted text-sm">Caricamento…</div>}
-      <div className="grid grid-cols-7 gap-1">
-        {['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'].map(d => <div key={d} className="text-center text-xs text-theme-text-muted py-1">{d}</div>)}
-        {cells.map((c, i) => (
-          <div key={i} className={`min-h-[72px] rounded-lg border p-1 ${c ? 'border-theme-border bg-theme-bg-secondary' : 'border-transparent'}`}>
-            {c && (<>
-              <div className="text-xs text-theme-text-muted">{c.day}</div>
-              {c.items.slice(0, 3).map(b => <div key={b.id} className="mt-0.5 text-[10px] truncate px-1 py-0.5 rounded bg-cyan-500/15 text-cyan-300" title={b.customer_name || ''}>{b.customer_name || labels.asset}</div>)}
-              {c.items.length > 3 && <div className="text-[10px] text-theme-text-muted mt-0.5">+{c.items.length - 3}</div>}
-            </>)}
+
+      {!loading && assets.length === 0 && !error && (
+        <EmptyBox msg={`Nessun ${labels.asset.toLowerCase()} nel catalogo. Aggiungi prima gli asset nella tab Catalogo.`} />
+      )}
+
+      {assets.length > 0 && (
+        <div className="border border-theme-border rounded-lg overflow-auto bg-theme-bg-primary">
+          <div style={{ minWidth: CAL_LEFT_W + gridW }}>
+            {/* Header giorni */}
+            <div className="flex sticky top-0 z-30 bg-theme-bg-primary border-b border-theme-border" style={{ height: CAL_HEADER_H }}>
+              <div
+                className="sticky left-0 z-40 shrink-0 bg-theme-bg-primary border-r border-theme-border flex items-center px-3 text-xs font-semibold uppercase tracking-wider text-theme-text-muted"
+                style={{ width: CAL_LEFT_W }}
+              >
+                {labels.asset}
+              </div>
+              <div className="flex">
+                {daysArray.map(day => {
+                  const d = new Date(year, month, day)
+                  return (
+                    <div
+                      key={day}
+                      className={`flex flex-col items-center justify-center border-r border-theme-border/60 shrink-0 ${isTodayDay(day) ? 'bg-dr7-gold/30' : ''}`}
+                      style={{ width: CAL_CELL_W }}
+                    >
+                      <span className="text-[10px] text-theme-text-primary">{day}</span>
+                      <span className="text-[8px] uppercase text-theme-text-muted">{d.toLocaleDateString('it-IT', { weekday: 'short' })}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Righe asset */}
+            {assets.map(asset => (
+              <CalRow
+                key={asset.id}
+                asset={asset}
+                bars={barsFor(rowsByAsset.get(asset.id) || [])}
+                daysArray={daysArray}
+                year={year} month={month}
+                isTodayDay={isTodayDay}
+                onCellClick={(day) => openCreate(asset.name, day)}
+                onBarClick={(b) => openEdit(b, asset.name)}
+              />
+            ))}
+
+            {/* Riga prenotazioni non assegnate (solo se presenti) */}
+            {unassigned.length > 0 && (
+              <CalRow
+                asset={{ id: '__unassigned__', name: 'Altro / Non assegnato', image_url: null }}
+                bars={barsFor(unassigned)}
+                daysArray={daysArray}
+                year={year} month={month}
+                isTodayDay={isTodayDay}
+                onCellClick={() => { /* niente create su riga non assegnata */ }}
+                onBarClick={(b) => openEdit(b, b.vehicle_name || '')}
+                disableCreate
+              />
+            )}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
+
+      {/* Modal create/edit */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !saving && setShowForm(false)}>
+          <div className="bg-theme-bg-secondary border border-theme-border rounded-xl w-full max-w-lg p-5 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-theme-text-primary">{form.id ? 'Modifica prenotazione' : 'Nuova prenotazione'}</h3>
+              <span className="text-sm text-theme-text-secondary">{formAsset || '—'}</span>
+            </div>
+            {error && <ErrorBox msg={error} />}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2">
+                <label className="text-xs text-theme-text-muted">Cliente</label>
+                <input className={INPUT_CLS} placeholder="Nome cliente" value={form.customer_name} onChange={e => setForm({ ...form, customer_name: e.target.value })} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs text-theme-text-muted">Telefono</label>
+                <input className={INPUT_CLS} placeholder="Telefono (opzionale)" value={form.customer_phone} onChange={e => setForm({ ...form, customer_phone: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted">Ritiro</label>
+                <input className={INPUT_CLS} type="date" value={form.pickup_date} onChange={e => setForm({ ...form, pickup_date: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted">Ora ritiro</label>
+                <input className={INPUT_CLS} type="time" value={form.pickup_time} onChange={e => setForm({ ...form, pickup_time: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted">Riconsegna</label>
+                <input className={INPUT_CLS} type="date" value={form.dropoff_date} onChange={e => setForm({ ...form, dropoff_date: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted">Ora riconsegna</label>
+                <input className={INPUT_CLS} type="time" value={form.dropoff_time} onChange={e => setForm({ ...form, dropoff_time: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted">Totale (€)</label>
+                <input className={INPUT_CLS} inputMode="decimal" placeholder="0,00" value={form.price_eur} onChange={e => setForm({ ...form, price_eur: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted">Stato</label>
+                <select className={INPUT_CLS} value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
+                  {CAL_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <div>
+                {form.id && (
+                  <button onClick={deleteBooking} disabled={saving} className="px-3 py-1.5 rounded-lg border border-red-500/40 text-red-400 text-sm hover:bg-red-500/10 disabled:opacity-50">Elimina</button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setShowForm(false)} disabled={saving} className={BTN_GHOST}>Annulla</button>
+                <button onClick={saveBooking} disabled={saving} className={BTN_PRIMARY}>{saving ? 'Salvataggio…' : (form.id ? 'Salva' : 'Crea')}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-function buildMonth(offset: number, bookings: BookingRow[]) {
-  const base = new Date(); base.setDate(1); base.setMonth(base.getMonth() + offset)
-  const year = base.getFullYear(), month = base.getMonth()
-  const monthLabel = base.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
-  const firstDow = (new Date(year, month, 1).getDay() + 6) % 7
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const byDay = new Map<number, BookingRow[]>()
-  bookings.forEach(b => {
-    if (!b.pickup_date) return
-    const d = new Date(b.pickup_date)
-    if (d.getFullYear() === year && d.getMonth() === month) {
-      const day = d.getDate()
-      if (!byDay.has(day)) byDay.set(day, [])
-      byDay.get(day)!.push(b)
-    }
-  })
-  const cells: ({ day: number; items: BookingRow[] } | null)[] = []
-  for (let i = 0; i < firstDow; i++) cells.push(null)
-  for (let day = 1; day <= daysInMonth; day++) cells.push({ day, items: byDay.get(day) || [] })
-  while (cells.length % 7 !== 0) cells.push(null)
-  return { cells, monthLabel }
+// Offset (minuti) del fuso Europe/Rome per una data yyyy-mm-dd: +60 (CET) o
+// +120 (CEST). Calcolato confrontando la stessa istante formattato in Rome vs UTC.
+function romeOffsetMinutes(ymd: string): number {
+  const noonUtc = new Date(`${ymd}T12:00:00Z`)
+  const romeHour = parseInt(noonUtc.toLocaleString('en-GB', { hour: '2-digit', hour12: false, timeZone: 'Europe/Rome' }).slice(0, 2), 10)
+  return (romeHour - 12) * 60
+}
+
+function CalRow({
+  asset, bars, daysArray, year, month, isTodayDay, onCellClick, onBarClick, disableCreate,
+}: {
+  asset: CalAsset
+  bars: { booking: BookingRow; left: number; width: number }[]
+  daysArray: number[]
+  year: number
+  month: number
+  isTodayDay: (day: number) => boolean
+  onCellClick: (day: number) => void
+  onBarClick: (b: BookingRow) => void
+  disableCreate?: boolean
+}) {
+  return (
+    <div className="flex border-b border-theme-border group relative" style={{ height: CAL_ROW_H }}>
+      {/* Colonna sinistra asset */}
+      <div
+        className="sticky left-0 z-20 shrink-0 bg-theme-bg-primary group-hover:bg-theme-bg-secondary border-r border-theme-border flex items-center gap-2 px-3"
+        style={{ width: CAL_LEFT_W }}
+      >
+        <div className="w-10 h-7 shrink-0 rounded bg-theme-bg-tertiary border border-theme-border overflow-hidden flex items-center justify-center">
+          {asset.image_url ? (
+            <img src={asset.image_url} alt={asset.name} className="w-full h-full object-cover" loading="lazy" />
+          ) : (
+            <div className="w-full h-full bg-theme-bg-tertiary" />
+          )}
+        </div>
+        <span className="text-sm text-theme-text-primary truncate" title={asset.name}>{asset.name}</span>
+      </div>
+
+      {/* Griglia giorni + barre */}
+      <div className="relative shrink-0" style={{ width: daysArray.length * CAL_CELL_W }}>
+        {/* celle sfondo + click create */}
+        <div className="flex h-full">
+          {daysArray.map(day => (
+            <div
+              key={day}
+              className={`h-full shrink-0 border-r border-theme-border/50 ${isTodayDay(day) ? 'bg-dr7-gold/15' : ''} ${disableCreate ? '' : 'hover:bg-theme-text-primary/5 cursor-pointer'}`}
+              style={{ width: CAL_CELL_W }}
+              onClick={disableCreate ? undefined : () => onCellClick(day)}
+              title={disableCreate ? undefined : `Nuova prenotazione: ${day}/${month + 1}/${year}`}
+            />
+          ))}
+        </div>
+        {/* barre */}
+        <div className="absolute inset-0 pointer-events-none">
+          {bars.map(({ booking, left, width }) => {
+            const st = barStyle(booking.status, booking.payment_status)
+            return (
+              <div
+                key={booking.id}
+                className={`absolute top-1/2 -translate-y-1/2 h-8 rounded border shadow-sm pointer-events-auto cursor-pointer overflow-hidden flex items-center px-2 hover:brightness-110 transition ${st.bar}`}
+                style={{ left, width }}
+                onClick={(e) => { e.stopPropagation(); onBarClick(booking) }}
+                title={booking.customer_name || ''}
+              >
+                <span className="text-[10px] font-semibold text-white truncate">{booking.customer_name || '—'}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 /* ------------------------------- CATALOGO ------------------------------- */
