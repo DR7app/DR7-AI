@@ -63,10 +63,10 @@ export const handler: Handler = async (event) => {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing required fields' }) }
     }
 
-    // BYPASS — role-tag check via admins.permissions[] (failsafe in
-    // utils/adminRoles.ROLE_FAILSAFE keeps valerio/ilenia safe).
-    if (authUser?.email && await userHasRole(authUser.email, 'direzione')) {
-      console.log(`[send-wallet-otp] AUTO-APPROVED for ${authUser.email} (role:direzione)`)
+    // BYPASS — self-approval SOLO con tag role:bypass-otp (oggi valerio +
+    // ilenia). Il ruolo 'direzione' includeva anche Salvatore via failsafe.
+    if (authUser?.email && await userHasRole(authUser.email, 'bypass-otp')) {
+      console.log(`[send-wallet-otp] AUTO-APPROVED for ${authUser.email} (role:bypass-otp)`)
       return { statusCode: 200, headers, body: JSON.stringify({ success: true, autoApproved: true }) }
     }
 

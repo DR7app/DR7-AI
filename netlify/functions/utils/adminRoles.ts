@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 
 export type AdminRoleTag =
   | 'direzione'
+  | 'bypass-otp'
   | 'developer'
   | 'payment-manager'
   | 'stipendio-editor'

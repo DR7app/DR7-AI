@@ -91,9 +91,13 @@ export const handler: Handler = async (event) => {
       const requestorEmail = (authUser?.email || '').toLowerCase()
       const isOtpTabAction = typeof limitationCode === 'string'
         && limitationCode.startsWith('gestione_otp_')
-      const isDirezione = await userHasRole(requestorEmail, 'direzione')
+      // 2026-06-16: self-approval SOLO per chi ha il tag role:bypass-otp
+      // (oggi valerio + ilenia). Prima bastava il ruolo 'direzione' che, via
+      // ROLE_FAILSAFE, includeva anche Salvatore → l'OTP si auto-approvava
+      // senza inserire il codice. Ora allineato al client (tag-based).
+      const hasOtpBypass = await userHasRole(requestorEmail, 'bypass-otp')
       const isDeveloperOnOtpTab = isOtpTabAction && await userHasRole(requestorEmail, 'developer')
-      const isSelfApproval = !!authUser?.email && (isDirezione || isDeveloperOnOtpTab)
+      const isSelfApproval = !!authUser?.email && (hasOtpBypass || isDeveloperOnOtpTab)
 
       // Store OTP server-side
       const { data: override, error: insertErr } = await supabase
