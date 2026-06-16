@@ -414,12 +414,27 @@ export const handler: Handler = async (event) => {
             fullAddress = addressParts.join(', ')
         }
 
-        // 2. Fallback to booking details if address empty
-        // This mirrors generate-contract.ts logic: clientAddress = customer?.indirizzo || booking...address
+        // 2. Fallback to booking details if address empty. Supporta sia i nomi
+        // legacy (address/city/zip) sia quelli usati dai form servizi
+        // (lavaggio/meccanica): indirizzo/numeroCivico/cittaResidenza/
+        // codicePostale/provinciaResidenza. Senza questo i lavaggi/meccanica
+        // pagati con carta NON producevano fattura (indirizzo del cliente vuoto).
         if (!fullAddress || fullAddress.trim() === '') {
-            fullAddress = bookingCustomer.address || ''
-            if (bookingCustomer.city) fullAddress += `, ${bookingCustomer.city}`
-            if (bookingCustomer.zip) fullAddress += ` ${bookingCustomer.zip}`
+            const bStreet = bookingCustomer.indirizzo || bookingCustomer.address || bookingCustomer.street || ''
+            const bNum = bookingCustomer.numeroCivico || bookingCustomer.numero_civico || bookingCustomer.streetNumber || ''
+            const bZip = bookingCustomer.codicePostale || bookingCustomer.cap || bookingCustomer.zip || ''
+            const bCity = bookingCustomer.cittaResidenza || bookingCustomer.citta || bookingCustomer.city || ''
+            const bProv = (bookingCustomer.provinciaResidenza || bookingCustomer.provincia || '').toUpperCase().trim()
+            const parts: string[] = []
+            if (bStreet) parts.push(bNum ? `${bStreet} ${bNum}` : bStreet)
+            if (bCity || bZip) {
+                let line = ''
+                if (bZip) line += bZip
+                if (bCity) line += (line ? ' ' : '') + bCity
+                if (bProv) line += ` (${bProv})`
+                if (line) parts.push(line)
+            }
+            fullAddress = parts.join(', ')
         }
 
         // Ensure tax fields are robustly fetched
@@ -1093,12 +1108,19 @@ async function handleWalletPurchaseFattura(
             return { statusCode: 500, body: JSON.stringify({ error: 'Failed to generate unique invoice number' }) }
         }
 
-        // 6. Build customer address block
+        // 6. Build customer address block. Fallback ai dati raccolti sulla
+        // ricarica (purchase.customer_*) quando il profilo customers_extended
+        // non li ha — così la fattura della ricarica ha SEMPRE CF + indirizzo.
+        const cfStreet = customerData?.indirizzo || purchase.customer_indirizzo || ''
+        const cfNum = customerData?.numero_civico || purchase.customer_numero_civico || ''
+        const cfZip = customerData?.codice_postale || customerData?.cap || purchase.customer_cap || ''
+        const cfCity = customerData?.citta || customerData?.citta_residenza || purchase.customer_citta || ''
+        const cfProv = customerData?.provincia || customerData?.provincia_residenza || purchase.customer_provincia || ''
         const addressParts = [
-            customerData?.indirizzo,
-            customerData?.codice_postale || customerData?.cap,
-            customerData?.citta,
-            customerData?.provincia,
+            cfStreet && cfNum ? `${cfStreet} ${cfNum}` : cfStreet,
+            cfZip,
+            cfCity,
+            cfProv,
         ].filter(Boolean)
         const fullAddress = addressParts.join(' ')
 
@@ -1106,10 +1128,10 @@ async function handleWalletPurchaseFattura(
         // Per persone fisiche: nome + cognome.
         const isAziendaCustomer = customerData?.tipo_cliente === 'azienda' || customerData?.tipo_cliente === 'pubblica_amministrazione'
         const customerName = isAziendaCustomer
-            ? (customerData?.ragione_sociale || customerData?.denominazione || customerData?.fullName || 'Cliente')
+            ? (customerData?.ragione_sociale || customerData?.denominazione || customerData?.fullName || purchase.customer_name || 'Cliente')
             : (customerData?.nome
                 ? `${customerData.nome} ${customerData.cognome || ''}`.trim()
-                : (customerData?.ragione_sociale || customerData?.denominazione || customerData?.fullName || 'Cliente'))
+                : (customerData?.ragione_sociale || customerData?.denominazione || customerData?.fullName || purchase.customer_name || 'Cliente'))
 
         const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
         const invoiceData: Record<string, any> = {
@@ -1119,9 +1141,9 @@ async function handleWalletPurchaseFattura(
             stato: 'paid',
             customer_name: customerName,
             customer_address: fullAddress,
-            customer_phone: customerData?.telefono || customerData?.phone || '',
-            customer_email: customerData?.email || '',
-            customer_tax_code: customerData?.codice_fiscale || '',
+            customer_phone: customerData?.telefono || customerData?.phone || purchase.customer_phone || '',
+            customer_email: customerData?.email || purchase.customer_email || '',
+            customer_tax_code: customerData?.codice_fiscale || purchase.customer_codice_fiscale || '',
             customer_vat: customerData?.partita_iva || '',
             booking_id: null,
             items,
