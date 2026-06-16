@@ -193,6 +193,7 @@ function formatEUInput(raw: string): string {
 // Libere: si possono aggiungere/togliere voci per ogni auto. Salvate in
 // vehicles.metadata.fixed_expenses. Margine = ricavo del periodo − spese fisse.
 type FixedExpense = { label: string; amount: number }
+const sumFx = (list?: FixedExpense[]) => (list || []).reduce((a, e) => a + (Number(e.amount) || 0), 0)
 
 function FixedExpensesEditor({ vehicleId, revenue, initial, onSave, saving, fmt }: {
   vehicleId: string
@@ -290,6 +291,10 @@ export default function ReportsTab() {
   // Spese fisse mensili per veicolo (vehicles.metadata.fixed_expenses).
   const [fixedExpenses, setFixedExpenses] = useState<Record<string, FixedExpense[]>>({})
   const [savingExpenses, setSavingExpenses] = useState<string | null>(null)
+  const totalFixedExpenses = useMemo(
+    () => Object.values(fixedExpenses).reduce((s, arr) => s + sumFx(arr), 0),
+    [fixedExpenses]
+  )
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -931,7 +936,14 @@ export default function ReportsTab() {
               {formatCurrency(v.totalRevenue + (v.anticipatedRevenue || 0) + (v.daSaldareRevenue || 0))}
             </td>
           ) : (
-            <td className="text-right px-4 py-3 text-dr7-gold font-bold">{formatCurrency(v.totalRevenue + (v.anticipatedRevenue || 0))}</td>
+            <td className="text-right px-4 py-3 text-dr7-gold font-bold">
+              {formatCurrency(v.totalRevenue + (v.anticipatedRevenue || 0))}
+              {sumFx(fixedExpenses[v.vehicleId]) > 0 && (
+                <div className={`text-[10px] font-semibold ${(v.totalRevenue - sumFx(fixedExpenses[v.vehicleId])) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  Margine {formatCurrency(v.totalRevenue - sumFx(fixedExpenses[v.vehicleId]))}
+                </div>
+              )}
+            </td>
           )}
         </tr>
         {isExpanded && (
@@ -1261,6 +1273,13 @@ export default function ReportsTab() {
                 <p className="text-[10px] text-cyan-400 mt-0.5">di cui {formatCurrency(vehicleData.totalAnticipatedRevenue || 0)} anticipato</p>
               )}
             </div>
+            {totalFixedExpenses > 0 && (
+              <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+                <p className="text-xs text-theme-text-muted">Margine Netto</p>
+                <p className={`text-2xl font-bold ${(vehicleData.totalRevenue - totalFixedExpenses) >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(vehicleData.totalRevenue - totalFixedExpenses)}</p>
+                <p className="text-[10px] text-theme-text-muted mt-0.5">ricavo − {formatCurrency(totalFixedExpenses)} spese fisse</p>
+              </div>
+            )}
             {/* Totale Complessivo = ricavo incassato + da saldare (riga rosso chiaro) */}
             {(vehicleData.totalDaSaldare || 0) > 0 && (
               <div className="bg-red-500/10 rounded-xl border border-red-500/30 p-4">
