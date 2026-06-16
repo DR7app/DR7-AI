@@ -311,21 +311,45 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
             }
 
             // 1. Operatori attivi
-            const { data: ops } = await supabase
-                .from('operatori_persone')
-                .select('id, nome, cognome, email, ruolo, ore_target_giornaliere, avatar_url, attivo')
-                .eq('attivo', true)
-                .order('cognome', { ascending: true })
-            let opListRaw = (ops || []) as Operatore[]
-
             // 2026-05-23: Salvatore (e ogni altra email in
-            // REPORT_RESTRICTED_EMAILS) vede solo la propria riga del
-            // report. Match per email su operatori_persone.email.
-            // Per tutti gli altri admin la lista resta completa.
+            // REPORT_RESTRICTED_EMAILS) vede solo la propria riga del report.
+            // 2026-06-16: Salvatore declassato da 'direzione' per forzare l'OTP
+            // (deve chiedere il codice a Valerio/Ilenia). La query "team" qui
+            // sotto dipendeva dalla read RLS che il ruolo direzione garantiva:
+            // senza direzione tornava vuota e il suo report personale spariva
+            // (vedeva solo ore totali + grafico). Per gli utenti restricted-own
+            // carichiamo quindi la SOLA riga propria via user_id (RLS self-read,
+            // stesso pattern di RilevazioneOrariTab), con fallback su email —
+            // cosi' il report torna visibile SENZA ridargli 'direzione', e l'OTP
+            // resta invariato. Per tutti gli altri admin la lista resta completa.
+            let opListRaw: Operatore[] = []
             if (isRestrictedToOwn) {
-                opListRaw = lowerAdminEmail
-                    ? opListRaw.filter(o => (o.email || '').toLowerCase() === lowerAdminEmail)
-                    : []
+                const { data: { user } } = await supabase.auth.getUser()
+                let own: Operatore[] = []
+                if (user?.id) {
+                    const { data: byId } = await supabase
+                        .from('operatori_persone')
+                        .select('id, nome, cognome, email, ruolo, ore_target_giornaliere, avatar_url, attivo')
+                        .eq('attivo', true)
+                        .eq('user_id', user.id)
+                    own = (byId || []) as Operatore[]
+                }
+                if (own.length === 0 && lowerAdminEmail) {
+                    const { data: byEmail } = await supabase
+                        .from('operatori_persone')
+                        .select('id, nome, cognome, email, ruolo, ore_target_giornaliere, avatar_url, attivo')
+                        .eq('attivo', true)
+                        .ilike('email', lowerAdminEmail)
+                    own = (byEmail || []) as Operatore[]
+                }
+                opListRaw = own
+            } else {
+                const { data: ops } = await supabase
+                    .from('operatori_persone')
+                    .select('id, nome, cognome, email, ruolo, ore_target_giornaliere, avatar_url, attivo')
+                    .eq('attivo', true)
+                    .order('cognome', { ascending: true })
+                opListRaw = (ops || []) as Operatore[]
             }
 
             // 2026-05-22: target ore proviene dal CONTRATTO attivo, non
