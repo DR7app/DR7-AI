@@ -398,6 +398,74 @@ const EMPTY_CAL_FORM: CalBookingForm = {
   price_eur: '', status: 'confirmed',
 }
 
+// Sezione calendario sola-lettura: prossime partenze tour con seat map colorata
+// (riusa seatVisual). Ogni partenza = una riga, ogni posto = uno slot col nome
+// cliente. Le prenotazioni si fanno dalla tab Tour.
+function TourCalendarSection({ serviceType }: { serviceType: NoleggioServiceType }) {
+  const [rows, setRows] = useState<{ dep: TourDeparture; assetName: string; seats: TourSeat[] }[]>([])
+  const [pay, setPay] = useState<Record<string, string>>({})
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      const { data: cats } = await supabase.from('noleggio_catalog').select('id, name').eq('service_type', serviceType)
+      const catMap = new Map<string, string>((cats || []).map((c: { id: string; name: string }) => [c.id, c.name]))
+      const catIds = Array.from(catMap.keys())
+      if (!catIds.length) { if (!cancelled) { setRows([]); setLoading(false) } return }
+      const todayYmd = new Date().toLocaleDateString('en-CA')
+      const { data: deps } = await supabase.from('noleggio_tour_departures').select('*')
+        .in('catalog_id', catIds).gte('departure_date', todayYmd)
+        .order('departure_date', { ascending: true }).order('departure_time', { ascending: true })
+      const depList = (deps || []) as TourDeparture[]
+      if (!depList.length) { if (!cancelled) { setRows([]); setLoading(false) } return }
+      const { data: allSeats } = await supabase.from('noleggio_tour_seats').select('*')
+        .in('departure_id', depList.map(d => d.id)).order('seat_position', { ascending: true })
+      const seatList = (allSeats || []) as TourSeat[]
+      const seatsByDep = new Map<string, TourSeat[]>()
+      seatList.forEach(s => { const a = seatsByDep.get(s.departure_id) || []; a.push(s); seatsByDep.set(s.departure_id, a) })
+      const bookingIds = Array.from(new Set(seatList.map(s => s.booking_id).filter(Boolean))) as string[]
+      if (bookingIds.length) {
+        const { data: bk } = await supabase.from('bookings').select('id, payment_status').in('id', bookingIds)
+        if (bk && !cancelled) setPay(Object.fromEntries(bk.map((b: { id: string; payment_status: string }) => [b.id, b.payment_status])))
+      }
+      if (cancelled) return
+      setRows(depList.map(d => ({ dep: d, assetName: catMap.get(d.catalog_id) || '', seats: seatsByDep.get(d.id) || [] })))
+      setLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [serviceType])
+
+  if (loading) return <div className="text-theme-text-muted text-sm">Caricamento tour…</div>
+  if (rows.length === 0) return null
+  return (
+    <div className="space-y-3">
+      <h3 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider">Tour & Posti — prossime partenze</h3>
+      {rows.map(({ dep, assetName, seats }) => (
+        <div key={dep.id} className="border border-theme-border rounded-lg p-4">
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
+            <span className="text-theme-text-primary font-medium">{assetName}</span>
+            <span className="text-theme-text-secondary tabular-nums">{fmtYmd(dep.departure_date)} · {dep.departure_time.slice(0, 5)}</span>
+            <span className="text-xs text-theme-text-muted">{seats.filter(s => s.status === 'sold').length}/{dep.total_seats} venduti</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {seats.map(seat => {
+              const v = seatVisual(seat, seat.booking_id ? pay[seat.booking_id] : undefined, false)
+              return (
+                <div key={seat.id} title={seat.customer_name || ''} className={`w-16 h-16 rounded-lg border text-xs flex flex-col items-center justify-center px-1 ${v.cls}`}>
+                  <span className="font-semibold">{seat.seat_label}</span>
+                  <span className="text-[9px] leading-tight">{v.lbl}</span>
+                  {seat.customer_name && <span className="text-[8px] leading-tight truncate max-w-[56px]">{seat.customer_name.split(' ')[0]}</span>}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceType; labels: NoleggioServiceLabels }) {
   const { bookings, loading: bookingsLoading, reload } = useBookings(serviceType)
   const [assets, setAssets] = useState<CalAsset[]>([])
@@ -561,6 +629,11 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
           <button onClick={() => setMonthOffset(o => o + 1)} className={BTN_GHOST}>›</button>
         </div>
       } />
+
+      {/* Tour & Posti: prossime partenze con la mappa posti (verde pagato /
+          giallo in attesa / rosso non pagato), sola lettura. */}
+      <TourCalendarSection serviceType={serviceType} />
+
       {error && <ErrorBox msg={error} />}
       {loading && <div className="text-theme-text-muted text-sm">Caricamento…</div>}
 
