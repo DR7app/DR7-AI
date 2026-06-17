@@ -139,19 +139,23 @@ function useBookings(serviceType: NoleggioServiceType) {
 function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceType; labels: NoleggioServiceLabels }) {
   const { bookings, loading, error, reload } = useBookings(serviceType)
 
-  // Catalogo asset (per la select nel form)
+  // Asset = TUTTO il catalogo di questo servizio (stessa query della tab
+  // Catalogo: NESSUN filtro is_active, cosi' la select mostra ogni voce
+  // inserita nel catalogo, non solo le attive).
   const [assets, setAssets] = useState<CalAsset[]>([])
+  const [assetsError, setAssetsError] = useState('')
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const { data } = await supabase
+      const { data, error: e } = await supabase
         .from('noleggio_catalog')
         .select('id, name, image_url, is_active')
         .eq('service_type', serviceType)
-        .eq('is_active', true)
         .order('sort_order', { ascending: true })
         .order('name', { ascending: true })
-      if (!cancelled) setAssets((data || []) as CalAsset[])
+      if (cancelled) return
+      if (e) setAssetsError(missingTableHint(e.message))
+      else setAssets((data || []) as CalAsset[])
     })()
     return () => { cancelled = true }
   }, [serviceType])
@@ -274,12 +278,13 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
           <div className="bg-theme-bg-secondary border border-theme-border rounded-xl w-full max-w-lg p-5 space-y-4" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-theme-text-primary">{form.id ? 'Modifica prenotazione' : 'Nuova prenotazione'}</h3>
             {formError && <ErrorBox msg={formError} />}
+            {assetsError && <ErrorBox msg={assetsError} />}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="sm:col-span-2">
-                <label className="text-xs text-theme-text-muted">{labels.asset}</label>
+                <label className="text-xs text-theme-text-muted">{labels.asset} <span className="text-theme-text-muted/70">({assets.length} dal catalogo)</span></label>
                 <select className={INPUT_CLS} value={formAsset} onChange={e => setFormAsset(e.target.value)}>
                   {assets.length === 0 && <option value="">Nessun asset nel catalogo</option>}
-                  {assets.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+                  {assets.map(a => <option key={a.id} value={a.name}>{a.name}{a.is_active ? '' : ' (non attivo)'}</option>)}
                 </select>
               </div>
               <div className="sm:col-span-2">
@@ -346,7 +351,7 @@ const CAL_ROW_H = 56  // altezza riga asset
 const CAL_LEFT_W = 220 // larghezza colonna sinistra (asset)
 const CAL_HEADER_H = 42
 
-interface CalAsset { id: string; name: string; image_url: string | null }
+interface CalAsset { id: string; name: string; image_url: string | null; is_active?: boolean }
 
 // Bucket di colore per la barra, in linea con la palette già usata nel file
 // (Badge): confermato/attivo = ciano, in attesa = ambra, cancellata = rosso.
