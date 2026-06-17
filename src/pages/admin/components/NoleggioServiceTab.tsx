@@ -9,7 +9,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } fro
 import { supabase } from '../../../supabaseClient'
 
 export type NoleggioServiceType = 'boat_rental' | 'heli_rental' | 'stay_rental'
-export type NoleggioView = 'bookings' | 'calendar' | 'catalog' | 'preventivi'
+export type NoleggioView = 'bookings' | 'calendar' | 'catalog' | 'preventivi' | 'tours'
 
 export interface NoleggioServiceLabels {
   title: string        // "Noleggio Mare"
@@ -103,6 +103,7 @@ export default function NoleggioServiceTab({ serviceType, view, labels }: Nolegg
   if (view === 'bookings') return <BookingsView serviceType={serviceType} labels={labels} />
   if (view === 'calendar') return <CalendarView serviceType={serviceType} labels={labels} />
   if (view === 'catalog') return <CatalogView serviceType={serviceType} labels={labels} />
+  if (view === 'tours') return <ToursView serviceType={serviceType} labels={labels} />
   return <PreventiviView serviceType={serviceType} labels={labels} />
 }
 
@@ -286,6 +287,9 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                   {assets.length === 0 && <option value="">Nessun asset nel catalogo</option>}
                   {assets.map(a => <option key={a.id} value={a.name}>{a.name}{a.is_active ? '' : ' (non attivo)'}</option>)}
                 </select>
+              </div>
+              <div className="sm:col-span-2">
+                <LeadPicker initialQuery={form.customer_name} onPick={(name, phone) => setForm(f => ({ ...f, customer_name: name || f.customer_name, customer_phone: phone || f.customer_phone }))} />
               </div>
               <div className="sm:col-span-2">
                 <label className="text-xs text-theme-text-muted">Cliente</label>
@@ -887,7 +891,7 @@ function CatalogView({ serviceType, labels }: { serviceType: NoleggioServiceType
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {items.map(it => (
             <div key={it.id} className={`border rounded-lg overflow-hidden bg-theme-bg-secondary ${it.is_active ? 'border-theme-border' : 'border-theme-border opacity-60'}`}>
-              {it.image_url && <img src={it.image_url} alt={it.name} className="w-full h-32 object-cover" />}
+              {it.image_url && <img src={it.image_url} alt={it.name} className="w-full h-44 object-contain bg-theme-bg-tertiary" />}
               <div className="p-3 space-y-1">
                 <div className="flex items-start justify-between gap-2">
                   <div className="font-semibold text-theme-text-primary">{it.name}</div>
@@ -1101,7 +1105,308 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
   )
 }
 
+/* --------------------------------- TOUR --------------------------------- */
+// Partenze (data + orario) + seat map nominale per ogni asset del catalogo.
+// Tabelle: noleggio_tour_departures + noleggio_tour_seats
+// (migration 20260617_helicopter_tour_departures_seats.sql).
+
+interface TourDeparture {
+  id: string
+  catalog_id: string
+  departure_date: string
+  departure_time: string
+  total_seats: number
+  price_per_seat_cents: number | null
+  status: string
+  notes: string | null
+}
+interface TourSeat {
+  id: string
+  departure_id: string
+  seat_label: string
+  seat_position: number
+  price_cents: number | null
+  status: string
+  customer_name: string | null
+  customer_phone: string | null
+  booking_id: string | null
+}
+const EMPTY_DEP_FORM = { departure_date: '', departure_time: '10:00', total_seats: '6', price_eur: '' }
+const SEAT_CLS: Record<string, string> = {
+  available: 'border-emerald-500/50 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20',
+  sold: 'border-blue-500/50 text-blue-300 bg-blue-500/15 cursor-default',
+  held: 'border-amber-500/50 text-amber-300 bg-amber-500/15 cursor-default',
+  blocked: 'border-theme-border text-theme-text-muted bg-theme-bg-tertiary line-through',
+}
+const SEAT_LBL: Record<string, string> = { available: 'libero', sold: 'venduto', held: 'in carrello', blocked: 'bloccato' }
+function fmtYmd(ymd: string): string {
+  if (!ymd) return '—'
+  const [y, m, d] = ymd.split('-')
+  return `${d}/${m}/${y}`
+}
+function tourTableHint(msg: string): string {
+  if (/noleggio_tour_departures|noleggio_tour_seats|does not exist|relation .* does not exist|schema cache/i.test(msg)) {
+    return 'Tabelle Tour non ancora create: esegui la migration 20260617_helicopter_tour_departures_seats.sql nel SQL editor Supabase.'
+  }
+  return msg
+}
+
+function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; labels: NoleggioServiceLabels }) {
+  const [assets, setAssets] = useState<CatalogRow[]>([])
+  const [assetId, setAssetId] = useState('')
+  const [departures, setDepartures] = useState<TourDeparture[]>([])
+  const [seats, setSeats] = useState<Record<string, TourSeat[]>>({})
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState(EMPTY_DEP_FORM)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data, error: e } = await supabase
+        .from('noleggio_catalog')
+        .select('id, service_type, name, description, price_per_day, capacity, image_url, is_active, sort_order')
+        .eq('service_type', serviceType)
+        .order('sort_order', { ascending: true }).order('name', { ascending: true })
+      if (cancelled) return
+      if (e) setError(missingTableHint(e.message))
+      else {
+        const list = (data || []) as CatalogRow[]
+        setAssets(list)
+        setAssetId(prev => prev || list[0]?.id || '')
+      }
+    })()
+    return () => { cancelled = true }
+  }, [serviceType])
+
+  const loadDepartures = useCallback(async (id: string) => {
+    if (!id) { setDepartures([]); return }
+    setLoading(true); setError('')
+    const { data, error: e } = await supabase
+      .from('noleggio_tour_departures')
+      .select('*').eq('catalog_id', id)
+      .order('departure_date', { ascending: true }).order('departure_time', { ascending: true })
+    if (e) setError(tourTableHint(e.message))
+    else setDepartures((data || []) as TourDeparture[])
+    setLoading(false)
+  }, [])
+  useEffect(() => { loadDepartures(assetId) }, [assetId, loadDepartures])
+
+  async function loadSeats(depId: string) {
+    const { data, error: e } = await supabase
+      .from('noleggio_tour_seats').select('*').eq('departure_id', depId)
+      .order('seat_position', { ascending: true })
+    if (!e) setSeats(s => ({ ...s, [depId]: (data || []) as TourSeat[] }))
+  }
+  function toggleExpand(depId: string) {
+    if (expanded === depId) { setExpanded(null); return }
+    setExpanded(depId)
+    if (!seats[depId]) loadSeats(depId)
+  }
+
+  async function createDeparture() {
+    if (!assetId) { setError('Seleziona prima un asset dal catalogo.'); return }
+    if (!form.departure_date) { setError('Inserisci la data della partenza.'); return }
+    const total = Math.max(1, parseInt(form.total_seats, 10) || 1)
+    setSaving(true); setError('')
+    const { data, error: e } = await supabase.from('noleggio_tour_departures').insert({
+      catalog_id: assetId,
+      departure_date: form.departure_date,
+      departure_time: form.departure_time || '10:00',
+      total_seats: total,
+      price_per_seat_cents: form.price_eur ? eurToCents(form.price_eur) : null,
+      status: 'scheduled',
+    }).select('id').single()
+    if (e || !data) { setSaving(false); setError(tourTableHint(e?.message || 'Errore creazione partenza')); return }
+    const depId = (data as { id: string }).id
+    const rows = Array.from({ length: total }, (_, i) => ({ departure_id: depId, seat_label: String(i + 1), seat_position: i + 1 }))
+    await supabase.from('noleggio_tour_seats').insert(rows)
+    setSaving(false); setShowForm(false); setForm(EMPTY_DEP_FORM)
+    loadDepartures(assetId)
+  }
+
+  async function deleteDeparture(dep: TourDeparture) {
+    if (!window.confirm(`Eliminare la partenza del ${fmtYmd(dep.departure_date)} alle ${dep.departure_time.slice(0, 5)}? I posti collegati verranno rimossi.`)) return
+    const { error: e } = await supabase.from('noleggio_tour_departures').delete().eq('id', dep.id)
+    if (e) { setError(e.message); return }
+    loadDepartures(assetId)
+  }
+
+  async function cycleSeat(seat: TourSeat) {
+    if (seat.status === 'sold' || seat.status === 'held') return
+    const next = seat.status === 'blocked' ? 'available' : 'blocked'
+    const { error: e } = await supabase.from('noleggio_tour_seats').update({ status: next }).eq('id', seat.id)
+    if (!e) setSeats(s => ({ ...s, [seat.departure_id]: (s[seat.departure_id] || []).map(x => x.id === seat.id ? { ...x, status: next } : x) }))
+  }
+
+  function seatSummary(dep: TourDeparture): string {
+    const list = seats[dep.id]
+    if (!list) return `${dep.total_seats} posti`
+    const sold = list.filter(s => s.status === 'sold').length
+    return `${sold}/${dep.total_seats} venduti`
+  }
+
+  const selectedAsset = assets.find(a => a.id === assetId)
+
+  return (
+    <div className="space-y-4">
+      <Header title={`${labels.title} — Tour & Posti`} action={
+        <button onClick={() => { setForm(EMPTY_DEP_FORM); setError(''); setShowForm(true) }} disabled={!assetId} className={BTN_PRIMARY}>+ Nuova partenza</button>
+      } />
+      {error && <ErrorBox msg={error} />}
+
+      {assets.length === 0 && !error && (
+        <EmptyBox msg={`Nessun ${labels.asset.toLowerCase()} nel catalogo. Aggiungi prima un ${labels.asset.toLowerCase()} nella tab Catalogo: sarà il tour da programmare.`} />
+      )}
+
+      {assets.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-theme-text-muted">{labels.asset}:</span>
+          <select className={INPUT_CLS + ' max-w-xs'} value={assetId} onChange={e => setAssetId(e.target.value)}>
+            {assets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </div>
+      )}
+
+      {loading && <div className="text-theme-text-muted text-sm">Caricamento…</div>}
+
+      {!loading && assetId && departures.length === 0 && !error && (
+        <EmptyBox msg={`Nessuna partenza per ${selectedAsset?.name || 'questo tour'}. Crea la prima con "+ Nuova partenza".`} />
+      )}
+
+      {departures.length > 0 && (
+        <div className="space-y-2">
+          {departures.map(dep => (
+            <div key={dep.id} className="border border-theme-border rounded-lg overflow-hidden">
+              <div className="flex items-center justify-between gap-3 px-4 py-3 bg-theme-bg-tertiary">
+                <button onClick={() => toggleExpand(dep.id)} className="flex items-center gap-3 text-left flex-1 flex-wrap">
+                  <span className="text-theme-text-muted">{expanded === dep.id ? '▾' : '▸'}</span>
+                  <span className="text-theme-text-primary font-medium tabular-nums">{fmtYmd(dep.departure_date)}</span>
+                  <span className="text-theme-text-secondary tabular-nums">{dep.departure_time.slice(0, 5)}</span>
+                  <span className="text-xs text-theme-text-muted">{seatSummary(dep)}</span>
+                  {dep.price_per_seat_cents != null && <span className="text-xs text-theme-text-muted">· {eur(dep.price_per_seat_cents)}/posto</span>}
+                </button>
+                <button onClick={() => deleteDeparture(dep)} className="text-red-400 text-xs hover:underline">Elimina</button>
+              </div>
+              {expanded === dep.id && (
+                <div className="p-4">
+                  {!seats[dep.id] && <div className="text-theme-text-muted text-sm">Caricamento posti…</div>}
+                  {seats[dep.id] && (
+                    <div className="flex flex-wrap gap-2">
+                      {seats[dep.id].map(seat => (
+                        <button key={seat.id} onClick={() => cycleSeat(seat)} title={seat.customer_name || ''}
+                          className={`w-14 h-14 rounded-lg border text-xs flex flex-col items-center justify-center ${SEAT_CLS[seat.status] || ''}`}>
+                          <span className="font-semibold">{seat.seat_label}</span>
+                          <span className="text-[9px] leading-tight">{SEAT_LBL[seat.status] || seat.status}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mt-3 text-[11px] text-theme-text-muted">Clic su un posto libero/bloccato per cambiarne lo stato. I posti venduti mostrano il cliente al passaggio del mouse.</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !saving && setShowForm(false)}>
+          <div className="bg-theme-bg-secondary border border-theme-border rounded-xl w-full max-w-md p-5 space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-theme-text-primary">Nuova partenza — {selectedAsset?.name || ''}</h3>
+            {error && <ErrorBox msg={error} />}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-theme-text-muted">Data</label>
+                <input className={INPUT_CLS} type="date" value={form.departure_date} onChange={e => setForm({ ...form, departure_date: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted">Orario</label>
+                <input className={INPUT_CLS} type="time" value={form.departure_time} onChange={e => setForm({ ...form, departure_time: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted">Posti totali</label>
+                <input className={INPUT_CLS} type="number" min={1} value={form.total_seats} onChange={e => setForm({ ...form, total_seats: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted">Prezzo posto (€)</label>
+                <input className={INPUT_CLS} inputMode="decimal" placeholder="opzionale" value={form.price_eur} onChange={e => setForm({ ...form, price_eur: e.target.value })} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setShowForm(false)} disabled={saving} className={BTN_GHOST}>Annulla</button>
+              <button onClick={createDeparture} disabled={saving} className={BTN_PRIMARY}>{saving ? 'Creazione…' : 'Crea partenza'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ------------------------------- SHARED UI ------------------------------ */
+
+// Selettore cliente dai Lead (tabella `customers`): cerca per nome/telefono/
+// email e richiama onPick(nome, telefono). Usato in Prenotazioni e Preventivi.
+interface Lead { id: string; full_name: string | null; phone: string | null; email: string | null }
+function LeadPicker({ onPick, initialQuery = '', label = 'Seleziona cliente dai Lead' }: { onPick: (name: string, phone: string) => void; initialQuery?: string; label?: string }) {
+  const [leads, setLeads] = useState<Lead[]>([])
+  const [query, setQuery] = useState(initialQuery)
+  const [open, setOpen] = useState(false)
+  useEffect(() => { setQuery(initialQuery) }, [initialQuery])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('customers')
+        .select('id, full_name, phone, email')
+        .order('full_name', { ascending: true })
+        .limit(2000)
+      if (!cancelled) setLeads((data || []) as Lead[])
+    })()
+    return () => { cancelled = true }
+  }, [])
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return leads.slice(0, 8)
+    return leads.filter(l =>
+      (l.full_name || '').toLowerCase().includes(q) ||
+      (l.phone || '').toLowerCase().includes(q) ||
+      (l.email || '').toLowerCase().includes(q)
+    ).slice(0, 8)
+  }, [leads, query])
+  return (
+    <div className="relative">
+      <label className="text-xs text-theme-text-muted">{label} {leads.length > 0 && <span className="text-theme-text-muted/70">({leads.length})</span>}</label>
+      <input
+        className={INPUT_CLS}
+        placeholder="Cerca un cliente per nome, telefono o email…"
+        value={query}
+        onChange={e => { setQuery(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      {open && matches.length > 0 && (
+        <div className="absolute z-30 mt-1 w-full max-h-64 overflow-auto bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg">
+          {matches.map(l => (
+            <button
+              key={l.id}
+              type="button"
+              onMouseDown={e => { e.preventDefault(); onPick(l.full_name || '', l.phone || ''); setQuery(l.full_name || ''); setOpen(false) }}
+              className="w-full text-left px-3 py-2 hover:bg-theme-bg-hover border-b border-theme-border last:border-0"
+            >
+              <div className="text-sm text-theme-text-primary">{l.full_name || '(senza nome)'}</div>
+              <div className="text-xs text-theme-text-muted">{[l.phone, l.email].filter(Boolean).join(' · ') || '—'}</div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function Header({ title, action }: { title: string; action?: ReactNode }) {
   return (
