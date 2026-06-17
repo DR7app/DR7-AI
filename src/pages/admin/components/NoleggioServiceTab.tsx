@@ -855,7 +855,9 @@ function CatalogView({ serviceType, labels }: { serviceType: NoleggioServiceType
       {error && <ErrorBox msg={error} />}
 
       {showForm && (
-        <div className="border border-theme-border rounded-lg p-4 bg-theme-bg-secondary space-y-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !saving && !uploadingImage && setShowForm(false)}>
+          <div className="bg-theme-bg-secondary border border-theme-border rounded-xl w-full max-w-lg p-5 space-y-3 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-theme-text-primary">{editingId ? `Modifica ${labels.asset.toLowerCase()}` : `Nuova ${labels.asset.toLowerCase()}`}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input className={INPUT_CLS} placeholder={`Nome ${labels.asset.toLowerCase()}`} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
             <input className={INPUT_CLS} placeholder="Prezzo / giorno (€)" inputMode="decimal" value={form.price_per_day} onChange={e => setForm({ ...form, price_per_day: e.target.value })} />
@@ -881,6 +883,7 @@ function CatalogView({ serviceType, labels }: { serviceType: NoleggioServiceType
           <div className="flex gap-2">
             <button onClick={save} disabled={saving} className={BTN_PRIMARY}>{saving ? 'Salvataggio…' : (editingId ? 'Salva modifiche' : 'Aggiungi')}</button>
             <button onClick={() => setShowForm(false)} className={BTN_GHOST}>Annulla</button>
+          </div>
           </div>
         </div>
       )}
