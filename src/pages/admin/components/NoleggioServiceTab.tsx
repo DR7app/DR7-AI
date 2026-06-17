@@ -7,6 +7,8 @@
 // Catalogo: tabella `noleggio_catalog`. Preventivi: tabella `noleggio_preventivi`.
 import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from 'react'
 import { supabase } from '../../../supabaseClient'
+import { authFetch } from '../../../utils/authFetch'
+import toast from 'react-hot-toast'
 
 export type NoleggioServiceType = 'boat_rental' | 'heli_rental' | 'stay_rental'
 export type NoleggioView = 'bookings' | 'calendar' | 'catalog' | 'preventivi' | 'tours'
@@ -1212,9 +1214,64 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
       created_at: new Date().toISOString(),
     }).select('id').single()
     if (be || !bk) { setBooking(false); setError('Errore prenotazione: ' + (be?.message || '')); return }
+    const bookingId = (bk as { id: string }).id
     await supabase.from('noleggio_tour_seats')
-      .update({ status: 'sold', booking_id: (bk as { id: string }).id, customer_name: cust.name.trim(), customer_phone: cust.phone.trim() })
+      .update({ status: 'sold', booking_id: bookingId, customer_name: cust.name.trim(), customer_phone: cust.phone.trim() })
       .in('id', ids)
+
+    // Pay by Link Nexi — STESSO flusso di Noleggio auto / Car Wash:
+    // nexi-pay-by-link -> salva il link in booking_details -> WhatsApp
+    // 'payment_link_customer'. payment_status resta 'pending' (posto ROSSO);
+    // al pagamento il callback Nexi lo porta a paid -> posto VERDE.
+    const amountEuros = totalCents / 100
+    const phone = cust.phone.trim()
+    const firstName = cust.name.trim().split(' ')[0] || 'Cliente'
+    try {
+      const description = `Tour DR7 ${selectedAsset?.name || ''} - ${labelsStr} (${fmtYmd(dep.departure_date)} ${dep.departure_time.slice(0, 5)})`
+      const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId, amount: amountEuros, customerEmail: '', customerName: cust.name.trim() || 'Cliente', description, expirationHours: 1 }),
+      })
+      const linkData = await linkRes.json()
+      if (linkRes.ok && linkData.paymentUrl) {
+        await supabase.from('bookings').update({
+          booking_details: {
+            tour_departure_id: dep.id, seats: labelsStr, seat_count: chosen.length,
+            nexi_payment_link: linkData.paymentUrl,
+            nexi_order_id: linkData.orderId || null,
+            payment_link_created_at: new Date().toISOString(),
+            payment_link_expires_at: linkData.expiresAt || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          },
+        }).eq('id', bookingId)
+        if (phone) {
+          const amountStr = amountEuros.toFixed(2)
+          const bookingRef = (bookingId || '').substring(0, 8).toUpperCase()
+          await fetch('/.netlify/functions/send-whatsapp-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              customPhone: phone,
+              templateKey: 'payment_link_customer',
+              booking: { service_type: serviceType },
+              templateVars: {
+                customer_name: firstName, nome: firstName,
+                amount: amountStr, total: amountStr, importo: amountStr, totale: amountStr,
+                link: linkData.paymentUrl, payment_link: linkData.paymentUrl,
+                booking_id: bookingRef, booking_ref: bookingRef, expiry: '1 ora',
+              },
+              skipHeader: true,
+            }),
+          })
+        }
+        toast.success('Prenotazione creata e link di pagamento inviato al cliente!')
+      } else {
+        toast.error('Prenotazione creata ma errore link pagamento: ' + (linkData.error || 'Errore'))
+      }
+    } catch (linkErr) {
+      toast.error('Prenotazione creata ma errore Pay by Link: ' + (linkErr as Error).message)
+    }
+
     setBooking(false); clearCart()
     loadSeats(dep.id)
   }
