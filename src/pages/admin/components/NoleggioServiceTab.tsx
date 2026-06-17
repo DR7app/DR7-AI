@@ -1077,13 +1077,6 @@ interface TourSeat {
   booking_id: string | null
 }
 const EMPTY_DEP_FORM = { departure_date: '', departure_time: '10:00', total_seats: '6', price_eur: '' }
-const SEAT_CLS: Record<string, string> = {
-  available: 'border-emerald-500/50 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20',
-  sold: 'border-blue-500/50 text-blue-300 bg-blue-500/15 cursor-default',
-  held: 'border-amber-500/50 text-amber-300 bg-amber-500/15 cursor-default',
-  blocked: 'border-theme-border text-theme-text-muted bg-theme-bg-tertiary line-through',
-}
-const SEAT_LBL: Record<string, string> = { available: 'libero', sold: 'venduto', held: 'in carrello', blocked: 'bloccato' }
 function fmtYmd(ymd: string): string {
   if (!ymd) return '—'
   const [y, m, d] = ymd.split('-')
@@ -1096,17 +1089,38 @@ function tourTableHint(msg: string): string {
   return msg
 }
 
+// Colore posto in base allo stato + pagamento del booking collegato:
+// verde = pagato · rosso = venduto ma non pagato · giallo = in attesa (carrello)
+// · grigio = bloccato · contorno verde = libero · bianco = scelto ora.
+function seatVisual(seat: TourSeat, payStatus: string | undefined, selected: boolean): { cls: string; lbl: string } {
+  if (selected) return { cls: 'border-white bg-white text-black', lbl: 'scelto' }
+  if (seat.status === 'available') return { cls: 'border-emerald-500/50 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20', lbl: 'libero' }
+  if (seat.status === 'blocked') return { cls: 'border-theme-border text-theme-text-muted bg-theme-bg-tertiary line-through', lbl: 'bloccato' }
+  if (seat.status === 'held') return { cls: 'border-amber-500/60 text-amber-300 bg-amber-500/20', lbl: 'in attesa' }
+  // sold
+  const paid = ['paid', 'succeeded', 'completed'].includes((payStatus || '').toLowerCase())
+  if (paid) return { cls: 'border-emerald-500 text-emerald-100 bg-emerald-600/40', lbl: 'pagato' }
+  return { cls: 'border-red-500/70 text-red-200 bg-red-600/30', lbl: 'non pagato' }
+}
+
 function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; labels: NoleggioServiceLabels }) {
   const [assets, setAssets] = useState<CatalogRow[]>([])
   const [assetId, setAssetId] = useState('')
   const [departures, setDepartures] = useState<TourDeparture[]>([])
   const [seats, setSeats] = useState<Record<string, TourSeat[]>>({})
+  const [pay, setPay] = useState<Record<string, string>>({}) // booking_id -> payment_status
   const [expanded, setExpanded] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(EMPTY_DEP_FORM)
   const [saving, setSaving] = useState(false)
+  // Prenotazione posti (carrello -> cliente)
+  const [cartDep, setCartDep] = useState<string | null>(null)
+  const [cartSeats, setCartSeats] = useState<Set<string>>(new Set())
+  const [cust, setCust] = useState({ name: '', phone: '' })
+  const [booking, setBooking] = useState(false)
+  const [manageMode, setManageMode] = useState<Set<string>>(new Set()) // partenze in modalità "gestisci posti"
 
   useEffect(() => {
     let cancelled = false
@@ -1144,12 +1158,65 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     const { data, error: e } = await supabase
       .from('noleggio_tour_seats').select('*').eq('departure_id', depId)
       .order('seat_position', { ascending: true })
-    if (!e) setSeats(s => ({ ...s, [depId]: (data || []) as TourSeat[] }))
+    if (e) return
+    const list = (data || []) as TourSeat[]
+    setSeats(s => ({ ...s, [depId]: list }))
+    // Stato pagamento dei booking collegati -> per il colore verde/rosso
+    const bookingIds = Array.from(new Set(list.map(x => x.booking_id).filter(Boolean))) as string[]
+    if (bookingIds.length) {
+      const { data: bk } = await supabase.from('bookings').select('id, payment_status').in('id', bookingIds)
+      if (bk) setPay(p => ({ ...p, ...Object.fromEntries(bk.map((b: { id: string; payment_status: string }) => [b.id, b.payment_status])) }))
+    }
   }
   function toggleExpand(depId: string) {
     if (expanded === depId) { setExpanded(null); return }
     setExpanded(depId)
     if (!seats[depId]) loadSeats(depId)
+  }
+
+  // Click su un posto: in modalità "gestisci" blocca/sblocca; altrimenti
+  // (default) lo aggiunge/toglie dal carrello per la prenotazione.
+  function onSeatClick(dep: TourDeparture, seat: TourSeat) {
+    if (manageMode.has(dep.id)) {
+      if (seat.status === 'sold' || seat.status === 'held') return
+      cycleSeat(seat)
+      return
+    }
+    if (seat.status !== 'available') return
+    if (cartDep !== dep.id) { setCartDep(dep.id); setCartSeats(new Set([seat.id])); return }
+    setCartSeats(prev => { const n = new Set(prev); if (n.has(seat.id)) n.delete(seat.id); else n.add(seat.id); return n })
+  }
+
+  function clearCart() { setCartDep(null); setCartSeats(new Set()); setCust({ name: '', phone: '' }) }
+
+  // Crea la prenotazione dai posti nel carrello e li assegna al cliente.
+  // booking confirmed + payment_status pending => posti ROSSI (non pagati).
+  async function createTourBooking(dep: TourDeparture) {
+    const ids = Array.from(cartSeats)
+    if (!ids.length) return
+    if (!cust.name.trim() || !cust.phone.trim()) { setError('Inserisci nome e telefono del cliente.'); return }
+    const chosen = (seats[dep.id] || []).filter(s => cartSeats.has(s.id))
+    const priceOf = (s: TourSeat) => s.price_cents != null ? s.price_cents : (dep.price_per_seat_cents != null ? dep.price_per_seat_cents : (selectedAsset?.price_per_day || 0))
+    const totalCents = chosen.reduce((t, s) => t + priceOf(s), 0)
+    const pickupISO = new Date(`${dep.departure_date}T${dep.departure_time}`).toISOString()
+    const labelsStr = chosen.map(s => s.seat_label).join(', ')
+    setBooking(true); setError('')
+    const { data: bk, error: be } = await supabase.from('bookings').insert({
+      service_type: serviceType,
+      vehicle_name: selectedAsset?.name || labels.title,
+      pickup_date: pickupISO, dropoff_date: pickupISO,
+      price_total: totalCents,
+      status: 'confirmed', payment_status: 'pending',
+      customer_name: cust.name.trim(), customer_phone: cust.phone.trim(),
+      booking_details: { tour_departure_id: dep.id, seats: labelsStr, seat_count: chosen.length },
+      created_at: new Date().toISOString(),
+    }).select('id').single()
+    if (be || !bk) { setBooking(false); setError('Errore prenotazione: ' + (be?.message || '')); return }
+    await supabase.from('noleggio_tour_seats')
+      .update({ status: 'sold', booking_id: (bk as { id: string }).id, customer_name: cust.name.trim(), customer_phone: cust.phone.trim() })
+      .in('id', ids)
+    setBooking(false); clearCart()
+    loadSeats(dep.id)
   }
 
   async function createDeparture() {
@@ -1238,19 +1305,62 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
               </div>
               {expanded === dep.id && (
                 <div className="p-4">
+                  <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                    <div className="flex items-center gap-3 text-[11px] text-theme-text-muted flex-wrap">
+                      <span><span className="inline-block w-3 h-3 rounded-sm border border-emerald-500/50 bg-emerald-500/10 align-middle" /> libero</span>
+                      <span><span className="inline-block w-3 h-3 rounded-sm bg-amber-500/60 align-middle" /> in attesa</span>
+                      <span><span className="inline-block w-3 h-3 rounded-sm bg-red-600/60 align-middle" /> non pagato</span>
+                      <span><span className="inline-block w-3 h-3 rounded-sm bg-emerald-600 align-middle" /> pagato</span>
+                      <span><span className="inline-block w-3 h-3 rounded-sm bg-theme-bg-tertiary border border-theme-border align-middle" /> bloccato</span>
+                    </div>
+                    <button
+                      onClick={() => setManageMode(m => { const n = new Set(m); if (n.has(dep.id)) n.delete(dep.id); else n.add(dep.id); return n })}
+                      className={`text-xs px-2 py-1 rounded ${manageMode.has(dep.id) ? 'bg-dr7-gold text-black font-semibold' : 'border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover'}`}>
+                      {manageMode.has(dep.id) ? 'Esci da gestione posti' : 'Gestisci posti (blocca)'}
+                    </button>
+                  </div>
+
                   {!seats[dep.id] && <div className="text-theme-text-muted text-sm">Caricamento posti…</div>}
                   {seats[dep.id] && (
                     <div className="flex flex-wrap gap-2">
-                      {seats[dep.id].map(seat => (
-                        <button key={seat.id} onClick={() => cycleSeat(seat)} title={seat.customer_name || ''}
-                          className={`w-14 h-14 rounded-lg border text-xs flex flex-col items-center justify-center ${SEAT_CLS[seat.status] || ''}`}>
-                          <span className="font-semibold">{seat.seat_label}</span>
-                          <span className="text-[9px] leading-tight">{SEAT_LBL[seat.status] || seat.status}</span>
-                        </button>
-                      ))}
+                      {seats[dep.id].map(seat => {
+                        const selected = cartDep === dep.id && cartSeats.has(seat.id)
+                        const v = seatVisual(seat, seat.booking_id ? pay[seat.booking_id] : undefined, selected)
+                        return (
+                          <button key={seat.id} onClick={() => onSeatClick(dep, seat)} title={seat.customer_name || ''}
+                            className={`w-16 h-16 rounded-lg border text-xs flex flex-col items-center justify-center px-1 ${v.cls}`}>
+                            <span className="font-semibold">{seat.seat_label}</span>
+                            <span className="text-[9px] leading-tight">{v.lbl}</span>
+                            {seat.customer_name && <span className="text-[8px] leading-tight truncate max-w-[56px]">{seat.customer_name.split(' ')[0]}</span>}
+                          </button>
+                        )
+                      })}
                     </div>
                   )}
-                  <p className="mt-3 text-[11px] text-theme-text-muted">Clic su un posto libero/bloccato per cambiarne lo stato. I posti venduti mostrano il cliente al passaggio del mouse.</p>
+
+                  {/* Carrello -> assegna cliente */}
+                  {cartDep === dep.id && cartSeats.size > 0 && !manageMode.has(dep.id) && (
+                    <div className="mt-4 border border-dr7-gold/40 rounded-lg p-3 space-y-3 bg-theme-bg-tertiary/50">
+                      <div className="text-sm text-theme-text-primary font-medium">
+                        {cartSeats.size} posto/i nel carrello — assegna un cliente
+                      </div>
+                      <LeadPicker onPick={(name, phone) => setCust({ name: name || cust.name, phone: phone || cust.phone })} />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input className={INPUT_CLS} placeholder="Nome cliente" value={cust.name} onChange={e => setCust({ ...cust, name: e.target.value })} />
+                        <input className={INPUT_CLS} placeholder="Telefono" value={cust.phone} onChange={e => setCust({ ...cust, phone: e.target.value })} />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <button onClick={clearCart} disabled={booking} className={BTN_GHOST}>Svuota</button>
+                        <button onClick={() => createTourBooking(dep)} disabled={booking} className={BTN_PRIMARY}>{booking ? 'Creazione…' : 'Crea prenotazione'}</button>
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="mt-3 text-[11px] text-theme-text-muted">
+                    {manageMode.has(dep.id)
+                      ? 'Modalità gestione: clic su un posto libero per bloccarlo (o sbloccarlo).'
+                      : 'Clic sui posti liberi per metterli nel carrello, poi assegna il cliente. Il cliente riceverà il link di pagamento (posto rosso = confermato non pagato).'}
+                  </p>
                 </div>
               )}
             </div>
