@@ -927,37 +927,6 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  // Lead/clienti per la selezione cliente nel preventivo (tabella `customers`).
-  const [leads, setLeads] = useState<{ id: string; full_name: string | null; phone: string | null; email: string | null }[]>([])
-  const [leadQuery, setLeadQuery] = useState('')
-  const [leadOpen, setLeadOpen] = useState(false)
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      const { data } = await supabase
-        .from('customers')
-        .select('id, full_name, phone, email')
-        .order('full_name', { ascending: true })
-        .limit(2000)
-      if (!cancelled) setLeads((data || []) as typeof leads)
-    })()
-    return () => { cancelled = true }
-  }, [])
-  const leadMatches = useMemo(() => {
-    const q = leadQuery.trim().toLowerCase()
-    if (!q) return leads.slice(0, 8)
-    return leads.filter(l =>
-      (l.full_name || '').toLowerCase().includes(q) ||
-      (l.phone || '').toLowerCase().includes(q) ||
-      (l.email || '').toLowerCase().includes(q)
-    ).slice(0, 8)
-  }, [leads, leadQuery])
-  function pickLead(l: { full_name: string | null; phone: string | null }) {
-    setForm(f => ({ ...f, customer_name: l.full_name || f.customer_name, customer_phone: l.phone || f.customer_phone }))
-    setLeadQuery(l.full_name || '')
-    setLeadOpen(false)
-  }
-
   const load = useCallback(async () => {
     setLoading(true); setError('')
     const { data, error: e } = await supabase
@@ -971,7 +940,7 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
   }, [serviceType])
   useEffect(() => { load() }, [load])
 
-  function openNew() { setEditingId(null); setForm(EMPTY_PREV); setLeadQuery(''); setLeadOpen(false); setShowForm(true) }
+  function openNew() { setEditingId(null); setForm(EMPTY_PREV); setShowForm(true) }
   function openEdit(p: PreventivoRow) {
     setEditingId(p.id)
     setForm({
@@ -979,7 +948,6 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
       start_date: p.start_date ? p.start_date.substring(0, 10) : '', end_date: p.end_date ? p.end_date.substring(0, 10) : '',
       amount: centsToEur(p.amount), notes: p.notes || '', status: p.status || 'bozza',
     })
-    setLeadQuery(p.customer_name || ''); setLeadOpen(false)
     setShowForm(true)
   }
   async function save() {
@@ -1021,33 +989,7 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
 
       {showForm && (
         <div className="border border-theme-border rounded-lg p-4 bg-theme-bg-secondary space-y-3">
-          {/* Selezione cliente dai lead (tab Clienti). Cerca per nome/telefono/email. */}
-          <div className="relative">
-            <label className="text-xs text-theme-text-muted">Seleziona cliente dai Lead {leads.length > 0 && <span className="text-theme-text-muted/70">({leads.length})</span>}</label>
-            <input
-              className={INPUT_CLS}
-              placeholder="Cerca un cliente per nome, telefono o email…"
-              value={leadQuery}
-              onChange={e => { setLeadQuery(e.target.value); setLeadOpen(true) }}
-              onFocus={() => setLeadOpen(true)}
-              onBlur={() => setTimeout(() => setLeadOpen(false), 150)}
-            />
-            {leadOpen && leadMatches.length > 0 && (
-              <div className="absolute z-20 mt-1 w-full max-h-64 overflow-auto bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg">
-                {leadMatches.map(l => (
-                  <button
-                    key={l.id}
-                    type="button"
-                    onMouseDown={e => { e.preventDefault(); pickLead(l) }}
-                    className="w-full text-left px-3 py-2 hover:bg-theme-bg-hover border-b border-theme-border last:border-0"
-                  >
-                    <div className="text-sm text-theme-text-primary">{l.full_name || '(senza nome)'}</div>
-                    <div className="text-xs text-theme-text-muted">{[l.phone, l.email].filter(Boolean).join(' · ') || '—'}</div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <LeadPicker initialQuery={form.customer_name} onPick={(name, phone) => setForm(f => ({ ...f, customer_name: name || f.customer_name, customer_phone: phone || f.customer_phone }))} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input className={INPUT_CLS} placeholder="Cliente" value={form.customer_name} onChange={e => setForm({ ...form, customer_name: e.target.value })} />
             <input className={INPUT_CLS} placeholder="Telefono (WhatsApp)" value={form.customer_phone} onChange={e => setForm({ ...form, customer_phone: e.target.value })} />
@@ -1351,7 +1293,25 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
 
 // Selettore cliente dai Lead (tabella `customers`): cerca per nome/telefono/
 // email e richiama onPick(nome, telefono). Usato in Prenotazioni e Preventivi.
-interface Lead { id: string; full_name: string | null; phone: string | null; email: string | null }
+interface Lead { id: string; name: string; phone: string; email: string }
+// Stessa sorgente della tab Clienti: customers_extended via /.netlify/functions/
+// list-customers (service role, bypassa RLS, paginato = TUTTI i clienti). Niente
+// query diretta su `customers` (mostrava solo un sottoinsieme).
+async function fetchLeads(): Promise<Lead[]> {
+  try {
+    const res = await fetch('/.netlify/functions/list-customers')
+    const json = await res.json()
+    const rows: Record<string, unknown>[] = json?.customers || []
+    return rows.map((c, i) => {
+      const g = (k: string) => (c[k] == null ? '' : String(c[k])).trim()
+      const name = g('full_name') || `${g('nome') || g('first_name')} ${g('cognome') || g('last_name')}`.trim() || g('ragione_sociale') || g('denominazione')
+      const phone = g('telefono') || g('phone') || g('mobile') || g('cellulare')
+      return { id: g('id') || g('user_id') || `lead-${i}`, name, phone, email: g('email') }
+    }).filter(l => l.name || l.phone || l.email)
+  } catch {
+    return []
+  }
+}
 function LeadPicker({ onPick, initialQuery = '', label = 'Seleziona cliente dai Lead' }: { onPick: (name: string, phone: string) => void; initialQuery?: string; label?: string }) {
   const [leads, setLeads] = useState<Lead[]>([])
   const [query, setQuery] = useState(initialQuery)
@@ -1359,23 +1319,16 @@ function LeadPicker({ onPick, initialQuery = '', label = 'Seleziona cliente dai 
   useEffect(() => { setQuery(initialQuery) }, [initialQuery])
   useEffect(() => {
     let cancelled = false
-    ;(async () => {
-      const { data } = await supabase
-        .from('customers')
-        .select('id, full_name, phone, email')
-        .order('full_name', { ascending: true })
-        .limit(2000)
-      if (!cancelled) setLeads((data || []) as Lead[])
-    })()
+    fetchLeads().then(ls => { if (!cancelled) setLeads(ls) })
     return () => { cancelled = true }
   }, [])
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return leads.slice(0, 8)
     return leads.filter(l =>
-      (l.full_name || '').toLowerCase().includes(q) ||
-      (l.phone || '').toLowerCase().includes(q) ||
-      (l.email || '').toLowerCase().includes(q)
+      l.name.toLowerCase().includes(q) ||
+      l.phone.toLowerCase().includes(q) ||
+      l.email.toLowerCase().includes(q)
     ).slice(0, 8)
   }, [leads, query])
   return (
@@ -1391,14 +1344,14 @@ function LeadPicker({ onPick, initialQuery = '', label = 'Seleziona cliente dai 
       />
       {open && matches.length > 0 && (
         <div className="absolute z-30 mt-1 w-full max-h-64 overflow-auto bg-theme-bg-secondary border border-theme-border rounded-lg shadow-lg">
-          {matches.map(l => (
+          {matches.map((l, i) => (
             <button
-              key={l.id}
+              key={`${l.id}-${i}`}
               type="button"
-              onMouseDown={e => { e.preventDefault(); onPick(l.full_name || '', l.phone || ''); setQuery(l.full_name || ''); setOpen(false) }}
+              onMouseDown={e => { e.preventDefault(); onPick(l.name, l.phone); setQuery(l.name); setOpen(false) }}
               className="w-full text-left px-3 py-2 hover:bg-theme-bg-hover border-b border-theme-border last:border-0"
             >
-              <div className="text-sm text-theme-text-primary">{l.full_name || '(senza nome)'}</div>
+              <div className="text-sm text-theme-text-primary">{l.name || '(senza nome)'}</div>
               <div className="text-xs text-theme-text-muted">{[l.phone, l.email].filter(Boolean).join(' · ') || '—'}</div>
             </button>
           ))}
