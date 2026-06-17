@@ -17,7 +17,7 @@ import { classifyVehicle, classifyVehicleLocally, type VehicleCategory } from '.
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 // Orari lavaggio dinamici da Centralina Pro > Orari Lavaggio
-import { generateLavaggioSlotsForDate, getAllowedTimeRangesForDate } from '../../../utils/lavaggioHours'
+import { getAllowedTimeRangesForDate, generateAllDayLavaggioSlots, isInLavaggioHours } from '../../../utils/lavaggioHours'
 import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
 import { isCartaPunti, isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
@@ -4529,46 +4529,38 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       // per-operator role:bypass-otp (toggle in OperatoriTab).
                       const newTime = e.target.value
                       if (!newTime) { setFormData({ ...formData, appointment_time: '' }); return }
-                      // Inline busy check (stessa logica della render funzione
-                      // sotto, ma accessibile qui senza scope IIFE).
+                      // 2026-06-17: come il noleggio — lo slot e' SEMPRE
+                      // selezionabile, ma l'OTP (carwash_slot_occupied) scatta
+                      // sia per slot OCCUPATO sia per slot FUORI ORARIO lavaggio.
+                      const dateForChk = formData.appointment_date ? new Date(formData.appointment_date + 'T12:00:00') : new Date()
+                      const closed = !isInLavaggioHours(dateForChk, newTime)
                       const newDuration = getTotalDuration() || 60
                       const conflict = busyBookingsOnDate.find(b => {
                         const bookingTime = b.appointment_time
                         if (!bookingTime) return false
-                        // 2026-06-02: usa la durata SALVATA sulla prenotazione
-                        // (snapshot al momento della creazione). Prima derivavamo
-                        // la durata dal catalogo CORRENTE via service_name —
-                        // quindi un cambio di durata in Catalogo Prime Wash
-                        // ricalcolava retroattivamente il blocco di ogni
-                        // prenotazione passata, e bookings senza match nel
-                        // catalogo cadevano sul fallback 60 min.
                         const existingDuration = b.duration_minutes
                           ?? (carWashServices.find(s => s.name === b.service_name)?.durationMinutes)
                           ?? 60
                         return checkTimeOverlap(newTime, newDuration, bookingTime, existingDuration as number)
                       })
-                      if (!conflict) { setFormData({ ...formData, appointment_time: newTime }); return }
-                      const who = conflict.customer_name || 'altro cliente'
-                      if (override.hasOverride('carwash_slot_occupied')) {
-                        setFormData({ ...formData, appointment_time: newTime })
-                        return
-                      }
                       setFormData({ ...formData, appointment_time: newTime })
-                      const bypassed = override.requestOverride(
-                        'carwash_slot_occupied',
-                        `Slot ${newTime} occupato da ${who} — sovrapporre richiede autorizzazione direzionale.`,
-                      )
-                      void bypassed // ignorato: il save controllera' hasOverride
+                      if (override.hasOverride('carwash_slot_occupied')) return
+                      if (conflict) {
+                        const who = conflict.customer_name || 'altro cliente'
+                        override.requestOverride('carwash_slot_occupied', `Slot ${newTime} occupato da ${who} — sovrapporre richiede autorizzazione direzionale.`)
+                      } else if (closed) {
+                        override.requestOverride('carwash_slot_occupied', `Orario ${newTime} FUORI ORARIO lavaggio — inserire richiede autorizzazione direzionale.`)
+                      }
                     }}
                     className="w-full appearance-none px-4 py-3 pr-10 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
                   >
                     <option value="">Seleziona orario</option>
                     {(() => {
-                      const selectedDay = formData.appointment_date ? new Date(formData.appointment_date + 'T12:00:00').getDay() : -1
-                      const isSat = selectedDay === 6
-                      // Slot dinamici da Centralina Pro > Orari Lavaggio
+                      // 2026-06-17: come il NOLEGGIO — mostra TUTTE le ore del
+                      // giorno; quelle FUORI ORARIO lavaggio o gia' OCCUPATE sono
+                      // marcate con 🔴 ma restano selezionabili (richiedono OTP).
                       const dateForSlots = formData.appointment_date ? new Date(formData.appointment_date + 'T12:00:00') : new Date()
-                      const allSlots = generateLavaggioSlotsForDate(dateForSlots)
+                      const allSlots = generateAllDayLavaggioSlots()
 
                       // Filter out past times if today
                       const now = new Date()
@@ -4579,25 +4571,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         ? allSlots.filter(t => { const [h, m] = t.split(':').map(Number); return h * 60 + m > currentMinutes; })
                         : allSlots
 
-                      const morningSlots = slots.filter(t => t.startsWith('09') || t.startsWith('10') || t.startsWith('11') || t.startsWith('12'))
-                      const afternoonSlots = isSat
-                        ? slots.filter(t => t.startsWith('13') || t.startsWith('14') || t.startsWith('15') || t.startsWith('16') || t.startsWith('17'))
-                        : slots.filter(t => t.startsWith('15') || t.startsWith('16') || t.startsWith('17') || t.startsWith('18'))
-
-                      // 2026-05-27: marca gli slot occupati dalle prenotazioni
-                      // esistenti per la data selezionata. Considera la durata
-                      // del servizio gia' prenotato (servizio match per nome)
-                      // E la durata del nuovo lavaggio (selectedService +
-                      // extras tramite getTotalDuration). Se manca selezione
-                      // servizio, fallback 60 min per la nuova prenotazione.
                       const newDuration = getTotalDuration() || 60
                       const isSlotBusy = (slotTime: string): { busy: boolean; who?: string } => {
                         for (const b of busyBookingsOnDate) {
                           const bookingTime = b.appointment_time
                           if (!bookingTime) continue
-                          // 2026-06-02: durata SALVATA sulla prenotazione
-                          // (snapshot al momento della creazione), non
-                          // dedotta dal catalogo corrente.
                           const existingDuration = b.duration_minutes
                             ?? (carWashServices.find(s => s.name === b.service_name)?.durationMinutes)
                             ?? 60
@@ -4608,33 +4586,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         return { busy: false }
                       }
 
-                      const renderSlot = (time: string) => {
+                      return slots.map((time) => {
                         const { busy, who } = isSlotBusy(time)
-                        // 2026-05-28: occupied slots ora SELEZIONABILI con
-                        // marker rosso "●". Click → OTP modal (gated dal
-                        // per-operator role:bypass-otp). Stessa pattern UX
-                        // del preventivo slot picker.
-                        return (
-                          <option key={time} value={time}>
-                            {busy ? `● ${time} — occupato (${who})` : time}
-                          </option>
-                        )
-                      }
-
-                      return (
-                        <>
-                          {morningSlots.length > 0 && (
-                            <optgroup label="Mattina">
-                              {morningSlots.map(renderSlot)}
-                            </optgroup>
-                          )}
-                          {afternoonSlots.length > 0 && (
-                            <optgroup label="Pomeriggio">
-                              {afternoonSlots.map(renderSlot)}
-                            </optgroup>
-                          )}
-                        </>
-                      )
+                        const closed = !isInLavaggioHours(dateForSlots, time)
+                        const label = busy
+                          ? `🔴 ${time} — occupato (${who})`
+                          : (closed ? `🔴 ${time} — fuori orario` : time)
+                        return <option key={time} value={time}>{label}</option>
+                      })
                     })()}
                   </select>
                 </div>

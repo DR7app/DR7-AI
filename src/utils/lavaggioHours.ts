@@ -136,3 +136,23 @@ export function generateLavaggioSlotsForDate(date: Date): string[] {
     }
     return out
 }
+
+/** True if `time` (HH:MM) falls inside an open window for the date. */
+export function isInLavaggioHours(date: Date, time: string): boolean {
+    const day = getDayHours(date)
+    if (!day.is_open) return false
+    const t = timeToMinutes(time)
+    return day.windows.some((w) => t >= timeToMinutes(w.start) && t < timeToMinutes(w.end))
+}
+
+/**
+ * All slot times across the WHOLE day (00:00 → 24:00) at the configured
+ * granularity. The admin picker shows every hour and puts a 🔴 on the ones
+ * outside the lavaggio opening hours — same format as the Noleggio picker.
+ */
+export function generateAllDayLavaggioSlots(): string[] {
+    const step = getSlotMinutes()
+    const out: string[] = []
+    for (let m = 0; m < 24 * 60; m += step) out.push(minutesToTime(m))
+    return out
+}
