@@ -32,6 +32,7 @@ export default function FornitoreCrossCheck({ fornitore }: Props) {
   const [month, setMonth] = useState(today.getMonth() + 1)
   const [docs, setDocs] = useState<FornitoreDocument[]>([])
   const [loading, setLoading] = useState(false)
+  const [compensating, setCompensating] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -106,6 +107,53 @@ export default function FornitoreCrossCheck({ fornitore }: Props) {
     load()
   }
 
+  // Compensazione automatica: collega le bolle/DDT non ancora abbinate alle
+  // fatture del mese. 1 fattura -> tutte le bolle a quella; più fatture ->
+  // riempimento per data fino a coprire il totale di ciascuna fattura.
+  async function autoCompensa() {
+    const orphans = docs.filter(d => (d.tipo === 'ddt' || d.tipo === 'bolla') && !d.fattura_collegata_id)
+    const fatt = docs.filter(d => d.tipo === 'fattura')
+    if (fatt.length === 0) { alert(`Nessuna fattura in ${monthLabel(year, month)}: impossibile compensare.`); return }
+    if (orphans.length === 0) { alert(`Nessuna bolla da compensare in ${monthLabel(year, month)}.`); return }
+
+    const assignments: { fatturaId: string; bollaIds: string[] }[] = []
+    if (fatt.length === 1) {
+      assignments.push({ fatturaId: fatt[0].id, bollaIds: orphans.map(b => b.id) })
+    } else {
+      const fSorted = [...fatt].sort((a, b) => (a.data_documento || '').localeCompare(b.data_documento || ''))
+      const bSorted = [...orphans].sort((a, b) => (a.data_documento || '').localeCompare(b.data_documento || ''))
+      let i = 0
+      for (const f of fSorted) {
+        const target = Number(f.importo_totale || 0)
+        let acc = 0
+        const ids: string[] = []
+        while (i < bSorted.length && acc + TOLERANCE_EUR < target) {
+          acc += Number(bSorted[i].importo_totale || 0)
+          ids.push(bSorted[i].id); i++
+        }
+        if (ids.length) assignments.push({ fatturaId: f.id, bollaIds: ids })
+      }
+    }
+    const totalToLink = assignments.reduce((s, a) => s + a.bollaIds.length, 0)
+    if (totalToLink === 0) { alert('Nessuna compensazione possibile.'); return }
+    if (!window.confirm(`Compensare automaticamente ${totalToLink} bolla/e con ${assignments.length} fattura/e in ${monthLabel(year, month)}?`)) return
+    setCompensating(true)
+    try {
+      for (const a of assignments) {
+        const { error } = await supabase
+          .from('fornitore_documents')
+          .update({ fattura_collegata_id: a.fatturaId })
+          .in('id', a.bollaIds)
+        if (error) throw error
+      }
+      await load()
+    } catch (e) {
+      alert('Errore compensazione: ' + (e as Error).message)
+    } finally {
+      setCompensating(false)
+    }
+  }
+
   const fatture = docs.filter(d => d.tipo === 'fattura')
 
   const monthOptions = Array.from({ length: 12 }, (_, i) => i + 1)
@@ -124,6 +172,13 @@ export default function FornitoreCrossCheck({ fornitore }: Props) {
           className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-1.5 text-theme-text-primary text-sm">
           {monthOptions.map(m => <option key={m} value={m}>{monthLabel(year, m).split(' ')[0]}</option>)}
         </select>
+        <button
+          onClick={autoCompensa}
+          disabled={compensating || loading}
+          className="ml-auto text-sm px-3 py-1.5 rounded bg-dr7-gold text-black font-semibold disabled:opacity-50"
+          title="Collega automaticamente le bolle non abbinate alle fatture del mese">
+          {compensating ? 'Compensazione…' : 'Compensa automaticamente'}
+        </button>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
