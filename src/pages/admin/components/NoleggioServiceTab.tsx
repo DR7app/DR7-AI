@@ -138,11 +138,107 @@ function useBookings(serviceType: NoleggioServiceType) {
 
 function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceType; labels: NoleggioServiceLabels }) {
   const { bookings, loading, error, reload } = useBookings(serviceType)
+
+  // Catalogo asset (per la select nel form)
+  const [assets, setAssets] = useState<CalAsset[]>([])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('noleggio_catalog')
+        .select('id, name, image_url, is_active')
+        .eq('service_type', serviceType)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true })
+      if (!cancelled) setAssets((data || []) as CalAsset[])
+    })()
+    return () => { cancelled = true }
+  }, [serviceType])
+
+  // Modal create/edit (stessa logica del Calendario, accessibile dalla lista)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState<CalBookingForm>(EMPTY_CAL_FORM)
+  const [formAsset, setFormAsset] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
+
+  function openCreate() {
+    const todayYmd = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+    setForm({ ...EMPTY_CAL_FORM, pickup_date: todayYmd, dropoff_date: todayYmd })
+    setFormAsset(assets[0]?.name || '')
+    setFormError('')
+    setShowForm(true)
+  }
+  function openEdit(b: BookingRow) {
+    const pk = b.pickup_date ? new Date(b.pickup_date) : null
+    const dr = b.dropoff_date ? new Date(b.dropoff_date) : null
+    const ymd = (d: Date | null) => d ? d.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }) : ''
+    const hm = (d: Date | null) => d ? d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }) : '10:00'
+    setForm({
+      id: b.id,
+      customer_name: b.customer_name || '',
+      customer_phone: b.customer_phone || '',
+      pickup_date: ymd(pk), pickup_time: hm(pk),
+      dropoff_date: ymd(dr), dropoff_time: hm(dr),
+      price_eur: centsToEur(b.price_total || 0),
+      status: (b.status || 'confirmed'),
+    })
+    setFormAsset(b.vehicle_name || '')
+    setFormError('')
+    setShowForm(true)
+  }
+
+  function toIso(date: string, time: string): string | null {
+    if (!date) return null
+    const romeOffsetMin = romeOffsetMinutes(date)
+    const utcMs = Date.UTC(
+      Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)),
+      Number((time || '00:00').slice(0, 2)), Number((time || '00:00').slice(3, 5)),
+    ) - romeOffsetMin * 60_000
+    return new Date(utcMs).toISOString()
+  }
+
+  async function saveBooking() {
+    if (!form.customer_name.trim()) { setFormError('Il nome cliente è obbligatorio.'); return }
+    setSaving(true); setFormError('')
+    const payload = {
+      service_type: serviceType,
+      customer_name: form.customer_name.trim(),
+      customer_phone: form.customer_phone.trim() || null,
+      vehicle_name: formAsset || null,
+      pickup_date: toIso(form.pickup_date, form.pickup_time),
+      dropoff_date: toIso(form.dropoff_date, form.dropoff_time),
+      price_total: eurToCents(form.price_eur),
+      status: form.status,
+    }
+    const { error: e } = form.id
+      ? await supabase.from('bookings').update(payload).eq('id', form.id)
+      : await supabase.from('bookings').insert({ ...payload, created_at: new Date().toISOString() })
+    setSaving(false)
+    if (e) { setFormError(e.message); return }
+    setShowForm(false); reload()
+  }
+  async function deleteBooking() {
+    if (!form.id) return
+    if (!window.confirm('Eliminare questa prenotazione?')) return
+    setSaving(true); setFormError('')
+    const { error: e } = await supabase.from('bookings').delete().eq('id', form.id)
+    setSaving(false)
+    if (e) { setFormError(e.message); return }
+    setShowForm(false); reload()
+  }
+
   return (
     <div className="space-y-4">
-      <Header title={`${labels.title} — Prenotazioni`} action={<button onClick={reload} disabled={loading} className={BTN_PRIMARY}>{loading ? 'Caricamento…' : 'Aggiorna'}</button>} />
+      <Header title={`${labels.title} — Prenotazioni`} action={
+        <div className="flex items-center gap-2">
+          <button onClick={openCreate} className={BTN_PRIMARY}>+ Nuova prenotazione</button>
+          <button onClick={reload} disabled={loading} className={BTN_GHOST}>{loading ? 'Caricamento…' : 'Aggiorna'}</button>
+        </div>
+      } />
       {error && <ErrorBox msg={error} />}
-      {!loading && bookings.length === 0 && !error && <EmptyBox msg={`Nessuna prenotazione ${labels.title.toLowerCase()} al momento.`} />}
+      {!loading && bookings.length === 0 && !error && <EmptyBox msg={`Nessuna prenotazione ${labels.title.toLowerCase()} al momento. Crea la prima con "+ Nuova prenotazione".`} />}
       {bookings.length > 0 && (
         <div className="overflow-x-auto border border-theme-border rounded-lg">
           <table className="w-full text-sm">
@@ -158,7 +254,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
             </thead>
             <tbody>
               {bookings.map(b => (
-                <tr key={b.id} className="border-t border-theme-border hover:bg-theme-bg-hover">
+                <tr key={b.id} onClick={() => openEdit(b)} className="border-t border-theme-border hover:bg-theme-bg-hover cursor-pointer">
                   <td className="px-3 py-2 text-theme-text-primary">{b.customer_name || '—'}</td>
                   <td className="px-3 py-2 text-theme-text-secondary">{b.vehicle_name || b.vehicle_plate || '—'}</td>
                   <td className="px-3 py-2 text-theme-text-secondary tabular-nums">{fmtDate(b.pickup_date)}</td>
@@ -169,6 +265,70 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Modal create/edit prenotazione */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !saving && setShowForm(false)}>
+          <div className="bg-theme-bg-secondary border border-theme-border rounded-xl w-full max-w-lg p-5 space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-theme-text-primary">{form.id ? 'Modifica prenotazione' : 'Nuova prenotazione'}</h3>
+            {formError && <ErrorBox msg={formError} />}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2">
+                <label className="text-xs text-theme-text-muted">{labels.asset}</label>
+                <select className={INPUT_CLS} value={formAsset} onChange={e => setFormAsset(e.target.value)}>
+                  {assets.length === 0 && <option value="">Nessun asset nel catalogo</option>}
+                  {assets.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs text-theme-text-muted">Cliente</label>
+                <input className={INPUT_CLS} placeholder="Nome cliente" value={form.customer_name} onChange={e => setForm({ ...form, customer_name: e.target.value })} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs text-theme-text-muted">Telefono</label>
+                <input className={INPUT_CLS} placeholder="Telefono (opzionale)" value={form.customer_phone} onChange={e => setForm({ ...form, customer_phone: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted">Ritiro</label>
+                <input className={INPUT_CLS} type="date" value={form.pickup_date} onChange={e => setForm({ ...form, pickup_date: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted">Ora ritiro</label>
+                <input className={INPUT_CLS} type="time" value={form.pickup_time} onChange={e => setForm({ ...form, pickup_time: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted">Riconsegna</label>
+                <input className={INPUT_CLS} type="date" value={form.dropoff_date} onChange={e => setForm({ ...form, dropoff_date: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted">Ora riconsegna</label>
+                <input className={INPUT_CLS} type="time" value={form.dropoff_time} onChange={e => setForm({ ...form, dropoff_time: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted">Totale (€)</label>
+                <input className={INPUT_CLS} inputMode="decimal" placeholder="0,00" value={form.price_eur} onChange={e => setForm({ ...form, price_eur: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-theme-text-muted">Stato</label>
+                <select className={INPUT_CLS} value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
+                  {CAL_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <div>
+                {form.id && (
+                  <button onClick={deleteBooking} disabled={saving} className="px-3 py-1.5 rounded-lg border border-red-500/40 text-red-400 text-sm hover:bg-red-500/10 disabled:opacity-50">Elimina</button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setShowForm(false)} disabled={saving} className={BTN_GHOST}>Annulla</button>
+                <button onClick={saveBooking} disabled={saving} className={BTN_PRIMARY}>{saving ? 'Salvataggio…' : (form.id ? 'Salva' : 'Crea')}</button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
