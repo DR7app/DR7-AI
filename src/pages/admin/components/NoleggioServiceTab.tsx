@@ -1319,6 +1319,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
   const [seatNames, setSeatNames] = useState<Record<string, string>>({}) // seatId -> nome passeggero
   const [tourPayStatus, setTourPayStatus] = useState('pending') // Da Saldare
   const [tourPayMethod, setTourPayMethod] = useState('')
+  const [tourConfirm, setTourConfirm] = useState(false) // Conferma Prenotazione
   const tourPaymentMethods = usePaymentMethods()
   const [booking, setBooking] = useState(false)
   const [manageMode, setManageMode] = useState<Set<string>>(new Set()) // partenze in modalità "gestisci posti"
@@ -1388,7 +1389,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     setCartSeats(prev => { const n = new Set(prev); if (n.has(seat.id)) n.delete(seat.id); else n.add(seat.id); return n })
   }
 
-  function clearCart() { setCartDep(null); setCartSeats(new Set()); setCust({ name: '', phone: '' }); setDiffNames(false); setSeatNames({}); setTourPayStatus('pending'); setTourPayMethod('') }
+  function clearCart() { setCartDep(null); setCartSeats(new Set()); setCust({ name: '', phone: '' }); setDiffNames(false); setSeatNames({}); setTourPayStatus('pending'); setTourPayMethod(''); setTourConfirm(false) }
 
   // Crea la prenotazione dai posti nel carrello e li assegna al cliente.
   // booking confirmed + payment_status pending => posti ROSSI (non pagati).
@@ -1409,6 +1410,8 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
       pickup_date: pickupISO, dropoff_date: pickupISO,
       price_total: totalCents,
       status: 'confirmed', payment_status: tourPayStatus, payment_method: tourPayMethod || null,
+      manually_confirmed: tourConfirm,
+      ...(tourConfirm ? { manually_confirmed_at: new Date().toISOString() } : {}),
       customer_name: cust.name.trim(), customer_phone: cust.phone.trim(),
       // Soddisfa il check bookings_user_or_guest_check (serve user_id OPPURE
       // guest_name). Il cliente arriva dai Lead, non da un account: usiamo i
@@ -1488,6 +1491,38 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
       }
     } else {
       toast.success('Prenotazione creata!')
+    }
+
+    // Conferma prenotazione tour: come Noleggio/Car Wash — parte se Pagato
+    // OPPURE se l'admin ha spuntato "Conferma Prenotazione" (anche Da Saldare).
+    // Body editabile in Messaggi di Sistema Pro (evento tour_new_customer ->
+    // template pro_conferma_tour). Solo se NON è Nexi Pay by Link pending
+    // (in quel caso parte già il link).
+    const isPaid = ['paid', 'completed', 'succeeded'].includes(tourPayStatus)
+    const sentNexiLink = isNexiPbl(tourPayMethod) && tourPayStatus === 'pending'
+    if (phone && (isPaid || tourConfirm) && !sentNexiLink) {
+      const ref = (bookingId || '').substring(0, 8).toUpperCase()
+      const paymentInfo = isPaid ? 'Pagato' : 'Da saldare'
+      await fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customPhone: phone,
+          templateKey: 'tour_new_customer',
+          booking: { service_type: serviceType },
+          templateVars: {
+            nome: firstName, customer_name: cust.name.trim(),
+            esperienza: selectedAsset?.name || labels.title, servizio: selectedAsset?.name || labels.title, service_name: selectedAsset?.name || labels.title,
+            data: fmtYmd(dep.departure_date), date: fmtYmd(dep.departure_date),
+            orario: dep.departure_time.slice(0, 5), ora: dep.departure_time.slice(0, 5), time: dep.departure_time.slice(0, 5),
+            posti: String(chosen.length), seat_count: String(chosen.length), posti_prenotati: String(chosen.length),
+            total: amountEuros.toFixed(2), totale: amountEuros.toFixed(2), importo: amountEuros.toFixed(2), amount: amountEuros.toFixed(2),
+            payment_info: paymentInfo, pagamento: paymentInfo,
+            booking_id: ref, booking_ref: ref, id: ref,
+            note: '', luogo_partenza: '', luogo_rientro: '',
+          },
+          skipHeader: true,
+        }),
+      }).catch(() => { /* best effort */ })
     }
 
     setBooking(false); clearCart()
@@ -1703,6 +1738,10 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                         </div>
                       </div>
                       {isNexiPbl(tourPayMethod) && tourPayStatus === 'pending' && <p className="text-[11px] text-theme-text-muted">Verrà generato e inviato il link di pagamento Nexi al cliente.</p>}
+                      <label className="flex items-center gap-2 text-xs text-theme-text-secondary cursor-pointer">
+                        <input type="checkbox" checked={tourConfirm} onChange={e => setTourConfirm(e.target.checked)} />
+                        Conferma Prenotazione (invia messaggio di conferma al cliente)
+                      </label>
                       <div className="flex justify-end gap-2">
                         <button onClick={clearCart} disabled={booking} className={BTN_GHOST}>Svuota</button>
                         <button onClick={() => createTourBooking(dep)} disabled={booking} className={BTN_PRIMARY}>{booking ? 'Creazione…' : 'Crea prenotazione'}</button>
