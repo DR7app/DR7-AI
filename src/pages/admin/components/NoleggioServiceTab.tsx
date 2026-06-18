@@ -658,10 +658,11 @@ const EMPTY_CAL_FORM: CalBookingForm = {
 // Sezione calendario sola-lettura: prossime partenze tour con seat map colorata
 // (riusa seatVisual). Ogni partenza = una riga, ogni posto = uno slot col nome
 // cliente. Le prenotazioni si fanno dalla tab Tour.
-function TourCalendarSection({ serviceType }: { serviceType: NoleggioServiceType }) {
+function TourCalendarSection({ serviceType, year, month }: { serviceType: NoleggioServiceType; year: number; month: number }) {
   const [rows, setRows] = useState<{ dep: TourDeparture; assetName: string; seats: TourSeat[] }[]>([])
   const [pay, setPay] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState<string | null>(null)
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -670,9 +671,12 @@ function TourCalendarSection({ serviceType }: { serviceType: NoleggioServiceType
       const catMap = new Map<string, string>((cats || []).map((c: { id: string; name: string }) => [c.id, c.name]))
       const catIds = Array.from(catMap.keys())
       if (!catIds.length) { if (!cancelled) { setRows([]); setLoading(false) } return }
-      const todayYmd = new Date().toLocaleDateString('en-CA')
+      // Solo le partenze del MESE visualizzato (come gli altri calendari).
+      const mm = String(month + 1).padStart(2, '0')
+      const firstDay = `${year}-${mm}-01`
+      const lastDay = `${year}-${mm}-${String(new Date(year, month + 1, 0).getDate()).padStart(2, '0')}`
       const { data: deps } = await supabase.from('noleggio_tour_departures').select('*')
-        .in('catalog_id', catIds).gte('departure_date', todayYmd)
+        .in('catalog_id', catIds).gte('departure_date', firstDay).lte('departure_date', lastDay)
         .order('departure_date', { ascending: true }).order('departure_time', { ascending: true })
       const depList = (deps || []) as TourDeparture[]
       if (!depList.length) { if (!cancelled) { setRows([]); setLoading(false) } return }
@@ -696,29 +700,36 @@ function TourCalendarSection({ serviceType }: { serviceType: NoleggioServiceType
   if (loading) return <div className="text-theme-text-muted text-sm">Caricamento tour…</div>
   if (rows.length === 0) return null
   return (
-    <div className="space-y-3">
-      <h3 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider">Tour & Posti — prossime partenze</h3>
-      {rows.map(({ dep, assetName, seats }) => (
-        <div key={dep.id} className="border border-theme-border rounded-lg p-4">
-          <div className="flex items-center gap-3 mb-3 flex-wrap">
-            <span className="text-theme-text-primary font-medium">{assetName}</span>
-            <span className="text-theme-text-secondary tabular-nums">{fmtYmd(dep.departure_date)} · {dep.departure_time.slice(0, 5)}</span>
-            <span className="text-xs text-theme-text-muted">{seats.filter(s => s.status === 'sold').length}/{dep.total_seats} venduti</span>
+    <div className="space-y-2">
+      <h3 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider">Tour & Posti del mese — clicca una partenza per i dettagli</h3>
+      {rows.map(({ dep, assetName, seats }) => {
+        const sold = seats.filter(s => s.status === 'sold').length
+        const open = expanded === dep.id
+        return (
+          <div key={dep.id} className="border border-theme-border rounded-lg overflow-hidden">
+            <button onClick={() => setExpanded(open ? null : dep.id)} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-theme-bg-hover flex-wrap">
+              <span className="text-theme-text-muted">{open ? '▾' : '▸'}</span>
+              <span className="text-theme-text-primary font-medium">{assetName}</span>
+              <span className="text-theme-text-secondary tabular-nums">{fmtYmd(dep.departure_date)} · {dep.departure_time.slice(0, 5)}</span>
+              <span className="text-xs text-theme-text-muted">{sold}/{dep.total_seats} venduti</span>
+            </button>
+            {open && (
+              <div className="px-4 pb-4 flex flex-wrap gap-2">
+                {seats.map(seat => {
+                  const v = seatVisual(seat, seat.booking_id ? pay[seat.booking_id] : undefined, false)
+                  return (
+                    <div key={seat.id} title={seat.customer_name || ''} className={`w-16 h-16 rounded-lg border text-xs flex flex-col items-center justify-center px-1 ${v.cls}`}>
+                      <span className="font-semibold">{seat.seat_label}</span>
+                      <span className="text-[9px] leading-tight">{v.lbl}</span>
+                      {seat.customer_name && <span className="text-[8px] leading-tight truncate max-w-[56px]">{seat.customer_name.split(' ')[0]}</span>}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
-          <div className="flex flex-wrap gap-2">
-            {seats.map(seat => {
-              const v = seatVisual(seat, seat.booking_id ? pay[seat.booking_id] : undefined, false)
-              return (
-                <div key={seat.id} title={seat.customer_name || ''} className={`w-16 h-16 rounded-lg border text-xs flex flex-col items-center justify-center px-1 ${v.cls}`}>
-                  <span className="font-semibold">{seat.seat_label}</span>
-                  <span className="text-[9px] leading-tight">{v.lbl}</span>
-                  {seat.customer_name && <span className="text-[8px] leading-tight truncate max-w-[56px]">{seat.customer_name.split(' ')[0]}</span>}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -890,7 +901,7 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
 
       {/* Tour & Posti: prossime partenze con la mappa posti (verde pagato /
           giallo in attesa / rosso non pagato), sola lettura. */}
-      <TourCalendarSection serviceType={serviceType} />
+      <TourCalendarSection serviceType={serviceType} year={year} month={month} />
 
       {error && <ErrorBox msg={error} />}
       {loading && <div className="text-theme-text-muted text-sm">Caricamento…</div>}

@@ -612,6 +612,9 @@ export default function UnpaidBookingsTab() {
         const isCarRental = !st || st === 'rental' || st === 'car_rental' ||
           (st !== 'car_wash' && st !== 'mechanical' && st !== 'mechanical_service')
         const isCarWash = st === 'car_wash'
+        // Tour Noleggio Aria/Mare/Soggiorni: NESSUN contratto da firmare
+        // (la fattura invece resta — isCarRental non viene cambiato).
+        const isTour = st === 'heli_rental' || st === 'boat_rental' || st === 'stay_rental'
         // Credit Wallet: la fattura e' gia' stata generata al momento della
         // ricarica del wallet. Generarne un'altra qui sarebbe doppia
         // fatturazione. Salta tutto il blocco fattura per questo metodo.
@@ -718,7 +721,7 @@ export default function UnpaidBookingsTab() {
         // signing link to a customer who has already signed (status was
         // "Confermata da saldare" precisely because the signature came back)
         // is the bug we're guarding against.
-        if (isCarRental) {
+        if (isCarRental && !isTour) {
           const { data: existingContract } = await supabase
             .from('contracts')
             .select('signed_pdf_url')

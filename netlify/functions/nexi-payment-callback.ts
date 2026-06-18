@@ -1294,6 +1294,11 @@ const handler: Handler = async (event) => {
 
                     try {
                     const baseUrl = process.env.URL || 'https://platform.dr7ai.com';
+                    // Tour Noleggio Aria/Mare/Soggiorni: NESSUN contratto da firmare.
+                    const isTourBooking = ['heli_rental', 'boat_rental', 'stay_rental'].includes(booking.service_type || '');
+                    if (isTourBooking) {
+                        console.log('[nexi-payment-callback] Tour Aria/Mare/Soggiorni — nessun contratto da firmare');
+                    } else {
                     const contractRes = await fetch(`${baseUrl}/.netlify/functions/generate-contract`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1330,6 +1335,7 @@ const handler: Handler = async (event) => {
                         }
                     } else {
                         console.error('[nexi-payment-callback] Contract generation failed:', contractData.error || contractData);
+                    }
                     }
                     } catch (contractErr) {
                         console.error('[nexi-payment-callback] Contract/signing error:', contractErr);
