@@ -1288,6 +1288,7 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
     label: 'Richieste al Cliente',
     templates: [
       { key: 'pro_richiesta_pagamento',  label: 'Richiesta Pagamento',        description: 'Invio link di pagamento al cliente' },
+      { key: 'pro_sollecito_pagamento',  label: 'Sollecito Pagamento',        description: 'Sollecito per debito ancora aperto (Invia Sollecito + auto-resend ogni 48h, max 3)' },
       { key: 'pro_richiesta_firma',      label: 'Richiesta Firma',            description: 'Invio link firma contratto' },
       { key: 'pro_richiesta_otp',        label: 'Richiesta OTP',              description: 'Invio codice OTP per conferma firma' },
       { key: 'pro_richiesta_iban',       label: 'Richiesta IBAN',             description: 'Richiesta IBAN per rimborso cauzione' },

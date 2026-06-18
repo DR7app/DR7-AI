@@ -51,7 +51,7 @@ export const OLD_TO_PRO: Record<string, string> = {
   // sollecito-pagamento-cron). Il body vive nel template Pro "Promemoria
   // Pagamento" (pro_promemoria_pagamento) editato dall'admin in Messaggi di
   // Sistema Pro.
-  sollecito_pagamento: 'pro_promemoria_pagamento',
+  sollecito_pagamento: 'pro_sollecito_pagamento',
   // Annullamento DA ADMIN: slot dedicato pro_annullamento_admin, separato
   // da quello del cliente. Cosi' l'admin puo' scrivere un messaggio del tipo
   // "Salve, abbiamo annullato la sua prenotazione..." invece di
