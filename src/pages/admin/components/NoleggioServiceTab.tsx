@@ -1447,14 +1447,13 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
       pickup_date: pickupISO, dropoff_date: pickupISO,
       price_total: totalCents,
       status: 'confirmed', payment_status: tourPayStatus, payment_method: tourPayMethod || null,
-      manually_confirmed: tourConfirm,
-      ...(tourConfirm ? { manually_confirmed_at: new Date().toISOString() } : {}),
       customer_name: cust.name.trim(), customer_phone: cust.phone.trim(),
       // Soddisfa il check bookings_user_or_guest_check (serve user_id OPPURE
       // guest_name). Il cliente arriva dai Lead, non da un account: usiamo i
       // campi guest come fa il Car Wash.
       guest_name: cust.name.trim(), guest_phone: cust.phone.trim() || null,
-      booking_details: { tour_departure_id: dep.id, seats: labelsStr, seat_count: chosen.length, passengers: passengersDetail },
+      // manually_confirmed NON è una colonna di bookings: va in booking_details (come ReservationsTab).
+      booking_details: { tour_departure_id: dep.id, seats: labelsStr, seat_count: chosen.length, passengers: passengersDetail, manually_confirmed: tourConfirm, ...(tourConfirm ? { manually_confirmed_at: new Date().toISOString() } : {}) },
       created_at: new Date().toISOString(),
     }).select('id').single()
     if (be || !bk) { setBooking(false); setError('Errore prenotazione: ' + (be?.message || '')); return }
@@ -1745,7 +1744,15 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                         {(seats[dep.id] || []).filter(s => cartSeats.has(s.id)).map(s => (
                           <div key={s.id} className="flex items-center gap-2">
                             <span className="text-xs text-theme-text-muted w-16 shrink-0">Posto {s.seat_label}</span>
-                            <input className={INPUT_CLS} placeholder={`Nome passeggero (posto ${s.seat_label})`} value={seatNames[s.id] || ''} onChange={e => setSeatNames(m => ({ ...m, [s.id]: e.target.value }))} />
+                            <div className="flex-1">
+                              <LeadPicker
+                                label=""
+                                placeholder={`Posto ${s.seat_label}: scegli un cliente o scrivi il nome`}
+                                initialQuery={seatNames[s.id] || ''}
+                                onQueryChange={q => setSeatNames(m => ({ ...m, [s.id]: q }))}
+                                onPick={name => setSeatNames(m => ({ ...m, [s.id]: name }))}
+                              />
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1770,6 +1777,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                         <input type="checkbox" checked={tourConfirm} onChange={e => setTourConfirm(e.target.checked)} />
                         Conferma Prenotazione (invia messaggio di conferma al cliente)
                       </label>
+                      {error && <ErrorBox msg={error} />}
                       <div className="flex justify-end gap-2">
                         <button onClick={clearCart} disabled={booking} className={BTN_GHOST}>Svuota</button>
                         <button onClick={() => createTourBooking(dep)} disabled={booking} className={BTN_PRIMARY}>{booking ? 'Creazione…' : 'Crea prenotazione'}</button>
@@ -1847,7 +1855,7 @@ async function fetchLeads(): Promise<Lead[]> {
     return []
   }
 }
-function LeadPicker({ onPick, initialQuery = '', label = 'Seleziona cliente dai Lead' }: { onPick: (name: string, phone: string) => void; initialQuery?: string; label?: string }) {
+function LeadPicker({ onPick, initialQuery = '', label = 'Seleziona cliente dai Lead', placeholder = 'Cerca un cliente per nome, telefono o email…', onQueryChange }: { onPick: (name: string, phone: string) => void; initialQuery?: string; label?: string; placeholder?: string; onQueryChange?: (q: string) => void }) {
   const [leads, setLeads] = useState<Lead[]>([])
   const [query, setQuery] = useState(initialQuery)
   const [open, setOpen] = useState(false)
@@ -1868,12 +1876,12 @@ function LeadPicker({ onPick, initialQuery = '', label = 'Seleziona cliente dai 
   }, [leads, query])
   return (
     <div className="relative">
-      <label className="text-xs text-theme-text-muted">{label} {leads.length > 0 && <span className="text-theme-text-muted/70">({leads.length})</span>}</label>
+      {label !== '' && <label className="text-xs text-theme-text-muted">{label} {leads.length > 0 && <span className="text-theme-text-muted/70">({leads.length})</span>}</label>}
       <input
         className={INPUT_CLS}
-        placeholder="Cerca un cliente per nome, telefono o email…"
+        placeholder={placeholder}
         value={query}
-        onChange={e => { setQuery(e.target.value); setOpen(true) }}
+        onChange={e => { setQuery(e.target.value); setOpen(true); onQueryChange?.(e.target.value) }}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
       />
