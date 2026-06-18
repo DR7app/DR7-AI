@@ -450,7 +450,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                   <td className="px-3 py-2 text-theme-text-secondary">{b.vehicle_name || b.vehicle_plate || '—'}</td>
                   <td className="px-3 py-2 text-theme-text-secondary tabular-nums">{fmtDate(b.pickup_date)}</td>
                   <td className="px-3 py-2 text-theme-text-secondary tabular-nums">{isTour ? (b.booking_details?.seat_count ?? b.booking_details?.passengers?.length ?? '—') : fmtDate(b.dropoff_date)}</td>
-                  <td className="px-3 py-2"><Badge value={b.status} /></td>
+                  <td className="px-3 py-2">{(() => { const st = payStato(b.payment_status, b.status); return <span className={`inline-block px-2 py-0.5 rounded-full text-xs border ${st.cls}`}>{st.label}</span> })()}</td>
                   <td className="px-3 py-2 text-right text-theme-text-primary tabular-nums">{eur(b.price_total)}</td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">
                     <button onClick={() => setDetailBooking(b)} className="text-cyan-400 hover:underline mr-3">Dettagli</button>
@@ -644,16 +644,25 @@ const CAL_HEADER_H = 42
 
 interface CalAsset { id: string; name: string; image_url: string | null; is_active?: boolean; capacity?: number | null; price_per_day?: number | null }
 
-// Bucket di colore per la barra, in linea con la palette già usata nel file
-// (Badge): confermato/attivo = ciano, in attesa = ambra, cancellata = rosso.
+// Colore barra in base al PAGAMENTO (come richiesto):
+//   Pagato = VERDE · Parziale/in attesa = GIALLO · Da Saldare = ROSSO · Annullata = grigio.
 function barStyle(status: string | null, paymentStatus: string | null): { bar: string } {
   const s = (status || '').toLowerCase()
-  if (s === 'cancelled' || s === 'annullata') return { bar: 'bg-red-500/70 border-red-400/50' }
-  if (s === 'completed' || s === 'completata') return { bar: 'bg-zinc-500/70 border-zinc-400/50' }
-  const pending = s === 'pending' || paymentStatus === 'pending' || paymentStatus === 'unpaid'
-  if (pending) return { bar: 'bg-amber-500/80 border-amber-400/50' }
-  // confirmed / active / confermata
-  return { bar: 'bg-cyan-500/80 border-cyan-400/50' }
+  if (s === 'cancelled' || s === 'annullata') return { bar: 'bg-zinc-500/60 border-zinc-400/40' }
+  const ps = (paymentStatus || '').toLowerCase()
+  if (['paid', 'succeeded', 'completed'].includes(ps)) return { bar: 'bg-emerald-500/80 border-emerald-400/50' } // VERDE pagato
+  if (ps === 'partial') return { bar: 'bg-amber-500/80 border-amber-400/50' } // GIALLO in attesa
+  return { bar: 'bg-red-500/80 border-red-400/50' } // ROSSO da saldare
+}
+
+// Badge STATO pagamento per la lista (stesso schema colori del car rental).
+function payStato(paymentStatus: string | null, status: string | null): { label: string; cls: string } {
+  const s = (status || '').toLowerCase()
+  if (s === 'cancelled' || s === 'annullata') return { label: 'Annullata', cls: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/40' }
+  const ps = (paymentStatus || '').toLowerCase()
+  if (['paid', 'succeeded', 'completed'].includes(ps)) return { label: 'Pagato', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' }
+  if (ps === 'partial') return { label: 'Parziale', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/40' }
+  return { label: 'Da Saldare', cls: 'bg-red-500/15 text-red-300 border-red-500/40' }
 }
 
 // yyyy-mm-dd in fuso Europe/Rome a partire da un timestamp ISO (UTC).
@@ -699,12 +708,12 @@ function TourCalendarSection({ serviceType, year, month }: { serviceType: Nolegg
       const catMap = new Map<string, string>((cats || []).map((c: { id: string; name: string }) => [c.id, c.name]))
       const catIds = Array.from(catMap.keys())
       if (!catIds.length) { if (!cancelled) { setRows([]); setLoading(false) } return }
-      // Solo le partenze del MESE visualizzato (come gli altri calendari).
-      const mm = String(month + 1).padStart(2, '0')
-      const firstDay = `${year}-${mm}-01`
-      const lastDay = `${year}-${mm}-${String(new Date(year, month + 1, 0).getDate()).padStart(2, '0')}`
+      // TUTTE le prossime partenze (da oggi in poi): così i tour si vedono
+      // SEMPRE, indipendentemente dal mese mostrato nella timeline.
+      void year; void month
+      const todayYmd = new Date().toLocaleDateString('en-CA')
       const { data: deps } = await supabase.from('noleggio_tour_departures').select('*')
-        .in('catalog_id', catIds).gte('departure_date', firstDay).lte('departure_date', lastDay)
+        .in('catalog_id', catIds).gte('departure_date', todayYmd)
         .order('departure_date', { ascending: true }).order('departure_time', { ascending: true })
       const depList = (deps || []) as TourDeparture[]
       if (!depList.length) { if (!cancelled) { setRows([]); setLoading(false) } return }
@@ -729,7 +738,7 @@ function TourCalendarSection({ serviceType, year, month }: { serviceType: Nolegg
   if (rows.length === 0) return null
   return (
     <div className="space-y-2">
-      <h3 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider">Tour & Posti del mese — clicca una partenza per i dettagli</h3>
+      <h3 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider">Tour & Posti — prossime partenze (clicca per i dettagli)</h3>
       {rows.map(({ dep, assetName, seats }) => {
         const sold = seats.filter(s => s.status === 'sold').length
         const open = expanded === dep.id

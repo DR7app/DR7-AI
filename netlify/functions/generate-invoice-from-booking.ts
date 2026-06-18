@@ -669,9 +669,14 @@ export const handler: Handler = async (event) => {
             let rentalGross = priceTotal - insurancePriceGross
             if (rentalGross < 0) rentalGross = 0 // Safety check
 
-            // 1. Vehicle Rental Item
+            // 1. Vehicle Rental Item — i Tour Aria/Mare NON sono "giorni": è 1 tour a N posti.
+            const isTourInv = ['heli_rental', 'boat_rental', 'stay_rental'].includes(booking.service_type || '')
+            const seatCountInv = bookingDetails.seat_count || (Array.isArray(bookingDetails.passengers) ? bookingDetails.passengers.length : 1)
+            const rentalDesc = isTourInv
+                ? `Tour ${booking.vehicle_name} - ${seatCountInv} posto/i`
+                : `Noleggio ${booking.vehicle_name} - ${rentalDays} giorni`
             items.push({
-                description: `Noleggio ${booking.vehicle_name} - ${rentalDays} giorni`,
+                description: rentalDesc,
                 unit_price: rentalGross / vatDivisor, // Net Price
                 quantity: 1,
                 vat_rate: vatRate,
