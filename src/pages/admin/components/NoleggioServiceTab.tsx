@@ -1340,7 +1340,6 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
   const [cartDep, setCartDep] = useState<string | null>(null)
   const [cartSeats, setCartSeats] = useState<Set<string>>(new Set())
   const [cust, setCust] = useState({ name: '', phone: '' })
-  const [diffNames, setDiffNames] = useState(false) // nome diverso per ogni posto
   const [seatNames, setSeatNames] = useState<Record<string, string>>({}) // seatId -> nome passeggero
   const [tourPayStatus, setTourPayStatus] = useState('pending') // Da Saldare
   const [tourPayMethod, setTourPayMethod] = useState('')
@@ -1386,14 +1385,27 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
       .from('noleggio_tour_seats').select('*').eq('departure_id', depId)
       .order('seat_position', { ascending: true })
     if (e) return
-    const list = (data || []) as TourSeat[]
-    setSeats(s => ({ ...s, [depId]: list }))
+    let list = (data || []) as TourSeat[]
     // Stato pagamento dei booking collegati -> per il colore verde/rosso
     const bookingIds = Array.from(new Set(list.map(x => x.booking_id).filter(Boolean))) as string[]
+    let foundIds = new Set<string>()
     if (bookingIds.length) {
       const { data: bk } = await supabase.from('bookings').select('id, payment_status').in('id', bookingIds)
-      if (bk) setPay(p => ({ ...p, ...Object.fromEntries(bk.map((b: { id: string; payment_status: string }) => [b.id, b.payment_status])) }))
+      if (bk) {
+        foundIds = new Set(bk.map((b: { id: string }) => b.id))
+        setPay(p => ({ ...p, ...Object.fromEntries(bk.map((b: { id: string; payment_status: string }) => [b.id, b.payment_status])) }))
+      }
     }
+    // AUTO-HEAL: posti "venduti" il cui booking è stato eliminato (orfani) ->
+    // tornano liberi automaticamente, senza SQL manuale.
+    const orphanIds = list.filter(s => s.booking_id && !foundIds.has(s.booking_id)).map(s => s.id)
+    if (orphanIds.length) {
+      await supabase.from('noleggio_tour_seats')
+        .update({ status: 'available', booking_id: null, customer_name: null, customer_phone: null })
+        .in('id', orphanIds)
+      list = list.map(s => orphanIds.includes(s.id) ? { ...s, status: 'available', booking_id: null, customer_name: null, customer_phone: null } : s)
+    }
+    setSeats(s => ({ ...s, [depId]: list }))
   }
   function toggleExpand(depId: string) {
     if (expanded === depId) { setExpanded(null); return }
@@ -1414,7 +1426,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     setCartSeats(prev => { const n = new Set(prev); if (n.has(seat.id)) n.delete(seat.id); else n.add(seat.id); return n })
   }
 
-  function clearCart() { setCartDep(null); setCartSeats(new Set()); setCust({ name: '', phone: '' }); setDiffNames(false); setSeatNames({}); setTourPayStatus('pending'); setTourPayMethod(''); setTourConfirm(false) }
+  function clearCart() { setCartDep(null); setCartSeats(new Set()); setCust({ name: '', phone: '' }); setSeatNames({}); setTourPayStatus('pending'); setTourPayMethod(''); setTourConfirm(false) }
 
   // Crea la prenotazione dai posti nel carrello e li assegna al cliente.
   // booking confirmed + payment_status pending => posti ROSSI (non pagati).
@@ -1428,7 +1440,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     const pickupISO = new Date(`${dep.departure_date}T${dep.departure_time}`).toISOString()
     const labelsStr = chosen.map(s => s.seat_label).join(', ')
     setBooking(true); setError('')
-    const passengersDetail = chosen.map(s => ({ seat: s.seat_label, name: (diffNames ? (seatNames[s.id] || '').trim() : '') || cust.name.trim() }))
+    const passengersDetail = chosen.map(s => ({ seat: s.seat_label, name: (seatNames[s.id] || '').trim() || cust.name.trim() }))
     const { data: bk, error: be } = await supabase.from('bookings').insert({
       service_type: serviceType,
       vehicle_name: selectedAsset?.name || labels.title,
@@ -1447,17 +1459,11 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     }).select('id').single()
     if (be || !bk) { setBooking(false); setError('Errore prenotazione: ' + (be?.message || '')); return }
     const bookingId = (bk as { id: string }).id
-    if (diffNames) {
-      // Nome diverso per ogni posto: aggiorna i posti uno a uno.
-      for (const s of chosen) {
-        await supabase.from('noleggio_tour_seats')
-          .update({ status: 'sold', booking_id: bookingId, customer_name: (seatNames[s.id] || '').trim() || cust.name.trim(), customer_phone: cust.phone.trim() })
-          .eq('id', s.id)
-      }
-    } else {
+    // Aggiorna ogni posto col proprio nome passeggero (fallback al contatto).
+    for (const s of chosen) {
       await supabase.from('noleggio_tour_seats')
-        .update({ status: 'sold', booking_id: bookingId, customer_name: cust.name.trim(), customer_phone: cust.phone.trim() })
-        .in('id', ids)
+        .update({ status: 'sold', booking_id: bookingId, customer_name: (seatNames[s.id] || '').trim() || cust.name.trim(), customer_phone: cust.phone.trim() })
+        .eq('id', s.id)
     }
 
     // Pay by Link Nexi — STESSO flusso di Noleggio auto / Car Wash:
@@ -1732,20 +1738,17 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                         <input className={INPUT_CLS} placeholder="Nome cliente (contatto)" value={cust.name} onChange={e => setCust({ ...cust, name: e.target.value })} />
                         <input className={INPUT_CLS} placeholder="Telefono" value={cust.phone} onChange={e => setCust({ ...cust, phone: e.target.value })} />
                       </div>
-                      <label className="flex items-center gap-2 text-xs text-theme-text-secondary cursor-pointer">
-                        <input type="checkbox" checked={diffNames} onChange={e => setDiffNames(e.target.checked)} />
-                        Nome diverso per ogni posto
-                      </label>
-                      {diffNames && (
-                        <div className="space-y-2">
-                          {(seats[dep.id] || []).filter(s => cartSeats.has(s.id)).map(s => (
-                            <div key={s.id} className="flex items-center gap-2">
-                              <span className="text-xs text-theme-text-muted w-16 shrink-0">Posto {s.seat_label}</span>
-                              <input className={INPUT_CLS} placeholder={`Nome passeggero posto ${s.seat_label}`} value={seatNames[s.id] || ''} onChange={e => setSeatNames(m => ({ ...m, [s.id]: e.target.value }))} />
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      {/* Nome del passeggero per OGNI posto (sempre visibile).
+                          Vuoto = usa il nome del contatto qui sopra. */}
+                      <div className="space-y-2">
+                        <div className="text-xs text-theme-text-muted">Nome passeggero per ogni posto (opzionale)</div>
+                        {(seats[dep.id] || []).filter(s => cartSeats.has(s.id)).map(s => (
+                          <div key={s.id} className="flex items-center gap-2">
+                            <span className="text-xs text-theme-text-muted w-16 shrink-0">Posto {s.seat_label}</span>
+                            <input className={INPUT_CLS} placeholder={`Nome passeggero (posto ${s.seat_label})`} value={seatNames[s.id] || ''} onChange={e => setSeatNames(m => ({ ...m, [s.id]: e.target.value }))} />
+                          </div>
+                        ))}
+                      </div>
                       {/* Pagamento — come ovunque (Centralina Pro) */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
