@@ -424,8 +424,15 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                 <div className="mt-2 space-y-2">
                   {passengers.map((p, i) => (
                     <div key={i} className="flex gap-2 items-center">
-                      <input className={INPUT_CLS} placeholder={`Passeggero ${i + 1}`} value={p.name}
-                        onChange={e => setPassengers(arr => arr.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
+                      <div className="flex-1">
+                        <LeadPicker
+                          label=""
+                          placeholder={`Passeggero ${i + 1}: scegli un cliente o scrivi il nome`}
+                          initialQuery={p.name}
+                          onQueryChange={q => setPassengers(arr => arr.map((x, j) => j === i ? { ...x, name: q } : x))}
+                          onPick={name => setPassengers(arr => arr.map((x, j) => j === i ? { ...x, name } : x))}
+                        />
+                      </div>
                       {serviceType === 'heli_rental' && (
                         <select className={INPUT_CLS + ' max-w-[150px]'} value={p.seat}
                           onChange={e => setPassengers(arr => arr.map((x, j) => j === i ? { ...x, seat: e.target.value } : x))}>
@@ -1347,6 +1354,8 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
   const [cartSeats, setCartSeats] = useState<Set<string>>(new Set())
   const [cust, setCust] = useState({ name: '', phone: '' })
   const [seatNames, setSeatNames] = useState<Record<string, string>>({}) // seatId -> nome passeggero
+  const [seatPhones, setSeatPhones] = useState<Record<string, string>>({}) // seatId -> telefono passeggero (se scelto dai clienti)
+  const [tourNote, setTourNote] = useState('') // note prenotazione
   const [tourPayStatus, setTourPayStatus] = useState('pending') // Da Saldare
   const [tourPayMethod, setTourPayMethod] = useState('')
   const [tourConfirm, setTourConfirm] = useState(false) // Conferma Prenotazione
@@ -1432,7 +1441,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     setCartSeats(prev => { const n = new Set(prev); if (n.has(seat.id)) n.delete(seat.id); else n.add(seat.id); return n })
   }
 
-  function clearCart() { setCartDep(null); setCartSeats(new Set()); setCust({ name: '', phone: '' }); setSeatNames({}); setTourPayStatus('pending'); setTourPayMethod(''); setTourConfirm(false) }
+  function clearCart() { setCartDep(null); setCartSeats(new Set()); setCust({ name: '', phone: '' }); setSeatNames({}); setSeatPhones({}); setTourNote(''); setTourPayStatus('pending'); setTourPayMethod(''); setTourConfirm(false) }
 
   // Crea la prenotazione dai posti nel carrello e li assegna al cliente.
   // booking confirmed + payment_status pending => posti ROSSI (non pagati).
@@ -1446,20 +1455,24 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     const pickupISO = new Date(`${dep.departure_date}T${dep.departure_time}`).toISOString()
     const labelsStr = chosen.map(s => s.seat_label).join(', ')
     setBooking(true); setError('')
-    const passengersDetail = chosen.map(s => ({ seat: s.seat_label, name: (seatNames[s.id] || '').trim() || cust.name.trim() }))
+    const passengersDetail = chosen.map(s => ({ seat: s.seat_label, name: (seatNames[s.id] || '').trim() || cust.name.trim(), phone: (seatPhones[s.id] || '').trim() || undefined }))
+    const passengersLabel = passengersDetail.map(p => `Posto ${p.seat}: ${p.name}`).join('\n')
     const { data: bk, error: be } = await supabase.from('bookings').insert({
       service_type: serviceType,
       vehicle_name: selectedAsset?.name || labels.title,
       pickup_date: pickupISO, dropoff_date: pickupISO,
       price_total: totalCents,
-      status: 'confirmed', payment_status: tourPayStatus, payment_method: tourPayMethod || null,
+      // Stato come Noleggio/Car Wash: Da Saldare senza Conferma -> 'pending'
+      // (va in "In attesa di pagamento"); Pagato o Conferma spuntata -> 'confirmed'.
+      status: (tourPayStatus === 'pending' && !tourConfirm) ? 'pending' : 'confirmed',
+      payment_status: tourPayStatus, payment_method: tourPayMethod || null,
       customer_name: cust.name.trim(), customer_phone: cust.phone.trim(),
       // Soddisfa il check bookings_user_or_guest_check (serve user_id OPPURE
       // guest_name). Il cliente arriva dai Lead, non da un account: usiamo i
       // campi guest come fa il Car Wash.
       guest_name: cust.name.trim(), guest_phone: cust.phone.trim() || null,
       // manually_confirmed NON è una colonna di bookings: va in booking_details (come ReservationsTab).
-      booking_details: { tour_departure_id: dep.id, seats: labelsStr, seat_count: chosen.length, passengers: passengersDetail, manually_confirmed: tourConfirm, ...(tourConfirm ? { manually_confirmed_at: new Date().toISOString() } : {}) },
+      booking_details: { tour_departure_id: dep.id, seats: labelsStr, seat_count: chosen.length, passengers: passengersDetail, note: tourNote.trim() || null, manually_confirmed: tourConfirm, ...(tourConfirm ? { manually_confirmed_at: new Date().toISOString() } : {}) },
       created_at: new Date().toISOString(),
     }).select('id').single()
     if (be || !bk) { setBooking(false); setError('Errore prenotazione: ' + (be?.message || '')); return }
@@ -1501,7 +1514,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
           if (phone) {
             const amountStr = amountEuros.toFixed(2)
             const bookingRef = (bookingId || '').substring(0, 8).toUpperCase()
-            await fetch('/.netlify/functions/send-whatsapp-notification', {
+            const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -1517,13 +1530,18 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                 skipHeader: true,
               }),
             })
+            const waJson = await waResp.json().catch(() => ({}))
+            if (!waResp.ok || waJson?.skipped) {
+              setError(`Link generato ma WhatsApp non inviato: ${waJson?.error || waJson?.reason || 'template "Richiesta Pagamento" non configurato/abilitato in Messaggi di Sistema Pro'}. Link: ${linkData.paymentUrl}`)
+            }
           }
           toast.success('Prenotazione creata e link di pagamento inviato al cliente!')
         } else {
-          toast.error('Prenotazione creata ma errore link pagamento: ' + (linkData.error || 'Errore'))
+          setError('Errore generazione link pagamento Nexi: ' + (linkData.error || JSON.stringify(linkData)))
+          toast.error('Errore link pagamento')
         }
       } catch (linkErr) {
-        toast.error('Prenotazione creata ma errore Pay by Link: ' + (linkErr as Error).message)
+        setError('Errore Pay by Link: ' + (linkErr as Error).message)
       }
     } else {
       toast.success('Prenotazione creata!')
@@ -1536,28 +1554,56 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     // (in quel caso parte già il link).
     const isPaid = ['paid', 'completed', 'succeeded'].includes(tourPayStatus)
     const sentNexiLink = isNexiPbl(tourPayMethod) && tourPayStatus === 'pending'
-    if (phone && (isPaid || tourConfirm) && !sentNexiLink) {
+    void firstName
+    if ((isPaid || tourConfirm) && !sentNexiLink) {
       const ref = (bookingId || '').substring(0, 8).toUpperCase()
       const paymentInfo = isPaid ? 'Pagato' : 'Da saldare'
-      await fetch('/.netlify/functions/send-whatsapp-notification', {
+      // Destinatari conferma: il contatto + OGNI passeggero che ha un telefono
+      // (scelto dai clienti). Dedup per cifre, così ogni cliente riceve la sua conferma.
+      const recips: { phone: string; name: string }[] = []
+      const seen = new Set<string>()
+      const addRecip = (ph: string, nm: string) => {
+        const digits = (ph || '').replace(/\D/g, '')
+        if (digits.length < 6 || seen.has(digits)) return
+        seen.add(digits); recips.push({ phone: ph, name: nm })
+      }
+      addRecip(phone, cust.name.trim())
+      passengersDetail.forEach(p => { if (p.phone) addRecip(p.phone, p.name) })
+      for (const r of recips) {
+        const rFirst = (r.name || '').split(' ')[0] || 'Cliente'
+        await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customPhone: r.phone,
+            templateKey: 'tour_new_customer',
+            booking: { service_type: serviceType },
+            templateVars: {
+              nome: rFirst, customer_name: r.name,
+              esperienza: selectedAsset?.name || labels.title, servizio: selectedAsset?.name || labels.title, service_name: selectedAsset?.name || labels.title,
+              data: fmtYmd(dep.departure_date), date: fmtYmd(dep.departure_date),
+              orario: dep.departure_time.slice(0, 5), ora: dep.departure_time.slice(0, 5), time: dep.departure_time.slice(0, 5),
+              posti: String(chosen.length), seat_count: String(chosen.length), posti_prenotati: String(chosen.length),
+              passeggeri: passengersLabel, passengers: passengersLabel,
+              total: amountEuros.toFixed(2), totale: amountEuros.toFixed(2), importo: amountEuros.toFixed(2), amount: amountEuros.toFixed(2),
+              payment_info: paymentInfo, pagamento: paymentInfo,
+              booking_id: ref, booking_ref: ref, id: ref,
+              note: tourNote.trim(), luogo_partenza: 'Viale Marconi, 229, 09131 Cagliari CA', luogo_rientro: 'Viale Marconi, 229, 09131 Cagliari CA',
+            },
+            skipHeader: true,
+          }),
+        }).catch(() => { /* best effort */ })
+      }
+    }
+
+    // Fattura automatica: come gli altri servizi, se il metodo NON è wallet
+    // e il pagamento è Pagato, genera la fattura. La regola auto_invoice arriva
+    // da Centralina Pro (payment_methods[].auto_invoice).
+    const methodCfg = tourPaymentMethods.find(m => m.label === tourPayMethod)
+    const isWallet = /wallet|credit/i.test(tourPayMethod)
+    if (isPaid && tourPayMethod && !isWallet && methodCfg?.auto_invoice !== false) {
+      await fetch('/.netlify/functions/generate-invoice-from-booking', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customPhone: phone,
-          templateKey: 'tour_new_customer',
-          booking: { service_type: serviceType },
-          templateVars: {
-            nome: firstName, customer_name: cust.name.trim(),
-            esperienza: selectedAsset?.name || labels.title, servizio: selectedAsset?.name || labels.title, service_name: selectedAsset?.name || labels.title,
-            data: fmtYmd(dep.departure_date), date: fmtYmd(dep.departure_date),
-            orario: dep.departure_time.slice(0, 5), ora: dep.departure_time.slice(0, 5), time: dep.departure_time.slice(0, 5),
-            posti: String(chosen.length), seat_count: String(chosen.length), posti_prenotati: String(chosen.length),
-            total: amountEuros.toFixed(2), totale: amountEuros.toFixed(2), importo: amountEuros.toFixed(2), amount: amountEuros.toFixed(2),
-            payment_info: paymentInfo, pagamento: paymentInfo,
-            booking_id: ref, booking_ref: ref, id: ref,
-            note: '', luogo_partenza: 'Viale Marconi, 229, 09131 Cagliari CA', luogo_rientro: 'Viale Marconi, 229, 09131 Cagliari CA',
-          },
-          skipHeader: true,
-        }),
+        body: JSON.stringify({ bookingId }),
       }).catch(() => { /* best effort */ })
     }
 
@@ -1756,11 +1802,15 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                                 placeholder={`Posto ${s.seat_label}: scegli un cliente o scrivi il nome`}
                                 initialQuery={seatNames[s.id] || ''}
                                 onQueryChange={q => setSeatNames(m => ({ ...m, [s.id]: q }))}
-                                onPick={name => setSeatNames(m => ({ ...m, [s.id]: name }))}
+                                onPick={(name, phone) => { setSeatNames(m => ({ ...m, [s.id]: name })); setSeatPhones(m => ({ ...m, [s.id]: phone || '' })) }}
                               />
                             </div>
                           </div>
                         ))}
+                      </div>
+                      <div>
+                        <label className="text-xs text-theme-text-muted">Note (opzionale)</label>
+                        <textarea className={INPUT_CLS} rows={2} placeholder="Note sulla prenotazione…" value={tourNote} onChange={e => setTourNote(e.target.value)} />
                       </div>
                       {/* Pagamento — come ovunque (Centralina Pro) */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
