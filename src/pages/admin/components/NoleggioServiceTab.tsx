@@ -1941,11 +1941,11 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                       {/* Nome del passeggero per OGNI posto (sempre visibile).
                           Vuoto = usa il nome del contatto qui sopra. */}
                       <div className="space-y-2">
-                        <div className="text-xs text-theme-text-muted">Nome passeggero per ogni posto (opzionale)</div>
+                        <div className="text-xs text-theme-text-muted">Passeggero per ogni posto — nome + telefono (così ognuno riceve la conferma)</div>
                         {(seats[dep.id] || []).filter(s => cartSeats.has(s.id)).map(s => (
-                          <div key={s.id} className="flex items-center gap-2">
-                            <span className="text-xs text-theme-text-muted w-16 shrink-0">Posto {s.seat_label}</span>
-                            <div className="flex-1">
+                          <div key={s.id} className="flex items-start gap-2 flex-wrap sm:flex-nowrap">
+                            <span className="text-xs text-theme-text-muted w-16 shrink-0 pt-2">Posto {s.seat_label}</span>
+                            <div className="flex-1 min-w-[160px]">
                               <LeadPicker
                                 label=""
                                 placeholder={`Posto ${s.seat_label}: scegli un cliente o scrivi il nome`}
@@ -1954,6 +1954,12 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                                 onPick={(name, phone) => { setSeatNames(m => ({ ...m, [s.id]: name })); setSeatPhones(m => ({ ...m, [s.id]: phone || '' })) }}
                               />
                             </div>
+                            <input
+                              className={INPUT_CLS + ' sm:max-w-[150px]'}
+                              placeholder="Telefono passeggero"
+                              value={seatPhones[s.id] || ''}
+                              onChange={e => setSeatPhones(m => ({ ...m, [s.id]: e.target.value }))}
+                            />
                           </div>
                         ))}
                       </div>
