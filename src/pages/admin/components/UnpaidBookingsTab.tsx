@@ -152,6 +152,9 @@ export default function UnpaidBookingsTab() {
   const [sortBy, setSortBy] = useState<'amount' | 'name'>('amount')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [processingKey, setProcessingKey] = useState<string | null>(null)
+  // Sollecito pagamento — chiave del gruppo per cui è in corso l'invio del
+  // promemoria WhatsApp (disabilita il bottone durante l'invio).
+  const [sollecitoSendingKey, setSollecitoSendingKey] = useState<string | null>(null)
   // Per-row actions dropdown (3-dots menu on desktop row layout)
   const [openActionsRowKey, setOpenActionsRowKey] = useState<string | null>(null)
 
@@ -1234,6 +1237,81 @@ export default function UnpaidBookingsTab() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Invio WhatsApp fallito'
       toast.error(msg)
+    }
+  }
+
+  // ── Sollecito pagamento ─────────────────────────────────────────────────
+  // Invia un promemoria WhatsApp (template Pro "pro_promemoria_pagamento")
+  // al cliente con debito ancora aperto. Stampa booking_details.sollecito su
+  // OGNI booking del gruppo (last_sent_at + count) così l'auto-resend ogni 48h
+  // (sollecito-pagamento-cron) può continuare il follow-up fino a max 3 invii.
+  async function handleSendSollecito(group: CustomerGroup) {
+    if (sollecitoSendingKey) return
+    const phone =
+      group.noleggioBookings[0]?.customer_phone
+      || group.primeWashBookings[0]?.customer_phone
+      || group.noleggioBookings[0]?.booking_details?.customer?.phone
+      || group.primeWashBookings[0]?.booking_details?.customer?.phone
+    if (!phone) {
+      toast.error('Nessun numero di telefono per questo cliente')
+      return
+    }
+    const customerName = group.customerName || 'Cliente'
+    const firstName = customerName.split(' ')[0] || 'Cliente'
+    const amountStr = (group.totalRemaining / 100).toFixed(2)
+    setSollecitoSendingKey(group.customerKey)
+    try {
+      const sendRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customPhone: phone,
+          templateKey: 'sollecito_pagamento',
+          booking: { service_type: group.noleggioBookings[0]?.service_type || 'rental' },
+          templateVars: {
+            '{nome}': firstName,
+            '{customer_name}': customerName,
+            '{importo}': amountStr,
+            '{amount}': amountStr,
+            '{total}': amountStr,
+          },
+        }),
+      })
+      const sendJson = await sendRes.json().catch(() => ({}))
+      if (sendJson?.skipped && sendJson?.reason === 'pro_template_unavailable') {
+        toast.error('Template "Promemoria Pagamento" mancante o disabilitato in Messaggi di Sistema Pro')
+        return
+      }
+      if (!sendRes.ok || sendJson?.skipped) {
+        toast.error(`Invio sollecito fallito: ${sendJson?.message || sendJson?.reason || 'errore sconosciuto'}`)
+        return
+      }
+
+      // Stamp the sollecito on every booking of the group (merge, don't clobber
+      // other booking_details keys). last_sent_at + incremented count drive the
+      // 48h auto-resend cron.
+      const nowIso = new Date().toISOString()
+      const allBookings = [...group.noleggioBookings, ...group.primeWashBookings]
+      for (const b of allBookings) {
+        const existing = b.booking_details || {}
+        const prevCount = Number(existing?.sollecito?.count || 0)
+        await supabase
+          .from('bookings')
+          .update({
+            booking_details: {
+              ...existing,
+              sollecito: { last_sent_at: nowIso, count: prevCount + 1 },
+            },
+          })
+          .eq('id', b.id)
+      }
+      toast.success('Sollecito inviato')
+      loadUnpaidBookings()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Invio sollecito fallito'
+      toast.error(msg)
+    } finally {
+      setSollecitoSendingKey(null)
     }
   }
 
@@ -3516,6 +3594,33 @@ export default function UnpaidBookingsTab() {
                     onClick={() => openAddebitoNexi(group)}
                     className="w-full px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-semibold transition-colors"
                   >Addebito (auto-retry -10%)</button>
+
+                  {/* Invia Sollecito — promemoria pagamento WhatsApp (auto-resend 48h, max 3) */}
+                  {(() => {
+                    const sending = sollecitoSendingKey === group.customerKey
+                    const lastSentAt = [...group.noleggioBookings, ...group.primeWashBookings]
+                      .map(b => b.booking_details?.sollecito?.last_sent_at)
+                      .filter(Boolean)
+                      .sort()
+                      .pop() as string | undefined
+                    const hoursAgo = lastSentAt
+                      ? Math.floor((Date.now() - new Date(lastSentAt).getTime()) / 3600000)
+                      : null
+                    return (
+                      <>
+                        <button
+                          onClick={() => handleSendSollecito(group)}
+                          disabled={sending}
+                          className="w-full px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >{sending ? 'Invio...' : 'Invia Sollecito'}</button>
+                        {hoursAgo != null && (
+                          <p className="text-xs text-theme-text-muted text-center -mt-1">
+                            Sollecito inviato {hoursAgo <= 0 ? 'poco fa' : `${hoursAgo}h fa`}
+                          </p>
+                        )}
+                      </>
+                    )
+                  })()}
 
                   {/* Noleggio section */}
                   {hasNoleggio && (

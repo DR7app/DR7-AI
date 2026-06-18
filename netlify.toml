@@ -139,6 +139,14 @@
 [functions."process-scheduled-system-messages-cron"]
   schedule = "*/8 * * * *"
 
+# Sollecito pagamento — auto-resend del promemoria di pagamento ogni 48h ai
+# clienti con debito ancora aperto. Il PRIMO sollecito parte manualmente da
+# "In attesa di pagamento"; il cron continua il follow-up (max 3 totali per
+# debito, stop a count>=3). La finestra 48h è enforced nell'handler, quindi
+# girare ogni 6h è sicuro (nessun doppio invio).
+[functions."sollecito-pagamento-cron"]
+  schedule = "0 */6 * * *"
+
 # DR7 Privilege — DISABILITATO dopo invio massivo non voluto.
 # Lo schedule è commentato così Netlify NON registra il cron.
 # DR7 Privilege — niente cron periodico: il codice viene inviato

@@ -46,6 +46,12 @@ export const OLD_TO_PRO: Record<string, string> = {
   // Pagamenti & annullamenti
   payment_link_customer: 'pro_richiesta_pagamento',
   rental_da_saldare_customer: 'pro_richiesta_pagamento',
+  // Sollecito pagamento — promemoria al cliente con debito ancora aperto
+  // ("Invia Sollecito" in UnpaidBookingsTab + auto-resend ogni 48h dal cron
+  // sollecito-pagamento-cron). Il body vive nel template Pro "Promemoria
+  // Pagamento" (pro_promemoria_pagamento) editato dall'admin in Messaggi di
+  // Sistema Pro.
+  sollecito_pagamento: 'pro_promemoria_pagamento',
   // Annullamento DA ADMIN: slot dedicato pro_annullamento_admin, separato
   // da quello del cliente. Cosi' l'admin puo' scrivere un messaggio del tipo
   // "Salve, abbiamo annullato la sua prenotazione..." invece di
@@ -168,6 +174,7 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
   payment_link_customer: 'Quando si invia il link di pagamento al cliente',
   rental_da_saldare_customer: 'Promemoria noleggio da saldare',
   booking_cancelled_whatsapp: 'Annullamento prenotazione (admin annulla manualmente o cron pagamento non riuscito)',
+  sollecito_pagamento: 'Sollecito pagamento: promemoria al cliente con debito ancora aperto ("Invia Sollecito" in In attesa di pagamento + auto-resend ogni 48h, max 3)',
   payment_received_extension: 'Conferma pagamento estensione (al cliente)',
   payment_received_extension_admin: 'Conferma pagamento estensione (admin)',
   payment_received_damages: 'Conferma pagamento danni/penali (al cliente)',
