@@ -2405,7 +2405,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         b.status !== 'deleted' &&
         b.service_type !== 'car_wash' &&
         b.service_type !== 'mechanical_service' &&
-        b.service_type !== 'mechanical'
+        b.service_type !== 'mechanical' &&
+        // NON sono noleggio auto: i Tour Aria/Mare/Soggiorni hanno le loro tab dedicate.
+        b.service_type !== 'heli_rental' &&
+        b.service_type !== 'boat_rental' &&
+        b.service_type !== 'stay_rental'
       ).map(b => ({
         ...b,
         contracts: contractsMap.get(b.id) || null
