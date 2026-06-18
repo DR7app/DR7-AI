@@ -187,6 +187,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
   const [formAsset, setFormAsset] = useState('')
   const [payStatus, setPayStatus] = useState('pending') // Da Saldare
   const [payMethod, setPayMethod] = useState('')
+  const [origPayStatus, setOrigPayStatus] = useState('') // per rilevare la transizione -> Pagato
   const [passengers, setPassengers] = useState<{ name: string; seat: string }[]>([])
   const [origDetails, setOrigDetails] = useState<Record<string, unknown>>({})
   const [saving, setSaving] = useState(false)
@@ -214,7 +215,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     const todayYmd = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
     setForm({ ...EMPTY_CAL_FORM, pickup_date: todayYmd, dropoff_date: todayYmd })
     setFormAsset(assets[0]?.name || '')
-    setPayStatus('pending'); setPayMethod('')
+    setPayStatus('pending'); setPayMethod(''); setOrigPayStatus('')
     setPassengers([]); setOrigDetails({})
     setFormError('')
     setShowForm(true)
@@ -235,6 +236,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     })
     setFormAsset(b.vehicle_name || '')
     setPayStatus(b.payment_status || 'pending')
+    setOrigPayStatus(b.payment_status || 'pending')
     setPayMethod(b.payment_method || '')
     setPassengers((b.booking_details?.passengers || []).map(p => ({ name: p.name || '', seat: p.seat || '' })) as { name: string; seat: string }[])
     setOrigDetails((b.booking_details as Record<string, unknown>) || {})
@@ -307,6 +309,53 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
           toast.error('Prenotazione creata ma errore link pagamento: ' + (linkData.error || ''))
         }
       } catch (le) { toast.error('Errore Pay by Link: ' + (le as Error).message) }
+    }
+
+    // Quando il pagamento passa a PAGATO (come ovunque): invia la conferma al
+    // cliente + ai passeggeri con telefono, e genera la fattura se NON è wallet
+    // (regola auto_invoice da Centralina Pro). Vale sia in modifica sia in creazione.
+    const PAID = ['paid', 'completed', 'succeeded']
+    const becamePaid = PAID.includes(payStatus) && !PAID.includes(origPayStatus)
+    if (bookingId && becamePaid) {
+      const ref = (bookingId || '').substring(0, 8).toUpperCase()
+      const pax = (origDetails.passengers as { name?: string; phone?: string }[] | undefined) || []
+      const recips: { phone: string; name: string }[] = []
+      const seen = new Set<string>()
+      const addRecip = (ph: string, nm: string) => { const d = (ph || '').replace(/\D/g, ''); if (d.length < 6 || seen.has(d)) return; seen.add(d); recips.push({ phone: ph, name: nm }) }
+      addRecip(form.customer_phone.trim(), form.customer_name.trim())
+      pax.forEach(p => { if (p.phone) addRecip(p.phone, p.name || form.customer_name.trim()) })
+      for (const r of recips) {
+        const rFirst = (r.name || '').split(' ')[0] || 'Cliente'
+        await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customPhone: r.phone,
+            templateKey: serviceType === 'heli_rental' || serviceType === 'boat_rental' ? 'tour_new_customer' : 'rental_new_customer',
+            booking: { service_type: 'rental' },
+            templateVars: {
+              nome: rFirst, customer_name: r.name,
+              esperienza: formAsset, servizio: formAsset, service_name: formAsset,
+              data: fmtDate(payload.pickup_date), date: fmtDate(payload.pickup_date),
+              orario: form.pickup_time, ora: form.pickup_time, time: form.pickup_time,
+              posti: String((details.seat_count as number) || cleanPassengers.length || ''), seat_count: String((details.seat_count as number) || cleanPassengers.length || ''),
+              total: (eurToCents(form.price_eur) / 100).toFixed(2), totale: (eurToCents(form.price_eur) / 100).toFixed(2), importo: (eurToCents(form.price_eur) / 100).toFixed(2), amount: (eurToCents(form.price_eur) / 100).toFixed(2),
+              payment_info: 'Pagato', pagamento: 'Pagato',
+              booking_id: ref, booking_ref: ref, id: ref, note: (details.note as string) || '',
+            },
+            skipHeader: true,
+          }),
+        }).catch(() => { /* best effort */ })
+      }
+      // Fattura: se metodo non-wallet e auto_invoice (Centralina Pro) != false
+      const methodCfg = paymentMethods.find(m => m.label === payMethod)
+      const isWallet = /wallet|credit/i.test(payMethod)
+      if (payMethod && !isWallet && methodCfg?.auto_invoice !== false) {
+        await fetch('/.netlify/functions/generate-invoice-from-booking', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId }),
+        }).catch(() => { /* best effort */ })
+      }
+      toast.success('Pagamento registrato e conferma inviata.')
     }
 
     setSaving(false); setShowForm(false); reload()
