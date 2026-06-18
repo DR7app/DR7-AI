@@ -164,7 +164,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     ;(async () => {
       const { data, error: e } = await supabase
         .from('noleggio_catalog')
-        .select('id, name, image_url, is_active, capacity')
+        .select('id, name, image_url, is_active, capacity, price_per_day')
         .eq('service_type', serviceType)
         .order('sort_order', { ascending: true })
         .order('name', { ascending: true })
@@ -191,8 +191,21 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
 
   // Posti disponibili per l'elicottero scelto (1..capacità del catalogo) per
   // il dropdown "quale posto per quale passeggero". Solo Noleggio Aria.
-  const selectedAssetCapacity = assets.find(a => a.name === formAsset)?.capacity || 0
+  const selectedAssetObj = assets.find(a => a.name === formAsset)
+  const selectedAssetCapacity = selectedAssetObj?.capacity || 0
+  const selectedAssetPriceCents = selectedAssetObj?.price_per_day || 0
   const seatOptions = Array.from({ length: selectedAssetCapacity }, (_, i) => String(i + 1))
+
+  // Totale calcolato automaticamente (Aria): n° passeggeri × prezzo posto del
+  // catalogo. Solo se il prezzo catalogo è impostato (>0), così non azzera un
+  // totale digitato a mano quando il prezzo è "su richiesta".
+  useEffect(() => {
+    if (serviceType !== 'heli_rental' || !showForm) return
+    if (passengers.length > 0 && selectedAssetPriceCents > 0) {
+      setForm(f => ({ ...f, price_eur: centsToEur(passengers.length * selectedAssetPriceCents) }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [passengers.length, formAsset, showForm])
 
   function openCreate() {
     const todayYmd = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
@@ -462,7 +475,7 @@ const CAL_ROW_H = 56  // altezza riga asset
 const CAL_LEFT_W = 220 // larghezza colonna sinistra (asset)
 const CAL_HEADER_H = 42
 
-interface CalAsset { id: string; name: string; image_url: string | null; is_active?: boolean; capacity?: number | null }
+interface CalAsset { id: string; name: string; image_url: string | null; is_active?: boolean; capacity?: number | null; price_per_day?: number | null }
 
 // Bucket di colore per la barra, in linea con la palette già usata nel file
 // (Badge): confermato/attivo = ciano, in attesa = ambra, cancellata = rosso.
@@ -1294,6 +1307,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(EMPTY_DEP_FORM)
+  const [editingDepId, setEditingDepId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   // Prenotazione posti (carrello -> cliente)
   const [cartDep, setCartDep] = useState<string | null>(null)
@@ -1454,11 +1468,49 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     loadSeats(dep.id)
   }
 
+  function openNewDeparture() {
+    setEditingDepId(null); setForm(EMPTY_DEP_FORM); setError(''); setShowForm(true)
+  }
+  function openEditDeparture(dep: TourDeparture) {
+    setEditingDepId(dep.id)
+    setForm({
+      departure_date: dep.departure_date,
+      departure_time: (dep.departure_time || '10:00').slice(0, 5),
+      total_seats: String(dep.total_seats),
+      price_eur: dep.price_per_seat_cents != null ? centsToEur(dep.price_per_seat_cents) : '',
+    })
+    setError(''); setShowForm(true)
+  }
+
   async function createDeparture() {
     if (!assetId) { setError('Seleziona prima un asset dal catalogo.'); return }
     if (!form.departure_date) { setError('Inserisci la data della partenza.'); return }
     const total = Math.max(1, parseInt(form.total_seats, 10) || 1)
     setSaving(true); setError('')
+
+    if (editingDepId) {
+      // MODIFICA: aggiorna i campi; se aumentano i posti aggiunge gli slot
+      // mancanti, se diminuiscono NON tocca i posti esistenti (evita di
+      // cancellare posti venduti). I posti già presenti restano invariati.
+      const { error: ue } = await supabase.from('noleggio_tour_departures').update({
+        departure_date: form.departure_date,
+        departure_time: form.departure_time || '10:00',
+        total_seats: total,
+        price_per_seat_cents: form.price_eur ? eurToCents(form.price_eur) : null,
+      }).eq('id', editingDepId)
+      if (ue) { setSaving(false); setError(tourTableHint(ue.message)); return }
+      const existing = (seats[editingDepId] || [])
+      const existingCount = existing.length || (await supabase.from('noleggio_tour_seats').select('id', { count: 'exact', head: true }).eq('departure_id', editingDepId)).count || 0
+      if (total > existingCount) {
+        const add = Array.from({ length: total - existingCount }, (_, i) => ({ departure_id: editingDepId, seat_label: String(existingCount + i + 1), seat_position: existingCount + i + 1 }))
+        await supabase.from('noleggio_tour_seats').insert(add)
+      }
+      setSaving(false); setShowForm(false); setForm(EMPTY_DEP_FORM); setEditingDepId(null)
+      setSeats(s => { const n = { ...s }; delete n[editingDepId]; return n })
+      loadDepartures(assetId)
+      return
+    }
+
     const { data, error: e } = await supabase.from('noleggio_tour_departures').insert({
       catalog_id: assetId,
       departure_date: form.departure_date,
@@ -1501,7 +1553,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
   return (
     <div className="space-y-4">
       <Header title={`${labels.title} — Tour & Posti`} action={
-        <button onClick={() => { setForm(EMPTY_DEP_FORM); setError(''); setShowForm(true) }} disabled={!assetId} className={BTN_PRIMARY}>+ Nuova partenza</button>
+        <button onClick={openNewDeparture} disabled={!assetId} className={BTN_PRIMARY}>+ Nuova partenza</button>
       } />
       {error && <ErrorBox msg={error} />}
 
@@ -1536,6 +1588,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                   <span className="text-xs text-theme-text-muted">{seatSummary(dep)}</span>
                   {dep.price_per_seat_cents != null && <span className="text-xs text-theme-text-muted">· {eur(dep.price_per_seat_cents)}/posto</span>}
                 </button>
+                <button onClick={() => openEditDeparture(dep)} className="text-theme-text-secondary text-xs hover:underline">Modifica</button>
                 <button onClick={() => deleteDeparture(dep)} className="text-red-400 text-xs hover:underline">Elimina</button>
               </div>
               {expanded === dep.id && (
@@ -1574,10 +1627,19 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                   )}
 
                   {/* Carrello -> assegna cliente */}
-                  {cartDep === dep.id && cartSeats.size > 0 && !manageMode.has(dep.id) && (
+                  {cartDep === dep.id && cartSeats.size > 0 && !manageMode.has(dep.id) && (() => {
+                    // Totale calcolato AUTOMATICAMENTE: posti selezionati × prezzo posto
+                    // (override posto -> prezzo partenza -> prezzo catalogo).
+                    const cartTotalCents = (seats[dep.id] || []).filter(s => cartSeats.has(s.id))
+                      .reduce((t, s) => t + (s.price_cents != null ? s.price_cents : (dep.price_per_seat_cents != null ? dep.price_per_seat_cents : (selectedAsset?.price_per_day || 0))), 0)
+                    return (
                     <div className="mt-4 border border-dr7-gold/40 rounded-lg p-3 space-y-3 bg-theme-bg-tertiary/50">
-                      <div className="text-sm text-theme-text-primary font-medium">
-                        {cartSeats.size} posto/i nel carrello — assegna un cliente
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="text-sm text-theme-text-primary font-medium">{cartSeats.size} posto/i nel carrello — assegna un cliente</div>
+                        <div className="text-right">
+                          <div className="text-[11px] text-theme-text-muted">Totale ({cartSeats.size} × prezzo posto)</div>
+                          <div className="text-lg font-bold text-theme-text-primary">{eur(cartTotalCents)}</div>
+                        </div>
                       </div>
                       <LeadPicker onPick={(name, phone) => setCust({ name: name || cust.name, phone: phone || cust.phone })} />
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1589,7 +1651,8 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                         <button onClick={() => createTourBooking(dep)} disabled={booking} className={BTN_PRIMARY}>{booking ? 'Creazione…' : 'Crea prenotazione'}</button>
                       </div>
                     </div>
-                  )}
+                    )
+                  })()}
 
                   <p className="mt-3 text-[11px] text-theme-text-muted">
                     {manageMode.has(dep.id)
@@ -1606,7 +1669,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !saving && setShowForm(false)}>
           <div className="bg-theme-bg-secondary border border-theme-border rounded-xl w-full max-w-md p-5 space-y-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-theme-text-primary">Nuova partenza — {selectedAsset?.name || ''}</h3>
+            <h3 className="text-lg font-semibold text-theme-text-primary">{editingDepId ? 'Modifica partenza' : 'Nuova partenza'} — {selectedAsset?.name || ''}</h3>
             {error && <ErrorBox msg={error} />}
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -1628,7 +1691,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={() => setShowForm(false)} disabled={saving} className={BTN_GHOST}>Annulla</button>
-              <button onClick={createDeparture} disabled={saving} className={BTN_PRIMARY}>{saving ? 'Creazione…' : 'Crea partenza'}</button>
+              <button onClick={createDeparture} disabled={saving} className={BTN_PRIMARY}>{saving ? 'Salvataggio…' : (editingDepId ? 'Salva partenza' : 'Crea partenza')}</button>
             </div>
           </div>
         </div>
