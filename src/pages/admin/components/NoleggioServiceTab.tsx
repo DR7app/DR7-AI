@@ -310,14 +310,32 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
 
     setSaving(false); setShowForm(false); reload()
   }
+  // Libera i posti tour collegati al booking (tornano available) prima di eliminarlo.
+  async function freeTourSeats(bookingId: string) {
+    try {
+      await supabase.from('noleggio_tour_seats')
+        .update({ status: 'available', booking_id: null, customer_name: null, customer_phone: null })
+        .eq('booking_id', bookingId)
+    } catch { /* tabella tour assente per stay/altri: ignora */ }
+  }
+
   async function deleteBooking() {
     if (!form.id) return
     if (!window.confirm('Eliminare questa prenotazione?')) return
     setSaving(true); setFormError('')
+    await freeTourSeats(form.id)
     const { error: e } = await supabase.from('bookings').delete().eq('id', form.id)
     setSaving(false)
     if (e) { setFormError(e.message); return }
     setShowForm(false); reload()
+  }
+
+  async function deleteBookingRow(b: BookingRow) {
+    if (!window.confirm(`Eliminare la prenotazione di ${b.customer_name || 'questo cliente'}?`)) return
+    await freeTourSeats(b.id)
+    const { error: e } = await supabase.from('bookings').delete().eq('id', b.id)
+    if (e) { setFormError(e.message); return }
+    reload()
   }
 
   return (
@@ -338,17 +356,22 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                 <th className="text-left px-3 py-2 font-medium">{isTour ? 'Posti' : 'Riconsegna'}</th>
                 <th className="text-left px-3 py-2 font-medium">Stato</th>
                 <th className="text-right px-3 py-2 font-medium">Totale</th>
+                <th className="text-right px-3 py-2 font-medium">Azioni</th>
               </tr>
             </thead>
             <tbody>
               {bookings.map(b => (
-                <tr key={b.id} onClick={() => openEdit(b)} className="border-t border-theme-border hover:bg-theme-bg-hover cursor-pointer">
+                <tr key={b.id} className="border-t border-theme-border hover:bg-theme-bg-hover">
                   <td className="px-3 py-2 text-theme-text-primary">{b.customer_name || '—'}</td>
                   <td className="px-3 py-2 text-theme-text-secondary">{b.vehicle_name || b.vehicle_plate || '—'}</td>
                   <td className="px-3 py-2 text-theme-text-secondary tabular-nums">{fmtDate(b.pickup_date)}</td>
                   <td className="px-3 py-2 text-theme-text-secondary tabular-nums">{isTour ? (b.booking_details?.seat_count ?? b.booking_details?.passengers?.length ?? '—') : fmtDate(b.dropoff_date)}</td>
                   <td className="px-3 py-2"><Badge value={b.status} /></td>
                   <td className="px-3 py-2 text-right text-theme-text-primary tabular-nums">{eur(b.price_total)}</td>
+                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <button onClick={() => openEdit(b)} className="text-theme-text-secondary hover:underline mr-3">Modifica</button>
+                    <button onClick={() => deleteBookingRow(b)} className="text-red-400 hover:underline">Elimina</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
