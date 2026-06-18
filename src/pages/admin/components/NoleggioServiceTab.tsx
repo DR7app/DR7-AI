@@ -239,10 +239,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
   return (
     <div className="space-y-4">
       <Header title={`${labels.title} — Prenotazioni`} action={
-        <div className="flex items-center gap-2">
-          <button onClick={openCreate} className={BTN_PRIMARY}>+ Nuova prenotazione</button>
-          <button onClick={reload} disabled={loading} className={BTN_GHOST}>{loading ? 'Caricamento…' : 'Aggiorna'}</button>
-        </div>
+        <button onClick={openCreate} className={BTN_PRIMARY}>+ Nuova prenotazione</button>
       } />
       {error && <ErrorBox msg={error} />}
       {!loading && bookings.length === 0 && !error && <EmptyBox msg={`Nessuna prenotazione ${labels.title.toLowerCase()} al momento. Crea la prima con "+ Nuova prenotazione".`} />}
