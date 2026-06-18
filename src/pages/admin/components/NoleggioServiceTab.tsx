@@ -48,6 +48,7 @@ interface BookingRow {
   dropoff_date: string | null
   price_total: number | null
   created_at: string | null
+  booking_details: { passengers?: { name: string; seat?: string }[] } | null
 }
 
 interface CatalogRow {
@@ -133,7 +134,7 @@ function useBookings(serviceType: NoleggioServiceType) {
       for (let start = 0; ; start += 1000) {
         const { data, error: e } = await supabase
           .from('bookings')
-          .select('id, customer_name, customer_phone, vehicle_name, vehicle_plate, status, payment_status, payment_method, pickup_date, dropoff_date, price_total, created_at')
+          .select('id, customer_name, customer_phone, vehicle_name, vehicle_plate, status, payment_status, payment_method, pickup_date, dropoff_date, price_total, created_at, booking_details')
           .eq('service_type', serviceType)
           .order('pickup_date', { ascending: false })
           .range(start, start + 999)
@@ -163,7 +164,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     ;(async () => {
       const { data, error: e } = await supabase
         .from('noleggio_catalog')
-        .select('id, name, image_url, is_active')
+        .select('id, name, image_url, is_active, capacity')
         .eq('service_type', serviceType)
         .order('sort_order', { ascending: true })
         .order('name', { ascending: true })
@@ -183,14 +184,22 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
   const [formAsset, setFormAsset] = useState('')
   const [payStatus, setPayStatus] = useState('pending') // Da Saldare
   const [payMethod, setPayMethod] = useState('')
+  const [passengers, setPassengers] = useState<{ name: string; seat: string }[]>([])
+  const [origDetails, setOrigDetails] = useState<Record<string, unknown>>({})
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
+
+  // Posti disponibili per l'elicottero scelto (1..capacità del catalogo) per
+  // il dropdown "quale posto per quale passeggero". Solo Noleggio Aria.
+  const selectedAssetCapacity = assets.find(a => a.name === formAsset)?.capacity || 0
+  const seatOptions = Array.from({ length: selectedAssetCapacity }, (_, i) => String(i + 1))
 
   function openCreate() {
     const todayYmd = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
     setForm({ ...EMPTY_CAL_FORM, pickup_date: todayYmd, dropoff_date: todayYmd })
     setFormAsset(assets[0]?.name || '')
     setPayStatus('pending'); setPayMethod('')
+    setPassengers([]); setOrigDetails({})
     setFormError('')
     setShowForm(true)
   }
@@ -211,6 +220,8 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     setFormAsset(b.vehicle_name || '')
     setPayStatus(b.payment_status || 'pending')
     setPayMethod(b.payment_method || '')
+    setPassengers((b.booking_details?.passengers || []).map(p => ({ name: p.name || '', seat: p.seat || '' })) as { name: string; seat: string }[])
+    setOrigDetails((b.booking_details as Record<string, unknown>) || {})
     setFormError('')
     setShowForm(true)
   }
@@ -228,6 +239,11 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
   async function saveBooking() {
     if (!form.customer_name.trim()) { setFormError('Il nome cliente è obbligatorio.'); return }
     setSaving(true); setFormError('')
+    // Passeggeri -> booking_details.passengers (preserva le altre chiavi su modifica).
+    const cleanPassengers = passengers.map(p => ({ name: p.name.trim(), ...(p.seat ? { seat: p.seat } : {}) })).filter(p => p.name)
+    const details: Record<string, unknown> = { ...origDetails }
+    if (cleanPassengers.length) details.passengers = cleanPassengers
+    else delete details.passengers
     const payload = {
       service_type: serviceType,
       customer_name: form.customer_name.trim(),
@@ -239,6 +255,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
       status: 'confirmed',
       payment_status: payStatus,
       payment_method: payMethod || null,
+      booking_details: details,
     }
     const { data, error: e } = form.id
       ? await supabase.from('bookings').update(payload).eq('id', form.id).select('id').single()
@@ -257,7 +274,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
         })
         const linkData = await linkRes.json()
         if (linkRes.ok && linkData.paymentUrl) {
-          await supabase.from('bookings').update({ booking_details: { nexi_payment_link: linkData.paymentUrl, nexi_order_id: linkData.orderId || null, payment_link_created_at: new Date().toISOString(), payment_link_expires_at: linkData.expiresAt || new Date(Date.now() + 3600000).toISOString() } }).eq('id', bookingId)
+          await supabase.from('bookings').update({ booking_details: { ...details, nexi_payment_link: linkData.paymentUrl, nexi_order_id: linkData.orderId || null, payment_link_created_at: new Date().toISOString(), payment_link_expires_at: linkData.expiresAt || new Date(Date.now() + 3600000).toISOString() } }).eq('id', bookingId)
           const phone = form.customer_phone.trim()
           if (phone) {
             const firstName = form.customer_name.trim().split(' ')[0] || 'Cliente'
@@ -349,6 +366,37 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                 <label className="text-xs text-theme-text-muted">Telefono</label>
                 <input className={INPUT_CLS} placeholder="Telefono (opzionale)" value={form.customer_phone} onChange={e => setForm({ ...form, customer_phone: e.target.value })} />
               </div>
+
+              {/* Passeggeri: nome + (solo Aria) dropdown del posto per ciascuno */}
+              <div className="sm:col-span-2 border-t border-theme-border pt-3 mt-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-theme-text-muted">Passeggeri {passengers.length > 0 && `(${passengers.length})`}</label>
+                  <button type="button" onClick={() => setPassengers(p => [...p, { name: '', seat: '' }])} className="text-xs text-dr7-gold font-semibold hover:underline">+ Aggiungi passeggero</button>
+                </div>
+                {passengers.length === 0 && (
+                  <p className="text-[11px] text-theme-text-muted mt-1">Nessun passeggero. Clicca "+ Aggiungi passeggero"{serviceType === 'heli_rental' ? ' e scegli il posto per ciascuno.' : '.'}</p>
+                )}
+                <div className="mt-2 space-y-2">
+                  {passengers.map((p, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <input className={INPUT_CLS} placeholder={`Passeggero ${i + 1}`} value={p.name}
+                        onChange={e => setPassengers(arr => arr.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
+                      {serviceType === 'heli_rental' && (
+                        <select className={INPUT_CLS + ' max-w-[150px]'} value={p.seat}
+                          onChange={e => setPassengers(arr => arr.map((x, j) => j === i ? { ...x, seat: e.target.value } : x))}>
+                          <option value="">Posto…</option>
+                          {seatOptions.map(s => <option key={s} value={s} disabled={passengers.some((q, j) => j !== i && q.seat === s)}>Posto {s}</option>)}
+                        </select>
+                      )}
+                      <button type="button" onClick={() => setPassengers(arr => arr.filter((_, j) => j !== i))} className="text-red-400 text-xl leading-none px-1 shrink-0" title="Rimuovi">×</button>
+                    </div>
+                  ))}
+                </div>
+                {serviceType === 'heli_rental' && selectedAssetCapacity === 0 && passengers.length > 0 && (
+                  <p className="mt-1 text-[11px] text-amber-400">Imposta la capacità (posti) di questo elicottero nel Catalogo per scegliere i posti.</p>
+                )}
+              </div>
+
               <div>
                 <label className="text-xs text-theme-text-muted">Ritiro</label>
                 <input className={INPUT_CLS} type="date" value={form.pickup_date} onChange={e => setForm({ ...form, pickup_date: e.target.value })} />
@@ -414,7 +462,7 @@ const CAL_ROW_H = 56  // altezza riga asset
 const CAL_LEFT_W = 220 // larghezza colonna sinistra (asset)
 const CAL_HEADER_H = 42
 
-interface CalAsset { id: string; name: string; image_url: string | null; is_active?: boolean }
+interface CalAsset { id: string; name: string; image_url: string | null; is_active?: boolean; capacity?: number | null }
 
 // Bucket di colore per la barra, in linea con la palette già usata nel file
 // (Badge): confermato/attivo = ciano, in attesa = ambra, cancellata = rosso.
