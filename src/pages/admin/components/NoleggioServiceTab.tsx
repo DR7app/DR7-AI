@@ -48,7 +48,7 @@ interface BookingRow {
   dropoff_date: string | null
   price_total: number | null
   created_at: string | null
-  booking_details: { passengers?: { name: string; seat?: string }[] } | null
+  booking_details: { passengers?: { name: string; seat?: string }[]; seat_count?: number; seats?: string } | null
 }
 
 interface CatalogRow {
@@ -153,6 +153,8 @@ function useBookings(serviceType: NoleggioServiceType) {
 
 function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceType; labels: NoleggioServiceLabels }) {
   const { bookings, loading, error, reload } = useBookings(serviceType)
+  // Aria/Mare = tour a posti: la lista mostra Partenza + Posti (non Ritiro/Riconsegna).
+  const isTour = serviceType === 'heli_rental' || serviceType === 'boat_rental'
 
   // Asset = TUTTO il catalogo di questo servizio (stessa query della tab
   // Catalogo: NESSUN filtro is_active, cosi' la select mostra ogni voce
@@ -332,8 +334,8 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
               <tr>
                 <th className="text-left px-3 py-2 font-medium">Cliente</th>
                 <th className="text-left px-3 py-2 font-medium">{labels.asset}</th>
-                <th className="text-left px-3 py-2 font-medium">Ritiro</th>
-                <th className="text-left px-3 py-2 font-medium">Riconsegna</th>
+                <th className="text-left px-3 py-2 font-medium">{isTour ? 'Partenza' : 'Ritiro'}</th>
+                <th className="text-left px-3 py-2 font-medium">{isTour ? 'Posti' : 'Riconsegna'}</th>
                 <th className="text-left px-3 py-2 font-medium">Stato</th>
                 <th className="text-right px-3 py-2 font-medium">Totale</th>
               </tr>
@@ -344,7 +346,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                   <td className="px-3 py-2 text-theme-text-primary">{b.customer_name || '—'}</td>
                   <td className="px-3 py-2 text-theme-text-secondary">{b.vehicle_name || b.vehicle_plate || '—'}</td>
                   <td className="px-3 py-2 text-theme-text-secondary tabular-nums">{fmtDate(b.pickup_date)}</td>
-                  <td className="px-3 py-2 text-theme-text-secondary tabular-nums">{fmtDate(b.dropoff_date)}</td>
+                  <td className="px-3 py-2 text-theme-text-secondary tabular-nums">{isTour ? (b.booking_details?.seat_count ?? b.booking_details?.passengers?.length ?? '—') : fmtDate(b.dropoff_date)}</td>
                   <td className="px-3 py-2"><Badge value={b.status} /></td>
                   <td className="px-3 py-2 text-right text-theme-text-primary tabular-nums">{eur(b.price_total)}</td>
                 </tr>
