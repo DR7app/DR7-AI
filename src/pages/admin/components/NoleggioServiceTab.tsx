@@ -136,6 +136,8 @@ function useBookings(serviceType: NoleggioServiceType) {
           .from('bookings')
           .select('id, customer_name, customer_phone, vehicle_name, vehicle_plate, status, payment_status, payment_method, pickup_date, dropoff_date, price_total, created_at, booking_details')
           .eq('service_type', serviceType)
+          // Nascondi le annullate/eliminate (delete-booking le annulla, non cancella).
+          .not('status', 'in', '(cancelled,annullata,deleted)')
           .order('pickup_date', { ascending: false })
           .range(start, start + 999)
         if (e) throw e
@@ -369,22 +371,40 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     } catch { /* tabella tour assente per stay/altri: ignora */ }
   }
 
+  // Elimina come il Noleggio auto: libera i posti + usa la function
+  // delete-booking (annulla + pulisce firme/cauzioni/referral, evita il 409 da
+  // foreign key di fattura/contratto). Fallback al delete diretto se serve.
+  async function removeBooking(id: string): Promise<string | null> {
+    await freeTourSeats(id)
+    try {
+      const res = await authFetch('/.netlify/functions/delete-booking', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: id }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) return null
+      const { error } = await supabase.from('bookings').delete().eq('id', id)
+      return error ? (data?.error || error.message) : null
+    } catch (e) {
+      const { error } = await supabase.from('bookings').delete().eq('id', id)
+      return error ? (e as Error).message : null
+    }
+  }
+
   async function deleteBooking() {
     if (!form.id) return
     if (!window.confirm('Eliminare questa prenotazione?')) return
     setSaving(true); setFormError('')
-    await freeTourSeats(form.id)
-    const { error: e } = await supabase.from('bookings').delete().eq('id', form.id)
+    const err = await removeBooking(form.id)
     setSaving(false)
-    if (e) { setFormError(e.message); return }
+    if (err) { setFormError(err); return }
     setShowForm(false); reload()
   }
 
   async function deleteBookingRow(b: BookingRow) {
     if (!window.confirm(`Eliminare la prenotazione di ${b.customer_name || 'questo cliente'}?`)) return
-    await freeTourSeats(b.id)
-    const { error: e } = await supabase.from('bookings').delete().eq('id', b.id)
-    if (e) { setFormError(e.message); return }
+    const err = await removeBooking(b.id)
+    if (err) { setFormError(err); return }
     reload()
   }
 
