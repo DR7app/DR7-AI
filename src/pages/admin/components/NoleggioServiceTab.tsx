@@ -376,15 +376,23 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
   // foreign key di fattura/contratto). Fallback al delete diretto se serve.
   async function removeBooking(id: string): Promise<string | null> {
     await freeTourSeats(id)
+    // I Tour Aria/Mare NON hanno contratto: rimuovi firme/contratti/fatture
+    // collegati (residui del vecchio bug) così il delete non sbatte sui
+    // foreign key (contracts_booking_id_fkey, ecc.).
+    try { await supabase.from('signature_requests').delete().eq('booking_id', id) } catch { /* */ }
+    try { await supabase.from('contracts').delete().eq('booking_id', id) } catch { /* */ }
+    try { await supabase.from('fatture').delete().eq('booking_id', id) } catch { /* */ }
     try {
       const res = await authFetch('/.netlify/functions/delete-booking', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookingId: id }),
       })
       const data = await res.json().catch(() => ({}))
-      if (res.ok) return null
+      // Anche se delete-booking dice "già annullata", proviamo il delete diretto
+      // (ora i FK sono liberi) per rimuovere davvero la riga di test.
       const { error } = await supabase.from('bookings').delete().eq('id', id)
-      return error ? (data?.error || error.message) : null
+      if (error && !res.ok) return (data?.error || error.message)
+      return null
     } catch (e) {
       const { error } = await supabase.from('bookings').delete().eq('id', id)
       return error ? (e as Error).message : null

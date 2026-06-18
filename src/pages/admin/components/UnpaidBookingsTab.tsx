@@ -721,7 +721,8 @@ export default function UnpaidBookingsTab() {
         // signing link to a customer who has already signed (status was
         // "Confermata da saldare" precisely because the signature came back)
         // is the bug we're guarding against.
-        if (isCarRental && !isTour) {
+        if (isCarRental) {
+          if (!isTour) {
           const { data: existingContract } = await supabase
             .from('contracts')
             .select('signed_pdf_url')
@@ -767,8 +768,10 @@ export default function UnpaidBookingsTab() {
               toast.error(`Errore contratto: ${sigErr instanceof Error ? sigErr.message : 'sconosciuto'}`, { duration: 8000 })
             }
           }
+          } // fine if (!isTour) — i Tour Aria/Mare NON hanno contratto
 
-          // 3. Send "Conferma Noleggio (cliente)" confirmation via rental_new_customer template
+          // 3. Conferma al cliente. Tour -> template Tour (pro_conferma_tour);
+          //    noleggio auto -> rental_new_customer (come prima).
           try {
             const { data: fullBooking } = await supabase
               .from('bookings')
@@ -777,19 +780,37 @@ export default function UnpaidBookingsTab() {
               .single()
             const custPhone = fullBooking?.customer_phone || fullBooking?.booking_details?.customer?.phone
             if (custPhone && fullBooking) {
-              // Pass booking with service_type='car_rental' + isEdit=false to force rental_new_customer template
+              const bd = fullBooking.booking_details || {}
+              const firstName = (fullBooking.customer_name || '').split(' ')[0] || 'Cliente'
+              const pk = fullBooking.pickup_date ? new Date(fullBooking.pickup_date) : null
+              const dataStr = pk ? pk.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' }) : ''
+              const oraStr = pk ? pk.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }) : ''
+              const totEur = ((Number(fullBooking.price_total) || 0) / 100).toFixed(2)
+              const ref = (bookingId || '').substring(0, 8).toUpperCase()
+              const body = isTour
+                ? {
+                    customPhone: custPhone,
+                    templateKey: 'tour_new_customer',
+                    booking: { service_type: fullBooking.service_type },
+                    templateVars: {
+                      nome: firstName, customer_name: fullBooking.customer_name || '',
+                      esperienza: fullBooking.vehicle_name || '', servizio: fullBooking.vehicle_name || '', service_name: fullBooking.vehicle_name || '',
+                      data: dataStr, date: dataStr, orario: oraStr, ora: oraStr, time: oraStr,
+                      posti: String(bd.seat_count || ''), seat_count: String(bd.seat_count || ''),
+                      total: totEur, totale: totEur, importo: totEur, amount: totEur,
+                      payment_info: 'Pagato', pagamento: 'Pagato',
+                      booking_id: ref, booking_ref: ref, id: ref, note: bd.note || '',
+                    },
+                    skipHeader: true,
+                  }
+                : {
+                    customPhone: custPhone,
+                    booking: { ...fullBooking, service_type: 'car_rental', payment_status: 'paid', isEdit: false },
+                  }
               const confRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  customPhone: custPhone,
-                  booking: {
-                    ...fullBooking,
-                    service_type: 'car_rental',
-                    payment_status: 'paid',
-                    isEdit: false,
-                  }
-                })
+                body: JSON.stringify(body)
               })
               const confResult = await confRes.json()
               logger.log('[Segna Pagato] Confirmation WhatsApp result:', confResult)
