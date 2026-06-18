@@ -131,7 +131,9 @@ export async function resolveKeyForContext(key: string, _context?: RenderContext
         const normalisedSvc = ctxSvc === 'mechanical_service' ? 'mechanical'
           : ctxSvc === 'car_wash' ? 'car_wash'
           : ctxSvc === 'mechanical' ? 'mechanical'
-          : (ctxSvc === 'rental' || ctxSvc === 'car_rental') ? 'rental'
+          // Noleggio Aria/Mare (heli_rental, boat_rental, stay_rental) e
+          // qualunque *_rental rientrano nella famiglia 'rental'.
+          : (ctxSvc === 'rental' || ctxSvc === 'car_rental' || ctxSvc.endsWith('_rental')) ? 'rental'
           : ''
         const score = (tplSvc: string | null | undefined): number => {
           const s = String(tplSvc || 'all').toLowerCase()
