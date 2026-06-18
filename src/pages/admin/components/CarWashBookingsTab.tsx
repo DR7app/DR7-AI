@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { flushSync } from 'react-dom'
 import { supabase } from '../../../supabaseClient'
 import CustomerAutocomplete from './CustomerAutocomplete'
+import { LeadPicker } from './LeadPicker'
 import NewClientModal from './NewClientModal'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
@@ -3649,6 +3650,29 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </div>
               )}
 
+              {/* Bug B: override categoria SEMPRE disponibile (no OTP) per
+                  correggere una classificazione targa errata. Si imposta quando
+                  l'operatore sta scegliendo un veicolo (targa trovata o categoria
+                  rilevata). Pilota il filtro servizi (vehicleCategory) e quindi
+                  fascia prezzo; vehicleCategory finisce in booking_details al save.
+                  Il percorso OTP "targa non trovata" sopra resta invariato. */}
+              {(vehicleCategory || targaVehicleInfo) && !lookingUpTarga && (
+                <div className="p-4 rounded-lg border border-theme-border bg-theme-bg-tertiary">
+                  <p className="text-sm text-theme-text-secondary mb-2 font-medium">Categoria veicolo (correggi manualmente se errata):</p>
+                  <div className="flex gap-2 flex-wrap">
+                    <button type="button" onClick={() => { setVehicleCategory('urban'); setClassificationSource('manual') }}
+                      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors border ${vehicleCategory === 'urban' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50' : 'bg-theme-bg-secondary text-theme-text-secondary border-theme-border hover:bg-theme-bg-hover'}`}>Urban</button>
+                    <button type="button" onClick={() => { setVehicleCategory('maxi'); setClassificationSource('manual') }}
+                      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors border ${vehicleCategory === 'maxi' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50' : 'bg-theme-bg-secondary text-theme-text-secondary border-theme-border hover:bg-theme-bg-hover'}`}>Maxi</button>
+                    <button type="button" onClick={() => { setVehicleCategory('moto'); setClassificationSource('manual') }}
+                      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors border ${vehicleCategory === 'moto' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50' : 'bg-theme-bg-secondary text-theme-text-secondary border-theme-border hover:bg-theme-bg-hover'}`}>Moto</button>
+                  </div>
+                  {classificationSource === 'manual' && (
+                    <p className="text-xs text-cyan-400 mt-2">Categoria impostata manualmente.</p>
+                  )}
+                </div>
+              )}
+
               {/* Navigation */}
               <div className="flex justify-between items-center pt-5 border-t border-theme-border">
                 <button
@@ -4479,6 +4503,18 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               {/* Customer */}
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cliente *</label>
+                {/* Bug A: lead picker (stessa sorgente della tab Clienti) come
+                    via principale per agganciare un cliente reale. Selezionando
+                    un lead imposta direttamente formData.customer_id, così la
+                    booking risulta legata al cliente. L'autocomplete sotto resta
+                    disponibile come alternativa. */}
+                <div className="mb-2">
+                  <LeadPicker
+                    label=""
+                    placeholder="Cerca un cliente per nome, telefono o email…"
+                    onPick={(_name, _phone, id) => { if (id) setFormData(prev => ({ ...prev, customer_id: id })) }}
+                  />
+                </div>
                 <CustomerAutocomplete
                   customers={customers}
                   selectedCustomerId={formData.customer_id}
@@ -5370,10 +5406,28 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               <div className="p-6 space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cliente</label>
+                  {/* Bug A: collega la prenotazione a un cliente/lead reale (stessa
+                      sorgente della tab Clienti). Selezionando un lead si imposta
+                      nome + telefono + customer_id; il campo libero sotto resta
+                      come fallback per i walk-in senza scheda cliente. */}
+                  <div className="mb-2">
+                    <LeadPicker
+                      label=""
+                      initialQuery={editingBooking.customer_name || ''}
+                      placeholder="Cerca un cliente per nome, telefono o email…"
+                      onPick={(name, phone, id) => setEditingBooking({
+                        ...editingBooking,
+                        customer_name: name || editingBooking.customer_name,
+                        customer_phone: phone || editingBooking.customer_phone,
+                        ...(id ? { customer_id: id } : {}),
+                      })}
+                    />
+                  </div>
                   <input
                     type="text"
                     value={editingBooking.customer_name}
                     onChange={(e) => setEditingBooking({ ...editingBooking, customer_name: e.target.value })}
+                    placeholder="Nome cliente (walk-in senza scheda)"
                     className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                   />
                 </div>
