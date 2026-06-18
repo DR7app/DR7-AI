@@ -261,6 +261,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
       service_type: serviceType,
       customer_name: form.customer_name.trim(),
       customer_phone: form.customer_phone.trim() || null,
+      guest_name: form.customer_name.trim(), guest_phone: form.customer_phone.trim() || null,
       vehicle_name: formAsset || null,
       pickup_date: toIso(form.pickup_date, form.pickup_time),
       dropoff_date: toIso(form.dropoff_date, form.dropoff_time),
@@ -712,6 +713,7 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
       service_type: serviceType,
       customer_name: form.customer_name.trim(),
       customer_phone: form.customer_phone.trim() || null,
+      guest_name: form.customer_name.trim(), guest_phone: form.customer_phone.trim() || null,
       vehicle_name: formAsset,
       pickup_date: pickupIso,
       dropoff_date: dropoffIso,
@@ -1313,6 +1315,11 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
   const [cartDep, setCartDep] = useState<string | null>(null)
   const [cartSeats, setCartSeats] = useState<Set<string>>(new Set())
   const [cust, setCust] = useState({ name: '', phone: '' })
+  const [diffNames, setDiffNames] = useState(false) // nome diverso per ogni posto
+  const [seatNames, setSeatNames] = useState<Record<string, string>>({}) // seatId -> nome passeggero
+  const [tourPayStatus, setTourPayStatus] = useState('pending') // Da Saldare
+  const [tourPayMethod, setTourPayMethod] = useState('')
+  const tourPaymentMethods = usePaymentMethods()
   const [booking, setBooking] = useState(false)
   const [manageMode, setManageMode] = useState<Set<string>>(new Set()) // partenze in modalità "gestisci posti"
 
@@ -1381,7 +1388,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     setCartSeats(prev => { const n = new Set(prev); if (n.has(seat.id)) n.delete(seat.id); else n.add(seat.id); return n })
   }
 
-  function clearCart() { setCartDep(null); setCartSeats(new Set()); setCust({ name: '', phone: '' }) }
+  function clearCart() { setCartDep(null); setCartSeats(new Set()); setCust({ name: '', phone: '' }); setDiffNames(false); setSeatNames({}); setTourPayStatus('pending'); setTourPayMethod('') }
 
   // Crea la prenotazione dai posti nel carrello e li assegna al cliente.
   // booking confirmed + payment_status pending => posti ROSSI (non pagati).
@@ -1395,21 +1402,35 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     const pickupISO = new Date(`${dep.departure_date}T${dep.departure_time}`).toISOString()
     const labelsStr = chosen.map(s => s.seat_label).join(', ')
     setBooking(true); setError('')
+    const passengersDetail = chosen.map(s => ({ seat: s.seat_label, name: (diffNames ? (seatNames[s.id] || '').trim() : '') || cust.name.trim() }))
     const { data: bk, error: be } = await supabase.from('bookings').insert({
       service_type: serviceType,
       vehicle_name: selectedAsset?.name || labels.title,
       pickup_date: pickupISO, dropoff_date: pickupISO,
       price_total: totalCents,
-      status: 'confirmed', payment_status: 'pending',
+      status: 'confirmed', payment_status: tourPayStatus, payment_method: tourPayMethod || null,
       customer_name: cust.name.trim(), customer_phone: cust.phone.trim(),
-      booking_details: { tour_departure_id: dep.id, seats: labelsStr, seat_count: chosen.length },
+      // Soddisfa il check bookings_user_or_guest_check (serve user_id OPPURE
+      // guest_name). Il cliente arriva dai Lead, non da un account: usiamo i
+      // campi guest come fa il Car Wash.
+      guest_name: cust.name.trim(), guest_phone: cust.phone.trim() || null,
+      booking_details: { tour_departure_id: dep.id, seats: labelsStr, seat_count: chosen.length, passengers: passengersDetail },
       created_at: new Date().toISOString(),
     }).select('id').single()
     if (be || !bk) { setBooking(false); setError('Errore prenotazione: ' + (be?.message || '')); return }
     const bookingId = (bk as { id: string }).id
-    await supabase.from('noleggio_tour_seats')
-      .update({ status: 'sold', booking_id: bookingId, customer_name: cust.name.trim(), customer_phone: cust.phone.trim() })
-      .in('id', ids)
+    if (diffNames) {
+      // Nome diverso per ogni posto: aggiorna i posti uno a uno.
+      for (const s of chosen) {
+        await supabase.from('noleggio_tour_seats')
+          .update({ status: 'sold', booking_id: bookingId, customer_name: (seatNames[s.id] || '').trim() || cust.name.trim(), customer_phone: cust.phone.trim() })
+          .eq('id', s.id)
+      }
+    } else {
+      await supabase.from('noleggio_tour_seats')
+        .update({ status: 'sold', booking_id: bookingId, customer_name: cust.name.trim(), customer_phone: cust.phone.trim() })
+        .in('id', ids)
+    }
 
     // Pay by Link Nexi — STESSO flusso di Noleggio auto / Car Wash:
     // nexi-pay-by-link -> salva il link in booking_details -> WhatsApp
@@ -1418,50 +1439,55 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     const amountEuros = totalCents / 100
     const phone = cust.phone.trim()
     const firstName = cust.name.trim().split(' ')[0] || 'Cliente'
-    try {
-      const description = `Tour DR7 ${selectedAsset?.name || ''} - ${labelsStr} (${fmtYmd(dep.departure_date)} ${dep.departure_time.slice(0, 5)})`
-      const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId, amount: amountEuros, customerEmail: '', customerName: cust.name.trim() || 'Cliente', description, expirationHours: 1 }),
-      })
-      const linkData = await linkRes.json()
-      if (linkRes.ok && linkData.paymentUrl) {
-        await supabase.from('bookings').update({
-          booking_details: {
-            tour_departure_id: dep.id, seats: labelsStr, seat_count: chosen.length,
-            nexi_payment_link: linkData.paymentUrl,
-            nexi_order_id: linkData.orderId || null,
-            payment_link_created_at: new Date().toISOString(),
-            payment_link_expires_at: linkData.expiresAt || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-          },
-        }).eq('id', bookingId)
-        if (phone) {
-          const amountStr = amountEuros.toFixed(2)
-          const bookingRef = (bookingId || '').substring(0, 8).toUpperCase()
-          await fetch('/.netlify/functions/send-whatsapp-notification', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              customPhone: phone,
-              templateKey: 'payment_link_customer',
-              booking: { service_type: serviceType },
-              templateVars: {
-                customer_name: firstName, nome: firstName,
-                amount: amountStr, total: amountStr, importo: amountStr, totale: amountStr,
-                link: linkData.paymentUrl, payment_link: linkData.paymentUrl,
-                booking_id: bookingRef, booking_ref: bookingRef, expiry: '1 ora',
-              },
-              skipHeader: true,
-            }),
-          })
+    // Link di pagamento SOLO se metodo Nexi - Pay by Link e Da Saldare (come ovunque).
+    if (isNexiPbl(tourPayMethod) && tourPayStatus === 'pending') {
+      try {
+        const description = `Tour DR7 ${selectedAsset?.name || ''} - ${labelsStr} (${fmtYmd(dep.departure_date)} ${dep.departure_time.slice(0, 5)})`
+        const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId, amount: amountEuros, customerEmail: '', customerName: cust.name.trim() || 'Cliente', description, expirationHours: 1 }),
+        })
+        const linkData = await linkRes.json()
+        if (linkRes.ok && linkData.paymentUrl) {
+          await supabase.from('bookings').update({
+            booking_details: {
+              tour_departure_id: dep.id, seats: labelsStr, seat_count: chosen.length, passengers: passengersDetail,
+              nexi_payment_link: linkData.paymentUrl,
+              nexi_order_id: linkData.orderId || null,
+              payment_link_created_at: new Date().toISOString(),
+              payment_link_expires_at: linkData.expiresAt || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+            },
+          }).eq('id', bookingId)
+          if (phone) {
+            const amountStr = amountEuros.toFixed(2)
+            const bookingRef = (bookingId || '').substring(0, 8).toUpperCase()
+            await fetch('/.netlify/functions/send-whatsapp-notification', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                customPhone: phone,
+                templateKey: 'payment_link_customer',
+                booking: { service_type: serviceType },
+                templateVars: {
+                  customer_name: firstName, nome: firstName,
+                  amount: amountStr, total: amountStr, importo: amountStr, totale: amountStr,
+                  link: linkData.paymentUrl, payment_link: linkData.paymentUrl,
+                  booking_id: bookingRef, booking_ref: bookingRef, expiry: '1 ora',
+                },
+                skipHeader: true,
+              }),
+            })
+          }
+          toast.success('Prenotazione creata e link di pagamento inviato al cliente!')
+        } else {
+          toast.error('Prenotazione creata ma errore link pagamento: ' + (linkData.error || 'Errore'))
         }
-        toast.success('Prenotazione creata e link di pagamento inviato al cliente!')
-      } else {
-        toast.error('Prenotazione creata ma errore link pagamento: ' + (linkData.error || 'Errore'))
+      } catch (linkErr) {
+        toast.error('Prenotazione creata ma errore Pay by Link: ' + (linkErr as Error).message)
       }
-    } catch (linkErr) {
-      toast.error('Prenotazione creata ma errore Pay by Link: ' + (linkErr as Error).message)
+    } else {
+      toast.success('Prenotazione creata!')
     }
 
     setBooking(false); clearCart()
@@ -1643,9 +1669,40 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                       </div>
                       <LeadPicker onPick={(name, phone) => setCust({ name: name || cust.name, phone: phone || cust.phone })} />
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <input className={INPUT_CLS} placeholder="Nome cliente" value={cust.name} onChange={e => setCust({ ...cust, name: e.target.value })} />
+                        <input className={INPUT_CLS} placeholder="Nome cliente (contatto)" value={cust.name} onChange={e => setCust({ ...cust, name: e.target.value })} />
                         <input className={INPUT_CLS} placeholder="Telefono" value={cust.phone} onChange={e => setCust({ ...cust, phone: e.target.value })} />
                       </div>
+                      <label className="flex items-center gap-2 text-xs text-theme-text-secondary cursor-pointer">
+                        <input type="checkbox" checked={diffNames} onChange={e => setDiffNames(e.target.checked)} />
+                        Nome diverso per ogni posto
+                      </label>
+                      {diffNames && (
+                        <div className="space-y-2">
+                          {(seats[dep.id] || []).filter(s => cartSeats.has(s.id)).map(s => (
+                            <div key={s.id} className="flex items-center gap-2">
+                              <span className="text-xs text-theme-text-muted w-16 shrink-0">Posto {s.seat_label}</span>
+                              <input className={INPUT_CLS} placeholder={`Nome passeggero posto ${s.seat_label}`} value={seatNames[s.id] || ''} onChange={e => setSeatNames(m => ({ ...m, [s.id]: e.target.value }))} />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {/* Pagamento — come ovunque (Centralina Pro) */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs text-theme-text-muted">Stato Pagamento</label>
+                          <select className={INPUT_CLS} value={tourPayStatus} onChange={e => setTourPayStatus(e.target.value)}>
+                            {PAY_STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-theme-text-muted">Metodo di Pagamento</label>
+                          <select className={INPUT_CLS} value={tourPayMethod} onChange={e => setTourPayMethod(e.target.value)}>
+                            <option value="">— seleziona —</option>
+                            {tourPaymentMethods.filter(m => m.is_enabled !== false).map(m => <option key={m.key || m.label} value={m.label}>{m.label}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      {isNexiPbl(tourPayMethod) && tourPayStatus === 'pending' && <p className="text-[11px] text-theme-text-muted">Verrà generato e inviato il link di pagamento Nexi al cliente.</p>}
                       <div className="flex justify-end gap-2">
                         <button onClick={clearCart} disabled={booking} className={BTN_GHOST}>Svuota</button>
                         <button onClick={() => createTourBooking(dep)} disabled={booking} className={BTN_PRIMARY}>{booking ? 'Creazione…' : 'Crea prenotazione'}</button>
