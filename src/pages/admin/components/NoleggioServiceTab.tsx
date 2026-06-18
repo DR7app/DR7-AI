@@ -48,7 +48,7 @@ interface BookingRow {
   dropoff_date: string | null
   price_total: number | null
   created_at: string | null
-  booking_details: { passengers?: { name: string; seat?: string }[]; seat_count?: number; seats?: string } | null
+  booking_details: { passengers?: { name: string; seat?: string; phone?: string }[]; seat_count?: number; seats?: string; note?: string | null } | null
 }
 
 interface CatalogRow {
@@ -182,6 +182,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
 
   // Modal create/edit (stessa logica del Calendario, accessibile dalla lista)
   const [showForm, setShowForm] = useState(false)
+  const [detailBooking, setDetailBooking] = useState<BookingRow | null>(null)
   const [form, setForm] = useState<CalBookingForm>(EMPTY_CAL_FORM)
   const [formAsset, setFormAsset] = useState('')
   const [payStatus, setPayStatus] = useState('pending') // Da Saldare
@@ -298,7 +299,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
             const ref = (bookingId || '').substring(0, 8).toUpperCase()
             await fetch('/.netlify/functions/send-whatsapp-notification', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ customPhone: phone, templateKey: 'payment_link_customer', booking: { service_type: serviceType }, templateVars: { customer_name: firstName, nome: firstName, amount: amountStr, total: amountStr, importo: amountStr, totale: amountStr, link: linkData.paymentUrl, payment_link: linkData.paymentUrl, booking_id: ref, booking_ref: ref, expiry: '1 ora' }, skipHeader: true }),
+              body: JSON.stringify({ customPhone: phone, templateKey: 'payment_link_customer', booking: { service_type: 'rental' }, templateVars: { customer_name: firstName, nome: firstName, amount: amountStr, total: amountStr, importo: amountStr, totale: amountStr, link: linkData.paymentUrl, payment_link: linkData.paymentUrl, booking_id: ref, booking_ref: ref, expiry: '1 ora' }, skipHeader: true }),
             })
           }
           toast.success('Prenotazione creata e link di pagamento inviato!')
@@ -375,6 +376,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                   <td className="px-3 py-2"><Badge value={b.status} /></td>
                   <td className="px-3 py-2 text-right text-theme-text-primary tabular-nums">{eur(b.price_total)}</td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <button onClick={() => setDetailBooking(b)} className="text-cyan-400 hover:underline mr-3">Dettagli</button>
                     <button onClick={() => openEdit(b)} className="text-theme-text-secondary hover:underline mr-3">Modifica</button>
                     <button onClick={() => deleteBookingRow(b)} className="text-red-400 hover:underline">Elimina</button>
                   </td>
@@ -499,6 +501,55 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
           </div>
         </div>
       )}
+
+      {detailBooking && (() => {
+        const b = detailBooking
+        const bd = b.booking_details
+        const pax = bd?.passengers || []
+        const Row = ({ k, v }: { k: string; v: ReactNode }) => (
+          <div className="flex justify-between gap-4 py-1 border-b border-theme-border/60 last:border-0">
+            <span className="text-theme-text-muted text-sm">{k}</span>
+            <span className="text-theme-text-primary text-sm text-right">{v || '—'}</span>
+          </div>
+        )
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDetailBooking(null)}>
+            <div className="bg-theme-bg-secondary border border-theme-border rounded-xl w-full max-w-lg p-5 space-y-3 max-h-[90vh] overflow-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-theme-text-primary">Dettagli prenotazione</h3>
+                <button onClick={() => setDetailBooking(null)} className="text-theme-text-muted hover:text-theme-text-primary text-2xl leading-none">&times;</button>
+              </div>
+              <div>
+                <Row k="Cliente" v={b.customer_name} />
+                <Row k="Telefono" v={b.customer_phone} />
+                <Row k={labels.asset} v={b.vehicle_name} />
+                <Row k={isTour ? 'Partenza' : 'Ritiro'} v={fmtDate(b.pickup_date)} />
+                <Row k="Posti" v={bd?.seat_count ?? pax.length} />
+                <Row k="Stato" v={<Badge value={b.status} />} />
+                <Row k="Pagamento" v={<Badge value={b.payment_status} />} />
+                <Row k="Metodo" v={b.payment_method} />
+                <Row k="Totale" v={eur(b.price_total)} />
+                {bd?.note && <Row k="Note" v={bd.note} />}
+              </div>
+              {pax.length > 0 && (
+                <div className="border border-theme-border rounded-lg overflow-hidden">
+                  <div className="bg-theme-bg-tertiary px-3 py-2 text-xs font-semibold text-theme-text-secondary">Passeggeri</div>
+                  {pax.map((p, i) => (
+                    <div key={i} className="flex items-center justify-between gap-3 px-3 py-2 border-t border-theme-border text-sm">
+                      <span className="text-theme-text-muted">{p.seat ? `Posto ${p.seat}` : `Passeggero ${i + 1}`}</span>
+                      <span className="text-theme-text-primary">{p.name || '—'}{p.phone ? ` · ${p.phone}` : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex justify-end gap-2 pt-1">
+                <button onClick={() => { const bk = detailBooking; setDetailBooking(null); openEdit(bk) }} className={BTN_GHOST}>Modifica</button>
+                <button onClick={() => setDetailBooking(null)} className={BTN_PRIMARY}>Chiudi</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
@@ -1520,7 +1571,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
               body: JSON.stringify({
                 customPhone: phone,
                 templateKey: 'payment_link_customer',
-                booking: { service_type: serviceType },
+                booking: { service_type: 'rental' },
                 templateVars: {
                   customer_name: firstName, nome: firstName,
                   amount: amountStr, total: amountStr, importo: amountStr, totale: amountStr,
