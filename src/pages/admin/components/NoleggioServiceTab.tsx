@@ -1554,7 +1554,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
             total: amountEuros.toFixed(2), totale: amountEuros.toFixed(2), importo: amountEuros.toFixed(2), amount: amountEuros.toFixed(2),
             payment_info: paymentInfo, pagamento: paymentInfo,
             booking_id: ref, booking_ref: ref, id: ref,
-            note: '', luogo_partenza: '', luogo_rientro: '',
+            note: '', luogo_partenza: 'Viale Marconi, 229, 09131 Cagliari CA', luogo_rientro: 'Viale Marconi, 229, 09131 Cagliari CA',
           },
           skipHeader: true,
         }),
