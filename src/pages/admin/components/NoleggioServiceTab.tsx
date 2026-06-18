@@ -9,6 +9,16 @@ import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } fro
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
 import toast from 'react-hot-toast'
+import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
+
+// Stati pagamento standard DR7 (come Noleggio auto / Car Wash): la label è
+// quella mostrata, il value è il payment_status salvato sul booking.
+const PAY_STATUS_OPTIONS = [
+  { value: 'pending', label: 'Da Saldare' },
+  { value: 'partial', label: 'Parziale' },
+  { value: 'paid', label: 'Pagato' },
+]
+const isNexiPbl = (method: string) => /nexi/i.test(method)
 
 export type NoleggioServiceType = 'boat_rental' | 'heli_rental' | 'stay_rental'
 export type NoleggioView = 'bookings' | 'calendar' | 'catalog' | 'preventivi' | 'tours'
@@ -33,6 +43,7 @@ interface BookingRow {
   vehicle_plate: string | null
   status: string | null
   payment_status: string | null
+  payment_method: string | null
   pickup_date: string | null
   dropoff_date: string | null
   price_total: number | null
@@ -122,7 +133,7 @@ function useBookings(serviceType: NoleggioServiceType) {
       for (let start = 0; ; start += 1000) {
         const { data, error: e } = await supabase
           .from('bookings')
-          .select('id, customer_name, customer_phone, vehicle_name, vehicle_plate, status, payment_status, pickup_date, dropoff_date, price_total, created_at')
+          .select('id, customer_name, customer_phone, vehicle_name, vehicle_plate, status, payment_status, payment_method, pickup_date, dropoff_date, price_total, created_at')
           .eq('service_type', serviceType)
           .order('pickup_date', { ascending: false })
           .range(start, start + 999)
@@ -163,10 +174,15 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     return () => { cancelled = true }
   }, [serviceType])
 
+  // Metodi di pagamento da Centralina Pro (niente hardcoded).
+  const paymentMethods = usePaymentMethods()
+
   // Modal create/edit (stessa logica del Calendario, accessibile dalla lista)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState<CalBookingForm>(EMPTY_CAL_FORM)
   const [formAsset, setFormAsset] = useState('')
+  const [payStatus, setPayStatus] = useState('pending') // Da Saldare
+  const [payMethod, setPayMethod] = useState('')
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
 
@@ -174,6 +190,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     const todayYmd = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
     setForm({ ...EMPTY_CAL_FORM, pickup_date: todayYmd, dropoff_date: todayYmd })
     setFormAsset(assets[0]?.name || '')
+    setPayStatus('pending'); setPayMethod('')
     setFormError('')
     setShowForm(true)
   }
@@ -192,6 +209,8 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
       status: (b.status || 'confirmed'),
     })
     setFormAsset(b.vehicle_name || '')
+    setPayStatus(b.payment_status || 'pending')
+    setPayMethod(b.payment_method || '')
     setFormError('')
     setShowForm(true)
   }
@@ -217,14 +236,46 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
       pickup_date: toIso(form.pickup_date, form.pickup_time),
       dropoff_date: toIso(form.dropoff_date, form.dropoff_time),
       price_total: eurToCents(form.price_eur),
-      status: form.status,
+      status: 'confirmed',
+      payment_status: payStatus,
+      payment_method: payMethod || null,
     }
-    const { error: e } = form.id
-      ? await supabase.from('bookings').update(payload).eq('id', form.id)
-      : await supabase.from('bookings').insert({ ...payload, created_at: new Date().toISOString() })
-    setSaving(false)
-    if (e) { setFormError(e.message); return }
-    setShowForm(false); reload()
+    const { data, error: e } = form.id
+      ? await supabase.from('bookings').update(payload).eq('id', form.id).select('id').single()
+      : await supabase.from('bookings').insert({ ...payload, created_at: new Date().toISOString() }).select('id').single()
+    if (e) { setSaving(false); setFormError(e.message); return }
+
+    // Nexi - Pay by Link + Da Saldare: genera e invia il link (stesso flusso
+    // di Noleggio auto / Car Wash). Solo alla creazione.
+    const bookingId = (data as { id: string } | null)?.id
+    if (!form.id && bookingId && payStatus === 'pending' && isNexiPbl(payMethod)) {
+      try {
+        const amountEuros = (eurToCents(form.price_eur)) / 100
+        const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId, amount: amountEuros, customerEmail: '', customerName: form.customer_name.trim() || 'Cliente', description: `${labels.title} - ${formAsset || ''}`.trim(), expirationHours: 1 }),
+        })
+        const linkData = await linkRes.json()
+        if (linkRes.ok && linkData.paymentUrl) {
+          await supabase.from('bookings').update({ booking_details: { nexi_payment_link: linkData.paymentUrl, nexi_order_id: linkData.orderId || null, payment_link_created_at: new Date().toISOString(), payment_link_expires_at: linkData.expiresAt || new Date(Date.now() + 3600000).toISOString() } }).eq('id', bookingId)
+          const phone = form.customer_phone.trim()
+          if (phone) {
+            const firstName = form.customer_name.trim().split(' ')[0] || 'Cliente'
+            const amountStr = amountEuros.toFixed(2)
+            const ref = (bookingId || '').substring(0, 8).toUpperCase()
+            await fetch('/.netlify/functions/send-whatsapp-notification', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ customPhone: phone, templateKey: 'payment_link_customer', booking: { service_type: serviceType }, templateVars: { customer_name: firstName, nome: firstName, amount: amountStr, total: amountStr, importo: amountStr, totale: amountStr, link: linkData.paymentUrl, payment_link: linkData.paymentUrl, booking_id: ref, booking_ref: ref, expiry: '1 ora' }, skipHeader: true }),
+            })
+          }
+          toast.success('Prenotazione creata e link di pagamento inviato!')
+        } else {
+          toast.error('Prenotazione creata ma errore link pagamento: ' + (linkData.error || ''))
+        }
+      } catch (le) { toast.error('Errore Pay by Link: ' + (le as Error).message) }
+    }
+
+    setSaving(false); setShowForm(false); reload()
   }
   async function deleteBooking() {
     if (!form.id) return
@@ -319,10 +370,19 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                 <input className={INPUT_CLS} inputMode="decimal" placeholder="0,00" value={form.price_eur} onChange={e => setForm({ ...form, price_eur: e.target.value })} />
               </div>
               <div>
-                <label className="text-xs text-theme-text-muted">Stato</label>
-                <select className={INPUT_CLS} value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
-                  {CAL_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                <label className="text-xs text-theme-text-muted">Stato Pagamento</label>
+                <select className={INPUT_CLS} value={payStatus} onChange={e => setPayStatus(e.target.value)}>
+                  {PAY_STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs text-theme-text-muted">Metodo di Pagamento</label>
+                <select className={INPUT_CLS} value={payMethod} onChange={e => setPayMethod(e.target.value)}>
+                  <option value="">— seleziona —</option>
+                  {paymentMethods.filter(m => m.is_enabled !== false).map(m => <option key={m.key || m.label} value={m.label}>{m.label}</option>)}
+                </select>
+                {paymentMethods.length === 0 && <p className="mt-1 text-[11px] text-amber-400">Nessun metodo configurato in Centralina Pro &gt; Fiscale.</p>}
+                {isNexiPbl(payMethod) && payStatus === 'pending' && <p className="mt-1 text-[11px] text-theme-text-muted">Verrà generato e inviato il link di pagamento Nexi al cliente.</p>}
               </div>
             </div>
             <div className="flex items-center justify-between gap-2 pt-1">
