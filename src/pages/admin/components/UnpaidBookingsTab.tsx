@@ -3896,6 +3896,11 @@ export default function UnpaidBookingsTab() {
                           onClick={() => { setOpenActionsRowKey(null); openAddebitoNexi(group) }}
                           className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-orange-400"
                         >Addebito MIT</button>
+                        <button
+                          onClick={() => { setOpenActionsRowKey(null); handleSendSollecito(group) }}
+                          disabled={sollecitoSendingKey === group.customerKey}
+                          className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-amber-400 disabled:opacity-50"
+                        >{sollecitoSendingKey === group.customerKey ? 'Invio…' : 'Invia Sollecito'}</button>
                       </div>
                     </>
                   )}
