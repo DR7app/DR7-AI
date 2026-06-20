@@ -1485,6 +1485,68 @@ function seatVisual(seat: TourSeat, payStatus: string | undefined, selected: boo
   return { cls: 'border-red-500/70 text-red-200 bg-red-600/30', lbl: 'non pagato' }
 }
 
+// Posizioni dei posti (in % sull'immagine cabina) per modello elicottero.
+// Bell 407 GX/GXP: 1 anteriore, 2-3 centrali, 4-5-6 panca posteriore.
+const HELI_407_SEATS: Record<number, { x: number; y: number }> = {
+  1: { x: 50, y: 24 },
+  2: { x: 44, y: 41 }, 3: { x: 56, y: 41 },
+  4: { x: 40, y: 49 }, 5: { x: 50, y: 49 }, 6: { x: 59, y: 49 },
+}
+
+// Colore PIENO del pallino posto sulla mappa foto (visibile sulla cabina scura).
+function seatDot(seat: TourSeat, payStatus: string | undefined, selected: boolean): string {
+  if (selected) return 'bg-white text-black ring-white'
+  if (seat.status === 'available') return 'bg-emerald-500/90 text-white ring-emerald-300'
+  if (seat.status === 'blocked') return 'bg-zinc-600/80 text-zinc-300 ring-zinc-500 line-through'
+  if (seat.status === 'held') return 'bg-amber-500 text-black ring-amber-300'
+  const paid = ['paid', 'succeeded', 'completed'].includes((payStatus || '').toLowerCase())
+  if (paid) return 'bg-emerald-600 text-white ring-emerald-300'
+  return 'bg-red-600 text-white ring-red-300'
+}
+
+// Mappa posti ELICOTTERO: foto cabina numerata con pallini cliccabili sopra
+// ogni posto, colorati per stato pagamento. Stessa logica onSeatClick della griglia.
+function HeliSeatMap({ seats, dep, cartDep, cartSeats, pay, onSeatClick }: {
+  seats: TourSeat[]; dep: TourDeparture; cartDep: string | null; cartSeats: Set<string>;
+  pay: Record<string, string>; onSeatClick: (dep: TourDeparture, seat: TourSeat) => void;
+}) {
+  const occupied = seats.filter(s => s.customer_name && (s.status === 'sold' || s.status === 'held'))
+  return (
+    <div className="flex flex-col sm:flex-row gap-4 items-start">
+      <div className="relative mx-auto w-full max-w-[240px] select-none shrink-0">
+        <img src="/heli-407-seatmap.png" alt="Mappa posti elicottero" draggable={false}
+          className="w-full rounded-xl border border-theme-border" />
+        {seats.map(seat => {
+          const posn = HELI_407_SEATS[seat.seat_position]
+          if (!posn) return null
+          const selected = cartDep === dep.id && cartSeats.has(seat.id)
+          const dot = seatDot(seat, seat.booking_id ? pay[seat.booking_id] : undefined, selected)
+          const clickable = seat.status === 'available' || selected
+          return (
+            <button key={seat.id} type="button" onClick={() => onSeatClick(dep, seat)}
+              title={seat.customer_name || `Posto ${seat.seat_label}`}
+              style={{ left: `${posn.x}%`, top: `${posn.y}%` }}
+              className={`absolute -translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-full text-sm font-bold flex items-center justify-center ring-2 shadow-lg transition ${dot} ${clickable ? 'hover:scale-110 cursor-pointer' : 'cursor-default'}`}>
+              {seat.seat_label}
+            </button>
+          )
+        })}
+      </div>
+      {occupied.length > 0 && (
+        <div className="text-xs text-theme-text-secondary space-y-1 pt-1">
+          <div className="font-semibold text-theme-text-muted uppercase tracking-wide text-[10px]">Passeggeri</div>
+          {occupied.map(s => (
+            <div key={s.id} className="flex items-center gap-2">
+              <span className="inline-flex w-5 h-5 rounded-full items-center justify-center text-[10px] font-bold bg-theme-bg-tertiary border border-theme-border">{s.seat_label}</span>
+              <span className="truncate max-w-[140px]">{s.customer_name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; labels: NoleggioServiceLabels }) {
   const [assets, setAssets] = useState<CatalogRow[]>([])
   const [assetId, setAssetId] = useState('')
@@ -1901,7 +1963,10 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                   </div>
 
                   {!seats[dep.id] && <div className="text-theme-text-muted text-sm">Caricamento posti…</div>}
-                  {seats[dep.id] && (
+                  {seats[dep.id] && serviceType === 'heli_rental' && (
+                    <HeliSeatMap seats={seats[dep.id]} dep={dep} cartDep={cartDep} cartSeats={cartSeats} pay={pay} onSeatClick={onSeatClick} />
+                  )}
+                  {seats[dep.id] && serviceType !== 'heli_rental' && (
                     <div className="flex flex-wrap gap-2">
                       {seats[dep.id].map(seat => {
                         const selected = cartDep === dep.id && cartSeats.has(seat.id)
