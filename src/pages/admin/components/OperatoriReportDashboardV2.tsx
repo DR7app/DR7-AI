@@ -79,7 +79,7 @@ interface DayRow {
     stato: 'fuori' | 'lavoro' | 'pausa' | 'finito'
 }
 
-type RangePreset = 'oggi' | '7gg' | '30gg' | 'quarter' | 'anno' | 'custom'
+type RangePreset = 'oggi' | '7gg' | '30gg' | 'mese' | 'quarter' | 'anno' | 'custom'
 
 function rangeFromPreset(preset: RangePreset): { from: string; to: string } {
     const today = new Date()
@@ -92,6 +92,10 @@ function rangeFromPreset(preset: RangePreset): { from: string; to: string } {
     if (preset === '30gg') {
         const d = new Date(); d.setDate(d.getDate() - 29)
         return { from: toRomeDate(d), to }
+    }
+    if (preset === 'mese') {
+        const start = new Date(today.getFullYear(), today.getMonth(), 1)
+        return { from: toRomeDate(start), to }
     }
     if (preset === 'quarter') {
         const q = Math.floor(today.getMonth() / 3)
@@ -208,8 +212,8 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
     const isRestrictedToOwn = REPORT_RESTRICTED_EMAILS.has(lowerAdminEmail)
     const isDirezione = (hasRole('direzione') || hasRole('developer')) && !isRestrictedToOwn
 
-    const [preset, setPreset] = useState<RangePreset>('30gg')
-    const [{ from: rangeFrom, to: rangeTo }, setRange] = useState(() => rangeFromPreset('30gg'))
+    const [preset, setPreset] = useState<RangePreset>('mese')
+    const [{ from: rangeFrom, to: rangeTo }, setRange] = useState(() => rangeFromPreset('mese'))
     const [customFrom, setCustomFrom] = useState<string>(rangeFrom)
     const [customTo, setCustomTo] = useState<string>(rangeTo)
 
@@ -764,10 +768,10 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                         onChange={(e) => { setPreset('custom'); setCustomTo(e.target.value) }}
                         className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary" />
                     <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-tertiary p-0.5 text-xs">
-                        {(['oggi', '7gg', '30gg', 'quarter', 'anno', 'custom'] as RangePreset[]).map(p => (
+                        {(['oggi', '7gg', '30gg', 'mese', 'quarter', 'anno', 'custom'] as RangePreset[]).map(p => (
                             <button key={p} onClick={() => setPreset(p)}
                                 className={`px-3 py-1 rounded-full ${preset === p ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}>
-                                {p === 'oggi' ? 'Oggi' : p === '7gg' ? '7 Giorni' : p === '30gg' ? '30 Giorni' : p === 'quarter' ? 'Questo Mese' : p === 'anno' ? 'Anno' : 'Custom'}
+                                {p === 'oggi' ? 'Oggi' : p === '7gg' ? '7 Giorni' : p === '30gg' ? '30 Giorni' : p === 'mese' ? 'Questo Mese' : p === 'quarter' ? 'Trimestre' : p === 'anno' ? 'Anno' : 'Custom'}
                             </button>
                         ))}
                     </div>

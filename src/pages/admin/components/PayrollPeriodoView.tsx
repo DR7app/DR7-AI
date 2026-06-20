@@ -82,9 +82,10 @@ export default function PayrollPeriodoView() {
     // Chi puo' aprire la pagina: direzione (team) oppure operatore self (solo se stesso).
     const canSeePayroll = isDirezione || isRestrictedToOwn
 
+    // Default = mese corrente (1° del mese -> oggi), non "ultimi 30 giorni"
+    // (che a inizio mese mostrava ancora date del mese precedente).
     const [from, setFrom] = useState<string>(() => {
-        const d = new Date(); d.setDate(d.getDate() - 29)
-        return toRomeDate(d)
+        const t = new Date(); return toRomeDate(new Date(t.getFullYear(), t.getMonth(), 1))
     })
     const [to, setTo] = useState<string>(() => toRomeDate(new Date()))
     const [loading, setLoading] = useState(true)
