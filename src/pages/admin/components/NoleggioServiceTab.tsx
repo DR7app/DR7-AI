@@ -1552,6 +1552,8 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
   const [assetId, setAssetId] = useState('')
   const [departures, setDepartures] = useState<TourDeparture[]>([])
   const [seats, setSeats] = useState<Record<string, TourSeat[]>>({})
+  // Conteggio posti liberi per partenza, caricato subito (senza espandere).
+  const [seatStats, setSeatStats] = useState<Record<string, { available: number; total: number }>>({})
   const [pay, setPay] = useState<Record<string, string>>({}) // booking_id -> payment_status
   const [expanded, setExpanded] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -1601,7 +1603,24 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
       .select('*').eq('catalog_id', id)
       .order('departure_date', { ascending: true }).order('departure_time', { ascending: true })
     if (e) setError(tourTableHint(e.message))
-    else setDepartures((data || []) as TourDeparture[])
+    else {
+      const deps = (data || []) as TourDeparture[]
+      setDepartures(deps)
+      // Conteggio posti liberi per ogni partenza, subito (così entrando si vede
+      // quanti posti restano senza dover espandere).
+      const depIds = deps.map(d => d.id)
+      if (depIds.length) {
+        const { data: seatRows } = await supabase
+          .from('noleggio_tour_seats').select('departure_id, status').in('departure_id', depIds)
+        const stats: Record<string, { available: number; total: number }> = {}
+        deps.forEach(d => { stats[d.id] = { available: 0, total: d.total_seats } })
+          ; (seatRows || []).forEach((r: { departure_id: string; status: string }) => {
+            const s = stats[r.departure_id]; if (!s) return
+            if (r.status === 'available') s.available++
+          })
+        setSeatStats(stats)
+      } else setSeatStats({})
+    }
     setLoading(false)
   }, [])
   useEffect(() => { loadDepartures(assetId) }, [assetId, loadDepartures])
@@ -1632,6 +1651,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
       list = list.map(s => orphanIds.includes(s.id) ? { ...s, status: 'available', booking_id: null, customer_name: null, customer_phone: null } : s)
     }
     setSeats(s => ({ ...s, [depId]: list }))
+    setSeatStats(st => ({ ...st, [depId]: { available: list.filter(s => s.status === 'available').length, total: list.length } }))
   }
   function toggleExpand(depId: string) {
     if (expanded === depId) { setExpanded(null); return }
@@ -1895,11 +1915,18 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     if (!e) setSeats(s => ({ ...s, [seat.departure_id]: (s[seat.departure_id] || []).map(x => x.id === seat.id ? { ...x, status: next } : x) }))
   }
 
-  function seatSummary(dep: TourDeparture): string {
+  // Posti ancora liberi (prenotabili). Usa i posti già caricati se la partenza
+  // è stata espansa, altrimenti il conteggio bulk caricato all'ingresso.
+  function seatFree(dep: TourDeparture): number | null {
     const list = seats[dep.id]
-    if (!list) return `${dep.total_seats} posti`
-    const sold = list.filter(s => s.status === 'sold').length
-    return `${sold}/${dep.total_seats} venduti`
+    if (list) return list.filter(s => s.status === 'available').length
+    const st = seatStats[dep.id]
+    return st ? st.available : null
+  }
+  function seatSummary(dep: TourDeparture): string {
+    const free = seatFree(dep)
+    if (free == null) return `${dep.total_seats} posti`
+    return `${free}/${dep.total_seats} liberi`
   }
 
   const selectedAsset = assets.find(a => a.id === assetId)
@@ -1939,7 +1966,13 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                   <span className="text-theme-text-muted">{expanded === dep.id ? '▾' : '▸'}</span>
                   <span className="text-theme-text-primary font-medium tabular-nums">{fmtYmd(dep.departure_date)}</span>
                   <span className="text-theme-text-secondary tabular-nums">{dep.departure_time.slice(0, 5)}</span>
-                  <span className="text-xs text-theme-text-muted">{seatSummary(dep)}</span>
+                  {(() => {
+                    const free = seatFree(dep)
+                    const cls = free == null ? 'bg-theme-bg-hover text-theme-text-muted border-theme-border'
+                      : free === 0 ? 'bg-red-600/20 text-red-300 border-red-500/40'
+                        : 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40'
+                    return <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${cls}`}>{free === 0 ? 'Esaurito' : seatSummary(dep)}</span>
+                  })()}
                   {dep.price_per_seat_cents != null && <span className="text-xs text-theme-text-muted">· {eur(dep.price_per_seat_cents)}/posto</span>}
                 </button>
                 <button onClick={() => openEditDeparture(dep)} className="text-theme-text-secondary text-xs hover:underline">Modifica</button>
