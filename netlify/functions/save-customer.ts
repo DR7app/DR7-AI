@@ -114,29 +114,40 @@ export const handler: Handler = async (event) => {
             // Check for existing customer before inserting (prevent duplicates)
             let existingCustomer = null;
 
-            // 1. Check by codice_fiscale
+            // Regola: NON si fondono MAI lead di tipo_cliente diverso (persona
+            // fisica vs azienda vs PA). Possono condividere CF/telefono/email
+            // (es. ditta individuale = CF del titolare) ma restano lead distinte.
+            // 1. Check by codice_fiscale (stesso tipo_cliente)
             if (!existingCustomer && customerData.codice_fiscale) {
-                const { data } = await supabase.from('customers_extended')
-                    .select('*').eq('codice_fiscale', customerData.codice_fiscale.toUpperCase()).maybeSingle();
-                if (data) existingCustomer = data;
+                let q = supabase.from('customers_extended').select('*').eq('codice_fiscale', customerData.codice_fiscale.toUpperCase());
+                if (customerData.tipo_cliente) q = q.eq('tipo_cliente', customerData.tipo_cliente);
+                const { data } = await q.limit(1);
+                if (data && data.length) existingCustomer = data[0];
             }
-            // 2. Check by partita_iva
+            // 2. Check by partita_iva (stesso tipo_cliente)
             if (!existingCustomer && customerData.partita_iva) {
-                const { data } = await supabase.from('customers_extended')
-                    .select('*').eq('partita_iva', customerData.partita_iva).maybeSingle();
-                if (data) existingCustomer = data;
+                let q = supabase.from('customers_extended').select('*').eq('partita_iva', customerData.partita_iva);
+                if (customerData.tipo_cliente) q = q.eq('tipo_cliente', customerData.tipo_cliente);
+                const { data } = await q.limit(1);
+                if (data && data.length) existingCustomer = data[0];
             }
-            // 3. Check by email
+            // 3. Check by email — SOLO stesso tipo_cliente. Una persona fisica
+            //    e la sua azienda (o PA) possono condividere email/telefono:
+            //    sono lead DIVERSE, non un duplicato. Senza questo filtro,
+            //    salvando un'azienda col contatto di una persona, l'azienda
+            //    sovrascriveva la riga della persona (le due lead venivano unite).
             if (!existingCustomer && customerData.email) {
-                const { data } = await supabase.from('customers_extended')
-                    .select('*').ilike('email', customerData.email).maybeSingle();
-                if (data) existingCustomer = data;
+                let q = supabase.from('customers_extended').select('*').ilike('email', customerData.email);
+                if (customerData.tipo_cliente) q = q.eq('tipo_cliente', customerData.tipo_cliente);
+                const { data } = await q.limit(1);
+                if (data && data.length) existingCustomer = data[0];
             }
-            // 4. Check by phone
+            // 4. Check by phone — anch'esso SOLO stesso tipo_cliente (vedi sopra).
             if (!existingCustomer && customerData.telefono) {
-                const { data } = await supabase.from('customers_extended')
-                    .select('*').eq('telefono', customerData.telefono).maybeSingle();
-                if (data) existingCustomer = data;
+                let q = supabase.from('customers_extended').select('*').eq('telefono', customerData.telefono);
+                if (customerData.tipo_cliente) q = q.eq('tipo_cliente', customerData.tipo_cliente);
+                const { data } = await q.limit(1);
+                if (data && data.length) existingCustomer = data[0];
             }
 
             if (existingCustomer) {
