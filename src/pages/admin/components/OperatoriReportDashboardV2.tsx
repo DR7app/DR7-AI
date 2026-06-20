@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import { REPORT_RESTRICTED_EMAILS } from '../../../utils/reportAccess'
 import OperatorProfileModal from './OperatorProfileModal'
 import InviteOperatoreModal from './InviteOperatoreModal'
 
@@ -198,11 +199,8 @@ interface OperatoriReportDashboardV2Props {
 // 'direzione') mantengono la team-view classica.
 // 2026-06-03: aggiunti i 2 lavaggisti — vedono solo il proprio report
 // (ore, produttivita') nonostante abbiano permission 'operatori'.
-const REPORT_RESTRICTED_EMAILS = new Set<string>([
-    'salvatore@dr7.app',
-    'alessiocasula@dr7.app',
-    'alekskiszka@dr7.app',
-])
+// 2026-06-20: lista spostata in src/utils/reportAccess.ts (condivisa con
+// PayrollPeriodoView, cosi' anche la Busta Paga e' "solo mia" per Salvatore).
 
 export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriReportDashboardV2Props = {}) {
     const { hasRole, adminEmail } = useAdminRole()

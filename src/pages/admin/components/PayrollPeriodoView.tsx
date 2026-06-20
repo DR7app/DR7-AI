@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import { REPORT_RESTRICTED_EMAILS } from '../../../utils/reportAccess'
 import OperatorProfileModal from './OperatorProfileModal'
 
 /**
@@ -72,8 +73,14 @@ interface PayrollRow {
 }
 
 export default function PayrollPeriodoView() {
-    const { hasRole } = useAdminRole()
-    const isDirezione = hasRole('direzione') || hasRole('developer')
+    const { hasRole, adminEmail } = useAdminRole()
+    const lowerAdminEmail = (adminEmail || '').toLowerCase()
+    // 2026-06-20: operatori "solo miei dati" (Salvatore, lavaggisti) vedono la
+    // propria busta paga (ore ordinarie/straordinari/paga), MAI quella altrui.
+    const isRestrictedToOwn = REPORT_RESTRICTED_EMAILS.has(lowerAdminEmail)
+    const isDirezione = (hasRole('direzione') || hasRole('developer')) && !isRestrictedToOwn
+    // Chi puo' aprire la pagina: direzione (team) oppure operatore self (solo se stesso).
+    const canSeePayroll = isDirezione || isRestrictedToOwn
 
     const [from, setFrom] = useState<string>(() => {
         const d = new Date(); d.setDate(d.getDate() - 29)
@@ -87,7 +94,7 @@ export default function PayrollPeriodoView() {
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
     const load = useCallback(async () => {
-        if (!isDirezione) { setLoading(false); return }
+        if (!canSeePayroll) { setLoading(false); return }
         setLoading(true)
         try {
             // 1. Operatori attivi
@@ -96,7 +103,11 @@ export default function PayrollPeriodoView() {
                 .select('id, user_id, nome, cognome, email, ruolo, ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, avatar_url, ore_a_recuperare_min, attivo')
                 .eq('attivo', true)
                 .order('cognome', { ascending: true })
-            const opList = (ops || []) as Operatore[]
+            let opList = (ops || []) as Operatore[]
+            // Operatore self: solo la propria busta paga, mai quella degli altri.
+            if (isRestrictedToOwn) {
+                opList = opList.filter(o => (o.email || '').toLowerCase() === lowerAdminEmail)
+            }
 
             // 2. Contratti attivi
             // 2026-05-22: include ore_target_giornaliere/settimanali/mensili
@@ -253,7 +264,7 @@ export default function PayrollPeriodoView() {
         } finally {
             setLoading(false)
         }
-    }, [from, to, isDirezione])
+    }, [from, to, canSeePayroll, isRestrictedToOwn, lowerAdminEmail])
 
     useEffect(() => { load() }, [load])
 
@@ -339,7 +350,7 @@ export default function PayrollPeriodoView() {
         else { setSortKey(key); setSortDir(key === 'name' ? 'asc' : 'desc') }
     }
 
-    if (!isDirezione) {
+    if (!canSeePayroll) {
         return (
             <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-6 text-center text-theme-text-muted text-sm">
                 Accesso riservato alla direzione.
@@ -352,8 +363,8 @@ export default function PayrollPeriodoView() {
             {/* Header con range + preset */}
             <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-4 flex flex-wrap items-end gap-3">
                 <div>
-                    <h2 className="text-base font-bold text-theme-text-primary">Buste Paga del Periodo</h2>
-                    <p className="text-xs text-theme-text-muted">Calcola in un colpo solo quanto pagare a ogni operatore in base ai contratti + ore registrate.</p>
+                    <h2 className="text-base font-bold text-theme-text-primary">{isRestrictedToOwn ? 'La mia busta paga' : 'Buste Paga del Periodo'}</h2>
+                    <p className="text-xs text-theme-text-muted">{isRestrictedToOwn ? 'Le tue ore lavorate, straordinari e paga del periodo, calcolate dal contratto + ore registrate.' : 'Calcola in un colpo solo quanto pagare a ogni operatore in base ai contratti + ore registrate.'}</p>
                 </div>
                 <div className="flex flex-wrap items-end gap-2 ml-auto">
                     <label className="flex flex-col text-[10px] uppercase text-theme-text-muted">
