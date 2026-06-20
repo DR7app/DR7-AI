@@ -90,6 +90,23 @@ export interface RenderContext {
  * - Key is in OLD_TO_PRO → return the pro_* key IF that template is enabled + non-empty.
  * - Otherwise → return null (caller MUST skip sending — no hardcoded fallback).
  */
+// 2026-06-20 SAFEGUARD: un booking LAVAGGIO/MECCANICA non deve MAI ricevere il
+// template di conferma NOLEGGIO, e viceversa, anche se l'admin ha (per errore)
+// assegnato un evento all'altra famiglia in Programmazione, o ha lasciato il
+// template noleggio con target_service_type='all'. Il messaggio "Nuova
+// Prenotazione Noleggio" partiva per un lavaggio. Riconosciamo la famiglia dal
+// message_key canonico del template (noleggio vs lavaggio/meccanica). Se c'e'
+// conflitto col service_type del booking, il template viene scartato (meglio
+// nessun messaggio che il messaggio sbagliato).
+function familyConflict(messageKey: string | null | undefined, normalisedSvc: string): boolean {
+  const mk = String(messageKey || '').toLowerCase()
+  const isRentalTpl = mk.includes('noleggio') || mk === 'rental_new_customer'
+  const isWashTpl = mk.includes('lavaggio') || mk.includes('meccanica') || mk.includes('carwash') || mk.includes('mechanical')
+  if (normalisedSvc === 'car_wash' || normalisedSvc === 'mechanical') return isRentalTpl
+  if (normalisedSvc === 'rental') return isWashTpl
+  return false
+}
+
 export async function resolveKeyForContext(key: string, _context?: RenderContext): Promise<string | null> {
   void _context
   if (key === 'message_wrapper_header' || key === 'message_wrapper_footer') return key
@@ -144,6 +161,7 @@ export async function resolveKeyForContext(key: string, _context?: RenderContext
           return 0
         }
         const ranked = eventBased
+          .filter(t => !familyConflict(t.message_key, normalisedSvc))
           .map(t => ({ t, r: score(t.target_service_type) }))
           .filter(x => x.r > 0)
           .sort((a, b) => b.r - a.r)
@@ -212,6 +230,7 @@ export async function resolveKeyForContext(key: string, _context?: RenderContext
       return 0
     }
     const ranked = candidates
+      .filter(t => !familyConflict(t.message_key, normalisedSvc))
       .map(t => ({ t, r: score(t.target_service_type) }))
       .filter(x => x.r > 0)
       .sort((a, b) => b.r - a.r)
