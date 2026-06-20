@@ -390,12 +390,21 @@ export const handler: Handler = async (event) => {
         // 1. Try customerData from database
         if (customerData) {
             const addressParts = []
+            // 2026-06-20: AZIENDA -> SEMPRE la SEDE LEGALE, MAI i campi personali
+            // (indirizzo/numero_civico/codice_postale/citta_residenza/
+            // provincia_residenza). Quei campi sono della persona fisica e possono
+            // restare sul record azienda (dati condivisi o vecchio merge
+            // persona<->azienda): la fattura prendeva l'indirizzo PERSONALE invece
+            // di quello AZIENDALE. Persona/PA mantengono i campi anagrafici.
+            const isBusiness = customerData.tipo_cliente === 'azienda'
             // Check various potential address fields
-            const street = customerData.indirizzo || customerData.sede_legale || customerData.address || customerData.street || ''
-            const num = customerData.numero_civico || customerData.streetNumber || ''
-            const zip = customerData.codice_postale || customerData.cap || customerData.zipCode || customerData.zip || ''
-            const city = customerData.citta_residenza || customerData.citta || customerData.city || ''
-            const prov = (customerData.provincia_residenza || customerData.provincia || customerData.province || '').toUpperCase().trim()
+            const street = isBusiness
+                ? (customerData.sede_legale || customerData.sede_operativa || '')
+                : (customerData.indirizzo || customerData.sede_legale || customerData.address || customerData.street || '')
+            const num = isBusiness ? '' : (customerData.numero_civico || customerData.streetNumber || '')
+            const zip = isBusiness ? '' : (customerData.codice_postale || customerData.cap || customerData.zipCode || customerData.zip || '')
+            const city = isBusiness ? '' : (customerData.citta_residenza || customerData.citta || customerData.city || '')
+            const prov = isBusiness ? '' : (customerData.provincia_residenza || customerData.provincia || customerData.province || '').toUpperCase().trim()
 
             if (street) {
                 let streetAddress = street

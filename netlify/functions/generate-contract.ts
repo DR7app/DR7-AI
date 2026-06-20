@@ -1268,12 +1268,15 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             // gli altri sono empty → l'AcroForm usa nomi sconosciuti.
             // Coprendo tutte le varianti, qualcuno deve matchare.
             ...buildAziendaFields(customer, booking, isAzienda),
-            'CompanyCity': customer?.tipo_cliente === 'azienda' ? (customer.citta_residenza || customer.citta || '') : '',
-            'CittaAzienda': customer?.tipo_cliente === 'azienda' ? (customer.citta_residenza || customer.citta || '') : '',
-            'CompanyProvince': customer?.tipo_cliente === 'azienda' ? (customer.provincia_residenza || customer.provincia || '') : '',
-            'ProvinciaAzienda': customer?.tipo_cliente === 'azienda' ? (customer.provincia_residenza || customer.provincia || '') : '',
-            'CompanyZipCode': customer?.tipo_cliente === 'azienda' ? (customer.codice_postale || customer.cap || '') : '',
-            'CAPAzienda': customer?.tipo_cliente === 'azienda' ? (customer.codice_postale || customer.cap || '') : '',
+            // 2026-06-20: azienda -> SOLO campi aziendali (citta/provincia/cap),
+            // MAI quelli di residenza personale (citta_residenza/...): su record
+            // misti persona<->azienda mostravano citta/CAP della persona.
+            'CompanyCity': customer?.tipo_cliente === 'azienda' ? (customer.citta || '') : '',
+            'CittaAzienda': customer?.tipo_cliente === 'azienda' ? (customer.citta || '') : '',
+            'CompanyProvince': customer?.tipo_cliente === 'azienda' ? (customer.provincia || '') : '',
+            'ProvinciaAzienda': customer?.tipo_cliente === 'azienda' ? (customer.provincia || '') : '',
+            'CompanyZipCode': customer?.tipo_cliente === 'azienda' ? (customer.cap || '') : '',
+            'CAPAzienda': customer?.tipo_cliente === 'azienda' ? (customer.cap || '') : '',
             'CompanyPEC': customer?.tipo_cliente === 'azienda' ? (customer.pec || '') : '',
             'PECAzienda': customer?.tipo_cliente === 'azienda' ? (customer.pec || '') : '',
             'CompanySDI': customer?.tipo_cliente === 'azienda' ? (customer.codice_sdi || customer.sdi || '') : '',
