@@ -75,38 +75,9 @@ async function checkDuplicate(sourceRecordId: string, serviceType: ServiceType) 
   return data;
 }
 
-// Check if this customer already has ANY review candidate (by phone or email)
-async function checkCustomerAlreadyExists(record: any): Promise<boolean> {
-  const phone = record.customer_phone?.replace(/\D/g, '');
-  const email = record.customer_email?.trim().toLowerCase();
-
-  if (phone && phone.length >= 9) {
-    // Match per NUMERO ESATTO: ultime 9 cifre ANCORATE in fondo (ends-with),
-    // NON un "contains" su 8 cifre. Il vecchio ilike `%<last8>%` generava falsi
-    // positivi: clienti DIVERSI che condividono una sequenza di cifre venivano
-    // scartati come "già candidati / già recensiti" e non ricevevano MAI la
-    // richiesta. Le ultime 9 cifre identificano il numero a prescindere dal
-    // prefisso internazionale (39/0039/+39).
-    const last9 = phone.slice(-9);
-    const { data } = await supabase
-      .from('review_candidates')
-      .select('id')
-      .ilike('customer_phone', `%${last9}`)
-      .limit(1);
-    if (data && data.length > 0) return true;
-  }
-
-  if (email) {
-    const { data } = await supabase
-      .from('review_candidates')
-      .select('id')
-      .eq('customer_email', email)
-      .limit(1);
-    if (data && data.length > 0) return true;
-  }
-
-  return false;
-}
+// 2026-06-20: rimossa checkCustomerAlreadyExists (deduplica per cliente a vita).
+// La regola e' "una richiesta per OGNI servizio" (per visita): la deduplica
+// resta solo PER PRENOTAZIONE via checkDuplicate(sourceRecordId).
 
 function checkInternalOrBasicExclusions(
   record: any,
@@ -393,17 +364,14 @@ const handler: Handler = async (event) => {
     // 2. Load source record
     const record = await loadSourceRecord(sourceRecordId, serviceType);
 
-    // 2b. Check if this customer already has a review candidate (one per customer lifetime)
-    if (!forceReEvaluate) {
-      const customerExists = await checkCustomerAlreadyExists(record);
-      if (customerExists) {
-        return {
-          statusCode: 200,
-          headers: getHeaders(event.headers.origin),
-          body: JSON.stringify({ skipped: true, reason: 'Customer already has a review candidate' }),
-        };
-      }
-    }
+    // 2b. RIMOSSO il blocco "una candidatura per cliente a vita". Regola scelta
+    // dalla direzione (2026-06-20): UNA richiesta recensione PER OGNI lavaggio/
+    // noleggio (per visita). La deduplica resta PER PRENOTAZIONE (checkDuplicate
+    // su sourceRecordId, sopra): stessa prenotazione = stessa candidatura, ma un
+    // cliente che torna per un nuovo servizio genera una NUOVA candidatura ed e'
+    // di nuovo idoneo a ricevere la richiesta. Prima un cliente che combaciava
+    // per telefono/email con una vecchia candidatura veniva scartato come "gia'
+    // candidato/gia' recensito" e non riceveva piu' nulla.
 
     // 3. Check internal / basic exclusions
     const basicCheck = checkInternalOrBasicExclusions(record, serviceType);
