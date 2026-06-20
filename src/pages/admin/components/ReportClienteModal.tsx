@@ -193,9 +193,49 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
       }
       setIsDR7Club(resolvedIsClub)
 
-      // Documents
-      const { data: docs } = await supabase.from('customer_documents').select('*').eq('customer_id', customerId)
-      setDocuments(docs || [])
+      // Documents — la fonte REALE dei documenti verificati e' `user_documents`
+      // (la tab "Verifica Documenti" scrive lì status='verified'). Prima la
+      // scheda leggeva la vecchia `customer_documents` -> spesso vuota, quindi
+      // l'alert "Nessun documento verificato" anche con i documenti approvati.
+      // user_documents.user_id puo' essere l'auth user_id O l'id riga
+      // customers_extended (upload admin legacy): match su entrambi.
+      // Inoltre user_documents usa document_type camelCase (cartaIdentitaFront,
+      // patenteFront, ...): lo normalizziamo verso gli slot snake_case della
+      // scheda (identity_document_front, drivers_license_front, ...).
+      const DOC_TYPE_MAP: Record<string, string> = {
+        cartaIdentitaFront: 'identity_document_front',
+        cartaIdentitaBack: 'identity_document_back',
+        patenteFront: 'drivers_license_front',
+        patenteBack: 'drivers_license_back',
+        codiceFiscaleFront: 'codice_fiscale_front',
+        codiceFiscaleBack: 'codice_fiscale_back',
+      }
+      const idCandidates = Array.from(new Set([userId, customerId].filter(Boolean))) as string[]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const normDoc = (d: any): DocRecord => ({
+        id: d.id,
+        document_type: DOC_TYPE_MAP[d.document_type] || d.document_type,
+        status: d.status,
+        uploaded_at: d.uploaded_at || d.upload_date || d.verified_at || d.created_at || '',
+      })
+      const [udRes, cdRes] = await Promise.all([
+        idCandidates.length
+          ? supabase.from('user_documents').select('*').in('user_id', idCandidates)
+          : Promise.resolve({ data: [] as unknown[] }),
+        supabase.from('customer_documents').select('*').eq('customer_id', customerId),
+      ])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const merged: DocRecord[] = [
+        ...(((udRes.data as any[]) || []).map(normDoc)),
+        ...(((cdRes.data as any[]) || []).map(normDoc)),
+      ]
+      // Dedup per document_type, preferendo lo stato 'verified'.
+      const byType = new Map<string, DocRecord>()
+      for (const d of merged) {
+        const prev = byType.get(d.document_type)
+        if (!prev || (d.status === 'verified' && prev.status !== 'verified')) byType.set(d.document_type, d)
+      }
+      setDocuments(Array.from(byType.values()))
     } catch (err) {
       console.error('ReportCliente load error:', err)
     } finally {
