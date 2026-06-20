@@ -3684,7 +3684,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 </button>
                 <button
                   type="button"
-                  disabled={!targaVehicleInfo}
+                  /* Si prosegue se la targa e' stata trovata (targaVehicleInfo)
+                     OPPURE se l'operatore ha gia' una categoria: classificazione
+                     automatica, selezione manuale (targa non trovata, dopo OTP)
+                     o Moto. Prima era bloccato a !targaVehicleInfo, quindi con
+                     targa non in DB + categoria manuale non si poteva avanzare. */
+                  disabled={!targaVehicleInfo && !vehicleCategory}
                   onClick={() => {
                     setSelectedService(null)
                     setSelectedPriceOption(null)
@@ -3695,7 +3700,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     setCurrentStep(1)
                   }}
                   className={`px-7 py-3 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${
-                    targaVehicleInfo
+                    (targaVehicleInfo || vehicleCategory)
                       ? 'bg-cyan-500 hover:bg-cyan-600 text-white shadow-lg shadow-cyan-500/25 active:scale-[0.98]'
                       : 'bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed'
                   }`}
