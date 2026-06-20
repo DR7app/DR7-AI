@@ -80,11 +80,18 @@ async function checkCustomerAlreadyExists(record: any): Promise<boolean> {
   const phone = record.customer_phone?.replace(/\D/g, '');
   const email = record.customer_email?.trim().toLowerCase();
 
-  if (phone && phone.length >= 6) {
+  if (phone && phone.length >= 9) {
+    // Match per NUMERO ESATTO: ultime 9 cifre ANCORATE in fondo (ends-with),
+    // NON un "contains" su 8 cifre. Il vecchio ilike `%<last8>%` generava falsi
+    // positivi: clienti DIVERSI che condividono una sequenza di cifre venivano
+    // scartati come "già candidati / già recensiti" e non ricevevano MAI la
+    // richiesta. Le ultime 9 cifre identificano il numero a prescindere dal
+    // prefisso internazionale (39/0039/+39).
+    const last9 = phone.slice(-9);
     const { data } = await supabase
       .from('review_candidates')
       .select('id')
-      .ilike('customer_phone', `%${phone.slice(-8)}%`)
+      .ilike('customer_phone', `%${last9}`)
       .limit(1);
     if (data && data.length > 0) return true;
   }
