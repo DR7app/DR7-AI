@@ -420,6 +420,17 @@ export const handler: Handler = async (event) => {
         // Send signed document via WhatsApp
         const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
         const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
+        // DEDUP: il PDF firmato va inviato UNA SOLA volta per numero. Il broadcast
+        // finale itera TUTTE le signature_requests del contratto: se lo stesso
+        // telefono compare in piu' ruoli (intestatario anche 2° guidatore/garante,
+        // o righe duplicate) il cliente riceveva 5+ copie identiche dello stesso PDF.
+        const normPhone = (raw: string): string => {
+            let p = String(raw || '').replace(/\D/g, '')
+            if (p.startsWith('00')) p = p.substring(2)
+            if (p.length === 10) p = '39' + p
+            return p
+        }
+        const sentPhones = new Set<string>()
         if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN && signedPdfUrl) {
             try {
                 let customerPhone = ''
@@ -451,9 +462,8 @@ export const handler: Handler = async (event) => {
                 // (Bug: il firmatario non riceveva il contratto firmato.)
                 if (!customerPhone) customerPhone = String(sigRequest.signer_phone || '')
                 if (customerPhone) {
-                    let cleanPhone = customerPhone.replace(/\D/g, '')
-                    if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
-                    if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
+                    const cleanPhone = normPhone(customerPhone)
+                    sentPhones.add(cleanPhone)
 
                     // Cache-buster on the signed URL: some CDNs / WhatsApp
                     // preview caches can hold onto an older file served at the
@@ -525,9 +535,14 @@ export const handler: Handler = async (event) => {
                                 console.log(`[signature-complete] broadcast skipped (no phone): ${recipient.signer_name}`)
                                 continue
                             }
-                            let cleanPhone = rawPhone.replace(/\D/g, '')
-                            if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
-                            if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
+                            const cleanPhone = normPhone(rawPhone)
+                            // DEDUP: niente copie multiple allo stesso numero (gia'
+                            // avvisato sopra o ruoli ripetuti con lo stesso telefono).
+                            if (sentPhones.has(cleanPhone)) {
+                                console.log(`[signature-complete] broadcast skipped (gia' inviato a ${cleanPhone}): ${recipient.signer_name}`)
+                                continue
+                            }
+                            sentPhones.add(cleanPhone)
                             try {
                                 const bcRes = await fetch(greenApiUrl, {
                                     method: 'POST',
