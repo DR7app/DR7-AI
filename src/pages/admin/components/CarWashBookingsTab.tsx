@@ -423,6 +423,22 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     return duration
   }
 
+  // Durata del SOLO lavaggio (servizio + extra "normali"), ESCLUSI gli experience
+  // (Prime Courtesy Drive, Supercar/Icon Experience). Richiesta direzione
+  // 2026-06-24: l'auto di cortesia E gli experience devono durare ESATTAMENTE
+  // quanto il lavaggio scelto (es. lavaggio 45 min -> cortesia/experience 45 min),
+  // non arrotondati all'ora ne' con una durata scelta a parte.
+  const washServiceMin = (() => {
+    let d = 0
+    if (selectedService) d += selectedService.durationMinutes || parseDurationToMinutes(selectedService.duration)
+    for (const extra of selectedExtras) {
+      if (extra.category === 'experience') continue
+      const qty = extraQuantities[extra.id] || 1
+      d += (extra.durationMinutes || parseDurationToMinutes(extra.duration)) * qty
+    }
+    return d
+  })()
+
   const buildServiceNames = () => {
     const parts: string[] = []
     if (selectedService) {
@@ -649,8 +665,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const experienceTier: 'supercar' | 'hypercar' | null = supercarExperienceExtra
     ? (/icon\s*experience/i.test(supercarExperienceExtra.name) ? 'hypercar' : 'supercar')
     : null
-  // Parse duration from option label "1h" / "2h" / "30min" → minutes.
+  // Durata Experience = durata del LAVAGGIO scelto (richiesta direzione
+  // 2026-06-24): Supercar/Icon Experience durano quanto il lavaggio. Fallback
+  // all'opzione prezzo (1h/2h/...) se non c'e' un lavaggio con durata.
   const supercarExperienceDurationMin = (() => {
+    if (!supercarExperienceExtra) return 0
+    if (washServiceMin > 0) return washServiceMin
     if (!supercarExperienceOption) return 0
     const lbl = supercarExperienceOption.label.toLowerCase().trim()
     const hMatch = lbl.match(/(\d+(?:[.,]\d+)?)\s*h/)
@@ -720,7 +740,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const courtesyWindow = (() => {
     if (!primeCourtesyExtra) return null
     if (!formData.appointment_date || !formData.appointment_time) return null
-    const durMin = courtesyChosenMin > 0 ? courtesyChosenMin : courtesyAutoMin
+    // Durata cortesia = durata del LAVAGGIO scelto (es. 45 min lavaggio -> 45
+    // min cortesia). Fallback alla durata scelta/auto solo se non c'e' un
+    // lavaggio con durata. Richiesta direzione 2026-06-24.
+    const durMin = washServiceMin > 0 ? washServiceMin : (courtesyChosenMin > 0 ? courtesyChosenMin : courtesyAutoMin)
     const [y, mo, d] = formData.appointment_date.split('-').map(Number)
     const [h, m] = formData.appointment_time.split(':').map(Number)
     const start = new Date(y, mo - 1, d, h, m, 0)
