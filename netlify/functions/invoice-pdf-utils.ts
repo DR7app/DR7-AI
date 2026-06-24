@@ -55,6 +55,7 @@ interface InvoiceData {
     exempt_amount: number
     importo_totale: number
     stato: string
+    tipo_fattura?: string
 }
 
 const PAGE_WIDTH = 595.28 // A4
@@ -106,7 +107,8 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Uint8Arr
     }
 
     // --- Invoice Title (right-aligned) ---
-    const titleText = `Fattura ${invoice.numero_fattura}`
+    const isNotaCredito = invoice.tipo_fattura === 'nota_di_credito' || invoice.tipo_fattura === 'nota_credito' || invoice.tipo_fattura === 'TD04'
+    const titleText = `${isNotaCredito ? 'Nota di Credito' : 'Fattura'} ${invoice.numero_fattura}`
     const titleWidth = fontBold.widthOfTextAtSize(titleText, 18)
     page.drawText(titleText, {
         x: PAGE_WIDTH - MARGIN - titleWidth,
@@ -199,7 +201,7 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Uint8Arr
     })
 
     const metaItems = [
-        { label: 'TIPO DI DOCUMENTO', value: 'Fattura' },
+        { label: 'TIPO DI DOCUMENTO', value: isNotaCredito ? 'Nota di Credito (TD04)' : 'Fattura' },
         { label: 'NUMERO', value: invoice.numero_fattura },
         { label: 'DATA', value: new Date(invoice.data_emissione).toLocaleDateString('it-IT') },
     ]

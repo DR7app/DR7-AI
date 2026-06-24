@@ -1,9 +1,13 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { generateInvoicePDF } from './invoice-pdf-utils'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
+const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
 
 /**
  * Generate a Nota di Credito (TD04) from an existing fattura.
@@ -107,6 +111,53 @@ export const handler: Handler = async (event) => {
             }
         }
 
+        // Genera il PDF della Nota di Credito, lo salva e lo invia AUTOMATICAMENTE
+        // al cliente via WhatsApp (come la fattura). Non-bloccante: se fallisce,
+        // la nota resta creata.
+        let pdfUrl: string | null = null
+        try {
+            const pdfBytes = await generateInvoicePDF(nota as any)
+            const pdfFileName = `nota_credito_${nota.numero_fattura.replace(/\//g, '-')}_${Date.now()}.pdf`
+            const { error: uploadError } = await supabase.storage
+                .from('invoices')
+                .upload(pdfFileName, pdfBytes, { contentType: 'application/pdf', upsert: true })
+            if (uploadError) {
+                console.error('[NotaCredito] PDF upload failed:', uploadError.message)
+            } else {
+                const { data: { publicUrl } } = supabase.storage.from('invoices').getPublicUrl(pdfFileName)
+                pdfUrl = publicUrl
+                await supabase.from('fatture').update({ pdf_url: pdfUrl }).eq('id', nota.id)
+
+                const customerPhone = nota.customer_phone || ''
+                if (customerPhone && GREEN_API_INSTANCE_ID && GREEN_API_TOKEN) {
+                    let cleanPhone = String(customerPhone).replace(/\D/g, '')
+                    if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
+                    if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
+                    const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`
+                    const waResponse = await fetch(greenApiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chatId: `${cleanPhone}@c.us`,
+                            urlFile: pdfUrl,
+                            fileName: `Nota_di_Credito_${nota.numero_fattura}.pdf`,
+                            caption: `Nota di Credito ${nota.numero_fattura} - DR7`,
+                        }),
+                    })
+                    const waResult = await waResponse.json().catch(() => ({}))
+                    if (waResponse.ok && !waResult.error) {
+                        console.log('[NotaCredito] PDF inviato via WhatsApp:', waResult.idMessage)
+                    } else {
+                        console.error('[NotaCredito] WhatsApp send failed:', waResult)
+                    }
+                } else {
+                    console.log('[NotaCredito] Nessun telefono o Green API non configurato — invio WhatsApp saltato')
+                }
+            }
+        } catch (pdfErr: any) {
+            console.error('[NotaCredito] PDF generazione/invio fallito (nota comunque creata):', pdfErr?.message)
+        }
+
         return {
             statusCode: 200,
             body: JSON.stringify({
@@ -115,8 +166,9 @@ export const handler: Handler = async (event) => {
                     id: nota.id,
                     numero_fattura: nota.numero_fattura,
                     importo_totale: nota.importo_totale,
+                    pdf_url: pdfUrl,
                 },
-                message: `Nota di credito ${notaNumber} creata. Invia a SDI per completare.`
+                message: `Nota di credito ${notaNumber} creata${pdfUrl ? ' e PDF inviato al cliente' : ''}. Invia a SDI per completare.`
             })
         }
     } catch (error: any) {
