@@ -78,6 +78,21 @@ function drawLine(page: any, y: number, font: any) {
     })
 }
 
+// Sostituisce i caratteri che il font Helvetica (WinAnsi) NON sa codificare:
+// pdf-lib lancia un errore su drawText e la fattura non genera (niente PDF/
+// WhatsApp). Es. "→" nelle ricariche wallet. Mappa i simboli comuni e sostituisce
+// tutto il resto fuori Latin-1 con "?", così nessun nome/descrizione puo' piu'
+// rompere la generazione del PDF.
+function pdfSafe(s: unknown): string {
+    return String(s ?? '')
+        .replace(/→/g, '->').replace(/←/g, '<-')
+        .replace(/[–—]/g, '-')
+        .replace(/[‘’′]/g, "'")
+        .replace(/[“”]/g, '"')
+        .replace(/…/g, '...')
+        .replace(/[^\x00-\xFF]/g, '?')
+}
+
 export async function generateInvoicePDF(invoice: InvoiceData): Promise<Uint8Array> {
     const pdfDoc = await PDFDocument.create()
     const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT])
@@ -149,7 +164,7 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Uint8Arr
 
     let companyY = y
     for (const line of companyLines) {
-        page.drawText(line.text, {
+        page.drawText(pdfSafe(line.text), {
             x: leftX,
             y: companyY,
             size: line.size,
@@ -179,7 +194,7 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Uint8Arr
 
     let customerY = y
     for (const line of customerLines) {
-        page.drawText(line.text, {
+        page.drawText(pdfSafe(line.text), {
             x: rightX,
             y: customerY,
             size: line.size,
@@ -246,7 +261,7 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Uint8Arr
         const lineTotal = item.unit_price * item.quantity
 
         // Description (left-aligned)
-        page.drawText(item.description, {
+        page.drawText(pdfSafe(item.description), {
             x: cols[0].x + 4,
             y: y - 10,
             size: 9,

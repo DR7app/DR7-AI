@@ -1010,7 +1010,12 @@ async function handleWalletPurchaseFattura(
                 body: JSON.stringify({ error: 'Wallet purchase not found', purchaseId })
             }
         }
-        if (purchase.payment_status !== 'succeeded') {
+        // Accetta tutti i valori "pagato" usati nel sistema: book_with_credits e i
+        // webhook scrivono 'succeeded', ma le ricariche wallet via card possono
+        // restare 'paid'/'completed'. Rifiutare solo 'succeeded' bloccava la
+        // fattura di ricariche realmente pagate (es. Runchina, status 'paid').
+        const PAID_STATUSES = ['succeeded', 'completed', 'paid']
+        if (!PAID_STATUSES.includes(String(purchase.payment_status || '').toLowerCase())) {
             return {
                 statusCode: 400,
                 body: JSON.stringify({ error: `Purchase not paid (status: ${purchase.payment_status})` })
@@ -1093,9 +1098,12 @@ async function handleWalletPurchaseFattura(
         const bonusPct = Number(purchase.bonus_percentage ?? purchaseData?.bonusPercentage ?? 0)
         const receivedAmount = Number(purchase.received_amount ?? purchaseData?.receivedAmount ?? paidAmount)
 
+        // NB: niente "→" o altri simboli fuori WinAnsi nella descrizione: il
+        // font del PDF (Helvetica) non li codifica e generateInvoicePDF lancia
+        // un errore -> niente PDF/WhatsApp. Usiamo "->".
         const descr = bonusPct > 0
-            ? `Ricarica Credit Wallet — ${packageName} (bonus ${bonusPct}% → €${receivedAmount.toFixed(2)} accreditati)`
-            : `Ricarica Credit Wallet — ${packageName}`
+            ? `Ricarica Credit Wallet - ${packageName} (bonus ${bonusPct}% -> €${receivedAmount.toFixed(2)} accreditati)`
+            : `Ricarica Credit Wallet - ${packageName}`
 
         const items = [{
             description: descr,
