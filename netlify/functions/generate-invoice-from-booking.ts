@@ -285,18 +285,25 @@ export const handler: Handler = async (event) => {
         const resolvedEmail = booking.customer_email || booking.booking_details?.customer?.email
         const resolvedPhone = booking.customer_phone || booking.booking_details?.customer?.phone
 
-        // 2. Fallback: Try by email in customers_extended
+        // 2. Fallback: Try by email in customers_extended.
+        // 2026-06-25: match CASE-INSENSITIVE (ilike) + limit/maybeSingle — prima
+        // .eq().single() falliva se la mail della prenotazione aveva case diverso
+        // dal profilo (es. tour pagato senza user_id collegato): CF/indirizzo del
+        // cliente registrato non venivano trovati -> "Indirizzo obbligatorio".
+        // Preferisce il profilo collegato a un account (user_id non nullo).
         if (!customerData && resolvedEmail) {
-            console.log('Fallback: Fetching by email from customers_extended...')
-            const { data, error } = await supabase
+            console.log('Fallback: Fetching by email (ilike) from customers_extended...')
+            const { data } = await supabase
                 .from('customers_extended')
                 .select('*')
-                .eq('email', resolvedEmail)
-                .single()
+                .ilike('email', resolvedEmail)
+                .order('user_id', { ascending: false, nullsFirst: false })
+                .limit(1)
+                .maybeSingle()
 
             if (data) {
                 customerData = data
-                console.log('✅ Found customer by Email (extended)')
+                console.log('✅ Found customer by Email (extended, ilike)')
             }
         }
 
