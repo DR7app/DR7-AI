@@ -5,9 +5,9 @@ import { createClient } from '@supabase/supabase-js'
 // Admin can override via centralina_pro_config.config.invoice.footer_lines
 // — array of strings, one per line. Changes apply to next generated invoice.
 const DEFAULT_INVOICE_FOOTER_LINES = [
-    'Dubai rent 7.0 S.p.A. - Iscr. reg. imp.: 04104640927',
+    'DR7 S.p.A. - Iscr. reg. imp.: 04104640927',
     'Tel: 3457905205 | Email: Info@dr7.app | PEC: dubai.rent7.0srl@legalmail.it | Website: www.dr7.app',
-    'Socio unico - Cap. soc. 50.000,00 € | Regime Fiscale: Ordinario',
+    'Socio unico - Cap. soc. 1.000.000,00 € | Regime Fiscale: Ordinario',
 ]
 
 async function loadFooterLines(): Promise<string[]> {
@@ -140,7 +140,7 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Uint8Arr
     y -= 14
 
     const companyLines = [
-        { text: 'Dubai rent 7.0 S.p.A.', bold: true, size: 11 },
+        { text: 'DR7 S.p.A.', bold: true, size: 11 },
         { text: 'VIA DEL FANGARIO 25, 09122 CAGLIARI (CA)', bold: false, size: 9 },
         { text: 'P.IVA 04104640927', bold: false, size: 9 },
         { text: 'C.F. 04104640927', bold: false, size: 9 },
