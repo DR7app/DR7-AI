@@ -146,17 +146,7 @@ function useBookings(serviceType: NoleggioServiceType) {
         acc.push(...(data as BookingRow[]))
         if (data.length < 1000) break
       }
-      // Ignora i "fantasmi" creati dal sito quando il cliente arriva su Nexi ma
-      // NON paga: il sito li salva come status='pending' + payment non saldato.
-      // Le prenotazioni create dall'admin nascono sempre status='confirmed'
-      // (anche "Da Saldare" via Pay-by-Link), quindi NON vengono toccate.
-      const PAID = ['paid', 'completed', 'succeeded']
-      const visible = acc.filter(b => {
-        const unpaid = !PAID.includes((b.payment_status || '').toLowerCase())
-        const isWebsiteGhost = (b.status || '').toLowerCase() === 'pending' && unpaid
-        return !isWebsiteGhost
-      })
-      setBookings(visible)
+      setBookings(acc)
     } catch (err) { setError(err instanceof Error ? err.message : 'Errore nel caricamento') }
     finally { setLoading(false) }
   }, [serviceType])
@@ -201,7 +191,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
   const [payStatus, setPayStatus] = useState('pending') // Da Saldare
   const [payMethod, setPayMethod] = useState('')
   const [origPayStatus, setOrigPayStatus] = useState('') // per rilevare la transizione -> Pagato
-  const [passengers, setPassengers] = useState<{ name: string; seat: string; phone: string }[]>([])
+  const [passengers, setPassengers] = useState<{ name: string; seat: string }[]>([])
   const [origDetails, setOrigDetails] = useState<Record<string, unknown>>({})
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
@@ -251,7 +241,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     setPayStatus(b.payment_status || 'pending')
     setOrigPayStatus(b.payment_status || 'pending')
     setPayMethod(b.payment_method || '')
-    setPassengers((b.booking_details?.passengers || []).map(p => ({ name: p.name || '', seat: p.seat || '', phone: p.phone || '' })) as { name: string; seat: string; phone: string }[])
+    setPassengers((b.booking_details?.passengers || []).map(p => ({ name: p.name || '', seat: p.seat || '' })) as { name: string; seat: string }[])
     setOrigDetails((b.booking_details as Record<string, unknown>) || {})
     setFormError('')
     setShowForm(true)
@@ -271,7 +261,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     if (!form.customer_name.trim()) { setFormError('Il nome cliente è obbligatorio.'); return }
     setSaving(true); setFormError('')
     // Passeggeri -> booking_details.passengers (preserva le altre chiavi su modifica).
-    const cleanPassengers = passengers.map(p => ({ name: p.name.trim(), ...(p.seat ? { seat: p.seat } : {}), ...(p.phone?.trim() ? { phone: p.phone.trim() } : {}) })).filter(p => p.name)
+    const cleanPassengers = passengers.map(p => ({ name: p.name.trim(), ...(p.seat ? { seat: p.seat } : {}) })).filter(p => p.name)
     const details: Record<string, unknown> = { ...origDetails }
     if (cleanPassengers.length) details.passengers = cleanPassengers
     else delete details.passengers
@@ -331,9 +321,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     const becamePaid = PAID.includes(payStatus) && !PAID.includes(origPayStatus)
     if (bookingId && becamePaid) {
       const ref = (bookingId || '').substring(0, 8).toUpperCase()
-      // Usa i passeggeri appena salvati (cleanPassengers), non quelli vecchi:
-      // così il telefono inserito ora arriva alla notifica del 2o passeggero.
-      const pax = cleanPassengers as { name?: string; phone?: string }[]
+      const pax = (origDetails.passengers as { name?: string; phone?: string }[] | undefined) || []
       const recips: { phone: string; name: string }[] = []
       const seen = new Set<string>()
       const addRecip = (ph: string, nm: string) => { const d = (ph || '').replace(/\D/g, ''); if (d.length < 6 || seen.has(d)) return; seen.add(d); recips.push({ phone: ph, name: nm }) }
@@ -508,7 +496,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
               <div className="sm:col-span-2 border-t border-theme-border pt-3 mt-1">
                 <div className="flex items-center justify-between">
                   <label className="text-xs text-theme-text-muted">Passeggeri {passengers.length > 0 && `(${passengers.length})`}</label>
-                  <button type="button" onClick={() => setPassengers(p => [...p, { name: '', seat: '', phone: '' }])} className="text-xs text-dr7-gold font-semibold hover:underline">+ Aggiungi passeggero</button>
+                  <button type="button" onClick={() => setPassengers(p => [...p, { name: '', seat: '' }])} className="text-xs text-dr7-gold font-semibold hover:underline">+ Aggiungi passeggero</button>
                 </div>
                 {passengers.length === 0 && (
                   <p className="text-[11px] text-theme-text-muted mt-1">Nessun passeggero. Clicca "+ Aggiungi passeggero"{serviceType === 'heli_rental' ? ' e scegli il posto per ciascuno.' : '.'}</p>
@@ -522,16 +510,9 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                           placeholder={`Passeggero ${i + 1}: scegli un cliente o scrivi il nome`}
                           initialQuery={p.name}
                           onQueryChange={q => setPassengers(arr => arr.map((x, j) => j === i ? { ...x, name: q } : x))}
-                          onPick={(name, phone) => setPassengers(arr => arr.map((x, j) => j === i ? { ...x, name, phone: phone || x.phone } : x))}
+                          onPick={name => setPassengers(arr => arr.map((x, j) => j === i ? { ...x, name } : x))}
                         />
                       </div>
-                      <input
-                        className={INPUT_CLS + ' max-w-[150px]'}
-                        type="tel"
-                        placeholder="Telefono"
-                        value={p.phone}
-                        onChange={e => setPassengers(arr => arr.map((x, j) => j === i ? { ...x, phone: e.target.value } : x))}
-                      />
                       {serviceType === 'heli_rental' && (
                         <select className={INPUT_CLS + ' max-w-[150px]'} value={p.seat}
                           onChange={e => setPassengers(arr => arr.map((x, j) => j === i ? { ...x, seat: e.target.value } : x))}>
