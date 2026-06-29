@@ -2092,6 +2092,24 @@ export default function MessaggiSistemaProTab() {
                 return
             }
             if (json?.skipped) {
+                // Alcuni template NON passano dal resolver (es. OTP firma
+                // 'pro_firma_otp', letto direttamente dal signer): il giro per
+                // messageKey "collassa". Ritenta inviando il CORPO GREZZO scritto
+                // dall'admin, con valori di esempio per i segnaposto comuni — così
+                // la "Prova" funziona per QUALSIASI messaggio.
+                const sampleBody = (template.message_body || '')
+                    .replace(/\{\{?\s*otp\s*\}?\}/gi, '123456')
+                    .replace(/\{\{?\s*expiryMinutes\s*\}?\}/gi, '10')
+                const res2 = await authFetch('/.netlify/functions/send-whatsapp-notification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ customPhone: phone, customMessage: sampleBody, skipHeader: true }),
+                })
+                const json2 = await res2.json().catch(() => ({}))
+                if (res2.ok && !json2?.skipped) {
+                    toast.success(`Test inviato a ${phone} (anteprima con codice di esempio)`)
+                    return
+                }
                 toast.error(`Test saltato: ${json.reason || json.message || 'template non disponibile'}`)
                 return
             }
