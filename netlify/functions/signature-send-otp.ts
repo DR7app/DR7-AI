@@ -1,6 +1,5 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { renderTemplate } from './utils/messageTemplates'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -138,17 +137,29 @@ export const handler: Handler = async (event) => {
         if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
         if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
 
-        // Body comes ONLY from Messaggi di Sistema Pro (pro_richiesta_otp).
-        // No hardcoded fallback — admin edits to the template MUST always
-        // reach the customer. Available variables: {otp},
-        // {expiryMinutes}.
-        const otpMessage = await renderTemplate('signature_otp_whatsapp', {
-            otp,
-            expiryMinutes: String(OTP_EXPIRY_MINUTES),
-        })
-        if (!otpMessage) {
-            console.error('[signature-send-otp] Template "signature_otp_whatsapp" (pro_richiesta_otp) missing or disabled')
-            return { statusCode: 500, body: JSON.stringify({ error: 'Template OTP non configurato in Messaggi di Sistema Pro (pro_richiesta_otp).' }) }
+        // Testo OTP dal template DEDICATO 'pro_firma_otp' ("OTP Firma Contratto"),
+        // letto DIRETTAMENTE da system_messages. NON usare renderTemplate(
+        // 'signature_otp_whatsapp'): la mappa OLD_TO_PRO instradava quella chiave
+        // su 'pro_richiesta_otp', CONDIVISA con "Notifica Admin: Nuovo Preventivo"
+        // e il no-cauzione — quindi le modifiche dell'admin all'OTP non arrivavano
+        // mai. Ora l'admin modifica "OTP Firma Contratto" e il messaggio cambia.
+        // Variabili: {otp}, {expiryMinutes}. Fallback DR7 se il template manca,
+        // così l'OTP parte SEMPRE.
+        const OTP_FALLBACK = `*MESSAGGIO AUTOMATICO GENERATO DA DR7 A.I.*\n\n*DR7 – Codice di Verifica*\n\nIl tuo codice OTP per la firma del contratto è:\n\n*${otp}*\n\nIl codice sarà valido per i prossimi ${OTP_EXPIRY_MINUTES} minuti.\n\nSe non hai richiesto questo codice o ritieni di averlo ricevuto per errore, puoi ignorare il presente messaggio.\n\nDR7`
+        let otpMessage = OTP_FALLBACK
+        try {
+            const { data: otpTpl } = await supabase
+                .from('system_messages')
+                .select('message_body, is_enabled')
+                .eq('message_key', 'pro_firma_otp')
+                .maybeSingle()
+            if (otpTpl && otpTpl.is_enabled !== false && otpTpl.message_body) {
+                otpMessage = String(otpTpl.message_body)
+                    .replace(/\{\{?\s*otp\s*\}?\}/gi, otp)
+                    .replace(/\{\{?\s*expiryMinutes\s*\}?\}/gi, String(OTP_EXPIRY_MINUTES))
+            }
+        } catch (tplErr) {
+            console.warn('[signature-send-otp] pro_firma_otp fetch failed, using fallback:', tplErr)
         }
 
         const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
