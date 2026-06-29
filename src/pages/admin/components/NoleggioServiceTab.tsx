@@ -52,6 +52,13 @@ interface BookingRow {
   booking_details: { passengers?: { name: string; seat?: string; phone?: string }[]; seat_count?: number; seats?: string; note?: string | null } | null
 }
 
+interface TourDurationOpt {
+  minutes: number
+  price: number          // EUR (intero) per persona
+  label: string
+  description?: string
+  best_value?: boolean
+}
 interface CatalogRow {
   id: string
   service_type: string
@@ -62,6 +69,7 @@ interface CatalogRow {
   image_url: string | null
   is_active: boolean
   sort_order: number
+  tour_durations?: TourDurationOpt[]
 }
 
 interface PreventivoRow {
@@ -1446,6 +1454,8 @@ interface TourDeparture {
   price_per_seat_cents: number | null
   status: string
   notes: string | null
+  duration_minutes?: number | null
+  duration_label?: string | null
 }
 interface TourSeat {
   id: string
@@ -1458,7 +1468,7 @@ interface TourSeat {
   customer_phone: string | null
   booking_id: string | null
 }
-const EMPTY_DEP_FORM = { departure_date: '', departure_time: '10:00', total_seats: '6', price_eur: '' }
+const EMPTY_DEP_FORM = { departure_date: '', departure_time: '10:00', total_seats: '6', price_eur: '', duration_label: '', duration_minutes: '' }
 function fmtYmd(ymd: string): string {
   if (!ymd) return '—'
   const [y, m, d] = ymd.split('-')
@@ -1581,7 +1591,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     ;(async () => {
       const { data, error: e } = await supabase
         .from('noleggio_catalog')
-        .select('id, service_type, name, description, price_per_day, capacity, image_url, is_active, sort_order')
+        .select('id, service_type, name, description, price_per_day, capacity, image_url, is_active, sort_order, tour_durations')
         .eq('service_type', serviceType)
         .order('sort_order', { ascending: true }).order('name', { ascending: true })
       if (cancelled) return
@@ -1852,6 +1862,8 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
       departure_time: (dep.departure_time || '10:00').slice(0, 5),
       total_seats: String(dep.total_seats),
       price_eur: dep.price_per_seat_cents != null ? centsToEur(dep.price_per_seat_cents) : '',
+      duration_label: dep.duration_label || '',
+      duration_minutes: dep.duration_minutes != null ? String(dep.duration_minutes) : '',
     })
     setError(''); setShowForm(true)
   }
@@ -1871,6 +1883,8 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
         departure_time: form.departure_time || '10:00',
         total_seats: total,
         price_per_seat_cents: form.price_eur ? eurToCents(form.price_eur) : null,
+        duration_minutes: form.duration_minutes ? parseInt(form.duration_minutes, 10) : null,
+        duration_label: form.duration_label || null,
       }).eq('id', editingDepId)
       if (ue) { setSaving(false); setError(tourTableHint(ue.message)); return }
       const existing = (seats[editingDepId] || [])
@@ -1891,6 +1905,8 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
       departure_time: form.departure_time || '10:00',
       total_seats: total,
       price_per_seat_cents: form.price_eur ? eurToCents(form.price_eur) : null,
+      duration_minutes: form.duration_minutes ? parseInt(form.duration_minutes, 10) : null,
+      duration_label: form.duration_label || null,
       status: 'scheduled',
     }).select('id').single()
     if (e || !data) { setSaving(false); setError(tourTableHint(e?.message || 'Errore creazione partenza')); return }
@@ -1966,6 +1982,9 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                   <span className="text-theme-text-muted">{expanded === dep.id ? '▾' : '▸'}</span>
                   <span className="text-theme-text-primary font-medium tabular-nums">{fmtYmd(dep.departure_date)}</span>
                   <span className="text-theme-text-secondary tabular-nums">{dep.departure_time.slice(0, 5)}</span>
+                  {dep.duration_label && (
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full border border-theme-border bg-theme-bg-hover text-theme-text-secondary">{dep.duration_label}</span>
+                  )}
                   {(() => {
                     const free = seatFree(dep)
                     const cls = free == null ? 'bg-theme-bg-hover text-theme-text-muted border-theme-border'
@@ -2112,6 +2131,30 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
           <div className="bg-theme-bg-secondary border border-theme-border rounded-xl w-full max-w-md p-5 space-y-4" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-theme-text-primary">{editingDepId ? 'Modifica partenza' : 'Nuova partenza'} — {selectedAsset?.name || ''}</h3>
             {error && <ErrorBox msg={error} />}
+            {selectedAsset?.tour_durations && selectedAsset.tour_durations.length > 0 && (
+              <div className="mb-3">
+                <label className="text-xs text-theme-text-muted">Durata del tour</label>
+                <select
+                  className={INPUT_CLS}
+                  value={form.duration_label}
+                  onChange={e => {
+                    const d = selectedAsset.tour_durations!.find(x => x.label === e.target.value)
+                    setForm(f => ({
+                      ...f,
+                      duration_label: d?.label || '',
+                      duration_minutes: d ? String(d.minutes) : '',
+                      // Prezzo per persona = prezzo della durata scelta (modificabile sotto).
+                      price_eur: d ? String(d.price) : f.price_eur,
+                    }))
+                  }}
+                >
+                  <option value="">— Scegli durata —</option>
+                  {selectedAsset.tour_durations.map((d, i) => (
+                    <option key={i} value={d.label}>{d.label} — €{d.price}/persona{d.best_value ? ' ★' : ''}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-theme-text-muted">Data</label>
