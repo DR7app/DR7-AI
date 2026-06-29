@@ -2131,30 +2131,39 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
           <div className="bg-theme-bg-secondary border border-theme-border rounded-xl w-full max-w-md p-5 space-y-4" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-theme-text-primary">{editingDepId ? 'Modifica partenza' : 'Nuova partenza'} — {selectedAsset?.name || ''}</h3>
             {error && <ErrorBox msg={error} />}
-            {selectedAsset?.tour_durations && selectedAsset.tour_durations.length > 0 && (
-              <div className="mb-3">
-                <label className="text-xs text-theme-text-muted">Durata del tour</label>
-                <select
-                  className={INPUT_CLS}
-                  value={form.duration_label}
-                  onChange={e => {
-                    const d = selectedAsset.tour_durations!.find(x => x.label === e.target.value)
-                    setForm(f => ({
-                      ...f,
-                      duration_label: d?.label || '',
-                      duration_minutes: d ? String(d.minutes) : '',
-                      // Prezzo per persona = prezzo della durata scelta (modificabile sotto).
-                      price_eur: d ? String(d.price) : f.price_eur,
-                    }))
-                  }}
-                >
-                  <option value="">— Scegli durata —</option>
-                  {selectedAsset.tour_durations.map((d, i) => (
-                    <option key={i} value={d.label}>{d.label} — €{d.price}/persona{d.best_value ? ' ★' : ''}</option>
-                  ))}
-                </select>
+            {/* Durata: preset rapido (se presenti) + campi LIBERI sempre modificabili.
+                Niente prezzi/durate bloccati: l'admin può impostare qualsiasi durata e prezzo. */}
+            <div className="mb-3 space-y-2">
+              {selectedAsset?.tour_durations && selectedAsset.tour_durations.length > 0 && (
+                <div>
+                  <label className="text-xs text-theme-text-muted">Durata (preset rapido — opzionale)</label>
+                  <select
+                    className={INPUT_CLS}
+                    value={selectedAsset.tour_durations.some(x => x.label === form.duration_label) ? form.duration_label : '__custom__'}
+                    onChange={e => {
+                      if (e.target.value === '__custom__') return
+                      const d = selectedAsset!.tour_durations!.find(x => x.label === e.target.value)
+                      if (d) setForm(f => ({ ...f, duration_label: d.label, duration_minutes: String(d.minutes), price_eur: String(d.price) }))
+                    }}
+                  >
+                    {selectedAsset.tour_durations.map((d, i) => (
+                      <option key={i} value={d.label}>{d.label} — €{d.price}/persona{d.best_value ? ' ★' : ''}</option>
+                    ))}
+                    <option value="__custom__">Personalizzata…</option>
+                  </select>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-theme-text-muted">Durata (etichetta)</label>
+                  <input className={INPUT_CLS} placeholder="es. 30 MIN" value={form.duration_label} onChange={e => setForm({ ...form, duration_label: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-xs text-theme-text-muted">Minuti</label>
+                  <input className={INPUT_CLS} type="number" min={1} placeholder="es. 30" value={form.duration_minutes} onChange={e => setForm({ ...form, duration_minutes: e.target.value })} />
+                </div>
               </div>
-            )}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-theme-text-muted">Data</label>
