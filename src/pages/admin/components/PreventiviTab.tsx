@@ -2207,8 +2207,26 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           ? `Consegna = ${formatEur(Number(extras.delivery_fee))}` : ''
         const linePickup = (extras?.pickup_fee && Number(extras.pickup_fee) > 0)
           ? `Ritiro = ${formatEur(Number(extras.pickup_fee))}` : ''
-        const lineExperience = (extras?.experience_cost && Number(extras.experience_cost) > 0)
-          ? `Servizi experience = ${formatEur(Number(extras.experience_cost))}` : ''
+        // Servizi experience: una riga PER servizio col SUO nome reale (es.
+        // "GUIDA LIBERA = 50,00"), non più un generico "Servizi experience = totale".
+        // I per_km sono mostrati nella sezione KM, quindi qui si escludono.
+        const lineExperience = (() => {
+          const sel = (extras?.experience_services || {}) as Record<string, number>
+          const cat = configOverlay.experienceServices || []
+          const days = Number(p.rental_days || 1)
+          const parts: string[] = []
+          for (const [id, qtyRaw] of Object.entries(sel)) {
+            const qty = Number(qtyRaw) || 0
+            if (qty <= 0) continue
+            const svc = cat.find(s => s.id === id)
+            if (!svc || svc.unit === 'per_km') continue
+            const cost = Math.round((svc.unit === 'per_day' ? svc.price * days * qty : svc.price * qty) * 100) / 100
+            if (cost <= 0) continue
+            const nm = qty > 1 ? `${svc.name} × ${qty}` : svc.name
+            parts.push(`${nm} = ${formatEur(cost)}`)
+          }
+          return parts.join('\n')
+        })()
 
         const pricingLines = [
           lineRental, lineInsurance, lineLavaggio, lineNoCauzione, lineKm,
@@ -5437,6 +5455,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
               </div>
             )
           })()}
+          {/* Secondo Guidatore + DR7 FLEX raggruppati sotto "Servizi Experience" */}
+          <p className="text-sm font-semibold text-theme-text-primary pt-1">Servizi Experience</p>
           <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
             <input type="checkbox" checked={form.include_second_driver} onChange={(e) => setForm(prev => ({ ...prev, include_second_driver: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
             <span className="text-sm text-theme-text-primary">
@@ -5452,10 +5472,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         </div>
       </div>
 
-      {/* Experience Services */}
+      {/* Experience Services (catalogo) — sotto lo stesso gruppo "Servizi Experience" */}
       {availableExperienceServices.length > 0 && (
         <div className="space-y-3">
-          <p className="text-sm font-semibold text-theme-text-primary">Servizi Experience</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {availableExperienceServices.map(svc => {
               const qty = form.experience_services[svc.id] || 0
