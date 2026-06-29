@@ -1276,7 +1276,10 @@ function CalcolaPagaSection({
             const weekDailyOT = new Map<string, number>()
             for (const d of days) {
                 if (d.minutiLavorati <= 0) continue
-                const wk = isoWeekKey(d.data)
+                // Stessa regola di PayrollPeriodoView: spezza la settimana al confine
+                // di MESE. Una settimana a cavallo non somma le ore dei due mesi, così
+                // 40h/sett è misurato dentro al mese e non nasce straordinario fittizio.
+                const wk = isoWeekKey(d.data) + '|' + String(d.data).slice(0, 7)
                 weekTotal.set(wk, (weekTotal.get(wk) || 0) + d.minutiLavorati)
                 // straord giornaliero per questo giorno
                 const dayOT = dailyCapMin > 0 && d.minutiLavorati > dailyCapMin

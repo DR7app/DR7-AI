@@ -224,7 +224,12 @@ export default function PayrollPeriodoView() {
                         m = Math.max(0, m)
                         totalMinLav += m
                         if (m <= 0) return
-                        const wk = isoWeekKey(dataKey)
+                        // Spezza la settimana al confine di MESE: i giorni della stessa
+                        // settimana ISO ma in mesi diversi vanno in bucket separati. Così
+                        // una settimana a cavallo (es. fine giugno / inizio luglio) NON
+                        // somma le ore dei due mesi e non genera straordinario fittizio:
+                        // 40h/sett viene misurato dentro al mese, le ore restano normali.
+                        const wk = isoWeekKey(dataKey) + '|' + dataKey.slice(0, 7)
                         weekTotal.set(wk, (weekTotal.get(wk) || 0) + m)
                         if (straordEnabled && dailyCapMin > 0 && m > dailyCapMin) {
                             const dayOT = m - dailyCapMin
