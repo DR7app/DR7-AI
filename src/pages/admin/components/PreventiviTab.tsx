@@ -602,9 +602,14 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     // 2026-05-27: nascondi servizi "per_km" (Pacchetto KM / prezzo al km
     // manuale) dal form Preventivi su richiesta direzione — non usati.
     // I servizi restano in Centralina Pro per il sito; qui non si vedono.
-    () => configOverlay.experienceServices.filter(s =>
-      s.unit !== 'per_km' && (!s.tierOnly || s.tierOnly === form.driver_tier)
-    ),
+    () => configOverlay.experienceServices.filter(s => {
+      if (s.unit === 'per_km') return false
+      if (s.tierOnly && s.tierOnly !== form.driver_tier) return false
+      // DR7 FLEX ha già il suo toggle dedicato: nascondi l'eventuale doppione a catalogo.
+      const n = (s.name || '').toLowerCase()
+      if (n.includes('dr7') && n.includes('flex')) return false
+      return true
+    }),
     [configOverlay.experienceServices, form.driver_tier]
   )
 
@@ -5455,27 +5460,37 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
               </div>
             )
           })()}
-          {/* Secondo Guidatore + DR7 FLEX raggruppati sotto "Servizi Experience" */}
-          <p className="text-sm font-semibold text-theme-text-primary pt-1">Servizi Experience</p>
-          <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
-            <input type="checkbox" checked={form.include_second_driver} onChange={(e) => setForm(prev => ({ ...prev, include_second_driver: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
-            <span className="text-sm text-theme-text-primary">
-              Secondo Guidatore ({formatEur(proSecondDriverDaily)}/giorno)
-            </span>
-          </label>
-          <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
-            <input type="checkbox" checked={form.include_dr7_flex} onChange={(e) => setForm(prev => ({ ...prev, include_dr7_flex: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
-            <span className="text-sm text-theme-text-primary">
-              DR7 FLEX — Cancellazione Premium ({formatEur(proDr7FlexDaily)}/giorno)
-            </span>
-          </label>
         </div>
       </div>
 
-      {/* Experience Services (catalogo) — sotto lo stesso gruppo "Servizi Experience" */}
-      {availableExperienceServices.length > 0 && (
-        <div className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+      {/* Servizi Experience — design UNICO: stessa card "Aggiungi" per tutti
+          (Secondo Guidatore + DR7 FLEX inclusi, niente più checkbox/stepper misti). */}
+      <div className="space-y-3">
+        <p className="text-sm font-semibold text-theme-text-primary">Servizi Experience</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {/* Secondo Guidatore */}
+          <div className={`flex items-center justify-between gap-3 p-2 rounded-lg border transition-colors ${form.include_second_driver ? 'border-dr7-gold/50 bg-dr7-gold/5' : 'border-theme-border/50 hover:bg-theme-bg-tertiary/30'}`}>
+            <div className="flex-1 min-w-0">
+              <span className="text-sm text-theme-text-primary">Secondo Guidatore</span>
+              <span className="text-xs text-theme-text-muted ml-2">{formatEur(proSecondDriverDaily)}/giorno</span>
+            </div>
+            <button
+              onClick={() => setForm(prev => ({ ...prev, include_second_driver: !prev.include_second_driver }))}
+              className={`px-3 py-1 text-xs rounded ${form.include_second_driver ? 'bg-dr7-gold text-white' : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'}`}
+            >{form.include_second_driver ? 'Aggiunto' : 'Aggiungi'}</button>
+          </div>
+          {/* DR7 FLEX — Cancellazione Premium (unico, niente doppione a catalogo) */}
+          <div className={`flex items-center justify-between gap-3 p-2 rounded-lg border transition-colors ${form.include_dr7_flex ? 'border-dr7-gold/50 bg-dr7-gold/5' : 'border-theme-border/50 hover:bg-theme-bg-tertiary/30'}`}>
+            <div className="flex-1 min-w-0">
+              <span className="text-sm text-theme-text-primary">DR7 FLEX — Cancellazione Premium</span>
+              <span className="text-xs text-theme-text-muted ml-2">{formatEur(proDr7FlexDaily)}/giorno</span>
+            </div>
+            <button
+              onClick={() => setForm(prev => ({ ...prev, include_dr7_flex: !prev.include_dr7_flex }))}
+              className={`px-3 py-1 text-xs rounded ${form.include_dr7_flex ? 'bg-dr7-gold text-white' : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'}`}
+            >{form.include_dr7_flex ? 'Aggiunto' : 'Aggiungi'}</button>
+          </div>
+          {/* Catalogo experience — stessa card */}
             {availableExperienceServices.map(svc => {
               const qty = form.experience_services[svc.id] || 0
               const isQuantity = svc.unit === 'per_item' || svc.unit === 'per_hour'
@@ -5576,7 +5591,14 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                       {formatEur(svc.price)}{UNIT_LABELS[svc.unit] || ''}
                     </span>
                   </div>
-                  {isQuantity ? (
+                  {qty <= 0 ? (
+                    /* Stato a riposo: SEMPRE "Aggiungi" (design unico) */
+                    <button
+                      onClick={() => setForm(prev => ({ ...prev, experience_services: { ...prev.experience_services, [svc.id]: 1 } }))}
+                      className="px-3 py-1 text-xs rounded bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover"
+                    >Aggiungi</button>
+                  ) : isQuantity ? (
+                    /* Aggiunto + a quantità: stepper - n + */
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => setForm(prev => {
@@ -5593,23 +5615,21 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                       >+</button>
                     </div>
                   ) : (
+                    /* Aggiunto + singolo: "Aggiunto" (clic per rimuovere) */
                     <button
                       onClick={() => setForm(prev => {
                         const svcs = { ...prev.experience_services }
-                        if (qty > 0) delete svcs[svc.id]; else svcs[svc.id] = 1
+                        delete svcs[svc.id]
                         return { ...prev, experience_services: svcs }
                       })}
-                      className={`px-3 py-1 text-xs rounded ${qty > 0 ? 'bg-dr7-gold text-white' : 'bg-theme-bg-tertiary text-theme-text-muted hover:bg-theme-bg-hover'}`}
-                    >
-                      {qty > 0 ? 'Aggiunto' : 'Aggiungi'}
-                    </button>
+                      className="px-3 py-1 text-xs rounded bg-dr7-gold text-white"
+                    >Aggiunto</button>
                   )}
                 </div>
               )
             })}
           </div>
         </div>
-      )}
 
       {/* Pricing Summary */}
       <div className="p-4 bg-theme-bg-tertiary border border-theme-border rounded-lg space-y-2">
