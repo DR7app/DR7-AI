@@ -550,6 +550,9 @@ type AutomationsConfig = {
   cross_vehicle_gap_minutes: number | ''
   pre_pickup_carwash_buffer_minutes: number | ''
   late_return_grace_minutes: number | ''
+  /** Periodi in cui le prenotazioni LAVAGGIO sono BLOCCATE: il sito non
+   *  permette di prenotare in quelle date. Vuoto = nessun blocco. */
+  carwash_block_ranges?: { from: string; to: string; message?: string }[]
   /** Lista regole di cancellazione, valutate per `daysUntilPickup` discendente.
    *  Vince la prima regola attiva con `min_days_notice <= daysUntilPickup`. */
   cancellation_rules: CancellationRule[]
@@ -607,6 +610,7 @@ const INITIAL_AUTOMATIONS: AutomationsConfig = {
   cross_vehicle_gap_minutes: 15,
   pre_pickup_carwash_buffer_minutes: 90,
   late_return_grace_minutes: 90,
+  carwash_block_ranges: [],
   cancellation_rules: [
     { id: 'standard',   label: 'Cancellazione standard',  applies_to: 'all',     requires_service: 'none',       min_days_notice: 5, refund_pct: 90, refund_method: 'wallet', is_active: true },
     { id: 'dr7_flex',   label: 'DR7 Flex (noleggio)',     applies_to: 'rental',  requires_service: 'dr7_flex',   min_days_notice: 0, refund_pct: 90, refund_method: 'wallet', is_active: true },
@@ -6361,6 +6365,39 @@ function AutomazioniSection({
             </div>
             <p className="text-[11px] text-theme-text-secondary mt-1.5">Default: 90 (1h30 prima del pickup time).</p>
           </label>
+        </div>
+      </section>
+
+      {/* 5) Blocco prenotazioni lavaggio (per date) */}
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
+        <header className="px-5 pt-5 pb-3 bg-[#fff4f2] border-b border-[#ff3b30]/15">
+          <h3 className="text-[15px] font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
+            <span className="inline-flex w-6 h-6 rounded-full bg-[#ff3b30] text-white items-center justify-center text-[12px] font-bold">5</span>
+            Blocco prenotazioni lavaggio
+          </h3>
+          <p className="text-[12px] text-[#3a3a3c] leading-relaxed pl-8">
+            Periodi in cui il sito NON permette di prenotare lavaggi (ferie, eventi, agenda piena). Le date comprese tra <b>Dal</b> e <b>Al</b> (incluse) vengono bloccate. Nessun periodo = nessun blocco.
+          </p>
+        </header>
+        <div className="p-5 space-y-3">
+          {(automations.carwash_block_ranges || []).map((r, i) => (
+            <div key={i} className="grid grid-cols-1 sm:grid-cols-[150px_150px_1fr_auto] gap-2 items-center">
+              <input type="date" value={r.from || ''}
+                onChange={(e) => update({ carwash_block_ranges: (automations.carwash_block_ranges || []).map((x, j) => j === i ? { ...x, from: e.target.value } : x) })}
+                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40" />
+              <input type="date" value={r.to || ''}
+                onChange={(e) => update({ carwash_block_ranges: (automations.carwash_block_ranges || []).map((x, j) => j === i ? { ...x, to: e.target.value } : x) })}
+                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40" />
+              <input type="text" placeholder="Messaggio mostrato al cliente (opzionale)" value={r.message || ''}
+                onChange={(e) => update({ carwash_block_ranges: (automations.carwash_block_ranges || []).map((x, j) => j === i ? { ...x, message: e.target.value } : x) })}
+                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40" />
+              <button type="button" onClick={() => update({ carwash_block_ranges: (automations.carwash_block_ranges || []).filter((_, j) => j !== i) })}
+                className="text-red-500 hover:text-red-600 text-xl leading-none px-2" title="Rimuovi periodo">&times;</button>
+            </div>
+          ))}
+          <button type="button"
+            onClick={() => update({ carwash_block_ranges: [...(automations.carwash_block_ranges || []), { from: '', to: '', message: '' }] })}
+            className="text-[13px] text-dr7-gold font-semibold hover:underline">+ Aggiungi periodo di blocco</button>
         </div>
       </section>
 
