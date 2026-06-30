@@ -571,12 +571,12 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                   <div className="mt-1 space-y-0.5 text-[11px]">
                     <div className="flex items-center justify-between text-theme-text-muted">
                       <span>Listino</span>
-                      <span className="tabular-nums">{formatEur(defaultTourCents)}</span>
+                      <span className="tabular-nums">€{centsToEur(defaultTourCents)}</span>
                     </div>
                     {tourScontoCents > 0 && (
                       <div className="flex items-center justify-between text-dr7-gold">
                         <span>Sconto</span>
-                        <span className="tabular-nums">-{formatEur(tourScontoCents)}</span>
+                        <span className="tabular-nums">-€{centsToEur(tourScontoCents)}</span>
                       </div>
                     )}
                   </div>
