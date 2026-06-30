@@ -210,6 +210,12 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
   const selectedAssetCapacity = selectedAssetObj?.capacity || 0
   const selectedAssetPriceCents = selectedAssetObj?.price_per_day || 0
   const seatOptions = Array.from({ length: selectedAssetCapacity }, (_, i) => String(i + 1))
+  // Prezzo "a listino" del tour (n. passeggeri × prezzo catalogo) e sconto
+  // auto-calcolato quando l'admin mette un Prezzo Finale più basso — stesso
+  // formato di Preventivo / Penali-Danni.
+  const defaultTourCents = passengers.length > 0 && selectedAssetPriceCents > 0 ? passengers.length * selectedAssetPriceCents : 0
+  const finalTourCents = form.price_eur ? eurToCents(form.price_eur) : 0
+  const tourScontoCents = defaultTourCents > 0 && finalTourCents > 0 && finalTourCents < defaultTourCents ? defaultTourCents - finalTourCents : 0
 
   // True appena l'admin tocca a mano il campo Prezzo: da quel momento NON si
   // ricalcola più in automatico, così il prezzo digitato resta.
@@ -559,8 +565,22 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                 <input className={INPUT_CLS} type="time" value={form.dropoff_time} onChange={e => setForm({ ...form, dropoff_time: e.target.value })} />
               </div>
               <div>
-                <label className="text-xs text-theme-text-muted">Totale (€)</label>
-                <input className={INPUT_CLS} inputMode="decimal" placeholder="0,00" value={form.price_eur} onChange={e => { priceEditedRef.current = true; setForm({ ...form, price_eur: e.target.value }) }} />
+                <label className="text-xs text-theme-text-muted">Prezzo Finale (€)</label>
+                <input className={INPUT_CLS} inputMode="decimal" placeholder={defaultTourCents > 0 ? `Listino ${centsToEur(defaultTourCents)}` : '0,00'} value={form.price_eur} onChange={e => { priceEditedRef.current = true; setForm({ ...form, price_eur: e.target.value }) }} />
+                {defaultTourCents > 0 && (
+                  <div className="mt-1 space-y-0.5 text-[11px]">
+                    <div className="flex items-center justify-between text-theme-text-muted">
+                      <span>Listino</span>
+                      <span className="tabular-nums">{formatEur(defaultTourCents)}</span>
+                    </div>
+                    {tourScontoCents > 0 && (
+                      <div className="flex items-center justify-between text-dr7-gold">
+                        <span>Sconto</span>
+                        <span className="tabular-nums">-{formatEur(tourScontoCents)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="text-xs text-theme-text-muted">Stato Pagamento</label>
