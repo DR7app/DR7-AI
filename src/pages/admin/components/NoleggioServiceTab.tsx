@@ -211,12 +211,15 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
   const selectedAssetPriceCents = selectedAssetObj?.price_per_day || 0
   const seatOptions = Array.from({ length: selectedAssetCapacity }, (_, i) => String(i + 1))
 
+  // True appena l'admin tocca a mano il campo Prezzo: da quel momento NON si
+  // ricalcola più in automatico, così il prezzo digitato resta.
+  const priceEditedRef = useRef(false)
   // Totale calcolato automaticamente (Aria): n° passeggeri × prezzo posto del
-  // catalogo. Solo se il prezzo catalogo è impostato (>0), così non azzera un
-  // totale digitato a mano quando il prezzo è "su richiesta".
+  // catalogo. Solo se il prezzo catalogo è impostato (>0) E l'admin non l'ha
+  // ancora modificato a mano (altrimenti sovrascriveva il prezzo digitato).
   useEffect(() => {
     if (serviceType !== 'heli_rental' || !showForm) return
-    if (passengers.length > 0 && selectedAssetPriceCents > 0) {
+    if (!priceEditedRef.current && passengers.length > 0 && selectedAssetPriceCents > 0) {
       setForm(f => ({ ...f, price_eur: centsToEur(passengers.length * selectedAssetPriceCents) }))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -229,9 +232,11 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     setPayStatus('pending'); setPayMethod(''); setOrigPayStatus('')
     setPassengers([]); setOrigDetails({})
     setFormError('')
+    priceEditedRef.current = false // nuova prenotazione: ricalcolo automatico attivo
     setShowForm(true)
   }
   function openEdit(b: BookingRow) {
+    priceEditedRef.current = true // modifica: NON sovrascrivere il prezzo salvato
     const pk = b.pickup_date ? new Date(b.pickup_date) : null
     const dr = b.dropoff_date ? new Date(b.dropoff_date) : null
     const ymd = (d: Date | null) => d ? d.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }) : ''
@@ -555,7 +560,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
               </div>
               <div>
                 <label className="text-xs text-theme-text-muted">Totale (€)</label>
-                <input className={INPUT_CLS} inputMode="decimal" placeholder="0,00" value={form.price_eur} onChange={e => setForm({ ...form, price_eur: e.target.value })} />
+                <input className={INPUT_CLS} inputMode="decimal" placeholder="0,00" value={form.price_eur} onChange={e => { priceEditedRef.current = true; setForm({ ...form, price_eur: e.target.value }) }} />
               </div>
               <div>
                 <label className="text-xs text-theme-text-muted">Stato Pagamento</label>
