@@ -1604,6 +1604,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
   const [seatNames, setSeatNames] = useState<Record<string, string>>({}) // seatId -> nome passeggero
   const [seatPhones, setSeatPhones] = useState<Record<string, string>>({}) // seatId -> telefono passeggero (se scelto dai clienti)
   const [tourNote, setTourNote] = useState('') // note prenotazione
+  const [tourPriceOverride, setTourPriceOverride] = useState('') // prezzo manuale (€): vuoto = prezzo automatico
   const [tourPayStatus, setTourPayStatus] = useState('pending') // Da Saldare
   const [tourPayMethod, setTourPayMethod] = useState('')
   const [tourConfirm, setTourConfirm] = useState(false) // Conferma Prenotazione
@@ -1707,7 +1708,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     setCartSeats(prev => { const n = new Set(prev); if (n.has(seat.id)) n.delete(seat.id); else n.add(seat.id); return n })
   }
 
-  function clearCart() { setCartDep(null); setCartSeats(new Set()); setCust({ name: '', phone: '' }); setSeatNames({}); setSeatPhones({}); setTourNote(''); setTourPayStatus('pending'); setTourPayMethod(''); setTourConfirm(false) }
+  function clearCart() { setCartDep(null); setCartSeats(new Set()); setCust({ name: '', phone: '' }); setSeatNames({}); setSeatPhones({}); setTourNote(''); setTourPriceOverride(''); setTourPayStatus('pending'); setTourPayMethod(''); setTourConfirm(false) }
 
   // Crea la prenotazione dai posti nel carrello e li assegna al cliente.
   // booking confirmed + payment_status pending => posti ROSSI (non pagati).
@@ -1717,7 +1718,10 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     if (!cust.name.trim() || !cust.phone.trim()) { setError('Inserisci nome e telefono del cliente.'); return }
     const chosen = (seats[dep.id] || []).filter(s => cartSeats.has(s.id))
     const priceOf = (s: TourSeat) => s.price_cents != null ? s.price_cents : (dep.price_per_seat_cents != null ? dep.price_per_seat_cents : (selectedAsset?.price_per_day || 0))
-    const totalCents = chosen.reduce((t, s) => t + priceOf(s), 0)
+    // Prezzo manuale: se l'operatore ha scritto un importo, quello è il TOTALE
+    // della prenotazione (override completo). Vuoto = totale automatico.
+    const autoTotalCents = chosen.reduce((t, s) => t + priceOf(s), 0)
+    const totalCents = tourPriceOverride.trim() ? eurToCents(tourPriceOverride) : autoTotalCents
     const pickupISO = new Date(`${dep.departure_date}T${dep.departure_time}`).toISOString()
     const labelsStr = chosen.map(s => s.seat_label).join(', ')
     setBooking(true); setError('')
@@ -2064,16 +2068,37 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                   {cartDep === dep.id && cartSeats.size > 0 && !manageMode.has(dep.id) && (() => {
                     // Totale calcolato AUTOMATICAMENTE: posti selezionati × prezzo posto
                     // (override posto -> prezzo partenza -> prezzo catalogo).
-                    const cartTotalCents = (seats[dep.id] || []).filter(s => cartSeats.has(s.id))
+                    const cartAutoTotalCents = (seats[dep.id] || []).filter(s => cartSeats.has(s.id))
                       .reduce((t, s) => t + (s.price_cents != null ? s.price_cents : (dep.price_per_seat_cents != null ? dep.price_per_seat_cents : (selectedAsset?.price_per_day || 0))), 0)
+                    // Prezzo manuale: se compilato, sostituisce il totale automatico.
+                    const hasOverride = tourPriceOverride.trim() !== ''
+                    const cartTotalCents = hasOverride ? eurToCents(tourPriceOverride) : cartAutoTotalCents
                     return (
                     <div className="mt-4 border border-dr7-gold/40 rounded-lg p-3 space-y-3 bg-theme-bg-tertiary/50">
                       <div className="flex items-center justify-between gap-3 flex-wrap">
                         <div className="text-sm text-theme-text-primary font-medium">{cartSeats.size} posto/i nel carrello — assegna un cliente</div>
                         <div className="text-right">
-                          <div className="text-[11px] text-theme-text-muted">Totale ({cartSeats.size} × prezzo posto)</div>
+                          <div className="text-[11px] text-theme-text-muted">{hasOverride ? 'Totale (prezzo manuale)' : `Totale (${cartSeats.size} × prezzo posto)`}</div>
                           <div className="text-lg font-bold text-theme-text-primary">{eur(cartTotalCents)}</div>
                         </div>
+                      </div>
+                      {/* Prezzo personalizzato: l'operatore può imporre il totale che vuole. */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-end">
+                        <div>
+                          <label className="text-xs text-theme-text-muted">Prezzo personalizzato (€) — totale prenotazione</label>
+                          <input
+                            className={INPUT_CLS}
+                            inputMode="decimal"
+                            placeholder={`Auto: ${eur(cartAutoTotalCents)} — lascia vuoto per il prezzo automatico`}
+                            value={tourPriceOverride}
+                            onChange={e => setTourPriceOverride(e.target.value)}
+                          />
+                        </div>
+                        {hasOverride && (
+                          <button type="button" onClick={() => setTourPriceOverride('')} className={BTN_GHOST + ' justify-self-start'}>
+                            Ripristina prezzo automatico ({eur(cartAutoTotalCents)})
+                          </button>
+                        )}
                       </div>
                       <LeadPicker onPick={(name, phone) => setCust({ name: name || cust.name, phone: phone || cust.phone })} />
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
