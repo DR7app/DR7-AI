@@ -1507,17 +1507,15 @@ function tourTableHint(msg: string): string {
 }
 
 // Colore posto in base allo stato + pagamento del booking collegato:
-// verde = pagato · rosso = venduto ma non pagato · giallo = in attesa (carrello)
-// · grigio = bloccato · contorno verde = libero · bianco = scelto ora.
-function seatVisual(seat: TourSeat, payStatus: string | undefined, selected: boolean): { cls: string; lbl: string } {
+// verde = libero (disponibile) · rosso = occupato (venduto, pagato o no, come
+// sul sito) · giallo = in attesa (carrello) · grigio = bloccato · bianco = scelto ora.
+function seatVisual(seat: TourSeat, _payStatus: string | undefined, selected: boolean): { cls: string; lbl: string } {
   if (selected) return { cls: 'border-white bg-white text-black', lbl: 'scelto' }
   if (seat.status === 'available') return { cls: 'border-emerald-500/50 text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20', lbl: 'libero' }
   if (seat.status === 'blocked') return { cls: 'border-theme-border text-theme-text-muted bg-theme-bg-tertiary line-through', lbl: 'bloccato' }
   if (seat.status === 'held') return { cls: 'border-amber-500/60 text-amber-300 bg-amber-500/20', lbl: 'in attesa' }
-  // sold
-  const paid = ['paid', 'succeeded', 'completed'].includes((payStatus || '').toLowerCase())
-  if (paid) return { cls: 'border-emerald-500 text-emerald-100 bg-emerald-600/40', lbl: 'pagato' }
-  return { cls: 'border-red-500/70 text-red-200 bg-red-600/30', lbl: 'non pagato' }
+  // sold = ROSSO sia pagato che non pagato (come sul sito pubblico)
+  return { cls: 'border-red-500/70 text-red-200 bg-red-600/30', lbl: 'occupato' }
 }
 
 // Posizioni dei posti (in % sull'immagine cabina) per modello elicottero.
@@ -1529,13 +1527,12 @@ const HELI_407_SEATS: Record<number, { x: number; y: number }> = {
 }
 
 // Colore PIENO del pallino posto sulla mappa foto (visibile sulla cabina scura).
-function seatDot(seat: TourSeat, payStatus: string | undefined, selected: boolean): string {
+function seatDot(seat: TourSeat, _payStatus: string | undefined, selected: boolean): string {
   if (selected) return 'bg-white text-black ring-white'
   if (seat.status === 'available') return 'bg-emerald-500/90 text-white ring-emerald-300'
   if (seat.status === 'blocked') return 'bg-zinc-600/80 text-zinc-300 ring-zinc-500 line-through'
   if (seat.status === 'held') return 'bg-amber-500 text-black ring-amber-300'
-  const paid = ['paid', 'succeeded', 'completed'].includes((payStatus || '').toLowerCase())
-  if (paid) return 'bg-emerald-600 text-white ring-emerald-300'
+  // Occupato (venduto) = ROSSO sia pagato che non pagato (come sul sito pubblico)
   return 'bg-red-600 text-white ring-red-300'
 }
 
@@ -2032,8 +2029,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                     <div className="flex items-center gap-3 text-[11px] text-theme-text-muted flex-wrap">
                       <span><span className="inline-block w-3 h-3 rounded-sm border border-emerald-500/50 bg-emerald-500/10 align-middle" /> libero</span>
                       <span><span className="inline-block w-3 h-3 rounded-sm bg-amber-500/60 align-middle" /> in attesa</span>
-                      <span><span className="inline-block w-3 h-3 rounded-sm bg-red-600/60 align-middle" /> non pagato</span>
-                      <span><span className="inline-block w-3 h-3 rounded-sm bg-emerald-600 align-middle" /> pagato</span>
+                      <span><span className="inline-block w-3 h-3 rounded-sm bg-red-600 align-middle" /> occupato</span>
                       <span><span className="inline-block w-3 h-3 rounded-sm bg-theme-bg-tertiary border border-theme-border align-middle" /> bloccato</span>
                     </div>
                     <button
@@ -2167,7 +2163,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                   <p className="mt-3 text-[11px] text-theme-text-muted">
                     {manageMode.has(dep.id)
                       ? 'Modalità gestione: clic su un posto libero per bloccarlo (o sbloccarlo).'
-                      : 'Clic sui posti liberi per metterli nel carrello, poi assegna il cliente. Il cliente riceverà il link di pagamento (posto rosso = confermato non pagato).'}
+                      : 'Clic sui posti liberi (verdi) per metterli nel carrello, poi assegna il cliente. Il cliente riceverà il link di pagamento (posto rosso = occupato).'}
                   </p>
                 </div>
               )}
