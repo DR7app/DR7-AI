@@ -1720,6 +1720,30 @@ export default function UnpaidBookingsTab() {
         }
       }
 
+      // 2b. 2026-07-01 BUG FIX: segna come pagate le penali + danni della
+      // prenotazione SENZA emettere un'altra fattura (la fattura e' gia' stata
+      // fatta). Prima "Segna Pagato" lasciava le penali (es. Sforo Km) aperte in
+      // "Da Saldare": qui le togliamo dalla lista, nessun nuovo documento fiscale
+      // (non vengono aggiunte a invoiceLineItems).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const penaltiesArr: any[] = [...(booking.booking_details?.penalties || [])]
+      for (let i = 0; i < penaltiesArr.length; i++) {
+        const p = penaltiesArr[i]
+        const unpaid = !p.paymentStatus || p.paymentStatus === 'pending' || p.paymentStatus === 'partial' || p.paymentStatus === 'nexi_pay_by_link'
+        if (!unpaid) continue
+        const pNet = (p.total || (p.amount || 0) * (p.quantity || 1)) - (p.discount || 0)
+        penaltiesArr[i] = { ...p, paymentStatus: 'paid', amountPaid: pNet }
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const danniArr: any[] = [...(booking.booking_details?.danni || [])]
+      for (let i = 0; i < danniArr.length; i++) {
+        const d = danniArr[i]
+        const unpaid = !d.paymentStatus || d.paymentStatus === 'pending' || d.paymentStatus === 'partial' || d.paymentStatus === 'nexi_pay_by_link'
+        if (!unpaid) continue
+        const dNet = (d.total || (d.amount || 0) * (d.quantity || 1)) - (d.discount || 0)
+        danniArr[i] = { ...d, paymentStatus: 'paid', amountPaid: dNet }
+      }
+
       // 3. Generate fattura FIRST — if it fails, abort before marking as paid
       if (invoiceLineItems.length > 0) {
         const res = await authFetch('/.netlify/functions/generate-penalty-invoice', {
@@ -1753,7 +1777,7 @@ export default function UnpaidBookingsTab() {
         payment_status: 'paid',
         status: 'confirmed',
         amount_paid: totalCents,
-        booking_details: { ...booking.booking_details, amountPaid: totalCents, extension_history: extensions }
+        booking_details: { ...booking.booking_details, amountPaid: totalCents, extension_history: extensions, penalties: penaltiesArr, danni: danniArr }
       }).eq('id', booking.id)
       if (error) throw error
       await propagatePaidToCarwashShadows(booking.id, true, booking.payment_method)
