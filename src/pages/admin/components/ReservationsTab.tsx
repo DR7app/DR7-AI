@@ -7623,6 +7623,60 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
     })
   }
 
+  // Allerta Meteo — invia un avviso WhatsApp a tutti i clienti con un noleggio
+  // auto attualmente in corso. Il testo è editabile da Messaggi di Sistema Pro
+  // (chiave pro_allerta_meteo). Prima chiediamo un preview (nessun invio) per
+  // mostrare all'admin quanti/quali clienti riceveranno il messaggio.
+  const handleAllertaMeteo = async () => {
+    try {
+      const prevRes = await authFetch('/.netlify/functions/send-weather-alert', {
+        method: 'POST',
+        body: JSON.stringify({ preview: true }),
+      })
+      const prevData = await prevRes.json()
+      if (!prevRes.ok) {
+        toast.error('Errore nel calcolo dei destinatari: ' + (prevData.error || 'Riprova'))
+        return
+      }
+      const recipients: { name: string; vehicle: string }[] = prevData.recipients || []
+      const count: number = prevData.count ?? recipients.length
+      if (count === 0) {
+        toast('Nessun cliente con noleggio in corso', { icon: 'ℹ️' })
+        return
+      }
+      const lista = recipients
+        .map(r => [r.vehicle, r.name].filter(Boolean).join(' '))
+        .filter(Boolean)
+        .join(', ')
+      const ok = window.confirm(
+        `Inviare l'allerta meteo a ${count} ${count === 1 ? 'cliente' : 'clienti'} con noleggio in corso?` +
+        (lista ? `\n\n${lista}` : '')
+      )
+      if (!ok) return
+
+      toast.loading('Invio allerta meteo in corso...')
+      const sendRes = await authFetch('/.netlify/functions/send-weather-alert', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      })
+      const sendData = await sendRes.json()
+      toast.dismiss()
+      if (!sendRes.ok || !sendData.success) {
+        toast.error('Errore invio allerta meteo: ' + (sendData.error || 'Riprova'))
+        return
+      }
+      const sent: number = sendData.sent ?? 0
+      const failed: number = sendData.failed ?? 0
+      toast.success(
+        `Allerta meteo inviata a ${sent} ${sent === 1 ? 'cliente' : 'clienti'}` +
+        (failed > 0 ? ` (${failed} non riusciti)` : '')
+      )
+    } catch (e) {
+      toast.dismiss()
+      toast.error('Errore invio allerta meteo: ' + (e instanceof Error ? e.message : 'Riprova'))
+    }
+  }
+
   if (loading) {
     return <div className="text-center py-8 text-theme-text-muted">Loading...</div>
   }
@@ -7636,6 +7690,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           bookings={bookings}
           onNewBooking={() => { resetForm(); setEditingId(null); newSession('booking_create'); setShowForm(true) }}
           onNewUscita={() => setShowUscita(true)}
+          onAllertaMeteo={handleAllertaMeteo}
         />
 
         {/* Search Bar */}
@@ -11214,10 +11269,12 @@ function ReservationsDashboardHeader({
   bookings,
   onNewBooking,
   onNewUscita,
+  onAllertaMeteo,
 }: {
   bookings: Booking[]
   onNewBooking: () => void
   onNewUscita: () => void
+  onAllertaMeteo: () => void
 }) {
   // Default al mese corrente in Europe/Rome.
   const nowRome = new Date()
@@ -11452,6 +11509,13 @@ function ReservationsDashboardHeader({
           <Button onClick={onNewUscita} variant="secondary" className="text-sm border border-emerald-500/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10">
             <span className="hidden sm:inline">+ Uscita Straordinaria</span>
             <span className="sm:hidden">+ Uscita</span>
+          </Button>
+          <Button onClick={onAllertaMeteo} variant="secondary" className="text-sm border border-amber-500/50 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10">
+            <svg className="w-4 h-4 mr-1.5 inline-block align-[-2px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86l-8.45 14.6A2 2 0 003.58 21h16.84a2 2 0 001.73-2.54l-8.45-14.6a2 2 0 00-3.46 0z" />
+            </svg>
+            <span className="hidden sm:inline">Allerta Meteo</span>
+            <span className="sm:hidden">Meteo</span>
           </Button>
         </div>
       </div>

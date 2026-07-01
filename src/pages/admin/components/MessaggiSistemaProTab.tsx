@@ -1282,6 +1282,7 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
       { key: 'pro_promemoria_firma',         label: 'Promemoria Firma',          description: 'Promemoria firma contratto pendente' },
       { key: 'pro_promemoria_pagamento',     label: 'Promemoria Pagamento',      description: 'Promemoria pagamento da saldare' },
       { key: 'pro_promemoria_appuntamento',  label: 'Promemoria Appuntamento',   description: 'Promemoria generico appuntamento' },
+      { key: 'pro_allerta_meteo',            label: 'Allerta Meteo',             description: 'Messaggio di avviso meteo inviato ai clienti con un noleggio in corso' },
     ],
   },
   {
@@ -1360,6 +1361,29 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
 ]
 
 const ALL_PRO_TEMPLATES: ProTemplateDef[] = PRO_MESSAGE_CATEGORIES.flatMap(c => c.templates)
+
+// Body di default dell'Allerta Meteo — usato per pre-compilare il template
+// pro_allerta_meteo la prima volta che appare nel pannello (poi editabile).
+const ALLERTA_METEO_DEFAULT_BODY = `Gentile Cliente,
+
+in presenza di condizioni meteo avverse (come pioggia intensa, grandine o vento forte), è fondamentale prestare particolare attenzione per *tutelare la tua sicurezza personale e proteggere il veicolo in tuo utilizzo*.
+
+Ti invitiamo a seguire alcune semplici precauzioni:
+
+*Durante la guida*
+- Riduci la velocità e aumenta la distanza di sicurezza
+- Evita percorsi soggetti ad allagamenti
+- Non attraversare sottopassi o zone con acqua alta
+
+*Protezione del veicolo*
+- Se possibile, parcheggia in *garage o aree coperte*
+- Evita soste sotto alberi, impalcature o strutture instabili
+- In caso di grandine, utilizza sistemi di protezione (teli o coperture)
+
+La tua sicurezza personale viene sempre al primo posto: adotta comportamenti prudenti per proteggere te stesso e prevenire danni al veicolo.
+
+Cordiali saluti
+DR7`
 
 // Wrappers are never numbered and never bulk-deleted by "Elimina non attivi"
 const WRAPPER_KEYS = new Set(['pro_wrapper_header', 'pro_wrapper_footer'])
@@ -1729,6 +1753,36 @@ export default function MessaggiSistemaProTab() {
                     console.error('Auto-seed pro templates failed:', insErr)
                 } else if (inserted) {
                     rows = [...rows, ...inserted]
+                }
+            }
+
+            // Ensure-exists MIRATO per pro_allerta_meteo: deve comparire ed
+            // essere editabile SUBITO (non solo al primo invio), col body di
+            // default pre-compilato e attivo. Specifico per questa chiave —
+            // non tocca il seed generale (solo a zero righe) né le eliminazioni
+            // dell'admin sugli altri template.
+            if (!rows.some(r => r.message_key === 'pro_allerta_meteo')) {
+                const { data: insMeteo, error: meteoErr } = await supabase
+                    .from('system_messages')
+                    .insert({
+                        message_key: 'pro_allerta_meteo',
+                        label: 'Allerta Meteo',
+                        description: 'Messaggio di avviso meteo inviato ai clienti con un noleggio in corso',
+                        message_body: ALLERTA_METEO_DEFAULT_BODY,
+                        is_automatic: false,
+                        is_enabled: true,
+                        include_header: false,
+                        trigger_event: 'before_dropoff',
+                        trigger_offset_hours: 24,
+                        send_hour: 9,
+                        target_category: 'all',
+                        target_status: 'confirmed,active',
+                    })
+                    .select()
+                if (meteoErr) {
+                    console.error('Ensure pro_allerta_meteo failed:', meteoErr)
+                } else if (insMeteo && insMeteo.length > 0) {
+                    rows = [...rows, ...insMeteo]
                 }
             }
 
