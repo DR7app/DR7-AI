@@ -76,6 +76,9 @@ const handler: Handler = async (event) => {
 
   const body = JSON.parse(event.body || '{}')
   const preview: boolean = body?.preview === true
+  // testOnly: invia SOLO ai noleggi la cui targa contiene "TEST" (case-insensitive).
+  // Serve per provare l'invio reale su un veicolo di test senza toccare i clienti veri.
+  const testOnly: boolean = body?.testOnly === true
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -109,6 +112,10 @@ const handler: Handler = async (event) => {
     const svc = String((r as { service_type?: string }).service_type || '').toLowerCase()
     // Solo noleggi: rental / car_rental / *_rental / vuoto. Salta lavaggio/meccanica.
     if (svc && NON_RENTAL.has(svc)) continue
+
+    const plate = String((r as { vehicle_plate?: string }).vehicle_plate || '')
+    // Modalità test: includi SOLO le targhe che contengono "TEST".
+    if (testOnly && !/test/i.test(plate)) continue
 
     const bd = (r as { booking_details?: Record<string, unknown> }).booking_details || {}
     const custObj = (bd.customer || {}) as Record<string, unknown>

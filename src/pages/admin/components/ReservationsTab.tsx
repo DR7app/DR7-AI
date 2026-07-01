@@ -7627,11 +7627,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   // auto attualmente in corso. Il testo è editabile da Messaggi di Sistema Pro
   // (chiave pro_allerta_meteo). Prima chiediamo un preview (nessun invio) per
   // mostrare all'admin quanti/quali clienti riceveranno il messaggio.
-  const handleAllertaMeteo = async () => {
+  const handleAllertaMeteo = async (testOnly = false) => {
     try {
       const prevRes = await authFetch('/.netlify/functions/send-weather-alert', {
         method: 'POST',
-        body: JSON.stringify({ preview: true }),
+        body: JSON.stringify({ preview: true, testOnly }),
       })
       const prevData = await prevRes.json()
       if (!prevRes.ok) {
@@ -7641,7 +7641,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       const recipients: { name: string; vehicle: string }[] = prevData.recipients || []
       const count: number = prevData.count ?? recipients.length
       if (count === 0) {
-        toast('Nessun cliente con noleggio in corso', { icon: 'ℹ️' })
+        toast(testOnly ? 'Nessun noleggio in corso con targa TEST' : 'Nessun cliente con noleggio in corso', { icon: 'ℹ️' })
         return
       }
       const lista = recipients
@@ -7649,6 +7649,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         .filter(Boolean)
         .join(', ')
       const ok = window.confirm(
+        (testOnly ? '[TEST — solo targhe TEST] ' : '') +
         `Inviare l'allerta meteo a ${count} ${count === 1 ? 'cliente' : 'clienti'} con noleggio in corso?` +
         (lista ? `\n\n${lista}` : '')
       )
@@ -7657,7 +7658,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       toast.loading('Invio allerta meteo in corso...')
       const sendRes = await authFetch('/.netlify/functions/send-weather-alert', {
         method: 'POST',
-        body: JSON.stringify({}),
+        body: JSON.stringify({ testOnly }),
       })
       const sendData = await sendRes.json()
       toast.dismiss()
@@ -7690,7 +7691,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           bookings={bookings}
           onNewBooking={() => { resetForm(); setEditingId(null); newSession('booking_create'); setShowForm(true) }}
           onNewUscita={() => setShowUscita(true)}
-          onAllertaMeteo={handleAllertaMeteo}
+          onAllertaMeteo={() => handleAllertaMeteo(false)}
+          onAllertaMeteoTest={() => handleAllertaMeteo(true)}
         />
 
         {/* Search Bar */}
@@ -11270,11 +11272,13 @@ function ReservationsDashboardHeader({
   onNewBooking,
   onNewUscita,
   onAllertaMeteo,
+  onAllertaMeteoTest,
 }: {
   bookings: Booking[]
   onNewBooking: () => void
   onNewUscita: () => void
   onAllertaMeteo: () => void
+  onAllertaMeteoTest: () => void
 }) {
   // Default al mese corrente in Europe/Rome.
   const nowRome = new Date()
@@ -11516,6 +11520,10 @@ function ReservationsDashboardHeader({
             </svg>
             <span className="hidden sm:inline">Allerta Meteo</span>
             <span className="sm:hidden">Meteo</span>
+          </Button>
+          <Button onClick={onAllertaMeteoTest} variant="secondary" className="text-sm border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover">
+            <span className="hidden sm:inline">Test Meteo (targhe TEST)</span>
+            <span className="sm:hidden">Test</span>
           </Button>
         </div>
       </div>
