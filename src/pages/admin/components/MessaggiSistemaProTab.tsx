@@ -1291,6 +1291,7 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
       { key: 'pro_sollecito_pagamento',  label: 'Sollecito Pagamento',        description: 'Sollecito per debito ancora aperto (Invia Sollecito + auto-resend ogni 48h, max 3)' },
       { key: 'pro_richiesta_firma',      label: 'Richiesta Firma',            description: 'Invio link firma contratto' },
       { key: 'pro_richiesta_otp',        label: 'Richiesta OTP',              description: 'Invio codice OTP per conferma firma' },
+      { key: 'pro_firma_otp',            label: 'OTP Firma Contratto',        description: 'Testo del codice OTP inviato per firmare il contratto (variabili: {otp}, {expiryMinutes}). Questo è il template letto da signature-send-otp.' },
       { key: 'pro_richiesta_iban',       label: 'Richiesta IBAN',             description: 'Richiesta IBAN per rimborso cauzione' },
       { key: 'pro_richiesta_documenti',  label: 'Richiesta Documenti',        description: 'Richiesta documenti aggiuntivi al cliente' },
     ],

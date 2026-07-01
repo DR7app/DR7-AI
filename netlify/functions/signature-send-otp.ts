@@ -148,15 +148,26 @@ export const handler: Handler = async (event) => {
         const OTP_FALLBACK = `*MESSAGGIO AUTOMATICO GENERATO DA DR7 A.I.*\n\n*DR7 – Codice di Verifica*\n\nIl tuo codice OTP per la firma del contratto è:\n\n*${otp}*\n\nIl codice sarà valido per i prossimi ${OTP_EXPIRY_MINUTES} minuti.\n\nSe non hai richiesto questo codice o ritieni di averlo ricevuto per errore, puoi ignorare il presente messaggio.\n\nDR7`
         let otpMessage = OTP_FALLBACK
         try {
-            const { data: otpTpl } = await supabase
+            // 2026-07-01: BUGFIX — leggi TUTTE le righe 'pro_firma_otp' e scegli
+            // quella abilitata + non vuota più recente. Prima usavamo
+            // .maybeSingle(): se in system_messages esistevano DUE (o più) righe
+            // con lo stesso message_key (duplicati creati dai vari passaggi di
+            // seed/custom), .maybeSingle() torna null → si usava SEMPRE il
+            // fallback hardcoded. Risultato: l'admin modificava "OTP Firma
+            // Contratto" (anche il bold) e il messaggio non cambiava mai.
+            const { data: otpRows } = await supabase
                 .from('system_messages')
-                .select('message_body, is_enabled')
+                .select('message_body, is_enabled, updated_at')
                 .eq('message_key', 'pro_firma_otp')
-                .maybeSingle()
-            if (otpTpl && otpTpl.is_enabled !== false && otpTpl.message_body) {
+                .order('updated_at', { ascending: false })
+            const otpTpl = (otpRows || []).find(r => r.is_enabled !== false && !!r.message_body)
+            if (otpTpl) {
                 otpMessage = String(otpTpl.message_body)
                     .replace(/\{\{?\s*otp\s*\}?\}/gi, otp)
                     .replace(/\{\{?\s*expiryMinutes\s*\}?\}/gi, String(OTP_EXPIRY_MINUTES))
+                console.log(`[signature-send-otp] Using pro_firma_otp template (rows=${otpRows?.length ?? 0})`)
+            } else {
+                console.warn(`[signature-send-otp] No enabled+non-empty pro_firma_otp row (rows=${otpRows?.length ?? 0}) — using hardcoded fallback`)
             }
         } catch (tplErr) {
             console.warn('[signature-send-otp] pro_firma_otp fetch failed, using fallback:', tplErr)
