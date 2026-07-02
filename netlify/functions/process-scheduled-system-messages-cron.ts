@@ -386,6 +386,68 @@ async function processScadenzeAdmin(tpl: SystemMessage, now: number) {
     return { sent, skipped, errors };
 }
 
+// Promemoria autista 12h prima della corsa straordinaria (service_type
+// 'uscita_straordinaria'). Destinatari = gli autisti della card
+// (booking_details.uscita.autisti[].phone), NON il cliente. Testo dal template
+// Pro 'pro_promemoria_autista' (editabile). Dedup: flag
+// booking_details.uscita.autista_reminder_sent_at — una passata per card manda
+// a TUTTI i suoi autisti, poi non ripete. Blocco dedicato perche' il loop
+// cliente invia a customer_phone (vuoto sulle uscite) e la dedup del send_log
+// e' per (template, booking), non per singolo autista.
+async function processUscitaAutistaReminders(now: number): Promise<{ sent: number; skipped: number; errors: number }> {
+    let sent = 0, skipped = 0, errors = 0;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: tplRows } = await supabase
+        .from('system_messages')
+        .select('message_body, is_enabled')
+        .eq('message_key', 'pro_promemoria_autista')
+        .order('updated_at', { ascending: false });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tpl = (tplRows || []).find((r: any) => r.is_enabled !== false && !!r.message_body);
+    if (!tpl) return { sent, skipped, errors };
+
+    const OFFSET_MS = 12 * 3600 * 1000;
+    // pickup - 12h ∈ [now - LOOKBACK, now + LOOKFORWARD]  →  pickup ∈ [now+12h-LOOKBACK, now+12h+LOOKFORWARD]
+    const lo = new Date(now + OFFSET_MS - LOOKBACK_MS).toISOString();
+    const hi = new Date(now + OFFSET_MS + LOOKFORWARD_MS).toISOString();
+    const { data: rows } = await supabase
+        .from('bookings')
+        .select('id, pickup_date, status, booking_details')
+        .eq('service_type', 'uscita_straordinaria')
+        .not('status', 'in', '(cancelled,annullata,completed,completata)')
+        .gte('pickup_date', lo)
+        .lte('pickup_date', hi);
+
+    const baseUrl = process.env.URL || 'https://platform.dr7ai.com';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const b of (rows || []) as any[]) {
+        const uscita = b.booking_details?.uscita;
+        if (!uscita) continue;
+        if (uscita.autista_reminder_sent_at) { skipped++; continue; }
+        const autisti = Array.isArray(uscita.autisti) ? uscita.autisti : [];
+        for (const a of autisti) {
+            const phone = a?.phone;
+            if (!phone) continue;
+            const firstName = String(a.full_name || '').trim().split(/\s+/)[0] || 'Autista';
+            const body = String(tpl.message_body).split('{nome}').join(firstName);
+            try {
+                const res = await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ customPhone: phone, customMessage: body, type: 'Promemoria Servizio Autista' }),
+                });
+                if (res.ok) sent++; else errors++;
+            } catch { errors++; }
+        }
+        // Marca la card come gia' avvisata (anche se 0 autisti con telefono:
+        // evita ri-tentativi infiniti sulla stessa card).
+        await supabase.from('bookings')
+            .update({ booking_details: { ...b.booking_details, uscita: { ...uscita, autista_reminder_sent_at: new Date().toISOString() } } })
+            .eq('id', b.id);
+    }
+    return { sent, skipped, errors };
+}
+
 const cronHandler = async () => {
     const now = Date.now();
     console.log(`[scheduled-msgs] cron fired at ${new Date(now).toISOString()}`);
@@ -437,6 +499,10 @@ const cronHandler = async () => {
     const DEFAULT_ALLOWLIST = [
         'pro_custom_promemoria_ritiro_veicolo_1778334892254',          // promemoria ritiro 24h prima del pickup
         'pro_custom_richiesta_prolungamento_supercar_1777711737784',   // richiesta prolungamento 24h prima del dropoff
+        'pro_promemoria_elicottero',                                   // tour elicottero 24h prima (cliente)
+        'pro_promemoria_lavaggio',                                     // lavaggio giorno prima (cliente)
+        // NB: pro_promemoria_autista NON e' qui — destinatario = autista, gestito
+        // dal blocco dedicato processUscitaAutistaReminders (fuori dal loop cliente).
     ];
     const allowlistRaw = (process.env.SCHEDULED_MSGS_ALLOWLIST || '').trim();
     const allowlist = allowlistRaw
@@ -705,6 +771,14 @@ const cronHandler = async () => {
                 results.push({ template: tpl.label, booking_id: booking.id, status: 'error', reason: msg });
             }
         }
+    }
+
+    // Promemoria autista corsa straordinaria (destinatari = autisti, blocco dedicato).
+    try {
+        const rA = await processUscitaAutistaReminders(now);
+        totalSent += rA.sent; totalSkipped += rA.skipped; totalErrors += rA.errors;
+    } catch (e) {
+        console.error('[scheduled-msgs] processUscitaAutistaReminders failed:', e);
     }
 
     console.log(`[scheduled-msgs] done. sent=${totalSent} skipped=${totalSkipped} errors=${totalErrors}`);
