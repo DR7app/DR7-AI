@@ -397,5 +397,39 @@ export async function generateInvoicePDF(invoice: InvoiceData): Promise<Uint8Arr
         })
     })
 
+    // Disclaimer fiscale FISSO su OGNI fattura (copia di cortesia): l'originale
+    // e' quello trasmesso allo SDI. Non configurabile / non rimovibile.
+    const FISCAL_DISCLAIMER = pdfSafe(
+        'Documento non valido ai fini fiscali ai sensi art.21 DPR 633/72. ' +
+        "L'originale è disponibile all'indirizzo PEC o codice SDI fornito, " +
+        "oppure nell'area riservata dell'Agenzia delle Entrate."
+    )
+    const discSize = 6
+    const discWords = FISCAL_DISCLAIMER.split(' ')
+    const discLines: string[] = []
+    let discCur = ''
+    for (const w of discWords) {
+        const trial = discCur ? `${discCur} ${w}` : w
+        if (font.widthOfTextAtSize(trial, discSize) > CONTENT_WIDTH && discCur) {
+            discLines.push(discCur)
+            discCur = w
+        } else {
+            discCur = trial
+        }
+    }
+    if (discCur) discLines.push(discCur)
+    let discY = footerY - footerLines.length * 10 - 6
+    discLines.forEach(line => {
+        const w = font.widthOfTextAtSize(line, discSize)
+        page.drawText(line, {
+            x: PAGE_WIDTH / 2 - w / 2,
+            y: discY,
+            size: discSize,
+            font,
+            color: GRAY,
+        })
+        discY -= 8
+    })
+
     return pdfDoc.save()
 }
