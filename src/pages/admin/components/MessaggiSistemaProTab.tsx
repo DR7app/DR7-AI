@@ -1283,6 +1283,9 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
       { key: 'pro_promemoria_pagamento',     label: 'Promemoria Pagamento',      description: 'Promemoria pagamento da saldare' },
       { key: 'pro_promemoria_appuntamento',  label: 'Promemoria Appuntamento',   description: 'Promemoria generico appuntamento' },
       { key: 'pro_allerta_meteo',            label: 'Allerta Meteo',             description: 'Messaggio di avviso meteo inviato ai clienti con un noleggio in corso' },
+      { key: 'pro_promemoria_elicottero',    label: 'Promemoria Tour Elicottero', description: 'Promemoria al cliente 24h prima del tour in elicottero (var: {nome})' },
+      { key: 'pro_promemoria_lavaggio',      label: 'Promemoria Lavaggio',        description: 'Promemoria al cliente il giorno prima dell\'appuntamento di lavaggio (var: {nome})' },
+      { key: 'pro_promemoria_autista',       label: 'Promemoria Servizio Autista', description: 'Promemoria all\'autista 12h prima della corsa straordinaria (var: {nome})' },
     ],
   },
   {
@@ -1361,6 +1364,58 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
 ]
 
 const ALL_PRO_TEMPLATES: ProTemplateDef[] = PRO_MESSAGE_CATEGORIES.flatMap(c => c.templates)
+
+// Body di default dei 3 promemoria (testo fornito dalla direzione). Precompilano
+// i template la prima volta che appaiono nel pannello, poi restano editabili.
+const PROMEMORIA_ELICOTTERO_DEFAULT_BODY = `*Promemoria Tour in Elicottero – 24 ore prima*
+
+Gentile *{nome}*,
+
+le ricordiamo la prenotazione del Suo tour in elicottero prevista per domani.
+
+La invitiamo cortesemente a presentarsi presso il punto di ritrovo con almeno *15 minuti di anticipo* rispetto all'orario prenotato, munito di:
+
+- carta d'identità o passaporto in corso di validità
+- eventuale conferma della prenotazione
+
+Per garantire il regolare svolgimento dell'esperienza, chiediamo la massima puntualità. In caso di ritardo, l'imbarco potrebbe non essere garantito.
+
+Per qualsiasi necessità restiamo a Sua completa disposizione.
+
+DR7`
+
+const PROMEMORIA_LAVAGGIO_DEFAULT_BODY = `*Promemoria Lavaggio – Giorno precedente*
+
+Gentile *{nome}*,
+
+le ricordiamo l'appuntamento per il servizio di lavaggio previsto per domani.
+
+La invitiamo cortesemente a presentarsi all'orario concordato. Qualora fosse impossibilitato a rispettare l'appuntamento o avesse necessità di modificarlo, La preghiamo di comunicarcelo con il maggior preavviso possibile.
+
+La ringraziamo per la fiducia accordata e restiamo a Sua disposizione per qualsiasi esigenza.
+
+DR7`
+
+const PROMEMORIA_AUTISTA_DEFAULT_BODY = `*Promemoria Servizio Autista – 12 ore prima*
+
+Gentile *{nome}*,
+
+Le ricordiamo il servizio assegnato per domani.
+
+La invitiamo a verificare con anticipo:
+
+- orario di partenza e programma del servizio
+- indirizzi di prelievo e destinazione
+- stato del veicolo assegnato (carburante, pulizia ed eventuali dotazioni)
+- documentazione necessaria per lo svolgimento del servizio
+
+La preghiamo inoltre di presentarsi con il dovuto anticipo rispetto all'orario previsto, così da garantire la massima puntualità al cliente.
+
+Per qualsiasi imprevisto o necessità organizzativa, La invitiamo a contattare tempestivamente la centrale operativa.
+
+La ringraziamo per la collaborazione.
+
+DR7`
 
 // Body di default dell'Allerta Meteo — usato per pre-compilare il template
 // pro_allerta_meteo la prima volta che appare nel pannello (poi editabile).
@@ -1783,6 +1838,42 @@ export default function MessaggiSistemaProTab() {
                     console.error('Ensure pro_allerta_meteo failed:', meteoErr)
                 } else if (insMeteo && insMeteo.length > 0) {
                     rows = [...rows, ...insMeteo]
+                }
+            }
+
+            // Ensure-exists MIRATO per i 3 promemoria (Elicottero / Lavaggio / Autista):
+            // compaiono SUBITO col testo di default fornito dalla direzione, attivi
+            // ed editabili — come pro_allerta_meteo. is_automatic:false: l'invio
+            // automatico via cron va abilitato/collegato in un secondo momento
+            // (elicottero+lavaggio => cliente; autista => destinatario autista).
+            const PROMEMORIA_SEED = [
+                { key: 'pro_promemoria_elicottero', label: 'Promemoria Tour Elicottero', description: 'Promemoria al cliente 24h prima del tour in elicottero (var: {nome})', body: PROMEMORIA_ELICOTTERO_DEFAULT_BODY, event: 'before_pickup', offset: 24 },
+                { key: 'pro_promemoria_lavaggio', label: 'Promemoria Lavaggio', description: 'Promemoria al cliente il giorno prima dell\'appuntamento di lavaggio (var: {nome})', body: PROMEMORIA_LAVAGGIO_DEFAULT_BODY, event: 'before_pickup', offset: 24 },
+                { key: 'pro_promemoria_autista', label: 'Promemoria Servizio Autista', description: 'Promemoria all\'autista 12h prima della corsa straordinaria (var: {nome})', body: PROMEMORIA_AUTISTA_DEFAULT_BODY, event: 'before_pickup', offset: 12 },
+            ]
+            for (const seed of PROMEMORIA_SEED) {
+                if (rows.some(r => r.message_key === seed.key)) continue
+                const { data: insP, error: pErr } = await supabase
+                    .from('system_messages')
+                    .insert({
+                        message_key: seed.key,
+                        label: seed.label,
+                        description: seed.description,
+                        message_body: seed.body,
+                        is_automatic: false,
+                        is_enabled: true,
+                        include_header: false,
+                        trigger_event: seed.event,
+                        trigger_offset_hours: seed.offset,
+                        send_hour: 9,
+                        target_category: 'all',
+                        target_status: 'confirmed,active',
+                    })
+                    .select()
+                if (pErr) {
+                    console.error(`Ensure ${seed.key} failed:`, pErr)
+                } else if (insP && insP.length > 0) {
+                    rows = [...rows, ...insP]
                 }
             }
 
