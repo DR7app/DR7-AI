@@ -1847,12 +1847,36 @@ export default function MessaggiSistemaProTab() {
             // automatico via cron va abilitato/collegato in un secondo momento
             // (elicottero+lavaggio => cliente; autista => destinatario autista).
             const PROMEMORIA_SEED = [
-                { key: 'pro_promemoria_elicottero', label: 'Promemoria Tour Elicottero', description: 'Promemoria al cliente 24h prima del tour in elicottero (var: {nome})', body: PROMEMORIA_ELICOTTERO_DEFAULT_BODY, event: 'before_pickup', offset: 24 },
-                { key: 'pro_promemoria_lavaggio', label: 'Promemoria Lavaggio', description: 'Promemoria al cliente il giorno prima dell\'appuntamento di lavaggio (var: {nome})', body: PROMEMORIA_LAVAGGIO_DEFAULT_BODY, event: 'before_pickup', offset: 24 },
-                { key: 'pro_promemoria_autista', label: 'Promemoria Servizio Autista', description: 'Promemoria all\'autista 12h prima della corsa straordinaria (var: {nome})', body: PROMEMORIA_AUTISTA_DEFAULT_BODY, event: 'before_pickup', offset: 12 },
+                { key: 'pro_promemoria_elicottero', label: 'Promemoria Tour Elicottero', description: 'Promemoria al cliente 24h prima del tour in elicottero (var: {nome})', body: PROMEMORIA_ELICOTTERO_DEFAULT_BODY, event: 'before_pickup', offset: 24, serviceType: 'heli_rental', automatic: true },
+                { key: 'pro_promemoria_lavaggio', label: 'Promemoria Lavaggio', description: 'Promemoria al cliente il giorno prima dell\'appuntamento di lavaggio (var: {nome})', body: PROMEMORIA_LAVAGGIO_DEFAULT_BODY, event: 'before_pickup', offset: 24, serviceType: 'car_wash', automatic: true },
+                // Autista: destinatario = autista, inviato dal blocco dedicato del cron
+                // (processUscitaAutistaReminders), NON dal loop is_automatic → automatic:false.
+                { key: 'pro_promemoria_autista', label: 'Promemoria Servizio Autista', description: 'Promemoria all\'autista 12h prima della corsa straordinaria (var: {nome})', body: PROMEMORIA_AUTISTA_DEFAULT_BODY, event: 'before_pickup', offset: 12, serviceType: 'uscita_straordinaria', automatic: false },
             ]
             for (const seed of PROMEMORIA_SEED) {
-                if (rows.some(r => r.message_key === seed.key)) continue
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const existing = rows.find(r => r.message_key === seed.key) as any
+                if (existing) {
+                    // Reconcile SOLO se ancora allo stato iniziale del seed (mai
+                    // configurato in Automazioni): imposta automatismo + service_type.
+                    // Non sovrascrive scelte fatte dall'admin in seguito.
+                    const untouched = existing.is_automatic === false && !existing.target_service_type
+                    if (untouched) {
+                        const { data: upd } = await supabase
+                            .from('system_messages')
+                            .update({
+                                is_automatic: seed.automatic,
+                                target_service_type: seed.serviceType,
+                                trigger_event: seed.event,
+                                trigger_offset_hours: seed.offset,
+                                is_enabled: true,
+                            })
+                            .eq('id', existing.id)
+                            .select()
+                        if (upd && upd.length > 0) rows = rows.map(r => r.id === existing.id ? upd[0] : r)
+                    }
+                    continue
+                }
                 const { data: insP, error: pErr } = await supabase
                     .from('system_messages')
                     .insert({
@@ -1860,7 +1884,7 @@ export default function MessaggiSistemaProTab() {
                         label: seed.label,
                         description: seed.description,
                         message_body: seed.body,
-                        is_automatic: false,
+                        is_automatic: seed.automatic,
                         is_enabled: true,
                         include_header: false,
                         trigger_event: seed.event,
@@ -1868,6 +1892,7 @@ export default function MessaggiSistemaProTab() {
                         send_hour: 9,
                         target_category: 'all',
                         target_status: 'confirmed,active',
+                        target_service_type: seed.serviceType,
                     })
                     .select()
                 if (pErr) {
