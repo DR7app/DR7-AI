@@ -1286,6 +1286,7 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
       { key: 'pro_promemoria_elicottero',    label: 'Promemoria Tour Elicottero', description: 'Promemoria al cliente 24h prima del tour in elicottero (var: {nome})' },
       { key: 'pro_promemoria_lavaggio',      label: 'Promemoria Lavaggio',        description: 'Promemoria al cliente il giorno prima dell\'appuntamento di lavaggio (var: {nome})' },
       { key: 'pro_promemoria_autista',       label: 'Promemoria Servizio Autista', description: 'Promemoria all\'autista 12h prima della corsa straordinaria (var: {nome})' },
+      { key: 'pro_uscita_cliente',           label: 'Conferma Transfer Cliente',  description: 'Conferma al cliente della corsa straordinaria / transfer, con nome autista (var: {nome}, {autista}, {veicolo}, {data_ritiro}, {ora_ritiro}, {luogo_ritiro}, {luogo_riconsegna})' },
     ],
   },
   {
@@ -1414,6 +1415,24 @@ La preghiamo inoltre di presentarsi con il dovuto anticipo rispetto all'orario p
 Per qualsiasi imprevisto o necessità organizzativa, La invitiamo a contattare tempestivamente la centrale operativa.
 
 La ringraziamo per la collaborazione.
+
+DR7`
+
+const USCITA_CLIENTE_DEFAULT_BODY = `*Conferma Transfer DR7*
+
+Gentile *{nome}*,
+
+confermiamo il Suo transfer.
+
+*Dettagli*
+- Data: {data_ritiro}
+- Orario: {ora_ritiro}
+- Ritiro: {luogo_ritiro}
+- Destinazione: {luogo_riconsegna}
+- Veicolo: {veicolo}
+- Autista: {autista}
+
+Per qualsiasi necessità restiamo a Sua completa disposizione.
 
 DR7`
 
@@ -1900,6 +1919,30 @@ export default function MessaggiSistemaProTab() {
                 } else if (insP && insP.length > 0) {
                     rows = [...rows, ...insP]
                 }
+            }
+
+            // Ensure-exists MIRATO per la Conferma Transfer Cliente: compare subito
+            // col testo di default, attiva ed editabile. Inviata dal modal Uscita
+            // Straordinaria al salvataggio (evento), non dal cron → is_automatic:false.
+            if (!rows.some(r => r.message_key === 'pro_uscita_cliente')) {
+                const { data: insUC } = await supabase
+                    .from('system_messages')
+                    .insert({
+                        message_key: 'pro_uscita_cliente',
+                        label: 'Conferma Transfer Cliente',
+                        description: 'Conferma al cliente della corsa straordinaria / transfer, con nome autista (var: {nome}, {autista}, {veicolo}, {data_ritiro}, {ora_ritiro}, {luogo_ritiro}, {luogo_riconsegna})',
+                        message_body: USCITA_CLIENTE_DEFAULT_BODY,
+                        is_automatic: false,
+                        is_enabled: true,
+                        include_header: false,
+                        trigger_event: 'on_booking',
+                        trigger_offset_hours: 0,
+                        send_hour: 9,
+                        target_category: 'all',
+                        target_status: 'confirmed,active',
+                    })
+                    .select()
+                if (insUC && insUC.length > 0) rows = [...rows, ...insUC]
             }
 
             // One-time cleanup: flip include_header=false on untouched seeded rows

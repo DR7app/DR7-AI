@@ -527,9 +527,78 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
         }
       }
 
+      // ── Conferma Transfer al CLIENTE (solo se la card e' collegata a un booking) ──
+      // Testo dal template Pro 'pro_uscita_cliente' (editabile in Messaggi di
+      // Sistema Pro). Inviato al cliente della prenotazione collegata, con nome
+      // autista. Nessun testo hardcoded: se il template manca/disattivo non invia.
+      let clientiNotificati = 0
+      try {
+        const { data: ucTplRows } = await supabase
+          .from('system_messages')
+          .select('message_body, is_enabled')
+          .eq('message_key', 'pro_uscita_cliente')
+          .order('updated_at', { ascending: false })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ucTpl = (ucTplRows || []).find((r: any) => r.is_enabled !== false && !!r.message_body)
+        if (ucTpl) {
+          const luogoName = (placeId: string, address: string) => {
+            if (!placeId) return address || '—'
+            if (placeId === 'dr7_office') return 'DR7 Office Cagliari'
+            if (placeId === 'domicilio') return address || 'Domicilio'
+            const opt = luogoOptionsFromPro.find(o => o.value === placeId)
+            return (opt?.label || placeId).replace(/\s*\(\+€[\d.,]+\)\s*$/, '').trim()
+          }
+          for (const c of valid) {
+            if (!c.linked_booking_id) continue
+            const { data: bk } = await supabase
+              .from('bookings')
+              .select('customer_name, customer_phone, booking_details')
+              .eq('id', c.linked_booking_id)
+              .maybeSingle()
+            if (!bk) continue
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const rawPhone = bk.customer_phone || (bk.booking_details as any)?.customer?.phone || ''
+            if (!rawPhone) continue
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const fullName = bk.customer_name || (bk.booking_details as any)?.customer?.fullName || 'Cliente'
+            const firstName = String(fullName).trim().split(/\s+/)[0] || 'Cliente'
+            const driveV = vehicles.find(v => v.id === c.vehicle_id)
+            const autistiNames = c.autista_ids
+              .map(id => autisti.find(a => a.id === id)?.full_name)
+              .filter(Boolean)
+              .join(', ') || '—'
+            const vars: Record<string, string> = {
+              nome: firstName,
+              autista: autistiNames,
+              veicolo: driveV?.display_name || '',
+              targa: driveV?.plate || c.plate || '—',
+              data_ritiro: fmtDate(c.pickup_date),
+              ora_ritiro: c.pickup_time || '—',
+              luogo_ritiro: luogoName(c.pickup_place, c.pickup_address),
+              luogo_riconsegna: luogoName(c.dropoff_place, c.dropoff_address),
+            }
+            let body = ucTpl.message_body as string
+            for (const [k, v] of Object.entries(vars)) body = body.split(`{${k}}`).join(v)
+            try {
+              await fetch('/.netlify/functions/send-whatsapp-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ customPhone: rawPhone, customMessage: body, type: 'Conferma Transfer Cliente' }),
+              })
+              clientiNotificati++
+            } catch (e) {
+              console.warn('[UscitaStraordinaria] conferma cliente fallita:', e)
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[UscitaStraordinaria] invio conferma cliente fallito:', e)
+      }
+
       const notifyMsg = notified > 0 ? ` · ${notified} autista notificat${notified > 1 ? 'i' : 'o'}` : ''
+      const clientMsg = clientiNotificati > 0 ? ` · ${clientiNotificati} cliente${clientiNotificati > 1 ? 'i' : ''} avvisat${clientiNotificati > 1 ? 'i' : 'o'}` : ''
       const noPhoneMsg = noPhone > 0 ? ` (${noPhone} senza telefono)` : ''
-      toast.success(`Uscita Straordinaria salvata (${rows.length} veicolo${rows.length > 1 ? 'i' : ''})${notifyMsg}${noPhoneMsg}.`)
+      toast.success(`Uscita Straordinaria salvata (${rows.length} veicolo${rows.length > 1 ? 'i' : ''})${notifyMsg}${clientMsg}${noPhoneMsg}.`)
       if (templateMissing) {
         toast.error('Template "Notifica Autista — Uscita Straordinaria" mancante o disattivato in Messaggi di Sistema Pro: nessuna notifica autista inviata. Configuralo (e attivalo) per abilitare l\'invio.', { duration: 11000 })
       }
