@@ -84,12 +84,17 @@ function BookingLinkPicker({ value, onChange }: { value: string | null; onChange
     let cancel = false
     const t = setTimeout(async () => {
       const safe = term.replace(/[%,()]/g, ' ')
+      // Mostra solo prenotazioni IN ARRIVO (ritiro da inizio giornata oggi in poi),
+      // ordinate dalla piu' vicina — cosi' colleghi al booking del transfer.
+      const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
       const { data } = await supabase
         .from('bookings')
         .select('id, customer_name, vehicle_name, vehicle_plate, pickup_date')
         .not('status', 'in', '(cancelled,annullata)')
+        .neq('service_type', USCITA_SERVICE_TYPE)
+        .gte('pickup_date', startOfToday.toISOString())
         .or(`customer_name.ilike.%${safe}%,vehicle_name.ilike.%${safe}%,vehicle_plate.ilike.%${safe}%`)
-        .order('pickup_date', { ascending: false })
+        .order('pickup_date', { ascending: true })
         .limit(8)
       if (!cancel) { setResults(data || []); setOpen(true) }
     }, 250)
