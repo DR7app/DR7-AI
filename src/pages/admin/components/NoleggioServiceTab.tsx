@@ -284,6 +284,20 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     const details: Record<string, unknown> = { ...origDetails }
     if (cleanPassengers.length) details.passengers = cleanPassengers
     else delete details.passengers
+
+    // 2026-07-04: tour (Aria/Mare) — se la data/ora cambia, ri-aggancia la
+    // prenotazione alla partenza giusta (match su data + ora). Cosi' i posti si
+    // spostano sulla partenza corretta invece di restare su quella vecchia
+    // (causa del caso "10:25 sold-out" con una prenotazione delle 11:25).
+    let tourDepId: string | null = (origDetails.tour_departure_id as string | undefined) || null
+    if ((serviceType === 'heli_rental' || serviceType === 'boat_rental') && form.pickup_date && form.pickup_time) {
+      const hhmm = form.pickup_time.length === 5 ? `${form.pickup_time}:00` : form.pickup_time
+      const { data: deps } = await supabase.from('noleggio_tour_departures')
+        .select('id').eq('departure_date', form.pickup_date).eq('departure_time', hhmm)
+      if (deps && deps.length === 1) tourDepId = (deps[0] as { id: string }).id
+      if (tourDepId) details.tour_departure_id = tourDepId
+    }
+
     const payload = {
       service_type: serviceType,
       customer_name: form.customer_name.trim(),
@@ -308,24 +322,21 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     // booking_details.passengers → il posto sulla mappa restava invariato.
     // Libera i posti di questa prenotazione non piu' usati e assegna i nuovi,
     // solo se liberi o gia' suoi (non ruba posti di altre prenotazioni).
-    if (form.id && (serviceType === 'heli_rental' || serviceType === 'boat_rental')) {
-      const depId = (origDetails.tour_departure_id as string | undefined) || null
-      if (depId) {
-        const newLabels = cleanPassengers.map(p => (p as { seat?: string }).seat).filter(Boolean) as string[]
-        const inList = newLabels.length ? `(${newLabels.map(l => `"${l}"`).join(',')})` : '("")'
+    if (form.id && (serviceType === 'heli_rental' || serviceType === 'boat_rental') && tourDepId) {
+      // Libera TUTTI i posti di questa prenotazione (anche su una partenza
+      // diversa, se l'orario e' cambiato), poi assegna i nuovi sulla partenza
+      // CORRETTA. Solo posti liberi o gia' suoi (non ruba posti altrui).
+      await supabase.from('noleggio_tour_seats')
+        .update({ status: 'available', booking_id: null, customer_name: null, customer_phone: null })
+        .eq('booking_id', form.id)
+      for (const p of cleanPassengers) {
+        const label = (p as { seat?: string }).seat
+        if (!label) continue
         await supabase.from('noleggio_tour_seats')
-          .update({ status: 'available', booking_id: null, customer_name: null, customer_phone: null })
-          .eq('booking_id', form.id)
-          .not('seat_label', 'in', inList)
-        for (const p of cleanPassengers) {
-          const label = (p as { seat?: string }).seat
-          if (!label) continue
-          await supabase.from('noleggio_tour_seats')
-            .update({ status: 'sold', booking_id: form.id, customer_name: p.name || form.customer_name.trim(), customer_phone: form.customer_phone.trim() || null })
-            .eq('departure_id', depId)
-            .eq('seat_label', label)
-            .or(`and(status.eq.available,booking_id.is.null),booking_id.eq.${form.id}`)
-        }
+          .update({ status: 'sold', booking_id: form.id, customer_name: p.name || form.customer_name.trim(), customer_phone: form.customer_phone.trim() || null })
+          .eq('departure_id', tourDepId)
+          .eq('seat_label', label)
+          .or(`and(status.eq.available,booking_id.is.null),booking_id.eq.${form.id}`)
       }
     }
 
