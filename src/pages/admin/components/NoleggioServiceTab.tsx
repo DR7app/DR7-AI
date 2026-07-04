@@ -303,6 +303,32 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
       : await supabase.from('bookings').insert({ ...payload, created_at: new Date().toISOString() }).select('id').single()
     if (e) { setSaving(false); setFormError(e.message); return }
 
+    // 2026-07-04 FIX: sincronizza la mappa posti (noleggio_tour_seats) quando si
+    // MODIFICA una prenotazione tour (Aria/Mare). Prima l'edit salvava solo
+    // booking_details.passengers → il posto sulla mappa restava invariato.
+    // Libera i posti di questa prenotazione non piu' usati e assegna i nuovi,
+    // solo se liberi o gia' suoi (non ruba posti di altre prenotazioni).
+    if (form.id && (serviceType === 'heli_rental' || serviceType === 'boat_rental')) {
+      const depId = (origDetails.tour_departure_id as string | undefined) || null
+      if (depId) {
+        const newLabels = cleanPassengers.map(p => (p as { seat?: string }).seat).filter(Boolean) as string[]
+        const inList = newLabels.length ? `(${newLabels.map(l => `"${l}"`).join(',')})` : '("")'
+        await supabase.from('noleggio_tour_seats')
+          .update({ status: 'available', booking_id: null, customer_name: null, customer_phone: null })
+          .eq('booking_id', form.id)
+          .not('seat_label', 'in', inList)
+        for (const p of cleanPassengers) {
+          const label = (p as { seat?: string }).seat
+          if (!label) continue
+          await supabase.from('noleggio_tour_seats')
+            .update({ status: 'sold', booking_id: form.id, customer_name: p.name || form.customer_name.trim(), customer_phone: form.customer_phone.trim() || null })
+            .eq('departure_id', depId)
+            .eq('seat_label', label)
+            .or(`and(status.eq.available,booking_id.is.null),booking_id.eq.${form.id}`)
+        }
+      }
+    }
+
     // Nexi - Pay by Link + Da Saldare: genera e invia il link (stesso flusso
     // di Noleggio auto / Car Wash). Solo alla creazione.
     const bookingId = (data as { id: string } | null)?.id
