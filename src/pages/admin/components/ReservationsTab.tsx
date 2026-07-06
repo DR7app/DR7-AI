@@ -5244,14 +5244,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // compilato la via ma non il campo Città separato (2026-06-08).
         if (!formData.delivery_city.trim() && !formData.delivery_street.trim()) deliveryMissing.push('Indirizzo o Città (consegna)')
         if (!formData.delivery_fee || parseFloat(formData.delivery_fee) < 0) deliveryMissing.push('Costo consegna')
-        if (deliveryMissing.length > 0) {
-          setTimeout(() => {
-            alert(
-              'CONSEGNA A DOMICILIO - CAMPI MANCANTI\n\n' +
-              'Compila i seguenti campi:\n\n' +
-              deliveryMissing.map(f => `- ${f}`).join('\n')
-            )
-          }, 100)
+        // 2026-07-06 (direzione): niente blocco secco -> OTP direzionale.
+        if (deliveryMissing.length > 0 && !hasOverride('delivery_fields_incomplete')) {
+          requestOverride('delivery_fields_incomplete',
+            `Consegna a domicilio incompleta (${deliveryMissing.join(', ')}). Procedere richiede approvazione direzionale.`)
           setIsSubmitting(false)
           submitLockRef.current = false
           return
@@ -5268,14 +5264,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // Basta l'indirizzo OPPURE la città (vedi nota consegna sopra).
         if (!formData.pickup_city.trim() && !formData.pickup_street.trim()) pickupMissing.push('Indirizzo o Città (ritiro)')
         if (!formData.pickup_fee || parseFloat(formData.pickup_fee) < 0) pickupMissing.push('Costo ritiro')
-        if (pickupMissing.length > 0) {
-          setTimeout(() => {
-            alert(
-              'RITIRO A DOMICILIO - CAMPI MANCANTI\n\n' +
-              'Compila i seguenti campi:\n\n' +
-              pickupMissing.map(f => `- ${f}`).join('\n')
-            )
-          }, 100)
+        // 2026-07-06 (direzione): niente blocco secco -> OTP direzionale.
+        if (pickupMissing.length > 0 && !hasOverride('pickup_fields_incomplete')) {
+          requestOverride('pickup_fields_incomplete',
+            `Ritiro a domicilio incompleto (${pickupMissing.join(', ')}). Procedere richiede approvazione direzionale.`)
           setIsSubmitting(false)
           submitLockRef.current = false
           return
