@@ -5289,29 +5289,23 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       // procedere come cauzione anche se la lookup non ha popolato tutti
       // i campi. Senza questo gate, il save bouncava sempre nonostante
       // l'OTP corretto.
-      if (formData.cauzione_auto && !hasOverride('vehicle_year_too_old')) {
+      // 2026-07-06 (direzione): NIENTE blocco secco. Se la Cauzione Auto non e'
+      // verificata (targa mancante o lookup non riuscita — es. API verifica
+      // targa 401/non disponibile) NON si blocca: si chiede OTP direzionale e,
+      // approvata, il save riparte e prosegue. Solo OTP puo' fermare il flusso.
+      if (formData.cauzione_auto
+          && !hasOverride('vehicle_year_too_old')
+          && !hasOverride('cauzione_auto_unverified')) {
         const cauzioneMissing: string[] = []
         if (!formData.cauzione_targa || formData.cauzione_targa.length < 5) {
-          cauzioneMissing.push('Targa Veicolo Cauzione')
+          cauzioneMissing.push('targa non inserita')
         }
-        // La verifica "Cerca cliccato" si basa sul BRAND popolato dalla
-        // lookup (non sull'anno: alcune targhe non hanno anno in OpenAPI
-        // e fetchTargaLookup mette 'N/D'. Senza brand invece la lookup
-        // non e' stata fatta del tutto).
         if (!formData.cauzione_targa_brand) {
-          cauzioneMissing.push('Cerca targa (clicca "Cerca" per verificare il veicolo)')
+          cauzioneMissing.push('veicolo non verificato (Cerca)')
         }
         if (cauzioneMissing.length > 0) {
-          setTimeout(() => {
-            alert(
-              'CAUZIONE AUTO - CAMPI MANCANTI\n\n' +
-              'Per utilizzare "Auto come Cauzione" devi:\n\n' +
-              '1. Inserire la targa del veicolo\n' +
-              '2. Cliccare "Cerca" per verificare che il veicolo sia dal 2020 in poi\n\n' +
-              'Campi mancanti:\n' +
-              cauzioneMissing.map(f => `- ${f}`).join('\n')
-            )
-          }, 100)
+          requestOverride('cauzione_auto_unverified',
+            `Cauzione Auto non verificata (${cauzioneMissing.join(', ')}). Procedere richiede approvazione direzionale.`)
           setIsSubmitting(false)
           submitLockRef.current = false
           return
