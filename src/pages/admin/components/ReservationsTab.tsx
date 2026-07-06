@@ -5246,11 +5246,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (!formData.delivery_fee || parseFloat(formData.delivery_fee) < 0) deliveryMissing.push('Costo consegna')
         // 2026-07-06 (direzione): niente blocco secco -> OTP direzionale.
         if (deliveryMissing.length > 0 && !hasOverride('delivery_fields_incomplete')) {
-          requestOverride('delivery_fields_incomplete',
-            `Consegna a domicilio incompleta (${deliveryMissing.join(', ')}). Procedere richiede approvazione direzionale.`)
-          setIsSubmitting(false)
-          submitLockRef.current = false
-          return
+          if (!requestOverride('delivery_fields_incomplete',
+              `Consegna a domicilio incompleta (${deliveryMissing.join(', ')}). Procedere richiede approvazione direzionale.`)) {
+            abortForOtp()
+            return
+          }
         }
       }
 
@@ -5266,11 +5266,11 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         if (!formData.pickup_fee || parseFloat(formData.pickup_fee) < 0) pickupMissing.push('Costo ritiro')
         // 2026-07-06 (direzione): niente blocco secco -> OTP direzionale.
         if (pickupMissing.length > 0 && !hasOverride('pickup_fields_incomplete')) {
-          requestOverride('pickup_fields_incomplete',
-            `Ritiro a domicilio incompleto (${pickupMissing.join(', ')}). Procedere richiede approvazione direzionale.`)
-          setIsSubmitting(false)
-          submitLockRef.current = false
-          return
+          if (!requestOverride('pickup_fields_incomplete',
+              `Ritiro a domicilio incompleto (${pickupMissing.join(', ')}). Procedere richiede approvazione direzionale.`)) {
+            abortForOtp()
+            return
+          }
         }
       }
 
@@ -5296,11 +5296,13 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
           cauzioneMissing.push('veicolo non verificato (Cerca)')
         }
         if (cauzioneMissing.length > 0) {
-          requestOverride('cauzione_auto_unverified',
-            `Cauzione Auto non verificata (${cauzioneMissing.join(', ')}). Procedere richiede approvazione direzionale.`)
-          setIsSubmitting(false)
-          submitLockRef.current = false
-          return
+          // requestOverride: true = bypass/gia' approvato (prosegui subito),
+          // false = popup OTP aperto (abortForOtp arma l'auto-resume dopo l'OK).
+          if (!requestOverride('cauzione_auto_unverified',
+              `Cauzione Auto non verificata (${cauzioneMissing.join(', ')}). Procedere richiede approvazione direzionale.`)) {
+            abortForOtp()
+            return
+          }
         }
       }
 
