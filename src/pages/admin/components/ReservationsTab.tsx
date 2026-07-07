@@ -530,6 +530,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [showUscita, setShowUscita] = useState(false)
+  // group_id dell'uscita in modifica (null = nuova uscita).
+  const [editUscitaGroupId, setEditUscitaGroupId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingOriginalPaymentStatus, setEditingOriginalPaymentStatus] = useState<string | null>(null) // Track if payment changed from unpaid → paid
   // Autisti (consegna/ritiro fuori sede): si puo' assegnare un autista DIVERSO
@@ -3544,6 +3546,14 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
 
   function handleEditBooking(booking: Booking) {
+    // Corse/uscite straordinarie: NON aprire il form noleggio (salvandolo
+    // diventerebbero prenotazioni normali). Apri la modale dedicata in MODIFICA.
+    if (booking.service_type === 'uscita_straordinaria') {
+      const gid = (booking.booking_details as { uscita?: { group_id?: string } } | null)?.uscita?.group_id || null
+      setEditUscitaGroupId(gid)
+      setShowUscita(true)
+      return
+    }
     // Only handle car rental bookings - car wash bookings are in CarWashBookingsTab
     if (booking.service_type === 'car_wash') {
       alert('Le prenotazioni lavaggio devono essere modificate nella tab "Prenotazioni Lavaggio"')
@@ -7678,7 +7688,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         <ReservationsDashboardHeader
           bookings={bookings}
           onNewBooking={() => { resetForm(); setEditingId(null); newSession('booking_create'); setShowForm(true) }}
-          onNewUscita={() => setShowUscita(true)}
+          onNewUscita={() => { setEditUscitaGroupId(null); setShowUscita(true) }}
           onAllertaMeteo={() => handleAllertaMeteo(false)}
           onAllertaMeteoTest={() => handleAllertaMeteo(true)}
         />
@@ -7882,7 +7892,8 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
 
         <UscitaStraordinariaModal
           open={showUscita}
-          onClose={() => setShowUscita(false)}
+          editGroupId={editUscitaGroupId}
+          onClose={() => { setShowUscita(false); setEditUscitaGroupId(null) }}
           vehicles={vehicles}
           onSaved={() => loadData()}
         />

@@ -158,6 +158,8 @@ export interface UscitaCauzione {
 export interface UscitaVehicleCard {
   /** Local-only id for React keys before persistence. */
   localId: string
+  /** In edit mode: the existing bookings.id this card maps to (UPDATE, not INSERT). */
+  _editBookingId?: string
   /** The DR7 vehicle being moved. */
   vehicle_id: string
   plate: string
@@ -228,5 +230,36 @@ export function emptyVehicleCard(localId: string): UscitaVehicleCard {
     servizi_extra: [],
     note_operative: '',
     note_integrative: '',
+  }
+}
+
+/** Reconstruct an editable card from a persisted uscita_straordinaria booking row.
+ *  Symmetric with how the modal save writes booking_details.uscita. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function cardFromUscitaBooking(booking: any, localId: string): UscitaVehicleCard {
+  const u = (booking?.booking_details?.uscita || {}) as Record<string, any>
+  const base = emptyVehicleCard(localId)
+  return {
+    ...base,
+    _editBookingId: booking.id,
+    vehicle_id: booking.vehicle_id || '',
+    plate: booking.vehicle_plate || '',
+    autista_ids: Array.isArray(u.autista_ids) ? u.autista_ids : [],
+    vehicle_to_drive: u.vehicle_to_drive || {},
+    pickup_date: u.pickup?.date || '',
+    pickup_time: u.pickup?.time || '',
+    pickup_place: u.pickup?.place || '',
+    pickup_address: u.pickup?.address || '',
+    dropoff_date: u.dropoff?.date || '',
+    dropoff_time: u.dropoff?.time || '',
+    dropoff_place: u.dropoff?.place || '',
+    dropoff_address: u.dropoff?.address || '',
+    motivazioni: Array.isArray(u.motivazioni) ? u.motivazioni : [],
+    linked_booking_id: u.linked_booking_id || null,
+    payment: u.payment || base.payment,
+    cauzione: u.cauzione || base.cauzione,
+    servizi_extra: Array.isArray(u.servizi_extra) ? u.servizi_extra : [],
+    note_operative: u.note_operative || '',
+    note_integrative: u.note_integrative || '',
   }
 }

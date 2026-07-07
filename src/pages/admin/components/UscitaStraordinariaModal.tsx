@@ -16,6 +16,7 @@ import {
   USCITA_CAUZIONE_STATES,
   uscitaStatoToBookingStatus,
   emptyVehicleCard,
+  cardFromUscitaBooking,
   type UscitaStato,
   type UscitaVehicleCard,
   type UscitaServizioExtra,
@@ -39,6 +40,8 @@ interface Props {
   onClose: () => void
   vehicles: VehicleLite[]
   onSaved?: () => void
+  /** Se valorizzato, la modale apre in MODIFICA su questa uscita (group_id). */
+  editGroupId?: string | null
 }
 
 const uid = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `c${Math.random().toString(36).slice(2)}`)
@@ -139,7 +142,9 @@ function BookingLinkPicker({ value, onChange }: { value: string | null; onChange
   )
 }
 
-export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSaved }: Props) {
+export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSaved, editGroupId }: Props) {
+  // Edit mode: id delle prenotazioni originali del gruppo (per rilevare le card rimosse).
+  const [origBookingIds, setOrigBookingIds] = useState<string[]>([])
   const [title, setTitle] = useState('')
   const [stato, setStato] = useState<UscitaStato>('Programmata')
   // 2026-06-03: rimosse le note globali a livello modal — direzione vuole
@@ -219,13 +224,37 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
   useEffect(() => {
     if (!open) return
     loadAutisti()
-    // Reset draft each time the modal opens.
-    setTitle('')
-    setStato('Programmata')
-    // 2026-06-03: noteOperative/noteIntegrative globali rimossi → niente reset.
-    setCards([emptyVehicleCard(uid())])
     setClientModalOpen(false)
-  }, [open, loadAutisti])
+    if (editGroupId) {
+      // MODIFICA: carica l'operazione esistente e prefilla le card (una per riga).
+      ;(async () => {
+        const { data } = await supabase
+          .from('bookings')
+          .select('*')
+          .eq('service_type', USCITA_SERVICE_TYPE)
+          .eq('booking_details->uscita->>group_id', editGroupId)
+          .not('status', 'in', '(cancelled,annullata)')
+          .order('created_at', { ascending: true })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rows = (data || []) as any[]
+        if (rows.length) {
+          const u0 = (rows[0].booking_details?.uscita || {}) as Record<string, unknown>
+          setTitle((u0.title as string) || '')
+          setStato(((u0.stato as UscitaStato)) || 'Programmata')
+          setCards(rows.map(b => cardFromUscitaBooking(b, uid())))
+          setOrigBookingIds(rows.map(b => b.id))
+        } else {
+          setTitle(''); setStato('Programmata'); setCards([emptyVehicleCard(uid())]); setOrigBookingIds([])
+        }
+      })()
+    } else {
+      // Nuova: draft pulito.
+      setTitle('')
+      setStato('Programmata')
+      setCards([emptyVehicleCard(uid())])
+      setOrigBookingIds([])
+    }
+  }, [open, editGroupId, loadAutisti])
 
   if (!open) return null
 
@@ -306,7 +335,7 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
     }
 
     setSaving(true)
-    const groupId = uid()
+    const groupId = editGroupId || uid()
     const autistiSnapshot = (ids: string[]) =>
       ids.map(id => { const a = autisti.find(x => x.id === id); return a ? { id: a.id, full_name: a.full_name, phone: a.phone } : { id, full_name: '', phone: '' } })
 
@@ -375,8 +404,31 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
         }
       })
 
-      const { error } = await supabase.from('bookings').insert(rows)
-      if (error) throw error
+      // MODIFICA vs CREAZIONE: le card con _editBookingId aggiornano la riga
+      // esistente (niente delete+reinsert → nessun id perso, nessun trigger di
+      // cancellazione). Le card nuove vengono inserite. Le card originali
+      // rimosse vengono annullate (status cancelled).
+      const toInsert = rows.filter((_, i) => !valid[i]._editBookingId)
+      const toUpdate = rows
+        .map((row, i) => ({ id: valid[i]._editBookingId, row }))
+        .filter((x): x is { id: string; row: typeof rows[number] } => !!x.id)
+      if (toInsert.length) {
+        const { error } = await supabase.from('bookings').insert(toInsert)
+        if (error) throw error
+      }
+      for (const u of toUpdate) {
+        const { error } = await supabase.from('bookings').update(u.row).eq('id', u.id)
+        if (error) throw error
+      }
+      if (editGroupId) {
+        const keptIds = new Set(toUpdate.map(u => u.id))
+        const removed = origBookingIds.filter(id => !keptIds.has(id))
+        if (removed.length) {
+          await supabase.from('bookings')
+            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+            .in('id', removed)
+        }
+      }
 
       // Notifiche bot per-autista: ognuno riceve SOLO le sue attività.
       const byAutista = new Map<string, UscitaVehicleCard[]>()
