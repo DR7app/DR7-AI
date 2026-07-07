@@ -87,22 +87,36 @@ function BookingLinkPicker({ value, onChange }: { value: string | null; onChange
     let cancel = false
     const t = setTimeout(async () => {
       const safe = term.replace(/[%,()]/g, ' ')
-      // Mostra solo prenotazioni IN ARRIVO (ritiro da inizio giornata oggi in poi),
-      // ordinate dalla piu' vicina — cosi' colleghi al booking del transfer.
-      const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
+      // Cerca fra TUTTE le prenotazioni (non solo le future): l'operatore deve
+      // poter collegare qualunque booking. Ordinate dalla piu' recente.
       const { data } = await supabase
         .from('bookings')
         .select('id, customer_name, vehicle_name, vehicle_plate, pickup_date')
         .not('status', 'in', '(cancelled,annullata)')
         .neq('service_type', USCITA_SERVICE_TYPE)
-        .gte('pickup_date', startOfToday.toISOString())
         .or(`customer_name.ilike.%${safe}%,vehicle_name.ilike.%${safe}%,vehicle_plate.ilike.%${safe}%`)
-        .order('pickup_date', { ascending: true })
-        .limit(8)
+        .order('pickup_date', { ascending: false })
+        .limit(10)
       if (!cancel) { setResults(data || []); setOpen(true) }
     }, 250)
     return () => { cancel = true; clearTimeout(t) }
   }, [q, selected])
+
+  // Edit mode: se arriva un value (linked_booking_id gia' salvato) ma non
+  // abbiamo i dati, carica il booking per mostrare cliente/veicolo (non l'id).
+  useEffect(() => {
+    if (!value || selected) return
+    let cancel = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('bookings')
+        .select('id, customer_name, vehicle_name, vehicle_plate, pickup_date')
+        .eq('id', value)
+        .maybeSingle()
+      if (!cancel && data) setSelected(data as BookingHit)
+    })()
+    return () => { cancel = true }
+  }, [value, selected])
 
   const pick = (b: BookingHit) => { setSelected(b); setOpen(false); setQ(''); onChange(b.id) }
   const clear = () => { setSelected(null); setQ(''); onChange(null) }
