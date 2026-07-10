@@ -2406,9 +2406,16 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           dropoff_time: p.dropoff_date
             ? new Date(p.dropoff_date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
             : '',
-          // Checkbox non spuntato: nessuna info km, qualunque sia il
-          // default della categoria.
-          km_info: pickedUnlimitedKm ? 'Illimitati' : '',
+          // 2026-07-10 FIX: {km_info} usciva VUOTO per i noleggi a km
+          // fissi (checkbox Km Illimitati non spuntato) → nel WhatsApp la
+          // riga "• {km_info}" appariva vuota. Ora, se non e' unlimited,
+          // mostriamo i km INCLUSI reali del preventivo (p.km_limit =
+          // kmIncluded + pacchetti, calcolato al salvataggio).
+          km_info: (() => {
+              if (pickedUnlimitedKm) return 'Illimitati'
+              const n = Number(p.km_limit)
+              return Number.isFinite(n) && n > 0 ? `${n} Km inclusi` : ''
+          })(),
           // {km_illimitati} -> "Km Illimitati = X,XX" (stesso formato delle
           // altre voci: "Lavaggio Finale = 9,90", "No cauzione = 49,00").
           // Mostrata SOLO se l'utente ha esplicitamente spuntato Km
