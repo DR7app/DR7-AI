@@ -184,7 +184,7 @@ Per PATENTE:
   "luogo_nascita": "dal campo 3 FRONTE",
   "patente_numero": "dal campo 5 FRONTE (NON dal retro!) - es: U1234567A",
   "patente_tipo": "SOLO categorie con date sul RETRO (es: B oppure AM, B)",
-  "patente_rilascio": "dal campo 4a FRONTE, YYYY-MM-DD",
+  "patente_rilascio": "dal RETRO tabella categorie, COLONNA 10 della categoria B (data di PRIMO conseguimento cat. B). Se la categoria B non e' presente, usa la data PIU' ANTICA tra le colonne 10 delle categorie possedute. NON usare il campo 4a del FRONTE: sulle patenti rinnovate il 4a mostra la data di RINNOVO, non il conseguimento reale. Formato YYYY-MM-DD",
   "patente_scadenza": "dal campo 4b FRONTE, YYYY-MM-DD",
   "patente_ente": "dal campo 4c FRONTE",
   "document_type": "patente"
@@ -197,6 +197,7 @@ Per PATENTE:
 3. Il numero documento CIE è SEMPRE 9 caratteri (es: CA12345AB)
 4. La data è SEMPRE nel formato YYYY-MM-DD
 5. Il codice fiscale è SEMPRE 16 caratteri
+6. patente_rilascio: prendila SEMPRE dal RETRO (colonna 10 della categoria B, o la più antica delle categorie possedute), MAI dal campo 4a del FRONTE. Il 4a su patenti rinnovate è la data di rinnovo, non il conseguimento reale.
 
 Rispondi SOLO con JSON valido.`;
 

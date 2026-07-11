@@ -66,7 +66,13 @@ const LateReturnAlarm: React.FC = () => {
                 const { data: bookings, error } = await supabase
                     .from('bookings')
                     .select('id, vehicle_name, customer_name, customer_phone, dropoff_date, status, booking_details')
-                    .eq('service_type', 'car_rental')
+                    // 2026-07-11 FIX: prima filtrava SOLO service_type='car_rental',
+                    // ma molti noleggi hanno service_type NULL o 'rental' (default
+                    // storico) → l'allarme ritardo NON suonava mai per quelle
+                    // prenotazioni. Ora accettiamo car_rental / rental / NULL
+                    // (car_wash, mechanical, uscita_straordinaria restano esclusi
+                    // perche' hanno un service_type esplicito diverso).
+                    .or('service_type.eq.car_rental,service_type.eq.rental,service_type.is.null')
                     .not('status', 'in', '("returned","completed","completata","cancelled","annullata")')
                     .not('dropoff_date', 'is', null)
                     .gte('dropoff_date', maxLateCutoff.toISOString())

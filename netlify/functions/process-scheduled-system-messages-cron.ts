@@ -601,7 +601,12 @@ const cronHandler = async () => {
             const sign = tpl.trigger_event === 'before_pickup' ? +1 : -1;
             const lo = new Date(now + sign * offsetH * 3600 * 1000 - wideBackMs).toISOString();
             const hi = new Date(now + sign * offsetH * 3600 * 1000 + wideFwdMs).toISOString();
-            q = q.gte('pickup_date', lo).lte('pickup_date', hi);
+            // 2026-07-11 FIX: i lavaggi/meccanica (car_wash) NON hanno pickup_date
+            // (usano appointment_date) → il filtro solo su pickup_date li
+            // escludeva e il promemoria "giorno prima lavaggio" non partiva mai.
+            // Ora matchiamo pickup_date OPPURE appointment_date nella finestra.
+            // getEventTimeMs sceglie poi il campo giusto per-riga.
+            q = q.or(`and(pickup_date.gte.${lo},pickup_date.lte.${hi}),and(appointment_date.gte.${lo},appointment_date.lte.${hi})`);
             // 2026-05-30: il gate "pagato O confermato" per il promemoria ritiro
             // è applicato per-booking nel loop sotto (serve leggere anche
             // manually_confirmed da booking_details, non filtrabile bene in SQL).
@@ -609,7 +614,8 @@ const cronHandler = async () => {
             const sign = tpl.trigger_event === 'before_dropoff' ? +1 : -1;
             const lo = new Date(now + sign * offsetH * 3600 * 1000 - wideBackMs).toISOString();
             const hi = new Date(now + sign * offsetH * 3600 * 1000 + wideFwdMs).toISOString();
-            q = q.gte('dropoff_date', lo).lte('dropoff_date', hi);
+            // Stesso fix: includi appointment_date (car_wash/meccanica non hanno dropoff_date).
+            q = q.or(`and(dropoff_date.gte.${lo},dropoff_date.lte.${hi}),and(appointment_date.gte.${lo},appointment_date.lte.${hi})`);
         } else if (tpl.trigger_event === 'on_booking') {
             const lo = new Date(now - offsetH * 3600 * 1000 - LOOKBACK_MS).toISOString();
             const hi = new Date(now - offsetH * 3600 * 1000 + LOOKFORWARD_MS).toISOString();
