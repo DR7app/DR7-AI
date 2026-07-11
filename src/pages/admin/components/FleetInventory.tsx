@@ -133,7 +133,7 @@ export default function FleetInventory() {
     // 2026-06-04: sub-tab interno del Magazzino: 'inventario' (default,
     // la vista corrente con tutti i veicoli) o 'fornitori' (gestione lista
     // fornitori dedicata ai veicoli, name + WhatsApp).
-    const [subTab, setSubTab] = useState<'inventario' | 'fornitori'>('inventario')
+    const [subTab, setSubTab] = useState<'inventario' | 'fornitori' | 'ordini'>('inventario')
 
     const [cart, setCart] = useState<CartItem[]>([])
     const [cartOpen, setCartOpen] = useState(false)
@@ -255,6 +255,24 @@ export default function FleetInventory() {
           const errMsg = data?.error || data?.message || `HTTP ${res.status}`
           toast.error(`Errore invio WhatsApp: ${errMsg}`, { duration: 8000 })
           return
+        }
+        // 2026-07-11: registra l'ordine (storico + report mensile). Prima il
+        // carrello veniva inviato ma NON salvato: nessuna traccia di cosa era
+        // stato ordinato. Best-effort: se la tabella non esiste ancora l'invio
+        // resta valido (l'ordine e' gia' partito su WhatsApp).
+        try {
+          await supabase.from('magazzino_ordini').insert({
+            fornitore_id: fornitore.id,
+            fornitore_nome: fornitore.nome,
+            items: cart,
+            items_count: cart.reduce((s, c) => s + c.quantity, 0),
+            note: orderNote.trim() || null,
+            message_body: body,
+            green_message_id: (data as any)?.idMessage || (data as any)?.data?.idMessage || null,
+            sent_via: 'whatsapp',
+          })
+        } catch (persistErr) {
+          console.warn('[Magazzino cart] persist ordine fallito (non-blocking):', persistErr)
         }
         toast.success(`Ordine inviato a ${fornitore.nome} via WhatsApp`)
         clearCart()
@@ -566,12 +584,24 @@ export default function FleetInventory() {
                   >
                     Fornitori ({fleetFornitori.length})
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setSubTab('ordini')}
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${subTab === 'ordini' ? 'border-b-2 border-dr7-gold text-dr7-gold' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                  >
+                    Storico Ordini
+                  </button>
                 </div>
             </div>
 
             {/* 2026-06-04: Fornitori sub-tab (CRUD inline) */}
             {subTab === 'fornitori' && (
               <FornitoriManagementPanel onChanged={loadFleetFornitori} fornitori={fleetFornitori} />
+            )}
+
+            {/* 2026-07-11: Storico ordini + report mensile */}
+            {subTab === 'ordini' && (
+              <MagazzinoOrdiniPanel />
             )}
 
             {/* 2026-06-04: Cart drawer overlay */}
@@ -1752,6 +1782,115 @@ function _CompactRow({
                     </div>
                 )
             })}
+        </div>
+    )
+}
+
+// 2026-07-11: Storico ordini Magazzino + report mensile.
+// Legge magazzino_ordini (popolata da sendCartViaWhatsApp) e raggruppa per
+// mese. Mostra per ogni ordine: fornitore, data, n. articoli, dettaglio righe.
+interface MagazzinoOrdine {
+    id: string
+    created_at: string
+    fornitore_nome: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    items: any[]
+    items_count: number
+    note: string | null
+}
+
+const MESI_IT = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre']
+
+function MagazzinoOrdiniPanel() {
+    const [ordini, setOrdini] = useState<MagazzinoOrdine[]>([])
+    const [loading, setLoading] = useState(true)
+    const [expanded, setExpanded] = useState<string | null>(null)
+    const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+    useEffect(() => {
+        (async () => {
+            setLoading(true)
+            const { data, error } = await supabase
+                .from('magazzino_ordini')
+                .select('id, created_at, fornitore_nome, items, items_count, note')
+                .order('created_at', { ascending: false })
+                .limit(500)
+            if (error) {
+                // Tabella non ancora creata (migration 20260711 non applicata) o
+                // altro errore: mostra un messaggio invece di crashare.
+                setErrorMsg(error.message)
+                setOrdini([])
+            } else {
+                setOrdini((data || []) as MagazzinoOrdine[])
+            }
+            setLoading(false)
+        })()
+    }, [])
+
+    // Raggruppa per "AAAA-MM" (dal created_at, timezone Rome).
+    const groups = new Map<string, { label: string; ordini: MagazzinoOrdine[]; totItems: number }>()
+    for (const o of ordini) {
+        const d = new Date(o.created_at)
+        const y = Number(d.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome', year: 'numeric' }))
+        const m = Number(d.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome', month: 'numeric' }))
+        const key = `${y}-${String(m).padStart(2, '0')}`
+        if (!groups.has(key)) groups.set(key, { label: `${MESI_IT[m - 1]} ${y}`, ordini: [], totItems: 0 })
+        const g = groups.get(key)!
+        g.ordini.push(o)
+        g.totItems += Number(o.items_count || 0)
+    }
+
+    if (loading) return <div className="py-8 text-center text-theme-text-muted text-sm">Caricamento ordini…</div>
+    if (errorMsg) return (
+        <div className="py-6 px-4 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 text-sm">
+            Storico ordini non disponibile: {errorMsg}.<br />
+            Applica la migration <code>20260711_magazzino_ordini.sql</code> su Supabase per abilitarlo.
+        </div>
+    )
+    if (ordini.length === 0) return <div className="py-8 text-center text-theme-text-muted text-sm">Nessun ordine registrato. Gli ordini inviati dal carrello compariranno qui.</div>
+
+    return (
+        <div className="mt-4 space-y-6">
+            {[...groups.entries()].map(([key, g]) => (
+                <div key={key}>
+                    <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-bold text-theme-text-primary">{g.label}</h4>
+                        <span className="text-xs text-theme-text-muted">{g.ordini.length} ordin{g.ordini.length > 1 ? 'i' : 'e'} · {g.totItems} articol{g.totItems === 1 ? 'o' : 'i'}</span>
+                    </div>
+                    <div className="rounded-xl border border-theme-border overflow-hidden divide-y divide-theme-border">
+                        {g.ordini.map(o => {
+                            const d = new Date(o.created_at)
+                            const dataIt = d.toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                            const open = expanded === o.id
+                            return (
+                                <div key={o.id} className="bg-theme-bg-secondary">
+                                    <button type="button" onClick={() => setExpanded(open ? null : o.id)} className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-theme-bg-hover/40 transition-colors">
+                                        <div className="min-w-0">
+                                            <div className="text-sm font-semibold text-theme-text-primary truncate">{o.fornitore_nome}</div>
+                                            <div className="text-xs text-theme-text-muted">{dataIt}</div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-dr7-gold/20 text-dr7-gold">{o.items_count} art.</span>
+                                            <span className="text-theme-text-muted text-xs">{open ? '▲' : '▼'}</span>
+                                        </div>
+                                    </button>
+                                    {open && (
+                                        <div className="px-4 pb-3 pt-1 text-sm text-theme-text-secondary space-y-1">
+                                            {Array.isArray(o.items) && o.items.length > 0 ? o.items.map((it: any, i: number) => (
+                                                <div key={i} className="flex justify-between gap-3">
+                                                    <span className="min-w-0 truncate">{it.vehicleName ? `${it.vehicleName}${it.vehiclePlate ? ` (${it.vehiclePlate})` : ''} — ` : ''}{it.label}{it.specs ? ` (${it.specs})` : ''}</span>
+                                                    <span className="shrink-0 text-theme-text-muted">×{it.quantity}</span>
+                                                </div>
+                                            )) : <div className="text-theme-text-muted text-xs">Nessun dettaglio righe.</div>}
+                                            {o.note && <div className="mt-1 text-xs text-theme-text-muted">Note: {o.note}</div>}
+                                        </div>
+                                    )}
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            ))}
         </div>
     )
 }
