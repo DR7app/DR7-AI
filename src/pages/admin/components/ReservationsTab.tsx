@@ -518,7 +518,7 @@ const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default function ReservationsTab({ initialData, onDataConsumed }: { initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string; fromPreventivo?: Record<string, any> } | null; onDataConsumed?: () => void }) {
+export default function ReservationsTab({ initialData, onDataConsumed, viewMode = 'bookings' }: { initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string; fromPreventivo?: Record<string, any> } | null; onDataConsumed?: () => void; viewMode?: 'bookings' | 'uscite' }) {
   const { canViewFinancials } = useAdminRole()
   const paymentMethods = usePaymentMethods()
   const [reservations, setReservations] = useState<Reservation[]>([])
@@ -2402,7 +2402,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
       logger.log('[ReservationsTab] Car wash/mechanical bookings:', carWashAndMechanicalBookings.length)
       setCarWashBookings(carWashAndMechanicalBookings)
 
-      // Then filter out service bookings from main bookings display
+      // Then filter out service bookings from main bookings display.
+      // 2026-07-11: le Uscite Straordinarie vivono in un subtab dedicato di
+      // Noleggio. In viewMode='uscite' mostriamo SOLO le uscite; in 'bookings'
+      // (default) le escludiamo cosi' non si mescolano con le prenotazioni.
       const filteredBookings = (allBookings || []).filter(b =>
         b.status !== 'deleted' &&
         b.service_type !== 'car_wash' &&
@@ -2411,7 +2414,10 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         // NON sono noleggio auto: i Tour Aria/Mare/Soggiorni hanno le loro tab dedicate.
         b.service_type !== 'heli_rental' &&
         b.service_type !== 'boat_rental' &&
-        b.service_type !== 'stay_rental'
+        b.service_type !== 'stay_rental' &&
+        (viewMode === 'uscite'
+          ? b.service_type === 'uscita_straordinaria'
+          : b.service_type !== 'uscita_straordinaria')
       ).map(b => ({
         ...b,
         contracts: contractsMap.get(b.id) || null
@@ -7687,6 +7693,7 @@ export default function ReservationsTab({ initialData, onDataConsumed }: { initi
         {/* Premium dashboard header: title + KPI stat cards */}
         <ReservationsDashboardHeader
           bookings={bookings}
+          viewMode={viewMode}
           onNewBooking={() => { resetForm(); setEditingId(null); newSession('booking_create'); setShowForm(true) }}
           onNewUscita={() => { setEditUscitaGroupId(null); setShowUscita(true) }}
           onAllertaMeteo={() => handleAllertaMeteo(false)}
@@ -11272,13 +11279,16 @@ function ReservationsDashboardHeader({
   onNewUscita,
   onAllertaMeteo,
   onAllertaMeteoTest,
+  viewMode = 'bookings',
 }: {
   bookings: Booking[]
   onNewBooking: () => void
   onNewUscita: () => void
   onAllertaMeteo: () => void
   onAllertaMeteoTest: () => void
+  viewMode?: 'bookings' | 'uscite'
 }) {
+  const isUscite = viewMode === 'uscite'
   // Default al mese corrente in Europe/Rome.
   const nowRome = new Date()
   const [selMonth, setSelMonth] = useState<{ year: number; month: number }>({
@@ -11488,10 +11498,10 @@ function ReservationsDashboardHeader({
       <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
         <div>
           <h2 className="text-2xl sm:text-3xl font-semibold text-theme-text-primary tracking-tight">
-            Prenotazioni Noleggio
+            {isUscite ? 'Uscite Straordinarie' : 'Prenotazioni Noleggio'}
             <span className="inline-block ml-2 w-2 h-2 rounded-full bg-green-500 align-middle animate-pulse" title="Real-time" />
           </h2>
-          <p className="text-sm text-theme-text-muted mt-1">Gestisci e monitora tutte le prenotazioni</p>
+          <p className="text-sm text-theme-text-muted mt-1">{isUscite ? 'Gestisci e monitora le uscite straordinarie con autista' : 'Gestisci e monitora tutte le prenotazioni'}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <a
@@ -11505,14 +11515,18 @@ function ReservationsDashboardHeader({
             <span className="hidden sm:inline">Calendario Giornaliero</span>
             <span className="sm:hidden">Calendario</span>
           </a>
-          <Button onClick={onNewBooking} className="text-sm">
-            <span className="hidden sm:inline">+ Nuova Prenotazione</span>
-            <span className="sm:hidden">+ Nuova</span>
-          </Button>
-          <Button onClick={onNewUscita} variant="secondary" className="text-sm border border-emerald-500/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10">
-            <span className="hidden sm:inline">+ Uscita Straordinaria</span>
-            <span className="sm:hidden">+ Uscita</span>
-          </Button>
+          {!isUscite && (
+            <Button onClick={onNewBooking} className="text-sm">
+              <span className="hidden sm:inline">+ Nuova Prenotazione</span>
+              <span className="sm:hidden">+ Nuova</span>
+            </Button>
+          )}
+          {isUscite && (
+            <Button onClick={onNewUscita} variant="secondary" className="text-sm border border-emerald-500/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10">
+              <span className="hidden sm:inline">+ Uscita Straordinaria</span>
+              <span className="sm:hidden">+ Uscita</span>
+            </Button>
+          )}
           <Button onClick={onAllertaMeteo} variant="secondary" className="text-sm border border-amber-500/50 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10">
             <svg className="w-4 h-4 mr-1.5 inline-block align-[-2px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86l-8.45 14.6A2 2 0 003.58 21h16.84a2 2 0 001.73-2.54l-8.45-14.6a2 2 0 00-3.46 0z" />

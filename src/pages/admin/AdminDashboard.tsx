@@ -263,12 +263,13 @@ export default function AdminDashboard() {
   // permKey overrides the default permission check (which uses `tab`).
   // Used when two sub-tabs share the same TabType but need separate access
   // grants — e.g. Preventivi vs Prenotazioni both target tab='reservations'.
-  type SubTab = { tab: TabType; label: string; titleLabel?: string; superadminOnly?: boolean; subView?: 'bookings' | 'preventivi'; permKey?: string }
-  const [rentalSubView, setRentalSubView] = useState<'bookings' | 'preventivi'>('bookings')
+  type SubTab = { tab: TabType; label: string; titleLabel?: string; superadminOnly?: boolean; subView?: 'bookings' | 'preventivi' | 'uscite'; permKey?: string }
+  const [rentalSubView, setRentalSubView] = useState<'bookings' | 'preventivi' | 'uscite'>('bookings')
   const SECTIONS: { name: string; tabs: SubTab[] }[] = [
     { name: 'Noleggio Terra', tabs: [
       { tab: 'reservations', label: 'Noleggio', titleLabel: 'Prenotazioni', subView: 'bookings' },
       { tab: 'reservations', label: 'Preventivi', subView: 'preventivi', permKey: 'reservations-preventivi' },
+      { tab: 'reservations', label: 'Uscite Straordinarie', subView: 'uscite' },
       { tab: 'calendar', label: 'Calendario' },
       { tab: 'contratto', label: 'Contratti' },
       { tab: 'gestione-danni', label: 'Danni & Penali' },

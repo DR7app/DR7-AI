@@ -9,21 +9,21 @@ interface RentalTabsProps {
     // When provided, the parent controls the active sub-view (Noleggio /
     // Preventivi). The internal tab bar is hidden because the parent already
     // shows a unified bar at the section level.
-    activeSubView?: 'bookings' | 'preventivi'
-    onSubViewChange?: (view: 'bookings' | 'preventivi') => void
+    activeSubView?: 'bookings' | 'preventivi' | 'uscite'
+    onSubViewChange?: (view: 'bookings' | 'preventivi' | 'uscite') => void
 }
 
 export default function RentalTabs({ initialData: externalInitialData, onDataConsumed, activeSubView: externalSubView, onSubViewChange }: RentalTabsProps) {
     const { hasPermission } = useAdminRole()
-    const [internalSubTab, setInternalSubTab] = useState<'bookings' | 'preventivi'>('bookings')
+    const [internalSubTab, setInternalSubTab] = useState<'bookings' | 'preventivi' | 'uscite'>('bookings')
     const isControlled = externalSubView !== undefined
     const rawSubTab = isControlled ? externalSubView! : internalSubTab
     // Final-line gate: a user with only `reservations-preventivi` (no
     // `reservations`) must never land on the bookings sub-view, even if
     // stale state tried to take them there.
     const canSeeBookings = hasPermission('reservations')
-    const activeSubTab: 'bookings' | 'preventivi' = (!canSeeBookings && rawSubTab === 'bookings') ? 'preventivi' : rawSubTab
-    const setActiveSubTab = (v: 'bookings' | 'preventivi') => {
+    const activeSubTab: 'bookings' | 'preventivi' | 'uscite' = (!canSeeBookings && rawSubTab === 'bookings') ? 'preventivi' : rawSubTab
+    const setActiveSubTab = (v: 'bookings' | 'preventivi' | 'uscite') => {
         if (isControlled) onSubViewChange?.(v)
         else setInternalSubTab(v)
     }
@@ -65,6 +65,15 @@ export default function RentalTabs({ initialData: externalInitialData, onDataCon
                     >
                         Preventivi
                     </button>
+                    <button
+                        onClick={() => setActiveSubTab('uscite')}
+                        className={`px-4 py-2 font-medium transition-colors ${activeSubTab === 'uscite'
+                            ? 'text-emerald-500 border-b-2 border-emerald-500'
+                            : 'text-theme-text-muted hover:text-theme-text-primary'
+                            }`}
+                    >
+                        Uscite Straordinarie
+                    </button>
                 </div>
             )}
 
@@ -77,6 +86,9 @@ export default function RentalTabs({ initialData: externalInitialData, onDataCon
                 )}
                 {activeSubTab === 'preventivi' && (
                     <PreventiviTab onConvertToBooking={handleConvertToBooking} />
+                )}
+                {activeSubTab === 'uscite' && (
+                    <ReservationsTab viewMode="uscite" />
                 )}
             </div>
         </div>
