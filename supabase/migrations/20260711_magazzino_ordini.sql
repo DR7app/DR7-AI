@@ -17,13 +17,11 @@ create table if not exists public.magazzino_ordini (
     sent_via        text not null default 'whatsapp'
 );
 
--- Colonne generate per il raggruppamento mensile del report.
-alter table public.magazzino_ordini
-    add column if not exists periodo_mese integer generated always as (extract(month from created_at)) stored,
-    add column if not exists periodo_anno integer generated always as (extract(year  from created_at)) stored;
-
+-- NB: niente colonne generate periodo_mese/periodo_anno — extract() su
+-- timestamptz non e' IMMUTABLE (dipende dal timezone) e Postgres rifiuta una
+-- STORED generated column (errore 42P17). Il raggruppamento mensile del report
+-- viene fatto lato client (MagazzinoOrdiniPanel), quindi non servono.
 create index if not exists idx_magazzino_ordini_created on public.magazzino_ordini (created_at desc);
-create index if not exists idx_magazzino_ordini_periodo on public.magazzino_ordini (periodo_anno, periodo_mese);
 create index if not exists idx_magazzino_ordini_fornitore on public.magazzino_ordini (fornitore_id);
 
 alter table public.magazzino_ordini enable row level security;
