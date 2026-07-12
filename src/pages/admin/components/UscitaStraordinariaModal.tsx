@@ -89,11 +89,15 @@ function BookingLinkPicker({ value, onChange }: { value: string | null; onChange
       const safe = term.replace(/[%,()]/g, ' ')
       // Cerca fra TUTTE le prenotazioni (non solo le future): l'operatore deve
       // poter collegare qualunque booking. Ordinate dalla piu' recente.
+      // 2026-07-12: collega SOLO a prenotazioni NOLEGGIO CAR reali. Includiamo
+      // i noleggi auto (service_type 'rental' / 'car_rental' / NULL storico) ed
+      // escludiamo uscite, lavaggi/meccanica e i noleggi non-auto (aria/mare/
+      // soggiorni), così l'operatore vede solo le prenotazioni auto vere.
       const { data } = await supabase
         .from('bookings')
         .select('id, customer_name, vehicle_name, vehicle_plate, pickup_date')
         .not('status', 'in', '(cancelled,annullata)')
-        .neq('service_type', USCITA_SERVICE_TYPE)
+        .or('service_type.is.null,service_type.eq.rental,service_type.eq.car_rental')
         .or(`customer_name.ilike.%${safe}%,vehicle_name.ilike.%${safe}%,vehicle_plate.ilike.%${safe}%`)
         .order('pickup_date', { ascending: false })
         .limit(10)
