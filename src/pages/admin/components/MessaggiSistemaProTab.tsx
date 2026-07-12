@@ -13,6 +13,10 @@ interface SystemMessage {
     message_body: string
     is_automatic: boolean
     is_enabled: boolean
+    /** Se true, il cron pianificato può inviare questo promemoria (in AND con
+        is_automatic + is_enabled). Default false = spento finché non approvato
+        qui dalla UI. Governa l'autonomia admin: parte SOLO ciò che si approva. */
+    cron_approved?: boolean
     include_header: boolean
     trigger_event: string
     trigger_offset_hours: number
@@ -2170,6 +2174,22 @@ export default function MessaggiSistemaProTab() {
         }
     }
 
+    async function handleToggleCronApproved(template: SystemMessage) {
+        try {
+            const newVal = !template.cron_approved
+            const { error } = await supabase
+                .from('system_messages')
+                .update({ cron_approved: newVal, updated_at: new Date().toISOString() })
+                .eq('id', template.id)
+            if (error) throw error
+            setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, cron_approved: newVal } : t))
+            toast.success(newVal ? 'Invio automatico su pianificazione ATTIVATO' : 'Invio automatico su pianificazione disattivato')
+        } catch (err: unknown) {
+            const _errMsg = err instanceof Error ? err.message : String(err)
+            toast.error('Errore: ' + _errMsg)
+        }
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async function handleUpdateAutomation(templateId: string, field: string, value: any) {
         try {
@@ -3329,6 +3349,23 @@ export default function MessaggiSistemaProTab() {
                                                             }`}
                                                         >
                                                             {template.is_automatic ? 'Automatico' : 'Manuale'}
+                                                        </button>
+                                                        {/* 2026-07-12: approvazione invio pianificato (cron).
+                                                            Il promemoria parte dal cron SOLO se questo è ON
+                                                            (oltre a Attivo + Automatico). Parte esclusivamente
+                                                            ciò che approvi qui — nessun invio di massa. */}
+                                                        <button
+                                                            onClick={(e) => { e.preventDefault(); handleToggleCronApproved(template) }}
+                                                            title={template.cron_approved
+                                                                ? 'Il cron può inviare questo promemoria automaticamente. Clic per disattivare.'
+                                                                : 'Il cron NON invierà questo promemoria finché non lo attivi qui.'}
+                                                            className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                                                                template.cron_approved
+                                                                    ? 'bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'
+                                                                    : 'bg-gray-600/20 text-gray-400 hover:bg-gray-600/30'
+                                                            }`}
+                                                        >
+                                                            {template.cron_approved ? 'Cron ON' : 'Cron OFF'}
                                                         </button>
                                                         {template.is_enabled === false && (
                                                             <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-600/20 text-red-400">OFF</span>

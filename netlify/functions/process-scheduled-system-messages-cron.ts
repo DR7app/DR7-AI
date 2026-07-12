@@ -397,13 +397,16 @@ async function processScadenzeAdmin(tpl: SystemMessage, now: number) {
 async function processUscitaAutistaReminders(now: number): Promise<{ sent: number; skipped: number; errors: number }> {
     let sent = 0, skipped = 0, errors = 0;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // 2026-07-12: trova il template autista per KEY o per LABEL (robusto anche
+    // se creato dalla UI con key pro_custom_*), e richiede cron_approved come
+    // il resto dei promemoria (parte solo se approvato dall'admin).
     const { data: tplRows } = await supabase
         .from('system_messages')
-        .select('message_body, is_enabled')
-        .eq('message_key', 'pro_promemoria_autista')
+        .select('message_body, is_enabled, cron_approved, message_key, label')
+        .or('message_key.eq.pro_promemoria_autista,label.ilike.%autista%')
         .order('updated_at', { ascending: false });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tpl = (tplRows || []).find((r: any) => r.is_enabled !== false && !!r.message_body);
+    const tpl = (tplRows || []).find((r: any) => r.is_enabled !== false && r.cron_approved === true && !!r.message_body);
     if (!tpl) return { sent, skipped, errors };
 
     const OFFSET_MS = 12 * 3600 * 1000;
@@ -455,7 +458,7 @@ const cronHandler = async () => {
     // 1. Carica tutti i template automatici attivi
     const { data: templates, error: tplErr } = await supabase
         .from('system_messages')
-        .select('id, message_key, label, is_automatic, is_enabled, trigger_event, trigger_offset_hours, send_hour, target_category, target_status, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end, target_membership_tier, target_min_prev_bookings, target_max_prev_bookings, target_rental_duration_min, target_rental_duration_max, target_customer_tags, target_residency, target_age_min, target_age_max, target_pickup_hour_min, target_pickup_hour_max, target_source_channel, target_province, target_min_lifetime_value, target_has_unpaid_invoices, target_used_promo_before, target_extension_count_min, target_extension_count_max')
+        .select('id, message_key, label, is_automatic, is_enabled, cron_approved, trigger_event, trigger_offset_hours, send_hour, target_category, target_status, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end, target_membership_tier, target_min_prev_bookings, target_max_prev_bookings, target_rental_duration_min, target_rental_duration_max, target_customer_tags, target_residency, target_age_min, target_age_max, target_pickup_hour_min, target_pickup_hour_max, target_source_channel, target_province, target_min_lifetime_value, target_has_unpaid_invoices, target_used_promo_before, target_extension_count_min, target_extension_count_max')
         .eq('is_automatic', true)
         .eq('is_enabled', true);
 
@@ -496,28 +499,20 @@ const cronHandler = async () => {
     // (CSV) può sovrascrivere l'elenco se in futuro servono altri template.
     // NB: non esiste un caso "manda tutto" — se l'allowlist fosse vuota il cron
     // non manda nulla (fail-safe anti-incident).
-    const DEFAULT_ALLOWLIST = [
-        'pro_custom_promemoria_ritiro_veicolo_1778334892254',          // promemoria ritiro 24h prima del pickup
-        'pro_custom_richiesta_prolungamento_supercar_1777711737784',   // richiesta prolungamento 24h prima del dropoff
-        'pro_promemoria_elicottero',                                   // tour elicottero 24h prima (cliente)
-        'pro_promemoria_lavaggio',                                     // lavaggio giorno prima (cliente)
-        // NB: pro_promemoria_autista NON e' qui — destinatario = autista, gestito
-        // dal blocco dedicato processUscitaAutistaReminders (fuori dal loop cliente).
-    ];
-    const allowlistRaw = (process.env.SCHEDULED_MSGS_ALLOWLIST || '').trim();
-    const allowlist = allowlistRaw
-        ? allowlistRaw.split(',').map(s => s.trim()).filter(Boolean)
-        : DEFAULT_ALLOWLIST;
-    if (allowlist.length === 0) {
-        console.warn('[scheduled-msgs] allowlist vuota — modalità SAFE (nessun invio).');
-        return { statusCode: 200, body: JSON.stringify({ ok: true, sent: 0, scanned: 0, reason: 'empty_allowlist_safe_mode' }) };
-    }
-    console.log(`[scheduled-msgs] ALLOWLIST attiva — solo: ${allowlist.join(', ')}`);
+    // 2026-07-12 GATE AUTONOMIA ADMIN. L'invio automatico e' governato dal flag
+    // DB `cron_approved` (colonna system_messages): un template parte SOLO se
+    // is_automatic + is_enabled (gia' filtrati nella query) + cron_approved.
+    // Cosi' parte ESCLUSIVAMENTE cio' che l'admin approva dalla UI — niente
+    // allowlist hardcoded ne' env SCHEDULED_MSGS_ALLOWLIST (che prima potevano
+    // bloccare heli/lavaggio anche con i template attivi, o all'opposto far
+    // partire template mis-flaggati). Default cron_approved = false → i template
+    // mis-flaggati restano SPENTI (stessa sicurezza anti mass-send del
+    // 2026-05-13). Le guardie sotto (OLD_TO_PRO legacy + event-driven) restano
+    // come difesa in profondita'.
 
     for (const tpl of templates as SystemMessage[]) {
-        // Allowlist gate: salta tutto ciò che non è esplicitamente consentito.
-        const mk = String((tpl as { message_key?: string }).message_key || '');
-        if (!allowlist.includes(mk)) continue;
+        // Gate: parte SOLO cio' che l'admin ha approvato per il cron.
+        if (!(tpl as { cron_approved?: boolean }).cron_approved) continue;
 
         // Skip eventi non gestiti (preventivo gestito altrove)
         if (tpl.trigger_event === 'on_preventivo') continue;
