@@ -178,6 +178,18 @@ export default function FleetInventory() {
       if (cart.length === 0) { toast.error('Carrello vuoto'); return }
       const fornitore = fleetFornitori.find(f => f.id === selectedFornitoreId)
       if (!fornitore) { toast.error('Seleziona un fornitore'); return }
+      // 2026-07-13 FIX: l'ordine arrivava a NOI (DR7) invece che al fornitore
+      // quando il numero fornitore era vuoto o = numero DR7. Ora blocchiamo
+      // l'invio finché il fornitore non ha un numero valido e diverso dal nostro.
+      const fornitorePhone = (fornitore.telefono || '').replace(/\D/g, '')
+      if (!fornitorePhone || fornitorePhone.length < 8) {
+        toast.error(`Il fornitore "${fornitore.nome}" non ha un numero WhatsApp valido. Impostalo nella tab Fornitori prima di ordinare.`, { duration: 8000 })
+        return
+      }
+      if (fornitorePhone.endsWith('3457905205')) {
+        toast.error(`Il numero del fornitore "${fornitore.nome}" è il numero DR7: correggilo nella tab Fornitori, altrimenti l'ordine arriva a noi e non al fornitore.`, { duration: 9000 })
+        return
+      }
       // Raggruppa per veicolo per leggibilita'.
       const byVehicle = new Map<string, CartItem[]>()
       for (const item of cart) {
