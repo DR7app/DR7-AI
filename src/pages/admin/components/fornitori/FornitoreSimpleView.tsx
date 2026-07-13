@@ -361,6 +361,17 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    {/* 2026-07-13 FIX: mancava un pulsante per caricare una bolla/DDT
+                        non legata a una fattura specifica (setShowUpload non era mai
+                        richiamato) → l'utente non trovava come inserire le bolle.
+                        Ora c'è un pulsante ben visibile. */}
+                    <button
+                        onClick={() => { setUploadForFatturaId(null); setShowUpload(true) }}
+                        className="text-xs px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-semibold"
+                        title="Carica una bolla / DDT per questo fornitore"
+                    >
+                        + Carica Bolla / DDT
+                    </button>
                     <button
                         onClick={() => setEditingAnagrafica(true)}
                         className="text-xs px-3 py-1.5 rounded bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold border border-dr7-gold/30 font-semibold"
