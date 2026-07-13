@@ -232,21 +232,29 @@ export default function ScannerTab() {
             return;
         }
 
-        // Extract each document
-        const results: ExtractedData[] = [];
+        // Extract each document — teniamo lo slot key per sapere da che LATO
+        // arriva ogni campo.
+        const results: { key: string; data: ExtractedData }[] = [];
         for (const [key] of slotsWithImages) {
             const data = await extractDocument(key);
-            if (data) results.push(data);
+            if (data) results.push({ key, data });
         }
 
-        // Merge all extracted data (later values override earlier ones)
+        // 2026-07-13 FIX patente: la DATA DI RILASCIO e le CATEGORIE stanno sul
+        // RETRO (tabella categorie, colonna 10) — vanno prese SOLO da license_back.
+        // Il NUMERO e la SCADENZA stanno sul FRONTE — solo da license_front. Cosi'
+        // una lettura errata del campo 4a sul fronte non sovrascrive la data di
+        // rilascio corretta del retro (era il bug: "la sbaglia dallo scanner").
+        const BACK_ONLY = new Set(['patente_rilascio', 'patente_tipo']);
+        const FRONT_ONLY = new Set(['patente_numero', 'patente_scadenza']);
         const merged: ExtractedData = {};
-        for (const data of results) {
-            Object.entries(data).forEach(([key, value]) => {
-                if (value && value !== '') {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    (merged as any)[key] = value;
-                }
+        for (const { key, data } of results) {
+            Object.entries(data).forEach(([field, value]) => {
+                if (!value || value === '') return;
+                if (BACK_ONLY.has(field) && key !== 'license_back') return;
+                if (FRONT_ONLY.has(field) && key !== 'license_front') return;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (merged as any)[field] = value;
             });
         }
 
