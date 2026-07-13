@@ -4257,7 +4257,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             payment_status: (extendData.extension_payment_status === 'paid' || additionalAmount === 0)
               ? 'paid'
               : 'pending',
-            isEdit: false, // forza il template rental_new (conferma) invece di rental_modified
+            // 2026-07-13: estensione PAGATA (o €0) -> messaggio di CONFERMA
+            // (rental_new_customer). Estensione DA SALDARE -> template "modifica"
+            // (rental_modified), NON conferma: un'estensione non pagata non deve
+            // risultare "confermata" (segue lo schema del noleggio normale).
+            isEdit: !(extendData.extension_payment_status === 'paid' || additionalAmount === 0),
           }
           const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
             method: 'POST',
@@ -4270,7 +4274,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           })
           const waResult = await waResp.json().catch(() => ({}))
           if (!waResp.ok || waResult?.skipped) {
-            toast.error('Template mancante in Messaggi di Sistema Pro: pro_conferma_noleggio')
+            toast.error('Template mancante in Messaggi di Sistema Pro (conferma/modifica noleggio)')
           } else {
             logger.log('[handleConfirmExtend] WhatsApp customer notification sent to', customerPhone, 'status=', extendData.extension_payment_status)
           }
