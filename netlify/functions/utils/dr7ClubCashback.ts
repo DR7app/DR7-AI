@@ -160,7 +160,10 @@ export async function getAnnualSpendEur(supabase: SupabaseClient, userId: string
         if (!pm.includes('nexi') && !pm.includes('card') && !pm.includes('stripe')) continue
         const status = String((b as any).status || '').toLowerCase()
         if (status === 'cancelled' || status === 'annullata') continue
-        const amount = Number((b as any).price_total ?? (b as any).total_amount ?? 0)
+        // 2026-07-13 FIX: bookings.price_total è in CENTESIMI → /100. Prima
+        // veniva sommato come euro (spesa annua x100 → tier gonfiato al 4%).
+        const rawTot = (b as any).price_total ?? (b as any).total_amount ?? 0
+        const amount = Number(rawTot) / 100
         if (amount > 0) totalEur += amount
     }
 

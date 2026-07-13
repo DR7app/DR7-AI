@@ -38,6 +38,7 @@ const BONUS_REFERENCE_TYPES = new Set([
     'gift',
     'voucher',
     'compensation',
+    'wallet_package_bonus', // bonus pacchetto ricarica (non pagato con carta) — niente interessi
 ])
 
 const handler: Handler = async () => {
