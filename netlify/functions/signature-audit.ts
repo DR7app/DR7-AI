@@ -249,7 +249,7 @@ function generateAuditHTML(data: any, signedRequest: any, extra?: { customerPhon
     </div>
 
     <div class="footer">
-        Dubai rent 7.0 S.p.A. - Via del Fangario 25, 09122 Cagliari (CA) - P.IVA 04104640927<br>
+        DR7 S.p.A. - Via del Fangario 25, 09122 Cagliari (CA) - P.IVA 04104640927<br>
         Documento generato il ${new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}
     </div>
 </body>

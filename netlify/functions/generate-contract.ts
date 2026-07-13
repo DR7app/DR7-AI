@@ -170,7 +170,7 @@ async function reconductSignedContract(params: {
         page.drawText(line, { x: 55, y, size: 10, font, color: black }); y -= 16
     }
     y -= 20
-    page.drawText('Dubai rent 7.0 S.p.A. - Via del Fangario 25, 09122 Cagliari (CA) - P.IVA 04104640927', { x: 55, y, size: 8, font, color: gray })
+    page.drawText('DR7 S.p.A. - Via del Fangario 25, 09122 Cagliari (CA) - P.IVA 04104640927', { x: 55, y, size: 8, font, color: gray })
 
     const signedPdfBytes = await pdfDoc.save()
     const signedPdfHash = createHash('sha256').update(Buffer.from(signedPdfBytes)).digest('hex')

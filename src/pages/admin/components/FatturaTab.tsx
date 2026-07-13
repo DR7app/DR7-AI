@@ -1560,7 +1560,7 @@ export function useFatturaScartataCount() {
 // netlify/functions/invoice-pdf-utils.ts on each PDF render.
 function InvoiceFooterEditor() {
   const DEFAULT_LINES = [
-    'Dubai rent 7.0 S.p.A. - Iscr. reg. imp.: 04104640927',
+    'DR7 S.p.A. - Iscr. reg. imp.: 04104640927',
     'Tel: 3457905205 | Email: Info@dr7.app | PEC: dubai.rent7.0srl@legalmail.it | Website: www.dr7.app',
     'Socio unico - Cap. soc. 50.000,00 € | Regime Fiscale: Ordinario',
   ]

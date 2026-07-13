@@ -293,7 +293,7 @@ export const handler: Handler = async (event) => {
         // Footer
         page.drawLine({ start: { x: 50, y }, end: { x: width - 50, y }, thickness: 1, color: rgb(0.85, 0.85, 0.85) })
         y -= 15
-        page.drawText('Dubai rent 7.0 S.p.A. - Via del Fangario 25, 09122 Cagliari (CA) - P.IVA 04104640927', {
+        page.drawText('DR7 S.p.A. - Via del Fangario 25, 09122 Cagliari (CA) - P.IVA 04104640927', {
             x: 55, y, size: 8, font, color: gray
         })
         y -= 12

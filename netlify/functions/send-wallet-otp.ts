@@ -101,7 +101,7 @@ export const handler: Handler = async (event) => {
           </div>
           <p style="text-align: center; color: #666; font-size: 13px;">Comunica questo codice all'operatore per autorizzare l'operazione.</p>
           <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
-          <p style="color: #999; font-size: 11px; text-align: center;">Dubai rent 7.0 S.p.A. - www.dr7.app</p>
+          <p style="color: #999; font-size: 11px; text-align: center;">DR7 S.p.A. - www.dr7.app</p>
         </div>
       `
     })

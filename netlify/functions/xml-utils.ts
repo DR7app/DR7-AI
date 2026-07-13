@@ -127,10 +127,10 @@ function formatAmount(amount: number): string {
 export function generateFatturaXML(invoice: InvoiceData): string {
   const customerAddress = parseAddress(invoice.customer_address || '')
 
-  // Company details (CedentePrestatore) — Dubai rent 7.0 S.p.A.
+  // Company details (CedentePrestatore) — DR7 S.p.A.
   const companyVAT = '04104640927'
   const companyFiscalCode = '04104640927'
-  const companyName = 'Dubai rent 7.0 S.p.A.'
+  const companyName = 'DR7 S.p.A.'
   const companyAddress = 'VIA DEL FANGARIO 25'
   const companyCAP = '09122'
   const companyCity = 'CAGLIARI'

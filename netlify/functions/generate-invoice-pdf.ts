@@ -291,7 +291,7 @@ function generateInvoiceHTML(invoice: any): string {
             <div class="section">
                 <div class="section-title">DA</div>
                 <div class="company-details">
-                    <div class="company-name">Dubai rent 7.0 S.p.A.</div>
+                    <div class="company-name">DR7 S.p.A.</div>
                     <p>VIA DEL FANGARIO 25, 09122 CAGLIARI (CA)</p>
                     <p>P.IVA 04104640927</p>
                     <p>C.F. 04104640927</p>
@@ -384,7 +384,7 @@ function generateInvoiceHTML(invoice: any): string {
 
         <!-- Footer -->
         <div class="footer">
-            <p><strong>Dubai rent 7.0 S.p.A.</strong> Iscr. reg. imp.: 04104640927</p>
+            <p><strong>DR7 S.p.A.</strong> Iscr. reg. imp.: 04104640927</p>
             <p>Tel: 3457905205 &nbsp;|&nbsp; Email: Info@dr7.app &nbsp;|&nbsp; PEC: dubai.rent7.0srl@legalmail.it &nbsp;|&nbsp; Website: www.dr7.app</p>
             <p>Socio unico - Cap. soc. 50.000,00 €</p>
             <p>Regime Fiscale: Ordinario</p>
