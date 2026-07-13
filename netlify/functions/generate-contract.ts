@@ -128,9 +128,13 @@ async function reconductSignedContract(params: {
     contractNumber: string; pickupDate: Date; dropoffDate: Date; customerPhone: string
 }): Promise<string | null> {
     const { supabase, booking, signedReq, newUnsignedPdfBytes, contractNumber, pickupDate, dropoffDate, customerPhone } = params
+    // La firma DR7 è ELETTRONICA via OTP (eIDAS), NON un'immagine autografa: la
+    // "firma" è l'attestazione. Quindi la riconduzione NON richiede un'immagine —
+    // rigenera il contratto con le nuove date + pagina di attestazione che cita
+    // la firma OTP originale. Se in futuro ci fosse anche un'immagine firma
+    // (signature_image) la ristampiamo, ma non è necessaria.
     const sig1: string | null = signedReq.signature_image || null
     const sig2: string | null = signedReq.signature_image_2 || null
-    if (!sig1 && !sig2) { console.log('[reconduct] nessuna immagine firma — mantengo PDF firmato originale'); return null }
 
     const pdfDoc = await PDFDocument.load(newUnsignedPdfBytes)
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
@@ -158,7 +162,7 @@ async function reconductSignedContract(params: {
     page.drawLine({ start: { x: 50, y }, end: { x: width - 50, y }, thickness: 2, color: gold }); y -= 30
     page.drawRectangle({ x: 45, y: y - 120, width: width - 90, height: 130, color: lightGray, borderColor: rgb(0.85, 0.85, 0.85), borderWidth: 1 })
     page.drawText('ESTENSIONE NOLEGGIO', { x: 55, y, size: 10, font: fontBold, color: gray }); y -= 20
-    for (const [label, value] of [['Documento:', contractNumber || 'N/A'], ['Cliente:', signedReq.signer_name || booking.customer_name || ''], ['Firma originale del:', origSignedRome], ['Nuovo ritiro:', pickupDate.toLocaleDateString('it-IT')], ['Nuova riconsegna:', dropoffDate.toLocaleDateString('it-IT')], ['Data riconduzione:', nowRome]] as [string, string][]) {
+    for (const [label, value] of [['Documento:', contractNumber || 'N/A'], ['Cliente:', signedReq.signer_name || booking.customer_name || ''], ['Firma originale (OTP eIDAS) del:', origSignedRome], ['Email OTP:', signedReq.signer_email || ''], ['Nuovo ritiro:', pickupDate.toLocaleDateString('it-IT')], ['Nuova riconsegna:', dropoffDate.toLocaleDateString('it-IT')], ['Data riconduzione:', nowRome]] as [string, string][]) {
         page.drawText(label, { x: 55, y, size: 10, font: fontBold, color: black }); page.drawText(String(value), { x: 200, y, size: 10, font, color: black }); y -= 18
     }
     y -= 28
