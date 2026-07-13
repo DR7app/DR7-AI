@@ -117,6 +117,82 @@ function sanitizeForPDF(text: string): string {
     return result.replace(/\s+/g, ' ').trim()
 }
 
+// 2026-07-13: Riconduzione contratto per ESTENSIONE (nessuna nuova firma).
+// Ristampa la firma autografa originale (salvata su signature_requests.
+// signature_image) sul PDF rigenerato con le nuove date, aggiunge una pagina di
+// attestazione, mantiene la firma 'signed' e invia il PDF via WhatsApp. Ritorna
+// null se non c'e' immagine firma (contratto legacy) → il chiamante mantiene il
+// PDF firmato originale intatto.
+async function reconductSignedContract(params: {
+    supabase: any; booking: any; signedReq: any; newUnsignedPdfBytes: Uint8Array
+    contractNumber: string; pickupDate: Date; dropoffDate: Date; customerPhone: string
+}): Promise<string | null> {
+    const { supabase, booking, signedReq, newUnsignedPdfBytes, contractNumber, pickupDate, dropoffDate, customerPhone } = params
+    const sig1: string | null = signedReq.signature_image || null
+    const sig2: string | null = signedReq.signature_image_2 || null
+    if (!sig1 && !sig2) { console.log('[reconduct] nessuna immagine firma — mantengo PDF firmato originale'); return null }
+
+    const pdfDoc = await PDFDocument.load(newUnsignedPdfBytes)
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+    const embedSig = async (dataUrl: string, xRatio: number) => {
+        try {
+            const bytes = Uint8Array.from(atob(dataUrl.replace('data:image/png;base64,', '')), c => c.charCodeAt(0))
+            const img = await pdfDoc.embedPng(bytes)
+            const pages = pdfDoc.getPages(); const lastPage = pages[pages.length - 1]
+            const { width: pw } = lastPage.getSize()
+            const d = img.scale(Math.min(160 / img.width, 50 / img.height))
+            lastPage.drawImage(img, { x: pw * xRatio + (160 - d.width) / 2, y: 45, width: d.width, height: d.height })
+        } catch (e: any) { console.error('[reconduct] embed firma fallito:', e?.message) }
+    }
+    if (sig1 && sig1.startsWith('data:image/png;base64,')) await embedSig(sig1, 0.35)
+    if (sig2 && sig2.startsWith('data:image/png;base64,')) await embedSig(sig2, 0.67)
+
+    const nowRome = new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })
+    const origSignedRome = signedReq.signed_at ? new Date(signedReq.signed_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome' }) : 'N/D'
+    const newUnsignedHash = createHash('sha256').update(Buffer.from(newUnsignedPdfBytes)).digest('hex')
+    const page = pdfDoc.addPage([595.28, 841.89]); const { width, height } = page.getSize()
+    const black = rgb(0, 0, 0), gray = rgb(0.4, 0.4, 0.4), gold = rgb(0.83, 0.69, 0.22), lightGray = rgb(0.95, 0.95, 0.95)
+    let y = height - 60
+    page.drawText('ATTESTAZIONE DI RICONDUZIONE CONTRATTO', { x: 50, y, size: 16, font: fontBold, color: black }); y -= 8
+    page.drawLine({ start: { x: 50, y }, end: { x: width - 50, y }, thickness: 2, color: gold }); y -= 30
+    page.drawRectangle({ x: 45, y: y - 120, width: width - 90, height: 130, color: lightGray, borderColor: rgb(0.85, 0.85, 0.85), borderWidth: 1 })
+    page.drawText('ESTENSIONE NOLEGGIO', { x: 55, y, size: 10, font: fontBold, color: gray }); y -= 20
+    for (const [label, value] of [['Documento:', contractNumber || 'N/A'], ['Cliente:', signedReq.signer_name || booking.customer_name || ''], ['Firma originale del:', origSignedRome], ['Nuovo ritiro:', pickupDate.toLocaleDateString('it-IT')], ['Nuova riconsegna:', dropoffDate.toLocaleDateString('it-IT')], ['Data riconduzione:', nowRome]] as [string, string][]) {
+        page.drawText(label, { x: 55, y, size: 10, font: fontBold, color: black }); page.drawText(String(value), { x: 200, y, size: 10, font, color: black }); y -= 18
+    }
+    y -= 28
+    for (const line of ['Il presente contratto e stato ricondotto alle nuove date di noleggio a', 'seguito del pagamento dell\'estensione richiesta dal cliente.', '', 'Ai sensi della clausola di riconduzione accettata e sottoscritta dal', 'cliente al momento della firma originale, l\'estensione NON richiede una', 'nuova firma: la firma elettronica avanzata gia apposta resta valida ed', 'efficace anche per le nuove date sopra indicate.']) {
+        page.drawText(line, { x: 55, y, size: 10, font, color: black }); y -= 16
+    }
+    y -= 20
+    page.drawText('Dubai rent 7.0 S.p.A. - Via del Fangario 25, 09122 Cagliari (CA) - P.IVA 04104640927', { x: 55, y, size: 8, font, color: gray })
+
+    const signedPdfBytes = await pdfDoc.save()
+    const signedPdfHash = createHash('sha256').update(Buffer.from(signedPdfBytes)).digest('hex')
+    const fileName = `signed/${contractNumber || booking.id}_ricondotto_${Date.now()}.pdf`
+    const { error: upErr } = await supabase.storage.from('contracts').upload(fileName, signedPdfBytes, { contentType: 'application/pdf', upsert: false })
+    if (upErr) { console.error('[reconduct] upload fallito:', upErr.message); return null }
+    const { data: pub } = supabase.storage.from('contracts').getPublicUrl(fileName)
+    const signedPdfUrl = pub.publicUrl
+
+    await supabase.from('signature_requests').update({ signed_pdf_url: signedPdfUrl, signed_pdf_hash: signedPdfHash, original_pdf_hash: newUnsignedHash, updated_at: new Date().toISOString() }).eq('id', signedReq.id)
+    try {
+        const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID, GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
+        if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN && customerPhone) {
+            let cleanPhone = String(customerPhone).replace(/\D/g, '')
+            if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
+            if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
+            const cacheBustedUrl = `${signedPdfUrl}${signedPdfUrl.includes('?') ? '&' : '?'}v=${Date.now()}`
+            await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chatId: `${cleanPhone}@c.us`, urlFile: cacheBustedUrl, fileName: `${contractNumber || booking.id}_ricondotto.pdf`, caption: `Contratto ${contractNumber || ''} aggiornato per estensione fino al ${dropoffDate.toLocaleDateString('it-IT')} — firma gia valida, nessuna nuova firma richiesta. DR7` }),
+            })
+        }
+    } catch (e: any) { console.error('[reconduct] WhatsApp errore:', e?.message) }
+    return signedPdfUrl
+}
+
 export const handler: Handler = async (event) => {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' }
@@ -127,7 +203,7 @@ export const handler: Handler = async (event) => {
     }
 
     try {
-        const { bookingId } = JSON.parse(event.body || '{}')
+        const { bookingId, reconduct } = JSON.parse(event.body || '{}')
 
         if (!bookingId) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Missing bookingId' }) }
@@ -1514,6 +1590,35 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             .from('contracts')
             .getPublicUrl(fileName)
 
+        // 2026-07-13: RICONDUZIONE ESTENSIONE. Se reconduct=true e c'e' gia una
+        // firma valida, NON chiediamo nuova firma: ristampiamo la firma sul PDF
+        // con le nuove date e lo inviamo via WhatsApp come contratto firmato.
+        let reconductHandled = false
+        let reconductedSignedUrl: string | null = null
+        if (reconduct) {
+            try {
+                const { data: signedReqs } = await supabase
+                    .from('signature_requests').select('*')
+                    .eq('booking_id', bookingId).eq('status', 'signed')
+                    .order('signed_at', { ascending: false })
+                if (signedReqs && signedReqs.length > 0) {
+                    reconductHandled = true
+                    const distinctSigners = new Set(signedReqs.map((r: any) => r.signer_phone || r.signer_email || r.signer_name || r.id))
+                    if (distinctSigners.size > 1) {
+                        console.log(`[generate-contract] reconduct booking ${bookingId}: ${distinctSigners.size} firmatari — mantengo firmato originale`)
+                    } else {
+                        reconductedSignedUrl = await reconductSignedContract({
+                            supabase, booking, signedReq: signedReqs[0], newUnsignedPdfBytes: pdfBytes,
+                            contractNumber, pickupDate, dropoffDate, customerPhone: customer?.telefono || resolvedPhone || '',
+                        })
+                        console.log(`[generate-contract] Reconduct estensione ${bookingId} — restamp=${!!reconductedSignedUrl}`)
+                    }
+                } else {
+                    console.log(`[generate-contract] reconduct richiesto ma nessuna firma per ${bookingId} — flusso normale`)
+                }
+            } catch (rcErr: any) { console.error('[generate-contract] reconduct fallito:', rcErr?.message) }
+        }
+
         // 8. Save/Update Contracts Table
         //
         // We intentionally avoid .upsert({onConflict:'booking_id'}): contracts.booking_id
@@ -1540,7 +1645,11 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
             total_amount: booking.price_total / 100,
             status: 'active',
             pdf_url: publicUrl,
-            signed_pdf_url: null,
+            // Riconduzione: NON azzerare la firma. Ristampata → usa quel signed_pdf_url;
+            // legacy/multi-firmatario → lascia intatto il firmato originale.
+            ...(reconductHandled
+                ? (reconductedSignedUrl ? { signed_pdf_url: reconductedSignedUrl } : {})
+                : { signed_pdf_url: null }),
             updated_at: new Date().toISOString()
         }
 
@@ -1603,7 +1712,8 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
         // UGUALE (rigenerazione senza modifiche dati: es. callback pagamento,
         // caso Fofana 2026-05-30) la firma resta valida. Stessa logica hash gia'
         // usata da signature-init per decidere chi deve rifirmare.
-        try {
+        // Riconduzione: la firma e' stata portata sulle nuove date. NON superseder.
+        if (!reconductHandled) try {
             const newPdfHash = createHash('sha256').update(Buffer.from(pdfBytes)).digest('hex')
             const { data: signedReqs } = await supabase
                 .from('signature_requests')
@@ -1639,7 +1749,7 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
         console.log('[generate-contract] Success:', publicUrl)
         return {
             statusCode: 200,
-            body: JSON.stringify({ success: true, url: publicUrl })
+            body: JSON.stringify({ success: true, url: publicUrl, reconducted: reconductHandled, signed: !!reconductedSignedUrl })
         }
 
     } catch (error: any) {

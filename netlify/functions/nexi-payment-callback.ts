@@ -615,27 +615,36 @@ const handler: Handler = async (event) => {
                 // l'auto-fattura non aggiorna i campi durata. Stesso pattern
                 // del flusso topup qui sotto.
                 try {
+                    // 2026-07-13: RICONDUZIONE. reconduct=true → contratto ricondotto
+                    // (firma originale ristampata sulle nuove date, inviato via
+                    // WhatsApp) senza nuovo link firma. Solo senza firma precedente
+                    // si invia il link.
                     const contractRes = await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/generate-contract`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
-                        body: JSON.stringify({ bookingId: booking.id })
+                        body: JSON.stringify({ bookingId: booking.id, reconduct: true })
                     });
                     if (contractRes.ok) {
-                        console.log('[nexi-payment-callback] Contract regenerated after extension payment');
-                        const { data: contractRow } = await supabase
-                            .from('contracts')
-                            .select('id')
-                            .eq('booking_id', booking.id)
-                            .order('created_at', { ascending: false })
-                            .limit(1)
-                            .maybeSingle();
-                        if (contractRow?.id) {
-                            await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/signature-init`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ contractId: contractRow.id, bookingId: booking.id })
-                            });
-                            console.log('[nexi-payment-callback] Signature-init fired for extension contract');
+                        const cd = await contractRes.json().catch(() => ({} as any));
+                        if (cd?.reconducted) {
+                            console.log(`[nexi-payment-callback] Estensione ricondotta senza nuova firma (booking ${booking.id}) — restamp=${cd?.signed}`);
+                        } else {
+                            console.log('[nexi-payment-callback] Contract regenerated after extension payment (nessuna firma precedente)');
+                            const { data: contractRow } = await supabase
+                                .from('contracts')
+                                .select('id')
+                                .eq('booking_id', booking.id)
+                                .order('created_at', { ascending: false })
+                                .limit(1)
+                                .maybeSingle();
+                            if (contractRow?.id) {
+                                await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/signature-init`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ contractId: contractRow.id, bookingId: booking.id })
+                                });
+                                console.log('[nexi-payment-callback] Signature-init fired for extension contract');
+                            }
                         }
                     } else {
                         const errBody = await contractRes.text().catch(() => '');

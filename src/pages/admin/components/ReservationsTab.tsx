@@ -4292,18 +4292,28 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               // standard (signature-init → template Pro esistente). Niente testo
               // hardcoded, niente template nuovo: la conferma usa "Conferma
               // Noleggio", il link contratto usa il template firma.
+              // 2026-07-13: RICONDUZIONE. reconduct=true → se c'e' gia una firma,
+              // il backend ristampa la firma sul contratto con le NUOVE date e lo
+              // invia via WhatsApp: niente nuovo link firma. Solo senza firma
+              // precedente si invia il link (prima estensione su booking mai firmato).
               const contractRes = await authFetch('/.netlify/functions/generate-contract', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ bookingId: extendingBooking.id }),
+                body: JSON.stringify({ bookingId: extendingBooking.id, reconduct: true }),
               })
               if (contractRes.ok) {
-                logger.log('[handleConfirmExtend] Extension contract regenerated; sending link via signature-init')
-                await fetch('/.netlify/functions/signature-init', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ bookingId: extendingBooking.id }),
-                })
+                const cd = await contractRes.json().catch(() => ({} as any))
+                if (cd?.reconducted) {
+                  logger.log('[handleConfirmExtend] Estensione ricondotta senza nuova firma — restamp:', cd?.signed)
+                  toast.success('Contratto ricondotto per estensione — arriva già firmato, nessuna nuova firma richiesta')
+                } else {
+                  logger.log('[handleConfirmExtend] Nessuna firma precedente; invio link firma')
+                  await fetch('/.netlify/functions/signature-init', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bookingId: extendingBooking.id }),
+                  })
+                }
               } else {
                 const errData = await contractRes.json().catch(() => ({}))
                 logger.warn('[handleConfirmExtend] Extension contract regen failed:', errData?.error || contractRes.status)

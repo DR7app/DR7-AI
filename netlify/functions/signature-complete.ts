@@ -337,6 +337,19 @@ export const handler: Handler = async (event) => {
             })
             .eq('id', sigRequest.id)
 
+        // 2026-07-13: conserva l'immagine firma (update separato, best-effort):
+        // serve per RISTAMPARE la firma sul contratto ricondotto in estensione.
+        // Se la colonna non esiste ancora, la firma resta comunque valida.
+        if (signatureImage || signatureImage2) {
+            try {
+                const { error: sigImgErr } = await supabase
+                    .from('signature_requests')
+                    .update({ signature_image: signatureImage || null, signature_image_2: signatureImage2 || null })
+                    .eq('id', sigRequest.id)
+                if (sigImgErr) console.warn('[signature-complete] signature_image non salvata:', sigImgErr.message)
+            } catch (e: any) { console.warn('[signature-complete] signature_image save fallita:', e?.message) }
+        }
+
         // Update contract record (only if this is a contract-based signature).
         // Usa la riga RISOLTA (la più recente) — non il contract_id grezzo della
         // richiesta, che potrebbe puntare a una riga duplicata vecchia.
