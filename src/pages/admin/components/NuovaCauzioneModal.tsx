@@ -36,7 +36,11 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
         data_restituzione_veicolo: cauzione?.data_restituzione_veicolo || '',
         importo: cauzione?.importo || '',
         metodo: cauzione?.metodo || 'bonifico',
-        note: cauzione?.note || ''
+        note: cauzione?.note || '',
+        // Dati per il rimborso manuale (bonifico) — mostrati a Valerio/Ilenia
+        // nella schermata "Da Restituire Oggi" alla scadenza.
+        intestatario_conto: cauzione?.intestatario_conto || '',
+        iban: cauzione?.iban || ''
     })
 
     useEffect(() => {
@@ -95,7 +99,9 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
                 data_restituzione_veicolo: formData.data_restituzione_veicolo,
                 importo: Number(formData.importo),
                 metodo: formData.metodo,
-                note: formData.note || null
+                note: formData.note || null,
+                intestatario_conto: formData.intestatario_conto?.trim() || null,
+                iban: formData.iban?.replace(/\s+/g, '').toUpperCase() || null
             }
 
             if (cauzione) {
@@ -267,6 +273,43 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
                                     <option value="preautorizzazione">Preautorizzazione</option>
                                 </select>
                             </div>
+
+                            {/* Dati rimborso (bonifico) — IBAN + intestatario per la restituzione */}
+                            {formData.metodo === 'bonifico' && (
+                                <div className="rounded-xl border border-dr7-gold/30 bg-dr7-gold/5 p-4 space-y-4">
+                                    <div className="flex items-center gap-2">
+                                        <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 7h18a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1V8a1 1 0 011-1z"/></svg>
+                                        <span className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider">Dati per il rimborso (bonifico)</span>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                                            Intestatario Conto
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formData.intestatario_conto}
+                                            onChange={(e) => setFormData({ ...formData, intestatario_conto: e.target.value })}
+                                            placeholder="Nome e cognome dell'intestatario del conto"
+                                            className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                                            IBAN
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formData.iban}
+                                            onChange={(e) => setFormData({ ...formData, iban: e.target.value })}
+                                            placeholder="IT00 X000 0000 0000 0000 0000 000"
+                                            className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary font-mono focus:outline-none focus:border-dr7-gold transition-colors"
+                                        />
+                                        <p className="text-xs text-theme-text-muted mt-1">
+                                            Verranno mostrati nella schermata "Da Restituire Oggi" alla scadenza della cauzione.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Note */}
                             <div>

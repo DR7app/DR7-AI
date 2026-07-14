@@ -23,6 +23,8 @@ interface Cauzione {
     data_restituzione: string | null
     data_sblocco: string | null
     data_incasso: string | null
+    iban: string | null
+    intestatario_conto: string | null
     is_overdue: boolean
     days_until_deadline: number
     cliente_nome?: string
@@ -1032,6 +1034,9 @@ export default function CauzioniTab() {
                 <CauzioneKpi label="A Rischio" count={stats.a_rischio} amount={stats.totale_rischio_amount} ring="#EAB308" urgent={stats.a_rischio > 0}/>
             </div>
 
+            {/* === DA RESTITUIRE OGGI — riepilogo bonifici manuali (Valerio/Ilenia) === */}
+            <DaRestituireOggi cauzioni={cauzioni} onRestituita={handleMarkRestituita} />
+
             {/* 2-column layout: main (8) + right sidebar (4) */}
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
             <div className="xl:col-span-8 space-y-4">
@@ -1411,6 +1416,115 @@ export default function CauzioniTab() {
 }
 
 // ── Sub-components ──────────────────────────────────────────────────────────
+
+/**
+ * DA RESTITUIRE OGGI — riepilogo per i bonifici manuali di restituzione cauzione.
+ * Mostra a Valerio/Ilenia tutte le cauzioni bonifico la cui scadenza e' OGGI (o
+ * gia' passata) e non ancora restituite/incassate, con importo, intestatario e
+ * IBAN gia' pronti + pulsanti copia, cosi' possono fare il bonifico rapidamente.
+ * Il sistema NON esegue bonifici automatici: solo riepilogo dati.
+ */
+function DaRestituireOggi({ cauzioni, onRestituita }: {
+    cauzioni: Cauzione[]
+    onRestituita: (c: Cauzione) => void
+}) {
+    const daRestituire = cauzioni.filter(c =>
+        c.metodo === 'bonifico'
+        && !c.data_incasso
+        && c.stato !== 'Restituita' && c.stato !== 'Sbloccata'
+        && c.stato !== 'Bloccata' && c.stato !== 'Danno' && c.stato !== 'Incassata'
+        && c.days_until_deadline <= 0
+    ).sort((a, b) => a.days_until_deadline - b.days_until_deadline)
+
+    if (daRestituire.length === 0) return null
+
+    const copy = (value: string | null | undefined, label: string) => {
+        if (!value) { toast.error(`${label} non inserito`); return }
+        navigator.clipboard.writeText(value)
+            .then(() => toast.success(`${label} copiato`))
+            .catch(() => toast.error('Copia non riuscita'))
+    }
+
+    const totale = daRestituire.reduce((s, c) => s + Number(c.importo || 0), 0)
+
+    return (
+        <div className="rounded-2xl border-2 border-amber-500/50 bg-amber-500/5 p-5">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <div className="flex items-center gap-2.5">
+                    <span className="relative flex h-2.5 w-2.5">
+                        <span className="absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-60 animate-ping"/>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"/>
+                    </span>
+                    <h3 className="text-base font-bold text-theme-text-primary">Da Restituire Oggi</h3>
+                    <span className="text-xs font-semibold text-amber-500">({daRestituire.length} bonific{daRestituire.length === 1 ? 'o' : 'i'})</span>
+                </div>
+                <div className="text-sm text-theme-text-secondary">
+                    Totale da rimborsare: <span className="font-bold text-theme-text-primary tabular-nums">€ {totale.toFixed(2)}</span>
+                </div>
+            </div>
+            <p className="text-xs text-theme-text-muted mb-4">
+                Effettua i bonifici manualmente usando i dati qui sotto. Copia IBAN e intestatario, poi segna "Restituita".
+            </p>
+            <div className="space-y-3">
+                {daRestituire.map(c => {
+                    const dueLabel = c.days_until_deadline === 0 ? 'Scade oggi' : `Scaduta da ${Math.abs(c.days_until_deadline)} gg`
+                    const hasIban = !!(c.iban && c.iban.trim())
+                    return (
+                        <div key={c.id} className="rounded-xl border border-theme-border bg-theme-bg-secondary p-4">
+                            <div className="flex items-start justify-between gap-3 flex-wrap">
+                                <div className="min-w-0">
+                                    <div className="text-sm font-bold text-theme-text-primary">{c.cliente_nome}</div>
+                                    <div className="text-xs text-theme-text-secondary">{c.veicolo_modello} · {c.veicolo_targa}</div>
+                                    <span className={`inline-block mt-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${c.days_until_deadline === 0 ? 'bg-amber-500 text-black' : 'bg-red-600 text-white'}`}>
+                                        {dueLabel}
+                                    </span>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Importo</div>
+                                    <div className="text-xl font-bold text-theme-text-primary tabular-nums">€ {Number(c.importo).toFixed(2)}</div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                                <div className="rounded-lg bg-theme-bg-tertiary border border-theme-border p-3">
+                                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">Intestatario Conto</div>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className={`text-sm truncate ${c.intestatario_conto ? 'text-theme-text-primary font-semibold' : 'text-red-400 italic'}`}>
+                                            {c.intestatario_conto || 'Non inserito'}
+                                        </span>
+                                        <button
+                                            onClick={() => copy(c.intestatario_conto, 'Intestatario')}
+                                            className="shrink-0 px-2.5 py-1 bg-theme-bg-hover text-theme-text-secondary text-[11px] rounded-full hover:bg-dr7-gold hover:text-white transition-colors"
+                                        >Copia</button>
+                                    </div>
+                                </div>
+                                <div className="rounded-lg bg-theme-bg-tertiary border border-theme-border p-3">
+                                    <div className="text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">IBAN</div>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className={`text-sm font-mono truncate ${hasIban ? 'text-theme-text-primary font-semibold' : 'text-red-400 italic'}`}>
+                                            {c.iban || 'Non inserito'}
+                                        </span>
+                                        <button
+                                            onClick={() => copy(c.iban, 'IBAN')}
+                                            className="shrink-0 px-2.5 py-1 bg-theme-bg-hover text-theme-text-secondary text-[11px] rounded-full hover:bg-dr7-gold hover:text-white transition-colors"
+                                        >Copia</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end mt-3">
+                                <button
+                                    onClick={() => onRestituita(c)}
+                                    className="px-4 py-2 bg-green-600 text-white text-xs font-semibold rounded-full hover:bg-green-700 transition-colors"
+                                >Segna Restituita</button>
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
 
 function CauzioneKpi({ label, count, amount, ring, urgent }: {
     label: string
