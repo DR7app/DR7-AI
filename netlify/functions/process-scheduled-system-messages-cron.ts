@@ -451,6 +451,120 @@ async function processUscitaAutistaReminders(now: number): Promise<{ sent: numbe
     return { sent, skipped, errors };
 }
 
+/**
+ * Promemoria STAFF (Valerio/Ilenia) delle cauzioni bonifico in scadenza OGGI da
+ * restituire manualmente. Manda UN riepilogo WhatsApp per destinatario con
+ * importo/intestatario/IBAN pronti. Parte SOLO se il template
+ * pro_cauzioni_rimborso_staff e' is_enabled + cron_approved (toggle in Messaggi
+ * di Sistema Pro). Anti-doppio-invio via cauzioni.rimborso_reminder_sent_on.
+ * Destinatari = direzione (valerio@/ilenia@dr7.app) via admins.contatto_interno.
+ */
+async function processCauzioniRimborsoStaffReminder(now: number): Promise<{ sent: number; skipped: number; errors: number }> {
+    let sent = 0, skipped = 0, errors = 0;
+
+    // 1) Template approvato (toggle ON/OFF), per key o per label.
+    const { data: tplRows } = await supabase
+        .from('system_messages')
+        .select('message_body, is_enabled, cron_approved, send_hour, message_key, label')
+        .or('message_key.eq.pro_cauzioni_rimborso_staff,label.ilike.%rimborso%cauzion%')
+        .order('updated_at', { ascending: false });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tpl = (tplRows || []).find((r: any) => r.is_enabled !== false && r.cron_approved === true && !!r.message_body);
+    if (!tpl) return { sent, skipped, errors };
+
+    // 2) Gate orario: manda dall'ora impostata (Rome, default 9) in poi.
+    const todayRome = new Date(now).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }); // YYYY-MM-DD
+    const romeHour = Number(new Date(now).toLocaleString('en-GB', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false }).slice(0, 2));
+    const sendHour = tpl.send_hour == null ? 9 : Number(tpl.send_hour);
+    if (romeHour < sendHour) return { sent, skipped, errors };
+
+    // 3) Cauzioni bonifico in scadenza OGGI, non ancora restituite/incassate, non
+    //    gia' incluse in un promemoria di oggi.
+    const { data: cauz } = await supabase
+        .from('cauzioni')
+        .select('id, cliente_id, importo, iban, intestatario_conto, metodo, stato, data_incasso, scadenza_cauzione, rimborso_reminder_sent_on')
+        .eq('metodo', 'bonifico')
+        .eq('scadenza_cauzione', todayRome)
+        .is('data_incasso', null)
+        .not('stato', 'in', '(Restituita,Sbloccata,Bloccata,Danno,Incassata)');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const due = (cauz || []).filter((c: any) => c.rimborso_reminder_sent_on !== todayRome);
+    if (due.length === 0) return { sent, skipped, errors };
+
+    // 4) Nomi cliente.
+    const clienteIds = [...new Set(due.map((c: { cliente_id: string }) => c.cliente_id).filter(Boolean))];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const nameMap: Record<string, string> = {};
+    if (clienteIds.length > 0) {
+        const { data: custs } = await supabase
+            .from('customers_extended')
+            .select('id, nome, cognome, denominazione, ragione_sociale, tipo_cliente')
+            .in('id', clienteIds as string[]);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (custs || []).forEach((c: any) => {
+            const azienda = c.tipo_cliente === 'azienda' ? (c.ragione_sociale || c.denominazione) : null;
+            nameMap[c.id] = (azienda || `${c.nome || ''} ${c.cognome || ''}`.trim() || 'Cliente');
+        });
+    }
+
+    // 5) Lista testo + totale.
+    const totale = due.reduce((s: number, c: { importo: number }) => s + Number(c.importo || 0), 0);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lista = due.map((c: any) => {
+        const nome = nameMap[c.cliente_id] || 'Cliente';
+        const iban = (c.iban && String(c.iban).trim()) || 'IBAN MANCANTE';
+        const intest = (c.intestatario_conto && String(c.intestatario_conto).trim()) || 'INTESTATARIO MANCANTE';
+        return `• ${nome} — € ${Number(c.importo).toFixed(2)}\n  Intestatario: ${intest}\n  IBAN: ${iban}`;
+    }).join('\n\n');
+
+    const body = String(tpl.message_body)
+        .split('{data}').join(new Date(todayRome + 'T00:00:00').toLocaleDateString('it-IT'))
+        .split('{count}').join(String(due.length))
+        .split('{totale}').join(totale.toFixed(2))
+        .split('{lista}').join(lista);
+    // Se il template non contiene {lista}, accoda comunque la lista (fail-safe).
+    const finalBody = String(tpl.message_body).includes('{lista}') ? body : `${body}\n\n${lista}`;
+
+    // 6) Destinatari: direzione via admins.contatto_interno.
+    const { data: admins } = await supabase
+        .from('admins')
+        .select('email, nome, contatto_interno')
+        .in('email', ['valerio@dr7.app', 'ilenia@dr7.app']);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const recipients = (admins || [])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((a: any) => ({ nome: a.nome, phone: String(a.contatto_interno || '').replace(/\D/g, '') }))
+        .filter((r: { phone: string }) => r.phone.length >= 8);
+
+    if (recipients.length === 0) {
+        console.warn('[cauzioni-rimborso-staff] nessun destinatario con telefono valido (admins.contatto_interno)');
+        return { sent, skipped: skipped + due.length, errors };
+    }
+
+    const baseUrl = process.env.URL || 'https://platform.dr7ai.com';
+    for (const r of recipients) {
+        try {
+            const res = await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ customPhone: r.phone, customMessage: finalBody, type: 'Promemoria Rimborso Cauzioni' }),
+            });
+            if (res.ok) sent++; else errors++;
+        } catch { errors++; }
+    }
+
+    // 7) Marca le cauzioni incluse (anti doppio invio) — solo se abbiamo inviato.
+    if (sent > 0) {
+        await supabase
+            .from('cauzioni')
+            .update({ rimborso_reminder_sent_on: todayRome })
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .in('id', due.map((c: any) => c.id));
+    }
+
+    return { sent, skipped, errors };
+}
+
 const cronHandler = async () => {
     const now = Date.now();
     console.log(`[scheduled-msgs] cron fired at ${new Date(now).toISOString()}`);
@@ -780,6 +894,14 @@ const cronHandler = async () => {
         totalSent += rA.sent; totalSkipped += rA.skipped; totalErrors += rA.errors;
     } catch (e) {
         console.error('[scheduled-msgs] processUscitaAutistaReminders failed:', e);
+    }
+
+    // Promemoria staff (Valerio/Ilenia) rimborso cauzioni in scadenza oggi.
+    try {
+        const rC = await processCauzioniRimborsoStaffReminder(now);
+        totalSent += rC.sent; totalSkipped += rC.skipped; totalErrors += rC.errors;
+    } catch (e) {
+        console.error('[scheduled-msgs] processCauzioniRimborsoStaffReminder failed:', e);
     }
 
     console.log(`[scheduled-msgs] done. sent=${totalSent} skipped=${totalSkipped} errors=${totalErrors}`);
