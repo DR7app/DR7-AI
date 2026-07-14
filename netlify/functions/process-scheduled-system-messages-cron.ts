@@ -69,6 +69,26 @@ interface SystemMessage {
 const LOOKBACK_MS = 30 * 60 * 1000;  // 30 min: forgive previous-cron failures
 const LOOKFORWARD_MS = 8 * 60 * 1000; // 8 min: small overlap with next cron run (15min interval)
 
+// Quiet hours (ora di Roma): NESSUN messaggio automatico esce tra le 22:00 e le
+// 07:00. Copre l'intero cron (template clienti + promemoria autista + rimborso
+// cauzioni). Prima le colonne quiet_hours_start/end esistevano ma non venivano
+// mai applicate: qualsiasi messaggio poteva partire di notte.
+const QUIET_START_HOUR = 22; // incluso: da 22:00
+const QUIET_END_HOUR = 7;    // escluso: fino alle 06:59, riparte alle 07:00
+
+/** Ora corrente (0-23) nel fuso Europe/Rome. */
+function getRomeHour(nowMs: number): number {
+    return Number(
+        new Date(nowMs).toLocaleString('en-GB', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false }).slice(0, 2)
+    );
+}
+
+/** True se l'ora di Roma cade nella fascia silenziosa [22:00, 07:00). */
+function isRomeQuietHours(nowMs: number): boolean {
+    const h = getRomeHour(nowMs);
+    return h >= QUIET_START_HOUR || h < QUIET_END_HOUR;
+}
+
 /**
  * Restituisce il timestamp UTC dell'evento per la booking, o null se non applicabile.
  */
@@ -472,11 +492,14 @@ async function processCauzioniRimborsoStaffReminder(now: number): Promise<{ sent
     const tpl = (tplRows || []).find((r: any) => r.is_enabled !== false && r.cron_approved === true && !!r.message_body);
     if (!tpl) return { sent, skipped, errors };
 
-    // 2) Gate orario: manda dall'ora impostata (Rome, default 9) in poi.
+    // 2) Gate orario: manda dall'ora impostata (Rome, default 9) in poi, mai in
+    //    fascia silenziosa (22:00-07:00) — ridondante col guard globale, ma difesa
+    //    in profondita' se la funzione fosse chiamata da sola.
+    if (isRomeQuietHours(now)) return { sent, skipped, errors };
     const todayRome = new Date(now).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }); // YYYY-MM-DD
-    const romeHour = Number(new Date(now).toLocaleString('en-GB', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false }).slice(0, 2));
+    const romeHour = getRomeHour(now);
     const sendHour = tpl.send_hour == null ? 9 : Number(tpl.send_hour);
-    if (romeHour < sendHour) return { sent, skipped, errors };
+    if (romeHour < sendHour || romeHour >= QUIET_START_HOUR) return { sent, skipped, errors };
 
     // 3) Cauzioni bonifico in scadenza OGGI, non ancora restituite/incassate, non
     //    gia' incluse in un promemoria di oggi.
@@ -568,6 +591,13 @@ async function processCauzioniRimborsoStaffReminder(now: number): Promise<{ sent
 const cronHandler = async () => {
     const now = Date.now();
     console.log(`[scheduled-msgs] cron fired at ${new Date(now).toISOString()}`);
+
+    // Quiet hours: non inviare NULLA tra le 22:00 e le 07:00 (Rome). I messaggi
+    // il cui target cade di notte partiranno al primo giro dopo le 07:00.
+    if (isRomeQuietHours(now)) {
+        console.log(`[scheduled-msgs] quiet hours (Rome ${getRomeHour(now)}:00) — nessun invio, skip run`);
+        return { statusCode: 200, body: JSON.stringify({ ok: true, skipped: 'quiet_hours', romeHour: getRomeHour(now) }) };
+    }
 
     // 1. Carica tutti i template automatici attivi
     const { data: templates, error: tplErr } = await supabase
