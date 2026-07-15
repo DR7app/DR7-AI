@@ -340,6 +340,30 @@ async function generateVehicleReport(
     if (danSum > 0) fattureDanniMap.set(f.booking_id, (fattureDanniMap.get(f.booking_id) || 0) + danSum)
   })
 
+  // 2026-07-15 FIX: penali/danni FATTURATI su prenotazioni ANNULLATE venivano
+  // PERSI dal report. Motivo: i penali/danni si sommano solo mentre si itera sui
+  // booking noleggio, e la query booking esclude 'cancelled'/'annullata'. Quindi
+  // se annulli una prenotazione ma applichi una penale (con fattura), quella
+  // penale non compariva da nessuna parte (Ricavo Penale = €0). Recuperiamo le
+  // prenotazioni fuori-set che hanno una fattura penale/danno, SOLO per
+  // attribuire l'importo al veicolo giusto (niente giorni-noleggio, niente
+  // ricavo noleggio: solo il penale/danno realmente fatturato).
+  const fetchedBookingIds = new Set((allBookings || []).map(b => b.id))
+  const chargeBookingIds = [...new Set([...fatturePenaltyMap.keys(), ...fattureDanniMap.keys()])]
+    .filter(id => id && !fetchedBookingIds.has(id))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const extraChargeBookings: any[] = []
+  if (chargeBookingIds.length > 0) {
+    for (let i = 0; i < chargeBookingIds.length; i += 1000) {
+      const slice = chargeBookingIds.slice(i, i + 1000)
+      const { data: rows } = await supabase
+        .from('bookings')
+        .select('id, vehicle_id, vehicle_name, vehicle_plate, booking_details, status, customer_name')
+        .in('id', slice)
+      if (rows) extraChargeBookings.push(...rows)
+    }
+  }
+
   // STEP 1: Filter to ONLY real rental bookings
   const rentalBookings = (allBookings || []).filter(b => {
     // Exclude admin/test bookings
@@ -699,6 +723,47 @@ async function generateVehicleReport(
           totalBookingDays
         })
       }
+    })
+
+    // 2026-07-15 FIX: aggiungi penali/danni fatturati su prenotazioni ANNULLATE
+    // attribuibili a QUESTO veicolo (vedi extraChargeBookings sopra). Solo
+    // penale/danno realmente fatturato/pagato — nessun giorno-noleggio, nessun
+    // ricavo noleggio: una prenotazione annullata resta 0 giorni.
+    extraChargeBookings.forEach(cb => {
+      const cbPlate = (cb.vehicle_plate || cb.booking_details?.vehicle_plate || cb.booking_details?.plate || '').replace(/\s/g, '').toUpperCase()
+      const cbVid = cb.vehicle_id || cb.booking_details?.vehicle_id
+      const cbName = normName(cb.vehicle_name)
+      const matches =
+        (cbVid && cbVid === vehicle.id) ||
+        (cbPlate && vPlate && vPlate.length >= 4 && cbPlate === vPlate) ||
+        (!cbVid && !cbPlate && cbName && vName && cbName === vName)
+      if (!matches) return
+
+      const penFromDetails = splitCharges(cb.booking_details?.penalties)
+      const danFromDetails = splitCharges(cb.booking_details?.danni)
+      const penAmt = Math.max(penFromDetails.paid, fatturePenaltyMap.get(cb.id) || 0)
+      const danAmt = Math.max(danFromDetails.paid, fattureDanniMap.get(cb.id) || 0)
+      if (penAmt <= 0 && danAmt <= 0) return
+
+      penaltyRevenue += penAmt
+      danniRevenue += danAmt
+      bookingDetailsList.push({
+        booking_id: cb.id,
+        customer_name: cb.customer_name || cb.booking_details?.customer?.name || '-',
+        targa: vPlate || cbPlate || '-',
+        start_at: null,
+        end_at: null,
+        billable_days: 0,
+        days_in_month: 0,
+        total_price: 0,
+        revenue_per_day: 0,
+        payment_status: cb.status || 'cancelled',
+        payment_method: '-',
+        penalty_amount: Math.round(penAmt * 100) / 100,
+        danni_amount: Math.round(danAmt * 100) / 100,
+        da_saldare: 0,
+        cancelled_with_charge: true,
+      })
     })
 
     // Calculate maintenance days from vehicle metadata (unavailability)
