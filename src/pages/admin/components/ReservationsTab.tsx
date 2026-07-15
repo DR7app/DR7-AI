@@ -7389,19 +7389,23 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       //     il contratto quando il pagamento arriva davvero.
       const PAID_STATUSES = ['paid', 'completed', 'succeeded']
       const currentlyPaid = PAID_STATUSES.includes(formData.payment_status || '')
-      const wasOriginallyPaid = !!editingId
-        && PAID_STATUSES.includes(editingOriginalPaymentStatus || '')
       // 2026-05-30: REGOLA DIREZIONE — se "Conferma Prenotazione" è spuntata,
       // il contratto di firma DEVE partire subito al salvataggio, IN AGGIUNTA
       // alla conferma noleggio, QUALUNQUE sia il metodo o lo stato pagamento
       // (anche Da Saldare / Contanti / Pay-by-Link). Confermare = il cliente
       // ha la macchina, quindi deve firmare ora; non si aspetta il pagamento.
       // (Il deferral resta solo per gli EDIT con saldo dovuto, sotto.)
+      // 2026-07-15 (direzione): OGNI modifica rimanda SEMPRE al cliente il
+      // contratto aggiornato, anche se resta un saldo da pagare (prima il link
+      // di firma era rimandato al pagamento sugli edit con saldo). Le NUOVE
+      // prenotazioni mantengono il gating originale: link firma solo se pagata o
+      // "Conferma Prenotazione" spuntata (post-pagamento parte dal callback Nexi).
+      // (editHasBalanceOwed / scheduleChanged restano usati altrove.)
       const shouldSendSigningLink = !!insertedBooking?.id
-        && !editHasBalanceOwed  // defer signing link until after payment on edits with balance
-        // scheduleChanged: orari modificati → il cliente deve firmare il contratto
-        // aggiornato con i nuovi orari (resta valido il deferral se c'è un saldo).
-        && (currentlyPaid || wasOriginallyPaid || confirmBooking || scheduleChanged)
+        && (
+          !!editingId                        // qualsiasi modifica → invia sempre il contratto aggiornato
+          || currentlyPaid || confirmBooking // nuove: solo se pagata o confermata
+        )
       if (shouldSendSigningLink) {
         try {
           // Fetch the contract that was just generated for this booking
