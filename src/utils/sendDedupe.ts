@@ -63,6 +63,10 @@ const GUARDED_ENDPOINTS = [
   'generate-penalty-invoice',
   'generate-nota-di-credito',
   'generate-contract',
+  // 2026-07-15: signature-init INVIA il link di firma via WhatsApp. Non essendo
+  // deduplicato, un doppio salvataggio (doppio click / re-render) faceva partire
+  // il contratto DUE VOLTE al cliente. Ora deduplicato come gli altri invii.
+  'signature-init',
   'generate-review-codes',
   'process-multa',
   'report-danni',
