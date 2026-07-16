@@ -133,24 +133,36 @@ async function reconductSignedContract(params: {
     // rigenera il contratto con le nuove date + pagina di attestazione che cita
     // la firma OTP originale. Se in futuro ci fosse anche un'immagine firma
     // (signature_image) la ristampiamo, ma non è necessaria.
-    const sig1: string | null = signedReq.signature_image || null
-    const sig2: string | null = signedReq.signature_image_2 || null
-
-    const pdfDoc = await PDFDocument.load(newUnsignedPdfBytes)
+    // 2026-07-16 FIX (Riccardo Garbati): il contratto RICONDOTTO arrivava NON
+    // firmato. Causa: si partiva dal template VUOTO (newUnsignedPdfBytes), che NON
+    // contiene i sigilli "DR7 Verified Seal" — quelli li disegna l'app di firma
+    // Trustera sull'ULTIMA pagina del PDF firmato (griglia FIRMA LOCATORE/guidatori).
+    // Ora: teniamo il CORPO con le NUOVE date e SOSTITUIAMO la pagina firma con
+    // quella GIA SIGILLATA presa dal PDF firmato originale. Risultato: nuove date
+    // nel corpo + firma (sigilli) visibile. Fallback: se qualcosa fallisce, usiamo
+    // direttamente il PDF firmato originale come base (firma garantita).
+    let pdfDoc = await PDFDocument.load(newUnsignedPdfBytes)
+    try {
+        const resp = await fetch(String(signedReq.signed_pdf_url || ''))
+        if (!resp.ok) throw new Error(`signed pdf HTTP ${resp.status}`)
+        const signedDoc = await PDFDocument.load(new Uint8Array(await resp.arrayBuffer()))
+        const sigIdx = pdfDoc.getPageCount() - 1
+        // La pagina firma e' l'ultima del contratto; nel PDF firmato e' allo stesso
+        // indice (Trustera sigilla in-place e accoda eventuali attestazioni dopo).
+        if (sigIdx >= 0 && signedDoc.getPageCount() > sigIdx) {
+            const [sealedPage] = await pdfDoc.copyPages(signedDoc, [sigIdx])
+            pdfDoc.removePage(sigIdx)
+            pdfDoc.insertPage(sigIdx, sealedPage)
+        }
+    } catch (e: any) {
+        console.error('[reconduct] copia pagina firma fallita, fallback al PDF firmato:', e?.message)
+        try {
+            const resp2 = await fetch(String(signedReq.signed_pdf_url || ''))
+            if (resp2.ok) pdfDoc = await PDFDocument.load(new Uint8Array(await resp2.arrayBuffer()))
+        } catch (e2: any) { console.error('[reconduct] fallback PDF firmato fallito:', e2?.message) }
+    }
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
-    const embedSig = async (dataUrl: string, xRatio: number) => {
-        try {
-            const bytes = Uint8Array.from(atob(dataUrl.replace('data:image/png;base64,', '')), c => c.charCodeAt(0))
-            const img = await pdfDoc.embedPng(bytes)
-            const pages = pdfDoc.getPages(); const lastPage = pages[pages.length - 1]
-            const { width: pw } = lastPage.getSize()
-            const d = img.scale(Math.min(160 / img.width, 50 / img.height))
-            lastPage.drawImage(img, { x: pw * xRatio + (160 - d.width) / 2, y: 45, width: d.width, height: d.height })
-        } catch (e: any) { console.error('[reconduct] embed firma fallito:', e?.message) }
-    }
-    if (sig1 && sig1.startsWith('data:image/png;base64,')) await embedSig(sig1, 0.35)
-    if (sig2 && sig2.startsWith('data:image/png;base64,')) await embedSig(sig2, 0.67)
 
     const nowRome = new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })
     const origSignedRome = signedReq.signed_at ? new Date(signedReq.signed_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome' }) : 'N/D'
@@ -188,9 +200,27 @@ async function reconductSignedContract(params: {
             if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.substring(2)
             if (cleanPhone.length === 10) cleanPhone = '39' + cleanPhone
             const cacheBustedUrl = `${signedPdfUrl}${signedPdfUrl.includes('?') ? '&' : '?'}v=${Date.now()}`
+            // 2026-07-16: caption editabile da Messaggi di Sistema Pro
+            // (template pro_contratto_ricondotto_estensione). Variabili:
+            // {numero_contratto}/{contratto}, {data_riconsegna}/{data}. Fallback
+            // hardcoded se il template manca o e' disattivato.
+            const dataRiconsegna = dropoffDate.toLocaleDateString('it-IT')
+            let caption = `Contratto ${contractNumber || ''} aggiornato per estensione fino al ${dataRiconsegna} — firma gia valida, nessuna nuova firma richiesta. DR7`
+            try {
+                const { data: tpl } = await supabase.from('system_messages')
+                    .select('message_body, is_enabled')
+                    .eq('message_key', 'pro_contratto_ricondotto_estensione').maybeSingle()
+                if (tpl?.message_body && tpl.is_enabled !== false) {
+                    caption = String(tpl.message_body)
+                        .split('{numero_contratto}').join(contractNumber || '')
+                        .split('{contratto}').join(contractNumber || '')
+                        .split('{data_riconsegna}').join(dataRiconsegna)
+                        .split('{data}').join(dataRiconsegna)
+                }
+            } catch (e: any) { console.warn('[reconduct] template caption fallback:', e?.message) }
             await fetch(`https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendFileByUrl/${GREEN_API_TOKEN}`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chatId: `${cleanPhone}@c.us`, urlFile: cacheBustedUrl, fileName: `${contractNumber || booking.id}_ricondotto.pdf`, caption: `Contratto ${contractNumber || ''} aggiornato per estensione fino al ${dropoffDate.toLocaleDateString('it-IT')} — firma gia valida, nessuna nuova firma richiesta. DR7` }),
+                body: JSON.stringify({ chatId: `${cleanPhone}@c.us`, urlFile: cacheBustedUrl, fileName: `${contractNumber || booking.id}_ricondotto.pdf`, caption }),
             })
         }
     } catch (e: any) { console.error('[reconduct] WhatsApp errore:', e?.message) }
