@@ -794,7 +794,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     new_vehicle_id: '',
     show_all_vehicles: false,
     extension_km_added: '',
-    extension_unlimited_km: false
+    extension_unlimited_km: false,
+    // 2026-07-16: come la "Conferma Prenotazione" del noleggio normale. Se
+    // spuntata, il contratto RICONDOTTO (gia firmato, nuove date) parte SUBITO
+    // anche se l'estensione non e' ancora pagata (il cliente ha gia l'auto).
+    conferma: false
   })
   const [isExtending, setIsExtending] = useState(false)
 
@@ -4019,7 +4023,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       new_vehicle_id: '',
       show_all_vehicles: false,
       extension_km_added: '',
-      extension_unlimited_km: currentUnlimitedKm || false
+      extension_unlimited_km: currentUnlimitedKm || false,
+      conferma: false
     })
     setShowExtendModal(true)
   }
@@ -4288,8 +4293,12 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           // e' "pagata" a tutti gli effetti -> il contratto aggiornato (nuove
           // date) DEVE partire anche se lo stato e' "Da Saldare". (Supera la
           // regola 2026-06-03 che saltava sempre il €0.)
+          // 2026-07-16: come la "Conferma Prenotazione" del noleggio normale —
+          // se l'operatore spunta "Conferma", il contratto RICONDOTTO (gia
+          // firmato, nuove date) parte SUBITO anche se l'estensione e' ancora
+          // Da Saldare: il cliente ha gia l'auto, deve avere il contratto valido.
           const extensionEffectivelyPaid = extendData.extension_payment_status === 'paid' || additionalAmount === 0
-          if (extensionEffectivelyPaid) {
+          if (extensionEffectivelyPaid || extendData.conferma) {
             try {
               // Stesso processo di una prenotazione: rigenera il contratto con
               // le nuove date e invia il LINK CONTRATTO tramite il flusso firma
@@ -11251,6 +11260,21 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     placeholder="Motivo estensione..."
                   />
                 </div>
+
+                {/* Conferma: come nel noleggio normale. Se spuntata, il contratto
+                    RICONDOTTO (gia firmato, nuove date) parte SUBITO anche se
+                    l'estensione e' ancora Da Saldare — il cliente ha gia l'auto. */}
+                <label className="flex items-start gap-2 cursor-pointer rounded-lg border border-purple-500/30 bg-purple-500/5 p-3">
+                  <input
+                    type="checkbox"
+                    checked={extendData.conferma}
+                    onChange={(e) => setExtendData({ ...extendData, conferma: e.target.checked })}
+                    className="w-4 h-4 accent-purple-500 mt-0.5"
+                  />
+                  <span className="text-sm text-theme-text-secondary">
+                    <span className="font-semibold text-theme-text-primary">Conferma</span> — invia subito il contratto aggiornato (gia firmato, nuove date) anche se l'estensione non e' ancora pagata.
+                  </span>
+                </label>
               </div>
 
               {/* Actions */}
