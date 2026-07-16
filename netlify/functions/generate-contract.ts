@@ -133,42 +133,32 @@ async function reconductSignedContract(params: {
     // rigenera il contratto con le nuove date + pagina di attestazione che cita
     // la firma OTP originale. Se in futuro ci fosse anche un'immagine firma
     // (signature_image) la ristampiamo, ma non è necessaria.
-    // 2026-07-16 FIX v2 (Riccardo Garbati): il ricondotto arrivava NON firmato.
-    // I sigilli "DR7 Verified Seal" li disegna l'app Trustera sull'ULTIMA pagina
-    // (griglia firma). Ricostruendo dal template vuoto sparivano; e la prima
-    // riconduzione aveva gia SOVRASCRITTO signed_pdf_url originale (file non piu
-    // recuperabile). Soluzione ROBUSTA: RIDISEGNIAMO i sigilli sul PDF nuove-date
-    // dai DATI della firma (nome + data). Nessuna dipendenza dal file firmato →
-    // funziona sempre, anche a riconduzioni ripetute.
-    const pdfDoc = await PDFDocument.load(newUnsignedPdfBytes)
+    // 2026-07-16 FIX v3 (LEGALE): il ricondotto deve portare la firma AUTENTICA,
+    // MAI una ricostruzione (ridisegnare i sigilli = firma falsa, inaccettabile).
+    // Perciò partiamo dal PDF ORIGINALE FIRMATO cosi com'e' (sigilli reali
+    // Trustera) e aggiungiamo SOLO una pagina di attestazione con le nuove date.
+    // La clausola di riconduzione sottoscritta rende la firma valida anche per le
+    // nuove date, senza alterare il corpo firmato. Fonte = original_signed_pdf_url
+    // (durevole, mai sovrascritto) o, se non ancora catturato, signed_pdf_url.
+    const genuineUrl: string = String(signedReq.original_signed_pdf_url || signedReq.signed_pdf_url || '')
+    // Se signed_pdf_url è già un RICONDOTTO e non abbiamo l'originale durevole,
+    // l'originale firmato è stato perso: NON produciamo un falso, abortiamo.
+    const originalLost = !signedReq.original_signed_pdf_url && /_ricondotto_/.test(String(signedReq.signed_pdf_url || ''))
+    if (!genuineUrl || originalLost) {
+        console.error(`[reconduct] PDF firmato ORIGINALE non disponibile (originalLost=${originalLost}) — nessun ricondotto (no fake). Serve ripristino di original_signed_pdf_url.`)
+        return null
+    }
+    let pdfDoc: PDFDocument
+    try {
+        const gResp = await fetch(genuineUrl)
+        if (!gResp.ok) throw new Error(`genuine signed pdf HTTP ${gResp.status}`)
+        pdfDoc = await PDFDocument.load(new Uint8Array(await gResp.arrayBuffer()))
+    } catch (e: any) {
+        console.error('[reconduct] impossibile caricare il PDF firmato originale:', e?.message)
+        return null
+    }
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
-    {
-        const certId = `TR-${new Date().getFullYear()}-${String(signedReq.signed_pdf_hash || signedReq.id || '').replace(/-/g, '').slice(0, 8).toUpperCase()}`
-        const grayC = rgb(0.35, 0.35, 0.35), lightGrayC = rgb(0.6, 0.6, 0.6), darkGreen = rgb(0.06, 0.35, 0.18)
-        // Disegna un sigillo "DR7 Trust Verified Seal" identico a quello di Trustera
-        // (stesso layout, stesse coordinate: LOCATORE x=40, guidatore x=230, y=135).
-        const drawSeal = (pg: any, signerName: string, signedAtIso: string | undefined, sx: number, sy: number) => {
-            const sw = 130, sh = 42
-            pg.drawRectangle({ x: sx, y: sy, width: sw, height: sh, borderColor: rgb(0.85, 0.85, 0.85), borderWidth: 0.75, color: rgb(1, 1, 1) })
-            const headerY = sy + sh - 12
-            pg.drawText('DR7 Trust  Verified Seal', { x: sx + 4, y: headerY + 1, size: 4.5, font: fontBold, color: grayC })
-            const infoX = sx + 4, infoY = headerY - 9
-            pg.drawText(signerName || 'Firmatario', { x: infoX, y: infoY, size: 5.5, font: fontBold, color: rgb(0.1, 0.1, 0.1) })
-            const d = new Date(signedAtIso || new Date().toISOString())
-            const dd = String(d.getDate()).padStart(2, '0'), mo = String(d.getMonth() + 1).padStart(2, '0'), yy = d.getFullYear(), hh = String(d.getHours()).padStart(2, '0'), mi = String(d.getMinutes()).padStart(2, '0')
-            pg.drawText(`${dd}/${mo}/${yy} — ${hh}:${mi} CET`, { x: infoX, y: infoY - 7, size: 4, font, color: grayC })
-            pg.drawText(`ID: ${certId}`, { x: infoX, y: infoY - 13, size: 3.5, font, color: lightGrayC })
-            pg.drawText('Verifica ', { x: sx + 4, y: sy + 2, size: 3, font, color: lightGrayC })
-            pg.drawText('AuditTrail', { x: sx + 4 + font.widthOfTextAtSize('Verifica ', 3), y: sy + 2, size: 3, font: fontBold, color: darkGreen })
-        }
-        try {
-            const pages = pdfDoc.getPages()
-            const lastPage = pages[pages.length - 1]
-            drawSeal(lastPage, 'Ilenia Campagnola', signedReq.signed_at, 40, 135) // FIRMA LOCATORE
-            drawSeal(lastPage, signedReq.signer_name || booking.customer_name || '', signedReq.signed_at, 230, 135) // 1° guidatore
-        } catch (e: any) { console.error('[reconduct] disegno sigilli fallito:', e?.message) }
-    }
 
     const nowRome = new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })
     const origSignedRome = signedReq.signed_at ? new Date(signedReq.signed_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome' }) : 'N/D'
@@ -198,7 +188,11 @@ async function reconductSignedContract(params: {
     const { data: pub } = supabase.storage.from('contracts').getPublicUrl(fileName)
     const signedPdfUrl = pub.publicUrl
 
-    await supabase.from('signature_requests').update({ signed_pdf_url: signedPdfUrl, signed_pdf_hash: signedPdfHash, original_pdf_hash: newUnsignedHash, updated_at: new Date().toISOString() }).eq('id', signedReq.id)
+    // PRESERVA l'originale firmato: la prima volta lo cattura in
+    // original_signed_pdf_url e NON lo sovrascrive mai piu (prima il ricondotto
+    // sovrascriveva signed_pdf_url e si perdeva la firma autentica per sempre).
+    const preserveOriginal = signedReq.original_signed_pdf_url ? {} : { original_signed_pdf_url: genuineUrl }
+    await supabase.from('signature_requests').update({ signed_pdf_url: signedPdfUrl, signed_pdf_hash: signedPdfHash, original_pdf_hash: newUnsignedHash, ...preserveOriginal, updated_at: new Date().toISOString() }).eq('id', signedReq.id)
     try {
         const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID, GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
         if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN && customerPhone) {
