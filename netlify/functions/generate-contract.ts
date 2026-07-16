@@ -231,11 +231,12 @@ async function reconductSignedContract(params: {
     const { data: pub } = supabase.storage.from('contracts').getPublicUrl(fileName)
     const signedPdfUrl = pub.publicUrl
 
-    // PRESERVA l'originale firmato per i record: cattura signed_pdf_url in
-    // original_signed_pdf_url solo se genuino (non un _ricondotto_) e non gia' set.
-    const preserveOriginal = (!signedReq.original_signed_pdf_url && signedReq.signed_pdf_url && !/_ricondotto_/.test(String(signedReq.signed_pdf_url)))
-        ? { original_signed_pdf_url: signedReq.signed_pdf_url } : {}
-    await supabase.from('signature_requests').update({ signed_pdf_url: signedPdfUrl, signed_pdf_hash: signedPdfHash, original_pdf_hash: newUnsignedHash, ...preserveOriginal, updated_at: new Date().toISOString() }).eq('id', signedReq.id)
+    // Aggiorna il record firma col ricondotto. In try/catch: un problema DB non
+    // deve MAI bloccare l'invio del contratto al cliente. Nessuna dipendenza da
+    // colonne extra → NESSUNA migration necessaria per la riconduzione.
+    try {
+        await supabase.from('signature_requests').update({ signed_pdf_url: signedPdfUrl, signed_pdf_hash: signedPdfHash, original_pdf_hash: newUnsignedHash, updated_at: new Date().toISOString() }).eq('id', signedReq.id)
+    } catch (e: any) { console.warn('[reconduct] update signature_requests fallito (non blocca invio):', e?.message) }
     try {
         const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID, GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
         if (GREEN_API_INSTANCE_ID && GREEN_API_TOKEN && customerPhone) {
