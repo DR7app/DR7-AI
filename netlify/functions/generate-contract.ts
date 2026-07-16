@@ -1669,6 +1669,15 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                             supabase, booking, signedReq: signedReqs[0], newUnsignedPdfBytes: pdfBytes,
                             contractNumber, pickupDate, dropoffDate, customerPhone: customer?.telefono || resolvedPhone || '',
                         })
+                        // Se NON abbiamo potuto ricondurre con la firma AUTENTICA
+                        // (originale non disponibile/non raggiungibile): NON
+                        // falsifichiamo e NON restiamo muti. Torniamo al flusso
+                        // normale (reconductHandled=false) così il chiamante invia
+                        // comunque il contratto con richiesta di firma.
+                        if (!reconductedSignedUrl) {
+                            reconductHandled = false
+                            console.warn(`[generate-contract] reconduct ${bookingId}: firma autentica non disponibile — fallback a richiesta firma (nessun invio muto, nessun falso)`)
+                        }
                         console.log(`[generate-contract] Reconduct estensione ${bookingId} — restamp=${!!reconductedSignedUrl}`)
                     }
                 } else {
