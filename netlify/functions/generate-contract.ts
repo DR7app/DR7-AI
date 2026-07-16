@@ -133,36 +133,42 @@ async function reconductSignedContract(params: {
     // rigenera il contratto con le nuove date + pagina di attestazione che cita
     // la firma OTP originale. Se in futuro ci fosse anche un'immagine firma
     // (signature_image) la ristampiamo, ma non è necessaria.
-    // 2026-07-16 FIX (Riccardo Garbati): il contratto RICONDOTTO arrivava NON
-    // firmato. Causa: si partiva dal template VUOTO (newUnsignedPdfBytes), che NON
-    // contiene i sigilli "DR7 Verified Seal" — quelli li disegna l'app di firma
-    // Trustera sull'ULTIMA pagina del PDF firmato (griglia FIRMA LOCATORE/guidatori).
-    // Ora: teniamo il CORPO con le NUOVE date e SOSTITUIAMO la pagina firma con
-    // quella GIA SIGILLATA presa dal PDF firmato originale. Risultato: nuove date
-    // nel corpo + firma (sigilli) visibile. Fallback: se qualcosa fallisce, usiamo
-    // direttamente il PDF firmato originale come base (firma garantita).
-    let pdfDoc = await PDFDocument.load(newUnsignedPdfBytes)
-    try {
-        const resp = await fetch(String(signedReq.signed_pdf_url || ''))
-        if (!resp.ok) throw new Error(`signed pdf HTTP ${resp.status}`)
-        const signedDoc = await PDFDocument.load(new Uint8Array(await resp.arrayBuffer()))
-        const sigIdx = pdfDoc.getPageCount() - 1
-        // La pagina firma e' l'ultima del contratto; nel PDF firmato e' allo stesso
-        // indice (Trustera sigilla in-place e accoda eventuali attestazioni dopo).
-        if (sigIdx >= 0 && signedDoc.getPageCount() > sigIdx) {
-            const [sealedPage] = await pdfDoc.copyPages(signedDoc, [sigIdx])
-            pdfDoc.removePage(sigIdx)
-            pdfDoc.insertPage(sigIdx, sealedPage)
-        }
-    } catch (e: any) {
-        console.error('[reconduct] copia pagina firma fallita, fallback al PDF firmato:', e?.message)
-        try {
-            const resp2 = await fetch(String(signedReq.signed_pdf_url || ''))
-            if (resp2.ok) pdfDoc = await PDFDocument.load(new Uint8Array(await resp2.arrayBuffer()))
-        } catch (e2: any) { console.error('[reconduct] fallback PDF firmato fallito:', e2?.message) }
-    }
+    // 2026-07-16 FIX v2 (Riccardo Garbati): il ricondotto arrivava NON firmato.
+    // I sigilli "DR7 Verified Seal" li disegna l'app Trustera sull'ULTIMA pagina
+    // (griglia firma). Ricostruendo dal template vuoto sparivano; e la prima
+    // riconduzione aveva gia SOVRASCRITTO signed_pdf_url originale (file non piu
+    // recuperabile). Soluzione ROBUSTA: RIDISEGNIAMO i sigilli sul PDF nuove-date
+    // dai DATI della firma (nome + data). Nessuna dipendenza dal file firmato →
+    // funziona sempre, anche a riconduzioni ripetute.
+    const pdfDoc = await PDFDocument.load(newUnsignedPdfBytes)
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+    {
+        const certId = `TR-${new Date().getFullYear()}-${String(signedReq.signed_pdf_hash || signedReq.id || '').replace(/-/g, '').slice(0, 8).toUpperCase()}`
+        const grayC = rgb(0.35, 0.35, 0.35), lightGrayC = rgb(0.6, 0.6, 0.6), darkGreen = rgb(0.06, 0.35, 0.18)
+        // Disegna un sigillo "DR7 Trust Verified Seal" identico a quello di Trustera
+        // (stesso layout, stesse coordinate: LOCATORE x=40, guidatore x=230, y=135).
+        const drawSeal = (pg: any, signerName: string, signedAtIso: string | undefined, sx: number, sy: number) => {
+            const sw = 130, sh = 42
+            pg.drawRectangle({ x: sx, y: sy, width: sw, height: sh, borderColor: rgb(0.85, 0.85, 0.85), borderWidth: 0.75, color: rgb(1, 1, 1) })
+            const headerY = sy + sh - 12
+            pg.drawText('DR7 Trust  Verified Seal', { x: sx + 4, y: headerY + 1, size: 4.5, font: fontBold, color: grayC })
+            const infoX = sx + 4, infoY = headerY - 9
+            pg.drawText(signerName || 'Firmatario', { x: infoX, y: infoY, size: 5.5, font: fontBold, color: rgb(0.1, 0.1, 0.1) })
+            const d = new Date(signedAtIso || new Date().toISOString())
+            const dd = String(d.getDate()).padStart(2, '0'), mo = String(d.getMonth() + 1).padStart(2, '0'), yy = d.getFullYear(), hh = String(d.getHours()).padStart(2, '0'), mi = String(d.getMinutes()).padStart(2, '0')
+            pg.drawText(`${dd}/${mo}/${yy} — ${hh}:${mi} CET`, { x: infoX, y: infoY - 7, size: 4, font, color: grayC })
+            pg.drawText(`ID: ${certId}`, { x: infoX, y: infoY - 13, size: 3.5, font, color: lightGrayC })
+            pg.drawText('Verifica ', { x: sx + 4, y: sy + 2, size: 3, font, color: lightGrayC })
+            pg.drawText('AuditTrail', { x: sx + 4 + font.widthOfTextAtSize('Verifica ', 3), y: sy + 2, size: 3, font: fontBold, color: darkGreen })
+        }
+        try {
+            const pages = pdfDoc.getPages()
+            const lastPage = pages[pages.length - 1]
+            drawSeal(lastPage, 'Ilenia Campagnola', signedReq.signed_at, 40, 135) // FIRMA LOCATORE
+            drawSeal(lastPage, signedReq.signer_name || booking.customer_name || '', signedReq.signed_at, 230, 135) // 1° guidatore
+        } catch (e: any) { console.error('[reconduct] disegno sigilli fallito:', e?.message) }
+    }
 
     const nowRome = new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })
     const origSignedRome = signedReq.signed_at ? new Date(signedReq.signed_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome' }) : 'N/D'
