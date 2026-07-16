@@ -125,10 +125,21 @@ function sanitizeForPDF(text: string): string {
 // null se non c'e' immagine firma (contratto legacy) → il chiamante mantiene il
 // PDF firmato originale intatto.
 async function reconductSignedContract(params: {
-    supabase: any; booking: any; signedReq: any; newUnsignedPdfBytes: Uint8Array
+    supabase: any; booking: any; signedReqs: any[]; newUnsignedPdfBytes: Uint8Array
     contractNumber: string; pickupDate: Date; dropoffDate: Date; customerPhone: string
 }): Promise<string | null> {
-    const { supabase, booking, signedReq, newUnsignedPdfBytes, contractNumber, pickupDate, dropoffDate, customerPhone } = params
+    const { supabase, booking, signedReqs, newUnsignedPdfBytes, contractNumber, pickupDate, dropoffDate, customerPhone } = params
+    const signedReq = signedReqs[0] // firmatario primario (per attestazione + update)
+    // Firmatari distinti (guidatori / garante), dedup per telefono/email/nome,
+    // in ordine di firma. La LOCATORE (Ilenia) è sempre disegnata a parte.
+    const distinctSigners: any[] = []
+    const seenSigners = new Set<string>()
+    for (const r of [...signedReqs].sort((a, b) => new Date(a.signed_at || 0).getTime() - new Date(b.signed_at || 0).getTime())) {
+        const k = String(r.signer_phone || r.signer_email || r.signer_name || r.id)
+        if (seenSigners.has(k)) continue
+        seenSigners.add(k)
+        distinctSigners.push(r)
+    }
     // La firma DR7 è ELETTRONICA via OTP (eIDAS), NON un'immagine autografa: la
     // "firma" è l'attestazione. Quindi la riconduzione NON richiede un'immagine —
     // rigenera il contratto con le nuove date + pagina di attestazione che cita
@@ -180,8 +191,15 @@ async function reconductSignedContract(params: {
         try {
             const pages = pdfDoc.getPages()
             const lastPage = pages[pages.length - 1]
-            drawSeal(lastPage, 'Ilenia Campagnola', signedReq.signed_at, 40, 135) // FIRMA LOCATORE
-            drawSeal(lastPage, signedReq.signer_name || booking.customer_name || '', signedReq.signed_at, 230, 135) // 1° guidatore
+            const { width: lastW } = lastPage.getSize()
+            // Posizioni come Trustera: LOCATORE x=40; 1° guidatore x=230; 2°
+            // guidatore x=437; ulteriori firmatari (garante) centrati in basso.
+            const sealPos = (i: number) => i === 0 ? { x: 230, y: 135 } : i === 1 ? { x: 437, y: 135 } : { x: (lastW - 130) / 2, y: 35 }
+            drawSeal(lastPage, 'Ilenia Campagnola', signedReq.signed_at, 40, 135) // FIRMA LOCATORE (azienda)
+            distinctSigners.forEach((s, i) => {
+                const p = sealPos(i)
+                drawSeal(lastPage, s.signer_name || (i === 0 ? (booking.customer_name || '') : ''), s.signed_at, p.x, p.y)
+            })
         } catch (e: any) { console.error('[reconduct] disegno sigilli fallito:', e?.message) }
     }
 
@@ -1686,25 +1704,20 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
                 console.log(`[generate-contract] reconduct ${bookingId}: firme trovate=${signedReqs.length} (contractIds=${contractIds.length})`)
                 if (signedReqs && signedReqs.length > 0) {
                     reconductHandled = true
-                    const distinctSigners = new Set(signedReqs.map((r: any) => r.signer_phone || r.signer_email || r.signer_name || r.id))
-                    if (distinctSigners.size > 1) {
-                        console.log(`[generate-contract] reconduct booking ${bookingId}: ${distinctSigners.size} firmatari — mantengo firmato originale`)
-                    } else {
-                        reconductedSignedUrl = await reconductSignedContract({
-                            supabase, booking, signedReq: signedReqs[0], newUnsignedPdfBytes: pdfBytes,
-                            contractNumber, pickupDate, dropoffDate, customerPhone: customer?.telefono || resolvedPhone || '',
-                        })
-                        // Se NON abbiamo potuto ricondurre con la firma AUTENTICA
-                        // (originale non disponibile/non raggiungibile): NON
-                        // falsifichiamo e NON restiamo muti. Torniamo al flusso
-                        // normale (reconductHandled=false) così il chiamante invia
-                        // comunque il contratto con richiesta di firma.
-                        if (!reconductedSignedUrl) {
-                            reconductHandled = false
-                            console.warn(`[generate-contract] reconduct ${bookingId}: firma autentica non disponibile — fallback a richiesta firma (nessun invio muto, nessun falso)`)
-                        }
-                        console.log(`[generate-contract] Reconduct estensione ${bookingId} — restamp=${!!reconductedSignedUrl}`)
+                    // Riconduce SEMPRE, con TUTTI i firmatari (1°/2° guidatore,
+                    // garante): la funzione disegna un sigillo per ciascuno.
+                    reconductedSignedUrl = await reconductSignedContract({
+                        supabase, booking, signedReqs, newUnsignedPdfBytes: pdfBytes,
+                        contractNumber, pickupDate, dropoffDate, customerPhone: customer?.telefono || resolvedPhone || '',
+                    })
+                    // Se il ricondotto NON è stato prodotto (errore upload/PDF): NON
+                    // restiamo muti → torniamo al flusso normale così il chiamante
+                    // invia comunque il contratto con richiesta di firma.
+                    if (!reconductedSignedUrl) {
+                        reconductHandled = false
+                        console.warn(`[generate-contract] reconduct ${bookingId}: ricondotto non prodotto — fallback a richiesta firma`)
                     }
+                    console.log(`[generate-contract] Reconduct estensione ${bookingId} — firmatari=${signedReqs.length} restamp=${!!reconductedSignedUrl}`)
                 } else {
                     console.log(`[generate-contract] reconduct richiesto ma nessuna firma per ${bookingId} — flusso normale`)
                 }
