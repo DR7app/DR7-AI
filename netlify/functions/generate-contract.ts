@@ -1601,10 +1601,34 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
         let reconductedSignedUrl: string | null = null
         if (reconduct) {
             try {
-                const { data: signedReqs } = await supabase
+                // 2026-07-16 FIX (Ricardo Garbati): la firma esistente puo' essere
+                // legata alla signature_requests via booking_id OPPURE via
+                // contract_id (a seconda di come e' stato creato il primo contratto
+                // firmato). Prima cercavamo SOLO per booking_id: se la firma era
+                // legata al contract_id, la riconduzione NON scattava e al cliente
+                // arrivava una NUOVA richiesta di firma invece del contratto gia'
+                // firmato. Ora match per booking_id OPPURE per contract_id dei
+                // contratti di questa prenotazione.
+                const { data: ctrRows } = await supabase
+                    .from('contracts').select('id').eq('booking_id', bookingId)
+                const contractIds = (ctrRows || []).map((c: any) => c.id).filter(Boolean)
+
+                let signedReqs: any[] = []
+                const { data: byBooking } = await supabase
                     .from('signature_requests').select('*')
                     .eq('booking_id', bookingId).eq('status', 'signed')
                     .order('signed_at', { ascending: false })
+                if (byBooking && byBooking.length > 0) signedReqs = byBooking
+
+                if (signedReqs.length === 0 && contractIds.length > 0) {
+                    const { data: byContract } = await supabase
+                        .from('signature_requests').select('*')
+                        .in('contract_id', contractIds).eq('status', 'signed')
+                        .order('signed_at', { ascending: false })
+                    if (byContract && byContract.length > 0) signedReqs = byContract
+                }
+
+                console.log(`[generate-contract] reconduct ${bookingId}: firme trovate=${signedReqs.length} (contractIds=${contractIds.length})`)
                 if (signedReqs && signedReqs.length > 0) {
                     reconductHandled = true
                     const distinctSigners = new Set(signedReqs.map((r: any) => r.signer_phone || r.signer_email || r.signer_name || r.id))
