@@ -147,6 +147,25 @@ export function getSlotMinutes(): number {
 }
 
 /**
+ * True se lo slot (data + ora HH:MM) cade dentro un BLOCCO/chiusura straordinaria.
+ * Serve al gestionale per gate OTP: forzare un orario bloccato richiede override.
+ * Restituisce anche la nota del blocco (per il messaggio OTP).
+ */
+export function getSlotBlock(date: Date, time: string): LavaggioBlock | null {
+    const blocks = getApplicableBlocks(date)
+    if (blocks.length === 0) return null
+    const t = timeToMinutes(time)
+    for (const b of blocks) {
+        if (!b.start || !b.end) return b // intera giornata
+        if (t >= timeToMinutes(b.start) && t < timeToMinutes(b.end)) return b
+    }
+    return null
+}
+export function isSlotBlocked(date: Date, time: string): boolean {
+    return getSlotBlock(date, time) !== null
+}
+
+/**
  * Returns time-ranges where a booking can START so it FINISHES within
  * a configured window (given its duration in minutes).
  * If the day is closed or has no windows, returns [].

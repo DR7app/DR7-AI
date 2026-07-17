@@ -18,7 +18,7 @@ import { classifyVehicle, classifyVehicleLocally, type VehicleCategory } from '.
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 // Orari lavaggio dinamici da Centralina Pro > Orari Lavaggio
-import { getAllowedTimeRangesForDate, generateAllDayLavaggioSlots, isInLavaggioHours } from '../../../utils/lavaggioHours'
+import { getAllowedTimeRangesForDate, generateAllDayLavaggioSlots, isInLavaggioHours, getSlotBlock } from '../../../utils/lavaggioHours'
 import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
 import { isCartaPunti, isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
@@ -1887,6 +1887,22 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // Test bookings (vehicle TEST*) bypassano TUTTI gli OTP: l'operatore QA
     // non deve ricevere conferme direzionali per i test interni.
     const currentVehicleIsTest = isTestVehicle(vehicleMakeModel, vehiclePlate)
+
+    // ===== OTP GATE: Orario dentro un BLOCCO/chiusura straordinaria =====
+    // Se l'orario scelto cade in un blocco lavaggi (Centralina Pro > Orari
+    // Lavaggio > Blocchi/Chiusure), forzarlo richiede OTP (toggle in Gestione
+    // OTP: 'carwash_blocked_slot'). Come gli altri gate, se il toggle e' OFF
+    // useLimitationOverride bypassa server-side e non blocca nulla.
+    if (!currentVehicleIsTest && formData.appointment_date && formData.appointment_time && !override.hasOverride('carwash_blocked_slot')) {
+      const [byy, bmm, bdd] = formData.appointment_date.split('-').map(Number)
+      const slotBlock = getSlotBlock(new Date(byy, bmm - 1, bdd), formData.appointment_time)
+      if (slotBlock) {
+        pendingCreateBookingRef.current = { force: forceBooking }
+        createBookingLockRef.current = false
+        override.requestOverride('carwash_blocked_slot', `Orario ${formData.appointment_time} del ${formData.appointment_date} bloccato${slotBlock.note ? ` (${slotBlock.note})` : ''}. Forzare richiede autorizzazione direzionale.`)
+        return
+      }
+    }
 
     // ===== OTP GATE: Conferma Prenotazione Lavaggio (toggle Gestione OTP) =====
     // La prenotazione carwash entra di default in stato 'confirmed'. Se l'OTP

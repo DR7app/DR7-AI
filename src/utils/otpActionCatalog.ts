@@ -73,6 +73,14 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
     wired: true,
   },
   {
+    id: 'carwash_blocked_slot',
+    label: 'Forza orario lavaggio bloccato',
+    used_in: 'Prime Wash > orario dentro un Blocco/Chiusura straordinaria (Centralina Pro > Orari Lavaggio)',
+    reason: 'L\'orario scelto e in un blocco/chiusura straordinaria: forzarlo richiede autorizzazione direzionale.',
+    group: 'Lavaggio',
+    wired: true,
+  },
+  {
     id: 'slot_unavailable',
     label: 'Forza prenotazione su slot occupato',
     used_in: 'Salva prenotazione su slot non disponibile',
