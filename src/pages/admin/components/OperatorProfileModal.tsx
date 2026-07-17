@@ -553,6 +553,10 @@ function KpiCard({ label, value, sub, tone = 'emerald' }: { label: string; value
 // o `role:developer` in admins.permissions (failsafe valerio/ilenia/ophe).
 // Gli altri admin che aprono il proprio profilo non vedono nulla qui.
 
+// 2026-07-17: pause obbligatorie fisse (direzione), per operatore.
+interface PausaFascia { da: string; a: string }
+interface PauseConfig { durata_min: number; pagata: boolean; fasce: PausaFascia[] }
+
 interface Contratto {
     id?: string
     tipo_rapporto: string | null
@@ -575,6 +579,7 @@ interface Contratto {
     visibilita_fatturato: boolean
     data_inizio: string
     note: string | null
+    pause_config: PauseConfig | null
     pdf_path: string | null
     pdf_filename: string | null
     pdf_uploaded_at: string | null
@@ -598,6 +603,7 @@ function emptyContratto(): Contratto {
         visibilita_fatturato: false,
         data_inizio: new Date().toISOString().slice(0, 10),
         note: null,
+        pause_config: { durata_min: 0, pagata: false, fasce: [] },
         pdf_path: null,
         pdf_filename: null,
         pdf_uploaded_at: null,
@@ -662,6 +668,14 @@ function ContrattoSection({ operatoreId }: { operatoreId: string }) {
         setDraft(prev => prev ? { ...prev, [k]: v } : prev)
     }
 
+    function setPause(patch: Partial<PauseConfig>) {
+        setDraft(prev => {
+            if (!prev) return prev
+            const cur = prev.pause_config || { durata_min: 0, pagata: false, fasce: [] }
+            return { ...prev, pause_config: { ...cur, ...patch } }
+        })
+    }
+
     function num(s: string): number | null {
         if (!s.trim()) return null
         const n = Number(s)
@@ -693,6 +707,7 @@ function ContrattoSection({ operatoreId }: { operatoreId: string }) {
                 notifiche_attive: draft.notifiche_attive,
                 visibilita_fatturato: draft.visibilita_fatturato,
                 note: draft.note,
+                pause_config: draft.pause_config || { durata_min: 0, pagata: false, fasce: [] },
             }
             console.log('[Contratto] saving payload', payload)
             if (contratto?.id) {
@@ -875,6 +890,51 @@ function ContrattoSection({ operatoreId }: { operatoreId: string }) {
                                     </span>
                                 </button>
                             ))}
+                        </div>
+                    </fieldset>
+
+                    <fieldset className="border border-theme-border rounded p-3 space-y-2">
+                        <legend className="px-2 text-[10px] uppercase tracking-wider text-theme-text-muted">Pause obbligatorie</legend>
+                        <p className="text-[10px] text-theme-text-muted">Valgono per questo operatore anche se non le registra da solo. Durata giornaliera e/o fasce orarie fisse.</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                                <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">Pausa giornaliera (min)</label>
+                                <input
+                                    type="number" min={0}
+                                    value={draft.pause_config?.durata_min ?? 0}
+                                    onChange={e => setPause({ durata_min: Number(e.target.value) || 0 })}
+                                    className="w-full px-2 py-1.5 rounded border border-theme-border bg-theme-bg-primary text-theme-text-primary text-sm"
+                                    placeholder="30"
+                                />
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setPause({ pagata: !(draft.pause_config?.pagata) })}
+                                className="flex items-center justify-between gap-3 p-2 rounded border border-theme-border bg-theme-bg-primary hover:border-dr7-gold/40 text-left self-end"
+                            >
+                                <span className="text-xs text-theme-text-primary">Pausa pagata (non scalata dalle ore)</span>
+                                <span className={`relative inline-flex flex-shrink-0 items-center w-9 h-5 rounded-full transition-colors ${draft.pause_config?.pagata ? 'bg-emerald-500' : 'bg-theme-bg-hover border border-theme-border'}`}>
+                                    <span className={`inline-block w-4 h-4 rounded-full bg-white shadow transform transition-transform ${draft.pause_config?.pagata ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                                </span>
+                            </button>
+                        </div>
+                        <div className="space-y-1.5">
+                            <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Fasce orarie fisse (opzionale)</div>
+                            {(draft.pause_config?.fasce ?? []).map((f, i) => (
+                                <div key={i} className="flex items-center gap-2">
+                                    <input type="time" value={f.da}
+                                        onChange={e => { const fasce = [...(draft.pause_config?.fasce ?? [])]; fasce[i] = { ...fasce[i], da: e.target.value }; setPause({ fasce }) }}
+                                        className="px-2 py-1 rounded border border-theme-border bg-theme-bg-primary text-theme-text-primary text-sm" />
+                                    <span className="text-theme-text-muted">–</span>
+                                    <input type="time" value={f.a}
+                                        onChange={e => { const fasce = [...(draft.pause_config?.fasce ?? [])]; fasce[i] = { ...fasce[i], a: e.target.value }; setPause({ fasce }) }}
+                                        className="px-2 py-1 rounded border border-theme-border bg-theme-bg-primary text-theme-text-primary text-sm" />
+                                    <button type="button" onClick={() => setPause({ fasce: (draft.pause_config?.fasce ?? []).filter((_, j) => j !== i) })} className="text-red-500 hover:text-red-600 px-2 text-lg leading-none">×</button>
+                                </div>
+                            ))}
+                            <button type="button"
+                                onClick={() => setPause({ fasce: [...(draft.pause_config?.fasce ?? []), { da: '13:00', a: '14:00' }] })}
+                                className="text-[11px] text-dr7-gold hover:opacity-80 font-medium">+ Aggiungi fascia</button>
                         </div>
                     </fieldset>
 
