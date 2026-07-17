@@ -20,6 +20,14 @@ interface Operatore {
     ruolo: string | null
 }
 
+// 2026-07-17: pause obbligatorie fisse impostate dalla direzione, per operatore.
+interface PausaFascia { da: string; a: string } // es. { da: '13:00', a: '14:00' }
+interface PauseConfig {
+    durata_min: number   // minuti di pausa totale al giorno (scalati dalle ore lavorate)
+    pagata: boolean      // true = pausa pagata (NON scalata); false = non pagata (scalata)
+    fasce: PausaFascia[] // fasce orarie fisse opzionali (in quelle ore non si contano ore)
+}
+
 interface Contratto {
     id?: string
     operatore_id: string
@@ -40,6 +48,7 @@ interface Contratto {
     notifiche_attive: boolean
     visibilita_fatturato: boolean
     note: string | null
+    pause_config: PauseConfig | null
 }
 
 const TIPO_RAPPORTO_OPTIONS = [
@@ -71,6 +80,7 @@ function emptyContratto(operatore_id: string, user_id: string | null): Contratto
         notifiche_attive: true,
         visibilita_fatturato: false,
         note: null,
+        pause_config: { durata_min: 0, pagata: false, fasce: [] },
     }
 }
 
@@ -132,6 +142,14 @@ export default function ContrattiOperatoreView() {
         setContratto(prev => prev ? { ...prev, [k]: v } : prev)
     }
 
+    function setPause(patch: Partial<PauseConfig>) {
+        setContratto(prev => {
+            if (!prev) return prev
+            const cur = prev.pause_config || { durata_min: 0, pagata: false, fasce: [] }
+            return { ...prev, pause_config: { ...cur, ...patch } }
+        })
+    }
+
     function nullableNumber(s: string): number | null {
         if (!s.trim()) return null
         const n = Number(s)
@@ -162,6 +180,7 @@ export default function ContrattiOperatoreView() {
                 notifiche_attive: contratto.notifiche_attive,
                 visibilita_fatturato: contratto.visibilita_fatturato,
                 note: contratto.note,
+                pause_config: contratto.pause_config || { durata_min: 0, pagata: false, fasce: [] },
             }
 
             if (contratto.id) {
@@ -336,6 +355,57 @@ export default function ContrattiOperatoreView() {
                                     onChange={e => update('giorni_lavorativi_settimana', nullableNumber(e.target.value))}
                                     placeholder="5"
                                 />
+                            </div>
+                        </fieldset>
+
+                        {/* Pause Obbligatorie (impostate dalla direzione) */}
+                        <fieldset className="border border-theme-border rounded-lg p-4 space-y-3">
+                            <legend className="px-2 text-xs uppercase tracking-wider font-semibold text-theme-text-muted">Pause obbligatorie</legend>
+                            <p className="text-xs text-theme-text-muted">Valgono per questo operatore anche se non le registra da solo. Puoi impostare una durata giornaliera e/o fasce orarie fisse.</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <Input
+                                    label="Pausa giornaliera (minuti)"
+                                    type="number"
+                                    min={0}
+                                    value={contratto.pause_config?.durata_min ?? 0}
+                                    onChange={e => setPause({ durata_min: Number(e.target.value) || 0 })}
+                                    placeholder="30"
+                                />
+                                <label className="flex items-center gap-2 md:mt-6 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={contratto.pause_config?.pagata ?? false}
+                                        onChange={e => setPause({ pagata: e.target.checked })}
+                                        className="w-4 h-4 accent-emerald-500"
+                                    />
+                                    <span className="text-sm text-theme-text-secondary">Pausa pagata (non scalata dalle ore)</span>
+                                </label>
+                            </div>
+                            <div className="space-y-2">
+                                <div className="text-xs uppercase tracking-wider font-semibold text-theme-text-muted">Fasce orarie fisse (opzionale)</div>
+                                {(contratto.pause_config?.fasce ?? []).map((f, i) => (
+                                    <div key={i} className="flex items-center gap-2">
+                                        <input
+                                            type="time"
+                                            value={f.da}
+                                            onChange={e => { const fasce = [...(contratto.pause_config?.fasce ?? [])]; fasce[i] = { ...fasce[i], da: e.target.value }; setPause({ fasce }) }}
+                                            className="px-2 py-1 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-sm"
+                                        />
+                                        <span className="text-theme-text-muted">–</span>
+                                        <input
+                                            type="time"
+                                            value={f.a}
+                                            onChange={e => { const fasce = [...(contratto.pause_config?.fasce ?? [])]; fasce[i] = { ...fasce[i], a: e.target.value }; setPause({ fasce }) }}
+                                            className="px-2 py-1 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-sm"
+                                        />
+                                        <button type="button" onClick={() => setPause({ fasce: (contratto.pause_config?.fasce ?? []).filter((_, j) => j !== i) })} className="text-red-500 hover:text-red-600 px-2 text-lg leading-none">×</button>
+                                    </div>
+                                ))}
+                                <button
+                                    type="button"
+                                    onClick={() => setPause({ fasce: [...(contratto.pause_config?.fasce ?? []), { da: '13:00', a: '14:00' }] })}
+                                    className="text-xs text-cyan-500 hover:text-cyan-400 font-medium"
+                                >+ Aggiungi fascia</button>
                             </div>
                         </fieldset>
 
