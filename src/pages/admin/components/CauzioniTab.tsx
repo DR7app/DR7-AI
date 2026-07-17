@@ -352,6 +352,47 @@ export default function CauzioniTab() {
         }
     }
 
+    // 2026-07-17: quando la cauzione viene INCASSATA, chiedi al cliente l'IBAN per
+    // il rimborso alla riconsegna. Usa il template Pro "Richiesta IBAN"
+    // (pro_richiesta_iban, evento handled 'deposit_return_iban'), niente testo
+    // hardcoded. Non bloccante: un errore invio non blocca l'incasso.
+    const sendIbanRequest = async (cauzione: Cauzione) => {
+        const phone = cauzione.cliente_telefono
+        if (!phone) { console.warn('[CauzioniTab] Richiesta IBAN: nessun telefono cliente'); return }
+        try {
+            const customerName = cauzione.cliente_nome || 'Cliente'
+            const amountStr = Number(cauzione.importo).toFixed(2)
+            const contractRef = (cauzione.riferimento_contratto_id || '').substring(0, 8).toUpperCase() || 'N/A'
+            const res = await fetch('/.netlify/functions/send-whatsapp-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    customPhone: phone,
+                    templateKey: 'deposit_return_iban',
+                    booking: { service_type: 'rental' },
+                    templateVars: {
+                        '{customer_name}': customerName,
+                        '{nome}': customerName.split(' ')[0] || 'Cliente',
+                        '{amount}': amountStr,
+                        '{importo}': amountStr,
+                        '{total}': amountStr,
+                        '{contract_ref}': contractRef,
+                        '{contratto}': contractRef,
+                    },
+                    skipHeader: false,
+                }),
+            })
+            const j = await res.json().catch(() => ({}))
+            if (j?.skipped && j?.reason === 'pro_template_unavailable') {
+                toast.error('Template "Richiesta IBAN" mancante o disattivato in Messaggi di Sistema Pro')
+            } else {
+                toast.success('Richiesta IBAN inviata al cliente')
+            }
+        } catch (e) {
+            console.warn('[CauzioniTab] sendIbanRequest fallito (non-blocking):', e)
+        }
+    }
+
     const handleMarkRestituita = async (cauzione: Cauzione) => {
         const note = prompt('Note opzionali per la restituzione:')
         if (note === null) return
@@ -816,6 +857,7 @@ export default function CauzioniTab() {
             if (error) throw error
             toast.success('Cauzione segnata come incassata')
             fireCauzioneEvent(cauzione.id, 'on_cauzione_collected')
+            sendIbanRequest(cauzione) // chiedi l'IBAN per il rimborso alla riconsegna
             fetchCauzioni()
         } catch (error: unknown) {
           const _errMsg = error instanceof Error ? error.message : String(error)
