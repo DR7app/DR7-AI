@@ -2684,7 +2684,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
   // Validate customer data before contract generation
   // Uses save-customer Netlify function to read (bypasses RLS)
-  async function validateCustomerData(booking: Booking): Promise<string[]> {
+  async function validateCustomerData(booking: Booking, forInvoice = false): Promise<string[]> {
     const customerId = booking.user_id ||
       booking.booking_details?.customer?.customerId ||
       booking.booking_details?.customer?.id ||
@@ -2769,6 +2769,12 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       if (!customer.codice_fiscale) missing.push('codice_fiscale')
       if (!customer.nome) missing.push('nome')
       if (!customer.cognome) missing.push('cognome')
+      // 2026-07-17 FIX: per la FATTURA servono SOLO CF + anagrafica base +
+      // indirizzo. I campi contratto/noleggio (nascita, patente, documento,
+      // tier/override) NON servono a fatturare. Prima il flow fattura riusava la
+      // validazione contratto COMPLETA e chiedeva in loop infinito dati che la
+      // fattura non usa (patente, luogo nascita, ecc.).
+      if (!forInvoice) {
       if (!customer.data_nascita) missing.push('data_nascita')
       if (!customer.luogo_nascita) missing.push('luogo_nascita')
       if (!customer.sesso && !customer.metadata?.sesso) missing.push('sesso')
@@ -2848,9 +2854,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
       if (!customer.documento_numero) missing.push('documento_numero')
       if (!customer.documento_tipo) missing.push('documento_tipo')
+      } // end !forInvoice (campi richiesti solo per il CONTRATTO/noleggio)
     }
 
-    // Azienda specific — partita_iva is enough, codice_fiscale not required
+    // Azienda: per la FATTURA serve la PARTITA IVA (non il codice fiscale).
     if (customer.tipo_cliente === 'azienda') {
       if (!customer.partita_iva && !customer.codice_fiscale) missing.push('partita_iva')
     }
@@ -3310,7 +3317,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     // 1. Validate Data for Invoice
     let missing: string[]
     try {
-      missing = await validateCustomerData(booking)
+      missing = await validateCustomerData(booking, true) // forInvoice: solo CF/PIVA + indirizzo
     } catch (error: unknown) {
       const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('[handleGenerateInvoice] Validation error:', error)
@@ -7204,7 +7211,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             if (errMsg.toLowerCase().includes('dati') || errMsg.toLowerCase().includes('mancant') || errMsg.toLowerCase().includes('missing') || errMsg.toLowerCase().includes('required')) {
               try {
                 const bookingForValidation = { ...insertedBooking, user_id: customerId, customer_email: customerInfo?.email, customer_phone: customerInfo?.phone } as unknown as Booking
-                const invoiceMissing = (await validateCustomerData(bookingForValidation)).filter(f => f !== '__limitation_override_requested__')
+                const invoiceMissing = (await validateCustomerData(bookingForValidation, true)).filter(f => f !== '__limitation_override_requested__')
                 if (invoiceMissing.length > 0) {
                   const custId = customerId || insertedBooking.user_id || insertedBooking.booking_details?.customer?.customerId
                   let custData = {}
