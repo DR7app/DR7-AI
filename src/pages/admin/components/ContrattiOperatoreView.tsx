@@ -385,18 +385,19 @@ export default function ContrattiOperatoreView() {
                                 <div className="text-xs uppercase tracking-wider font-semibold text-theme-text-muted">Fasce orarie fisse (opzionale)</div>
                                 {(contratto.pause_config?.fasce ?? []).map((f, i) => (
                                     <div key={i} className="flex items-center gap-2">
+                                        {/* Orario 24h EUROPEO (mai AM/PM): text input HH:MM. */}
                                         <input
-                                            type="time"
+                                            type="text" inputMode="numeric" maxLength={5} placeholder="13:00"
                                             value={f.da}
                                             onChange={e => { const fasce = [...(contratto.pause_config?.fasce ?? [])]; fasce[i] = { ...fasce[i], da: e.target.value }; setPause({ fasce }) }}
-                                            className="px-2 py-1 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-sm"
+                                            className="w-16 px-2 py-1 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-sm text-center tabular-nums"
                                         />
                                         <span className="text-theme-text-muted">–</span>
                                         <input
-                                            type="time"
+                                            type="text" inputMode="numeric" maxLength={5} placeholder="14:00"
                                             value={f.a}
                                             onChange={e => { const fasce = [...(contratto.pause_config?.fasce ?? [])]; fasce[i] = { ...fasce[i], a: e.target.value }; setPause({ fasce }) }}
-                                            className="px-2 py-1 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-sm"
+                                            className="w-16 px-2 py-1 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-sm text-center tabular-nums"
                                         />
                                         <button type="button" onClick={() => setPause({ fasce: (contratto.pause_config?.fasce ?? []).filter((_, j) => j !== i) })} className="text-red-500 hover:text-red-600 px-2 text-lg leading-none">×</button>
                                     </div>

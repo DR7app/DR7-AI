@@ -922,13 +922,14 @@ function ContrattoSection({ operatoreId }: { operatoreId: string }) {
                             <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Fasce orarie fisse (opzionale)</div>
                             {(draft.pause_config?.fasce ?? []).map((f, i) => (
                                 <div key={i} className="flex items-center gap-2">
-                                    <input type="time" value={f.da}
+                                    {/* Orario 24h EUROPEO (mai AM/PM): text input HH:MM. */}
+                                    <input type="text" inputMode="numeric" maxLength={5} placeholder="13:00" value={f.da}
                                         onChange={e => { const fasce = [...(draft.pause_config?.fasce ?? [])]; fasce[i] = { ...fasce[i], da: e.target.value }; setPause({ fasce }) }}
-                                        className="px-2 py-1 rounded border border-theme-border bg-theme-bg-primary text-theme-text-primary text-sm" />
+                                        className="w-16 px-2 py-1 rounded border border-theme-border bg-theme-bg-primary text-theme-text-primary text-sm text-center tabular-nums" />
                                     <span className="text-theme-text-muted">–</span>
-                                    <input type="time" value={f.a}
+                                    <input type="text" inputMode="numeric" maxLength={5} placeholder="14:00" value={f.a}
                                         onChange={e => { const fasce = [...(draft.pause_config?.fasce ?? [])]; fasce[i] = { ...fasce[i], a: e.target.value }; setPause({ fasce }) }}
-                                        className="px-2 py-1 rounded border border-theme-border bg-theme-bg-primary text-theme-text-primary text-sm" />
+                                        className="w-16 px-2 py-1 rounded border border-theme-border bg-theme-bg-primary text-theme-text-primary text-sm text-center tabular-nums" />
                                     <button type="button" onClick={() => setPause({ fasce: (draft.pause_config?.fasce ?? []).filter((_, j) => j !== i) })} className="text-red-500 hover:text-red-600 px-2 text-lg leading-none">×</button>
                                 </div>
                             ))}
