@@ -31,6 +31,12 @@ interface Ticket {
 }
 
 const REPARTI = ['Direzione', 'Software', 'Amministrazione', 'Officina', 'Altro'] as const
+const STATI: { value: string; label: string; badge: string }[] = [
+    { value: 'inviato', label: 'Inviato', badge: 'bg-blue-600 text-white' },
+    { value: 'in_lavorazione', label: 'In lavorazione', badge: 'bg-amber-600 text-white' },
+    { value: 'risolto', label: 'Risolto', badge: 'bg-emerald-600 text-white' },
+    { value: 'chiuso', label: 'Chiuso', badge: 'bg-gray-600 text-white' },
+]
 const PRIORITA: { value: string; label: string; dot: string; badge: string }[] = [
     { value: 'bassa', label: 'Bassa', dot: 'bg-emerald-500', badge: 'bg-emerald-600 text-white' },
     { value: 'media', label: 'Media', dot: 'bg-blue-500', badge: 'bg-blue-600 text-white' },
@@ -372,7 +378,13 @@ export default function TicketTab() {
 }
 
 // ── Lista ticket inviati ─────────────────────────────────────────────────────
-function TicketInviatiList({ tickets }: { tickets: Ticket[]; onRefresh: () => void }) {
+function TicketInviatiList({ tickets, onRefresh }: { tickets: Ticket[]; onRefresh: () => void }) {
+    const changeStato = async (id: string, stato: string) => {
+        const { error } = await supabase.from('tickets').update({ stato }).eq('id', id)
+        if (error) { toast.error(`Errore: ${error.message}`); return }
+        toast.success('Stato aggiornato')
+        onRefresh()
+    }
     if (tickets.length === 0) {
         return <div className="bg-theme-bg-secondary border border-theme-border rounded-2xl p-10 text-center text-theme-text-secondary">Nessun ticket inviato.</div>
     }
@@ -398,6 +410,18 @@ function TicketInviatiList({ tickets }: { tickets: Ticket[]; onRefresh: () => vo
                                     A: {t.recipient_nome || '-'} · Da: {t.richiedente_nome || '-'} · {new Date(t.created_at).toLocaleString('it-IT')}
                                     {t.allegati?.length ? ` · ${t.allegati.length} allegato/i` : ''}
                                 </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${STATI.find(s => s.value === (t.stato || 'inviato'))?.badge || 'bg-blue-600 text-white'}`}>
+                                    {STATI.find(s => s.value === (t.stato || 'inviato'))?.label || t.stato}
+                                </span>
+                                <select
+                                    value={t.stato || 'inviato'}
+                                    onChange={e => changeStato(t.id, e.target.value)}
+                                    className="px-2 py-1 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:border-cyan-500"
+                                >
+                                    {STATI.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                                </select>
                             </div>
                         </div>
                     </div>
