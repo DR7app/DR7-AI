@@ -106,17 +106,20 @@ export default function OperatorProfileModal({
     type TargetGranularita = 'giornaliera' | 'settimanale' | 'mensile' | 'none'
     const [targetGran, setTargetGran] = useState<TargetGranularita>('none')
     const [targetValueHours, setTargetValueHours] = useState<number>(0)
+    // Pause obbligatorie del contratto (applicate come deduzione minima alle ore).
+    const [pauseConfig, setPauseConfig] = useState<PauseConfig | null>(null)
     useEffect(() => {
         let cancelled = false
         ;(async () => {
             const { data } = await supabase
                 .from('operatore_contratto')
-                .select('ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, stipendio_frequenza')
+                .select('ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, stipendio_frequenza, pause_config')
                 .eq('operatore_id', operatore.id)
                 .eq('attivo', true)
                 .maybeSingle()
             if (cancelled) return
-            const c = data as { ore_target_giornaliere?: number | null; ore_target_settimanali?: number | null; ore_target_mensili?: number | null; stipendio_frequenza?: 'settimanale' | 'mensile' | null } | null
+            const c = data as { ore_target_giornaliere?: number | null; ore_target_settimanali?: number | null; ore_target_mensili?: number | null; stipendio_frequenza?: 'settimanale' | 'mensile' | null; pause_config?: PauseConfig | null } | null
+            setPauseConfig(c?.pause_config || null)
             // 2026-06-06: default periodo Calcola Paga dalla frequenza stipendio.
             // settimanale → 7gg, mensile → 30gg (default gia' impostato). Solo
             // al primo caricamento, cosi' non sovrascrive le scelte dell'utente.
@@ -216,6 +219,18 @@ export default function OperatorProfileModal({
             if (!byDay.has(e.data)) byDay.set(e.data, [])
             byDay.get(e.data)!.push(e)
         }
+        // Pausa OBBLIGATORIA dal contratto, applicata SOLO se non pagata:
+        // durata giornaliera + somma delle fasce orarie fisse. Usata come MINIMO
+        // di pausa per ogni giorno lavorato (se il timbrato ne ha meno, si forza).
+        const fasceMin = (pauseConfig?.fasce ?? []).reduce((s, f) => {
+            const da = String(f.da || '').split(':').map(Number)
+            const a = String(f.a || '').split(':').map(Number)
+            if (da.length < 2 || a.length < 2 || da.some(n => Number.isNaN(n)) || a.some(n => Number.isNaN(n))) return s
+            return s + Math.max(0, (a[0] * 60 + a[1]) - (da[0] * 60 + da[1]))
+        }, 0)
+        const mandatoryPauseMin = (pauseConfig && pauseConfig.pagata === false)
+            ? (Number(pauseConfig.durata_min) || 0) + fasceMin
+            : 0
         const breakdowns: DayBreakdown[] = range.days.map(d => {
             const dayEntries = byDay.get(d) || []
             let entrata: string | null = null
@@ -235,16 +250,19 @@ export default function OperatorProfileModal({
                     : 0
                 return { start, end, durMin }
             })
-            const minutiPausa = pauseWindows.reduce((s, p) => s + p.durMin, 0)
+            const minutiPausaLog = pauseWindows.reduce((s, p) => s + p.durMin, 0)
+            const worked = !!(entrata && uscita)
+            // Applica la pausa obbligatoria come MINIMO sui giorni lavorati.
+            const minutiPausa = worked ? Math.max(minutiPausaLog, mandatoryPauseMin) : minutiPausaLog
             let minutiLavorati = 0
-            if (entrata && uscita) {
-                minutiLavorati = Math.max(0, Math.floor((new Date(uscita).getTime() - new Date(entrata).getTime()) / 60000) - minutiPausa)
+            if (worked) {
+                minutiLavorati = Math.max(0, Math.floor((new Date(uscita!).getTime() - new Date(entrata!).getTime()) / 60000) - minutiPausa)
             }
             return { data: d, entrata, uscita, pauseWindows, minutiLavorati, minutiPausa }
         })
         setDays(breakdowns)
         setLoading(false)
-    }, [operatore.id, range.start, range.end, range.days])
+    }, [operatore.id, range.start, range.end, range.days, pauseConfig])
 
     useEffect(() => { loadDays() }, [loadDays])
 
@@ -901,7 +919,7 @@ function ContrattoSection({ operatoreId }: { operatoreId: string }) {
                                 <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">Pausa giornaliera (min)</label>
                                 <input
                                     type="number" min={0}
-                                    value={draft.pause_config?.durata_min ?? 0}
+                                    value={draft.pause_config?.durata_min ? draft.pause_config.durata_min : ''}
                                     onChange={e => setPause({ durata_min: Number(e.target.value) || 0 })}
                                     className="w-full px-2 py-1.5 rounded border border-theme-border bg-theme-bg-primary text-theme-text-primary text-sm"
                                     placeholder="30"

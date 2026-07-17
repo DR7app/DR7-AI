@@ -367,7 +367,7 @@ export default function ContrattiOperatoreView() {
                                     label="Pausa giornaliera (minuti)"
                                     type="number"
                                     min={0}
-                                    value={contratto.pause_config?.durata_min ?? 0}
+                                    value={contratto.pause_config?.durata_min ? contratto.pause_config.durata_min : ''}
                                     onChange={e => setPause({ durata_min: Number(e.target.value) || 0 })}
                                     placeholder="30"
                                 />
