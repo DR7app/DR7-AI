@@ -371,6 +371,12 @@ export default function CauzioniTab() {
                     templateKey: 'deposit_return_iban',
                     booking: { service_type: 'rental' },
                     templateVars: {
+                        // Il template "Richiesta IBAN" usa {nome cliente} (con spazio):
+                        // passiamo tutte le varianti così viene sempre sostituito col nome.
+                        '{nome cliente}': customerName,
+                        '{nome_cliente}': customerName,
+                        '{nome_completo}': customerName,
+                        '{cliente}': customerName,
                         '{customer_name}': customerName,
                         '{nome}': customerName.split(' ')[0] || 'Cliente',
                         '{amount}': amountStr,
