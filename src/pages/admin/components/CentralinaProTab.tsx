@@ -640,10 +640,30 @@ const INITIAL_AUTOMATIONS: AutomationsConfig = {
 // disponibili da qui. Per ogni giorno: aperto/chiuso + lista finestre
 // (start/end). Granularità slot configurabile (default 5 min).
 
+// 2026-07-17: blocchi/chiusure straordinarie lavaggio (letti da entrambi admin
+// e sito via lavaggioHours.ts). Un blocco sottrae una fascia (o l'intera
+// giornata) alle finestre, per un intervallo di date + giorni della settimana.
+type LavaggioBlock = {
+  id: string
+  from: string       // 'YYYY-MM-DD'
+  to: string         // 'YYYY-MM-DD'
+  weekdays: number[] // 0=Dom..6=Sab; vuoto = ogni giorno
+  start: string      // 'HH:MM'; vuoto (con end vuoto) = intera giornata
+  end: string        // 'HH:MM'
+  note?: string
+  active: boolean
+}
 type LavaggioHoursConfig = {
   hours: WeekHours
   slot_minutes: number | ''
+  blocks?: LavaggioBlock[]
 }
+
+// Giorni settimana (n = JS getDay(): 0=Dom..6=Sab) per i blocchi lavaggio.
+const LAV_WEEKDAYS: { n: number; l: string }[] = [
+  { n: 1, l: 'Lun' }, { n: 2, l: 'Mar' }, { n: 3, l: 'Mer' }, { n: 4, l: 'Gio' },
+  { n: 5, l: 'Ven' }, { n: 6, l: 'Sab' }, { n: 0, l: 'Dom' },
+]
 
 const INITIAL_LAVAGGIO_HOURS: LavaggioHoursConfig = {
   slot_minutes: 5,
@@ -6640,6 +6660,61 @@ function OrariLavaggioSection({
             )
           })}
         </ul>
+      </section>
+
+      {/* Blocchi / Chiusure straordinarie */}
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
+        <header className="px-5 pt-5 pb-3">
+          <h3 className="text-[15px] font-semibold text-theme-text-primary">Blocchi / Chiusure straordinarie</h3>
+          <p className="text-[12px] text-theme-text-secondary mt-1">Bloccano gli slot per un periodo (anche mensile), in certi giorni della settimana e/o in una fascia oraria. Valgono in gestionale e sul sito. Orari in formato 24h.</p>
+        </header>
+        <div className="px-5 pb-5 space-y-3">
+          {(config.blocks ?? []).map((b, i) => {
+            const upd = (patch: Partial<LavaggioBlock>) => { const blocks = [...(config.blocks ?? [])]; blocks[i] = { ...blocks[i], ...patch }; update({ blocks }) }
+            const inp = 'bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40'
+            return (
+              <div key={b.id} className={`border border-theme-border rounded-xl p-3 space-y-2 ${b.active === false ? 'opacity-50' : ''}`}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] text-theme-text-muted">Dal</span>
+                  <input type="date" value={b.from} onChange={e => upd({ from: e.target.value })} className={inp} />
+                  <span className="text-[11px] text-theme-text-muted">al</span>
+                  <input type="date" value={b.to} onChange={e => upd({ to: e.target.value })} className={inp} />
+                  <span className="text-[11px] text-theme-text-muted ml-2">Fascia</span>
+                  <input type="text" inputMode="numeric" maxLength={5} placeholder="13:00" value={b.start} onChange={e => upd({ start: e.target.value })} className={`${inp} w-16 text-center tabular-nums`} />
+                  <span className="text-[12px] text-theme-text-muted">–</span>
+                  <input type="text" inputMode="numeric" maxLength={5} placeholder="19:00" value={b.end} onChange={e => upd({ end: e.target.value })} className={`${inp} w-16 text-center tabular-nums`} />
+                  <span className="text-[10px] text-theme-text-muted">(vuoto = intera giornata)</span>
+                  <button onClick={() => { const blocks = (config.blocks ?? []).filter((_, j) => j !== i); update({ blocks }) }} className="ml-auto text-[12px] font-medium text-[#ff3b30] hover:text-[#d70015]">Elimina</button>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] text-theme-text-muted mr-1">Giorni:</span>
+                  {LAV_WEEKDAYS.map(w => {
+                    const on = (b.weekdays ?? []).includes(w.n)
+                    return (
+                      <button key={w.n} type="button"
+                        onClick={() => { const set = new Set(b.weekdays ?? []); if (on) set.delete(w.n); else set.add(w.n); upd({ weekdays: [...set] }) }}
+                        className={`px-2 py-0.5 rounded text-[11px] font-medium ${on ? 'bg-[#007aff] text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary'}`}>{w.l}</button>
+                    )
+                  })}
+                  <span className="text-[10px] text-theme-text-muted ml-1">(nessuno = ogni giorno)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="text" placeholder="Nota (facoltativa)" value={b.note ?? ''} onChange={e => upd({ note: e.target.value })} className={`${inp} flex-1`} />
+                  <label className="flex items-center gap-1.5 text-[11px] text-theme-text-secondary cursor-pointer">
+                    <input type="checkbox" checked={b.active !== false} onChange={e => upd({ active: e.target.checked })} className="w-4 h-4 accent-emerald-500" />
+                    Attivo
+                  </label>
+                </div>
+              </div>
+            )
+          })}
+          <button type="button"
+            onClick={() => { const blocks = [...(config.blocks ?? []), { id: `blk_${Date.now()}`, from: '', to: '', weekdays: [], start: '', end: '', note: '', active: true }]; update({ blocks }) }}
+            className="inline-flex items-center gap-1 text-[13px] font-medium text-[#007aff] hover:text-[#0066d6]">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+            Aggiungi blocco
+          </button>
+        </div>
       </section>
     </div>
   )
