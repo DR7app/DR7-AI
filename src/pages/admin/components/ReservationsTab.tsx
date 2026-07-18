@@ -554,6 +554,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     closeLimitation,
     cancelLimitation,
     hasOverride,
+    consumeOverride,
     consumeAllOverrides,
     activeOverrides,
     overrideCodes,
@@ -568,6 +569,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   // useEffect below replays processBookingSubmission with the same args,
   // so the operator doesn't have to re-click Salva.
   const pendingSubmitRef = useRef<{ skipValidation: boolean; overrideCustomerId?: string } | null>(null)
+  // 2026-07-18: come pendingSubmitRef ma per la CANCELLAZIONE. Se il gate
+  // 'booking.delete' apre l'OTP, memorizziamo qui la prenotazione; alla
+  // approvazione l'useEffect su overrideCodes ri-lancia handleDeleteBooking
+  // senza che l'admin debba ri-cliccare "Cancella".
+  const pendingDeleteRef = useRef<{ bookingId: string; bookingType: 'booking' | 'reservation' } | null>(null)
   // Codici di limitation aggiuntivi da marcare come autorizzati con lo stesso
   // overrideId della modal corrente. Usato per il flusso "motivazioni
   // combinate": la modal verifica una sola OTP, poi marchiamo anche gli altri
@@ -752,6 +758,19 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     processBookingSubmission(pending.skipValidation, pending.overrideCustomerId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overrideCodes, showForm])
+
+  // 2026-07-18: AUTO-RESUME della CANCELLAZIONE dopo approvazione OTP.
+  // Prima l'admin inseriva l'OTP ma la prenotazione RESTAVA: handleDeleteBooking
+  // usciva dopo aver aperto la modal e nessuno la ri-lanciava. Ora, quando arriva
+  // l'approvazione (booking.delete in overrideCodes), ripartiamo da soli.
+  useEffect(() => {
+    const pending = pendingDeleteRef.current
+    if (!pending) return
+    if (!hasOverride('booking.delete')) return
+    pendingDeleteRef.current = null
+    handleDeleteBooking(pending.bookingId, pending.bookingType)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overrideCodes])
 
   // Missing Data Modal State
   const [showMissingDataModal, setShowMissingDataModal] = useState(false)
@@ -3445,8 +3464,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     // Test bookings (veicolo TEST*) bypassano sempre l'OTP.
     const bookingToDelete = bookings.find(b => b.id === bookingId)
     if (!isTestBooking(bookingToDelete) && !hasOverride('booking.delete')) {
-      requestOverride('booking.delete', 'Eliminare una prenotazione richiede autorizzazione direzionale.')
-      if (!hasOverride('booking.delete')) return // OTP modal aperto, esci
+      const bypassed = requestOverride('booking.delete', 'Eliminare una prenotazione richiede autorizzazione direzionale.')
+      if (!bypassed && !hasOverride('booking.delete')) {
+        // OTP modal aperto: memorizza la cancellazione così, dopo l'approvazione,
+        // l'useEffect su overrideCodes ri-lancia handleDeleteBooking da solo.
+        pendingDeleteRef.current = { bookingId, bookingType }
+        return
+      }
     }
     try {
       // Get booking details before deleting
@@ -3551,6 +3575,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         })
       }
       toast.success('Prenotazione eliminata')
+      // Consuma l'override così una eventuale SECONDA cancellazione nella stessa
+      // sessione richiede di nuovo l'OTP (ogni cancellazione va autorizzata).
+      if (hasOverride('booking.delete')) { consumeOverride('booking.delete', bookingId).catch(() => {}) }
       loadData()
     } catch (error) {
       console.error('Failed to delete booking:', error)
