@@ -2169,15 +2169,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   // Pickup/dropoff locations: built-ins (office, domicilio) + configurable
   // entries from Centralina Pro (Servizi → Luoghi di Ritiro). Fee is
   // computed as km × delivery.price_per_km in configOverlay.
+  // 2026-07-18: rimosse le consegne preimpostate (aeroporti). Restano solo
+  // Ufficio DR7 e Consegna a domicilio (indirizzo custom). Il domicilio
+  // comunica con la Centralina Pro via delivery.price_per_km (tariffa €/km).
   const LOCATIONS = useMemo(() => [
     { value: 'dr7_office', label: 'Viale Marconi, 229, 09131 Cagliari CA', fee: 0 },
-    ...configOverlay.pickupLocations.map(p => ({
-      value: p.id,
-      label: `${p.label} (+€${p.fee.toFixed(2)})`,
-      fee: p.fee,
-    })),
     { value: 'domicilio', label: 'Consegna a domicilio (inserisci indirizzo)', fee: 0 },
-  ], [configOverlay.pickupLocations])
+  ], [])
 
   // 2026-05-29: tariffa €/km consegna domicilio per categoria del veicolo
   // selezionato. Mostrata come hint sopra i campi "Costo consegna" /

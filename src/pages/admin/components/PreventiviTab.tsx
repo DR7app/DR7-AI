@@ -523,11 +523,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   const { config: rentalConfig } = useRentalConfig()
   const configOverlay = useMemo(() => buildConfigOverlay(rentalConfig), [rentalConfig])
 
+  // 2026-07-18: rimosse le consegne preimpostate (aeroporti). Restano solo
+  // Ufficio DR7 e Domicilio (indirizzo custom). Il domicilio comunica con la
+  // Centralina Pro tramite delivery.price_per_km (tariffa €/km per categoria).
   const LOCATIONS: LocationOption[] = useMemo(() => [
     { value: 'dr7_office', label: 'DR7 — Viale Marconi 229, Cagliari', fee: 0 },
-    ...configOverlay.pickupLocations.map(p => ({ value: p.id, label: p.label, fee: p.fee })),
     { value: 'domicilio', label: 'Domicilio (indirizzo custom)', fee: 0 },
-  ], [configOverlay.pickupLocations])
+  ], [])
 
   // ─── Form State ─────────────────────────────────────────────────────────
 
