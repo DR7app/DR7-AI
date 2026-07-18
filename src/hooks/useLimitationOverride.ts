@@ -208,10 +208,14 @@ export function useLimitationOverride() {
     // via toggle in OperatoriTab > "OTP per Operatore". Il controllo di
     // CHI puo' flippare il toggle e' gestito in OperatoriTab.toggleAdminRole.
     // OTP_BYPASS_EMAILS resta come riferimento per migrazione / audit.
-    void OTP_BYPASS_EMAILS
-    const emailInFailsafe = false
+    // 2026-07-18: RE-ABILITATO il bypass per direzione/amministrazione
+    // (valerio/ilenia/salvatore/ophe). Questi account NON ricevono MAI OTP —
+    // "l'OTP non e' per l'amministrazione". Gli operatori restano gestiti dai
+    // toggle (role:bypass-otp). Era stato disattivato col redesign toggle-only,
+    // ma bloccava la direzione (es. impossibile prenotare un lavaggio).
+    const emailInFailsafe = !!adminEmailRef.current && OTP_BYPASS_EMAILS.has(String(adminEmailRef.current).toLowerCase())
     const roleBypass = adminHasBypassRoleRef.current
-    const adminBypass = roleBypass
+    const adminBypass = roleBypass || emailInFailsafe
     const callerBypass = explicitBypass || adminBypass
 
     // Gate completo: is_required AND conditions. Se l'OTP e' disabilitato
