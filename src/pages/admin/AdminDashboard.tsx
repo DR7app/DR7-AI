@@ -333,7 +333,6 @@ export default function AdminDashboard() {
       { tab: 'report-preventivi', label: 'Preventivi' },
       { tab: 'report-traffic', label: 'Rendimento Sito' },
       { tab: 'report-gmb', label: 'Rendimento Google My Business' },
-      { tab: 'operatori', label: 'Operatori' },
       // 2026-05-18: 'rilevazione-orari' rimossa dal menu — adesso e' una
       // sub-view dentro Operatori (Dashboard / Rilevazione / Contratti / Audit).
       { tab: 'dashboard-kpi', label: 'Dashboard' },
@@ -346,6 +345,7 @@ export default function AdminDashboard() {
       { tab: 'cauzioni', label: 'Cauzioni' },
       { tab: 'scadenze', label: 'Scadenze' },
       { tab: 'fattura', label: 'Fattura' },
+      { tab: 'operatori', label: 'Operatori' },
       { tab: 'immondizia', label: 'Immondizia' },
       { tab: 'ticket', label: 'Ticket' },
       { tab: 'fornitori', label: 'Fornitori' },
