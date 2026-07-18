@@ -16,6 +16,14 @@ const OTP_BYPASS_EMAILS = new Set([
   'ophe@dr7.app',
 ])
 
+// 2026-07-18: SOLO l'amministrazione (Valerio + Ilenia) bypassa l'OTP a
+// prescindere. Salvatore e ophe NON sono amministrazione -> ricevono l'OTP come
+// gli operatori (gestito dai toggle). "L'OTP non e' per l'amministrazione".
+const OTP_AMMINISTRAZIONE_BYPASS = new Set([
+  'valerio@dr7.app',
+  'ilenia@dr7.app',
+])
+
 interface LimitationState {
   isOpen: boolean
   limitationCode: string
@@ -213,7 +221,7 @@ export function useLimitationOverride() {
     // "l'OTP non e' per l'amministrazione". Gli operatori restano gestiti dai
     // toggle (role:bypass-otp). Era stato disattivato col redesign toggle-only,
     // ma bloccava la direzione (es. impossibile prenotare un lavaggio).
-    const emailInFailsafe = !!adminEmailRef.current && OTP_BYPASS_EMAILS.has(String(adminEmailRef.current).toLowerCase())
+    const emailInFailsafe = !!adminEmailRef.current && OTP_AMMINISTRAZIONE_BYPASS.has(String(adminEmailRef.current).toLowerCase())
     const roleBypass = adminHasBypassRoleRef.current
     const adminBypass = roleBypass || emailInFailsafe
     const callerBypass = explicitBypass || adminBypass
