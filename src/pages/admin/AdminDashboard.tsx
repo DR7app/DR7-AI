@@ -23,6 +23,7 @@ const CustomersTab = lazyWithRetry(() => import('./components/CustomersTab'))
 const CustomerWalletTab = lazyWithRetry(() => import('./components/CustomerWalletTab'))
 const SiteUsersTab = lazyWithRetry(() => import('./components/SiteUsersTab'))
 const VehiclesTab = lazyWithRetry(() => import('./components/VehiclesTab'))
+const TerraCatalogTab = lazyWithRetry(() => import('./components/TerraCatalogTab'))
 const FornitoriTab = lazyWithRetry(() => import('./components/FornitoriTab'))
 const CalendarTab = lazyWithRetry(() => import('./components/CalendarTab'))
 const CarWashBookingsTab = lazyWithRetry(() => import('./components/CarWashBookingsTab'))
@@ -74,7 +75,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'immondizia' | 'ticket'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'immondizia' | 'ticket' | 'terra-catalog'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -280,6 +281,7 @@ export default function AdminDashboard() {
       { tab: 'cargos', label: 'Cargos' },
       // 2026-06-10: sezione "Flotta" spostata DENTRO Noleggio.
       { tab: 'vehicles', label: 'Veicoli' },
+      { tab: 'terra-catalog', label: 'Catalogo' },
       { tab: 'magazzino', label: 'Magazzino' },
       { tab: 'gps-keyless', label: 'GPS Flotta' },
     ] },
@@ -447,6 +449,7 @@ export default function AdminDashboard() {
     'carwash-calendar': 'Calendario Prime Wash',
     'carwash-catalog': 'Catalogo Prime Wash',
     'vehicles': 'Veicoli',
+    'terra-catalog': 'Catalogo Noleggio Terra',
     'gps-keyless': 'GPS Flotta',
     'unpaid': 'In attesa di pagamento',
     'customers': 'Lead',
@@ -1021,6 +1024,7 @@ export default function AdminDashboard() {
           {activeTab === 'customer-wallet' && <CustomerWalletTab />}
           {activeTab === 'site-users' && <SiteUsersTab />}
           {activeTab === 'vehicles' && <VehiclesTab />}
+          {activeTab === 'terra-catalog' && <TerraCatalogTab />}
           {activeTab === 'calendar' && (
             <CalendarTab
               onNewBooking={handleCalendarBooking}
