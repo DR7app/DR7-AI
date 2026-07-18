@@ -548,6 +548,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     include_second_driver: false,
     include_dr7_flex: false,
     include_cauzione_veicoli: false,
+    // 2026-07-18: Reparto Cauzione — opzione deposito scelta dalla Centralina
+    // Pro (per categoria × fascia × residenza). L'importo (raw €) viene salvato
+    // su preventivi.deposit_amount e slitta automaticamente in prenotazione.
+    deposit_option_id: '' as string,
     // 2026-05-16 legacy single-select (compat). I nuovi flussi usano
     // km_packages sotto (multi-select cumulativo).
     km_package_id: '' as string,
@@ -988,6 +992,59 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     }
     return fallback
   }, [proDeposits, selectedVehicle, form.driver_tier, form.residente_sardegna, configOverlay])
+
+  // ── Reparto Cauzione (2026-07-18) ─────────────────────────────────────────
+  // Stessa logica della prenotazione (ReservationsTab): le opzioni cauzione
+  // vengono dalla Centralina Pro per categoria × fascia × residenza. L'admin
+  // sceglie un'opzione; il suo `amount` (raw €) diventa preventivi.deposit_amount
+  // e slitta automaticamente in prenotazione (ConvertPreventivoModal).
+  type PrevDepositOption = { id?: string; label?: string; amount?: number | string; surcharge_per_day?: number | string; is_active?: boolean }
+  const depositOptionsForPreventivo = useMemo<PrevDepositOption[]>(() => {
+    if (!proDeposits) return []
+    const firstVal = Object.values(proDeposits)[0] as Record<string, unknown> | undefined
+    const isOld = !!firstVal && typeof firstVal === 'object'
+      && ('residente' in firstVal || 'non_residente' in firstVal)
+
+    const vehCat = String(selectedVehicle?.category || '').toLowerCase().trim()
+    const fasciaKey = form.driver_tier === 'TIER_1' ? 'B' : 'A'
+    const residencyKey = form.residente_sardegna ? 'residente' : 'non_residente'
+    const filterActive = (o: PrevDepositOption[]) => o.filter(x => x.is_active !== false)
+
+    if (isOld) {
+      const fasciaCfg = (proDeposits[fasciaKey] as { residente?: unknown; non_residente?: unknown } | undefined)
+      return filterActive((fasciaCfg?.[residencyKey] as PrevDepositOption[]) || [])
+    }
+    // Stesse alias del booking form (supercars<->exotic, aziendali<->furgone,
+    // urban<->utilitaria) + fallback case-insensitive sulle chiavi reali.
+    const aliases: string[] = (vehCat === 'supercars' || vehCat === 'supercar')
+      ? ['supercars', 'supercar', 'exotic']
+      : vehCat === 'exotic' ? ['exotic', 'supercars', 'supercar']
+      : (vehCat === 'aziendali' || vehCat === 'furgone') ? ['aziendali', 'furgone']
+      : (vehCat === 'urban' || vehCat === 'utilitaria') ? ['urban', 'utilitaria']
+      : vehCat ? [vehCat] : []
+    let catCfg: Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
+    for (const key of aliases) {
+      const candidate = proDeposits[key] as Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
+      if (candidate) { catCfg = candidate; break }
+    }
+    if (!catCfg && vehCat) {
+      const match = Object.keys(proDeposits).find(k => String(k).toLowerCase().trim() === vehCat)
+      if (match) catCfg = proDeposits[match] as Record<string, { residente?: unknown; non_residente?: unknown }> | undefined
+    }
+    const fasciaCfg = catCfg?.[fasciaKey]
+    return filterActive(((fasciaCfg?.[residencyKey] as PrevDepositOption[]) || []).slice())
+  }, [proDeposits, selectedVehicle, form.driver_tier, form.residente_sardegna])
+
+  const selectedDepositOption = useMemo<PrevDepositOption | null>(() => {
+    if (!form.deposit_option_id) return null
+    return depositOptionsForPreventivo.find(o => o.id === form.deposit_option_id) || null
+  }, [depositOptionsForPreventivo, form.deposit_option_id])
+
+  // Importo cauzione (raw €) da salvare su preventivi.deposit_amount.
+  const selectedDepositAmount = useMemo(() => {
+    const v = Number(selectedDepositOption?.amount)
+    return Number.isFinite(v) && v >= 0 ? v : 0
+  }, [selectedDepositOption])
 
   // Revenue pricing
   const [revenueData, setRevenueData] = useState<{
@@ -1834,6 +1891,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         sconto: pricing.sconto,
         sconto_note: form.sconto_note || null,
         total_final: pricing.totalFinal,
+        // 2026-07-18: Reparto Cauzione — importo (raw €) scelto dalle opzioni
+        // Centralina Pro. Slitta automaticamente in prenotazione alla conversione.
+        deposit_amount: selectedDepositAmount,
         driver_tier: form.driver_tier,
         pricing_trace: revenueData || null,
         extras_detail: {
@@ -1848,6 +1908,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           include_cauzione_veicoli: form.include_cauzione_veicoli,
           cauzione_veicoli_daily: pricing.cauzioneVeicoliDaily,
           cauzione_veicoli_total: pricing.cauzioneVeicoliTotal,
+          // 2026-07-18: opzione cauzione scelta (per re-load esatto del preventivo).
+          deposit_option_id: form.deposit_option_id || null,
+          deposit_option_label: selectedDepositOption?.label || null,
+          deposit_amount: selectedDepositAmount,
           delivery_fee: pricing.deliveryFee,
           pickup_fee: pricing.pickupFee,
           pickup_location: form.pickup_location,
@@ -1971,6 +2035,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       include_second_driver: !!extras.include_second_driver || p.second_driver_total > 0,
       include_dr7_flex: !!extras.include_dr7_flex,
       include_cauzione_veicoli: !!extras.include_cauzione_veicoli || Number(extras.cauzione_veicoli_total || 0) > 0,
+      deposit_option_id: typeof extras.deposit_option_id === 'string' ? extras.deposit_option_id : '',
       km_package_id: typeof extras.km_package_id === 'string' ? extras.km_package_id : '',
       km_package_qty: Number.isFinite(Number(extras.km_package_qty)) && Number(extras.km_package_qty) > 0 ? Number(extras.km_package_qty) : 1,
       // 2026-05-16: restore multi-select pacchetti
@@ -2021,6 +2086,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       include_second_driver: false,
       include_dr7_flex: false,
       include_cauzione_veicoli: false,
+      deposit_option_id: '',
       km_package_id: '',
       km_package_qty: 1,
       pickup_location: 'dr7_office',
@@ -5375,6 +5441,36 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           </div>
         </div>
       )}
+
+      {/* Reparto Cauzione (2026-07-18) — opzioni dalla Centralina Pro per
+          categoria × fascia × residenza. L'importo scelto slitta in prenotazione. */}
+      <div className="space-y-2">
+        <p className="text-sm font-semibold text-theme-text-primary">Cauzione</p>
+        <select
+          value={form.deposit_option_id}
+          onChange={(e) => setForm(prev => ({ ...prev, deposit_option_id: e.target.value }))}
+          disabled={!form.vehicle_id || depositOptionsForPreventivo.length === 0}
+          className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm disabled:opacity-50"
+        >
+          <option value="">— Seleziona cauzione —</option>
+          {depositOptionsForPreventivo.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.label} — {formatEur(Number(o.amount) || 0)}
+            </option>
+          ))}
+        </select>
+        {!form.vehicle_id && (
+          <p className="text-xs text-theme-text-muted">Seleziona prima un veicolo per vedere le cauzioni disponibili.</p>
+        )}
+        {form.vehicle_id && depositOptionsForPreventivo.length === 0 && (
+          <p className="text-xs text-amber-400">Nessuna cauzione configurata in Centralina Pro per questa categoria / fascia / residenza.</p>
+        )}
+        {selectedDepositOption && (
+          <p className="text-xs text-theme-text-secondary">
+            Cauzione selezionata: <span className="font-semibold text-theme-text-primary">{formatEur(selectedDepositAmount)}</span> — slitta automaticamente in prenotazione.
+          </p>
+        )}
+      </div>
 
       {/* Extras Toggles */}
       <div className="space-y-3">
