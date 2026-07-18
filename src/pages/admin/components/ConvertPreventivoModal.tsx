@@ -76,7 +76,9 @@ export default function ConvertPreventivoModal({ isOpen, preventivo, customers, 
         pickup_enabled: preventivo.pickup_enabled || false,
         pickup_address: preventivo.pickup_enabled ? { street: preventivo.pickup_street || '', city: preventivo.pickup_city || '', zip: preventivo.pickup_zip || '', province: preventivo.pickup_province || '', notes: preventivo.pickup_notes || '' } : null,
         pickup_fee: eurToCents(preventivo.pickup_fee || 0),
-        deposit_amount: eurToCents(preventivo.deposit_amount || 0),
+        // 2026-07-18: deposit_amount in EURO (come ReservationsTab, parseFloat),
+        // non in centesimi — altrimenti la cauzione appariva ×100 nel dettaglio.
+        deposit_amount: Number(preventivo.deposit_amount) || 0,
         // 2026-05-23: preserva km esatto del preventivo. Top-level cosi'
         // ReservationsTab / contract / fattura non ricalcolano da config
         // (che potrebbe essere cambiata dopo il quote).

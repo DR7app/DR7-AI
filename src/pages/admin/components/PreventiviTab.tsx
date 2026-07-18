@@ -177,6 +177,9 @@ interface Preventivo {
   sconto: number
   sconto_note: string | null
   total_final: number
+  // 2026-07-18: Reparto Cauzione — importo (EURO) scelto nel preventivo, colonna
+  // preventivi.deposit_amount. Slitta in prenotazione alla conversione/accettazione.
+  deposit_amount?: number | null
   pricing_trace: Record<string, unknown> | null
   extras_detail: Record<string, unknown> | null
   customer_phone: string | null
@@ -3036,6 +3039,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       payment_status,
       payment_method,
       amount_paid: paidCents,
+      // 2026-07-18: porta la CAUZIONE scelta nel preventivo (Reparto Cauzione)
+      // sulla prenotazione. deposit_amount è in EURO come nelle prenotazioni
+      // create da ReservationsTab (parseFloat, non centesimi). Se No Cauzione,
+      // resta 0.
+      deposit_amount: (p.no_cauzione_total || 0) > 0 ? 0 : (Number(p.deposit_amount) || 0),
       service_type: 'rental',
       booking_source: 'admin',
       // 2026-05-23: NON aggiungere km_limit/unlimited_km al top-level
@@ -3079,6 +3087,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         noDepositSurcharge: Number(p.no_cauzione_total) || 0,
         no_cauzione_surcharge_per_day: Number(p.no_cauzione_daily) || 0,
         deposit_status: (p.no_cauzione_total || 0) > 0 ? 'no_cauzione' : 'da_incassare',
+        // 2026-07-18: importo cauzione (EURO) dal Reparto Cauzione del preventivo.
+        // Letto da ReservationsTab (Cauzione:) e da contratto/fattura.
+        deposit: (p.no_cauzione_total || 0) > 0 ? 0 : (Number(p.deposit_amount) || 0),
       },
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
