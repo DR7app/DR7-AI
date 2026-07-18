@@ -107,9 +107,11 @@ function getApplicableBlocks(date: Date): LavaggioBlock[] {
     const ds = ymd(date)
     const dow = date.getDay()
     return (CONFIG.blocks || []).filter((b) =>
-        !!b && b.active !== false
-        && (!b.from || ds >= b.from)
-        && (!b.to || ds <= b.to)
+        // SICUREZZA: un blocco senza periodo (from+to) e' INCOMPLETO e viene
+        // IGNORATO. Senza questo un blocco vuoto (appena aggiunto) bloccava ogni
+        // giorno intero -> lavaggio non prenotabile / OTP per tutti.
+        !!b && b.active !== false && !!b.from && !!b.to
+        && ds >= b.from && ds <= b.to
         && (!Array.isArray(b.weekdays) || b.weekdays.length === 0 || b.weekdays.includes(dow)),
     )
 }
