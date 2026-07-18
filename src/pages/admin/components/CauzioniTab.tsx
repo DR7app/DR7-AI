@@ -612,6 +612,90 @@ export default function CauzioniTab() {
         }
     }
 
+    // 2026-07-18: "LINK INCASSO" — a differenza di LINK PRE-AUTH (blocco/hold via
+    // nexi-create-preauth), questo genera un link che ADDEBITA davvero la cauzione
+    // (nexi-pay-by-link, captureType IMPLICIT). Passa cauzioneId + paymentPurpose
+    // 'cauzione' così il callback (nexi-payment-callback) marca la cauzione come
+    // Incassata automaticamente al pagamento. Stesso messaggio WhatsApp del link
+    // pre-auth (deposit_request_customer), come richiesto.
+    const handleSendIncassoLink = async (cauzione: Cauzione) => {
+        try {
+            toast.loading('Generazione link incasso...', { id: 'incassolink' })
+
+            const response = await authFetch('/.netlify/functions/nexi-pay-by-link', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    cauzioneId: cauzione.id,
+                    amount: cauzione.importo,
+                    customerEmail: cauzione.cliente_email || '',
+                    customerName: cauzione.cliente_nome || 'Cliente',
+                    description: `Cauzione ${cauzione.veicolo_modello || ''} - ${cauzione.cliente_nome || ''}`,
+                    paymentPurpose: 'cauzione',
+                    expirationHours: 1,
+                })
+            })
+            const result = await response.json()
+            toast.dismiss('incassolink')
+
+            if (!response.ok) throw new Error(result.error || 'Errore generazione link')
+
+            if (result.paymentUrl) {
+                const phone = cauzione.cliente_telefono
+                if (phone) {
+                    const contractRef = (cauzione.riferimento_contratto_id || '').substring(0, 8).toUpperCase() || 'N/A'
+                    const sendRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            customPhone: phone,
+                            // Stesso template del link pre-auth (richiesto): il resolver
+                            // sceglie il Pro template via handled_events.
+                            templateKey: 'deposit_request_customer',
+                            booking: { service_type: 'rental' },
+                            templateVars: (() => {
+                                const customerName = cauzione.cliente_nome || 'Cliente'
+                                const amountStr = Number(cauzione.importo).toFixed(2)
+                                return {
+                                    '{customer_name}': customerName,
+                                    '{nome}': customerName.split(' ')[0] || 'Cliente',
+                                    '{amount}': amountStr,
+                                    '{total}': amountStr,
+                                    '{importo}': amountStr,
+                                    '{link}': result.paymentUrl,
+                                    '{payment_link}': result.paymentUrl,
+                                    '{contract_ref}': contractRef,
+                                    '{contratto}': contractRef,
+                                    '{booking_ref}': contractRef,
+                                    '{booking_id}': contractRef,
+                                }
+                            })(),
+                            skipHeader: false,
+                        })
+                    })
+                    const sendJson = await sendRes.json().catch(() => ({}))
+                    if (sendJson?.skipped && sendJson?.reason === 'pro_template_unavailable') {
+                        toast.error('Template mancante in Messaggi di Sistema Pro')
+                    } else {
+                        toast.success('Link incasso inviato via WhatsApp al cliente!')
+                    }
+                } else {
+                    try {
+                        await navigator.clipboard.writeText(result.paymentUrl)
+                        toast.success('Link incasso copiato! Nessun telefono trovato per inviare WhatsApp.')
+                    } catch {
+                        prompt('Nessun telefono trovato. Copia il link incasso:', result.paymentUrl)
+                    }
+                }
+                fetchCauzioni()
+            }
+        } catch (error: unknown) {
+            const _errMsg = error instanceof Error ? error.message : String(error)
+            toast.dismiss('incassolink')
+            toast.error(_errMsg || 'Errore')
+        }
+    }
+
     // @ts-ignore
     const handleCreatePreauth = async (cauzione: Cauzione) => {
         try {
@@ -944,21 +1028,25 @@ export default function CauzioniTab() {
     const getStatoBadgeClass = (cauzione: Cauzione) => {
         if (cauzione.stato === 'Bloccata') return 'bg-orange-600 text-white'
         if (cauzione.stato === 'Incassata') return 'bg-purple-600 text-white'
+        // 2026-07-18: pre-autorizzazione completata = fondi BLOCCATI (data_incasso
+        // resta null). Va mostrata "Pre-autorizzata" PRIMA di "Da incassare".
+        if (cauzione.nexi_transaction_id && cauzione.metodo === 'preautorizzazione') return 'bg-blue-600 text-white' // Pre-autorizzata
         if (!cauzione.data_incasso) return 'bg-yellow-600 text-black' // Da incassare
         if (cauzione.is_overdue) return 'bg-red-600 text-white'
         if (cauzione.stato === 'In scadenza') return 'bg-yellow-600 text-black'
-        if (cauzione.nexi_transaction_id && cauzione.metodo === 'preautorizzazione') return 'bg-blue-600 text-white' // Pre-autorizzata
         return 'bg-green-600 text-white' // Attiva
     }
 
     const getStatoLabel = (cauzione: Cauzione) => {
         if (cauzione.stato === 'Bloccata') return 'Bloccata'
         if (cauzione.stato === 'Incassata') return 'Incassata'
+        // Pre-autorizzata quando la pre-auth e' completata (metodo preautorizzazione
+        // + nexi_transaction_id). Deve vincere su "Da incassare": i fondi sono
+        // bloccati, non incassati, quindi data_incasso e' ancora null.
+        if (cauzione.nexi_transaction_id && cauzione.metodo === 'preautorizzazione') return 'Pre-autorizzata'
         if (!cauzione.data_incasso) return 'Da incassare'
         if (cauzione.is_overdue) return 'Scaduta'
         if (cauzione.stato === 'In scadenza') return 'In scadenza'
-        // Show Pre-autorizzata when preauth exists (nexi_transaction_id set, metodo preautorizzazione)
-        if (cauzione.nexi_transaction_id && cauzione.metodo === 'preautorizzazione') return 'Pre-autorizzata'
         return 'Attiva'
     }
 
@@ -1137,7 +1225,10 @@ export default function CauzioniTab() {
                                 <button onClick={() => handleSegnaIncassata(c)} className="px-3 py-1.5 bg-dr7-gold text-white text-[11px] rounded-full hover:bg-[#0A8FA3] transition-colors font-semibold">INCASSA</button>
                             )}
                             {!isIncassata && (
-                                <button onClick={() => handleSendPayLink(c)} className="px-3 py-1.5 bg-dr7-gold text-white text-[11px] rounded-full hover:bg-dr7-gold/80 transition-colors font-semibold">INVIA LINK</button>
+                                <button onClick={() => handleSendPayLink(c)} className="px-3 py-1.5 bg-blue-500 text-white text-[11px] rounded-full hover:bg-blue-600 transition-colors font-semibold" title="Link che BLOCCA la cauzione sulla carta (pre-autorizzazione, non addebita)">LINK PRE-AUTH</button>
+                            )}
+                            {!isIncassata && (
+                                <button onClick={() => handleSendIncassoLink(c)} className="px-3 py-1.5 bg-dr7-gold text-white text-[11px] rounded-full hover:bg-dr7-gold/80 transition-colors font-semibold" title="Link che ADDEBITA la cauzione (incasso reale, i soldi vengono presi)">LINK INCASSO</button>
                             )}
                             {isIncassata && !isInCassa && (
                                 <button onClick={() => handleSegnaDaIncassare(c)} className="px-3 py-1.5 bg-amber-600 text-white text-[11px] rounded-full hover:bg-amber-700 transition-colors">DA INCASSARE</button>

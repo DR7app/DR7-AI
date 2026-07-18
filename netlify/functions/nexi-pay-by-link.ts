@@ -46,6 +46,7 @@ const handler: Handler = async (event) => {
             expirationDays = 7,
             expirationHours, // Override: 1 = 1 hour (default for bookings)
             paymentPurpose,
+            cauzioneId, // 2026-07-18: link INCASSO cauzione — il callback marca Incassata
         } = JSON.parse(event.body || '{}');
 
         if (!NEXI_API_KEY) {
@@ -179,6 +180,7 @@ const handler: Handler = async (event) => {
                 metadata: {
                     type: 'pay_by_link',
                     payment_purpose: paymentPurpose || 'booking',
+                    cauzione_id: cauzioneId || null, // 2026-07-18: usato dal callback per marcare Incassata
                     customer_name: customerName,
                     nexi_link_id: nexiLinkId,
                     tokenization_requested: !usedFallback,

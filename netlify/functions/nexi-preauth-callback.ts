@@ -128,6 +128,7 @@ const handler: Handler = async (event) => {
                 updateData.nexi_contract_id = contractId;
             }
             updateData.stato = 'Attiva'; // Pre-authorized and ready for SBLOCCA or INCASSA
+            updateData.metodo = 'preautorizzazione'; // 2026-07-18: badge mostra "Pre-autorizzata" (pre-auth completata)
             updateData.note = `Preautorizzazione completata (fondi bloccati) - OpId: ${operationId || 'N/A'} - Auth: ${authorizationCode || 'N/A'}${contractId ? ` - Carta registrata (${contractId})` : ''} - Importo: €${amount ? (Number(amount) / 100).toFixed(2) : '?'}`;
             console.log('[nexi-preauth-callback] PREAUTH SUCCESS — operationId:', operationId, 'transactionId:', transactionId, 'authCode:', authorizationCode);
         } else if (wasCharged) {

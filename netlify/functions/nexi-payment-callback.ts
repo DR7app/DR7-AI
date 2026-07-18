@@ -183,6 +183,28 @@ const handler: Handler = async (event) => {
             updated_at: new Date().toISOString()
         }).eq('id', transaction.id);
 
+        // ── CAUZIONE INCASSO via link (2026-07-18) ─────────────────────────
+        // Il link INCASSO (pay-by-link con paymentPurpose 'cauzione') addebita
+        // DAVVERO la cauzione. Al pagamento riuscito marchiamo la cauzione come
+        // Incassata e chiediamo l'IBAN per il rimborso (come il flusso manuale
+        // "INCASSA"). Short-circuit: le cauzioni non usano booking_id, quindi non
+        // rientrano nei rami danni/extension/booking piu' sotto.
+        const cauzioneIdCb = transaction.metadata?.cauzione_id;
+        if (paymentPurpose === 'cauzione' && cauzioneIdCb) {
+            if (isSuccess) {
+                const amountEur = (transaction.amount_cents / 100);
+                await supabase.from('cauzioni').update({
+                    stato: 'Incassata',
+                    data_incasso: new Date().toISOString(),
+                    nexi_transaction_id: transactionId || operationId || null,
+                    note: `Incassata via link pagamento — €${amountEur.toFixed(2)} — OpId: ${operationId || 'N/A'}`,
+                    updated_at: new Date().toISOString(),
+                }).eq('id', cauzioneIdCb);
+                console.log(`[nexi-payment-callback] Cauzione ${cauzioneIdCb} marcata Incassata via link`);
+            }
+            return { statusCode: 200, headers, body: JSON.stringify({ success: true, status: isSuccess ? 'cauzione_incassata' : 'cauzione_payment_failed' }) };
+        }
+
         // ── AUTO-RESEND FRESH PAY-BY-LINK ON PAYMENT REFUSAL ───────────────
         // Quando Nexi rifiuta un pagamento, genera e invia un link fresco al
         // cliente. Ripete ad ogni rifiuto entro una finestra di 1 ora che parte
