@@ -80,15 +80,24 @@ export const handler: Handler = async (event) => {
     }
 
     // ── 2. Cache miss → openapi.com ───────────────────────────────────────────
-    if (!OPENAPI_TOKEN) {
-      console.error('[lookup-targa] OPENAPI_AUTOMOTIVE_TOKEN not configured')
+    // 2026-07-18: token PRIMA dal config condiviso (centralina_pro_config.config
+    // .openapi_automotive_token), poi da env. Aggiornabile con UNA sola SQL,
+    // vale per admin e sito. Il config VINCE sull'env stale.
+    let openapiToken = OPENAPI_TOKEN
+    try {
+      const { data: cfgRow } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+      const cfgTok = (cfgRow?.config as { openapi_automotive_token?: string } | null)?.openapi_automotive_token
+      if (cfgTok && typeof cfgTok === 'string' && cfgTok.trim()) openapiToken = cfgTok.trim()
+    } catch (e: any) { console.warn('[lookup-targa] config token lookup failed, uso env:', e?.message) }
+    if (!openapiToken) {
+      console.error('[lookup-targa] token OpenAPI non configurato (ne config ne env)')
       return { statusCode: 500, headers, body: JSON.stringify({ error: 'Servizio temporaneamente non disponibile.' }) }
     }
 
     console.log('[lookup-targa] Cache MISS:', cleanTarga, '→ calling openapi.com')
 
     const res = await fetch(`https://automotive.openapi.com/IT-car/${cleanTarga}`, {
-      headers: { 'Authorization': `Bearer ${OPENAPI_TOKEN}` },
+      headers: { 'Authorization': `Bearer ${openapiToken}` },
     })
 
     console.log('[lookup-targa] OpenAPI status:', res.status)
