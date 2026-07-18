@@ -140,7 +140,7 @@ export default function CampagnaMarketingTab() {
     const [imagePreviews, setImagePreviews] = useState<string[]>([])
     const [videoFile, setVideoFile] = useState<File | null>(null)
     const [videoPreview, setVideoPreview] = useState<string>('')
-    const [, setSending] = useState(false)
+    const [sending, setSending] = useState(false)
     const sendLockRef = useRef(false)
     const saveEditLockRef = useRef(false)
 
@@ -337,19 +337,21 @@ export default function CampagnaMarketingTab() {
         return data.publicUrl
     }
 
-    async function handleSend() {
+    // capLimit: se valorizzato, invia SOLO ai primi N destinatari dell'audience
+    // (bottoni "Invia a 50/100/..."). Undefined = invio normale a tutti i selezionati.
+    async function handleSend(capLimit?: number) {
         if (sendLockRef.current) return
         if (!title.trim()) return toast.error('Inserisci un titolo')
         if (!message.trim()) return toast.error('Inserisci il messaggio')
         sendLockRef.current = true
         try {
-        await handleSendInner()
+        await handleSendInner(capLimit)
         } finally {
             sendLockRef.current = false
         }
     }
 
-    async function handleSendInner() {
+    async function handleSendInner(capLimit?: number) {
 
         // Scheduled-send branch: ignores manual selection (audience is
         // recomputed at fire time from saved filters).
@@ -442,9 +444,13 @@ export default function CampagnaMarketingTab() {
         }
 
         // Immediate-send branch (existing behaviour).
-        if (selectedIds.size === 0) return toast.error('Seleziona almeno un cliente')
+        // capLimit (bottoni "Invia a N"): pool = selezione manuale se presente,
+        // altrimenti TUTTI gli eligible; poi taglia ai primi N. Senza capLimit
+        // resta il comportamento classico (richiede selezione manuale).
+        if (!capLimit && selectedIds.size === 0) return toast.error('Seleziona almeno un cliente')
 
-        const recipients = customers.filter(c => selectedIds.has(c.id))
+        const pool = selectedIds.size > 0 ? customers.filter(c => selectedIds.has(c.id)) : eligible
+        const recipients = (capLimit && capLimit > 0) ? pool.slice(0, capLimit) : pool
         if (recipients.length === 0) return toast.error('Nessun destinatario valido')
 
         if (!confirm(`Inviare la campagna a ${recipients.length} clienti? L'invio parte subito.`)) return
@@ -957,18 +963,49 @@ export default function CampagnaMarketingTab() {
                         )}
                     </div>
 
-                    <div className="flex items-center justify-between pt-2 border-t border-theme-border">
-                        <div className="text-sm text-theme-text-muted">
-                            {scheduleEnabled
-                                ? <>Modalità: <span className="font-bold text-dr7-gold">Programmazione</span></>
-                                : <>Selezionati: <span className="font-bold text-dr7-gold">{selectedIds.size}</span></>
-                            }
+                    <div className="pt-2 border-t border-theme-border space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="text-sm text-theme-text-muted">
+                                {scheduleEnabled
+                                    ? <>Modalità: <span className="font-bold text-dr7-gold">Programmazione</span></>
+                                    : <>Selezionati: <span className="font-bold text-dr7-gold">{selectedIds.size}</span></>
+                                }
+                            </div>
+                            <Button onClick={() => handleSend()}>
+                                {scheduleEnabled
+                                    ? (recurrenceType === 'none' ? 'Programma invio' : 'Salva ricorrenza')
+                                    : 'Invia ora'}
+                            </Button>
                         </div>
-                        <Button onClick={handleSend}>
-                            {scheduleEnabled
-                                ? (recurrenceType === 'none' ? 'Programma invio' : 'Salva ricorrenza')
-                                : 'Invia ora'}
-                        </Button>
+                        {/* 2026-07-18: invio rapido a un numero di destinatari. Usa la
+                            selezione manuale se presente, altrimenti tutti gli idonei;
+                            invia SOLO ai primi N. */}
+                        {!scheduleEnabled && (
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-xs text-theme-text-muted">
+                                    Invio rapido{selectedIds.size > 0 ? ` (su ${selectedIds.size} selezionati)` : ` (idonei: ${eligible.length})`}:
+                                </span>
+                                {[50, 100, 250, 500].map(n => (
+                                    <button
+                                        key={n}
+                                        type="button"
+                                        disabled={sending}
+                                        onClick={() => handleSend(n)}
+                                        className="px-3 py-1.5 text-xs rounded-full bg-theme-bg-secondary border border-theme-border text-theme-text-primary hover:bg-theme-bg-hover disabled:opacity-50"
+                                    >
+                                        Invia a {n}
+                                    </button>
+                                ))}
+                                <button
+                                    type="button"
+                                    disabled={sending}
+                                    onClick={() => handleSend(selectedIds.size > 0 ? selectedIds.size : eligible.length)}
+                                    className="px-3 py-1.5 text-xs rounded-full bg-dr7-gold text-white font-semibold hover:opacity-90 disabled:opacity-50"
+                                >
+                                    Invia a tutti
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
 
