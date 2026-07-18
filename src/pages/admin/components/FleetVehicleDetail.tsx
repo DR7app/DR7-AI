@@ -535,30 +535,12 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
 
                             {/* Tires (Gomme) */}
                             <div className="bg-theme-bg-tertiary rounded-lg p-4">
+                                {/* 2026-07-18: rimosso "Ordina Gomme" dalla scheda auto.
+                                    Gli ordini ai fornitori partono ESCLUSIVAMENTE dal
+                                    Magazzino (FleetInventory > Ordini). Qui restano solo
+                                    le specifiche gomme (dato del veicolo). */}
                                 <div className="flex justify-between items-center mb-3">
                                     <h4 className="text-lg font-bold text-theme-text-primary">Gomme</h4>
-                                    <button
-                                        onClick={() => {
-                                            const tireInfo = (editedVehicle.metadata?.tire_specs || {}) as Record<string, string>
-                                            const subject = encodeURIComponent(`Ordine Gomme - ${editedVehicle.display_name} (${editedVehicle.plate})`)
-                                            const body = encodeURIComponent(
-                                                `Buongiorno,\n\n` +
-                                                `Vorrei ordinare gomme per:\n\n` +
-                                                `Veicolo: ${editedVehicle.display_name}\n` +
-                                                `Targa: ${editedVehicle.plate}\n` +
-                                                `Telaio: ${editedVehicle.chassis_number || 'N/A'}\n\n` +
-                                                `SPECIFICHE GOMME:\n` +
-                                                `Anteriori: ${tireInfo.front_size || 'N/A'} - ${tireInfo.front_model || 'N/A'}\n` +
-                                                `Posteriori: ${tireInfo.rear_size || 'N/A'} - ${tireInfo.rear_model || 'N/A'}\n\n` +
-                                                `Quantità richiesta: ___\n\n` +
-                                                `Cordiali saluti,\nDR7`
-                                            )
-                                            window.open(`mailto:?subject=${subject}&body=${body}`, '_blank')
-                                        }}
-                                        className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-medium transition-colors"
-                                    >
-                                        Ordina Gomme
-                                    </button>
                                 </div>
 
                                 {/* Tire Specifications */}
