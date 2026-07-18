@@ -9816,17 +9816,33 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {(() => {
                     const tier = customerTier?.tier || 'TIER_1'
-                    const availableServices = getExperienceServicesForTier(tier)
+                    // 2026-07-18: leggi i servizi DINAMICAMENTE dalla Centralina
+                    // Pro (rentalConfig.experience_services), mantenendo i
+                    // DISATTIVATI con is_active così vengono mostrati GRIGI e non
+                    // aggiungibili (non nascosti). Prima usava una lista hardcoded
+                    // che ignorava del tutto l'on/off della Centralina Pro.
+                    const raw = rentalConfig?.experience_services || []
+                    const availableServices = (raw.length > 0
+                      ? raw.map(s => ({ id: s.id, name: s.name, price: s.price, unit: s.unit as string, tierOnly: (s.tier_only ?? null) as string | null, is_active: s.is_active !== false }))
+                      : getExperienceServicesForTier(tier).map(s => ({ id: s.id, name: s.name, price: s.price, unit: s.unit as string, tierOnly: ((s as { tierOnly?: string | null }).tierOnly ?? null), is_active: true }))
+                    ).filter(s => s.unit !== 'per_km' && (!s.tierOnly || s.tierOnly === tier))
                     return availableServices.map(svc => {
                       const qty = formData.experience_services[svc.id] || 0
                       const unitLabel = svc.unit === 'per_day' ? '/giorno' : svc.unit === 'per_hour' ? '/ora' : svc.unit === 'per_item' ? '/unità' : ''
+                      // Disattivato in Centralina Pro → grigio e non aggiungibile.
+                      // Ma se è GIÀ presente sulla prenotazione (qty>0), lascialo
+                      // gestibile per non corrompere prenotazioni esistenti.
+                      const svcDisabled = svc.is_active === false && qty <= 0
                       return (
-                        <div key={svc.id} className={`flex items-center justify-between p-2 rounded-md border ${qty > 0 ? 'border-dr7-gold bg-dr7-gold/5' : 'border-theme-border'}`}>
+                        <div key={svc.id} className={`flex items-center justify-between p-2 rounded-md border ${svcDisabled ? 'opacity-50 border-theme-border' : qty > 0 ? 'border-dr7-gold bg-dr7-gold/5' : 'border-theme-border'}`}>
                           <div className="flex-1 min-w-0">
                             <span className="text-sm text-theme-text-primary">{svc.name}</span>
                             <span className="text-xs text-theme-text-muted ml-1">€{svc.price.toFixed(2)}{unitLabel}</span>
+                            {svcDisabled && <span className="text-xs text-theme-text-muted ml-2">(Disattivato)</span>}
                           </div>
-                          {(svc.unit === 'per_item' || svc.unit === 'per_hour') ? (
+                          {svcDisabled ? (
+                            <button type="button" disabled className="ml-2 px-3 py-1 rounded text-xs font-medium bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed opacity-60">Disattivato</button>
+                          ) : (svc.unit === 'per_item' || svc.unit === 'per_hour') ? (
                             <div className="flex items-center gap-1 ml-2">
                               <button type="button" onClick={() => setFormData(prev => {
                                 const es = { ...prev.experience_services }

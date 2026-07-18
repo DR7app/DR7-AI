@@ -602,20 +602,26 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     [selectedVehicle, form.driver_tier, configOverlay]
   )
 
-  const availableExperienceServices = useMemo(
-    // 2026-05-27: nascondi servizi "per_km" (Pacchetto KM / prezzo al km
-    // manuale) dal form Preventivi su richiesta direzione — non usati.
-    // I servizi restano in Centralina Pro per il sito; qui non si vedono.
-    () => configOverlay.experienceServices.filter(s => {
+  // 2026-07-18: legge i servizi RAW dalla Centralina Pro (rentalConfig
+  // .experience_services) MANTENENDO quelli disattivati con il flag is_active,
+  // così il catalogo può mostrarli GRIGI/disabilitati invece di farli sparire.
+  // Dinamico: ogni modifica in Centralina Pro si riflette qui.
+  // 2026-05-27: i servizi "per_km" restano nascosti nel form Preventivi.
+  const availableExperienceServices = useMemo(() => {
+    const raw = rentalConfig?.experience_services || []
+    const source = raw.length > 0
+      ? raw.map(s => ({ id: s.id, name: s.name, price: s.price, unit: s.unit, tierOnly: s.tier_only, is_active: s.is_active !== false }))
+      // Fallback quando la config non è ancora caricata: overlay (solo attivi).
+      : configOverlay.experienceServices.map(s => ({ id: s.id, name: s.name, price: s.price, unit: s.unit, tierOnly: (s as { tierOnly?: string | null }).tierOnly ?? null, is_active: true }))
+    return source.filter(s => {
       if (s.unit === 'per_km') return false
       if (s.tierOnly && s.tierOnly !== form.driver_tier) return false
       // DR7 FLEX ha già il suo toggle dedicato: nascondi l'eventuale doppione a catalogo.
       const n = (s.name || '').toLowerCase()
       if (n.includes('dr7') && n.includes('flex')) return false
       return true
-    }),
-    [configOverlay.experienceServices, form.driver_tier]
-  )
+    })
+  }, [rentalConfig, configOverlay.experienceServices, form.driver_tier])
 
   // Draft strings per-service for the "Numero KM" + "Prezzo per KM" inputs.
   // Held SEPARATELY from form.experience_km_quotes (which is numeric) so the
@@ -1083,6 +1089,18 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       setForm(prev => ({ ...prev, include_cauzione_veicoli: false }))
     }
   }, [cauzioneVeicoloAvailable, form.include_cauzione_veicoli])
+  // Servizi experience disattivati in Centralina Pro: rimuovi la selezione così
+  // non entrano nel prezzo (restano visibili grigi nel catalogo).
+  useEffect(() => {
+    const inactiveIds = availableExperienceServices.filter(s => s.is_active === false).map(s => s.id)
+    if (inactiveIds.length === 0) return
+    setForm(prev => {
+      let changed = false
+      const es = { ...prev.experience_services }
+      for (const id of inactiveIds) { if (es[id]) { delete es[id]; changed = true } }
+      return changed ? { ...prev, experience_services: es } : prev
+    })
+  }, [availableExperienceServices])
 
   // Revenue pricing
   const [revenueData, setRevenueData] = useState<{
@@ -5725,11 +5743,15 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                 )
               }
 
+              // 2026-07-18: servizio DISATTIVATO in Centralina Pro → grigio +
+              // non aggiungibile (non nascosto). Dinamico da rentalConfig.
+              const svcDisabled = svc.is_active === false
               return (
                 <div
                   key={svc.id}
                   className={`flex items-center justify-between gap-3 p-2 rounded-lg border transition-colors ${
-                    qty > 0 ? 'border-dr7-gold/50 bg-dr7-gold/5' : 'border-theme-border/50 hover:bg-theme-bg-tertiary/30'
+                    svcDisabled ? 'opacity-50 cursor-not-allowed border-theme-border/50'
+                      : qty > 0 ? 'border-dr7-gold/50 bg-dr7-gold/5' : 'border-theme-border/50 hover:bg-theme-bg-tertiary/30'
                   }`}
                 >
                   <div className="flex-1 min-w-0">
@@ -5737,8 +5759,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
                     <span className="text-xs text-theme-text-muted ml-2">
                       {formatEur(svc.price)}{UNIT_LABELS[svc.unit] || ''}
                     </span>
+                    {svcDisabled && (
+                      <span className="text-xs text-theme-text-muted ml-2">(Disattivato in Centralina Pro)</span>
+                    )}
                   </div>
-                  {qty <= 0 ? (
+                  {svcDisabled ? (
+                    <button disabled className="px-3 py-1 text-xs rounded bg-theme-bg-tertiary text-theme-text-muted cursor-not-allowed opacity-60">Disattivato</button>
+                  ) : qty <= 0 ? (
                     /* Stato a riposo: SEMPRE "Aggiungi" (design unico) */
                     <button
                       onClick={() => setForm(prev => ({ ...prev, experience_services: { ...prev.experience_services, [svc.id]: 1 } }))}
