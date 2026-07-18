@@ -1046,6 +1046,44 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     return Number.isFinite(v) && v >= 0 ? v : 0
   }, [selectedDepositOption])
 
+  // ── Disponibilità extra da Centralina Pro (2026-07-18) ────────────────────
+  // Se un'opzione è DISATTIVATA in Centralina Pro per la fascia/residenza
+  // corrente, l'extra corrispondente va mostrato GRIGIO e non selezionabile
+  // nel preventivo (non nascosto). depositOptionsForPreventivo è già filtrato
+  // per categoria × fascia × residenza + is_active, quindi basta cercare
+  // l'opzione: se manca, l'extra è disattivato per QUESTA fascia.
+  const noCauzioneAvailable = useMemo(() => {
+    const isNoDepositOpt = (o: { id?: string; label?: string }) => {
+      if (o.id === 'no_deposit') return true
+      const label = String(o.label || '').toLowerCase().trim()
+      return /nessuna\s+cauzione|no\s+cauzione|^no_deposit$/i.test(label)
+    }
+    return depositOptionsForPreventivo.some(isNoDepositOpt)
+  }, [depositOptionsForPreventivo])
+
+  const cauzioneVeicoloAvailable = useMemo(() => {
+    const isVehicleDepositOpt = (o: { id?: string; label?: string }) => {
+      if (o.id === 'vehicle_deposit') return true
+      const label = String(o.label || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim()
+      return /cauzione (con )?(veicolo|auto|macchina)|deposito (con )?(veicolo|auto)|vehicle deposit/.test(label)
+    }
+    return depositOptionsForPreventivo.some(isVehicleDepositOpt)
+  }, [depositOptionsForPreventivo])
+
+  // Se un extra viene disattivato in Centralina Pro (o cambia fascia/residenza
+  // e non è più disponibile), togli la spunta così NON viene incluso nel
+  // prezzo del preventivo. La UI lo mostra comunque grigio/disabilitato.
+  useEffect(() => {
+    if (!noCauzioneAvailable && form.include_no_cauzione) {
+      setForm(prev => ({ ...prev, include_no_cauzione: false }))
+    }
+  }, [noCauzioneAvailable, form.include_no_cauzione])
+  useEffect(() => {
+    if (!cauzioneVeicoloAvailable && form.include_cauzione_veicoli) {
+      setForm(prev => ({ ...prev, include_cauzione_veicoli: false }))
+    }
+  }, [cauzioneVeicoloAvailable, form.include_cauzione_veicoli])
+
   // Revenue pricing
   const [revenueData, setRevenueData] = useState<{
     finalDailyRateEur: number
@@ -5480,19 +5518,25 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             <input type="checkbox" checked={form.include_lavaggio} onChange={(e) => setForm(prev => ({ ...prev, include_lavaggio: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
             <span className="text-sm text-theme-text-primary">Lavaggio ({formatEur(proLavaggioFee)})</span>
           </label>
-          <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
-            <input type="checkbox" checked={form.include_no_cauzione} onChange={(e) => handleNoCauzioneToggle(e.target.checked)} className="w-4 h-4 accent-dr7-gold" />
+          <label className={`flex items-center gap-3 p-2 rounded-lg border border-theme-border/50 ${noCauzioneAvailable ? 'cursor-pointer hover:bg-theme-bg-tertiary/30' : 'opacity-50 cursor-not-allowed'}`}>
+            <input type="checkbox" disabled={!noCauzioneAvailable} checked={form.include_no_cauzione && noCauzioneAvailable} onChange={(e) => handleNoCauzioneToggle(e.target.checked)} className="w-4 h-4 accent-dr7-gold disabled:cursor-not-allowed" />
             <span className="text-sm text-theme-text-primary">
               No Cauzione ({formatEur(noCauzioneResolvedDaily)}/giorno)
-              {isFasciaB && !isValerio && (
+              {!noCauzioneAvailable && (
+                <span className="ml-2 text-xs text-theme-text-muted">(Disattivato in Centralina Pro per questa fascia)</span>
+              )}
+              {noCauzioneAvailable && isFasciaB && !isValerio && (
                 <span className="ml-2 text-xs text-amber-400">(Fascia B → richiede autorizzazione)</span>
               )}
             </span>
           </label>
-          <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
-            <input type="checkbox" checked={form.include_cauzione_veicoli} onChange={(e) => setForm(prev => ({ ...prev, include_cauzione_veicoli: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
+          <label className={`flex items-center gap-3 p-2 rounded-lg border border-theme-border/50 ${cauzioneVeicoloAvailable ? 'cursor-pointer hover:bg-theme-bg-tertiary/30' : 'opacity-50 cursor-not-allowed'}`}>
+            <input type="checkbox" disabled={!cauzioneVeicoloAvailable} checked={form.include_cauzione_veicoli && cauzioneVeicoloAvailable} onChange={(e) => setForm(prev => ({ ...prev, include_cauzione_veicoli: e.target.checked }))} className="w-4 h-4 accent-dr7-gold disabled:cursor-not-allowed" />
             <span className="text-sm text-theme-text-primary">
               Cauzione Veicolo di proprietà ({formatEur(cauzioneVeicoliResolvedDaily)}/giorno)
+              {!cauzioneVeicoloAvailable && (
+                <span className="ml-2 text-xs text-theme-text-muted">(Disattivato in Centralina Pro per questa fascia)</span>
+              )}
             </span>
           </label>
           <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
