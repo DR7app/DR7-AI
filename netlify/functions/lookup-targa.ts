@@ -80,15 +80,16 @@ export const handler: Handler = async (event) => {
     }
 
     // ── 2. Cache miss → openapi.com ───────────────────────────────────────────
-    // 2026-07-18: token PRIMA dal config condiviso (centralina_pro_config.config
-    // .openapi_automotive_token), poi da env. Aggiornabile con UNA sola SQL,
-    // vale per admin e sito. Il config VINCE sull'env stale.
+    // 2026-07-18: token PRIMA dalla tabella service_secrets (leggibile SOLO con
+    // service_role, RLS blocca anon -> NON esposto al browser), poi da env.
+    // Aggiornabile con UNA sola SQL, vale per admin e sito. Il secret VINCE
+    // sull'env stale (causa 502 "Wrong Token").
     let openapiToken = OPENAPI_TOKEN
     try {
-      const { data: cfgRow } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
-      const cfgTok = (cfgRow?.config as { openapi_automotive_token?: string } | null)?.openapi_automotive_token
+      const { data: secRow } = await supabase.from('service_secrets').select('value').eq('key', 'openapi_automotive_token').maybeSingle()
+      const cfgTok = (secRow as { value?: string } | null)?.value
       if (cfgTok && typeof cfgTok === 'string' && cfgTok.trim()) openapiToken = cfgTok.trim()
-    } catch (e: any) { console.warn('[lookup-targa] config token lookup failed, uso env:', e?.message) }
+    } catch (e: any) { console.warn('[lookup-targa] secret token lookup failed, uso env:', e?.message) }
     if (!openapiToken) {
       console.error('[lookup-targa] token OpenAPI non configurato (ne config ne env)')
       return { statusCode: 500, headers, body: JSON.stringify({ error: 'Servizio temporaneamente non disponibile.' }) }
