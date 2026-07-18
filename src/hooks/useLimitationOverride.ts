@@ -9,16 +9,9 @@ import { supabase } from '../supabaseClient'
 // prescindere dal codice. Stesso elenco usato da OperatoriTab/PreventiviTab
 // per altri gate sensibili. 2026-05-15: aggiunta ophe@dr7.app per i lavori
 // di sviluppo/manutenzione (configurazione siti, debug, modifiche di test).
-const OTP_BYPASS_EMAILS = new Set([
-  'valerio@dr7.app',
-  'ilenia@dr7.app',
-  'salvatore@dr7.app',
-  'ophe@dr7.app',
-])
-
 // 2026-07-18: SOLO l'amministrazione (Valerio + Ilenia) bypassa l'OTP a
-// prescindere. Salvatore e ophe NON sono amministrazione -> ricevono l'OTP come
-// gli operatori (gestito dai toggle). "L'OTP non e' per l'amministrazione".
+// prescindere dal codice. Salvatore e ophe NON sono amministrazione -> ricevono
+// l'OTP come gli operatori (gestito dai toggle). "L'OTP non e' per l'amministrazione".
 const OTP_AMMINISTRAZIONE_BYPASS = new Set([
   'valerio@dr7.app',
   'ilenia@dr7.app',
