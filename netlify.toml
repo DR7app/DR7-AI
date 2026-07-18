@@ -100,6 +100,14 @@
 [functions."process-wallet-auto-recharges-cron"]
   schedule = "0 * * * *"
 
+# Allerta Meteo automatica (2026-07-18) — ogni ora controlla il meteo reale di
+# Cagliari (Open-Meteo) e invia l'Allerta Meteo se attivo il toggle "Cron ON"
+# del template. TERRA=pioggia, MARE=pioggia o vento forte. Una volta per episodio,
+# solo 08–21. Toggle per canale da Messaggi di Sistema Pro (pro_allerta_meteo /
+# pro_allerta_meteo_mare).
+[functions."weather-alert-cron"]
+  schedule = "0 * * * *"
+
 # Nexi preauth auto-refresh — riattivato 2026-05-13.
 # Cron giornaliero che rinnova le pre-autorizzazioni a lungo termine
 # (durata > 7 giorni) ogni 6 giorni. Strategia void-first:
