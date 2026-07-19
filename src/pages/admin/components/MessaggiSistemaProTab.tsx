@@ -167,148 +167,119 @@ const DAY_LABELS_IT = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab']
 // (rental / car_wash / mechanical / prime_wash), i gruppi incompatibili
 // vengono nascosti e i loro eventi rimossi automaticamente dai handled_events
 // (vedi logica in handleUpdateAutomation gate per service-type change).
+// 2026-07-19: gruppi RIORGANIZZATI secondo la struttura del gestionale DR7
+// (Noleggio Terra, Contratti, Pagamenti, Cauzioni, Preventivi, Documenti,
+// Lavaggio & Meccanica, Marketing, DR7 Club...). Le CHIAVI evento restano
+// INVARIATE (il backend fa fire su quelle): cambia solo raggruppamento/ordine/
+// etichette. Il tag `service` resta SOLO sui gruppi mono-servizio (Noleggio /
+// Lavaggio) per non alterare il filtro per target_service_type.
 const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; service?: 'rental' | 'car_wash' | 'mechanical' }> = [
+  // ── NOLEGGIO TERRA ──────────────────────────────────────────────────────
   {
-    label: 'Noleggio',
+    label: 'Noleggio Terra — Prenotazioni',
     color: 'blue',
     service: 'rental',
     keys: ['rental_new_customer', 'rental_new', 'rental_new_admin', 'rental_modified', 'rental_auto_pronta', 'rental_da_saldare_customer', 'tour_new_customer'],
   },
+  // ── CONTRATTI & FIRMA ───────────────────────────────────────────────────
   {
-    // Prime Wash = lavaggi + meccanica (stesso umbrella nel sistema:
-    // non c'e' una sezione "Meccanica" separata in admin). Tutti gli
-    // eventi delle due famiglie raggruppati qui sotto un'unica voce.
-    label: 'Prime Wash',
-    color: 'cyan',
-    service: 'car_wash',
-    keys: [
-      // Lavaggio
-      'carwash_new_customer', 'carwash_new', 'carwash_new_admin', 'carwash_modified',
-      'carwash_confirmed_da_saldare',
-      'carwash_paid_cash', 'carwash_paid_card', 'carwash_paid_bank_transfer',
-      'carwash_paid_paypal', 'carwash_paid_wallet',
-      // Meccanica (stessa famiglia Prime Wash)
-      'mechanical_new_customer', 'mechanical_new', 'mechanical_new_admin', 'mechanical_modified',
-      'mechanical_confirmed_da_saldare',
-      'mechanical_paid_cash', 'mechanical_paid_card', 'mechanical_paid_bank_transfer',
-      'mechanical_paid_paypal', 'mechanical_paid_wallet',
-      // Auto pronta / lavaggio concluso (bottone "Auto Pronta" su CarWashBookingsTab)
-      'service_ready_customer',
-    ],
-  },
-  {
-    label: 'Firma & Contratto',
+    label: 'Contratti & Firma',
     color: 'violet',
     keys: ['signature_request_link', 'document_signature_link', 'signature_reminder_whatsapp', 'signature_otp_whatsapp'],
   },
+  // ── PAGAMENTI (Amministrazione > Attesa di pagamento) ───────────────────
   {
-    label: 'Pagamento',
+    label: 'Pagamenti',
     color: 'emerald',
     keys: [
       'payment_link_customer',
+      'booking_confirmed_da_saldare',
+      'booking_paid_cash', 'booking_paid_card', 'booking_paid_bank_transfer', 'booking_paid_paypal', 'booking_paid_wallet',
       'payment_received_extension', 'payment_received_extension_admin',
       'payment_received_damages', 'payment_received_damages_admin',
-      'booking_confirmed_da_saldare',
-      // Per-payment-method receipt events (fired in addition to conferma when
-      // admin saves a paid booking + Conferma Prenotazione).
-      'booking_paid_cash', 'booking_paid_card', 'booking_paid_bank_transfer',
-      'booking_paid_paypal', 'booking_paid_wallet',
+      'on_payment_failed', 'on_payment_link_expired', 'on_partial_payment_received',
     ],
   },
+  // ── CAUZIONI (Amministrazione > Cauzioni) ───────────────────────────────
   {
-    label: 'Cauzione & Annullamento',
+    label: 'Cauzioni',
     color: 'amber',
     keys: [
-      'deposit_return_iban',
       'deposit_request_customer',       // admin invia link cauzione manuale
-      // 2026-05-22: eventi per Cauzione Veicolo (auto come garanzia)
+      'deposit_return_iban',            // richiesta IBAN per rimborso cauzione
       'cauzione_veicolo_created',
       'cauzione_veicolo_returned',
       'cauzione_garante_notification',
-      'booking_cancelled_whatsapp',
-      'website_booking_cancelled_customer',
     ],
   },
+  // ── ANNULLAMENTO ────────────────────────────────────────────────────────
   {
-    label: 'Admin Alerts',
+    label: 'Annullamento Prenotazione',
     color: 'rose',
-    keys: ['admin_new_website_quote', 'admin_no_cauzione_request'],
+    keys: ['booking_cancelled_whatsapp', 'website_booking_cancelled_customer'],
   },
+  // ── ESTENSIONI & EXTRA ──────────────────────────────────────────────────
   {
-    label: 'No Cauzione & Preventivi',
-    color: 'orange',
-    keys: [
-      'no_cauzione_approved',
-      'no_cauzione_rejected',
-      'quote_discount_offered',
-    ],
+    label: 'Estensioni & Extra',
+    color: 'violet',
+    keys: ['on_extension_requested', 'on_extra_added'],
   },
+  // ── PREVENTIVI & NO CAUZIONE ────────────────────────────────────────────
+  {
+    label: 'Preventivi & No Cauzione',
+    color: 'orange',
+    keys: ['admin_new_website_quote', 'admin_no_cauzione_request', 'no_cauzione_approved', 'no_cauzione_rejected', 'quote_discount_offered'],
+  },
+  // ── VERIFICA DOCUMENTI ──────────────────────────────────────────────────
   {
     label: 'Documenti Cliente',
     color: 'teal',
-    keys: [
-      // 2026-05-22: caricamento + verifica patente/CI
-      'on_doc_uploaded',
-      'on_doc_verified',
-      'on_doc_rejected',
-    ],
+    keys: ['on_doc_uploaded', 'on_doc_verified', 'on_doc_rejected'],
   },
+  // ── RITARDI & NO-SHOW ───────────────────────────────────────────────────
   {
-    label: 'Pickup / Dropoff Timing',
+    label: 'Ritardi & No-show',
     color: 'amber',
+    keys: ['on_late_pickup', 'on_late_return', 'on_no_show'],
+  },
+  // ── LAVAGGIO & MECCANICA (Prime Wash) ───────────────────────────────────
+  {
+    label: 'Lavaggio & Meccanica',
+    color: 'cyan',
+    service: 'car_wash',
     keys: [
-      // 2026-05-22: alert ritardo / no-show
-      'on_late_pickup',
-      'on_late_return',
-      'on_no_show',
+      'carwash_new_customer', 'carwash_new', 'carwash_new_admin', 'carwash_modified',
+      'carwash_confirmed_da_saldare',
+      'carwash_paid_cash', 'carwash_paid_card', 'carwash_paid_bank_transfer', 'carwash_paid_paypal', 'carwash_paid_wallet',
+      'mechanical_new_customer', 'mechanical_new', 'mechanical_new_admin', 'mechanical_modified',
+      'mechanical_confirmed_da_saldare',
+      'mechanical_paid_cash', 'mechanical_paid_card', 'mechanical_paid_bank_transfer', 'mechanical_paid_paypal', 'mechanical_paid_wallet',
+      'service_ready_customer',
     ],
   },
+  // ── MARKETING > RECENSIONI ──────────────────────────────────────────────
   {
-    label: 'Pagamento (extra)',
-    color: 'emerald',
-    keys: [
-      // 2026-05-22: stati pagamento non standard
-      'on_payment_failed',
-      'on_payment_link_expired',
-      'on_partial_payment_received',
-    ],
-  },
-  {
-    label: 'Estensioni & Extras',
-    color: 'violet',
-    keys: [
-      'on_extra_added',
-      'on_extension_requested',
-    ],
-  },
-  {
-    label: 'DR7 Club / Fidelity Lifecycle',
+    label: 'Marketing — Recensioni',
     color: 'pink',
-    keys: [
-      // 2026-05-22: lifecycle membership DR7 Club
-      'on_first_booking',
-      'on_club_subscription',
-      'on_club_tier_promotion',
-      'on_club_renewal_due',
-      'on_wallet_recharge',
-      'on_wallet_low_balance',
-      'before_birthday',
-    ],
+    keys: ['review_request_whatsapp', 'on_review_received', 'review_discount_code'],
   },
+  // ── MARKETING > COMPLEANNI ──────────────────────────────────────────────
   {
-    label: 'Marketing / Wallet / Fidelity',
+    label: 'Marketing — Compleanni',
     color: 'pink',
-    keys: [
-      'review_request_whatsapp',
-      'on_review_received',
-      'review_discount_code',
-      'birthday_message',
-      'wallet_bonus_credit',
-      'fidelity_voucher_whatsapp',
-      'promo_incassi_whatsapp',
-      'maxi_promo_gap_whatsapp',
-      'on_promo_gap',
-    ],
+    keys: ['birthday_message', 'before_birthday'],
+  },
+  // ── DR7 CLUB & WALLET ───────────────────────────────────────────────────
+  {
+    label: 'DR7 Club & Wallet',
+    color: 'pink',
+    keys: ['on_first_booking', 'on_club_subscription', 'on_club_tier_promotion', 'on_club_renewal_due', 'on_wallet_recharge', 'on_wallet_low_balance', 'wallet_bonus_credit', 'fidelity_voucher_whatsapp'],
+  },
+  // ── MARKETING > PROMO ───────────────────────────────────────────────────
+  {
+    label: 'Marketing — Promo',
+    color: 'rose',
+    keys: ['promo_incassi_whatsapp', 'maxi_promo_gap_whatsapp', 'on_promo_gap'],
   },
 ]
 
