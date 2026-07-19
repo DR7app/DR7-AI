@@ -1475,6 +1475,9 @@ export default function MessaggiSistemaProTab() {
     const [editBody, setEditBody] = useState('')
     const [editLabel, setEditLabel] = useState('')
     const [saving, setSaving] = useState(false)
+    // 2026-07-19: ricerca evento/trigger nella sezione "Eventi gestiti" (per
+    // trovare velocemente su quale azione attivare il messaggio).
+    const [eventSearch, setEventSearch] = useState('')
     const [searchQuery, setSearchQuery] = useState('')
 
     // New template form
@@ -3674,6 +3677,23 @@ export default function MessaggiSistemaProTab() {
                                                             </button>
                                                         )}
                                                     </div>
+                                                    {/* 2026-07-19: barra di ricerca trigger — filtra gli eventi
+                                                        per nome/chiave così è facile trovare l'azione giusta. */}
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            value={eventSearch}
+                                                            onChange={(e) => setEventSearch(e.target.value)}
+                                                            placeholder="Cerca un trigger / azione (es. iban, cauzione, pagamento, contratto)..."
+                                                            className="w-full pl-8 pr-8 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs placeholder:text-theme-text-muted"
+                                                        />
+                                                        <svg className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+                                                        </svg>
+                                                        {eventSearch && (
+                                                            <button type="button" onClick={() => setEventSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary text-sm">×</button>
+                                                        )}
+                                                    </div>
                                                     <div className="space-y-2.5">
                                                         {eventGroupsForServiceType(template.target_service_type).map(group => {
                                                             const colorMap: Record<string, { dot: string; pillOn: string; pillTxt: string }> = {
@@ -3688,7 +3708,13 @@ export default function MessaggiSistemaProTab() {
                                                                 orange:  { dot: 'bg-orange-400',  pillOn: 'bg-orange-500/25 border-orange-400/70',   pillTxt: 'text-orange-100' },
                                                             }
                                                             const colors = colorMap[group.color] || colorMap.blue
-                                                            const knownKeys = group.keys.filter(k => EVENT_LABELS_IT[k as keyof typeof EVENT_LABELS_IT])
+                                                            const q = eventSearch.trim().toLowerCase()
+                                                            const knownKeys = group.keys.filter(k => {
+                                                                if (!EVENT_LABELS_IT[k as keyof typeof EVENT_LABELS_IT]) return false
+                                                                if (!q) return true
+                                                                const label = String(EVENT_LABELS_IT[k as keyof typeof EVENT_LABELS_IT] || '').toLowerCase()
+                                                                return label.includes(q) || k.toLowerCase().includes(q)
+                                                            })
                                                             if (knownKeys.length === 0) return null
                                                             const assignedInGroup = knownKeys.filter(k => (template.handled_events || []).includes(k)).length
                                                             return (
