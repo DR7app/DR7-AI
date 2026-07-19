@@ -1276,28 +1276,31 @@ export default function ReviewManagementTab() {
                       </svg>
                     </button>
                   )}
-                  {/* 2026-07-18: al posto del singolo "Già recensito" due bottoni
-                      espliciti — Blocca (verde) marca il cliente come già recensito
-                      (non riceve la richiesta), Sblocca (rosso) lo rimette idoneo. */}
-                  <button
-                    onClick={() => handleMarcaGiaRecensito(candidate.id)}
-                    disabled={sendingId === candidate.id}
-                    title="Blocca: il cliente ha già recensito — non inviare la richiesta"
-                    className="inline-flex items-center gap-1.5 px-3 h-8 rounded-full bg-green-600 text-white text-xs font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M12 21a9 9 0 100-18 9 9 0 000 18z" />
-                    </svg>
-                    Blocca
-                  </button>
-                  <button
-                    onClick={() => handleSblocca(candidate.id)}
-                    disabled={sendingId === candidate.id}
-                    title="Sblocca: rimetti il cliente idoneo a ricevere la richiesta"
-                    className="inline-flex items-center px-3 h-8 rounded-full bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
-                  >
-                    Sblocca
-                  </button>
+                  {/* 2026-07-18: UN SOLO bottone che riflette lo stato — se già
+                      bloccato (send_status='SENT') mostra Sblocca (rosso),
+                      altrimenti Blocca (verde). */}
+                  {candidate.send_status === 'SENT' ? (
+                    <button
+                      onClick={() => handleSblocca(candidate.id)}
+                      disabled={sendingId === candidate.id}
+                      title="Sblocca: rimetti il cliente idoneo a ricevere la richiesta"
+                      className="inline-flex items-center px-3 h-8 rounded-full bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+                    >
+                      Sblocca
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleMarcaGiaRecensito(candidate.id)}
+                      disabled={sendingId === candidate.id}
+                      title="Blocca: il cliente ha già recensito — non inviare la richiesta"
+                      className="inline-flex items-center gap-1.5 px-3 h-8 rounded-full bg-green-600 text-white text-xs font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M12 21a9 9 0 100-18 9 9 0 000 18z" />
+                      </svg>
+                      Blocca
+                    </button>
+                  )}
                 </>
               )}
               {isToReview && (
