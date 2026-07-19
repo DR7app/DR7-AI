@@ -273,20 +273,56 @@ async function pumpChunkLoop(deadline: number) {
         auth: { autoRefreshToken: false, persistSession: false },
     })
     while (Date.now() < deadline) {
-        const { data: live } = await sb
+        // 2026-07-18: drip/frequenza. Prendi più candidate e scegli la prima che
+        // NON ha già raggiunto il tetto per la finestra (drip_batch_size ogni
+        // drip_interval_minutes). Le campagne senza drip inviano senza limiti.
+        // RESILIENTE: se le colonne drip non esistono ancora (migration non
+        // eseguita), fallback al comportamento classico senza limiti.
+        type DripCand = { id: string; drip_batch_size: number | null; drip_interval_minutes: number | null }
+        let candidates: DripCand[] = []
+        const dripSel = await sb
             .from('marketing_campaigns')
-            .select('id')
+            .select('id, drip_batch_size, drip_interval_minutes')
             .in('status', ['pending', 'sending'])
             .order('created_at', { ascending: true })
-            .limit(1)
-        const next = (live as { id: string }[] | null)?.[0]
-        if (!next) return
+            .limit(25)
+        if (dripSel.error) {
+            const plain = await sb
+                .from('marketing_campaigns')
+                .select('id')
+                .in('status', ['pending', 'sending'])
+                .order('created_at', { ascending: true })
+                .limit(25)
+            candidates = ((plain.data as { id: string }[] | null) || []).map(c => ({ id: c.id, drip_batch_size: null, drip_interval_minutes: null }))
+        } else {
+            candidates = (dripSel.data as DripCand[] | null) || []
+        }
+        if (candidates.length === 0) return
+
+        let chosenId: string | null = null
+        for (const c of candidates) {
+            const batch = Number(c.drip_batch_size) || 0
+            const intervalMin = Number(c.drip_interval_minutes) || 0
+            if (batch > 0 && intervalMin > 0) {
+                const sinceIso = new Date(Date.now() - intervalMin * 60_000).toISOString()
+                const { count } = await sb
+                    .from('marketing_campaign_recipients')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('campaign_id', c.id)
+                    .eq('status', 'sent')
+                    .gte('sent_at', sinceIso)
+                if ((count || 0) >= batch) continue // tetto raggiunto per questa finestra: salta
+            }
+            chosenId = c.id
+            break
+        }
+        if (!chosenId) return // tutte le campagne drip sono in pausa: niente da inviare ora
 
         try {
             const res = await fetch(`${SITE_URL}/.netlify/functions/send-whatsapp-campaign-chunk`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ campaignId: next.id }),
+                body: JSON.stringify({ campaignId: chosenId }),
             })
             const result = await res.json().catch(() => ({} as { done?: boolean }))
             if (!res.ok) {

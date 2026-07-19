@@ -127,6 +127,16 @@ const RECURRENCE_LABELS: Record<RecurrenceType, string> = {
 
 const PER_PAGE = 50
 
+// 2026-07-18: preset frequenza "drip" (N destinatari ogni intervallo).
+const DRIP_PRESETS: { label: string; batch: number; interval: number }[] = [
+    { label: '50 ogni ora', batch: 50, interval: 60 },
+    { label: '100 ogni ora', batch: 100, interval: 60 },
+    { label: '250 ogni ora', batch: 250, interval: 60 },
+    { label: '500 ogni ora', batch: 500, interval: 60 },
+    { label: '50 ogni 30 minuti', batch: 50, interval: 30 },
+    { label: '100 ogni 2 ore', batch: 100, interval: 120 },
+]
+
 export default function CampagnaMarketingTab() {
     const [customers, setCustomers] = useState<Customer[]>([])
     const [loadingCustomers, setLoadingCustomers] = useState(true)
@@ -170,6 +180,10 @@ export default function CampagnaMarketingTab() {
     const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('none')
     const [recurrenceInterval, setRecurrenceInterval] = useState(1)
     const [recurrenceEndDate, setRecurrenceEndDate] = useState('')
+    // 2026-07-18: frequenza invio — Manuale (invia ora / a N) o Automatica (drip
+    // a scaglioni: N destinatari ogni intervallo, gestito dal cron).
+    const [sendMode, setSendMode] = useState<'manual' | 'auto'>('manual')
+    const [dripIdx, setDripIdx] = useState(0)
 
     const [scheduledCampaigns, setScheduledCampaigns] = useState<CampaignRow[]>([])
 
@@ -443,17 +457,22 @@ export default function CampagnaMarketingTab() {
             return
         }
 
-        // Immediate-send branch (existing behaviour).
+        // Immediate / auto-drip branch.
         // capLimit (bottoni "Invia a N"): pool = selezione manuale se presente,
-        // altrimenti TUTTI gli eligible; poi taglia ai primi N. Senza capLimit
-        // resta il comportamento classico (richiede selezione manuale).
-        if (!capLimit && selectedIds.size === 0) return toast.error('Seleziona almeno un cliente')
+        // altrimenti TUTTI gli eligible; poi taglia ai primi N.
+        // sendMode 'auto' = drip: coda TUTTI i destinatari (snapshot) e lascia
+        // che il cron li invii a scaglioni (drip_batch_size ogni intervallo).
+        const drip = (sendMode === 'auto' && !capLimit) ? DRIP_PRESETS[dripIdx] : null
+        if (!drip && !capLimit && selectedIds.size === 0) return toast.error('Seleziona almeno un cliente')
 
         const pool = selectedIds.size > 0 ? customers.filter(c => selectedIds.has(c.id)) : eligible
         const recipients = (capLimit && capLimit > 0) ? pool.slice(0, capLimit) : pool
         if (recipients.length === 0) return toast.error('Nessun destinatario valido')
 
-        if (!confirm(`Inviare la campagna a ${recipients.length} clienti? L'invio parte subito.`)) return
+        const confirmMsg = drip
+            ? `Avviare l'invio AUTOMATICO a ${recipients.length} clienti, ${drip.batch} ogni ${drip.interval >= 60 ? `${drip.interval / 60} ${drip.interval === 60 ? 'ora' : 'ore'}` : `${drip.interval} minuti`}? Il sistema invierà a scaglioni finché non li ha contattati tutti.`
+            : `Inviare la campagna a ${recipients.length} clienti? L'invio parte subito.`
+        if (!confirm(confirmMsg)) return
 
         setSending(true)
         try {
@@ -480,9 +499,11 @@ export default function CampagnaMarketingTab() {
                     image_urls: imageUrls.length > 0 ? imageUrls : null,
                     video_url,
                     channel: 'whatsapp',
-                    audience: selectedIds.size === eligible.length ? 'all' : 'selected',
+                    audience: drip ? 'drip' : (selectedIds.size === eligible.length ? 'all' : 'selected'),
                     total_recipients: recipients.length,
                     status: 'pending',
+                    // Drip: il cron rispetta il tetto per finestra. Colonne opzionali.
+                    ...(drip ? { drip_batch_size: drip.batch, drip_interval_minutes: drip.interval } : {}),
                 })
                 .select()
                 .single()
@@ -501,11 +522,17 @@ export default function CampagnaMarketingTab() {
                 .insert(recipientRows)
             if (recErr) throw recErr
 
-            // Browser-driven chunked send: keeps calling the chunk endpoint
-            // until 'done: true'. Stays under Netlify's 10s function timeout
-            // and works on the free tier (no background functions needed).
-            await runChunkedSend(campaign.id, recipients.length)
-            toast.success('Campagna inviata.')
+            if (drip) {
+                // Drip: NON inviare dal browser. Il cron rilascia gli scaglioni
+                // (drip_batch_size ogni drip_interval_minutes) finché finisce.
+                toast.success(`Invio automatico avviato: ${drip.batch} ogni ${drip.interval >= 60 ? `${drip.interval / 60} ${drip.interval === 60 ? 'ora' : 'ore'}` : `${drip.interval} min`}. Il sistema invierà a scaglioni.`)
+            } else {
+                // Browser-driven chunked send: keeps calling the chunk endpoint
+                // until 'done: true'. Stays under Netlify's 10s function timeout
+                // and works on the free tier (no background functions needed).
+                await runChunkedSend(campaign.id, recipients.length)
+                toast.success('Campagna inviata.')
+            }
 
             setTitle('')
             setMessage('')
@@ -964,23 +991,46 @@ export default function CampagnaMarketingTab() {
                     </div>
 
                     <div className="pt-2 border-t border-theme-border space-y-3">
+                        {/* 2026-07-18: Frequenza invio — Manuale o Automatica (drip). */}
+                        {!scheduleEnabled && (
+                            <div className="flex flex-wrap items-center gap-3">
+                                <span className="text-xs font-semibold text-theme-text-secondary">Frequenza:</span>
+                                <div className="inline-flex rounded-full border border-theme-border overflow-hidden">
+                                    <button type="button" onClick={() => setSendMode('manual')}
+                                        className={`px-3 py-1.5 text-xs font-semibold transition-colors ${sendMode === 'manual' ? 'bg-dr7-gold text-white' : 'bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-hover'}`}>
+                                        Manuale
+                                    </button>
+                                    <button type="button" onClick={() => setSendMode('auto')}
+                                        className={`px-3 py-1.5 text-xs font-semibold transition-colors ${sendMode === 'auto' ? 'bg-dr7-gold text-white' : 'bg-theme-bg-secondary text-theme-text-secondary hover:bg-theme-bg-hover'}`}>
+                                        Automatica
+                                    </button>
+                                </div>
+                                {sendMode === 'auto' && (
+                                    <select value={dripIdx} onChange={(e) => setDripIdx(Number(e.target.value))}
+                                        className="px-3 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs">
+                                        {DRIP_PRESETS.map((p, i) => <option key={i} value={i}>{p.label}</option>)}
+                                    </select>
+                                )}
+                            </div>
+                        )}
+
                         <div className="flex items-center justify-between">
                             <div className="text-sm text-theme-text-muted">
                                 {scheduleEnabled
                                     ? <>Modalità: <span className="font-bold text-dr7-gold">Programmazione</span></>
-                                    : <>Selezionati: <span className="font-bold text-dr7-gold">{selectedIds.size}</span></>
+                                    : sendMode === 'auto'
+                                        ? <>Invio automatico a scaglioni</>
+                                        : <>Selezionati: <span className="font-bold text-dr7-gold">{selectedIds.size}</span></>
                                 }
                             </div>
                             <Button onClick={() => handleSend()}>
                                 {scheduleEnabled
                                     ? (recurrenceType === 'none' ? 'Programma invio' : 'Salva ricorrenza')
-                                    : 'Invia ora'}
+                                    : sendMode === 'auto' ? 'Avvia invio automatico' : 'Invia ora'}
                             </Button>
                         </div>
-                        {/* 2026-07-18: invio rapido a un numero di destinatari. Usa la
-                            selezione manuale se presente, altrimenti tutti gli idonei;
-                            invia SOLO ai primi N. */}
-                        {!scheduleEnabled && (
+                        {/* Invio rapido a un numero di destinatari (solo modalità Manuale). */}
+                        {!scheduleEnabled && sendMode === 'manual' && (
                             <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-xs text-theme-text-muted">
                                     Invio rapido{selectedIds.size > 0 ? ` (su ${selectedIds.size} selezionati)` : ` (idonei: ${eligible.length})`}:
