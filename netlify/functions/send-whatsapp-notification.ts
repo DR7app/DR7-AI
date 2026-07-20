@@ -1,6 +1,7 @@
 import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 import { getMessageTemplate, resolveKeyForContext } from './utils/messageTemplates';
+import { langFromPhone, translateText } from './utils/i18n';
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID;
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN;
@@ -869,6 +870,19 @@ const handler: Handler = async (event) => {
     } catch {
       wrappedMessage = finalMessage;
     }
+  }
+
+  // 2026-07-20: LINGUA AUTOMATICA — traduci il messaggio nella lingua del
+  // prefisso del destinatario (IT resta IT). Fail-safe: se la traduzione
+  // fallisce, si invia comunque il testo originale in italiano.
+  try {
+    const targetLang = langFromPhone(targetPhone, 'en');
+    if (targetLang && targetLang !== 'it' && wrappedMessage && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+      const sbTx = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
+      wrappedMessage = await translateText(sbTx, wrappedMessage, targetLang, 'it');
+    }
+  } catch (e) {
+    console.warn('[send-whatsapp] auto-translate skipped:', e);
   }
 
   try {
