@@ -96,24 +96,26 @@ const handler: Handler = async (event) => {
                     realOperationId = authOp.operationId
                     console.log('[nexi-capture-preauth] Found by orderId, operationId:', realOperationId)
                 } else {
-                    // 2) FALLBACK 2026-07-20: l'orderId DR7 puo' NON coincidere con
-                    //    l'orderId reale su Nexi (pre-auth via link/portale). Cerca la
-                    //    pre-autorizzazione AUTORIZZATA con lo STESSO IMPORTO. Se unica
-                    //    la catturiamo; se piu' d'una prendiamo la piu' vicina alla data
-                    //    di riferimento (o la piu' recente).
+                    // 2) FALLBACK SICURO 2026-07-20: l'orderId DR7 puo' NON coincidere
+                    //    con quello reale su Nexi (pre-auth via link/portale). Cerchiamo
+                    //    la pre-auth AUTORIZZATA con lo STESSO IMPORTO **e nello STESSO
+                    //    GIORNO** della transazione. Auto-cattura SOLO se e' UNICA: mai
+                    //    indovinare (rischio di catturare i €X di un ALTRO cliente).
                     const amountOps = allOps.filter((op: any) => isAuthorized(op) && Number(op.operationAmount) === amountCents)
-                    if (amountOps.length === 1) {
-                        realOperationId = amountOps[0].operationId
-                        console.log('[nexi-capture-preauth] Fallback by AMOUNT (unica), operationId:', realOperationId)
-                    } else if (amountOps.length > 1) {
-                        const refMs = refDate ? new Date(refDate).getTime() : Date.now()
-                        amountOps.sort((a: any, b: any) => Math.abs(new Date(a.operationTime || 0).getTime() - refMs) - Math.abs(new Date(b.operationTime || 0).getTime() - refMs))
-                        realOperationId = amountOps[0].operationId
-                        console.log('[nexi-capture-preauth] Fallback by AMOUNT (piu\' vicina a', refDate, '), operationId:', realOperationId)
+                    const refMs = refDate ? new Date(refDate).getTime() : NaN
+                    const sameDay = Number.isFinite(refMs)
+                        ? amountOps.filter((op: any) => Math.abs(new Date(op.operationTime || 0).getTime() - refMs) <= 24 * 60 * 60 * 1000)
+                        : amountOps
+                    if (sameDay.length === 1) {
+                        realOperationId = sameDay[0].operationId
+                        console.log('[nexi-capture-preauth] Fallback SICURO (importo + stesso giorno, unica), operationId:', realOperationId)
+                    } else if (sameDay.length > 1) {
+                        // Ambiguo: NON catturare. Elenca i candidati e chiedi di scegliere.
+                        scannedForError = sameDay.slice(0, 20).map((op: any) => ({ orderId: op.orderId, amount: op.operationAmount, time: op.operationTime, result: op.operationResult }))
+                        return { statusCode: 409, headers, body: JSON.stringify({ error: `Trovate ${sameDay.length} pre-autorizzazioni da €${(amountCents / 100).toFixed(2)} nello stesso giorno: per sicurezza NON catturo automaticamente (rischio cliente sbagliato). Candidati: ${JSON.stringify(scannedForError)}` }) }
                     } else {
-                        // Diagnostica: elenca le AUTHORIZATION viste (orderId/importo/tempo).
-                        scannedForError = allOps.filter(isAuthorized).slice(0, 20).map((op: any) => ({ orderId: op.orderId, amount: op.operationAmount, time: op.operationTime, result: op.operationResult }))
-                        console.warn('[nexi-capture-preauth] Nessuna operazione per orderId', orderId, 'ne per importo', amountCents)
+                        scannedForError = amountOps.slice(0, 20).map((op: any) => ({ orderId: op.orderId, amount: op.operationAmount, time: op.operationTime, result: op.operationResult }))
+                        console.warn('[nexi-capture-preauth] Nessuna operazione per orderId', orderId, 'ne per importo/giorno', amountCents)
                     }
                 }
             } else {
