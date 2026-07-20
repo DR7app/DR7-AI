@@ -21,17 +21,76 @@ interface MaintenanceAlert {
     urgent: boolean
 }
 
+// 2026-07-20: storico interventi manutenzione (task 8). Ogni intervento resta
+// salvato e consultabile come cronologia/calendario degli interventi effettuati.
+interface MaintenanceLog {
+    id: string
+    vehicle_id: string
+    intervento_date: string
+    tipo: string
+    km: number | null
+    descrizione: string | null
+    costo: number | null
+    created_at: string
+}
+const MAINT_TIPI = ['Tagliando', 'Cambio gomme', 'Cambio pastiglie/freni', 'Cambio olio', 'Revisione', 'Riparazione', 'Carrozzeria', 'Altro']
+
 export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDetailProps) {
     const [vehicle, setVehicle] = useState<Vehicle | null>(null)
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [activeTab, setActiveTab] = useState<SubTab>('panoramica')
     const [editedVehicle, setEditedVehicle] = useState<Partial<Vehicle>>({})
+    // Storico interventi manutenzione (task 8).
+    const [logs, setLogs] = useState<MaintenanceLog[]>([])
+    const [logForm, setLogForm] = useState({ intervento_date: '', tipo: 'Tagliando', km: '', descrizione: '', costo: '' })
+    const [logSaving, setLogSaving] = useState(false)
 
     useEffect(() => {
         loadVehicle()
+        loadLogs()
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [vehicleId])
+
+    async function loadLogs() {
+        const { data } = await supabase
+            .from('vehicle_maintenance_log')
+            .select('*')
+            .eq('vehicle_id', vehicleId)
+            .order('intervento_date', { ascending: false })
+            .order('created_at', { ascending: false })
+        setLogs((data || []) as MaintenanceLog[])
+    }
+
+    async function handleAddIntervento() {
+        if (!logForm.tipo) { toast.error('Seleziona il tipo di intervento'); return }
+        setLogSaving(true)
+        try {
+            const { error } = await supabase.from('vehicle_maintenance_log').insert({
+                vehicle_id: vehicleId,
+                intervento_date: logForm.intervento_date || new Date().toISOString().slice(0, 10),
+                tipo: logForm.tipo,
+                km: logForm.km ? parseInt(logForm.km, 10) : null,
+                descrizione: logForm.descrizione.trim() || null,
+                costo: logForm.costo ? parseFloat(logForm.costo) : null,
+            })
+            if (error) throw error
+            toast.success('Intervento registrato nello storico')
+            setLogForm({ intervento_date: '', tipo: 'Tagliando', km: '', descrizione: '', costo: '' })
+            await loadLogs()
+        } catch (e) {
+            toast.error('Errore: ' + (e instanceof Error ? e.message : String(e)))
+        } finally {
+            setLogSaving(false)
+        }
+    }
+
+    async function handleDeleteIntervento(id: string) {
+        if (!confirm('Eliminare questo intervento dallo storico?')) return
+        const { error } = await supabase.from('vehicle_maintenance_log').delete().eq('id', id)
+        if (error) { toast.error('Errore: ' + error.message); return }
+        await loadLogs()
+    }
 
     // Le QuickAction nella Panoramica (Modifica / Manutenzione / Storico)
     // chiedono di switchare sub-tab via CustomEvent invece di prop-drilling.
@@ -862,10 +921,81 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                 )}
 
                 {activeTab === 'history' && (
-                    <div>
-                        <h3 className="text-xl text-theme-text-primary mb-4">Storico Interventi</h3>
-                        <p className="text-theme-text-muted">Cronologia completa degli interventi di manutenzione...</p>
-                        <p className="text-theme-text-muted text-sm mt-2">(Da implementare: lista eventi da tabella vehicle_events)</p>
+                    <div className="space-y-6">
+                        <h3 className="text-xl text-theme-text-primary">Storico Interventi</h3>
+
+                        {/* Registra un nuovo intervento — resta salvato nello storico. */}
+                        <div className="bg-theme-bg-tertiary rounded-lg p-4 border border-theme-border">
+                            <h4 className="text-sm font-semibold text-theme-text-primary mb-3">Registra intervento</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                <div>
+                                    <label className="block text-xs text-theme-text-secondary mb-1">Data</label>
+                                    <input type="date" value={logForm.intervento_date} onChange={(e) => setLogForm({ ...logForm, intervento_date: e.target.value })} className="w-full bg-theme-bg-secondary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-theme-text-secondary mb-1">Tipo</label>
+                                    <select value={logForm.tipo} onChange={(e) => setLogForm({ ...logForm, tipo: e.target.value })} className="w-full bg-theme-bg-secondary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border">
+                                        {MAINT_TIPI.map(t => <option key={t} value={t}>{t}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-theme-text-secondary mb-1">KM</label>
+                                    <input type="number" value={logForm.km} onChange={(e) => setLogForm({ ...logForm, km: e.target.value })} placeholder="es. 45000" className="w-full bg-theme-bg-secondary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-theme-text-secondary mb-1">Costo (€)</label>
+                                    <input type="number" step="0.01" value={logForm.costo} onChange={(e) => setLogForm({ ...logForm, costo: e.target.value })} placeholder="opzionale" className="w-full bg-theme-bg-secondary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border" />
+                                </div>
+                                <div className="md:col-span-4">
+                                    <label className="block text-xs text-theme-text-secondary mb-1">Descrizione / lavori effettuati</label>
+                                    <input type="text" value={logForm.descrizione} onChange={(e) => setLogForm({ ...logForm, descrizione: e.target.value })} placeholder="es. sostituzione filtri + olio, controllo freni" className="w-full bg-theme-bg-secondary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border" />
+                                </div>
+                            </div>
+                            <div className="mt-3 flex justify-end">
+                                <Button onClick={handleAddIntervento} disabled={logSaving}>{logSaving ? 'Salvataggio...' : 'Registra intervento'}</Button>
+                            </div>
+                        </div>
+
+                        {/* Cronologia (calendario) degli interventi effettuati, per mese. */}
+                        {logs.length === 0 ? (
+                            <p className="text-theme-text-muted text-center py-8">Nessun intervento registrato. Aggiungi il primo qui sopra.</p>
+                        ) : (
+                            <div className="space-y-5">
+                                {(() => {
+                                    const groups = new Map<string, MaintenanceLog[]>()
+                                    for (const l of logs) {
+                                        const d = new Date(l.intervento_date)
+                                        const key = d.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+                                        if (!groups.has(key)) groups.set(key, [])
+                                        groups.get(key)!.push(l)
+                                    }
+                                    return Array.from(groups.entries()).map(([month, items]) => (
+                                        <div key={month}>
+                                            <div className="text-xs font-bold uppercase tracking-wider text-theme-text-muted mb-2 capitalize">{month}</div>
+                                            <div className="space-y-2">
+                                                {items.map(l => (
+                                                    <div key={l.id} className="flex items-start gap-3 bg-theme-bg-tertiary rounded-lg p-3 border border-theme-border">
+                                                        <div className="shrink-0 w-14 text-center">
+                                                            <div className="text-lg font-bold text-theme-text-primary leading-none">{new Date(l.intervento_date).getDate()}</div>
+                                                            <div className="text-[10px] uppercase text-theme-text-muted">{new Date(l.intervento_date).toLocaleDateString('it-IT', { weekday: 'short' })}</div>
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-dr7-gold/20 text-dr7-gold">{l.tipo}</span>
+                                                                {l.km != null && <span className="text-xs text-theme-text-muted tabular-nums">{l.km.toLocaleString('it-IT')} km</span>}
+                                                                {l.costo != null && <span className="text-xs font-semibold text-theme-text-primary">€{Number(l.costo).toFixed(2)}</span>}
+                                                            </div>
+                                                            {l.descrizione && <div className="text-sm text-theme-text-secondary mt-1">{l.descrizione}</div>}
+                                                        </div>
+                                                        <button onClick={() => handleDeleteIntervento(l.id)} title="Elimina" className="shrink-0 text-theme-text-muted hover:text-red-500 text-sm">✕</button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))
+                                })()}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
