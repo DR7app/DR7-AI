@@ -323,11 +323,12 @@ export default function AdminDashboard() {
       { tab: 'marketing-pro', label: 'Messaggi di Sistema Pro' },
       { tab: 'campagna-marketing', label: 'Campagna Marketing' },
       { tab: 'social-links', label: 'Social Links' },
-      { tab: 'referral', label: 'Referral' },
       { tab: 'codice-sconto', label: 'Codice Sconto' },
     ] },
     { name: 'Report', tabs: [
       { tab: 'report-noleggio', label: 'Noleggio' },
+      // 2026-07-20: Referral spostato da Marketing a Report (consultazione).
+      { tab: 'referral', label: 'Referral' },
       { tab: 'report-lavaggio', label: 'Lavaggio' },
       { tab: 'report-clienti', label: 'Clienti' },
       { tab: 'report-autisti', label: 'Autisti' },
