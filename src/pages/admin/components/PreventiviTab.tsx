@@ -896,6 +896,14 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     return getUnlimitedKmPriceForVehicle(selectedVehicle, form.driver_tier, rentalConfig, configOverlay)
   }, [proKm, proCategoryKey, form.driver_tier, selectedVehicle, rentalConfig, configOverlay])
 
+  // 2026-07-20: Km Illimitati DISPONIBILE solo se acceso in Centralina Pro per
+  // la categoria (unlimitedKm_enabled !== false). Se spento -> checkbox grigia e
+  // NON selezionabile (come No Cauzione), non "disponibile a 0€".
+  const unlimitedKmAvailable = useMemo(() => {
+    const entry = (proKm || []).find(k => k.id === proCategoryKey)
+    return (entry as { unlimitedKm_enabled?: boolean } | undefined)?.unlimitedKm_enabled !== false
+  }, [proKm, proCategoryKey])
+
   const noCauzioneResolvedDaily = useMemo(() => {
     const fallback = configOverlay.noCauzionePerDay || 0
     if (!proDeposits) return fallback
@@ -1103,6 +1111,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       setForm(prev => ({ ...prev, include_cauzione_veicoli: false }))
     }
   }, [cauzioneVeicoloAvailable, form.include_cauzione_veicoli])
+  // Km Illimitati spenti in Centralina Pro: togli la spunta (no prezzo fantasma).
+  useEffect(() => {
+    if (!unlimitedKmAvailable && form.include_unlimited_km) {
+      setForm(prev => ({ ...prev, include_unlimited_km: false }))
+    }
+  }, [unlimitedKmAvailable, form.include_unlimited_km])
   // Servizi experience disattivati in Centralina Pro: rimuovi la selezione così
   // non entrano nel prezzo (restano visibili grigi nel catalogo).
   useEffect(() => {
@@ -5579,10 +5593,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
               )}
             </span>
           </label>
-          <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg border border-theme-border/50 hover:bg-theme-bg-tertiary/30">
-            <input type="checkbox" checked={form.include_unlimited_km} onChange={(e) => setForm(prev => ({ ...prev, include_unlimited_km: e.target.checked, ...(e.target.checked ? { km_package_id: '' } : {}) }))} className="w-4 h-4 accent-dr7-gold" />
+          <label className={`flex items-center gap-3 p-2 rounded-lg border border-theme-border/50 ${unlimitedKmAvailable ? 'cursor-pointer hover:bg-theme-bg-tertiary/30' : 'opacity-50 cursor-not-allowed'}`}>
+            <input type="checkbox" disabled={!unlimitedKmAvailable} checked={form.include_unlimited_km && unlimitedKmAvailable} onChange={(e) => setForm(prev => ({ ...prev, include_unlimited_km: e.target.checked, ...(e.target.checked ? { km_package_id: '' } : {}) }))} className="w-4 h-4 accent-dr7-gold disabled:cursor-not-allowed" />
             <span className="text-sm text-theme-text-primary">
               Km Illimitati ({formatEur(proUnlimitedKmDaily)}/giorno)
+              {!unlimitedKmAvailable && (
+                <span className="ml-2 text-xs text-theme-text-muted">(Disattivato in Centralina Pro)</span>
+              )}
             </span>
           </label>
           {/* === PACCHETTI KM (2026-05-16) === per la categoria del veicolo
