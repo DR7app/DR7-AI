@@ -1046,6 +1046,15 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     return filterActive(((fasciaCfg?.[residencyKey] as PrevDepositOption[]) || []).slice())
   }, [proDeposits, selectedVehicle, form.driver_tier, form.residente_sardegna])
 
+  // 2026-07-20: la TENDINA cauzione mostra SOLO importi cauzione reali. "Nessuna
+  // cauzione" e "Cauzione con veicolo" NON vanno qui (comparivano a €0 e
+  // duplicavano i loro quadratini dedicati sotto): restano come checkbox.
+  const depositDropdownOptions = useMemo<PrevDepositOption[]>(() => {
+    const isNoDep = (o: PrevDepositOption) => o.id === 'no_deposit' || /nessuna\s+cauzione|no\s+cauzione|^no_deposit$/i.test(String(o.label || '').toLowerCase().trim())
+    const isVehDep = (o: PrevDepositOption) => o.id === 'vehicle_deposit' || /cauzione (con )?(veicolo|auto|macchina)|deposito (con )?(veicolo|auto)|vehicle deposit/.test(String(o.label || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim())
+    return depositOptionsForPreventivo.filter(o => !isNoDep(o) && !isVehDep(o))
+  }, [depositOptionsForPreventivo])
+
   const selectedDepositOption = useMemo<PrevDepositOption | null>(() => {
     if (!form.deposit_option_id) return null
     return depositOptionsForPreventivo.find(o => o.id === form.deposit_option_id) || null
@@ -5518,11 +5527,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         <select
           value={form.deposit_option_id}
           onChange={(e) => setForm(prev => ({ ...prev, deposit_option_id: e.target.value }))}
-          disabled={!form.vehicle_id || depositOptionsForPreventivo.length === 0}
+          disabled={!form.vehicle_id || depositDropdownOptions.length === 0}
           className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm disabled:opacity-50"
         >
           <option value="">— Seleziona cauzione —</option>
-          {depositOptionsForPreventivo.map((o) => (
+          {depositDropdownOptions.map((o) => (
             <option key={o.id} value={o.id}>
               {o.label} — {formatEur(Number(o.amount) || 0)}
             </option>
@@ -5531,7 +5540,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         {!form.vehicle_id && (
           <p className="text-xs text-theme-text-muted">Seleziona prima un veicolo per vedere le cauzioni disponibili.</p>
         )}
-        {form.vehicle_id && depositOptionsForPreventivo.length === 0 && (
+        {form.vehicle_id && depositDropdownOptions.length === 0 && (
           <p className="text-xs text-amber-400">Nessuna cauzione configurata in Centralina Pro per questa categoria / fascia / residenza.</p>
         )}
         {selectedDepositOption && (
