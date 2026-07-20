@@ -549,7 +549,12 @@ export default function UnpaidBookingsTab() {
     }
   }
 
-  async function updatePaymentStatus(bookingId: string, newStatus: string, paymentMethod?: string) {
+  // remainingEurBeingPaid: quanto è REALMENTE ancora da pagare per questa voce
+  // (dal residuo mostrato in UI). Serve a evitare fatture integrative fantasma
+  // quando si ri-segna "pagato" una voce GIÀ saldata (residuo ~0): la ricostruzione
+  // netto→lordo dell'importo già fatturato può sottostimare e generare un delta
+  // inesistente. Bug reale: Michele Concas, 0/800 → seconda fattura da €350.
+  async function updatePaymentStatus(bookingId: string, newStatus: string, paymentMethod?: string, remainingEurBeingPaid?: number) {
     try {
       // When marking paid, also set amount_paid = price_total so the calendar
       // detail panel (and any other consumer that computes remaining as
@@ -693,18 +698,28 @@ export default function UnpaidBookingsTab() {
           } else if (deltaCents > 0) {
             // Previously invoiced, but there's a new positive delta — emit a
             // delta invoice for just the new amount.
-            const deltaEur = deltaCents / 100
-            const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ bookingId, includeIVA: true, extensionAmount: deltaEur })
-            })
-            if (invoiceRes.ok) {
-              const invoiceData = await invoiceRes.json()
-              toast.success(`Fattura integrativa €${deltaEur.toFixed(2)} generata (${invoiceData.invoice?.numero_fattura || ''})`)
+            // GUARD (2026-07-20): se conosciamo il residuo REALE ancora da pagare
+            // (remainingEurBeingPaid), il delta NON può superarlo, e se è ~0 non
+            // si fattura nulla. Evita la fattura integrativa fantasma quando si
+            // ri-segna "pagato" una voce già saldata (bug Michele Concas 0/800→€350).
+            const remainingCents = typeof remainingEurBeingPaid === 'number' ? Math.round(remainingEurBeingPaid * 100) : undefined
+            if (typeof remainingCents === 'number' && remainingCents <= 50) {
+              logger.log('[Segna Pagato] Residuo reale ~0: nessuna fattura integrativa (voce già saldata).')
             } else {
-              const err = await invoiceRes.json().catch(() => ({} as any))
-              toast.error(`Fattura integrativa non generata: ${err.error || `HTTP ${invoiceRes.status}`}`, { duration: 8000 })
+              const cappedDeltaCents = typeof remainingCents === 'number' ? Math.min(deltaCents, remainingCents) : deltaCents
+              const deltaEur = cappedDeltaCents / 100
+              const invoiceRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bookingId, includeIVA: true, extensionAmount: deltaEur })
+              })
+              if (invoiceRes.ok) {
+                const invoiceData = await invoiceRes.json()
+                toast.success(`Fattura integrativa €${deltaEur.toFixed(2)} generata (${invoiceData.invoice?.numero_fattura || ''})`)
+              } else {
+                const err = await invoiceRes.json().catch(() => ({} as any))
+                toast.error(`Fattura integrativa non generata: ${err.error || `HTTP ${invoiceRes.status}`}`, { duration: 8000 })
+              }
             }
           } else {
             // Fattura exists and covers the full booking total — nothing new
@@ -2813,7 +2828,7 @@ export default function UnpaidBookingsTab() {
                   <button
                     onClick={() => askPaymentMethod(
                       `Pagato — €${(remainingCents / 100).toFixed(2)} · ${booking.customer_name || 'Cliente'}`,
-                      (method) => updatePaymentStatus(booking.id, 'paid', method)
+                      (method) => updatePaymentStatus(booking.id, 'paid', method, remainingCents / 100)
                     )}
                     className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
                   >Pagato</button>
@@ -3618,7 +3633,7 @@ export default function UnpaidBookingsTab() {
                       <button
                         onClick={() => askPaymentMethod(
                           `Segna Pagato — €${(group.totalRemaining / 100).toFixed(2)} per ${group.customerName}`,
-                          (method) => updatePaymentStatus(group.noleggioBookings[0].id, 'paid', method)
+                          (method) => updatePaymentStatus(group.noleggioBookings[0].id, 'paid', method, group.totalRemaining / 100)
                         )}
                         className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors"
                       >Segna Pagato</button>
@@ -3864,9 +3879,9 @@ export default function UnpaidBookingsTab() {
                         if (itemCount >= 2) {
                           askPaymentMethod(`Salda Tutto — €${remainingEur.toFixed(2)} per ${group.customerName}`, (method) => markAllCustomerPaid(group, method))
                         } else if (group.noleggioBookings[0]) {
-                          askPaymentMethod(`Segna Pagato — €${remainingEur.toFixed(2)} per ${group.customerName}`, (method) => updatePaymentStatus(group.noleggioBookings[0].id, 'paid', method))
+                          askPaymentMethod(`Segna Pagato — €${remainingEur.toFixed(2)} per ${group.customerName}`, (method) => updatePaymentStatus(group.noleggioBookings[0].id, 'paid', method, remainingEur))
                         } else if (group.primeWashBookings[0]) {
-                          askPaymentMethod(`Segna Pagato — €${remainingEur.toFixed(2)} per ${group.customerName}`, (method) => updatePaymentStatus(group.primeWashBookings[0].id, 'paid', method))
+                          askPaymentMethod(`Segna Pagato — €${remainingEur.toFixed(2)} per ${group.customerName}`, (method) => updatePaymentStatus(group.primeWashBookings[0].id, 'paid', method, remainingEur))
                         }
                       }}
                       title={itemCount >= 2 ? 'Crea una fattura unica con TUTTE le voci di questo cliente' : 'Segna come pagato'}
@@ -3902,7 +3917,7 @@ export default function UnpaidBookingsTab() {
                           <button
                             onClick={() => {
                               setOpenActionsRowKey(null)
-                              askPaymentMethod(`Segna Pagato — €${remainingEur.toFixed(2)} per ${group.customerName}`, (method) => updatePaymentStatus(group.noleggioBookings[0].id, 'paid', method))
+                              askPaymentMethod(`Segna Pagato — €${remainingEur.toFixed(2)} per ${group.customerName}`, (method) => updatePaymentStatus(group.noleggioBookings[0].id, 'paid', method, remainingEur))
                             }}
                             className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-emerald-400"
                           >Segna Pagato</button>
