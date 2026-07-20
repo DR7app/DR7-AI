@@ -97,6 +97,14 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
     wired: true,
   },
   {
+    id: 'cross_vehicle_gap',
+    label: 'Conflitto handover tra veicoli',
+    used_in: 'Salva prenotazione con ritiro/riconsegna entro il gap di un altra auto',
+    reason: 'Due handover troppo vicini su auto diverse: lo staff non puo gestirli insieme. Alert WhatsApp allo staff anche se si bypassa.',
+    group: 'Noleggio',
+    wired: true,
+  },
+  {
     id: 'vehicle_year_too_old',
     label: 'Veicolo pre-2020 per cauzione',
     used_in: 'Selezione veicolo con anno < 2020 in modalita cauzione',

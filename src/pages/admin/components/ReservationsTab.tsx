@@ -63,7 +63,8 @@ import {
   getAvailableVehicles,
   isVehicleAvailable,
   getRentalBufferMinutes,
-  getPrePickupCarwashBufferMinutes
+  getPrePickupCarwashBufferMinutes,
+  getCrossVehicleGapMinutes
 } from '../../../utils/vehicleAvailability'
 import Input from './Input'
 import Select from './Select'
@@ -4694,6 +4695,63 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           code: 'driver_blocked',
           motivazione: `Cliente non idoneo al noleggio: ${customerTier.reason || 'fascia bloccata'}`,
         })
+      }
+
+      // (f) 2026-07-20: CONFLITTO HANDOVER CROSS-VEICOLO. Se il ritiro/riconsegna
+      //     di questa prenotazione cade entro il "gap tra veicoli diversi"
+      //     (Centralina Pro > cross_vehicle_gap_minutes) da un ritiro/riconsegna
+      //     di UN'ALTRA auto, lo staff non puo' gestire i due handover insieme.
+      //     Richiesta utente: OTP (bypassabile) MA con ALERT WhatsApp allo staff
+      //     SEMPRE, anche se l'OTP viene bypassato.
+      {
+        const gapMin = getCrossVehicleGapMinutes()
+        const toDt = (d?: string | null, t?: string | null) => (d && t) ? new Date(`${d}T${t}`).getTime() : NaN
+        const newPickup = toDt(formData.pickup_date, formData.pickup_time)
+        const newReturn = toDt(formData.return_date, formData.return_time)
+        const myVehId = String(formData.vehicle_id || '')
+        let conflict: { otherLabel: string; myEvent: string; otherEvent: string } | null = null
+        if (gapMin > 0 && myVehId) {
+          for (const b of bookings) {
+            if (!b || b.status === 'cancelled' || b.id === editingId) continue
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if (String((b as any).vehicle_id || '') === myVehId) continue // stesso veicolo: altro buffer
+            const bPickup = b.pickup_date ? new Date(b.pickup_date).getTime() : NaN
+            const bReturn = b.dropoff_date ? new Date(b.dropoff_date).getTime() : NaN
+            const myEvents: Array<[string, number]> = [['ritiro', newPickup], ['riconsegna', newReturn]]
+            const obEvents: Array<[string, number]> = [['ritiro', bPickup], ['riconsegna', bReturn]]
+            for (const [myName, myT] of myEvents) {
+              if (!Number.isFinite(myT)) continue
+              for (const [obName, obT] of obEvents) {
+                if (!Number.isFinite(obT)) continue
+                if (Math.abs(myT - obT) < gapMin * 60000) {
+                  conflict = {
+                    otherLabel: `${b.vehicle_name || b.vehicle_plate || 'altra auto'}${b.customer_name ? ` (${b.customer_name})` : ''}`,
+                    myEvent: myName,
+                    otherEvent: obName,
+                  }
+                  break
+                }
+              }
+              if (conflict) break
+            }
+            if (conflict) break
+          }
+        }
+        if (conflict) {
+          const alertMsg = `⚠️ *Conflitto handover veicoli*\nLa ${conflict.myEvent} di questa prenotazione cade entro ${gapMin} min dalla ${conflict.otherEvent} di *${conflict.otherLabel}*.\nLo staff non puo' gestire due handover alla stessa ora — verificare gli orari.`
+          // ALERT WhatsApp allo staff SEMPRE (anche se l'OTP viene bypassato).
+          fetch('/.netlify/functions/send-whatsapp-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notifyAdmin: true, customMessage: alertMsg, skipHeader: true }),
+          }).catch(() => { /* non-blocking */ })
+          if (!hasOverride('cross_vehicle_gap')) {
+            trips.push({
+              code: 'cross_vehicle_gap',
+              motivazione: `Handover a meno di ${gapMin} min da un'altra auto: ${conflict.myEvent} vs ${conflict.otherEvent} di ${conflict.otherLabel}`,
+            })
+          }
+        }
       }
 
       // Filtro Gestione OTP: rimuoviamo dalla lista trips i codici che la
