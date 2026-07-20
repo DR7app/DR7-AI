@@ -1480,7 +1480,12 @@ export default function NexiTab() {
                                                 l'operationId reale dall'orderId su Nexi, quindi la cattura
                                                 funziona lo stesso; se non c'e' un'AUTHORIZATION valida fallisce
                                                 senza addebitare. Cosi' si incassa DALL'ADMIN senza portale Nexi. */}
-                                            {(tx.status === 'preauth_held' || tx.status === 'pending_preauth' || tx.status === 'preauth_pending_refresh_confirm' || tx.status === 'preauth_refresh_failed') ? (
+                                            {/* 2026-07-20: incluso 'preauth_captured' — se DR7 aveva
+                                                marcato Catturato ma su Nexi e' ancora Preautorizzata (status
+                                                sballato), il bottone Cattura deve tornare. Ri-eseguire e'
+                                                sicuro: la cattura controlla Nexi e addebita solo se c'e' una
+                                                pre-auth AUTORIZZATA (niente doppio addebito). */}
+                                            {(tx.status === 'preauth_held' || tx.status === 'pending_preauth' || tx.status === 'preauth_captured' || tx.status === 'preauth_pending_refresh_confirm' || tx.status === 'preauth_refresh_failed') ? (
                                                 <div className="flex flex-col sm:flex-row gap-1.5">
                                                     <button
                                                         onClick={() => handleCapturePreauth(tx)}
