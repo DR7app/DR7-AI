@@ -2484,11 +2484,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         const fmtDateLong = apptDt.toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' })
         const fmtTime = apptDt.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' })
         const totalEur = totalPrice.toFixed(2)
+        // 2026-07-20: mai mostrare il valore grezzo inglese ("unpaid") nel
+        // messaggio al cliente. Mappa SEMPRE in italiano.
         const paymentInfoLabel = paymentStatus === 'paid' || paymentStatus === 'succeeded' || paymentStatus === 'completed'
           ? 'Pagato'
-          : paymentStatus === 'pending'
+          : (paymentStatus === 'pending' || paymentStatus === 'unpaid' || paymentStatus === 'partial' || paymentStatus === 'nexi_pay_by_link')
             ? 'Da saldare'
-            : (paymentStatus || '—')
+            : '—'
 
         // service_type del booking corrente (può essere car_wash o mechanical).
         // Serve al resolver per scegliere il template Prime Wash custom giusto.
