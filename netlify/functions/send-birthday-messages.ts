@@ -54,13 +54,29 @@ const birthdayHandler: Handler = async (event) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Calculate the date 10 days from now
+    // 2026-07-20 FIX: NIENTE hardcode. L'admin sceglie QUANTI giorni prima
+    // inviare tramite l'offset del template compleanno in Messaggi di Sistema
+    // Pro (trigger_offset_hours). 0 = il giorno stesso del compleanno.
+    // Prima era hardcoded a +10 giorni -> arrivava sempre 10 giorni prima.
+    let offsetDays = 0;
+    try {
+      const { data: tplRows } = await supabase
+        .from('system_messages')
+        .select('trigger_offset_hours, handled_events, message_key, is_enabled')
+        .or('message_key.eq.pro_marketing_compleanno,handled_events.cs.{birthday_message},handled_events.cs.{before_birthday}');
+      const tpl = (tplRows || []).find((r: { is_enabled?: boolean }) => r.is_enabled !== false) || (tplRows || [])[0];
+      const h = Number(tpl?.trigger_offset_hours);
+      if (Number.isFinite(h) && h > 0) offsetDays = Math.round(h / 24);
+    } catch (e) {
+      console.warn('[Birthday Auto] lookup offset fallito, uso 0 (giorno stesso):', e);
+    }
+
     const targetDate = new Date(today);
-    targetDate.setDate(targetDate.getDate() + 10);
+    if (offsetDays > 0) targetDate.setDate(targetDate.getDate() + offsetDays);
     const targetMonth = targetDate.getMonth() + 1; // JavaScript months are 0-indexed
     const targetDay = targetDate.getDate();
 
-    console.log(`[Birthday Auto] Looking for birthdays on ${targetDay}/${targetMonth} (10 days from now)`);
+    console.log(`[Birthday Auto] offsetDays=${offsetDays} — cerco compleanni del ${targetDay}/${targetMonth}`);
 
     // Get all customers with birthdays
     const { data: customers, error: customersError } = await supabase
@@ -88,7 +104,7 @@ const birthdayHandler: Handler = async (event) => {
 
     const sentCustomerIds = new Set((sentMessages || []).map(m => m.customer_id));
 
-    // Filter customers whose birthday is exactly 10 days away
+    // Filter customers whose birthday matches the target date (offset dinamico).
     const customersToMessage: typeof customers = [];
 
     for (const customer of customers || []) {
@@ -106,7 +122,7 @@ const birthdayHandler: Handler = async (event) => {
       }
     }
 
-    console.log(`[Birthday Auto] Found ${customersToMessage.length} customers with birthday in 10 days`);
+    console.log(`[Birthday Auto] ${customersToMessage.length} clienti con compleanno target (offset ${offsetDays}gg)`);
 
     let sent = 0;
     let errors = 0;
