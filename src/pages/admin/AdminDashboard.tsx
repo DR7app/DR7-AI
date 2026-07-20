@@ -322,7 +322,6 @@ export default function AdminDashboard() {
       { tab: 'reviews', label: 'Recensioni' },
       { tab: 'marketing-pro', label: 'Messaggi di Sistema Pro' },
       { tab: 'campagna-marketing', label: 'Campagna Marketing' },
-      { tab: 'social-links', label: 'Social Links' },
       { tab: 'codice-sconto', label: 'Codice Sconto' },
     ] },
     { name: 'Report', tabs: [

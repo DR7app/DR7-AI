@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
+import SocialLinksTab from './SocialLinksTab'
 import { getProKeyEventTriggers, EVENT_DESCRIPTIONS, suggestEventsForTemplate } from '../../../utils/proTemplateRouting'
 const EVENT_LABELS_IT = EVENT_DESCRIPTIONS
 import toast from 'react-hot-toast'
@@ -1449,6 +1450,8 @@ export default function MessaggiSistemaProTab() {
     // 2026-07-19: ricerca evento/trigger nella sezione "Eventi gestiti" (per
     // trovare velocemente su quale azione attivare il messaggio).
     const [eventSearch, setEventSearch] = useState('')
+    // 2026-07-20: sub-tab Messaggi | Social Links (Social spostato da Marketing).
+    const [proSubTab, setProSubTab] = useState<'messaggi' | 'social'>('messaggi')
     const [searchQuery, setSearchQuery] = useState('')
 
     // New template form
@@ -2587,6 +2590,13 @@ export default function MessaggiSistemaProTab() {
 
     return (
         <div className="space-y-8">
+            {/* 2026-07-20: sub-tab Messaggi | Social Links (Social spostato da Marketing). */}
+            <div className="flex gap-1 border-b border-theme-border">
+                <button type="button" onClick={() => setProSubTab('messaggi')} className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${proSubTab === 'messaggi' ? 'border-dr7-gold text-dr7-gold' : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'}`}>Messaggi</button>
+                <button type="button" onClick={() => setProSubTab('social')} className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${proSubTab === 'social' ? 'border-dr7-gold text-dr7-gold' : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'}`}>Social Links</button>
+            </div>
+            {proSubTab === 'social' && <SocialLinksTab />}
+            {proSubTab === 'messaggi' && (<>
             {/* ═══════════ SECTION A: Template Manager (Pro) ═══════════ */}
             <div className="space-y-4">
                 <div className="flex justify-between items-center">
@@ -4350,6 +4360,7 @@ export default function MessaggiSistemaProTab() {
                     </div>
                 )}
             </div>
+            </>)}
         </div>
     )
 }
