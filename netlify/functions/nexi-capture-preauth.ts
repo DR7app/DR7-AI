@@ -31,7 +31,7 @@ const handler: Handler = async (event) => {
     if (authErr) return authErr
 
     try {
-        const { cauzioneId, operationId: inputOperationId, amount, orderId, transactionId } = JSON.parse(event.body || '{}');
+        const { cauzioneId, operationId: inputOperationId, amount, orderId, transactionId, referenceDate: refDate } = JSON.parse(event.body || '{}');
 
         // Per le preauth auto-rinnovate, l'operationId attivo si trova in
         // nexi_transactions.metadata.current_operation_id (il vecchio
@@ -72,6 +72,7 @@ const handler: Handler = async (event) => {
 
         // Step 1: Find the real operationId by looking up operations for this orderId
         let realOperationId = inputOperationId || metaOperationId
+        let scannedForError: Array<{ orderId: string; amount: string; time: string; result: string }> = []
         if (!realOperationId && orderId) {
             console.log('[nexi-capture-preauth] Looking up operations for orderId:', orderId);
             const fromTime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
@@ -84,14 +85,36 @@ const handler: Handler = async (event) => {
                 const opsData = await opsRes.json()
                 const allOps = opsData.operations || []
                 console.log('[nexi-capture-preauth] Scanned', allOps.length, 'operations')
-                // Filter by orderId client-side (Nexi API doesn't support orderId filter)
+                const isAuthorized = (op: any) => {
+                    const r = String(op.operationResult || '').toUpperCase()
+                    return r === 'AUTHORIZED' || r === 'PENDING' || r === ''
+                }
+                // 1) Match esatto per orderId.
                 const matchingOps = allOps.filter((op: any) => op.orderId === orderId)
-                const authOp = matchingOps.find((op: any) => op.operationResult === 'AUTHORIZED') || matchingOps[0]
+                const authOp = matchingOps.find(isAuthorized) || matchingOps[0]
                 if (authOp?.operationId) {
                     realOperationId = authOp.operationId
-                    console.log('[nexi-capture-preauth] Found real operationId:', realOperationId)
+                    console.log('[nexi-capture-preauth] Found by orderId, operationId:', realOperationId)
                 } else {
-                    console.warn('[nexi-capture-preauth] No matching operation found for orderId:', orderId)
+                    // 2) FALLBACK 2026-07-20: l'orderId DR7 puo' NON coincidere con
+                    //    l'orderId reale su Nexi (pre-auth via link/portale). Cerca la
+                    //    pre-autorizzazione AUTORIZZATA con lo STESSO IMPORTO. Se unica
+                    //    la catturiamo; se piu' d'una prendiamo la piu' vicina alla data
+                    //    di riferimento (o la piu' recente).
+                    const amountOps = allOps.filter((op: any) => isAuthorized(op) && Number(op.operationAmount) === amountCents)
+                    if (amountOps.length === 1) {
+                        realOperationId = amountOps[0].operationId
+                        console.log('[nexi-capture-preauth] Fallback by AMOUNT (unica), operationId:', realOperationId)
+                    } else if (amountOps.length > 1) {
+                        const refMs = refDate ? new Date(refDate).getTime() : Date.now()
+                        amountOps.sort((a: any, b: any) => Math.abs(new Date(a.operationTime || 0).getTime() - refMs) - Math.abs(new Date(b.operationTime || 0).getTime() - refMs))
+                        realOperationId = amountOps[0].operationId
+                        console.log('[nexi-capture-preauth] Fallback by AMOUNT (piu\' vicina a', refDate, '), operationId:', realOperationId)
+                    } else {
+                        // Diagnostica: elenca le AUTHORIZATION viste (orderId/importo/tempo).
+                        scannedForError = allOps.filter(isAuthorized).slice(0, 20).map((op: any) => ({ orderId: op.orderId, amount: op.operationAmount, time: op.operationTime, result: op.operationResult }))
+                        console.warn('[nexi-capture-preauth] Nessuna operazione per orderId', orderId, 'ne per importo', amountCents)
+                    }
                 }
             } else {
                 const errText = await opsRes.text()
@@ -100,7 +123,7 @@ const handler: Handler = async (event) => {
         }
 
         if (!realOperationId) {
-            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Could not find operationId' }) }
+            return { statusCode: 400, headers, body: JSON.stringify({ error: `Pre-autorizzazione non trovata su Nexi per ordine ${orderId} ne per importo €${(amountCents / 100).toFixed(2)}. Operazioni autorizzate viste: ${JSON.stringify(scannedForError)}` }) }
         }
 
         // Step 2: Capture with the real operationId

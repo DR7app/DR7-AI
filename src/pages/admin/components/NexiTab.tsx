@@ -271,6 +271,8 @@ export default function NexiTab() {
                     orderId: tx.order_id,
                     transactionId: tx.id,
                     amount: amt,
+                    // Aiuta il fallback per-importo a scegliere la pre-auth giusta.
+                    referenceDate: tx.created_at,
                 }),
             })
             const data = await res.json()
