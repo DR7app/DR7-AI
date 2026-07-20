@@ -85,13 +85,17 @@ const handler: Handler = async (event) => {
                 const opsData = await opsRes.json()
                 const allOps = opsData.operations || []
                 console.log('[nexi-capture-preauth] Scanned', allOps.length, 'operations')
-                const isAuthorized = (op: any) => {
-                    const r = String(op.operationResult || '').toUpperCase()
-                    return r === 'AUTHORIZED' || r === 'PENDING' || r === ''
-                }
-                // 1) Match esatto per orderId.
-                const matchingOps = allOps.filter((op: any) => op.orderId === orderId)
-                const authOp = matchingOps.find(isAuthorized) || matchingOps[0]
+                // SOLO 'AUTHORIZED' = pre-auth ancora HELD e catturabile. Escludiamo
+                // EXECUTED/VOIDED/ecc. (gia' eseguite/annullate) per non ritentare
+                // sull'operazione sbagliata (bug "already executed - aaccda6b").
+                const isAuthorized = (op: any) => String(op.operationResult || '').toUpperCase() === 'AUTHORIZED'
+                // 1) Match esatto per orderId — MA solo se l'IMPORTO coincide.
+                //    (Prima catturava QUALSIASI op con quell'orderId a prescindere
+                //    dall'importo → cattura falsa su operazione sbagliata mentre la
+                //    vera pre-auth restava Preautorizzata su Nexi.)
+                const matchingOps = allOps.filter((op: any) => op.orderId === orderId && (Number(op.operationAmount) === amountCents || !op.operationAmount))
+                const authOp = matchingOps.find((op: any) => isAuthorized(op) && Number(op.operationAmount) === amountCents)
+                    || matchingOps.find(isAuthorized)
                 if (authOp?.operationId) {
                     realOperationId = authOp.operationId
                     console.log('[nexi-capture-preauth] Found by orderId, operationId:', realOperationId)
@@ -114,8 +118,14 @@ const handler: Handler = async (event) => {
                         scannedForError = sameDay.slice(0, 20).map((op: any) => ({ orderId: op.orderId, amount: op.operationAmount, time: op.operationTime, result: op.operationResult }))
                         return { statusCode: 409, headers, body: JSON.stringify({ error: `Trovate ${sameDay.length} pre-autorizzazioni da €${(amountCents / 100).toFixed(2)} nello stesso giorno: per sicurezza NON catturo automaticamente (rischio cliente sbagliato). Candidati: ${JSON.stringify(scannedForError)}` }) }
                     } else {
-                        scannedForError = amountOps.slice(0, 20).map((op: any) => ({ orderId: op.orderId, amount: op.operationAmount, time: op.operationTime, result: op.operationResult }))
-                        console.warn('[nexi-capture-preauth] Nessuna operazione per orderId', orderId, 'ne per importo/giorno', amountCents)
+                        // Nessuna AUTHORIZED per questo importo. Diagnostica COMPLETA:
+                        // elenca TUTTE le operazioni di questo importo con il loro stato
+                        // (AUTHORIZED/EXECUTED/VOIDED...) per capire dov'e' finito il denaro.
+                        scannedForError = allOps
+                            .filter((op: any) => Number(op.operationAmount) === amountCents)
+                            .slice(0, 20)
+                            .map((op: any) => ({ orderId: op.orderId, amount: op.operationAmount, time: op.operationTime, result: op.operationResult, operationId: op.operationId }))
+                        console.warn('[nexi-capture-preauth] Nessuna AUTHORIZED da', amountCents, '— ops stesso importo:', JSON.stringify(scannedForError))
                     }
                 }
             } else {
@@ -125,7 +135,7 @@ const handler: Handler = async (event) => {
         }
 
         if (!realOperationId) {
-            return { statusCode: 400, headers, body: JSON.stringify({ error: `Pre-autorizzazione non trovata su Nexi per ordine ${orderId} ne per importo €${(amountCents / 100).toFixed(2)}. Operazioni autorizzate viste: ${JSON.stringify(scannedForError)}` }) }
+            return { statusCode: 400, headers, body: JSON.stringify({ error: `Nessuna pre-autorizzazione AUTORIZZATA (ancora catturabile) da €${(amountCents / 100).toFixed(2)} trovata su Nexi per l'ordine ${orderId}. Operazioni di questo importo su Nexi (con stato): ${JSON.stringify(scannedForError)}`, operations: scannedForError }) }
         }
 
         // Step 2: Capture with the real operationId
@@ -152,6 +162,28 @@ const handler: Handler = async (event) => {
                 headers,
                 body: JSON.stringify({ error: `Nexi API error (${response.status}): ${responseText.substring(0, 200)}` })
             };
+        }
+
+        // 2026-07-20: "already executed operation can't be captured" = l'operazione
+        // e' GIA' stata eseguita/catturata → i soldi SONO GIA' stati presi. NON e'
+        // un errore: allineiamo DR7 a "catturato" e diciamo che e' fatto.
+        const errDesc = String(responseData?.errors?.[0]?.description || responseData?.error || responseText || '').toLowerCase()
+        const alreadyDone = /already executed|already captured|gia.?\s*eseguit|gia.?\s*cattur/.test(errDesc)
+        if (!response.ok && alreadyDone) {
+            console.log('[nexi-capture-preauth] Operazione GIA\' eseguita/catturata — soldi gia\' presi. OpId:', realOperationId)
+            if (cauzioneId) {
+                await supabase.from('cauzioni').update({
+                    stato: 'Incassata',
+                    data_incasso: new Date().toISOString(),
+                    note: `Gia' incassata su Nexi (operazione gia' eseguita) - Op: ${realOperationId}`,
+                    updated_at: new Date().toISOString(),
+                }).eq('id', cauzioneId)
+            }
+            if (transactionId || orderId) {
+                const q2 = supabase.from('nexi_transactions').update({ status: 'preauth_captured', metadata: { already_executed: true, operation_id: realOperationId } })
+                if (transactionId) await q2.eq('id', transactionId); else await q2.eq('order_id', orderId)
+            }
+            return { statusCode: 200, headers, body: JSON.stringify({ success: true, alreadyExecuted: true, message: `Questa pre-autorizzazione era GIA' stata incassata su Nexi (operazione ${realOperationId}). I €${amount.toFixed(2)} sono gia' stati presi. Verifica in Nexi tra le operazioni eseguite.` }) }
         }
 
         if (!response.ok) {
