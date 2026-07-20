@@ -520,9 +520,11 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
   const fitRowHeight = useMemo(() => {
     const n = visibleRows.length
     if (!gridH || n === 0) return MIN_ROW_HEIGHT
-    // Mobile: righe più alte e leggibili (con scroll verticale) invece di
-    // schiacciare tutti i veicoli nell'altezza dello schermo.
-    return Math.max(isNarrow ? 56 : 28, Math.floor((gridH - HEADER_ROW_H - 20) / n))
+    // 2026-07-20: righe GRANDI e leggibili. Minimo MIN_ROW_HEIGHT (60px) sia su
+    // desktop che mobile: se i veicoli non entrano tutti nello schermo la griglia
+    // SCROLLA (overflow-auto) invece di schiacciare le righe a 28px (illeggibile).
+    // Con pochi veicoli le righe si allargano per riempire lo schermo.
+    return Math.max(isNarrow ? 56 : MIN_ROW_HEIGHT, Math.floor((gridH - HEADER_ROW_H - 20) / n))
   }, [gridH, visibleRows.length, isNarrow])
 
   // ── Vista mobile stile Apple Calendar ───────────────────────────────────────
