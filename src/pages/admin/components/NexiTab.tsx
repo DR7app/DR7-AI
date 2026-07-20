@@ -30,7 +30,7 @@ interface NexiTransaction {
     created_at: string
     order_id: string
     amount_cents: number
-    status: 'pending' | 'completed' | 'failed' | 'cancelled' | 'preauth_held' | 'preauth_captured' | 'preauth_voided' | 'preauth_pending_link' | 'preauth_pending_refresh_confirm' | 'preauth_refresh_failed' | 'preauth_wrongly_charged' | 'preauth_wrongly_charged_refunded' | 'orphan_removed'
+    status: 'pending' | 'completed' | 'failed' | 'cancelled' | 'preauth_held' | 'pending_preauth' | 'preauth_captured' | 'preauth_voided' | 'preauth_pending_link' | 'preauth_pending_refresh_confirm' | 'preauth_refresh_failed' | 'preauth_wrongly_charged' | 'preauth_wrongly_charged_refunded' | 'orphan_removed'
     description: string
     customer_email: string
     contract_id?: string
@@ -903,6 +903,7 @@ export default function NexiTab() {
             failed: 'bg-red-900/50 text-red-300 border-red-700/50',
             cancelled: 'bg-theme-bg-tertiary/50 text-theme-text-secondary border-theme-border/50',
             preauth_held: 'bg-blue-900/50 text-blue-300 border-blue-700/50',
+            pending_preauth: 'bg-blue-900/50 text-blue-300 border-blue-700/50',
             preauth_captured: 'bg-green-900/50 text-green-300 border-green-700/50',
             preauth_voided: 'bg-theme-bg-tertiary/50 text-theme-text-secondary border-theme-border/50',
             preauth_pending_link: 'bg-amber-900/50 text-amber-300 border-amber-700/50',
@@ -918,6 +919,7 @@ export default function NexiTab() {
             failed: 'Fallito',
             cancelled: 'Annullato',
             preauth_held: 'Pre-autorizzato',
+            pending_preauth: 'Pre-autorizzato (da incassare)',
             preauth_captured: 'Catturato',
             preauth_voided: 'Sbloccato',
             preauth_pending_link: 'In attesa conferma cliente',
@@ -1470,12 +1472,18 @@ export default function NexiTab() {
                                             <div className="text-xs text-theme-text-muted">{tx.customer_email}</div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            {tx.status === 'preauth_held' ? (
+                                            {/* 2026-07-20: mostra Cattura/Annulla anche per 'pending_preauth'.
+                                                Sono pre-autorizzazioni completate su Nexi ma rimaste stuck in DR7
+                                                (callback non aggiornato). nexi-capture-preauth risolve da solo
+                                                l'operationId reale dall'orderId su Nexi, quindi la cattura
+                                                funziona lo stesso; se non c'e' un'AUTHORIZATION valida fallisce
+                                                senza addebitare. Cosi' si incassa DALL'ADMIN senza portale Nexi. */}
+                                            {(tx.status === 'preauth_held' || tx.status === 'pending_preauth' || tx.status === 'preauth_pending_refresh_confirm' || tx.status === 'preauth_refresh_failed') ? (
                                                 <div className="flex flex-col sm:flex-row gap-1.5">
                                                     <button
                                                         onClick={() => handleCapturePreauth(tx)}
                                                         className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 border border-emerald-700/50 whitespace-nowrap"
-                                                        title="Cattura i fondi bloccati"
+                                                        title="Cattura i fondi pre-autorizzati (verifica l'operazione su Nexi e incassa)"
                                                     >
                                                         Cattura
                                                     </button>
