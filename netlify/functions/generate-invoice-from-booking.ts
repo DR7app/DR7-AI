@@ -27,7 +27,11 @@ async function loadVatRate(): Promise<number> {
         const cfg = (data?.config ?? null) as Record<string, unknown> | null
         const fiscal = cfg?.fiscal as Record<string, unknown> | undefined
         const rate = fiscal?.vat_rate
-        if (typeof rate === 'number' && rate >= 0 && rate <= 100) return rate
+        // 2026-07-20: 0 NON e' un'aliquota valida per noleggio/servizi (solo
+        // danni/penali sono IVA 0, gestiti a parte). Un vat_rate 0 salvato per
+        // errore/glitch faceva emettere fatture noleggio a IVA 0. Trattiamo 0
+        // (o non-numero) come "non impostato" → default 22.
+        if (typeof rate === 'number' && rate > 0 && rate <= 100) return rate
         return 22
     } catch {
         return 22
@@ -717,6 +721,9 @@ export const handler: Handler = async (event) => {
             const vatRate = includeIVA ? dynamicVatRate : 0
             const vatDivisor = 1 + dynamicVatRate / 100
 
+            // 2026-07-20: SOLO danni e penali sono IVA 0 (fuori campo). Quindi
+            // NIENTE divisione per 1.22 e vat_rate 0: l'importo tipizzato e' gia'
+            // l'importo pieno da fatturare. (Noleggio/estensioni restano IVA 22.)
             // Only include PENDING items (not already-paid ones that have their own fattura)
             const penalties = bookingDetails.penalties || []
             penalties.forEach((p: any) => {
@@ -725,10 +732,10 @@ export const handler: Handler = async (event) => {
                     if (gross > 0) {
                         items.push({
                             description: `Penale: ${p.label || 'Penale'}`,
-                            unit_price: gross / vatDivisor,
+                            unit_price: gross,
                             quantity: 1,
-                            vat_rate: vatRate,
-                            total: gross / vatDivisor
+                            vat_rate: 0,
+                            total: gross
                         })
                     }
                 }
@@ -741,10 +748,10 @@ export const handler: Handler = async (event) => {
                     if (gross > 0) {
                         items.push({
                             description: `Danno: ${d.label || 'Danno'}`,
-                            unit_price: gross / vatDivisor,
+                            unit_price: gross,
                             quantity: 1,
-                            vat_rate: vatRate,
-                            total: gross / vatDivisor
+                            vat_rate: 0,
+                            total: gross
                         })
                     }
                 }
