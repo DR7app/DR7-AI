@@ -205,7 +205,14 @@ export default function FleetInventory() {
       const detailLines: string[] = []
       for (const [vKey, items] of byVehicle) {
         const [vName, vPlate] = vKey.split('|')
-        detailLines.push(`*${vName}${vPlate ? ` (${vPlate})` : ''}*`)
+        // 2026-07-20: includi anche il TELAIO (chassis) nell'ordine fornitore,
+        // oltre alla targa. Letto dal record veicolo (colonna chassis_number o
+        // metadata.chassis_number/telaio).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const veh = vehicles.find(v => v.id === items[0]?.vehicleId) as any
+        const chassis = String(veh?.chassis_number || veh?.metadata?.chassis_number || veh?.metadata?.telaio || '').trim()
+        const idLine = [vPlate ? `Targa: ${vPlate}` : '', chassis ? `Telaio: ${chassis}` : ''].filter(Boolean).join(' · ')
+        detailLines.push(`*${vName}*${idLine ? ` — ${idLine}` : ''}`)
         for (const it of items) {
           const specs = it.specs ? ` — ${it.specs}` : ''
           detailLines.push(`   • ${it.label}${specs}`)
