@@ -633,7 +633,7 @@ const TRIGGER_DESCRIPTIONS: Record<string, string> = {
     'before_signature': 'Promemoria al cliente di firmare il contratto. Offset = ore PRIMA del pickup. Parte solo se signature_signed_at e\' ancora vuoto.',
     'after_signature_review': 'Richiesta recensione X giorni dopo la firma (es. 7 = una settimana dopo). Offset in ore.',
     'on_late_return': 'Quando l\'auto e\' in ritardo oltre la grace di Centralina Pro (default 90 min prima dell\'orario pickup nel giorno di rientro). Cron giornaliero.',
-    'before_birthday': 'Compleanno cliente. Default 10 giorni prima dal cron esistente. Offset in ore non modifica (e\' fisso a 10 giorni).',
+    'before_birthday': 'Compleanno cliente. L\'invio segue l\'OFFSET che imposti qui (in ore): 0 = il giorno stesso del compleanno, 24 = 1 giorno prima, 240 = 10 giorni prima. Niente piu\' hardcode.',
     'on_review_received': 'Recensione Google ricevuta. Trigger MANUALE: si fa fire da admin via /trigger-system-event quando arriva una review (richiede integrazione esterna).',
     'on_promo_gap': 'Gap di disponibilita\' di un veicolo (4-48h tra due booking). Cron ogni 10 minuti tramite maxi-promo-gap-cron.',
     'on_cauzione_partial_capture': 'Quando l\'admin incassa solo una parte della cauzione (es. €100 su €500 di danno). Inline in CauzioniTab.',
