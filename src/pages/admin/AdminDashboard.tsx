@@ -326,8 +326,6 @@ export default function AdminDashboard() {
     ] },
     { name: 'Report', tabs: [
       { tab: 'report-noleggio', label: 'Noleggio' },
-      // 2026-07-20: Referral spostato da Marketing a Report (consultazione).
-      { tab: 'referral', label: 'Referral' },
       { tab: 'report-lavaggio', label: 'Lavaggio' },
       { tab: 'report-clienti', label: 'Clienti' },
       { tab: 'report-autisti', label: 'Autisti' },
@@ -338,6 +336,8 @@ export default function AdminDashboard() {
       // 2026-05-18: 'rilevazione-orari' rimossa dal menu — adesso e' una
       // sub-view dentro Operatori (Dashboard / Rilevazione / Contratti / Audit).
       { tab: 'dashboard-kpi', label: 'Dashboard' },
+      // 2026-07-20: Referral spostato da Marketing a Report, in FONDO alla lista.
+      { tab: 'referral', label: 'Referral' },
     ] },
     // 2026-06-02: sezione Comunicazione rimossa — tutti i sub-tab erano
     // PlaceholderTab vuoti. Se mai serviranno (E-mail, PEC, WhatsApp, SMS,
