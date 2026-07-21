@@ -79,7 +79,14 @@ function splitCharges(arr: any): { paid: number; remaining: number } {
     const apRaw = parseFloat(c.amountPaid ?? 0) || 0
     // Totale della voce: total esplicito, altrimenti amount*quantity, altrimenti
     // l'importo pagato (caso limite di voci che riportano solo amountPaid).
-    const total = explicitTotal > 0 ? explicitTotal : (fromQty > 0 ? fromQty : apRaw)
+    const listino = explicitTotal > 0 ? explicitTotal : (fromQty > 0 ? fromQty : apRaw)
+    if (listino <= 0) return
+    // 2026-07-21: sottrai lo sconto (Prezzo finale desiderato di DanniPenaliModal).
+    // Il totale reale della voce e' listino − sconto. Senza questa riga una penale
+    // scontata e gia' pagata (es. listino 711, pagata 698, sconto 13) lasciava un
+    // fantasma "Da saldare €13": remaining = 711 − 698. Ora net = 698 → remaining 0.
+    const discount = parseFloat(c.discount ?? 0) || 0
+    const total = Math.max(0, listino - discount)
     if (total <= 0) return
     const ps = String(c.paymentStatus || '').toLowerCase()
     const paidPart = ps === 'paid' ? (apRaw > 0 ? apRaw : total) : apRaw
