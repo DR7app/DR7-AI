@@ -42,6 +42,7 @@ const BirthdaysTab = lazyWithRetry(() => import('./components/BirthdaysTab'))
 // FleetManagementTab rimosso 2026-05-22: la tab "Gestione Flotta" e'
 // stata eliminata perche' duplicato di "Veicoli".
 const FleetInventory = lazyWithRetry(() => import('./components/FleetInventory'))
+const InventarioMagazzino = lazyWithRetry(() => import('./components/InventarioMagazzino'))
 const ScadenzeTab = lazyWithRetry(() => import('./components/ScadenzeTab'))
 const ReportsTab = lazyWithRetry(() => import('./components/ReportsTab'))
 const ReportLavaggioTab = lazyWithRetry(() => import('./components/ReportLavaggioTab'))
@@ -75,7 +76,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'immondizia' | 'ticket' | 'terra-catalog'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'immondizia' | 'ticket' | 'terra-catalog' | 'magazzino-generale'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -339,6 +340,9 @@ export default function AdminDashboard() {
       // 2026-07-20: Referral spostato da Marketing a Report, in FONDO alla lista.
       { tab: 'referral', label: 'Referral' },
     ] },
+    { name: 'Magazzino', tabs: [
+      { tab: 'magazzino-generale', label: 'Magazzino Generale' },
+    ] },
     // 2026-06-02: sezione Comunicazione rimossa — tutti i sub-tab erano
     // PlaceholderTab vuoti. Se mai serviranno (E-mail, PEC, WhatsApp, SMS,
     // Chiamate, Chat GPT, Aruba) si reintroducono qui.
@@ -383,6 +387,7 @@ export default function AdminDashboard() {
     'Clienti':         { group: 'gestione', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-5.13a4 4 0 11-8 0 4 4 0 018 0zm6 4a3 3 0 11-6 0 3 3 0 016 0z"/> },
     'Marketing':       { group: 'gestione', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/> },
     'Report':          { group: 'gestione', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/> },
+    'Magazzino':       { group: 'gestione', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/> },
     'Amministrazione':{ group: 'sistemi', icon: <><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></> },
     'Centralina Pro':  { group: 'sistemi', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M13 10V3L4 14h7v7l9-11h-7z"/> },
     'DR7 Trust':       { group: 'sistemi', icon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/> },
@@ -450,6 +455,7 @@ export default function AdminDashboard() {
     'carwash-catalog': 'Catalogo Prime Wash',
     'vehicles': 'Veicoli',
     'terra-catalog': 'Catalogo Noleggio Terra',
+    'magazzino-generale': 'Magazzino Generale',
     'gps-keyless': 'GPS Flotta',
     'unpaid': 'In attesa di pagamento',
     'customers': 'Lead',
@@ -1068,6 +1074,7 @@ export default function AdminDashboard() {
           {activeTab === 'social-links' && <SocialLinksTab />}
           {/* 'fleet' route eliminata 2026-05-22 — vedi nota sulla sidebar. */}
           {activeTab === 'magazzino' && <FleetInventory />}
+          {activeTab === 'magazzino-generale' && <InventarioMagazzino />}
           {activeTab === 'nexi' && (isTabRestricted('nexi') ? <PlaceholderTab title="Accesso non autorizzato" /> : <NexiTab />)}
           {activeTab === 'scadenze' && <ScadenzeTab />}
           {activeTab === 'reports' && (isTabRestricted('reports') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportsTab />)}
