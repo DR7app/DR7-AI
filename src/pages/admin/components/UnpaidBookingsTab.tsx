@@ -2336,13 +2336,20 @@ export default function UnpaidBookingsTab() {
       for (const { item, realIdx } of pendingPenalties) {
         const total = item.total || (item.amount || 0) * (item.quantity || 1)
         const paid = item.amountPaid || 0
+        // 2026-07-21: sottrai lo sconto (Prezzo finale desiderato di
+        // DanniPenaliModal). Il prezzo mostrato in "Da Saldare" deve essere
+        // quello REALE da pagare (es. penale scontata 1600 -> 550), MAI il
+        // listino. Prima amount/remaining ignoravano `discount`: il totale
+        // gruppo diceva 550 (riga ~2210) ma la voce mostrava 1600.
+        const discount = Number(item.discount) || 0
+        const net = Math.max(0, total - discount)
         group.penaliItems.push({
           bookingId: booking.id,
           booking,
           label: item.label || 'Penale',
-          amount: total,
+          amount: net,
           amountPaid: paid,
-          remaining: total - paid,
+          remaining: net - paid,
           paymentStatus: item.paymentStatus || 'pending',
           source: 'booking_details',
           type: 'penalties',
@@ -2355,13 +2362,17 @@ export default function UnpaidBookingsTab() {
       for (const { item, realIdx } of pendingDanni) {
         const total = item.total || (item.amount || 0) * (item.quantity || 1)
         const paid = item.amountPaid || 0
+        // 2026-07-21: stesso fix delle penali — mostra il prezzo REALE (total
+        // meno lo sconto), mai il listino.
+        const discount = Number(item.discount) || 0
+        const net = Math.max(0, total - discount)
         group.danniItems.push({
           bookingId: booking.id,
           booking,
           label: item.label || 'Danno',
-          amount: total,
+          amount: net,
           amountPaid: paid,
-          remaining: total - paid,
+          remaining: net - paid,
           paymentStatus: item.paymentStatus || 'pending',
           source: 'booking_details',
           type: 'danni',
