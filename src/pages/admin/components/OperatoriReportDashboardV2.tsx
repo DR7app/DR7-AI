@@ -367,6 +367,10 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
             //        || op.ore_target_giornaliere || 8       (fallback)
             const opIds = opListRaw.map(o => o.id)
             const contractsByOp = new Map<string, { giornaliere: number | null; settimanali: number | null; mensili: number | null; giorni_settimana: number | null; tipo_rapporto: string | null }>()
+            // 2026-07-21: pausa OBBLIGATORIA per operatore (Contratto > pause_config).
+            // mandatoryPauseByOp = minuti/giorno da scalare SOLO se pausa NON pagata.
+            // Vuoto per operatori senza config -> nessuna deduzione (es. Salvatore).
+            const mandatoryPauseByOp = new Map<string, number>()
             if (opIds.length > 0) {
                 const { data: contracts } = await supabase
                     .from('operatore_contratto')
@@ -391,6 +395,31 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                         tipo_rapporto: c.tipo_rapporto,
                     })
                 }
+                // Query SEPARATA e RESILIENTE per pause_config: se la colonna non
+                // esiste ancora (migration non eseguita) NON deve rompere il report.
+                try {
+                    const { data: pcRows, error: pcErr } = await supabase
+                        .from('operatore_contratto')
+                        .select('operatore_id, pause_config')
+                        .in('operatore_id', opIds)
+                        .eq('attivo', true)
+                    if (!pcErr) {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        for (const r of (pcRows || []) as Array<{ operatore_id: string; pause_config: any }>) {
+                            const pc = r.pause_config
+                            if (pc && pc.pagata === false) {
+                                const fasceMin = Array.isArray(pc.fasce) ? pc.fasce.reduce((s: number, f: { da?: string; a?: string }) => {
+                                    const [dh, dm] = String(f?.da || '').split(':').map(Number)
+                                    const [ah, am] = String(f?.a || '').split(':').map(Number)
+                                    const mins = ((Number.isFinite(ah) ? ah * 60 + (am || 0) : 0) - (Number.isFinite(dh) ? dh * 60 + (dm || 0) : 0))
+                                    return s + Math.max(0, mins || 0)
+                                }, 0) : 0
+                                const mand = (Number(pc.durata_min) || 0) + fasceMin
+                                if (mand > 0) mandatoryPauseByOp.set(r.operatore_id, mand)
+                            }
+                        }
+                    }
+                } catch { /* colonna assente: nessuna deduzione, report resta ok */ }
             }
             const computeTarget = (op: Operatore): { gran: 'giornaliera' | 'settimanale' | 'mensile' | 'none'; value: number } => {
                 const c = contractsByOp.get(op.id)
@@ -439,15 +468,19 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                 let minLav = 0, minPausa = 0
                 if (t.entrata) {
                     const end = t.uscita ? new Date(t.uscita).getTime() : Date.now()
-                    minLav = Math.max(0, Math.round((end - new Date(t.entrata).getTime()) / 60000))
+                    const rawWorked = Math.max(0, Math.round((end - new Date(t.entrata).getTime()) / 60000))
+                    let loggedPausa = 0
                     for (let i = 0; i < t.pi.length; i++) {
                         const start = new Date(t.pi[i]).getTime()
                         const fin = t.pf[i] ? new Date(t.pf[i]).getTime() : Date.now()
-                        const dur = Math.max(0, Math.round((fin - start) / 60000))
-                        minPausa += dur
-                        minLav -= dur
+                        loggedPausa += Math.max(0, Math.round((fin - start) / 60000))
                     }
-                    minLav = Math.max(0, minLav)
+                    // 2026-07-21: pausa OBBLIGATORIA da contratto (solo per chi ce l'ha).
+                    // Si scala il MASSIMO tra pausa registrata e pausa obbligatoria,
+                    // cosi' l'operatore non deve inserirla a mano ogni giorno.
+                    const mand = mandatoryPauseByOp.get(op.id) || 0
+                    minPausa = Math.max(loggedPausa, mand)
+                    minLav = Math.max(0, rawWorked - minPausa)
                 }
                 let stato: DayRow['stato'] = 'fuori'
                 if (t.lastTipo === 'entrata' || t.lastTipo === 'pausa_fine') stato = 'lavoro'
@@ -534,16 +567,19 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
             const perOpMin = new Map<string, number>()
             byOpDay.forEach((dayMap, opId) => {
                 let opTot = 0
+                const mand = mandatoryPauseByOp.get(opId) || 0
                 dayMap.forEach(t => {
                     if (!t.entrata) return
                     const end = t.uscita ? new Date(t.uscita).getTime() : new Date(t.entrata).getTime()
-                    let m = Math.max(0, Math.round((end - new Date(t.entrata).getTime()) / 60000))
+                    const rawWorked = Math.max(0, Math.round((end - new Date(t.entrata).getTime()) / 60000))
+                    let loggedPausa = 0
                     for (let i = 0; i < t.pi.length; i++) {
                         const start = new Date(t.pi[i]).getTime()
                         const fin = t.pf[i] ? new Date(t.pf[i]).getTime() : start
-                        m -= Math.max(0, Math.round((fin - start) / 60000))
+                        loggedPausa += Math.max(0, Math.round((fin - start) / 60000))
                     }
-                    opTot += Math.max(0, m)
+                    // 2026-07-21: scala il MAX tra pausa registrata e pausa obbligatoria da contratto.
+                    opTot += Math.max(0, rawWorked - Math.max(loggedPausa, mand))
                 })
                 perOpMin.set(opId, opTot)
                 totMinLav += opTot
