@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import DateRangeFilter from '../../../components/DateRangeFilter'
+import { maskIban, validateIban } from '../../../utils/ibanValidation'
 
 interface Cauzione {
     id: string
@@ -25,6 +26,7 @@ interface Cauzione {
     data_incasso: string | null
     iban: string | null
     intestatario_conto: string | null
+    stato_restituzione?: 'DA_RESTITUIRE' | 'RESTITUITA' | 'TRATTENUTA_PARZIALE' | 'TRATTENUTA_TOTALE' | 'NON_DOVUTA' | null
     is_overdue: boolean
     days_until_deadline: number
     cliente_nome?: string
@@ -45,6 +47,8 @@ export default function CauzioniTab() {
     // 2026-06-01: filtro periodo Da/A — created_at della cauzione.
     const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
     const [filterMetodo, setFilterMetodo] = useState<string>('all')
+    // FASE 8: filtri rapidi (In scadenza oggi / Scadute non restituite / IBAN mancante).
+    const [quickFilter, setQuickFilter] = useState<'all' | 'oggi' | 'scadute' | 'iban_mancante'>('all')
     const [showStorico, setShowStorico] = useState(false)
     const [cassaCauzione, setCassaCauzione] = useState<Cauzione | null>(null)
 
@@ -299,6 +303,23 @@ export default function CauzioniTab() {
         if (dateRange.to && romeDay > dateRange.to) return false
         return true
     }
+    // FASE 8: una cauzione da restituire senza IBAN valido.
+    const isTerminaleRestituzione = (c: Cauzione) =>
+        c.stato_restituzione === 'RESTITUITA' || c.stato_restituzione === 'TRATTENUTA_TOTALE' || c.stato_restituzione === 'NON_DOVUTA' ||
+        c.stato === 'Restituita' || c.stato === 'Sbloccata'
+    const isIbanMancante = (c: Cauzione) =>
+        !isTerminaleRestituzione(c) && c.metodo !== 'preautorizzazione' && !validateIban(c.iban || '').valid
+    const matchesQuickFilter = (c: Cauzione) => {
+        if (quickFilter === 'all') return true
+        if (quickFilter === 'oggi') return c.days_until_deadline === 0 && !isTerminaleRestituzione(c)
+        if (quickFilter === 'scadute') return c.is_overdue && !isTerminaleRestituzione(c)
+        if (quickFilter === 'iban_mancante') return isIbanMancante(c)
+        return true
+    }
+    const oggiCount = cauzioni.filter(c => c.days_until_deadline === 0 && !isTerminaleRestituzione(c)).length
+    const scaduteCount = cauzioni.filter(c => c.is_overdue && !isTerminaleRestituzione(c)).length
+    const ibanMancanteCount = cauzioni.filter(isIbanMancante).length
+
     const applySearch = (list: Cauzione[]) => list.filter(c => {
         if (!passesDateRange(c)) return false
         const matchesSearch = searchTerm === '' ||
@@ -306,7 +327,7 @@ export default function CauzioniTab() {
             c.veicolo_modello?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             c.veicolo_targa?.toLowerCase().includes(searchTerm.toLowerCase())
         const matchesMetodo = filterMetodo === 'all' || c.metodo === filterMetodo
-        return matchesSearch && matchesMetodo
+        return matchesSearch && matchesMetodo && matchesQuickFilter(c)
     })
 
     // Sort for INCASSATE: scadute first, then in scadenza, then attive. Within each group, nearest deadline first.
@@ -1063,10 +1084,19 @@ export default function CauzioniTab() {
     // --- Shared table row renderer ---
     // Mobile-friendly card alternative: same data as the table row, stacked
     // vertically for phones (<sm). Action buttons are min-h-[44px] for touch.
+    // FASE 8: colore riga per stato scadenza — nero scaduta non gestita · rosso
+    // oggi · giallo entro 3gg · verde restituita/non dovuta.
+    const scadenzaBorder = (c: Cauzione): string => {
+        if (isTerminaleRestituzione(c)) return 'border-l-4 border-l-emerald-500'
+        if (c.is_overdue) return 'border-l-4 border-l-zinc-900 dark:border-l-white'
+        if (c.days_until_deadline === 0) return 'border-l-4 border-l-red-500'
+        if (c.days_until_deadline > 0 && c.days_until_deadline <= 3) return 'border-l-4 border-l-yellow-500'
+        return ''
+    }
     const renderCard = (cauzione: Cauzione, actions: React.ReactNode) => (
         <div
             key={`card-${cauzione.id}`}
-            className={`border border-theme-border rounded-2xl bg-theme-bg-secondary p-3 ${cauzione.is_overdue ? 'border-l-4 border-l-red-500' : ''}`}
+            className={`border border-theme-border rounded-2xl bg-theme-bg-secondary p-3 ${scadenzaBorder(cauzione)}`}
         >
             <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -1105,7 +1135,19 @@ export default function CauzioniTab() {
                     <div className="text-theme-text-muted uppercase tracking-wider">Metodo</div>
                     <div className="text-theme-text-primary capitalize">{cauzione.metodo}</div>
                 </div>
+                {cauzione.metodo === 'bonifico' && (
+                    <div className="col-span-2">
+                        <div className="text-theme-text-muted uppercase tracking-wider">IBAN restituzione</div>
+                        <div className="text-theme-text-primary font-mono truncate">{cauzione.iban ? maskIban(cauzione.iban) : '—'}</div>
+                    </div>
+                )}
             </div>
+            {/* FASE 8: badge "Manca IBAN" per cauzioni da restituire senza IBAN valido a ridosso della scadenza. */}
+            {isIbanMancante(cauzione) && cauzione.days_until_deadline <= 7 && (
+                <div className="mt-2 text-[11px] px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-500">
+                    Manca l'IBAN per la restituzione — inseriscilo prima della scadenza del {new Date(cauzione.scadenza_cauzione + 'T00:00:00').toLocaleDateString('it-IT')}
+                </div>
+            )}
             <div className="flex gap-2 flex-wrap mt-3 [&_button]:flex-1 [&_button]:min-h-[40px]">
                 {actions}
             </div>
@@ -1168,6 +1210,24 @@ export default function CauzioniTab() {
                 <CauzioneKpi label="Totale Attive" count={stats.totale_attive} amount={stats.totale_attive_amount} ring="#A855F7"/>
                 <CauzioneKpi label="Scadute" count={stats.scadute} amount={stats.totale_scadute_amount} ring="#DC2626" urgent={stats.scadute > 0}/>
                 <CauzioneKpi label="A Rischio" count={stats.a_rischio} amount={stats.totale_rischio_amount} ring="#EAB308" urgent={stats.a_rischio > 0}/>
+            </div>
+
+            {/* === Filtri rapidi (FASE 8) === */}
+            <div className="flex flex-wrap items-center gap-2">
+                {([
+                    { k: 'all' as const, l: 'Tutte', n: null, cls: 'text-theme-text-secondary' },
+                    { k: 'oggi' as const, l: 'In scadenza oggi', n: oggiCount, cls: 'text-red-400' },
+                    { k: 'scadute' as const, l: 'Scadute non restituite', n: scaduteCount, cls: 'text-zinc-300' },
+                    { k: 'iban_mancante' as const, l: 'IBAN mancante', n: ibanMancanteCount, cls: 'text-amber-400' },
+                ]).map(f => (
+                    <button
+                        key={f.k}
+                        onClick={() => setQuickFilter(f.k)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${quickFilter === f.k ? 'bg-dr7-gold/15 border-dr7-gold/50 text-dr7-gold' : `bg-theme-bg-tertiary border-theme-border ${f.cls}`}`}
+                    >
+                        {f.l}{f.n != null ? ` (${f.n})` : ''}
+                    </button>
+                ))}
             </div>
 
             {/* === DA RESTITUIRE OGGI — riepilogo bonifici manuali (Valerio/Ilenia) === */}
