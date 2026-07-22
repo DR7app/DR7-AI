@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+import { validateIban, formatIbanGroups } from '../../../utils/ibanValidation'
 
 interface NuovaCauzioneModalProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -16,6 +17,8 @@ interface Customer {
     denominazione: string | null
     tipo_cliente: string
     email: string | null
+    iban: string | null
+    iban_intestatario: string | null
 }
 
 interface Vehicle {
@@ -40,8 +43,14 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
         // Dati per il rimborso manuale (bonifico) — mostrati a Valerio/Ilenia
         // nella schermata "Da Restituire Oggi" alla scadenza.
         intestatario_conto: cauzione?.intestatario_conto || '',
-        iban: cauzione?.iban || ''
+        iban: cauzione?.iban || '',
+        bic_swift: cauzione?.bic_swift || '',
+        banca: cauzione?.banca || ''
     })
+
+    // Validazione IBAN live (FASE 2): esito mostrato sotto il campo, blocca il salvataggio.
+    const ibanCheck = validateIban(formData.iban || '')
+    const ibanFilled = (formData.iban || '').trim().length > 0
 
     useEffect(() => {
         loadCustomersAndVehicles()
@@ -53,7 +62,7 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
             // Load customers
             const { data: customersData, error: customersError } = await supabase
                 .from('customers_extended')
-                .select('id, nome, cognome, denominazione, tipo_cliente, email')
+                .select('id, nome, cognome, denominazione, tipo_cliente, email, iban, iban_intestatario')
                 .order('cognome', { ascending: true })
 
             if (customersError) throw customersError
@@ -91,8 +100,21 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
             return
         }
 
+        // FASE 2: se l'IBAN e' valorizzato deve essere valido; se estero serve il BIC.
+        if (formData.metodo === 'bonifico' && ibanFilled) {
+            if (!ibanCheck.valid) {
+                toast.error(ibanCheck.error || 'IBAN non valido — controlla i caratteri')
+                return
+            }
+            if (ibanCheck.needsBic && !formData.bic_swift.trim()) {
+                toast.error('IBAN estero: il BIC/SWIFT è obbligatorio')
+                return
+            }
+        }
+
         setLoading(true)
         try {
+            const normalizedIban = ibanFilled ? ibanCheck.normalized : null
             const dataToSave = {
                 cliente_id: formData.cliente_id,
                 veicolo_id: formData.veicolo_id,
@@ -101,7 +123,9 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
                 metodo: formData.metodo,
                 note: formData.note || null,
                 intestatario_conto: formData.intestatario_conto?.trim() || null,
-                iban: formData.iban?.replace(/\s+/g, '').toUpperCase() || null
+                iban: normalizedIban,
+                bic_swift: formData.bic_swift?.trim().toUpperCase() || null,
+                banca: formData.banca?.trim() || null
             }
 
             if (cauzione) {
@@ -140,6 +164,24 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
                         console.warn('[NuovaCauzioneModal] on_cauzione_created trigger failed (non-blocking):', e)
                     }
                 }
+            }
+
+            // FASE 1: salva l'IBAN in anagrafica cliente per precompilare la prossima volta.
+            if (normalizedIban && formData.cliente_id) {
+                await supabase.from('customers_extended')
+                    .update({ iban: normalizedIban, iban_intestatario: formData.intestatario_conto?.trim() || null })
+                    .eq('id', formData.cliente_id)
+                    .then(() => {}, () => {})
+            }
+            // FASE 9: audit IBAN se e' cambiato (valori mascherati).
+            if (cauzione && normalizedIban && normalizedIban !== (cauzione.iban || null)) {
+                const mask = (v: string | null) => { const n = (v || '').replace(/\s+/g, '').toUpperCase(); return n ? `${n.slice(0, 2)}••••${n.slice(-4)}` : '' }
+                let utente = 'admin'
+                try { const { data } = await supabase.auth.getUser(); utente = data.user?.email || 'admin' } catch { /* noop */ }
+                await supabase.from('cauzioni_iban_audit').insert({
+                    cauzione_id: cauzione.id, campo: 'iban',
+                    valore_prima: mask(cauzione.iban), valore_dopo: mask(normalizedIban), utente,
+                }).then(() => {}, () => {})
             }
 
             onSave()
@@ -185,7 +227,18 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
                                 </label>
                                 <select
                                     value={formData.cliente_id}
-                                    onChange={(e) => setFormData({ ...formData, cliente_id: e.target.value })}
+                                    onChange={(e) => {
+                                        const id = e.target.value
+                                        const cust = customers.find(c => c.id === id)
+                                        // Precompila intestatario + IBAN dall'anagrafica (solo se ancora vuoti).
+                                        const nomeCliente = cust ? (cust.tipo_cliente === 'azienda' ? (cust.denominazione || '') : `${cust.nome || ''} ${cust.cognome || ''}`.trim()) : ''
+                                        setFormData(f => ({
+                                            ...f,
+                                            cliente_id: id,
+                                            intestatario_conto: f.intestatario_conto || cust?.iban_intestatario || nomeCliente,
+                                            iban: f.iban || (cust?.iban ? formatIbanGroups(cust.iban) : '')
+                                        }))
+                                    }}
                                     required
                                     className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
                                 >
@@ -301,12 +354,50 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
                                             type="text"
                                             value={formData.iban}
                                             onChange={(e) => setFormData({ ...formData, iban: e.target.value })}
+                                            onBlur={() => { if (ibanFilled && ibanCheck.valid) setFormData(f => ({ ...f, iban: formatIbanGroups(f.iban) })) }}
                                             placeholder="IT00 X000 0000 0000 0000 0000 000"
-                                            className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary font-mono focus:outline-none focus:border-dr7-gold transition-colors"
+                                            className={`w-full px-4 py-3 bg-theme-bg-tertiary border rounded-lg text-theme-text-primary font-mono focus:outline-none transition-colors ${!ibanFilled ? 'border-theme-border focus:border-dr7-gold' : ibanCheck.valid ? 'border-emerald-500/60 focus:border-emerald-500' : 'border-red-500/60 focus:border-red-500'}`}
                                         />
+                                        {ibanFilled && (
+                                            ibanCheck.valid ? (
+                                                <p className="text-xs text-emerald-500 mt-1 flex items-center gap-1">
+                                                    ✓ IBAN valido{ibanCheck.warning ? ` — ${ibanCheck.warning}` : ''}{ibanCheck.country ? ` (${ibanCheck.country})` : ''}
+                                                </p>
+                                            ) : (
+                                                <p className="text-xs text-red-500 mt-1">✗ {ibanCheck.error}</p>
+                                            )
+                                        )}
                                         <p className="text-xs text-theme-text-muted mt-1">
                                             Verranno mostrati nella schermata "Da Restituire Oggi" alla scadenza della cauzione.
                                         </p>
+                                    </div>
+                                    {/* BIC/SWIFT — obbligatorio per IBAN esteri */}
+                                    {ibanFilled && ibanCheck.needsBic && (
+                                        <div>
+                                            <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                                                BIC / SWIFT <span className="text-red-500">*</span>
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={formData.bic_swift}
+                                                onChange={(e) => setFormData({ ...formData, bic_swift: e.target.value.toUpperCase() })}
+                                                placeholder="Obbligatorio per bonifici esteri"
+                                                className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary font-mono focus:outline-none focus:border-dr7-gold transition-colors"
+                                            />
+                                        </div>
+                                    )}
+                                    {/* Banca */}
+                                    <div>
+                                        <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                                            Banca
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formData.banca}
+                                            onChange={(e) => setFormData({ ...formData, banca: e.target.value })}
+                                            placeholder="Nome istituto (facoltativo)"
+                                            className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                                        />
                                     </div>
                                 </div>
                             )}
