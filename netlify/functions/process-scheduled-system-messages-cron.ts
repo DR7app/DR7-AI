@@ -479,6 +479,163 @@ async function processUscitaAutistaReminders(now: number): Promise<{ sent: numbe
  * di Sistema Pro). Anti-doppio-invio via cauzioni.rimborso_reminder_sent_on.
  * Destinatari = direzione (valerio@/ilenia@dr7.app) via admins.contatto_interno.
  */
+/**
+ * Avviso automatico "Scadenza cauzione" (spec 22/07/2026) — FASE 5-6.
+ * Un messaggio PER cauzione il giorno esatto della scadenza restituzione, con
+ * scelta automatica della variante A (bonifico) / B (IBAN mancante) / C (pre-auth).
+ * Anti-duplicato a DB via cauzioni_scadenza_log.chiave_antidup (UNIQUE).
+ * Template pro_scadenza_cauzione_a/b/c gestiti da Messaggi di Sistema Pro
+ * (is_enabled + cron_approved). Orario 08:00 (send_hour del template).
+ */
+async function processScadenzaCauzioneAvviso(now: number): Promise<{ sent: number; skipped: number; errors: number }> {
+    let sent = 0, skipped = 0, errors = 0;
+
+    // 1) Template varianti approvate (toggle ON/OFF in Messaggi di Sistema Pro).
+    const { data: tplRows } = await supabase
+        .from('system_messages')
+        .select('message_key, message_body, is_enabled, cron_approved, send_hour')
+        .in('message_key', ['pro_scadenza_cauzione_a', 'pro_scadenza_cauzione_b', 'pro_scadenza_cauzione_c']);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tplByVariant: Record<string, any> = {};
+    (tplRows || []).forEach((r: { message_key: string; is_enabled: boolean; cron_approved: boolean; message_body: string }) => {
+        if (r.is_enabled !== false && r.cron_approved === true && r.message_body) {
+            tplByVariant[r.message_key.slice(-1).toUpperCase()] = r; // A / B / C
+        }
+    });
+    if (Object.keys(tplByVariant).length === 0) return { sent, skipped, errors };
+
+    // 2) Gate orario: dall'ora del template (Rome, default 8) in poi, mai di notte.
+    if (isRomeQuietHours(now)) return { sent, skipped, errors };
+    const todayRome = new Date(now).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' });
+    const romeHour = getRomeHour(now);
+    const sendHour = Number((Object.values(tplByVariant)[0] as { send_hour: number | null })?.send_hour ?? 8);
+    if (romeHour < sendHour || romeHour >= QUIET_START_HOUR) return { sent, skipped, errors };
+
+    // 3) Cauzioni in scadenza OGGI, ancora DA_RESTITUIRE, incassate o pre-autorizzate,
+    //    non in stato terminale, non gia' avvisate oggi.
+    const { data: cauzRows } = await supabase
+        .from('cauzioni')
+        .select('*')
+        .eq('scadenza_cauzione', todayRome)
+        .eq('stato_restituzione', 'DA_RESTITUIRE')
+        .not('stato', 'in', '(Restituita,Sbloccata,Bloccata,Danno)');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const due = (cauzRows || []).filter((c: any) => {
+        if (c.scadenza_avviso_sent_on === todayRome) return false;
+        const incassataOPreauth = !!c.data_incasso || c.metodo === 'preautorizzazione';
+        return incassataOPreauth;
+    });
+    if (due.length === 0) return { sent, skipped, errors };
+
+    // Nomi cliente
+    const { validateIban } = await import('../../src/utils/ibanValidation');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const clienteIds = [...new Set(due.map((c: any) => c.cliente_id).filter(Boolean))];
+    const nameMap: Record<string, string> = {};
+    if (clienteIds.length > 0) {
+        const { data: custs } = await supabase
+            .from('customers_extended')
+            .select('id, nome, cognome, ragione_sociale, denominazione, tipo_cliente')
+            .in('id', clienteIds as string[]);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (custs || []).forEach((c: any) => {
+            const azienda = c.tipo_cliente === 'azienda' ? (c.ragione_sociale || c.denominazione) : null;
+            nameMap[c.id] = azienda || `${c.nome || ''} ${c.cognome || ''}`.trim() || 'Cliente';
+        });
+    }
+
+    // Destinatari staff (Valerio/Ilenia) via admins.contatto_interno.
+    const { data: admins } = await supabase
+        .from('admins')
+        .select('email, nome, contatto_interno')
+        .in('email', ['valerio@dr7.app', 'ilenia@dr7.app']);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const recipients = (admins || [])
+        .map((a: { nome: string; contatto_interno: string }) => ({ nome: a.nome, phone: String(a.contatto_interno || '').replace(/\D/g, '') }))
+        .filter((r: { phone: string }) => r.phone.length >= 8);
+
+    const baseUrl = process.env.URL || 'https://platform.dr7ai.com';
+    const fmtEur = (n: number) => Number(n || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const c of due as any[]) {
+        // 5) importo da restituire = incassato - trattenuto. Se <= 0 -> NON_DOVUTA.
+        const incassato = Number(c.importo || 0);
+        const trattenuto = Number(c.importo_trattenuto || 0);
+        const daRestituire = Math.round((incassato - trattenuto) * 100) / 100;
+        if (daRestituire <= 0) {
+            await supabase.from('cauzioni').update({ stato_restituzione: 'NON_DOVUTA' }).eq('id', c.id);
+            skipped++;
+            continue;
+        }
+
+        // 4) Scelta variante A/B/C.
+        const ibanCheck = validateIban(c.iban || '');
+        let variant: 'A' | 'B' | 'C';
+        if (c.metodo === 'preautorizzazione') variant = 'C';
+        else if (!ibanCheck.valid) variant = 'B';
+        else variant = 'A';
+        const tpl = tplByVariant[variant];
+        if (!tpl) { skipped++; continue; } // variante spenta: non inviare
+
+        // 7) Anti-duplicato: claim-first sul log (UNIQUE su chiave_antidup).
+        const chiave = `SCADENZA_CAUZIONE:${c.id}:${todayRome}`;
+        const dest = recipients.map((r: { nome: string }) => r.nome).join(', ');
+        const { error: logErr } = await supabase.from('cauzioni_scadenza_log').insert({
+            cauzione_id: c.id, message_code: 'SCADENZA_CAUZIONE', variante: variant,
+            destinatari: dest, canali: 'whatsapp', chiave_antidup: chiave, esito: { status: 'pending' },
+        });
+        if (logErr) { skipped++; continue; } // gia' inviato oggi (conflict) o errore: non doppiare
+
+        // 8) Corpo: sostituzione variabili, soppressione righe con valore vuoto
+        //    (banca / trattenute) come da spec ("mai € 0,00").
+        const nome = nameMap[c.cliente_id] || 'Cliente';
+        const vars: Record<string, string> = {
+            cliente: nome,
+            numero_contratto: c.contratto_numero || c.numero_contratto || '—',
+            veicolo: c.veicolo_nome || c.veicolo || '—',
+            targa: c.veicolo_targa || c.targa || '—',
+            data_riconsegna: c.data_restituzione_veicolo ? new Date(c.data_restituzione_veicolo + 'T00:00:00').toLocaleDateString('it-IT') : '—',
+            data_scadenza: new Date(todayRome + 'T00:00:00').toLocaleDateString('it-IT'),
+            intestatario_rimborso: c.intestatario_conto || nome,
+            importo_da_restituire: fmtEur(daRestituire),
+            iban_rimborso: c.iban ? ibanCheck.normalized : '',
+            banca: c.banca || '',
+            importo_cauzione: fmtEur(incassato),
+            importo_trattenuto: trattenuto > 0 ? fmtEur(trattenuto) : '',
+        };
+        let body = String(tpl.message_body);
+        for (const [k, v] of Object.entries(vars)) body = body.split(`{{${k}}}`).join(v);
+        // Rimuovi le righe rimaste con valore vuoto (Banca:, Trattenute applicate:, IBAN:).
+        body = body.split('\n').filter(line => {
+            const m = line.match(/:\s*(?:€\s*)?$/); // riga che finisce con ":" o ": €" senza valore
+            return !m;
+        }).join('\n');
+
+        // 9) Invio (WhatsApp allo staff). Email/in-app: FASE 7 (alarm) / follow-up.
+        let ok = false;
+        for (const r of recipients) {
+            try {
+                const res = await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ customPhone: r.phone, customMessage: body, type: 'Scadenza Cauzione' }),
+                });
+                if (res.ok) ok = true; else errors++;
+            } catch { errors++; }
+        }
+        if (ok) {
+            sent++;
+            await supabase.from('cauzioni').update({ scadenza_avviso_sent_on: todayRome }).eq('id', c.id);
+            await supabase.from('cauzioni_scadenza_log').update({ esito: { status: 'sent' } }).eq('chiave_antidup', chiave);
+        } else {
+            // invio fallito: libera il claim cosi' riprova al giro dopo.
+            await supabase.from('cauzioni_scadenza_log').delete().eq('chiave_antidup', chiave);
+        }
+    }
+
+    return { sent, skipped, errors };
+}
+
 async function processCauzioniRimborsoStaffReminder(now: number): Promise<{ sent: number; skipped: number; errors: number }> {
     let sent = 0, skipped = 0, errors = 0;
 
@@ -924,6 +1081,14 @@ const cronHandler = async () => {
         totalSent += rA.sent; totalSkipped += rA.skipped; totalErrors += rA.errors;
     } catch (e) {
         console.error('[scheduled-msgs] processUscitaAutistaReminders failed:', e);
+    }
+
+    // Avviso "Scadenza cauzione" per-cauzione (varianti A/B/C, 08:00).
+    try {
+        const rS = await processScadenzaCauzioneAvviso(now);
+        totalSent += rS.sent; totalSkipped += rS.skipped; totalErrors += rS.errors;
+    } catch (e) {
+        console.error('[scheduled-msgs] processScadenzaCauzioneAvviso failed:', e);
     }
 
     // Promemoria staff (Valerio/Ilenia) rimborso cauzioni in scadenza oggi.
