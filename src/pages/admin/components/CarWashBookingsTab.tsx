@@ -4656,14 +4656,16 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       const dateForSlots = formData.appointment_date ? new Date(formData.appointment_date + 'T12:00:00') : new Date()
                       const allSlots = generateAllDayLavaggioSlots()
 
-                      // Filter out past times if today
+                      // 2026-07-23: NON eliminare mai gli orari passati. Se il
+                      // cliente arriva alle 12 e la prenotazione si crea alle
+                      // 12:15, l'admin deve poter mettere il lavaggio alle 12 (o
+                      // anche prima). Gli orari passati restano selezionabili,
+                      // marcati 🔴 come occupato/bloccato/fuori orario.
                       const now = new Date()
                       const todayStr = now.toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' })
                       const isToday = formData.appointment_date === todayStr
                       const currentMinutes = isToday ? now.getHours() * 60 + now.getMinutes() : 0
-                      const slots = isToday
-                        ? allSlots.filter(t => { const [h, m] = t.split(':').map(Number); return h * 60 + m > currentMinutes; })
-                        : allSlots
+                      const slots = allSlots
 
                       const newDuration = getTotalDuration() || 60
                       const isSlotBusy = (slotTime: string): { busy: boolean; who?: string } => {
@@ -4684,11 +4686,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         const { busy, who } = isSlotBusy(time)
                         const closed = !isInLavaggioHours(dateForSlots, time)
                         const block = getSlotBlock(dateForSlots, time)
+                        const [ph, pm] = time.split(':').map(Number)
+                        const past = isToday && (ph * 60 + pm) <= currentMinutes
                         const label = busy
                           ? `🔴 ${time} — occupato (${who})`
                           : block
                             ? `🔴 ${time} — bloccato${block.note ? ` (${block.note})` : ''}`
-                            : (closed ? `🔴 ${time} — fuori orario` : time)
+                            : closed
+                              ? `🔴 ${time} — fuori orario`
+                              : past
+                                ? `🔴 ${time} — orario passato`
+                                : time
                         return <option key={time} value={time}>{label}</option>
                       })
                     })()}

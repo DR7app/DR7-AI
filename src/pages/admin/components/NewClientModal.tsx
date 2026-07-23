@@ -6,6 +6,7 @@ import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import CalcolaCFButton from '../../../components/CalcolaCFButton'
 import CompilaButton, { type ExtractedData, type DataConflict } from '../../../components/CompilaButton'
+import { validateIban, formatIbanGroups } from '../../../utils/ibanValidation'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -24,6 +25,11 @@ interface ClientFormData {
   nazione: string
   telefono: string
   email: string
+
+  // Dati rimborso cauzione (bonifico) — precompilano la cauzione e il messaggio
+  // automatico di restituzione.
+  iban: string
+  iban_intestatario: string
 
   // Persona Fisica
   nome: string
@@ -95,6 +101,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     nazione: 'Italia',
     telefono: '',
     email: '',
+    iban: '',
+    iban_intestatario: '',
     nome: '',
     cognome: '',
     codice_fiscale: '',
@@ -164,6 +172,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           nazione: initialData.nazione || 'Italia',
           telefono: initialData.phone || initialData.telefono || '',
           email: initialData.email || '',
+          iban: initialData.iban || '',
+          iban_intestatario: initialData.iban_intestatario || '',
 
           // Persona Fisica
           nome: initialData.nome || (initialData.full_name ? initialData.full_name.split(' ')[0] : ''),
@@ -249,6 +259,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           nazione: 'Italia',
           telefono: '',
           email: '',
+          iban: '',
+          iban_intestatario: '',
           nome: '',
           cognome: '',
           codice_fiscale: '',
@@ -401,7 +413,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         note: formData.note,
         source: 'admin',
         created_at: new Date().toISOString(),
-        residence_status: residenceStatus
+        residence_status: residenceStatus,
+        // Dati rimborso cauzione: IBAN normalizzato (senza spazi, maiuscolo) +
+        // intestatario. Precompilano la cauzione e il messaggio automatico.
+        iban: formData.iban ? formData.iban.replace(/\s+/g, '').toUpperCase() : null,
+        iban_intestatario: formData.iban_intestatario?.trim() || null
       }
 
       // Populate data based on type
@@ -1573,6 +1589,55 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
           </div>
 
+        </div>
+
+        {/* ── Dati Rimborso Cauzione (IBAN) ──────────────────────────────
+            Sezione dedicata: qui si salva l'IBAN del cliente per la
+            restituzione della cauzione via bonifico. Precompila la scheda
+            cauzione e alimenta il messaggio automatico di restituzione. */}
+        <div className="px-4 pb-4">
+          {(() => {
+            const ibanCheck = validateIban(formData.iban || '')
+            const filled = (formData.iban || '').trim().length > 0
+            return (
+              <div className="rounded-xl border border-dr7-gold/30 bg-dr7-gold/5 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 7h18a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1V8a1 1 0 011-1z"/></svg>
+                  <span className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider">Dati per il rimborso cauzione (bonifico)</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-theme-text-primary mb-1.5">Intestatario conto</label>
+                    <input
+                      type="text"
+                      value={formData.iban_intestatario}
+                      onChange={(e) => setFormData(prev => ({ ...prev, iban_intestatario: e.target.value }))}
+                      placeholder="Nome e cognome (o ragione sociale)"
+                      className="w-full px-3 py-2.5 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold transition-colors"
+                    />
+                    <p className="text-[11px] text-theme-text-muted mt-1">Può essere diverso dal cliente (es. conto cointestato).</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-theme-text-primary mb-1.5">IBAN</label>
+                    <input
+                      type="text"
+                      value={formData.iban}
+                      onChange={(e) => setFormData(prev => ({ ...prev, iban: e.target.value }))}
+                      onBlur={() => { if (filled && ibanCheck.valid) setFormData(prev => ({ ...prev, iban: formatIbanGroups(prev.iban) })) }}
+                      placeholder="IT00 X000 0000 0000 0000 0000 000"
+                      className={`w-full px-3 py-2.5 bg-theme-bg-tertiary border rounded-lg text-theme-text-primary text-sm font-mono focus:outline-none transition-colors ${!filled ? 'border-theme-border focus:border-dr7-gold' : ibanCheck.valid ? 'border-emerald-500/60 focus:border-emerald-500' : 'border-red-500/60 focus:border-red-500'}`}
+                    />
+                    {filled && (
+                      ibanCheck.valid
+                        ? <p className="text-[11px] text-emerald-500 mt-1">✓ IBAN valido{ibanCheck.warning ? ` — ${ibanCheck.warning}` : ''}{ibanCheck.country ? ` (${ibanCheck.country})` : ''}</p>
+                        : <p className="text-[11px] text-red-500 mt-1">✗ {ibanCheck.error}</p>
+                    )}
+                  </div>
+                </div>
+                <p className="text-[11px] text-theme-text-muted mt-2">Salvato qui, l'IBAN precompila automaticamente la cauzione del cliente e il messaggio di restituzione.</p>
+              </div>
+            )
+          })()}
         </div>
 
         {/* ── Sticky footer ───────────────────────────────────────────── */}
