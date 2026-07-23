@@ -9,7 +9,7 @@ interface AlarmBooking {
     vehicleName: string
     returnTime: string
     customerName: string
-    type?: 'return' | 'deposit' | 'unpaid_pickup' | 'car_wash' | 'fleet_maintenance_km' | 'fleet_maintenance_date'
+    type?: 'return' | 'deposit' | 'unpaid_pickup' | 'car_wash' | 'fleet_maintenance_km' | 'fleet_maintenance_date' | 'cauzione_scadenza'
     deposit?: number
     // Fleet maintenance specific fields
     vehicleId?: string
@@ -1002,6 +1002,68 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         }
     }
 
+    // ── Allarme "Scadenza cauzione" (campanella) ─────────────────────────────
+    // Suona il giorno della scadenza (ed oltre, finche' non gestita) per le
+    // cauzioni ancora DA_RESTITUIRE effettivamente incassate/pre-autorizzate.
+    // Config in system_alarms['cauzione_scadenza_rimborso'] (giorni, default 0).
+    const checkCauzioneScadenzaAlarms = async () => {
+        try {
+            const cfg = getAlarmCfg('cauzione_scadenza_rimborso', 0, 'days')
+            if (!cfg.is_enabled) return
+            const now = new Date()
+            const todayLocal = now.toLocaleDateString('en-CA') // YYYY-MM-DD (locale macchina)
+            const soglia = new Date(now.getTime() + cfg.threshold_value * 24 * 60 * 60 * 1000)
+                .toLocaleDateString('en-CA')
+
+            const { data: cauz } = await supabase
+                .from('cauzioni')
+                .select('id, cliente_id, importo, scadenza_cauzione, metodo, data_incasso, stato, stato_restituzione')
+                .lte('scadenza_cauzione', soglia)
+                .eq('stato_restituzione', 'DA_RESTITUIRE')
+                .not('stato', 'in', '(Restituita,Sbloccata,Bloccata,Danno)')
+            if (!cauz || cauz.length === 0) return
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const due = (cauz as any[]).filter(c => (!!c.data_incasso || c.metodo === 'preautorizzazione'))
+            if (due.length === 0) return
+
+            // Nomi cliente (solo per i due non ancora suonati).
+            const pending = due.filter(c => !triggeredAlarmsRef.current.has(`cauzione_scadenza_${c.id}`))
+            if (pending.length === 0) return
+            const nameMap: Record<string, string> = {}
+            const cids = [...new Set(pending.map(c => c.cliente_id).filter(Boolean))]
+            if (cids.length > 0) {
+                const { data: custs } = await supabase
+                    .from('customers_extended')
+                    .select('id, nome, cognome, denominazione, ragione_sociale, tipo_cliente')
+                    .in('id', cids as string[])
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                ;(custs || []).forEach((c: any) => {
+                    const azienda = c.tipo_cliente === 'azienda' ? (c.ragione_sociale || c.denominazione) : null
+                    nameMap[c.id] = azienda || `${c.nome || ''} ${c.cognome || ''}`.trim() || 'Cliente'
+                })
+            }
+
+            // Suona il primo non ancora suonato (uno alla volta, come gli altri).
+            const c = pending[0]
+            const trackingId = `cauzione_scadenza_${c.id}`
+            const overdue = c.scadenza_cauzione < todayLocal
+            markAlarmTriggered(trackingId)
+            playAlarm({
+                bookingId: c.id,
+                vehicleId: c.id,
+                vehicleName: 'Cauzione',
+                customerName: nameMap[c.cliente_id] || 'Cliente',
+                returnTime: new Date(c.scadenza_cauzione + 'T00:00:00').toLocaleDateString('it-IT'),
+                type: 'cauzione_scadenza',
+                deposit: Number(c.importo || 0),
+                urgent: overdue,
+            })
+        } catch (error) {
+            console.error('Error checking cauzione scadenza alarms:', error)
+        }
+    }
+
     // Poll every 60 seconds — only when authenticated and tab is visible.
     // Skippato totalmente se l'admin ha hide:allarmi (collaboratori).
     // alarmsDisabledForUser === null significa "ancora da verificare":
@@ -1017,7 +1079,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             if (isRunning) return
             isRunning = true
             try {
-                await Promise.all([checkAlarms(), checkFleetMaintenanceAlarms()])
+                await Promise.all([checkAlarms(), checkFleetMaintenanceAlarms(), checkCauzioneScadenzaAlarms()])
             } finally {
                 isRunning = false
             }

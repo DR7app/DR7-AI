@@ -26,6 +26,7 @@ export default function AlarmNotification() {
             case 'car_wash': return { title: 'Lavaggio tra poco', accent: 'bg-blue-500', accentText: 'text-blue-700', timeLabel: 'Orario' }
             case 'fleet_maintenance_km': return { title: (alarmState.activeAlarm.urgent ? 'Manutenzione urgente' : 'Manutenzione richiesta') + mtSuffix, accent: 'bg-orange-500', accentText: 'text-orange-700', timeLabel: 'Scadenza' }
             case 'fleet_maintenance_date': return { title: (alarmState.activeAlarm.urgent ? 'Scadenza amministrativa' : 'Rinnovo richiesto') + mtSuffix, accent: 'bg-yellow-500', accentText: 'text-yellow-700', timeLabel: 'Scadenza' }
+            case 'cauzione_scadenza': return { title: alarmState.activeAlarm.urgent ? 'Cauzione scaduta — da restituire' : 'Scadenza cauzione — oggi', accent: 'bg-yellow-500', accentText: 'text-yellow-700', timeLabel: 'Scadenza' }
             default: return { title: 'Rientro veicolo', accent: 'bg-red-500', accentText: 'text-red-700', timeLabel: 'Previsto' }
         }
     })()
@@ -129,10 +130,10 @@ export default function AlarmNotification() {
                                 />
                             )}
 
-                            {/* Amount for deposit/unpaid */}
-                            {(type === 'deposit' || type === 'unpaid_pickup') && alarmState.activeAlarm.deposit != null && (
+                            {/* Amount for deposit/unpaid/cauzione */}
+                            {(type === 'deposit' || type === 'unpaid_pickup' || type === 'cauzione_scadenza') && alarmState.activeAlarm.deposit != null && (
                                 <Row
-                                    label={type === 'deposit' ? 'Cauzione' : 'Da pagare'}
+                                    label={type === 'unpaid_pickup' ? 'Da pagare' : type === 'cauzione_scadenza' ? 'Da restituire' : 'Cauzione'}
                                     value={`€ ${Number(alarmState.activeAlarm.deposit).toLocaleString('it-IT', { minimumFractionDigits: 2 })}`}
                                     strong
                                 />

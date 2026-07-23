@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
-import { validateIban, formatIbanGroups } from '../../../utils/ibanValidation'
+import { validateIban, formatIbanGroups, maskIban } from '../../../utils/ibanValidation'
+import { useAdminRole } from '../../../hooks/useAdminRole'
 
 interface NuovaCauzioneModalProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -28,6 +29,11 @@ interface Vehicle {
 }
 
 export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaCauzioneModalProps) {
+    const { role, hasRole } = useAdminRole()
+    // FASE 9: l'IBAN in chiaro e' visibile/modificabile solo a Ilenia, Valerio,
+    // Amministrazione (direzione) e Admin/dev. Gli altri vedono solo la maschera
+    // in sola lettura.
+    const canViewIban = role === 'superadmin' || hasRole('direzione') || hasRole('developer') || hasRole('payment-manager')
     const [loading, setLoading] = useState(false)
     const [customers, setCustomers] = useState<Customer[]>([])
     const [vehicles, setVehicles] = useState<Vehicle[]>([])
@@ -352,13 +358,18 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
                                         </label>
                                         <input
                                             type="text"
-                                            value={formData.iban}
+                                            value={canViewIban ? formData.iban : (formData.iban ? maskIban(formData.iban) : '')}
                                             onChange={(e) => setFormData({ ...formData, iban: e.target.value })}
-                                            onBlur={() => { if (ibanFilled && ibanCheck.valid) setFormData(f => ({ ...f, iban: formatIbanGroups(f.iban) })) }}
+                                            onBlur={() => { if (canViewIban && ibanFilled && ibanCheck.valid) setFormData(f => ({ ...f, iban: formatIbanGroups(f.iban) })) }}
+                                            readOnly={!canViewIban}
+                                            disabled={!canViewIban}
                                             placeholder="IT00 X000 0000 0000 0000 0000 000"
-                                            className={`w-full px-4 py-3 bg-theme-bg-tertiary border rounded-lg text-theme-text-primary font-mono focus:outline-none transition-colors ${!ibanFilled ? 'border-theme-border focus:border-dr7-gold' : ibanCheck.valid ? 'border-emerald-500/60 focus:border-emerald-500' : 'border-red-500/60 focus:border-red-500'}`}
+                                            className={`w-full px-4 py-3 bg-theme-bg-tertiary border rounded-lg text-theme-text-primary font-mono focus:outline-none transition-colors disabled:opacity-70 disabled:cursor-not-allowed ${!ibanFilled ? 'border-theme-border focus:border-dr7-gold' : ibanCheck.valid ? 'border-emerald-500/60 focus:border-emerald-500' : 'border-red-500/60 focus:border-red-500'}`}
                                         />
-                                        {ibanFilled && (
+                                        {!canViewIban && (
+                                            <p className="text-xs text-theme-text-muted mt-1">IBAN visibile in chiaro solo a Amministrazione (Ilenia/Valerio).</p>
+                                        )}
+                                        {canViewIban && ibanFilled && (
                                             ibanCheck.valid ? (
                                                 <p className="text-xs text-emerald-500 mt-1 flex items-center gap-1">
                                                     ✓ IBAN valido{ibanCheck.warning ? ` — ${ibanCheck.warning}` : ''}{ibanCheck.country ? ` (${ibanCheck.country})` : ''}
