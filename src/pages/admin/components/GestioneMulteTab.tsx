@@ -21,6 +21,66 @@ export default function GestioneMulteTab() {
     const [pecResult, setPecResult] = useState<any>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
+    // ── Destinatario PEC dinamico (organo accertatore) ───────────────────────
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [pecRecipient, setPecRecipient] = useState<any>(null)  // proposta backend
+    const [chosenPec, setChosenPec] = useState('')               // destinatario effettivo
+    const [chosenEnteId, setChosenEnteId] = useState<string | null>(null)
+    const [selMode, setSelMode] = useState<'automatica' | 'rubrica' | 'manuale' | 'verbale'>('manuale')
+    const [confirmRecipient, setConfirmRecipient] = useState(false)
+    const [showChangeRecipient, setShowChangeRecipient] = useState(false)
+    const [rubricaQuery, setRubricaQuery] = useState('')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [rubricaResults, setRubricaResults] = useState<any[]>([])
+    const [ccInput, setCcInput] = useState('')
+
+    function looksLikePec(email: string): boolean {
+        const e = (email || '').toLowerCase().trim()
+        if (!/\S+@\S+\.\S+/.test(e)) return false
+        const domain = e.split('@')[1] || ''
+        return /pec|legalmail|postecert|sicurezzapostale|cert\./.test(domain)
+    }
+
+    async function searchRubrica(q: string) {
+        setRubricaQuery(q)
+        if (q.trim().length < 2) { setRubricaResults([]); return }
+        const { data } = await supabase
+            .from('enti_notificatori')
+            .select('id, denominazione, comune, provincia, pec, tipo_ente')
+            .eq('attivo', true)
+            .or(`denominazione.ilike.%${q}%,comune.ilike.%${q}%`)
+            .limit(15)
+        setRubricaResults(data || [])
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function pickRubricaEnte(ente: any) {
+        setChosenPec(ente.pec)
+        setChosenEnteId(ente.id)
+        setSelMode('rubrica')
+        setConfirmRecipient(false)
+        setShowChangeRecipient(false)
+        setRubricaQuery(''); setRubricaResults([])
+    }
+
+    async function handleAddToRubrica() {
+        const pec = chosenPec.trim().toLowerCase()
+        if (!pec || !looksLikePec(pec)) { toast.error('PEC non valida'); return }
+        const denominazione = (multaData?.ente_denominazione || '').trim() || `Ente ${multaData?.comune || ''}`.trim()
+        const { data, error } = await supabase.from('enti_notificatori').insert({
+            denominazione,
+            tipo_ente: multaData?.ente_tipo || 'altro',
+            comune: multaData?.comune || null,
+            provincia: multaData?.provincia || null,
+            pec,
+            fonte: 'verbale',
+            verificata_il: new Date().toISOString(),
+        }).select('id').single()
+        if (error) { toast.error('Errore salvataggio rubrica: ' + error.message); return }
+        setChosenEnteId(data.id)
+        toast.success('Ente aggiunto alla rubrica')
+    }
+
     // PEC History
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [pecHistory, setPecHistory] = useState<any[]>([])
@@ -84,6 +144,14 @@ export default function GestioneMulteTab() {
             setMultaData(data.multaData)
             setDriverData(data.driver)
             setLetterText(data.letterText)
+            // Destinatario PEC proposto dal riconoscimento dell'organo accertatore.
+            const rec = data.pecRecipient || null
+            setPecRecipient(rec)
+            setChosenPec(rec?.pec || '')
+            setChosenEnteId(rec?.ente_id || null)
+            setSelMode(rec?.source === 'verbale' ? 'verbale' : rec?.source === 'rubrica' ? (rec.confidence >= 0.85 ? 'automatica' : 'rubrica') : 'manuale')
+            setConfirmRecipient(false)
+            setShowChangeRecipient(!rec?.pec) // se nessuna proposta, apri subito la scelta
             setMultaStep('review')
             toast.success('Conducente trovato! Controlla i dati prima di inviare.')
         } catch (err: unknown) {
@@ -96,6 +164,20 @@ export default function GestioneMulteTab() {
 
     async function handleSendPec() {
         if (!multaData || !driverData) { toast.error('Dati mancanti'); return }
+        // Regola non negoziabile: mai un invio a destinatario non confermato.
+        const dest = chosenPec.trim().toLowerCase()
+        if (!dest || !/\S+@\S+\.\S+/.test(dest)) {
+            toast.error('Destinatario PEC mancante o non valido — scegli o inserisci una PEC'); return
+        }
+        if (!confirmRecipient) {
+            toast.error('Conferma il destinatario prima di inviare'); return
+        }
+        // Avviso invio duplicato per la stessa multa (non blocca, chiede conferma).
+        const alreadySent = pecHistory.find(h => h.numero_verbale && multaData.numero_verbale && h.numero_verbale === multaData.numero_verbale)
+        if (alreadySent && !window.confirm(`Questa multa (verbale ${multaData.numero_verbale}) risulta già inviata il ${new Date(alreadySent.created_at).toLocaleDateString('it-IT')} a ${alreadySent.pec_to}. Inviare di nuovo?`)) {
+            return
+        }
+        const ccList = ccInput.split(/[,;\s]+/).map(s => s.trim().toLowerCase()).filter(s => /\S+@\S+\.\S+/.test(s))
         setPecSending(true)
         try {
             const res = await fetch('/.netlify/functions/process-multa', {
@@ -108,15 +190,17 @@ export default function GestioneMulteTab() {
                     multaData,
                     driverData,
                     letterText,
+                    pecTo: dest,
+                    pecCc: ccList,
                 }),
             })
             const data = await res.json()
             if (data.error) { toast.error('Errore invio PEC: ' + data.error); return }
-            setPecResult(data)
+            setPecResult({ ...data, pecTo: dest })
             setMultaStep('sent')
             toast.success(`PEC inviata con ${data.attachmentCount} allegati!`)
 
-            // Save to history log
+            // Save to history log — destinatario EFFETTIVO + modalità + confidenza.
             await supabase.from('multe_pec_log').insert({
                 numero_verbale: multaData.numero_verbale || null,
                 targa: multaData.targa || null,
@@ -127,7 +211,11 @@ export default function GestioneMulteTab() {
                 conducente_codice_fiscale: driverData.codice_fiscale || null,
                 booking_id: driverData.booking_id || null,
                 pec_message_id: data.messageId || null,
-                pec_to: 'poliziamunicipale@comune.cagliari.legalmail.it',
+                pec_to: dest,
+                ente_id: chosenEnteId,
+                modalita_selezione: selMode,
+                confidenza: pecRecipient?.confidence ?? null,
+                pec_cc: ccList.length ? ccList : null,
                 allegati_count: data.attachmentCount || 0,
                 has_patente: (driverData.license_urls?.length || 0) > 0,
                 has_contratto: !!driverData.contract_url,
@@ -150,6 +238,9 @@ export default function GestioneMulteTab() {
         setDriverData(null)
         setLetterText('')
         setPecResult(null)
+        setPecRecipient(null); setChosenPec(''); setChosenEnteId(null)
+        setSelMode('manuale'); setConfirmRecipient(false); setShowChangeRecipient(false)
+        setRubricaQuery(''); setRubricaResults([]); setCcInput('')
         if (fileInputRef.current) fileInputRef.current.value = ''
     }
 
@@ -498,11 +589,79 @@ export default function GestioneMulteTab() {
                                 </div>
                             </div>
 
+                            {/* ── Destinatario PEC dinamico ─────────────────────── */}
+                            {(() => {
+                                const conf = pecRecipient?.confidence ?? 0
+                                const badge = !chosenPec
+                                    ? { c: 'bg-red-500/15 text-red-300 border-red-500/40', t: 'Nessun destinatario' }
+                                    : conf >= 0.85 || selMode === 'verbale'
+                                        ? { c: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40', t: `Confidenza alta${conf ? ` ${Math.round(conf * 100)}%` : ''}` }
+                                        : conf >= 0.5
+                                            ? { c: 'bg-amber-500/15 text-amber-300 border-amber-500/40', t: `Confidenza media ${Math.round(conf * 100)}%` }
+                                            : { c: 'bg-red-500/15 text-red-300 border-red-500/40', t: 'Confidenza bassa — verifica' }
+                                const sourceLabel = selMode === 'verbale' ? 'rilevata dal verbale' : selMode === 'rubrica' || selMode === 'automatica' ? 'da rubrica' : 'inserita manualmente'
+                                const pecNotInRubrica = selMode === 'verbale' && !chosenEnteId
+                                return (
+                                    <div className="bg-theme-bg-secondary rounded-lg border border-theme-border p-4 space-y-3">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <h3 className="text-sm font-bold text-theme-text-primary">Destinatario PEC</h3>
+                                            <span className={`text-[11px] px-2 py-0.5 rounded-full border ${badge.c}`}>{badge.t}</span>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className="font-mono text-sm text-theme-text-primary break-all">{chosenPec || '— nessuna PEC —'}</span>
+                                            {chosenPec && <span className="text-[11px] text-theme-text-muted">({sourceLabel})</span>}
+                                        </div>
+                                        {pecRecipient?.denominazione && <div className="text-xs text-theme-text-muted">{pecRecipient.denominazione}</div>}
+                                        {chosenPec && !looksLikePec(chosenPec) && (
+                                            <div className="text-[11px] text-amber-400">Questo indirizzo non sembra una PEC — confermi comunque?</div>
+                                        )}
+                                        {pecNotInRubrica && (
+                                            <button onClick={handleAddToRubrica} className="text-xs px-3 py-1.5 rounded-lg bg-dr7-gold/15 text-dr7-gold border border-dr7-gold/40 hover:bg-dr7-gold/25">+ Aggiungi alla rubrica</button>
+                                        )}
+                                        <div>
+                                            <button onClick={() => setShowChangeRecipient(v => !v)} className="text-xs text-theme-text-secondary underline">
+                                                {showChangeRecipient ? 'Chiudi' : 'Cambia destinatario'}
+                                            </button>
+                                        </div>
+                                        {showChangeRecipient && (
+                                            <div className="rounded-lg border border-theme-border bg-theme-bg-tertiary/40 p-3 space-y-3">
+                                                <div>
+                                                    <label className="block text-[11px] uppercase tracking-wide text-theme-text-muted mb-1">Cerca in rubrica (nome / comune)</label>
+                                                    <input value={rubricaQuery} onChange={e => searchRubrica(e.target.value)} placeholder="Es. Olbia, Polizia Locale…" className="w-full px-3 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-sm text-theme-text-primary" />
+                                                    {rubricaResults.length > 0 && (
+                                                        <div className="mt-1 max-h-44 overflow-y-auto rounded-lg border border-theme-border divide-y divide-theme-border/50">
+                                                            {rubricaResults.map(e => (
+                                                                <button key={e.id} onClick={() => pickRubricaEnte(e)} className="w-full text-left px-3 py-2 hover:bg-theme-bg-hover">
+                                                                    <div className="text-sm text-theme-text-primary">{e.denominazione}</div>
+                                                                    <div className="text-[11px] text-theme-text-muted">{e.comune || ''}{e.provincia ? ` (${e.provincia})` : ''} · <span className="font-mono">{e.pec}</span></div>
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[11px] uppercase tracking-wide text-theme-text-muted mb-1">…oppure inserisci una PEC manualmente</label>
+                                                    <input value={chosenPec} onChange={e => { setChosenPec(e.target.value); setChosenEnteId(null); setSelMode('manuale'); setConfirmRecipient(false) }} placeholder="pec@comune.esempio.legalmail.it" className="w-full px-3 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-sm text-theme-text-primary font-mono" />
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div>
+                                            <label className="block text-[11px] uppercase tracking-wide text-theme-text-muted mb-1">CC (facoltativo — studio legale / cliente)</label>
+                                            <input value={ccInput} onChange={e => setCcInput(e.target.value)} placeholder="email separate da virgola" className="w-full px-3 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-sm text-theme-text-primary" />
+                                        </div>
+                                        <label className="flex items-center gap-2 text-sm text-theme-text-primary cursor-pointer">
+                                            <input type="checkbox" checked={confirmRecipient} onChange={e => setConfirmRecipient(e.target.checked)} className="w-4 h-4 accent-dr7-gold" />
+                                            Confermo che il destinatario è corretto
+                                        </label>
+                                    </div>
+                                )
+                            })()}
+
                             <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
                                 <div className="px-5 py-3 border-b border-theme-border bg-theme-bg-tertiary/30 flex justify-between items-center">
                                     <h3 className="text-sm font-bold text-theme-text-primary">Anteprima Comunicazione PEC</h3>
-                                    <div className="text-xs text-theme-text-muted">
-                                        A: poliziamunicipale@comune.cagliari.legalmail.it
+                                    <div className="text-xs text-theme-text-muted break-all">
+                                        A: {chosenPec || '—'}
                                     </div>
                                 </div>
                                 <div className="p-4">
@@ -521,8 +680,8 @@ export default function GestioneMulteTab() {
                                 </Button>
                                 <Button
                                     onClick={handleSendPec}
-                                    disabled={pecSending}
-                                    className="flex-[2] bg-green-600 hover:bg-green-500 flex items-center justify-center gap-2"
+                                    disabled={pecSending || !chosenPec || !confirmRecipient}
+                                    className="flex-[2] bg-green-600 hover:bg-green-500 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {pecSending ? (
                                         <>
@@ -532,7 +691,7 @@ export default function GestioneMulteTab() {
                                     ) : (
                                         <>
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                                            Invia PEC a Polizia Municipale
+                                            {confirmRecipient ? 'Invia PEC' : 'Conferma il destinatario'}
                                         </>
                                     )}
                                 </Button>
@@ -549,8 +708,8 @@ export default function GestioneMulteTab() {
                                 </div>
                                 <div>
                                     <h3 className="text-lg font-bold text-green-400">PEC Inviata</h3>
-                                    <p className="text-sm text-theme-text-muted mt-1">
-                                        Comunicazione inviata a poliziamunicipale@comune.cagliari.legalmail.it
+                                    <p className="text-sm text-theme-text-muted mt-1 break-all">
+                                        Comunicazione inviata a {pecResult.pecTo || chosenPec}
                                     </p>
                                 </div>
                                 <div className="text-xs text-theme-text-muted space-y-1">

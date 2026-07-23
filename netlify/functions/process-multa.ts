@@ -27,7 +27,24 @@ interface MultaData {
     luogo_infrazione?: string
     tipo_violazione?: string
     articolo?: string
+    // Organo accertatore (per destinatario PEC dinamico)
+    ente_denominazione?: string | null
+    ente_tipo?: string | null
+    comune?: string | null
+    provincia?: string | null
+    pec_indicata_nel_verbale?: string | null
     raw_text?: string
+}
+
+// Destinatario PEC proposto dal matching contro la rubrica enti_notificatori.
+interface PecRecipient {
+    pec: string | null
+    ente_id: string | null
+    denominazione: string | null
+    source: 'verbale' | 'rubrica' | 'nessuno'
+    confidence: number         // 0..1
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    candidates: any[]          // top match alternativi (per confidenza media)
 }
 
 interface DriverData {
@@ -86,6 +103,11 @@ Campi da estrarre:
 - luogo_infrazione: luogo/via dell'infrazione
 - tipo_violazione: breve descrizione della violazione
 - articolo: articolo del CdS violato (es: "Art. 142 comma 8")
+- ente_denominazione: nome COMPLETO dell'organo accertatore che ha emesso il verbale (es: "Comando Polizia Locale di Olbia", "Polizia Stradale - Sezione di Sassari", "Comando Provinciale Carabinieri di Nuoro"). NON inventare: prendilo dall'intestazione/timbro del verbale.
+- ente_tipo: uno tra polizia_locale | polizia_stradale | carabinieri | gdf | polizia_provinciale | concessionaria | altro
+- comune: comune dell'organo accertatore (es: "Olbia")
+- provincia: sigla provincia dell'organo accertatore (es: "SS")
+- pec_indicata_nel_verbale: indirizzo PEC dell'organo accertatore SE stampato nel verbale (molti verbali la riportano per la comunicazione dati conducente), altrimenti null. Deve essere un indirizzo di posta certificata (pec.*, *.pec.it, legalmail.it, postecert.it...).
 
 Se un campo non è leggibile, usa null.
 Rispondi SOLO con il JSON.`
@@ -99,6 +121,80 @@ Rispondi SOLO con il JSON.`
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error('Impossibile estrarre dati dal PDF')
     return JSON.parse(jsonMatch[0])
+}
+
+// ── Matching organo accertatore → destinatario PEC ──────────────────────────
+// Priorita' (spec FASE 5): PEC nel verbale (0.95) > match esatto denom+comune
+// (0.90) > fuzzy denom+comune (=similarita') > nessuno (0). Se il verbale
+// riporta una PEC non in rubrica, la proponiamo comunque (source 'verbale').
+function normalizeDenom(s: string): string {
+    return (s || '')
+        .toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')       // via accenti
+        .replace(/\b(comando|corpo|sezione|distaccamento|di|del|della|dei|delle|the)\b/g, ' ')
+        .replace(/[^a-z0-9 ]/g, ' ')
+        .replace(/\s+/g, ' ').trim()
+}
+function isPecDomain(email: string): boolean {
+    const e = (email || '').toLowerCase()
+    return /@(pec\.|.*\.pec\.it|.*legalmail\.it|.*postecert\.it|.*sicurezzapostale\.it|.*pec\.aruba\.it|.*cert\.legalmail\.it)/.test(e)
+        || /pec/.test(e.split('@')[1] || '')
+}
+async function matchEnte(multa: MultaData): Promise<PecRecipient> {
+    const empty: PecRecipient = { pec: null, ente_id: null, denominazione: null, source: 'nessuno', confidence: 0, candidates: [] }
+
+    // 1) PEC stampata nel verbale → fonte piu' affidabile.
+    const pecVerbale = (multa.pec_indicata_nel_verbale || '').trim()
+    if (pecVerbale && /\S+@\S+\.\S+/.test(pecVerbale)) {
+        // esiste gia' in rubrica? (per collegare ente_id)
+        const { data: existing } = await supabase
+            .from('enti_notificatori').select('id, denominazione')
+            .ilike('pec', pecVerbale).eq('attivo', true).limit(1)
+        return {
+            pec: pecVerbale.toLowerCase(),
+            ente_id: existing?.[0]?.id || null,
+            denominazione: existing?.[0]?.denominazione || multa.ente_denominazione || null,
+            source: 'verbale', confidence: 0.95, candidates: [],
+        }
+    }
+
+    const denom = (multa.ente_denominazione || '').trim()
+    const comune = (multa.comune || '').trim()
+    if (!denom && !comune) return empty
+
+    // 2) match esatto denominazione + comune.
+    if (denom && comune) {
+        const { data: exact } = await supabase
+            .from('enti_notificatori').select('id, denominazione, pec, comune, provincia')
+            .ilike('denominazione', denom).ilike('comune', comune).eq('attivo', true).limit(1)
+        if (exact?.[0]) {
+            return { pec: exact[0].pec, ente_id: exact[0].id, denominazione: exact[0].denominazione, source: 'rubrica', confidence: 0.90, candidates: [] }
+        }
+    }
+
+    // 3) fuzzy: candidati per comune (o provincia), poi similarita' sulla denominazione.
+    let query = supabase.from('enti_notificatori').select('id, denominazione, pec, comune, provincia').eq('attivo', true)
+    if (comune) query = query.ilike('comune', comune)
+    else if (multa.provincia) query = query.ilike('provincia', multa.provincia)
+    const { data: pool } = await query.limit(50)
+    const nd = normalizeDenom(denom)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const scored = (pool || []).map((e: any) => {
+        const ne = normalizeDenom(e.denominazione)
+        // Dice/trigram-ish: quota di token in comune.
+        const a = new Set(nd.split(' ').filter(Boolean))
+        const b = new Set(ne.split(' ').filter(Boolean))
+        const inter = [...a].filter(t => b.has(t)).length
+        const sim = a.size + b.size > 0 ? (2 * inter) / (a.size + b.size) : 0
+        return { ...e, confidence: Math.round(sim * 1000) / 1000 }
+    }).sort((x, y) => y.confidence - x.confidence)
+
+    if (scored.length && scored[0].confidence >= 0.5) {
+        const top = scored[0]
+        return { pec: top.pec, ente_id: top.id, denominazione: top.denominazione, source: 'rubrica', confidence: top.confidence, candidates: scored.slice(0, 3) }
+    }
+    // Confidenza bassa: proponi comunque i 3 candidati per la scelta manuale.
+    return { ...empty, candidates: scored.slice(0, 3) }
 }
 
 // ── Find driver from booking ─────────────────────────────────────────────────
@@ -359,10 +455,19 @@ async function sendPEC(
     body: string,
     attachments: Array<{ filename: string; content: Buffer; contentType: string }>,
     pecTo?: string,
-    pecPassword?: string
+    pecPassword?: string,
+    pecCc?: string[]
 ): Promise<{ messageId: string }> {
     const pass = pecPassword || PEC_PASSWORD
     if (!pass) throw new Error('Password PEC non configurata. Aggiungi PEC_PASSWORD nelle variabili d\'ambiente Netlify.')
+
+    // Regola non negoziabile: nessun destinatario hardcoded. Se il chiamante non
+    // passa un destinatario esplicito, l'invio si blocca (mai all'indirizzo
+    // sbagliato). PEC_TO_DEFAULT resta solo come costante legacy, non usata.
+    const to = (pecTo || '').trim()
+    if (!to || !/\S+@\S+\.\S+/.test(to)) {
+        throw new Error('Destinatario PEC mancante: invio bloccato (nessun destinatario predefinito).')
+    }
 
     const transporter = nodemailer.createTransport({
         host: PEC_HOST,
@@ -374,9 +479,11 @@ async function sendPEC(
         },
     })
 
+    const cc = (pecCc || []).map(c => c.trim()).filter(c => /\S+@\S+\.\S+/.test(c))
     const info = await transporter.sendMail({
         from: PEC_FROM,
-        to: pecTo || PEC_TO_DEFAULT,
+        to,
+        ...(cc.length ? { cc } : {}),
         subject,
         text: body,
         attachments: attachments.map(a => ({
@@ -405,6 +512,7 @@ interface ProcessMultaRequest {
     driverData?: DriverData
     letterText?: string    // User-edited letter text (if not provided, auto-generated)
     pecTo?: string
+    pecCc?: string[]
     pecPassword?: string
     // For fullProcess — all of the above
 }
@@ -435,10 +543,11 @@ const handler: Handler = async (event) => {
                 }
 
                 const multaData = await extractMultaData(req.pdfBase64)
+                const pecRecipient = await matchEnte(multaData)
                 return {
                     statusCode: 200,
                     headers: corsHeaders,
-                    body: JSON.stringify({ multaData }),
+                    body: JSON.stringify({ multaData, pecRecipient }),
                 }
             }
 
@@ -553,7 +662,8 @@ const handler: Handler = async (event) => {
                     letterText,
                     attachments,
                     req.pecTo,
-                    req.pecPassword
+                    req.pecPassword,
+                    req.pecCc
                 )
 
                 return {
@@ -605,10 +715,13 @@ const handler: Handler = async (event) => {
                 // Step 3: Generate letter (but don't send yet — return for review)
                 const letterText = generateLetterText(multaData, driver)
 
+                // Step 4: propose PEC recipient (organo accertatore dinamico)
+                const pecRecipient = await matchEnte(multaData)
+
                 return {
                     statusCode: 200,
                     headers: corsHeaders,
-                    body: JSON.stringify({ multaData, driver, letterText }),
+                    body: JSON.stringify({ multaData, driver, letterText, pecRecipient }),
                 }
             }
 
