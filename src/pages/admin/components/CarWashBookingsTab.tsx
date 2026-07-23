@@ -308,8 +308,20 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   useEffect(() => {
     const pending = pendingCreateBookingRef.current
     if (!pending) return
-    const confirmOk = override.overrideCodes.has('prenotazione_lavaggio_conferma')
-    if (confirmOk) {
+    // 2026-07-23 BUG FIX: createBooking ha PIU' gate OTP in sequenza
+    // (carwash_blocked_slot → prenotazione_lavaggio_conferma → carta_punti_lavaggio).
+    // Prima si riprendeva SOLO su 'prenotazione_lavaggio_conferma': approvando
+    // il blocco (carwash_blocked_slot) l'effetto non faceva nulla e il tasto
+    // restava per sempre su "In attesa OTP…". Riprendiamo su QUALSIASI gate di
+    // creazione approvato: createBooking ricontrolla i gate dall'alto, quello
+    // appena approvato passa e o avanza al gate successivo (ri-settando pending)
+    // o completa. L'effetto scatta solo quando overrideCodes CAMBIA (nuova
+    // approvazione), quindi ogni approvazione avanza di un gate senza loop.
+    const anyGateApproved =
+      override.overrideCodes.has('carwash_blocked_slot') ||
+      override.overrideCodes.has('prenotazione_lavaggio_conferma') ||
+      override.overrideCodes.has('carta_punti_lavaggio')
+    if (anyGateApproved) {
       pendingCreateBookingRef.current = null
       createBooking(pending.force)
     }
@@ -4671,9 +4683,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       return slots.map((time) => {
                         const { busy, who } = isSlotBusy(time)
                         const closed = !isInLavaggioHours(dateForSlots, time)
+                        const block = getSlotBlock(dateForSlots, time)
                         const label = busy
                           ? `🔴 ${time} — occupato (${who})`
-                          : (closed ? `🔴 ${time} — fuori orario` : time)
+                          : block
+                            ? `🔴 ${time} — bloccato${block.note ? ` (${block.note})` : ''}`
+                            : (closed ? `🔴 ${time} — fuori orario` : time)
                         return <option key={time} value={time}>{label}</option>
                       })
                     })()}
