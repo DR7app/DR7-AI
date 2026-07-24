@@ -5,6 +5,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+import { statusColorClasses } from './ClientStatusConfigSection'
 import { listCardsFromMetadata } from '../../../utils/nexiCards'
 import CustomerAddebitoButton from './CustomerAddebitoButton'
 import CardDeleteButton from './CardDeleteButton'
@@ -55,6 +56,17 @@ type TabId = 'stato' | 'anagrafica' | 'storico' | 'economica'
 export default function ReportClienteModal({ customerId, onClose }: ReportClienteProps) {
   const [customer, setCustomer] = useState<CustomerData | null>(null)
   const [uploadingFoto, setUploadingFoto] = useState(false)
+  // Status clienti personalizzabili (roadmap 20): label/descrizione/colore da Centralina.
+  const [statusCfg, setStatusCfg] = useState<Record<string, { label: string; descrizione: string | null; color: string }>>({})
+  useEffect(() => {
+    supabase.from('client_status_config').select('status_key, label, descrizione, color').then(({ data }) => {
+      if (data) {
+        const m: Record<string, { label: string; descrizione: string | null; color: string }> = {}
+        for (const r of data as { status_key: string; label: string; descrizione: string | null; color: string }[]) m[r.status_key] = r
+        setStatusCfg(m)
+      }
+    }, () => {})
+  }, [])
   const [deletedCardIds, setDeletedCardIds] = useState<Set<string>>(new Set())
 
   // Foto cliente (roadmap 21): upload diretto dalla scheda + salva su DB.
@@ -403,13 +415,19 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   // Insight
   const insight = useMemo(() => {
     const status = customer?.status_cliente
+    // roadmap 20: usa la config personalizzata da Centralina (label/descrizione/colore).
+    if (status && statusCfg[status]) {
+      const c = statusCfg[status]
+      const cls = statusColorClasses(c.color)
+      return { label: c.descrizione ? `${c.label} — ${c.descrizione}` : c.label, color: cls.text, bg: cls.bg }
+    }
     if (status === 'blacklist') return { label: 'Cliente in Blacklist', color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/30' }
     if (status === 'elite') return { label: 'Cliente Elite — alto valore, basso rischio', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' }
     if (status === 'member') return { label: 'Cliente Member — fidelizzato', color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/30' }
     if (riskScore >= 8 && kpis.totalSpent > 1000) return { label: 'Cliente affidabile con alto valore', color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/30' }
     if (riskScore < 5) return { label: 'Attenzione: rischio elevato', color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/30' }
     return { label: 'Cliente standard', color: 'text-theme-text-muted', bg: 'bg-theme-bg-tertiary border-theme-border' }
-  }, [customer, riskScore, kpis])
+  }, [customer, riskScore, kpis, statusCfg])
 
   // Monthly spend for chart (last 6 months)
   const monthlyData = useMemo(() => {

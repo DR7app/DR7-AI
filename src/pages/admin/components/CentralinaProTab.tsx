@@ -13,6 +13,7 @@ import { useAdminRole } from '../../../hooks/useAdminRole'
 import TerraCatalogTab from './TerraCatalogTab'
 import CarWashCatalogTab from './CarWashCatalogTab'
 import NoleggioServiceTab from './NoleggioServiceTab'
+import ClientStatusConfigSection from './ClientStatusConfigSection'
 
 type FleetVehicle = {
   id: string
@@ -43,7 +44,7 @@ type VehicleRevenueTarget = {
   tiers: VehicleRevenueTier[]
 }
 
-type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo'
+type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti'
 
 // Days of the week for opening-hours configs (lavaggio, future noleggio).
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
@@ -81,6 +82,7 @@ const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'p11', title: 'Automazioni' },
   { id: 'p12', title: 'Orari' },
   { id: 'catalogo', title: 'Catalogo' },
+  { id: 'status-clienti', title: 'Status Clienti' },
   // 'Marketing' rimossa: ora vive in admin > Marketing > Social Links.
   // Il campo `marketing` resta nel snapshot per preservarlo durante save.
 ]
@@ -2023,12 +2025,13 @@ export default function CentralinaProTab() {
                 {businessId === 'soggiorni' && <NoleggioServiceTab serviceType="stay_rental" view="catalog" labels={{ title: 'Soggiorni & Ospitalità', asset: 'Alloggio', assetPlural: 'Alloggi' }} />}
               </div>
             )}
+            {section === 'status-clienti' && <ClientStatusConfigSection />}
             </>)}
           </main>
         </div>
       </div>
 
-      {!isCauzioniViewOnly && section !== 'catalogo' && (
+      {!isCauzioniViewOnly && section !== 'catalogo' && section !== 'status-clienti' && (
         <SaveBar
           changes={changes}
           justSaved={justSaved}
