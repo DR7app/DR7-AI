@@ -952,6 +952,30 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         {/* ── Body ─────────────────────────────────────────────────────── */}
         <div className="p-5 space-y-4 flex-1">
 
+          {/* ── Foto cliente (roadmap 21) — in cima alla scheda ────────── */}
+          <div className="rounded-xl border border-theme-border bg-theme-bg-tertiary/40 p-4 flex items-center gap-4">
+            <div className="w-20 h-20 rounded-full overflow-hidden bg-theme-bg-tertiary border border-theme-border grid place-items-center shrink-0">
+              {formData.foto_url ? (
+                <img src={formData.foto_url} alt="Foto cliente" className="w-full h-full object-cover" />
+              ) : (
+                <svg className="w-8 h-8 text-theme-text-muted" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20.25a7.5 7.5 0 0115 0" /></svg>
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-theme-text-primary mb-1">Foto cliente</div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <label className="px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-semibold cursor-pointer">
+                  {uploadingFoto ? 'Caricamento…' : (formData.foto_url ? 'Cambia foto' : 'Carica foto')}
+                  <input type="file" accept="image/*" className="hidden" disabled={uploadingFoto}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFoto(f); e.currentTarget.value = '' }} />
+                </label>
+                {formData.foto_url && (
+                  <button type="button" onClick={() => setFormData(prev => ({ ...prev, foto_url: '' }))} className="px-3 py-2 rounded-lg border border-theme-border text-theme-text-secondary text-sm">Rimuovi</button>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Compila banner — unchanged behaviour from previous version */}
           {lastExtracted && lastExtracted.length > 0 && (
             <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-4">
@@ -1665,32 +1689,6 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
               </div>
             )
           })()}
-        </div>
-
-        {/* ── Foto cliente (roadmap 21) ──────────────────────────────── */}
-        <div className="px-4 pb-4">
-          <div className="rounded-xl border border-theme-border bg-theme-bg-tertiary/40 p-4 flex items-center gap-4">
-            <div className="w-20 h-20 rounded-full overflow-hidden bg-theme-bg-tertiary border border-theme-border grid place-items-center shrink-0">
-              {formData.foto_url ? (
-                <img src={formData.foto_url} alt="Foto cliente" className="w-full h-full object-cover" />
-              ) : (
-                <svg className="w-8 h-8 text-theme-text-muted" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20.25a7.5 7.5 0 0115 0" /></svg>
-              )}
-            </div>
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-theme-text-primary mb-1">Foto cliente</div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <label className="px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-semibold cursor-pointer">
-                  {uploadingFoto ? 'Caricamento…' : (formData.foto_url ? 'Cambia foto' : 'Carica foto')}
-                  <input type="file" accept="image/*" className="hidden" disabled={uploadingFoto}
-                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFoto(f); e.currentTarget.value = '' }} />
-                </label>
-                {formData.foto_url && (
-                  <button type="button" onClick={() => setFormData(prev => ({ ...prev, foto_url: '' }))} className="px-3 py-2 rounded-lg border border-theme-border text-theme-text-secondary text-sm">Rimuovi</button>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* ── Sticky footer ───────────────────────────────────────────── */}
