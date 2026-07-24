@@ -306,6 +306,34 @@ export default function RilevazioneOrariTab() {
                     cur.lastTipo = e.tipo
                     byOp.set(e.operatore_id, cur)
                 }
+                // 2026-07-24 (#32): pause FISSE impostate dal titolare
+                // (operatore_contratto.pause_config) devono comparire in
+                // giornaliera in automatico, senza reinserirle a mano. Se non
+                // pagate, si applicano come pausa minima (max tra timbrata e
+                // configurata) e si deducono dalle ore. Query resiliente: se la
+                // colonna manca, non rompe la giornaliera.
+                const mandPauseByOp = new Map<string, number>()
+                try {
+                    const { data: contratti } = await supabase
+                        .from('operatore_contratto')
+                        .select('operatore_id, pause_config')
+                        .eq('attivo', true)
+                    for (const c of (contratti || []) as { operatore_id: string; pause_config: { durata_min?: number; pagata?: boolean; fasce?: { da: string; a: string }[] } | null }[]) {
+                        const pc = c.pause_config
+                        if (!pc || pc.pagata === true) continue
+                        let mins = Number(pc.durata_min) || 0
+                        for (const f of (pc.fasce || [])) {
+                            const [dh, dm] = (f.da || '').split(':').map(Number)
+                            const [ah, am] = (f.a || '').split(':').map(Number)
+                            if (Number.isFinite(dh) && Number.isFinite(ah)) {
+                                const diff = (ah * 60 + (am || 0)) - (dh * 60 + (dm || 0))
+                                if (diff > 0) mins += diff
+                            }
+                        }
+                        if (mins > 0) mandPauseByOp.set(c.operatore_id, mins)
+                    }
+                } catch { /* colonna pause_config assente: nessuna pausa fissa */ }
+
                 const rows: DayRow[] = []
                 for (const op of opList) {
                     const data = byOp.get(op.id)
@@ -321,6 +349,13 @@ export default function RilevazioneOrariTab() {
                         for (let i = 0; i < Math.min(data.pi.length, data.pf.length); i++) {
                             const diff = new Date(data.pf[i]).getTime() - new Date(data.pi[i]).getTime()
                             if (diff > 0) pausaMin += Math.round(diff / 60000)
+                        }
+                        // Applica la pausa fissa configurata (se maggiore della timbrata):
+                        // deduce la differenza dalle ore lavorate e la mostra come pausa.
+                        const mand = mandPauseByOp.get(op.id) || 0
+                        if (mand > pausaMin) {
+                            minuti = Math.max(0, minuti - (mand - pausaMin))
+                            pausaMin = mand
                         }
                     }
                     let stato: DayRow['stato'] = 'fuori'
