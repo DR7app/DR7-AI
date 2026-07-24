@@ -75,6 +75,17 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
       toast.success('Foto cliente aggiornata')
     } catch (e) { toast.error('Errore upload: ' + (e as Error).message) } finally { setUploadingFoto(false) }
   }
+  async function removeFoto() {
+    if (!customer?.id) return
+    if (!window.confirm('Rimuovere la foto del cliente?')) return
+    setUploadingFoto(true)
+    try {
+      const { error } = await supabase.from('customers_extended').update({ foto_url: null }).eq('id', customer.id)
+      if (error) throw error
+      setCustomer(prev => prev ? { ...prev, foto_url: undefined } : prev)
+      toast.success('Foto rimossa')
+    } catch (e) { toast.error('Errore: ' + (e as Error).message) } finally { setUploadingFoto(false) }
+  }
   const [bookings, setBookings] = useState<BookingRecord[]>([])
   const [walletBalance, setWalletBalance] = useState(0)
   const [walletTxs, setWalletTxs] = useState<WalletTx[]>([])
@@ -572,6 +583,14 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                   <input type="file" accept="image/*" className="hidden" disabled={uploadingFoto}
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFoto(f); e.currentTarget.value = '' }} />
                 </label>
+                {customer.foto_url && !uploadingFoto && (
+                  <button
+                    onClick={removeFoto}
+                    title="Rimuovi foto"
+                    aria-label="Rimuovi foto"
+                    className="absolute -bottom-1.5 -right-1.5 w-6 h-6 rounded-full bg-red-600 hover:bg-red-700 border-2 border-theme-bg-primary flex items-center justify-center text-white text-xs font-bold"
+                  >×</button>
+                )}
                 {clubTier.tier === 'signature' && (
                   <div className="absolute -top-1.5 -right-1.5 w-7 h-7 rounded-full bg-amber-400 border-2 border-theme-bg-primary flex items-center justify-center text-theme-bg-primary text-sm" title="Signature">
                     <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.176 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
