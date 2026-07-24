@@ -1283,12 +1283,28 @@ function loadPersisted(): PersistedSnapshot | null {
   }
 }
 
-async function loadPersistedFromSupabase(): Promise<PersistedSnapshot | null> {
+// ─── Multi-business: una riga di config per business ─────────────────────────
+// Terra resta su id='main' (INVARIATO: il sito e tutto l'esistente leggono di
+// qui). Gli altri business hanno righe dedicate (business_*), che NON toccano
+// 'main'. Cosi' aggiungere business non rompe nulla di gia' presente.
+type BusinessId = 'terra' | 'mare' | 'aria' | 'soggiorni' | 'lavaggio'
+const BUSINESSES: { id: BusinessId; label: string; row: string }[] = [
+  { id: 'terra',     label: 'Noleggio Terra',        row: 'main' },
+  { id: 'mare',      label: 'Noleggio Mare',         row: 'business_mare' },
+  { id: 'aria',      label: 'Noleggio Aria',         row: 'business_aria' },
+  { id: 'soggiorni', label: 'Soggiorni & Ospitalità', row: 'business_soggiorni' },
+  { id: 'lavaggio',  label: 'Lavaggio & Meccanica',  row: 'business_lavaggio' },
+]
+function businessRow(id: BusinessId): string {
+  return BUSINESSES.find(b => b.id === id)?.row || 'main'
+}
+
+async function loadPersistedFromSupabase(rowId: string = 'main'): Promise<PersistedSnapshot | null> {
   try {
     const { data, error } = await supabase
       .from('centralina_pro_config')
       .select('config')
-      .eq('id', 'main')
+      .eq('id', rowId)
       .maybeSingle()
     if (error || !data) return null
     const cfg = data.config as Partial<PersistedSnapshot> | null
@@ -1299,16 +1315,19 @@ async function loadPersistedFromSupabase(): Promise<PersistedSnapshot | null> {
   }
 }
 
-function savePersisted(snap: PersistedSnapshot) {
-  // Always cache locally first — instant + resilient to offline.
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(snap))
-  } catch { /* ignore quota / private mode errors */ }
+function savePersisted(snap: PersistedSnapshot, rowId: string = 'main') {
+  // Cache locale solo per il business principale (Terra/'main'): la cache legacy
+  // e' single-business, non deve mescolare config di business diversi.
+  if (rowId === 'main') {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(snap))
+    } catch { /* ignore quota / private mode errors */ }
+  }
   // Then persist to Supabase so the website + other admins see it.
-  // Use upsert so a missing row (id='main') is created, not silently ignored.
+  // Use upsert so a missing row is created, not silently ignored.
   supabase
     .from('centralina_pro_config')
-    .upsert({ id: 'main', config: snap }, { onConflict: 'id' })
+    .upsert({ id: rowId, config: snap }, { onConflict: 'id' })
     .then(({ error }) => {
       if (error) {
         console.error('[CentralinaPro] failed to save to Supabase:', error)
@@ -1514,57 +1533,86 @@ export default function CentralinaProTab() {
   const [savedNoleggioHours, setSavedNoleggioHours] = useState<NoleggioHoursConfig>(initialNoleggioHours)
 
   const [justSaved, setJustSaved] = useState(false)
+  // Business attivo (sub-tab). Terra='main' (invariato). Cambiare business salva
+  // il corrente e carica/semina l'altro. Vedi switchBusiness.
+  const [businessId, setBusinessId] = useState<BusinessId>('terra')
+  const [switchingBusiness, setSwitchingBusiness] = useState(false)
+
+  // Applica uno snapshot remoto agli state hook (usato al mount e al cambio
+  // business). Ogni campo e' guardato: se manca, lo state resta com'e'.
+  function applyRemoteSnapshot(remote: PersistedSnapshot) {
+    if (remote.categories) { setCategories(remote.categories); setSavedCategories(remote.categories) }
+    if (remote.fasce) { setFasce(remote.fasce); setSavedFasce(remote.fasce) }
+    if (remote.insurance) { setInsurance(remote.insurance); setSavedInsurance(remote.insurance) }
+    if (remote.km) { setKm(remote.km); setSavedKm(remote.km) }
+    if (remote.deposits) {
+      const migrated = migrateDeposits(remote.deposits)
+      const healed: DepositsConfig = {}
+      for (const [catId, byFascia] of Object.entries(migrated)) {
+        healed[catId] = canonicalizeDepositIds(byFascia as DepositsByFascia)
+      }
+      setDeposits(healed); setSavedDeposits(healed)
+    }
+    if (remote.servizi) { setServizi(remote.servizi); setSavedServizi(remote.servizi) }
+    if (remote.prezzoDinamico) {
+      const merged = mergePrezzoDinamico(remote.prezzoDinamico)
+      setPrezzoDinamico(merged); setSavedPrezzoDinamico(merged)
+    }
+    if (remote.preventivi) { setPreventivi(remote.preventivi); setSavedPreventivi(remote.preventivi) }
+    if (remote.penali !== undefined) { const m = migratePenali(remote.penali); setPenali(m); setSavedPenali(m) }
+    if (remote.danni !== undefined) { const m = migrateDanni(remote.danni); setDanni(m); setSavedDanni(m) }
+    if (remote.fiscal !== undefined) { setFiscal(remote.fiscal); setSavedFiscal(remote.fiscal) }
+    if (remote.dr7_club !== undefined) { setDr7Club(remote.dr7_club); setSavedDr7Club(remote.dr7_club) }
+    if (remote.automations !== undefined) { setAutomations(remote.automations); setSavedAutomations(remote.automations) }
+    if (remote.marketing !== undefined) { setMarketing(remote.marketing); setSavedMarketing(remote.marketing) }
+    if (remote.lavaggio_hours !== undefined) { setLavaggioHours(remote.lavaggio_hours); setSavedLavaggioHours(remote.lavaggio_hours) }
+    if (remote.noleggio_hours !== undefined) { setNoleggioHours(remote.noleggio_hours); setSavedNoleggioHours(remote.noleggio_hours) }
+  }
+
+  // Snapshot corrente dagli state hook (per salvataggio + copia al cambio business).
+  function buildSnapshot(): PersistedSnapshot {
+    return { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours }
+  }
+
+  // Cambio business: salva il corrente sulla sua riga, poi carica il nuovo. Se
+  // il nuovo non esiste ancora, lo semina come COPIA di Terra ('main').
+  async function switchBusiness(newId: BusinessId) {
+    if (newId === businessId || switchingBusiness) return
+    // Non auto-committiamo: il salvataggio resta esplicito (tasto Salva). Se ci
+    // sono modifiche non salvate, avvisa prima di cambiare (altrimenti si
+    // perdono, ricaricando dal DB). Cosi' cambiare tab NON pubblica edit di
+    // Terra sul sito senza volerlo.
+    if (changes.length > 0 && !window.confirm(`Hai ${changes.length} modifiche non salvate su ${BUSINESSES.find(b => b.id === businessId)?.label}. Cambiando business le perdi. Continuare?`)) {
+      return
+    }
+    setSwitchingBusiness(true)
+    try {
+      // carica il nuovo business
+      const targetRow = businessRow(newId)
+      let remote = await loadPersistedFromSupabase(targetRow)
+      if (!remote) {
+        // Semina da una copia di Terra ('main'), poi persisti sulla nuova riga.
+        const terra = await loadPersistedFromSupabase('main') || buildSnapshot()
+        remote = JSON.parse(JSON.stringify(terra)) as PersistedSnapshot
+        savePersisted(remote, targetRow)
+      }
+      setBusinessId(newId)
+      applyRemoteSnapshot(remote)
+      setJustSaved(false)
+    } finally {
+      setSwitchingBusiness(false)
+    }
+  }
 
   // ─── HYDRATE FROM SUPABASE + ONE-TIME LOCALSTORAGE MIGRATION ───
-  // On first mount: fetch Pro config from Supabase. If present, replace local
-  // state (Supabase is the source of truth for the website). If absent AND
-  // localStorage has data, push it up so nothing is lost.
+  // On first mount: fetch Pro config from Supabase (business Terra = 'main').
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const remote = await loadPersistedFromSupabase()
+      const remote = await loadPersistedFromSupabase('main')
       if (cancelled) return
       if (remote) {
-        // Supabase has data → adopt it
-        if (remote.categories) { setCategories(remote.categories); setSavedCategories(remote.categories) }
-        if (remote.fasce) { setFasce(remote.fasce); setSavedFasce(remote.fasce) }
-        if (remote.insurance) { setInsurance(remote.insurance); setSavedInsurance(remote.insurance) }
-        if (remote.km) { setKm(remote.km); setSavedKm(remote.km) }
-        if (remote.deposits) {
-          const migrated = migrateDeposits(remote.deposits)
-          // Auto-heal: applica anche a LOAD time la dedup degli id duplicati,
-          // cosi' chi ha gia' salvato uno stato corrotto (es. due righe con
-          // id 'credit_card' che condividevano la stessa key React e si
-          // editavano insieme) vede le righe tornare distinte alla prossima
-          // apertura della tab, senza dover salvare manualmente.
-          const healed: DepositsConfig = {}
-          for (const [catId, byFascia] of Object.entries(migrated)) {
-            healed[catId] = canonicalizeDepositIds(byFascia as DepositsByFascia)
-          }
-          setDeposits(healed); setSavedDeposits(healed)
-        }
-        if (remote.servizi) { setServizi(remote.servizi); setSavedServizi(remote.servizi) }
-        if (remote.prezzoDinamico) {
-          const merged = mergePrezzoDinamico(remote.prezzoDinamico)
-          setPrezzoDinamico(merged)
-          setSavedPrezzoDinamico(merged)
-        }
-        if (remote.preventivi) { setPreventivi(remote.preventivi); setSavedPreventivi(remote.preventivi) }
-        if (remote.penali !== undefined) {
-          const migrated = migratePenali(remote.penali)
-          setPenali(migrated); setSavedPenali(migrated)
-        }
-        if (remote.danni !== undefined) {
-          const migrated = migrateDanni(remote.danni)
-          setDanni(migrated); setSavedDanni(migrated)
-        }
-        if (remote.fiscal !== undefined) { setFiscal(remote.fiscal); setSavedFiscal(remote.fiscal) }
-        if (remote.dr7_club !== undefined) { setDr7Club(remote.dr7_club); setSavedDr7Club(remote.dr7_club) }
-        if (remote.automations !== undefined) { setAutomations(remote.automations); setSavedAutomations(remote.automations) }
-        if (remote.marketing !== undefined) { setMarketing(remote.marketing); setSavedMarketing(remote.marketing) }
-        if (remote.lavaggio_hours !== undefined) { setLavaggioHours(remote.lavaggio_hours); setSavedLavaggioHours(remote.lavaggio_hours) }
-        if (remote.noleggio_hours !== undefined) { setNoleggioHours(remote.noleggio_hours); setSavedNoleggioHours(remote.noleggio_hours) }
-        // Refresh local cache with the authoritative copy
+        applyRemoteSnapshot(remote)
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)) } catch { /* ignore */ }
       } else {
         // Supabase is empty — seed with initial/localStorage values
@@ -1716,7 +1764,7 @@ export default function CentralinaProTab() {
     setSavedMarketing(marketing)
     setSavedLavaggioHours(lavaggioHours)
     setSavedNoleggioHours(noleggioHours)
-    savePersisted({ categories, fasce, insurance, km, deposits: cleanedDeposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours })
+    savePersisted({ categories, fasce, insurance, km, deposits: cleanedDeposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours }, businessRow(businessId))
     // Bust the payment-method cache so every dropdown across admin picks up
     // the new list on next mount, without page reload.
     invalidatePaymentMethodsCache()
@@ -1775,6 +1823,36 @@ export default function CentralinaProTab() {
             Attivo
           </span>
         </div>
+
+        {/* ─── Business sub-tabs (multi-business centralina) ─── */}
+        {!isCauzioniViewOnly && (
+          <div className="mb-6">
+            <div className="flex flex-wrap gap-1.5">
+              {BUSINESSES.map(b => {
+                const active = businessId === b.id
+                return (
+                  <button
+                    key={b.id}
+                    onClick={() => switchBusiness(b.id)}
+                    disabled={switchingBusiness}
+                    className={`px-4 py-2 rounded-full text-[13px] font-semibold border transition-colors disabled:opacity-50 ${
+                      active
+                        ? 'bg-[#007aff] text-white border-[#007aff]'
+                        : 'bg-theme-bg-secondary text-theme-text-secondary border-theme-border hover:bg-theme-bg-hover'
+                    }`}
+                  >
+                    {b.label}
+                  </button>
+                )
+              })}
+            </div>
+            {businessId !== 'terra' && (
+              <p className="mt-2 text-[12px] text-amber-600 dark:text-amber-400">
+                Configurazione indipendente per <strong>{BUSINESSES.find(b => b.id === businessId)?.label}</strong> — seminata da Noleggio Terra, modificabile liberamente. Non tocca la config di Terra.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-6">
           <aside className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden h-fit">
