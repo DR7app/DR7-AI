@@ -26,6 +26,7 @@ interface PauseConfig {
     durata_min: number   // minuti di pausa totale al giorno (scalati dalle ore lavorate)
     pagata: boolean      // true = pausa pagata (NON scalata); false = non pagata (scalata)
     fasce: PausaFascia[] // fasce orarie fisse opzionali (in quelle ore non si contano ore)
+    giorni?: number[]    // giorni della settimana in cui vale (getDay(): 0=Dom..6=Sab). Vuoto/assente = tutti i giorni.
 }
 
 interface Contratto {
@@ -407,6 +408,32 @@ export default function ContrattiOperatoreView() {
                                     onClick={() => setPause({ fasce: [...(contratto.pause_config?.fasce ?? []), { da: '13:00', a: '14:00' }] })}
                                     className="text-xs text-cyan-500 hover:text-cyan-400 font-medium"
                                 >+ Aggiungi fascia</button>
+                            </div>
+                            {/* Giorni della settimana in cui vale la pausa. Nessuno selezionato = tutti i giorni. */}
+                            <div className="space-y-2">
+                                <div className="text-xs uppercase tracking-wider font-semibold text-theme-text-muted">Giorni in cui vale</div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {[{ g: 1, l: 'Lun' }, { g: 2, l: 'Mar' }, { g: 3, l: 'Mer' }, { g: 4, l: 'Gio' }, { g: 5, l: 'Ven' }, { g: 6, l: 'Sab' }, { g: 0, l: 'Dom' }].map(({ g, l }) => {
+                                        const sel = contratto.pause_config?.giorni ?? []
+                                        const on = sel.length === 0 || sel.includes(g)
+                                        const active = sel.includes(g)
+                                        return (
+                                            <button
+                                                key={g}
+                                                type="button"
+                                                onClick={() => {
+                                                    const cur = [...(contratto.pause_config?.giorni ?? [])]
+                                                    const idx = cur.indexOf(g)
+                                                    if (idx >= 0) cur.splice(idx, 1); else cur.push(g)
+                                                    setPause({ giorni: cur.sort((a, b) => a - b) })
+                                                }}
+                                                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors ${active ? 'bg-emerald-500 text-white border-emerald-500' : on ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' : 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'}`}
+                                                title={active ? 'Attivo' : (contratto.pause_config?.giorni?.length ? 'Non attivo' : 'Tutti i giorni')}
+                                            >{l}</button>
+                                        )
+                                    })}
+                                </div>
+                                <p className="text-[11px] text-theme-text-muted">Nessun giorno selezionato = vale tutti i giorni. Es. seleziona Lun–Ven per la pausa solo nei feriali.</p>
                             </div>
                         </fieldset>
 

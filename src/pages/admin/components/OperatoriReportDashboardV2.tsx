@@ -370,7 +370,7 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
             // 2026-07-21: pausa OBBLIGATORIA per operatore (Contratto > pause_config).
             // mandatoryPauseByOp = minuti/giorno da scalare SOLO se pausa NON pagata.
             // Vuoto per operatori senza config -> nessuna deduzione (es. Salvatore).
-            const mandatoryPauseByOp = new Map<string, number>()
+            const mandatoryPauseByOp = new Map<string, { mand: number; giorni: number[] }>()
             if (opIds.length > 0) {
                 const { data: contracts } = await supabase
                     .from('operatore_contratto')
@@ -415,7 +415,7 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                                     return s + Math.max(0, mins || 0)
                                 }, 0) : 0
                                 const mand = (Number(pc.durata_min) || 0) + fasceMin
-                                if (mand > 0) mandatoryPauseByOp.set(r.operatore_id, mand)
+                                if (mand > 0) mandatoryPauseByOp.set(r.operatore_id, { mand, giorni: Array.isArray(pc.giorni) ? pc.giorni : [] })
                             }
                         }
                     }
@@ -478,7 +478,10 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                     // 2026-07-21: pausa OBBLIGATORIA da contratto (solo per chi ce l'ha).
                     // Si scala il MASSIMO tra pausa registrata e pausa obbligatoria,
                     // cosi' l'operatore non deve inserirla a mano ogni giorno.
-                    const mand = mandatoryPauseByOp.get(op.id) || 0
+                    const mp = mandatoryPauseByOp.get(op.id)
+                    // Applica la pausa fissa solo se oggi rientra nei giorni scelti (vuoto = tutti).
+                    const todayDow = new Date().getDay()
+                    const mand = mp && (mp.giorni.length === 0 || mp.giorni.includes(todayDow)) ? mp.mand : 0
                     minPausa = Math.max(loggedPausa, mand)
                     minLav = Math.max(0, rawWorked - minPausa)
                 }
@@ -567,8 +570,8 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
             const perOpMin = new Map<string, number>()
             byOpDay.forEach((dayMap, opId) => {
                 let opTot = 0
-                const mand = mandatoryPauseByOp.get(opId) || 0
-                dayMap.forEach(t => {
+                const mp = mandatoryPauseByOp.get(opId)
+                dayMap.forEach((t, dataKey) => {
                     if (!t.entrata) return
                     const end = t.uscita ? new Date(t.uscita).getTime() : new Date(t.entrata).getTime()
                     const rawWorked = Math.max(0, Math.round((end - new Date(t.entrata).getTime()) / 60000))
@@ -579,6 +582,9 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                         loggedPausa += Math.max(0, Math.round((fin - start) / 60000))
                     }
                     // 2026-07-21: scala il MAX tra pausa registrata e pausa obbligatoria da contratto.
+                    // 2026-07-24: la pausa fissa vale solo nei giorni scelti (vuoto = tutti).
+                    const dow = new Date(`${dataKey}T12:00:00`).getDay()
+                    const mand = mp && (mp.giorni.length === 0 || mp.giorni.includes(dow)) ? mp.mand : 0
                     opTot += Math.max(0, rawWorked - Math.max(loggedPausa, mand))
                 })
                 perOpMin.set(opId, opTot)

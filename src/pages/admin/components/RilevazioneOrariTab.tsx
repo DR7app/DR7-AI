@@ -313,14 +313,17 @@ export default function RilevazioneOrariTab() {
                 // configurata) e si deducono dalle ore. Query resiliente: se la
                 // colonna manca, non rompe la giornaliera.
                 const mandPauseByOp = new Map<string, number>()
+                const dowGiornaliera = new Date(d + 'T12:00:00').getDay() // 0=Dom..6=Sab
                 try {
                     const { data: contratti } = await supabase
                         .from('operatore_contratto')
                         .select('operatore_id, pause_config')
                         .eq('attivo', true)
-                    for (const c of (contratti || []) as { operatore_id: string; pause_config: { durata_min?: number; pagata?: boolean; fasce?: { da: string; a: string }[] } | null }[]) {
+                    for (const c of (contratti || []) as { operatore_id: string; pause_config: { durata_min?: number; pagata?: boolean; fasce?: { da: string; a: string }[]; giorni?: number[] } | null }[]) {
                         const pc = c.pause_config
                         if (!pc || pc.pagata === true) continue
+                        // Rispetta i giorni selezionati: vuoto = tutti i giorni.
+                        if (Array.isArray(pc.giorni) && pc.giorni.length > 0 && !pc.giorni.includes(dowGiornaliera)) continue
                         let mins = Number(pc.durata_min) || 0
                         for (const f of (pc.fasce || [])) {
                             const [dh, dm] = (f.da || '').split(':').map(Number)
