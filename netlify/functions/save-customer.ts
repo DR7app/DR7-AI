@@ -142,13 +142,10 @@ export const handler: Handler = async (event) => {
                 const { data } = await q.limit(1);
                 if (data && data.length) existingCustomer = data[0];
             }
-            // 4. Check by phone — anch'esso SOLO stesso tipo_cliente (vedi sopra).
-            if (!existingCustomer && customerData.telefono) {
-                let q = supabase.from('customers_extended').select('*').eq('telefono', customerData.telefono);
-                if (customerData.tipo_cliente) q = q.eq('tipo_cliente', customerData.tipo_cliente);
-                const { data } = await q.limit(1);
-                if (data && data.length) existingCustomer = data[0];
-            }
+            // 4. (roadmap 19) NIENTE dedup per telefono: due o più lead possono
+            //    condividere lo stesso numero (es. familiari, stesso contatto) e
+            //    restano lead SEPARATE e distinte. La deduplicazione avviene solo
+            //    su identità fiscale (CF/P.IVA) o email dello stesso tipo_cliente.
 
             if (existingCustomer) {
                 // Update existing customer instead of creating duplicate
