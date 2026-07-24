@@ -31,6 +31,9 @@ interface ClientFormData {
   iban: string
   iban_intestatario: string
 
+  // Foto cliente (roadmap 21)
+  foto_url: string
+
   // Persona Fisica
   nome: string
   cognome: string
@@ -103,6 +106,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     email: '',
     iban: '',
     iban_intestatario: '',
+    foto_url: '',
     nome: '',
     cognome: '',
     codice_fiscale: '',
@@ -174,6 +178,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           email: initialData.email || '',
           iban: initialData.iban || '',
           iban_intestatario: initialData.iban_intestatario || '',
+          foto_url: initialData.foto_url || '',
 
           // Persona Fisica
           nome: initialData.nome || (initialData.full_name ? initialData.full_name.split(' ')[0] : ''),
@@ -261,6 +266,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           email: '',
           iban: '',
           iban_intestatario: '',
+          foto_url: '',
           nome: '',
           cognome: '',
           codice_fiscale: '',
@@ -396,6 +402,26 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     return Object.keys(newErrors).length === 0
   }
 
+  // Foto cliente (roadmap 21): upload su storage pubblico + salva l'URL.
+  const [uploadingFoto, setUploadingFoto] = useState(false)
+  async function uploadFoto(file: File) {
+    if (!file.type.startsWith('image/')) { toast.error('Solo file immagine (PNG, JPG)'); return }
+    setUploadingFoto(true)
+    try {
+      const ext = file.name.split('.').pop() || 'jpg'
+      const fileName = `customer-photos/${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage
+        .from('catalog-images')
+        .upload(fileName, file, { cacheControl: '31536000', upsert: true })
+      if (upErr) throw upErr
+      const { data } = supabase.storage.from('catalog-images').getPublicUrl(fileName)
+      setFormData(prev => ({ ...prev, foto_url: data?.publicUrl || '' }))
+      toast.success('Foto caricata')
+    } catch (e) {
+      toast.error('Errore upload foto: ' + (e as Error).message)
+    } finally { setUploadingFoto(false) }
+  }
+
   const handleSave = async () => {
     if (!validateForm()) return
 
@@ -417,6 +443,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         // Dati rimborso cauzione: IBAN normalizzato (senza spazi, maiuscolo) +
         // intestatario. Precompilano la cauzione e il messaggio automatico.
         iban: formData.iban ? formData.iban.replace(/\s+/g, '').toUpperCase() : null,
+        foto_url: formData.foto_url || null,
         iban_intestatario: formData.iban_intestatario?.trim() || null
       }
 
@@ -1638,6 +1665,32 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
               </div>
             )
           })()}
+        </div>
+
+        {/* ── Foto cliente (roadmap 21) ──────────────────────────────── */}
+        <div className="px-4 pb-4">
+          <div className="rounded-xl border border-theme-border bg-theme-bg-tertiary/40 p-4 flex items-center gap-4">
+            <div className="w-20 h-20 rounded-full overflow-hidden bg-theme-bg-tertiary border border-theme-border grid place-items-center shrink-0">
+              {formData.foto_url ? (
+                <img src={formData.foto_url} alt="Foto cliente" className="w-full h-full object-cover" />
+              ) : (
+                <svg className="w-8 h-8 text-theme-text-muted" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20.25a7.5 7.5 0 0115 0" /></svg>
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-theme-text-primary mb-1">Foto cliente</div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <label className="px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-semibold cursor-pointer">
+                  {uploadingFoto ? 'Caricamento…' : (formData.foto_url ? 'Cambia foto' : 'Carica foto')}
+                  <input type="file" accept="image/*" className="hidden" disabled={uploadingFoto}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFoto(f); e.currentTarget.value = '' }} />
+                </label>
+                {formData.foto_url && (
+                  <button type="button" onClick={() => setFormData(prev => ({ ...prev, foto_url: '' }))} className="px-3 py-2 rounded-lg border border-theme-border text-theme-text-secondary text-sm">Rimuovi</button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* ── Sticky footer ───────────────────────────────────────────── */}
