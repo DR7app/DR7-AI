@@ -191,6 +191,10 @@ export default function CustomersTab() {
     }
 
     let result = [...allCustomers]
+    // roadmap 22: gli AUTISTI si gestiscono da Centralina Pro > Autisti, non
+    // compaiono nella lista Lead/Clienti.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    result = result.filter((c: any) => c.metadata?.role !== 'autista')
 
     // 1. Sort by selected field
     result.sort((a, b) => {

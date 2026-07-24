@@ -14,6 +14,7 @@ import TerraCatalogTab from './TerraCatalogTab'
 import CarWashCatalogTab from './CarWashCatalogTab'
 import NoleggioServiceTab from './NoleggioServiceTab'
 import ClientStatusConfigSection from './ClientStatusConfigSection'
+import AutistiConfigSection from './AutistiConfigSection'
 
 type FleetVehicle = {
   id: string
@@ -44,7 +45,7 @@ type VehicleRevenueTarget = {
   tiers: VehicleRevenueTier[]
 }
 
-type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti'
+type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti'
 
 // Days of the week for opening-hours configs (lavaggio, future noleggio).
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
@@ -83,6 +84,7 @@ const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'p12', title: 'Orari' },
   { id: 'catalogo', title: 'Catalogo' },
   { id: 'status-clienti', title: 'Status Clienti' },
+  { id: 'autisti', title: 'Autisti' },
   // 'Marketing' rimossa: ora vive in admin > Marketing > Social Links.
   // Il campo `marketing` resta nel snapshot per preservarlo durante save.
 ]
@@ -2026,12 +2028,13 @@ export default function CentralinaProTab() {
               </div>
             )}
             {section === 'status-clienti' && <ClientStatusConfigSection />}
+            {section === 'autisti' && <AutistiConfigSection />}
             </>)}
           </main>
         </div>
       </div>
 
-      {!isCauzioniViewOnly && section !== 'catalogo' && section !== 'status-clienti' && (
+      {!isCauzioniViewOnly && section !== 'catalogo' && section !== 'status-clienti' && section !== 'autisti' && (
         <SaveBar
           changes={changes}
           justSaved={justSaved}
