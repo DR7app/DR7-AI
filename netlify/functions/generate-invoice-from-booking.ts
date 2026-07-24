@@ -17,7 +17,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
  * config row is missing, the fiscal section was never saved, or the value
  * is out of the [0, 100] range.
  */
-async function loadVatRate(): Promise<number> {
+async function loadVatRate(categoryId?: string | null): Promise<number> {
     try {
         const { data } = await supabase
             .from('centralina_pro_config')
@@ -31,11 +31,37 @@ async function loadVatRate(): Promise<number> {
         // danni/penali sono IVA 0, gestiti a parte). Un vat_rate 0 salvato per
         // errore/glitch faceva emettere fatture noleggio a IVA 0. Trattiamo 0
         // (o non-numero) come "non impostato" → default 22.
-        if (typeof rate === 'number' && rate > 0 && rate <= 100) return rate
-        return 22
+        const general = (typeof rate === 'number' && rate > 0 && rate <= 100) ? rate : 22
+        // 2026-07-24 (roadmap 33): aliquota IVA PER CATEGORIA se impostata in
+        // Centralina (categories[].vat_rate). Vuoto/0 → usa l'IVA generale.
+        if (categoryId) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const cats = (cfg?.categories as any[]) || []
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const cat = cats.find((c: any) => c?.id === categoryId)
+            const cr = cat?.vat_rate
+            if (typeof cr === 'number' && cr > 0 && cr <= 100) return cr
+        }
+        return general
     } catch {
         return 22
     }
+}
+
+// Categoria del veicolo della prenotazione (per l'IVA per-categoria).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function resolveBookingCategory(booking: any): Promise<string | null> {
+    const fromDetails = booking?.booking_details?.vehicle?.category
+        || booking?.booking_details?.vehicle_category
+        || booking?.category
+    if (typeof fromDetails === 'string' && fromDetails.trim()) return fromDetails.trim()
+    if (booking?.vehicle_id) {
+        try {
+            const { data: v } = await supabase.from('vehicles').select('category').eq('id', booking.vehicle_id).maybeSingle()
+            if (v?.category) return String(v.category)
+        } catch { /* ignore */ }
+    }
+    return null
 }
 
 /**
@@ -145,9 +171,6 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // Aliquota IVA dinamica da Centralina Pro (Fiscale > Aliquota IVA)
-        const dynamicVatRate = await loadVatRate()
-
         // Fetch booking details
         const { data: booking, error: bookingError } = await supabase
             .from('bookings')
@@ -161,6 +184,11 @@ export const handler: Handler = async (event) => {
                 body: JSON.stringify({ error: 'Booking not found' })
             }
         }
+
+        // Aliquota IVA dinamica da Centralina Pro: per-categoria del veicolo se
+        // impostata (Categorie & Fascia > IVA per categoria), altrimenti generale.
+        const bookingCategory = await resolveBookingCategory(booking)
+        const dynamicVatRate = await loadVatRate(bookingCategory)
 
         // Guard: never generate fattura for unpaid bookings
         const paymentStatus = booking.payment_status || ''

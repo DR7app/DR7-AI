@@ -57,7 +57,7 @@ interface TimeWindow { start: string; end: string }
 interface DayHours { is_open: boolean; windows: TimeWindow[] }
 type WeekHours = Record<DayKey, DayHours>
 
-type Category = { id: string; label: string }
+type Category = { id: string; label: string; vat_rate?: number | '' }
 type Fascia = {
   id: string
   label: string
@@ -2051,6 +2051,9 @@ function CategorieFasciaSection({
   fasce: Fascia[]
   setFasce: (next: Fascia[]) => void
 }) {
+  const setCatVat = (id: string, v: number | '') =>
+    setCategories(categories.map(c => c.id === id ? { ...c, vat_rate: v } : c))
+
   return (
     <div className="space-y-6">
       <EditableList
@@ -2061,6 +2064,35 @@ function CategorieFasciaSection({
         addLabel="Aggiungi categoria"
         placeholderNew="Nuova categoria"
       />
+      {/* Aliquota IVA per categoria (roadmap 33). Vuoto = usa l'IVA generale
+          (Fiscale). La fattura del noleggio applica l'aliquota della categoria
+          del veicolo. */}
+      <div className="bg-theme-bg-secondary rounded-2xl border border-theme-border p-5">
+        <div className="text-[15px] font-semibold text-theme-text-primary">Aliquota IVA per categoria</div>
+        <p className="text-[13px] text-theme-text-muted mt-0.5 mb-4">Imposta un'IVA diversa per categoria (es. 10%). Vuoto = usa l'IVA generale della sezione Fiscale.</p>
+        {categories.length === 0 ? (
+          <p className="text-[13px] text-theme-text-muted">Aggiungi prima una categoria qui sopra.</p>
+        ) : (
+          <div className="space-y-2">
+            {categories.map(c => (
+              <div key={c.id} className="flex items-center gap-3">
+                <span className="flex-1 text-sm text-theme-text-primary truncate">{c.label || <em className="text-theme-text-muted">(senza nome)</em>}</span>
+                <div className="w-28 flex items-center gap-1">
+                  <input
+                    type="number" min={0} max={100} step={1}
+                    value={c.vat_rate ?? ''}
+                    onChange={e => setCatVat(c.id, e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="generale"
+                    title="Aliquota IVA per questa categoria. Vuoto = usa l'IVA generale."
+                    className="w-full px-2 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary text-right tabular-nums"
+                  />
+                  <span className="text-xs text-theme-text-muted">%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <FasciaList items={fasce} onChange={setFasce} />
     </div>
   )
