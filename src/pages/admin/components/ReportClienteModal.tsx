@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
+import toast from 'react-hot-toast'
 import { listCardsFromMetadata } from '../../../utils/nexiCards'
 import CustomerAddebitoButton from './CustomerAddebitoButton'
 import CardDeleteButton from './CardDeleteButton'
@@ -32,6 +33,7 @@ interface CustomerData {
   data_nascita?: string
   sesso?: string
   status_cliente?: string
+  foto_url?: string
   source?: string
   created_at: string
   user_id?: string
@@ -52,7 +54,27 @@ type TabId = 'stato' | 'anagrafica' | 'storico' | 'economica'
 
 export default function ReportClienteModal({ customerId, onClose }: ReportClienteProps) {
   const [customer, setCustomer] = useState<CustomerData | null>(null)
+  const [uploadingFoto, setUploadingFoto] = useState(false)
   const [deletedCardIds, setDeletedCardIds] = useState<Set<string>>(new Set())
+
+  // Foto cliente (roadmap 21): upload diretto dalla scheda + salva su DB.
+  async function uploadFoto(file: File) {
+    if (!file.type.startsWith('image/')) { toast.error('Solo file immagine'); return }
+    if (!customer?.id) return
+    setUploadingFoto(true)
+    try {
+      const ext = file.name.split('.').pop() || 'jpg'
+      const path = `customer-photos/${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('catalog-images').upload(path, file, { cacheControl: '31536000', upsert: true })
+      if (upErr) throw upErr
+      const { data } = supabase.storage.from('catalog-images').getPublicUrl(path)
+      const url = data?.publicUrl || ''
+      const { error: dbErr } = await supabase.from('customers_extended').update({ foto_url: url }).eq('id', customer.id)
+      if (dbErr) throw dbErr
+      setCustomer(prev => prev ? { ...prev, foto_url: url } : prev)
+      toast.success('Foto cliente aggiornata')
+    } catch (e) { toast.error('Errore upload: ' + (e as Error).message) } finally { setUploadingFoto(false) }
+  }
   const [bookings, setBookings] = useState<BookingRecord[]>([])
   const [walletBalance, setWalletBalance] = useState(0)
   const [walletTxs, setWalletTxs] = useState<WalletTx[]>([])
@@ -530,9 +552,26 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
             {/* Identità cliente */}
             <div className="flex items-start gap-4 flex-1 min-w-0">
               <div className="relative shrink-0">
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-dr7-gold/30 to-dr7-gold/5 border border-dr7-gold/40 flex items-center justify-center text-3xl font-bold text-dr7-gold">
-                  {(customer.nome?.[0] || customer.denominazione?.[0] || '?').toUpperCase()}
+                <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-dr7-gold/30 to-dr7-gold/5 border border-dr7-gold/40 flex items-center justify-center text-3xl font-bold text-dr7-gold">
+                  {customer.foto_url ? (
+                    <img src={customer.foto_url} alt="Foto cliente" className="w-full h-full object-cover" />
+                  ) : (
+                    (customer.nome?.[0] || customer.denominazione?.[0] || '?').toUpperCase()
+                  )}
                 </div>
+                {/* Upload foto direttamente dalla scheda (roadmap 21) */}
+                <label
+                  title={uploadingFoto ? 'Caricamento…' : 'Carica/cambia foto cliente'}
+                  className="absolute -bottom-1.5 -left-1.5 w-7 h-7 rounded-full bg-cyan-600 hover:bg-cyan-700 border-2 border-theme-bg-primary flex items-center justify-center cursor-pointer"
+                >
+                  {uploadingFoto ? (
+                    <svg className="w-3.5 h-3.5 text-white animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                  ) : (
+                    <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>
+                  )}
+                  <input type="file" accept="image/*" className="hidden" disabled={uploadingFoto}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFoto(f); e.currentTarget.value = '' }} />
+                </label>
                 {clubTier.tier === 'signature' && (
                   <div className="absolute -top-1.5 -right-1.5 w-7 h-7 rounded-full bg-amber-400 border-2 border-theme-bg-primary flex items-center justify-center text-theme-bg-primary text-sm" title="Signature">
                     <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.176 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
