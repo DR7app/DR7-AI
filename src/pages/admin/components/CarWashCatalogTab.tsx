@@ -691,12 +691,26 @@ function ServiceCard({
 
   return (
     <div
-      className={`rounded-2xl border p-5 transition-colors group relative ${
+      className={`rounded-2xl border transition-colors group relative overflow-hidden ${
         inactive
           ? 'border-theme-border/30 bg-theme-bg-secondary/40 opacity-50'
           : 'border-theme-border bg-theme-bg-secondary'
       }`}
     >
+      {/* Immagine servizio (come gli altri cataloghi) — cambiandola da qui si
+          aggiorna anche sul sito (car_wash_services.image_url). */}
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      {(service as any).image_url ? (
+        <div className="aspect-[16/9] overflow-hidden bg-theme-bg-tertiary">
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          <img src={(service as any).image_url} alt={service.name} loading="lazy" className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }} />
+        </div>
+      ) : (
+        <div className="aspect-[16/9] bg-theme-bg-tertiary grid place-items-center">
+          <span className="text-xs text-theme-text-muted">Nessuna foto — Modifica per aggiungerla</span>
+        </div>
+      )}
+      <div className="p-5">
       {/* Action buttons */}
       <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
@@ -780,6 +794,7 @@ function ServiceCard({
           ))}
         </ul>
       )}
+      </div>
     </div>
   )
 }
