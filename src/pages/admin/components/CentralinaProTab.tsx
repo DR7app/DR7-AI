@@ -7,6 +7,12 @@ import { kmFromDR7Office } from '../../../utils/dr7Distance'
 import { invalidatePaymentMethodsCache } from '../../../hooks/usePaymentMethods'
 import { reloadAutoInvoiceConfig } from '../../../utils/paymentMethodAutoInvoice'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+// Cataloghi per business (roadmap 15): riuso dei componenti catalogo esistenti,
+// nessuna duplicazione. Renderizzati nella sezione "Catalogo" della Centralina
+// in base al business attivo.
+import TerraCatalogTab from './TerraCatalogTab'
+import CarWashCatalogTab from './CarWashCatalogTab'
+import NoleggioServiceTab from './NoleggioServiceTab'
 
 type FleetVehicle = {
   id: string
@@ -37,7 +43,7 @@ type VehicleRevenueTarget = {
   tiers: VehicleRevenueTier[]
 }
 
-type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12'
+type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo'
 
 // Days of the week for opening-hours configs (lavaggio, future noleggio).
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
@@ -74,6 +80,7 @@ const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'p10', title: 'DR7 Club' },
   { id: 'p11', title: 'Automazioni' },
   { id: 'p12', title: 'Orari' },
+  { id: 'catalogo', title: 'Catalogo' },
   // 'Marketing' rimossa: ora vive in admin > Marketing > Social Links.
   // Il campo `marketing` resta nel snapshot per preservarlo durante save.
 ]
@@ -1969,11 +1976,23 @@ export default function CentralinaProTab() {
                 setNoleggio={setNoleggioHours}
               />
             )}
+            {/* Catalogo per business (roadmap 15): riuso dei componenti catalogo
+                esistenti in base al business attivo. Ognuno gestisce il proprio
+                salvataggio, quindi la SaveBar della centralina qui si nasconde. */}
+            {section === 'catalogo' && (
+              <div className="-m-2">
+                {businessId === 'terra' && <TerraCatalogTab />}
+                {businessId === 'lavaggio' && <CarWashCatalogTab />}
+                {businessId === 'mare' && <NoleggioServiceTab serviceType="boat_rental" view="catalog" labels={{ title: 'Noleggio Mare', asset: 'Barca', assetPlural: 'Barche' }} />}
+                {businessId === 'aria' && <NoleggioServiceTab serviceType="heli_rental" view="catalog" labels={{ title: 'Noleggio Aria', asset: 'Elicottero', assetPlural: 'Elicotteri' }} />}
+                {businessId === 'soggiorni' && <NoleggioServiceTab serviceType="stay_rental" view="catalog" labels={{ title: 'Soggiorni & Ospitalità', asset: 'Alloggio', assetPlural: 'Alloggi' }} />}
+              </div>
+            )}
           </main>
         </div>
       </div>
 
-      {!isCauzioniViewOnly && (
+      {!isCauzioniViewOnly && section !== 'catalogo' && (
         <SaveBar
           changes={changes}
           justSaved={justSaved}
