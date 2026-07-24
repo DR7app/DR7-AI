@@ -63,6 +63,19 @@ export default function GestioneMulteTab() {
         setRubricaQuery(''); setRubricaResults([])
     }
 
+    const [syncingIpa, setSyncingIpa] = useState(false)
+    async function handleSyncIpa() {
+        setSyncingIpa(true)
+        try {
+            const res = await fetch('/.netlify/functions/sync-ipa', { method: 'POST' })
+            const data = await res.json()
+            if (!res.ok || data.ok === false) { toast.error('Sync IPA fallito: ' + (data.error || res.status)); return }
+            toast.success(`Rubrica aggiornata: ${data.upserted}/${data.total} enti con PEC`)
+        } catch (e) {
+            toast.error('Errore sync IPA: ' + (e as Error).message)
+        } finally { setSyncingIpa(false) }
+    }
+
     async function handleAddToRubrica() {
         const pec = chosenPec.trim().toLowerCase()
         if (!pec || !looksLikePec(pec)) { toast.error('PEC non valida'); return }
@@ -254,22 +267,32 @@ export default function GestioneMulteTab() {
                     <div>
                         <h2 className="text-2xl font-bold text-theme-text-primary">Gestione Multe</h2>
                         <p className="text-sm text-theme-text-muted mt-0.5">
-                            {activeSubTab === 'history' ? 'Storico comunicazioni PEC inviate' : 'Carica verbale e invia PEC alla Polizia Municipale'}
+                            {activeSubTab === 'history' ? 'Storico comunicazioni PEC inviate' : "Carica il verbale: il destinatario PEC viene proposto dall'organo accertatore"}
                         </p>
                     </div>
-                    <div className="flex bg-theme-bg-tertiary rounded-lg border border-theme-border overflow-hidden">
+                    <div className="flex items-center gap-2">
                         <button
-                            onClick={() => setActiveSubTab('history')}
-                            className={`px-4 py-2 text-sm font-medium transition-colors min-h-[44px] ${activeSubTab === 'history' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                            onClick={handleSyncIpa}
+                            disabled={syncingIpa}
+                            title="Aggiorna la rubrica degli enti accertatori dal registro ufficiale IPA"
+                            className="px-3 py-2 text-xs font-medium rounded-lg border border-theme-border bg-theme-bg-tertiary text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-hover transition-colors min-h-[44px] disabled:opacity-50"
                         >
-                            Storico PEC
+                            {syncingIpa ? 'Sync IPA…' : 'Aggiorna rubrica IPA'}
                         </button>
-                        <button
-                            onClick={() => setActiveSubTab('upload')}
-                            className={`px-4 py-2 text-sm font-medium transition-colors min-h-[44px] ${activeSubTab === 'upload' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
-                        >
-                            Carica &amp; Invia PEC
-                        </button>
+                        <div className="flex bg-theme-bg-tertiary rounded-lg border border-theme-border overflow-hidden">
+                            <button
+                                onClick={() => setActiveSubTab('history')}
+                                className={`px-4 py-2 text-sm font-medium transition-colors min-h-[44px] ${activeSubTab === 'history' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                            >
+                                Storico PEC
+                            </button>
+                            <button
+                                onClick={() => setActiveSubTab('upload')}
+                                className={`px-4 py-2 text-sm font-medium transition-colors min-h-[44px] ${activeSubTab === 'upload' ? 'bg-dr7-gold text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                            >
+                                Carica &amp; Invia PEC
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
