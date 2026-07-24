@@ -200,6 +200,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
   const [payMethod, setPayMethod] = useState('')
   const [origPayStatus, setOrigPayStatus] = useState('') // per rilevare la transizione -> Pagato
   const [passengers, setPassengers] = useState<{ name: string; seat: string }[]>([])
+  const [conSkipper, setConSkipper] = useState(true) // Mare (roadmap 12): guida con/senza skipper
   const [origDetails, setOrigDetails] = useState<Record<string, unknown>>({})
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
@@ -236,7 +237,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     setForm({ ...EMPTY_CAL_FORM, pickup_date: todayYmd, dropoff_date: todayYmd })
     setFormAsset(assets[0]?.name || '')
     setPayStatus('pending'); setPayMethod(''); setOrigPayStatus('')
-    setPassengers([]); setOrigDetails({})
+    setPassengers([]); setOrigDetails({}); setConSkipper(true)
     setFormError('')
     priceEditedRef.current = false // nuova prenotazione: ricalcolo automatico attivo
     setShowForm(true)
@@ -261,6 +262,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     setOrigPayStatus(b.payment_status || 'pending')
     setPayMethod(b.payment_method || '')
     setPassengers((b.booking_details?.passengers || []).map(p => ({ name: p.name || '', seat: p.seat || '' })) as { name: string; seat: string }[])
+    setConSkipper((b.booking_details as { con_skipper?: boolean } | null)?.con_skipper ?? true)
     setOrigDetails((b.booking_details as Record<string, unknown>) || {})
     setFormError('')
     setShowForm(true)
@@ -284,6 +286,8 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     const details: Record<string, unknown> = { ...origDetails }
     if (cleanPassengers.length) details.passengers = cleanPassengers
     else delete details.passengers
+    // Mare (roadmap 12): scelta skipper salvata nel booking.
+    if (serviceType === 'boat_rental') details.con_skipper = conSkipper
 
     // 2026-07-04: tour (Aria/Mare) — se la data/ora cambia, ri-aggancia la
     // prenotazione alla partenza giusta (match su data + ora). Cosi' i posti si
@@ -547,6 +551,17 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                 <label className="text-xs text-theme-text-muted">Telefono</label>
                 <input className={INPUT_CLS} placeholder="Telefono (opzionale)" value={form.customer_phone} onChange={e => setForm({ ...form, customer_phone: e.target.value })} />
               </div>
+
+              {/* Mare (roadmap 12): guida con/senza skipper */}
+              {serviceType === 'boat_rental' && (
+                <div className="sm:col-span-2">
+                  <label className="text-xs text-theme-text-muted">Conduzione</label>
+                  <div className="flex gap-2 mt-1">
+                    <button type="button" onClick={() => setConSkipper(true)} className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${conSkipper ? 'bg-dr7-gold text-black border-dr7-gold' : 'bg-theme-bg-tertiary text-theme-text-secondary border-theme-border'}`}>Con skipper</button>
+                    <button type="button" onClick={() => setConSkipper(false)} className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${!conSkipper ? 'bg-dr7-gold text-black border-dr7-gold' : 'bg-theme-bg-tertiary text-theme-text-secondary border-theme-border'}`}>Senza skipper</button>
+                  </div>
+                </div>
+              )}
 
               {/* Passeggeri: nome + (solo Aria) dropdown del posto per ciascuno */}
               <div className="sm:col-span-2 border-t border-theme-border pt-3 mt-1">
