@@ -375,7 +375,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
     if (annualSpend >= 3000) {
       return { tier: 'black', label: 'Black', reward: 3, annualSpend, cardBookingSpend, rechargeSpend, rechargeCount, nextThreshold: 10000, badge: 'bg-zinc-900 text-white border-zinc-900' }
     }
-    return { tier: 'access', label: 'Access', reward: 2, annualSpend, cardBookingSpend, rechargeSpend, rechargeCount, nextThreshold: 3000, badge: 'bg-gray-500/20 text-gray-300 border-gray-500/50' }
+    return { tier: 'access', label: 'Access', reward: 2, annualSpend, cardBookingSpend, rechargeSpend, rechargeCount, nextThreshold: 3000, badge: 'bg-gray-500/15 text-gray-700 dark:text-gray-300 border-gray-400/50' }
   }, [bookings, walletRecharges, customer?.user_id])
 
   // Risk / reliability score (0-10)
