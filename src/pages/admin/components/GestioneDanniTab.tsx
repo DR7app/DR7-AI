@@ -473,59 +473,61 @@ export default function GestioneDanniTab() {
   async function handleDeleteItem(item: PenaltyDannoItem) {
     setSaving(true)
     try {
-      if (item.status === 'pending') {
-        // Remove from booking_details array
-        const { data: booking, error: fetchErr } = await supabase
-          .from('bookings')
-          .select('booking_details')
-          .eq('id', item.bookingId)
-          .single()
+      // 2026-07-24 BUG FIX: una penale/danno può esistere sia in
+      // booking_details sia in una fattura. Il report (report-danni) conta
+      // entrambe le fonti: cancellarne UNA sola lasciava l'altra e la voce
+      // RIAPPARIVA nel report. Ora la cancellazione PURGA ENTRAMBE le fonti
+      // per quella prenotazione, con match su etichetta/descrizione.
+      const label = (item.label || '').trim()
+      const labelLc = label.toLowerCase()
 
-        if (fetchErr) throw fetchErr
+      // ── 1) booking_details ──────────────────────────────────────────────
+      const { data: booking, error: fetchErr } = await supabase
+        .from('bookings').select('booking_details').eq('id', item.bookingId).single()
+      if (fetchErr) throw fetchErr
+      const details = booking?.booking_details || {}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const arr: any[] = [...(details[item.arrayKey] || [])]
+      let changedDetails = false
+      if (item.status === 'pending' && item.arrayIndex >= 0 && item.arrayIndex < arr.length) {
+        arr.splice(item.arrayIndex, 1); changedDetails = true
+      } else if (labelLc.length >= 3) {
+        // Item fatturato: rimuovi il "gemello" in booking_details per etichetta.
+        for (let i = arr.length - 1; i >= 0; i--) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const el = ((arr[i] as any).label || (arr[i] as any).description || (arr[i] as any).motivo || '').toLowerCase().trim()
+          if (el && (labelLc.includes(el) || el.includes(labelLc))) { arr.splice(i, 1); changedDetails = true; break }
+        }
+      }
+      if (changedDetails) {
+        const { error: updErr } = await supabase.from('bookings')
+          .update({ booking_details: { ...details, [item.arrayKey]: arr } }).eq('id', item.bookingId)
+        if (updErr) throw updErr
+      }
 
-        const details = booking?.booking_details || {}
+      // ── 2) fatture ── rimuovi le righe corrispondenti da TUTTE le fatture
+      //    di questa prenotazione (match su descrizione). Fattura svuotata → eliminata.
+      if (labelLc.length >= 3) {
+        const { data: fatt } = await supabase
+          .from('fatture').select('id, items, importo_totale, numero_fattura').eq('booking_id', item.bookingId)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const arr: any[] = [...(details[item.arrayKey] || [])]
-        arr.splice(item.arrayIndex, 1)
-
-        const { error: updateErr } = await supabase
-          .from('bookings')
-          .update({ booking_details: { ...details, [item.arrayKey]: arr } })
-          .eq('id', item.bookingId)
-
-        if (updateErr) throw updateErr
-      } else if (item.status === 'invoiced' && item.fatturaNumero) {
-        // Remove this line item from the fattura's items array (fattura stays, just fewer items)
-        const { data: fattura, error: fetchErr } = await supabase
-          .from('fatture')
-          .select('id, items, importo_totale')
-          .eq('numero_fattura', item.fatturaNumero)
-          .single()
-
-        if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const fatturaItems: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
-        // Find matching line item by description
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const matchIdx = fatturaItems.findIndex((fi: any) => fi.description === item.label)
-
-        if (matchIdx >= 0) {
-          const removedTotal = fatturaItems[matchIdx].total || (fatturaItems[matchIdx].unit_price || 0) * (fatturaItems[matchIdx].quantity || 1)
-          fatturaItems.splice(matchIdx, 1)
-
-          if (fatturaItems.length === 0) {
-            // No items left — delete the fattura
-            const { error: delErr } = await supabase.from('fatture').delete().eq('id', fattura.id)
+        const matches = (fi: any) => {
+          const d = (fi.description || '').toLowerCase()
+          return !!d && (d === labelLc || d.includes(labelLc) || labelLc.includes(d))
+        }
+        for (const f of (fatt || [])) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const fitems: any[] = Array.isArray(f.items) ? [...f.items] : []
+          const kept = fitems.filter(fi => !matches(fi))
+          if (kept.length === fitems.length) continue
+          const removedTotal = fitems.filter(matches).reduce((s, fi) => s + (fi.total || (fi.unit_price || 0) * (fi.quantity || 1)), 0)
+          if (kept.length === 0) {
+            const { error: delErr } = await supabase.from('fatture').delete().eq('id', f.id)
             if (delErr) throw delErr
           } else {
-            // Update fattura with remaining items and adjusted total
-            const newTotal = Math.max(0, (fattura.importo_totale || 0) - removedTotal)
-            const { error: updateErr } = await supabase
-              .from('fatture')
-              .update({ items: fatturaItems, importo_totale: newTotal })
-              .eq('id', fattura.id)
-            if (updateErr) throw updateErr
+            const { error: updErr } = await supabase.from('fatture')
+              .update({ items: kept, importo_totale: Math.max(0, (f.importo_totale || 0) - removedTotal) }).eq('id', f.id)
+            if (updErr) throw updErr
           }
         }
       }

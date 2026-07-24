@@ -863,6 +863,12 @@ export default function UnpaidBookingsTab() {
       const details = fresh?.booking_details || {}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const arr: any[] = [...(details[type] || [])]
+      // 2026-07-24: cattura l'etichetta della voce rimossa per pulire anche la
+      // fattura corrispondente (altrimenti riappare nel report che legge
+      // booking_details + fatture).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const removed: any = arr[originalIndex] || {}
+      const label = String(removed.label || removed.description || removed.motivo || '').trim().toLowerCase()
       arr.splice(originalIndex, 1)
 
       const { error } = await supabase
@@ -871,6 +877,23 @@ export default function UnpaidBookingsTab() {
         .eq('id', booking.id)
 
       if (error) throw error
+
+      // Pulisci le righe corrispondenti dalle fatture della prenotazione.
+      if (label.length >= 3) {
+        const { data: fatt } = await supabase
+          .from('fatture').select('id, items, importo_totale').eq('booking_id', booking.id)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const matches = (fi: any) => { const d = String(fi.description || '').toLowerCase(); return !!d && (d === label || d.includes(label) || label.includes(d)) }
+        for (const f of (fatt || [])) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const fitems: any[] = Array.isArray(f.items) ? [...f.items] : []
+          const kept = fitems.filter(fi => !matches(fi))
+          if (kept.length === fitems.length) continue
+          const removedTotal = fitems.filter(matches).reduce((s, fi) => s + (fi.total || (fi.unit_price || 0) * (fi.quantity || 1)), 0)
+          if (kept.length === 0) await supabase.from('fatture').delete().eq('id', f.id)
+          else await supabase.from('fatture').update({ items: kept, importo_totale: Math.max(0, (f.importo_totale || 0) - removedTotal) }).eq('id', f.id)
+        }
+      }
       toast.success(`${type === 'danni' ? 'Danno' : 'Penale'} rimosso!`)
       setConfirmDeleteKey(null)
       loadUnpaidBookings()
