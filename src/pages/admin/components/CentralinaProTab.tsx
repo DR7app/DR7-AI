@@ -1276,6 +1276,9 @@ type PersistedSnapshot = {
   marketing?: MarketingConfig
   lavaggio_hours?: LavaggioHoursConfig
   noleggio_hours?: NoleggioHoursConfig
+  // Sezioni disattivate per questo business (id sezione). Permette di spegnere
+  // cio' che non si applica (es. Mare non ha "Assicurazioni"/"Fascia patente").
+  sezioni_off?: string[]
 }
 
 // Supabase singleton row: centralina_pro_config (id='main', config jsonb).
@@ -1520,6 +1523,7 @@ export default function CentralinaProTab() {
   const [marketing, setMarketing] = useState<MarketingConfig>(initialMarketing)
   const [lavaggioHours, setLavaggioHours] = useState<LavaggioHoursConfig>(initialLavaggioHours)
   const [noleggioHours, setNoleggioHours] = useState<NoleggioHoursConfig>(initialNoleggioHours)
+  const [sezioniOff, setSezioniOff] = useState<string[]>(pick(persisted, 'sezioni_off', []))
 
   // Saved (committed) snapshot — what was last persisted
   const [savedCategories, setSavedCategories] = useState<Category[]>(initialCategories)
@@ -1538,6 +1542,7 @@ export default function CentralinaProTab() {
   const [savedMarketing, setSavedMarketing] = useState<MarketingConfig>(initialMarketing)
   const [savedLavaggioHours, setSavedLavaggioHours] = useState<LavaggioHoursConfig>(initialLavaggioHours)
   const [savedNoleggioHours, setSavedNoleggioHours] = useState<NoleggioHoursConfig>(initialNoleggioHours)
+  const [savedSezioniOff, setSavedSezioniOff] = useState<string[]>(pick(persisted, 'sezioni_off', []))
 
   const [justSaved, setJustSaved] = useState(false)
   // Business attivo (sub-tab). Terra='main' (invariato). Cambiare business salva
@@ -1574,11 +1579,12 @@ export default function CentralinaProTab() {
     if (remote.marketing !== undefined) { setMarketing(remote.marketing); setSavedMarketing(remote.marketing) }
     if (remote.lavaggio_hours !== undefined) { setLavaggioHours(remote.lavaggio_hours); setSavedLavaggioHours(remote.lavaggio_hours) }
     if (remote.noleggio_hours !== undefined) { setNoleggioHours(remote.noleggio_hours); setSavedNoleggioHours(remote.noleggio_hours) }
+    { const so = Array.isArray(remote.sezioni_off) ? remote.sezioni_off : []; setSezioniOff(so); setSavedSezioniOff(so) }
   }
 
   // Snapshot corrente dagli state hook (per salvataggio + copia al cambio business).
   function buildSnapshot(): PersistedSnapshot {
-    return { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours }
+    return { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours, sezioni_off: sezioniOff }
   }
 
   // Cambio business: salva il corrente sulla sua riga, poi carica il nuovo. Se
@@ -1712,8 +1718,8 @@ export default function CentralinaProTab() {
   }, [fasce])
 
   const changes = useMemo(
-    () =>
-      computeChanges(
+    () => {
+      const out = computeChanges(
         { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours },
         {
           categories: savedCategories,
@@ -1733,10 +1739,16 @@ export default function CentralinaProTab() {
           lavaggio_hours: savedLavaggioHours,
           noleggio_hours: savedNoleggioHours,
         }
-      ),
+      )
+      if (JSON.stringify([...sezioniOff].sort()) !== JSON.stringify([...savedSezioniOff].sort())) {
+        out.push('Sezioni attive del business aggiornate')
+      }
+      return out
+    },
     [
       categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7Club, automations, marketing, lavaggioHours, noleggioHours,
       savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi, savedPrezzoDinamico, savedPreventivi, savedPenali, savedDanni, savedFiscal, savedDr7Club, savedAutomations, savedMarketing, savedLavaggioHours, savedNoleggioHours,
+      sezioniOff, savedSezioniOff,
     ]
   )
 
@@ -1771,7 +1783,8 @@ export default function CentralinaProTab() {
     setSavedMarketing(marketing)
     setSavedLavaggioHours(lavaggioHours)
     setSavedNoleggioHours(noleggioHours)
-    savePersisted({ categories, fasce, insurance, km, deposits: cleanedDeposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours }, businessRow(businessId))
+    setSavedSezioniOff(sezioniOff)
+    savePersisted({ categories, fasce, insurance, km, deposits: cleanedDeposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours, sezioni_off: sezioniOff }, businessRow(businessId))
     // Bust the payment-method cache so every dropdown across admin picks up
     // the new list on next mount, without page reload.
     invalidatePaymentMethodsCache()
@@ -1809,6 +1822,12 @@ export default function CentralinaProTab() {
     setMarketing(savedMarketing)
     setLavaggioHours(savedLavaggioHours)
     setNoleggioHours(savedNoleggioHours)
+    setSezioniOff(savedSezioniOff)
+  }
+
+  // Attiva/disattiva una sezione per il business corrente (roadmap 17: ON/OFF).
+  function toggleSezione(id: string) {
+    setSezioniOff(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
   void changes.length // SaveBar always visible
@@ -1866,39 +1885,55 @@ export default function CentralinaProTab() {
             <nav className="py-2">
               {(isCauzioniViewOnly ? SECTIONS.filter(s => s.id === 'p4') : SECTIONS).map((s, idx) => {
                 const active = section === s.id
+                const off = sezioniOff.includes(s.id)
+                // Il toggle ON/OFF per sezione compare solo nella centralina piena
+                // (non nella vista cauzioni-only).
+                const showToggle = !isCauzioniViewOnly
                 return (
-                  <button
-                    key={s.id}
-                    onClick={() => setSection(s.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-                      active
-                        ? 'bg-[#007aff]/10'
-                        : 'hover:bg-theme-bg-hover:bg-theme-bg-secondary/[0.04]'
-                    }`}
-                  >
-                    <span
-                      className={`flex items-center justify-center w-7 h-7 rounded-full text-[13px] font-semibold ${
-                        active
-                          ? 'bg-[#007aff] text-white'
-                          : 'bg-[#e5e5ea] text-theme-text-primary'
-                      }`}
+                  <div key={s.id} className={`w-full flex items-center gap-2 pr-3 ${active ? 'bg-[#007aff]/10' : 'hover:bg-theme-bg-hover'}`}>
+                    <button
+                      onClick={() => setSection(s.id)}
+                      className="flex-1 min-w-0 flex items-center gap-3 px-4 py-3 text-left"
                     >
-                      {idx + 1}
-                    </span>
-                    <span
-                      className={`flex-1 min-w-0 text-[14px] font-medium truncate ${
-                        active ? 'text-[#007aff]' : 'text-theme-text-primary'
-                      }`}
-                    >
-                      {s.title}
-                    </span>
-                  </button>
+                      <span
+                        className={`flex items-center justify-center w-7 h-7 rounded-full text-[13px] font-semibold ${
+                          off ? 'bg-theme-bg-tertiary text-theme-text-muted' : active ? 'bg-[#007aff] text-white' : 'bg-[#e5e5ea] text-theme-text-primary'
+                        }`}
+                      >
+                        {idx + 1}
+                      </span>
+                      <span
+                        className={`flex-1 min-w-0 text-[14px] font-medium truncate ${
+                          off ? 'text-theme-text-muted line-through' : active ? 'text-[#007aff]' : 'text-theme-text-primary'
+                        }`}
+                      >
+                        {s.title}
+                      </span>
+                    </button>
+                    {showToggle && (
+                      <button
+                        onClick={() => toggleSezione(s.id)}
+                        title={off ? 'Sezione disattivata — clicca per attivare' : 'Sezione attiva — clicca per disattivare per questo business'}
+                        aria-label={off ? 'Attiva sezione' : 'Disattiva sezione'}
+                        className={`shrink-0 w-9 h-5 rounded-full transition-colors relative ${off ? 'bg-theme-bg-tertiary border border-theme-border' : 'bg-emerald-500'}`}
+                      >
+                        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${off ? 'left-0.5' : 'left-[18px]'}`} />
+                      </button>
+                    )}
+                  </div>
                 )
               })}
             </nav>
           </aside>
 
           <main className="min-w-0">
+            {sezioniOff.includes(section) ? (
+              <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-8 text-center">
+                <p className="text-sm font-semibold text-theme-text-primary">Sezione disattivata per {BUSINESSES.find(b => b.id === businessId)?.label}</p>
+                <p className="text-sm text-theme-text-muted mt-1">Questa sezione non si applica a questo business. Riattivala dal toggle nel menu a sinistra.</p>
+                <button onClick={() => toggleSezione(section)} className="mt-4 px-4 py-2 rounded-lg bg-[#007aff] text-white text-sm font-semibold">Riattiva sezione</button>
+              </div>
+            ) : (<>
             {section === 'categorie-fascia' && (
               <CategorieFasciaSection
                 categories={categories}
@@ -1988,6 +2023,7 @@ export default function CentralinaProTab() {
                 {businessId === 'soggiorni' && <NoleggioServiceTab serviceType="stay_rental" view="catalog" labels={{ title: 'Soggiorni & Ospitalità', asset: 'Alloggio', assetPlural: 'Alloggi' }} />}
               </div>
             )}
+            </>)}
           </main>
         </div>
       </div>
