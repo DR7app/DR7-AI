@@ -90,6 +90,9 @@ export default function InventarioMagazzino() {
   const [editArticolo, setEditArticolo] = useState<Partial<Articolo> | null>(null)
   const [movModal, setMovModal] = useState<{ articolo: Articolo; tipo: 'carico' | 'scarico' | 'rettifica' } | null>(null)
   const [busy, setBusy] = useState(false)
+  // Invio ordine via WhatsApp a un numero digitato al volo (non solo fornitori).
+  const [sendOrderId, setSendOrderId] = useState<string | null>(null)
+  const [sendPhone, setSendPhone] = useState('')
 
   // ── Load ─────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -317,6 +320,54 @@ export default function InventarioMagazzino() {
     } catch (e) { toast.error(`Errore: ${(e as Error).message}`) } finally { setBusy(false) }
   }
 
+  // Invia l'ordine via WhatsApp a un numero qualsiasi (digitato al volo o
+  // precompilato dal fornitore), poi porta l'ordine a "inviato".
+  async function inviaOrdineWhatsApp(o: Ordine, phoneRaw: string) {
+    const phone = (phoneRaw || '').replace(/\D/g, '')
+    if (phone.length < 8) { toast.error('Numero non valido'); return }
+    setBusy(true)
+    try {
+      const a = articoli.find(x => x.id === o.articolo_id)
+      const forn = o.fornitore_id ? fornitoreById.get(o.fornitore_id) : undefined
+      const unita = a && isPct(a) ? '%' : (a?.unita || 'pz')
+      const msg =
+        `Ordine DR7 — Magazzino\n\n` +
+        `Articolo: ${a?.nome || o.articolo_id}\n` +
+        (a?.codice ? `Codice: ${a.codice}\n` : '') +
+        `Quantita: ${num(o.quantita)} ${unita}\n` +
+        (forn ? `Fornitore: ${forn.nome}\n` : '') +
+        `\nConsegna presso: DR7 — Viale Marconi 229, 09131 Cagliari (CA)`
+      const res = await fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customPhone: phone, customMessage: msg, type: 'Ordine Magazzino' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data?.success === false) throw new Error(data?.error || `HTTP ${res.status}`)
+      await supabase.from('inv_ordini').update({ stato: 'inviato', sent_at: new Date().toISOString() }).eq('id', o.id)
+      toast.success('Ordine inviato via WhatsApp')
+      setSendOrderId(null); setSendPhone('')
+      await load()
+    } catch (e) { toast.error(`Errore invio: ${(e as Error).message}`) } finally { setBusy(false) }
+  }
+
+  // Crea un ordine manuale (on-demand) per un articolo, anche se non e' sotto
+  // scorta. Poi lo si invia via WhatsApp al numero che si vuole.
+  async function creaOrdineManuale(a: Articolo) {
+    if (openOrderByArticolo.has(a.id)) { toast('Ordine gia aperto per questo articolo', { icon: 'ℹ️' }); return }
+    setBusy(true)
+    try {
+      const forn = a.fornitore_id ? fornitoreById.get(a.fornitore_id) : undefined
+      const canale = a.canale_riordino || forn?.canale_riordino_default || 'whatsapp'
+      const quantita = a.quantita_riordino || a.soglia_minima || 1
+      const { error } = await supabase.from('inv_ordini').insert({
+        articolo_id: a.id, fornitore_id: a.fornitore_id, canale, quantita, stato: 'bozza', auto: false,
+      })
+      if (error) throw error
+      toast.success('Ordine creato — invialo via WhatsApp al numero che vuoi')
+      await load()
+    } catch (e) { toast.error(`Errore: ${(e as Error).message}`) } finally { setBusy(false) }
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
   if (tablesMissing) {
     return (
@@ -407,6 +458,7 @@ export default function InventarioMagazzino() {
                             <button onClick={() => setMovModal({ articolo: a, tipo: 'carico' })} className="w-7 h-7 grid place-items-center rounded bg-emerald-600/80 hover:bg-emerald-600 text-white text-sm font-bold" title="Carico">+</button>
                             <button onClick={() => setMovModal({ articolo: a, tipo: 'scarico' })} className="w-7 h-7 grid place-items-center rounded bg-red-600/80 hover:bg-red-600 text-white text-sm font-bold" title="Scarico">−</button>
                             <button onClick={() => setMovModal({ articolo: a, tipo: 'rettifica' })} className="px-2 h-7 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary text-xs" title="Rettifica inventario fisico">Rett.</button>
+                            {!hasOpenOrder && <button onClick={() => creaOrdineManuale(a)} disabled={busy} className="px-2 h-7 rounded bg-green-600/80 hover:bg-green-600 text-white text-xs font-semibold disabled:opacity-50" title="Crea ordine e invialo via WhatsApp a un numero a scelta">Ordina</button>}
                             <button onClick={() => setEditArticolo(a)} className="px-2 h-7 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary text-xs">Modifica</button>
                           </div>
                         </div>
@@ -435,7 +487,25 @@ export default function InventarioMagazzino() {
                   <span className="text-[11px] px-1.5 py-0.5 rounded bg-theme-bg-tertiary text-theme-text-muted uppercase">{o.canale}</span>
                   {forn && <span className="text-[11px] text-theme-text-muted">{forn.nome}</span>}
                   <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 uppercase">{o.stato}</span>
-                  {o.stato === 'bozza' && <button onClick={() => ordineTransizione(o, 'inviato')} className="px-2 py-1 rounded bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold">Segna inviato</button>}
+                  {o.stato === 'bozza' && sendOrderId !== o.id && (
+                    <button
+                      onClick={() => { setSendOrderId(o.id); setSendPhone(forn?.telefono ? forn.telefono.replace(/\D/g, '') : '') }}
+                      className="px-2 py-1 rounded bg-green-600 hover:bg-green-700 text-white text-xs font-semibold"
+                    >Invia WhatsApp</button>
+                  )}
+                  {o.stato === 'bozza' && sendOrderId === o.id && (
+                    <div className="flex items-center gap-1 w-full mt-1">
+                      <input
+                        type="tel" value={sendPhone} onChange={e => setSendPhone(e.target.value)}
+                        placeholder="Numero WhatsApp (es. 39347...)"
+                        className="flex-1 px-2 py-1 rounded bg-theme-bg-tertiary border border-green-500/50 text-xs text-theme-text-primary"
+                        autoFocus
+                      />
+                      <button disabled={busy} onClick={() => inviaOrdineWhatsApp(o, sendPhone)} className="px-2 py-1 rounded bg-green-600 hover:bg-green-700 text-white text-xs font-semibold disabled:opacity-50">Invia</button>
+                      <button onClick={() => { setSendOrderId(null); setSendPhone('') }} className="px-2 py-1 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary text-xs">Annulla</button>
+                    </div>
+                  )}
+                  {o.stato === 'bozza' && sendOrderId !== o.id && <button onClick={() => ordineTransizione(o, 'inviato')} className="px-2 py-1 rounded bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold">Segna inviato</button>}
                   {(o.stato === 'inviato' || o.stato === 'confermato') && <button onClick={() => ordineTransizione(o, 'ricevuto')} className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">Ricevuto (carico)</button>}
                   <button onClick={() => ordineTransizione(o, 'annullato')} className="px-2 py-1 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary text-xs">Annulla</button>
                 </div>
