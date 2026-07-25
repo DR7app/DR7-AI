@@ -80,7 +80,7 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
   return (
     <div className={`flex flex-wrap items-center gap-2 ${className}`}>
       {!compact && (
-        <span className="text-xs text-theme-text-muted">Periodo:</span>
+        <span className="text-xs text-theme-text-muted">Modello Periodo:</span>
       )}
       <div className="flex items-center gap-1">
         {!compact && <span className="text-xs text-theme-text-secondary">{fromLabel}</span>}
