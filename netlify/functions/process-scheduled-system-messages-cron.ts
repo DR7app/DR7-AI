@@ -487,6 +487,36 @@ async function processUscitaAutistaReminders(now: number): Promise<{ sent: numbe
  * Template pro_scadenza_cauzione_a/b/c gestiti da Messaggi di Sistema Pro
  * (is_enabled + cron_approved). Orario 08:00 (send_hour del template).
  */
+// Destinatari staff cauzioni: numeri configurati in Centralina
+// (config.notifications.cauzioni_staff_phones, separati da virgola/riga/;) +
+// fallback ad admins.contatto_interno di valerio@/ilenia@dr7.app. Dedup.
+async function resolveCauzioniStaffRecipients(): Promise<{ nome: string; phone: string }[]> {
+    const out = new Map<string, { nome: string; phone: string }>();
+    // 1) numeri configurati
+    try {
+        const { data } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const notif = (data?.config as any)?.notifications || {};
+        const raw = String(notif.cauzioni_staff_phones || '');
+        for (const part of raw.split(/[\n,;]+/)) {
+            const phone = part.replace(/\D/g, '');
+            if (phone.length >= 8) out.set(phone, { nome: 'Staff', phone });
+        }
+    } catch { /* config opzionale */ }
+    // 2) fallback admins.contatto_interno
+    try {
+        const { data: admins } = await supabase
+            .from('admins').select('email, nome, contatto_interno')
+            .in('email', ['valerio@dr7.app', 'ilenia@dr7.app']);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const a of (admins || []) as any[]) {
+            const phone = String(a.contatto_interno || '').replace(/\D/g, '');
+            if (phone.length >= 8 && !out.has(phone)) out.set(phone, { nome: a.nome || 'Staff', phone });
+        }
+    } catch { /* ignore */ }
+    return [...out.values()];
+}
+
 async function processScadenzaCauzioneAvviso(now: number): Promise<{ sent: number; skipped: number; errors: number }> {
     let sent = 0, skipped = 0, errors = 0;
 
@@ -544,15 +574,8 @@ async function processScadenzaCauzioneAvviso(now: number): Promise<{ sent: numbe
         });
     }
 
-    // Destinatari staff (Valerio/Ilenia) via admins.contatto_interno.
-    const { data: admins } = await supabase
-        .from('admins')
-        .select('email, nome, contatto_interno')
-        .in('email', ['valerio@dr7.app', 'ilenia@dr7.app']);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const recipients = (admins || [])
-        .map((a: { nome: string; contatto_interno: string }) => ({ nome: a.nome, phone: String(a.contatto_interno || '').replace(/\D/g, '') }))
-        .filter((r: { phone: string }) => r.phone.length >= 8);
+    // Destinatari staff: numeri configurati in Centralina + fallback admins.
+    const recipients = await resolveCauzioniStaffRecipients();
 
     const baseUrl = process.env.URL || 'https://platform.dr7ai.com';
     const fmtEur = (n: number) => Number(n || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -636,27 +659,29 @@ async function processScadenzaCauzioneAvviso(now: number): Promise<{ sent: numbe
     return { sent, skipped, errors };
 }
 
-async function processCauzioniRimborsoStaffReminder(now: number): Promise<{ sent: number; skipped: number; errors: number }> {
+export async function processCauzioniRimborsoStaffReminder(now: number, opts?: { force?: boolean }): Promise<{ sent: number; skipped: number; errors: number; reason?: string }> {
     let sent = 0, skipped = 0, errors = 0;
+    const force = opts?.force === true;
 
-    // 1) Template approvato (toggle ON/OFF), per key o per label.
+    // 1) Template. In modalita' force basta is_enabled + body (ignora cron_approved:
+    //    il tasto "Invia ora" serve proprio a testare prima di attivare il cron).
     const { data: tplRows } = await supabase
         .from('system_messages')
         .select('message_body, is_enabled, cron_approved, send_hour, message_key, label')
         .or('message_key.eq.pro_cauzioni_rimborso_staff,label.ilike.%rimborso%cauzion%')
         .order('updated_at', { ascending: false });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tpl = (tplRows || []).find((r: any) => r.is_enabled !== false && r.cron_approved === true && !!r.message_body);
-    if (!tpl) return { sent, skipped, errors };
+    const tpl = (tplRows || []).find((r: any) => r.is_enabled !== false && !!r.message_body && (force || r.cron_approved === true));
+    if (!tpl) return { sent, skipped, errors, reason: force ? 'Template cauzioni non trovato o disabilitato' : 'Template non approvato per il cron (attiva Cron ON)' };
 
-    // 2) Gate orario: manda dall'ora impostata (Rome, default 9) in poi, mai in
-    //    fascia silenziosa (22:00-07:00) — ridondante col guard globale, ma difesa
-    //    in profondita' se la funzione fosse chiamata da sola.
-    if (isRomeQuietHours(now)) return { sent, skipped, errors };
+    // 2) Gate orario (saltato in force).
     const todayRome = new Date(now).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }); // YYYY-MM-DD
-    const romeHour = getRomeHour(now);
-    const sendHour = tpl.send_hour == null ? 9 : Number(tpl.send_hour);
-    if (romeHour < sendHour || romeHour >= QUIET_START_HOUR) return { sent, skipped, errors };
+    if (!force) {
+        if (isRomeQuietHours(now)) return { sent, skipped, errors };
+        const romeHour = getRomeHour(now);
+        const sendHour = tpl.send_hour == null ? 9 : Number(tpl.send_hour);
+        if (romeHour < sendHour || romeHour >= QUIET_START_HOUR) return { sent, skipped, errors };
+    }
 
     // 3) Cauzioni bonifico in scadenza OGGI, non ancora restituite/incassate, non
     //    gia' incluse in un promemoria di oggi.
@@ -668,8 +693,8 @@ async function processCauzioniRimborsoStaffReminder(now: number): Promise<{ sent
         .is('data_incasso', null)
         .not('stato', 'in', '(Restituita,Sbloccata,Bloccata,Danno,Incassata)');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const due = (cauz || []).filter((c: any) => c.rimborso_reminder_sent_on !== todayRome);
-    if (due.length === 0) return { sent, skipped, errors };
+    const due = (cauz || []).filter((c: any) => force || c.rimborso_reminder_sent_on !== todayRome);
+    if (due.length === 0) return { sent, skipped, errors, reason: `Nessuna cauzione bonifico in scadenza oggi (${todayRome})` };
 
     // 4) Nomi cliente.
     const clienteIds = [...new Set(due.map((c: { cliente_id: string }) => c.cliente_id).filter(Boolean))];
@@ -705,20 +730,15 @@ async function processCauzioniRimborsoStaffReminder(now: number): Promise<{ sent
     // Se il template non contiene {lista}, accoda comunque la lista (fail-safe).
     const finalBody = String(tpl.message_body).includes('{lista}') ? body : `${body}\n\n${lista}`;
 
-    // 6) Destinatari: direzione via admins.contatto_interno.
-    const { data: admins } = await supabase
-        .from('admins')
-        .select('email, nome, contatto_interno')
-        .in('email', ['valerio@dr7.app', 'ilenia@dr7.app']);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const recipients = (admins || [])
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .map((a: any) => ({ nome: a.nome, phone: String(a.contatto_interno || '').replace(/\D/g, '') }))
-        .filter((r: { phone: string }) => r.phone.length >= 8);
+    // 6) Destinatari: numeri configurati in Centralina (notifications.
+    //    cauzioni_staff_phones) + fallback ad admins.contatto_interno di
+    //    valerio@/ilenia@. Cosi' non dipende dal fatto che gli admin abbiano
+    //    il contatto interno valorizzato.
+    const recipients = await resolveCauzioniStaffRecipients();
 
     if (recipients.length === 0) {
         console.warn('[cauzioni-rimborso-staff] nessun destinatario con telefono valido (admins.contatto_interno)');
-        return { sent, skipped: skipped + due.length, errors };
+        return { sent, skipped: skipped + due.length, errors, reason: 'Nessun destinatario: valerio@/ilenia@dr7.app senza "contatto interno" (numero WhatsApp)' };
     }
 
     const baseUrl = process.env.URL || 'https://platform.dr7ai.com';

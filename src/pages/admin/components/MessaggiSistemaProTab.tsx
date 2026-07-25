@@ -2333,6 +2333,39 @@ export default function MessaggiSistemaProTab() {
         }
     }
 
+    // "Invia ora" per il promemoria rimborso cauzioni: forza l'invio (ignora
+    // orario/cron) e mostra la diagnosi (inviati / motivo se non parte).
+    const [sendingCauzioni, setSendingCauzioni] = useState(false)
+    async function handleSendCauzioniNow() {
+        setSendingCauzioni(true)
+        try {
+            const res = await fetch('/.netlify/functions/trigger-cauzioni-reminder', { method: 'POST' })
+            const data = await res.json().catch(() => ({}))
+            if (data.ok) toast.success(data.message || 'Inviato', { duration: 6000 })
+            else toast(data.message || data.error || 'Niente da inviare', { icon: 'ℹ️', duration: 9000 })
+        } catch (e) { toast.error('Errore: ' + (e as Error).message) } finally { setSendingCauzioni(false) }
+    }
+
+    // Imposta i numeri WhatsApp dello staff che ricevono i promemoria cauzioni
+    // (salvati in centralina_pro_config.notifications.cauzioni_staff_phones).
+    async function handleEditCauzioniContacts() {
+        try {
+            const { data } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const cfg: any = data?.config || {}
+            const notif = cfg.notifications || {}
+            const input = window.prompt(
+                'Numeri WhatsApp staff che ricevono i promemoria cauzioni (separati da virgola).\nEs: 393401234567, 393407654321',
+                String(notif.cauzioni_staff_phones || '')
+            )
+            if (input === null) return
+            const nextCfg = { ...cfg, notifications: { ...notif, cauzioni_staff_phones: input.trim() } }
+            const { error } = await supabase.from('centralina_pro_config').upsert({ id: 'main', config: nextCfg }, { onConflict: 'id' })
+            if (error) throw error
+            toast.success('Contatti staff cauzioni salvati')
+        } catch (e) { toast.error('Errore: ' + (e as Error).message) }
+    }
+
     async function handleDeleteTemplate(template: SystemMessage) {
         if (!confirm(`Eliminare definitivamente il messaggio "${template.label}"?\n\nQuesta operazione non è reversibile.`)) return
 
@@ -3401,6 +3434,21 @@ export default function MessaggiSistemaProTab() {
                                                         >
                                                             {template.send_email ? 'Email ✓' : 'Email ✗'}
                                                         </button>
+                                                        {template.message_key === 'pro_cauzioni_rimborso_staff' && (
+                                                            <>
+                                                                <button
+                                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleEditCauzioniContacts() }}
+                                                                    title="Imposta i numeri WhatsApp dello staff che riceve i promemoria cauzioni"
+                                                                    className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-600/20 text-purple-400 hover:bg-purple-600/30 transition-colors"
+                                                                >Contatti</button>
+                                                                <button
+                                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleSendCauzioniNow() }}
+                                                                    disabled={sendingCauzioni}
+                                                                    title="Forza l'invio ora (ignora orario e cron) e mostra la diagnosi"
+                                                                    className="px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 disabled:opacity-50 transition-colors"
+                                                                >{sendingCauzioni ? 'Invio…' : 'Invia ora'}</button>
+                                                            </>
+                                                        )}
                                                         <button
                                                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteTemplate(template) }}
                                                             title="Elimina definitivamente"
