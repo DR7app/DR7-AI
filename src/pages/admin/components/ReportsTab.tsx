@@ -282,30 +282,47 @@ function FixedExpensesEditor({ vehicleId, revenue, initial, onSave, saving, fmt 
   )
 }
 
-// Modale modifica/aggiunta voce report (nuova funzione). In edit mostra i campi
-// numerici precompilati; in add chiede anche nome/targa/categoria. La nota e'
-// obbligatoria cosi' resta tracciato il motivo. I valori confluiscono nei totali.
-const REPORT_EDIT_FIELDS: { key: string; label: string }[] = [
+// Modale modifica/aggiunta voce report (nuova funzione), generica: riceve la
+// lista dei campi numerici e i campi identita' (nome/targa o tipo). In edit
+// precompila; in add chiede anche l'identita'. La nota e' obbligatoria cosi'
+// resta tracciato il motivo. I totali si ricalcolano in fetchReport.
+interface FieldDef { key: string; label: string }
+// Config veicoli (Report Noleggio)
+const VEHICLE_EDIT_FIELDS: FieldDef[] = [
   { key: 'rentalRevenue', label: 'Ricavo noleggio €' },
   { key: 'penaltyRevenue', label: 'Penali €' },
   { key: 'danniRevenue', label: 'Danni €' },
   { key: 'daSaldareRevenue', label: 'Da saldare €' },
   { key: 'anticipatedRevenue', label: 'Anticipato €' },
 ]
-function ReportRowModal({ mode, row, onClose, onSaveEdit, onSaveAdd }: {
+// Config lavaggi (Report Lavaggi): ricavo + quantita' per tipo servizio
+const WASH_EDIT_FIELDS: FieldDef[] = [
+  { key: 'revenue', label: 'Ricavo €' },
+  { key: 'count', label: 'Quantità' },
+]
+function ReportRowModal({ mode, row, fields, identityFields, addTemplate, onClose, onSaveEdit, onSaveAdd }: {
   mode: 'edit' | 'add'
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   row: any
+  fields: FieldDef[]
+  // campi identita' richiesti in add (es. label/plate per veicoli, type per lavaggi)
+  identityFields: { key: string; label: string; placeholder?: string; required?: boolean }[]
+  // valori extra di default per una riga aggiunta (per rispettare la forma dei dati)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  addTemplate?: Record<string, any>
   onClose: () => void
   onSaveEdit: (changes: Record<string, number>, note: string) => void
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onSaveAdd: (row: any, note: string) => void
 }) {
-  const [label, setLabel] = useState<string>(row?.label || '')
-  const [plate, setPlate] = useState<string>(row?.plate || '')
+  const [ident, setIdent] = useState<Record<string, string>>(() => {
+    const o: Record<string, string> = {}
+    for (const f of identityFields) o[f.key] = row?.[f.key] != null ? String(row[f.key]) : ''
+    return o
+  })
   const [vals, setVals] = useState<Record<string, string>>(() => {
     const o: Record<string, string> = {}
-    for (const f of REPORT_EDIT_FIELDS) o[f.key] = row?.[f.key] != null ? String(row[f.key]) : ''
+    for (const f of fields) o[f.key] = row?.[f.key] != null ? String(row[f.key]) : ''
     return o
   })
   const [note, setNote] = useState<string>('')
@@ -315,43 +332,41 @@ function ReportRowModal({ mode, row, onClose, onSaveEdit, onSaveAdd }: {
     if (!note.trim()) { toast.error('Inserisci un motivo/nota'); return }
     if (mode === 'edit') {
       const changes: Record<string, number> = {}
-      for (const f of REPORT_EDIT_FIELDS) {
+      for (const f of fields) {
         const nv = num(vals[f.key])
         if (nv !== Number(row?.[f.key] || 0)) changes[f.key] = nv
       }
-      const rentalRevenue = num(vals.rentalRevenue), penaltyRevenue = num(vals.penaltyRevenue), danniRevenue = num(vals.danniRevenue)
-      changes.totalRevenue = rentalRevenue + penaltyRevenue + danniRevenue
       onSaveEdit(changes, note.trim())
     } else {
-      if (!label.trim()) { toast.error('Inserisci un nome per la voce'); return }
-      const rentalRevenue = num(vals.rentalRevenue), penaltyRevenue = num(vals.penaltyRevenue), danniRevenue = num(vals.danniRevenue), daSaldareRevenue = num(vals.daSaldareRevenue), anticipatedRevenue = num(vals.anticipatedRevenue)
-      onSaveAdd({
-        label: label.trim(), plate: plate.trim(), category: row?.category || 'altro',
-        rentedDays: 0, maintenanceDays: 0, idleDays: 0, utilizationRate: 0, bookingsCount: 0, bookings: [],
-        rentalRevenue, penaltyRevenue, danniRevenue, daSaldareRevenue, anticipatedRevenue,
-        totalRevenue: rentalRevenue + penaltyRevenue + danniRevenue,
-      }, note.trim())
+      for (const f of identityFields) {
+        if (f.required && !ident[f.key]?.trim()) { toast.error(`Inserisci ${f.label.toLowerCase()}`); return }
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const newRow: Record<string, any> = { ...(addTemplate || {}) }
+      for (const f of identityFields) newRow[f.key] = ident[f.key]?.trim() || ''
+      for (const f of fields) newRow[f.key] = num(vals[f.key])
+      onSaveAdd(newRow, note.trim())
     }
   }
 
+  const title = row?.label || row?.type
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="bg-theme-bg-secondary border border-theme-border rounded-xl w-full max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <h3 className="text-lg font-bold text-theme-text-primary">
-          {mode === 'edit' ? `Modifica voce${row?.label ? ` — ${row.label}` : ''}` : 'Aggiungi voce manuale'}
+          {mode === 'edit' ? `Modifica voce${title ? ` — ${title}` : ''}` : 'Aggiungi voce manuale'}
         </h3>
         {mode === 'add' && (
-          <div className="grid grid-cols-2 gap-3">
-            <label className="text-xs text-theme-text-muted col-span-2">Nome voce
-              <input value={label} onChange={e => setLabel(e.target.value)} className="mt-1 w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-sm" placeholder="Es. Lamborghini Huracan" />
-            </label>
-            <label className="text-xs text-theme-text-muted col-span-2">Targa (facoltativa)
-              <input value={plate} onChange={e => setPlate(e.target.value)} className="mt-1 w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-sm" placeholder="XX000XX" />
-            </label>
+          <div className="grid grid-cols-1 gap-3">
+            {identityFields.map(f => (
+              <label key={f.key} className="text-xs text-theme-text-muted">{f.label}{f.required ? '' : ' (facoltativo)'}
+                <input value={ident[f.key]} onChange={e => setIdent(v => ({ ...v, [f.key]: e.target.value }))} className="mt-1 w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-sm" placeholder={f.placeholder || ''} />
+              </label>
+            ))}
           </div>
         )}
         <div className="grid grid-cols-2 gap-3">
-          {REPORT_EDIT_FIELDS.map(f => (
+          {fields.map(f => (
             <label key={f.key} className="text-xs text-theme-text-muted">{f.label}
               <input value={vals[f.key]} onChange={e => setVals(v => ({ ...v, [f.key]: e.target.value }))} inputMode="decimal" className="mt-1 w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-sm text-right tabular-nums" placeholder="0" />
             </label>
@@ -581,7 +596,21 @@ export default function ReportsTab() {
         setOverrides(ov)
         setVehicleData({ ...data, vehicles: adjusted })
       } else if (activeReport === 'washes') {
-        setWashData(data)
+        // Override manuali anche sul report Lavaggi: correggi ricavo/quantita' per
+        // tipo, rimuovi o aggiungi un tipo. I totali (ricavo, conteggio) si
+        // ricalcolano sulle righe corrette. Chiave = `${periodKey}|${type}`.
+        const ov = await loadReportOverrides('lavaggio')
+        const periodKey = `${customFrom}|${customTo}`
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const baseTypes = ((data.byType || []) as any[])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let adjTypes = applyOverrides(baseTypes, ov, (t: any) => `${periodKey}|${t.type}`)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        adjTypes = adjTypes.filter((t: any) => !t._isManual || t.period === periodKey)
+        const washRevenue = adjTypes.reduce((s, t) => s + (Number(t.revenue) || 0), 0)
+        const billableWashesCount = adjTypes.reduce((s, t) => s + (Number(t.count) || 0), 0)
+        setOverrides(ov)
+        setWashData({ ...data, byType: adjTypes, washRevenue, billableWashesCount })
       } else {
         setCauzioniData(data)
       }
@@ -632,6 +661,47 @@ export default function ReportsTab() {
   async function handleAddManualRow(row: any, note: string) {
     try {
       await saveAddOverride('noleggio', { ...row, period: periodKey, vehicleId: `manual_${Date.now()}` }, note || null)
+      setShowAddRow(false)
+      await fetchReport()
+      toast.success('Voce aggiunta al report')
+    } catch (e) { toast.error('Errore: ' + (e as Error).message) }
+  }
+
+  // ── Modifiche manuali Report Lavaggi (chiave per tipo servizio) ───────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function handleSaveWashEdit(row: any, changes: Record<string, number>, note: string) {
+    try {
+      if (row._isManual && row._manualId) {
+        await deleteOverrideById(row._manualId)
+        await saveAddOverride('lavaggio', { ...row, ...changes, note, period: periodKey, type: row.type }, note || null)
+      } else {
+        const key = `${periodKey}|${row.type}`
+        for (const [field, value] of Object.entries(changes)) await saveEditOverride('lavaggio', key, field, value, note || null)
+      }
+      setEditRow(null)
+      await fetchReport()
+      toast.success('Report aggiornato')
+    } catch (e) { toast.error('Errore: ' + (e as Error).message) }
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function handleRemoveWash(row: any) {
+    if (!confirm(`Rimuovere "${row.type}" dal report? (puoi ripristinarla)`)) return
+    try {
+      if (row._isManual && row._manualId) await deleteOverrideById(row._manualId)
+      else await saveRemoveOverride('lavaggio', `${periodKey}|${row.type}`, null)
+      await fetchReport()
+      toast.success('Voce rimossa dal report')
+    } catch (e) { toast.error('Errore: ' + (e as Error).message) }
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function handleRestoreWash(row: any) {
+    try { await deleteOverrideByRow('lavaggio', `${periodKey}|${row.type}`); await fetchReport(); toast.success('Voce ripristinata') }
+    catch (e) { toast.error('Errore: ' + (e as Error).message) }
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function handleAddWash(row: any, note: string) {
+    try {
+      await saveAddOverride('lavaggio', { ...row, period: periodKey }, note || null)
       setShowAddRow(false)
       await fetchReport()
       toast.success('Voce aggiunta al report')
@@ -1564,6 +1634,8 @@ export default function ReportsTab() {
             <ReportRowModal
               mode="edit"
               row={editRow}
+              fields={VEHICLE_EDIT_FIELDS}
+              identityFields={[]}
               onClose={() => setEditRow(null)}
               onSaveEdit={(changes, note) => handleSaveRowEdit(editRow, changes, note)}
               onSaveAdd={() => {}}
@@ -1573,6 +1645,12 @@ export default function ReportsTab() {
             <ReportRowModal
               mode="add"
               row={null}
+              fields={VEHICLE_EDIT_FIELDS}
+              identityFields={[
+                { key: 'label', label: 'Nome voce', placeholder: 'Es. Lamborghini Huracan', required: true },
+                { key: 'plate', label: 'Targa', placeholder: 'XX000XX' },
+              ]}
+              addTemplate={{ category: 'altro', rentedDays: 0, maintenanceDays: 0, idleDays: 0, utilizationRate: 0, bookingsCount: 0, bookings: [], totalRevenue: 0 }}
               onClose={() => setShowAddRow(false)}
               onSaveEdit={() => {}}
               onSaveAdd={(newRow, note) => handleAddManualRow(newRow, note)}
@@ -1655,6 +1733,51 @@ export default function ReportsTab() {
             </div>
           </div>
 
+          {/* Modifica manuale report Lavaggi */}
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => setEditReport(v => !v)}
+              className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${editReport ? 'bg-amber-500/15 border-amber-500/40 text-amber-400' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary hover:text-theme-text-primary'}`}
+            >
+              {editReport ? '✓ Modifica report attiva' : '✎ Modifica report'}
+            </button>
+            {editReport && (
+              <button
+                onClick={() => setShowAddRow(true)}
+                className="px-3 py-2 rounded-lg text-sm font-medium border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20"
+              >
+                + Aggiungi voce
+              </button>
+            )}
+            {overrides && overrides.raw.length > 0 && (
+              <span className="text-xs text-theme-text-muted">{overrides.raw.length} modifiche manuali attive</span>
+            )}
+          </div>
+
+          {/* Modali modifica/aggiunta voce Lavaggi */}
+          {editRow && (
+            <ReportRowModal
+              mode="edit"
+              row={editRow}
+              fields={WASH_EDIT_FIELDS}
+              identityFields={[]}
+              onClose={() => setEditRow(null)}
+              onSaveEdit={(changes, note) => handleSaveWashEdit(editRow, changes, note)}
+              onSaveAdd={() => {}}
+            />
+          )}
+          {showAddRow && (
+            <ReportRowModal
+              mode="add"
+              row={null}
+              fields={WASH_EDIT_FIELDS}
+              identityFields={[{ key: 'type', label: 'Tipo servizio', placeholder: 'Es. Lavaggio completo', required: true }]}
+              onClose={() => setShowAddRow(false)}
+              onSaveEdit={() => {}}
+              onSaveAdd={(newRow, note) => handleAddWash(newRow, note)}
+            />
+          )}
+
           {/* Breakdown by Type */}
           {washData.byType.length > 0 && (
             <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border overflow-hidden">
@@ -1675,7 +1798,21 @@ export default function ReportsTab() {
                   <tbody>
                     {washData.byType.map(item => (
                       <tr key={item.type} className="border-t border-theme-border hover:bg-theme-bg-tertiary/30 transition-colors">
-                        <td className="px-4 py-3 font-medium text-theme-text-primary">{item.type}</td>
+                        <td className="px-4 py-3 font-medium text-theme-text-primary">
+                          {item.type}
+                          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                          {(item as any)._isManual && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400">manuale</span>}
+                          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                          {(item as any)._overrideNote && <span className="ml-1 text-[11px] text-amber-400" title={(item as any)._overrideNote}>✎</span>}
+                          {editReport && (
+                            <span className="ml-3 inline-flex gap-1">
+                              <button onClick={() => setEditRow(item)} className="text-[11px] px-1.5 py-0.5 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary">Modifica</button>
+                              <button onClick={() => handleRemoveWash(item)} className="text-[11px] px-1.5 py-0.5 rounded border border-red-500/30 text-red-400">Rimuovi</button>
+                              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                              {((item as any)._overrideNote || (item as any)._isManual) && <button onClick={() => handleRestoreWash(item)} className="text-[11px] px-1.5 py-0.5 rounded border border-theme-border text-theme-text-muted">Ripristina</button>}
+                            </span>
+                          )}
+                        </td>
                         <td className="text-center px-4 py-3 text-theme-text-primary">{item.count}</td>
                         <td className="text-right px-4 py-3 text-dr7-gold font-semibold">{formatCurrency(item.revenue)}</td>
                         <td className="text-right px-4 py-3 text-theme-text-muted">
@@ -1699,11 +1836,25 @@ export default function ReportsTab() {
                 {washData.byType.map(item => (
                   <div key={item.type} className="bg-theme-bg-tertiary/30 rounded-lg p-4 border border-theme-border">
                     <div className="flex justify-between items-start mb-2">
-                      <p className="font-semibold text-theme-text-primary text-sm">{item.type}</p>
+                      <p className="font-semibold text-theme-text-primary text-sm">
+                        {item.type}
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                        {(item as any)._isManual && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-400">manuale</span>}
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                        {(item as any)._overrideNote && <span className="ml-1 text-[11px] text-amber-400" title={(item as any)._overrideNote}>✎</span>}
+                      </p>
                       <span className="text-xs bg-theme-bg-tertiary px-2 py-1 rounded-full text-theme-text-muted">
                         {washData.washRevenue > 0 ? Math.round((item.revenue / washData.washRevenue) * 100) : 0}%
                       </span>
                     </div>
+                    {editReport && (
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        <button onClick={() => setEditRow(item)} className="text-[11px] px-1.5 py-0.5 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary">Modifica</button>
+                        <button onClick={() => handleRemoveWash(item)} className="text-[11px] px-1.5 py-0.5 rounded border border-red-500/30 text-red-400">Rimuovi</button>
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                        {((item as any)._overrideNote || (item as any)._isManual) && <button onClick={() => handleRestoreWash(item)} className="text-[11px] px-1.5 py-0.5 rounded border border-theme-border text-theme-text-muted">Ripristina</button>}
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3 text-center">
                       <div>
                         <p className="text-lg font-bold text-theme-text-primary">{item.count}</p>
