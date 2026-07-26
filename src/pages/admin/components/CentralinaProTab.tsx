@@ -69,7 +69,7 @@ type Fascia = {
   min_license_years: number | ''
 }
 
-const SECTIONS: { id: SectionId; title: string }[] = [
+export const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'categorie-fascia', title: 'Categorie & Fascia' },
   { id: 'p2', title: 'Assicurazioni' },
   { id: 'p3', title: 'Km & Sforo' },
@@ -1301,8 +1301,8 @@ function loadPersisted(): PersistedSnapshot | null {
 // Terra resta su id='main' (INVARIATO: il sito e tutto l'esistente leggono di
 // qui). Gli altri business hanno righe dedicate (business_*), che NON toccano
 // 'main'. Cosi' aggiungere business non rompe nulla di gia' presente.
-type BusinessId = 'terra' | 'mare' | 'aria' | 'soggiorni' | 'lavaggio'
-const BUSINESSES: { id: BusinessId; label: string; row: string }[] = [
+export type BusinessId = 'terra' | 'mare' | 'aria' | 'soggiorni' | 'lavaggio'
+export const BUSINESSES: { id: BusinessId; label: string; row: string }[] = [
   { id: 'terra',     label: 'Noleggio Terra',        row: 'main' },
   { id: 'mare',      label: 'Noleggio Mare',         row: 'business_mare' },
   { id: 'aria',      label: 'Noleggio Aria',         row: 'business_aria' },
