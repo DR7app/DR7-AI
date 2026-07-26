@@ -893,6 +893,32 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
   const daysArray = useMemo(() => Array.from({ length: daysInMonth }, (_, i) => i + 1), [daysInMonth])
   const monthYmdPrefix = `${year}-${String(month + 1).padStart(2, '0')}`
 
+  // Larghezza cella DINAMICA come il Calendario Noleggio Terra (CalendarTab):
+  // le celle riempiono la larghezza visibile invece di restare fisse a 45px.
+  // Solo dimensione/design — nessuna logica di prenotazione toccata.
+  const gridRef = useRef<HTMLDivElement>(null)
+  const [containerW, setContainerW] = useState(0)
+  useEffect(() => {
+    const el = gridRef.current
+    if (!el) return
+    const update = () => setContainerW(el.clientWidth)
+    update()
+    const raf = requestAnimationFrame(update)
+    const t = setTimeout(update, 150)
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    window.addEventListener('resize', update)
+    return () => { cancelAnimationFrame(raf); clearTimeout(t); ro.disconnect(); window.removeEventListener('resize', update) }
+  }, [assetsLoading, bookingsLoading])
+  const isNarrow = containerW > 0 && containerW < 640
+  const cellW = useMemo(() => {
+    if (!containerW) return CAL_CELL_W
+    if (isNarrow) return 46
+    const avail = containerW - CAL_LEFT_W
+    if (avail <= 0 || daysInMonth <= 0) return CAL_CELL_W
+    return Math.max(CAL_CELL_W, Math.floor(avail / daysInMonth))
+  }, [containerW, daysInMonth, isNarrow])
+
   // Match barre → riga asset per nome (case-insensitive trim). Le prenotazioni
   // senza asset corrispondente finiscono in "Altro / Non assegnato".
   const { rowsByAsset, unassigned } = useMemo(() => {
@@ -922,12 +948,12 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
       if (dYmd < `${monthYmdPrefix}-01` || pYmd > `${monthYmdPrefix}-${String(daysInMonth).padStart(2, '0')}`) return
       const startDay = pYmd.startsWith(monthYmdPrefix) ? romeDayOfMonth(b.pickup_date) : 1
       const endDay = dYmd.startsWith(monthYmdPrefix) ? romeDayOfMonth(b.dropoff_date || b.pickup_date) : daysInMonth
-      const left = (startDay - 1) * CAL_CELL_W
-      const width = Math.max(CAL_CELL_W, (endDay - startDay + 1) * CAL_CELL_W)
+      const left = (startDay - 1) * cellW
+      const width = Math.max(cellW, (endDay - startDay + 1) * cellW)
       out.push({ booking: b, left, width })
     })
     return out
-  }, [monthYmdPrefix, daysInMonth])
+  }, [monthYmdPrefix, daysInMonth, cellW])
 
   const today = new Date()
   const isTodayDay = (day: number) =>
@@ -1010,7 +1036,7 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
   }
 
   const loading = assetsLoading || bookingsLoading
-  const gridW = daysArray.length * CAL_CELL_W
+  const gridW = daysArray.length * cellW
 
   return (
     <div className="space-y-4">
@@ -1034,7 +1060,7 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
       )}
 
       {assets.length > 0 && (
-        <div className="border border-theme-border rounded-lg overflow-auto bg-theme-bg-primary">
+        <div ref={gridRef} className="border border-theme-border rounded-lg overflow-auto bg-theme-bg-primary">
           <div style={{ minWidth: CAL_LEFT_W + gridW }}>
             {/* Header giorni */}
             <div className="flex sticky top-0 z-30 bg-theme-bg-primary border-b border-theme-border" style={{ height: CAL_HEADER_H }}>
@@ -1051,7 +1077,7 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                     <div
                       key={day}
                       className={`flex flex-col items-center justify-center border-r border-theme-border/60 shrink-0 ${isTodayDay(day) ? 'bg-dr7-gold/30' : ''}`}
-                      style={{ width: CAL_CELL_W }}
+                      style={{ width: cellW }}
                     >
                       <span className="text-[10px] text-theme-text-primary">{day}</span>
                       <span className="text-[8px] uppercase text-theme-text-muted">{d.toLocaleDateString('it-IT', { weekday: 'short' })}</span>
@@ -1068,6 +1094,7 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                 asset={asset}
                 bars={barsFor(rowsByAsset.get(asset.id) || [])}
                 daysArray={daysArray}
+                cellW={cellW}
                 year={year} month={month}
                 isTodayDay={isTodayDay}
                 onCellClick={(day) => openCreate(asset.name, day)}
@@ -1081,6 +1108,7 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                 asset={{ id: '__unassigned__', name: 'Altro / Non assegnato', image_url: null }}
                 bars={barsFor(unassigned)}
                 daysArray={daysArray}
+                cellW={cellW}
                 year={year} month={month}
                 isTodayDay={isTodayDay}
                 onCellClick={() => { /* niente create su riga non assegnata */ }}
@@ -1164,11 +1192,12 @@ function romeOffsetMinutes(ymd: string): number {
 }
 
 function CalRow({
-  asset, bars, daysArray, year, month, isTodayDay, onCellClick, onBarClick, disableCreate,
+  asset, bars, daysArray, cellW, year, month, isTodayDay, onCellClick, onBarClick, disableCreate,
 }: {
   asset: CalAsset
   bars: { booking: BookingRow; left: number; width: number }[]
   daysArray: number[]
+  cellW: number
   year: number
   month: number
   isTodayDay: (day: number) => boolean
@@ -1194,14 +1223,14 @@ function CalRow({
       </div>
 
       {/* Griglia giorni + barre */}
-      <div className="relative shrink-0" style={{ width: daysArray.length * CAL_CELL_W }}>
+      <div className="relative shrink-0" style={{ width: daysArray.length * cellW }}>
         {/* celle sfondo + click create */}
         <div className="flex h-full">
           {daysArray.map(day => (
             <div
               key={day}
               className={`h-full shrink-0 border-r border-theme-border/50 ${isTodayDay(day) ? 'bg-dr7-gold/15' : ''} ${disableCreate ? '' : 'hover:bg-theme-text-primary/5 cursor-pointer'}`}
-              style={{ width: CAL_CELL_W }}
+              style={{ width: cellW }}
               onClick={disableCreate ? undefined : () => onCellClick(day)}
               title={disableCreate ? undefined : `Nuova prenotazione: ${day}/${month + 1}/${year}`}
             />
