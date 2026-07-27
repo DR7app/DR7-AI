@@ -108,7 +108,7 @@ export const handler: Handler = async (event) => {
         }
 
         const chargeAt = new Date(Date.now() + 1 * 60 * 1000).toISOString() // ~1 min
-        await supabase.from('pending_addebiti').insert({
+        const { error: insertError } = await supabase.from('pending_addebiti').insert({
             transaction_id: transactionId || null,
             booking_id: bookingId || null,
             customer_name: customerName || '',
@@ -137,6 +137,18 @@ export const handler: Handler = async (event) => {
             interval_hours: recurring ? (parseInt(intervalHours) || 24) : null,
             photo_urls: photoUrls && photoUrls.length > 0 ? photoUrls : null,
         })
+
+        // Se l'insert fallisce (es. colonna mancante perche' la migration non e'
+        // stata lanciata, o RLS) NON dobbiamo dire "Addebito programmato": era un
+        // falso successo. Restituiamo l'errore reale cosi' l'admin lo vede.
+        if (insertError) {
+            console.error('[nexi-nuovo-addebito] Insert pending_addebiti FALLITO:', insertError.message)
+            return {
+                statusCode: 500,
+                headers,
+                body: JSON.stringify({ error: `Salvataggio addebito fallito: ${insertError.message}` }),
+            }
+        }
 
         console.log(`[nexi-nuovo-addebito] Pending addebito created (${wantEmail ? 'con email' : 'senza email'}), charge scheduled`)
 
