@@ -262,6 +262,23 @@ const processHandler: Handler = async () => {
         }
     }
 
+    // Scalino della cascata addebito, configurabile da Centralina Pro
+    // (Automazioni > "Addebito — scalino cascata"). Letto una volta per ciclo.
+    // Default €300 se assente o non valido.
+    let cascadeStepCents = 30000 // €300
+    try {
+        const { data: cfgRow } = await supabase
+            .from('centralina_pro_config')
+            .select('config')
+            .eq('id', 'main')
+            .maybeSingle()
+        const stepEur = Number((cfgRow?.config as any)?.automations?.addebito_cascade_step_eur)
+        if (Number.isFinite(stepEur) && stepEur > 0) cascadeStepCents = Math.round(stepEur * 100)
+    } catch (cfgErr) {
+        console.warn('[process-pending-addebiti] Scalino cascata da config non letto, uso €300:', cfgErr)
+    }
+    console.log(`[process-pending-addebiti] Scalino cascata: €${(cascadeStepCents / 100).toFixed(2)}`)
+
     // 2. Find addebiti ready for MIT charge (2 min after second email)
     const { data: readyForCharge } = await supabase
         .from('pending_addebiti')
@@ -281,10 +298,9 @@ const processHandler: Handler = async () => {
 
         try {
             const minAmountCents = 50 // €0.50 minimum
-            // Scalino della cascata: ad ogni rifiuto si scende di QUESTO importo
-            // fisso (prima era -10% percentuale). "Cascata di 300": full, poi
-            // -€300, -€600, ... finche' la carta accetta o si scende sotto il minimo.
-            const cascadeStepCents = 30000 // €300
+            // cascadeStepCents e' letto sopra dalla Centralina Pro (default €300):
+            // ad ogni rifiuto l'importo scende di questo valore fisso finche' la
+            // carta accetta o si scende sotto il minimo.
             let lastError = ''
             let attempts = 0
 
