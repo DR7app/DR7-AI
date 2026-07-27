@@ -2384,22 +2384,47 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     setLoading(true)
     try {
       // Fetch ALL bookings to ensure we don't filter out NULLs or unexpected values via SQL
-      // We will filter client-side to be 100% sure we get what we want
-      const { data: allBookings, error: bookingsError } = await supabase
-        .from('bookings')
-        .select('*')
-        .order('created_at', { ascending: false })
+      // We will filter client-side to be 100% sure we get what we want.
+      // 2026-07-27 FIX (bug Andrea Testa): PostgREST limita ogni richiesta a 1000
+      // righe. Senza paginare, con oltre 1000 prenotazioni totali (car wash + tour
+      // + shadow rows vivono tutte in `bookings`) le prenotazioni piu' vecchie
+      // sparivano dalla lista Noleggio pur restando visibili nel calendario.
+      // Paginiamo in blocchi da 1000 finche' non arriviamo in fondo.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const allBookings: any[] = []
+      let bookingsError: unknown = null
+      {
+        const PAGE = 1000
+        for (let start = 0; ; start += PAGE) {
+          const { data: page, error: pageErr } = await supabase
+            .from('bookings')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .range(start, start + PAGE - 1)
+          if (pageErr) { bookingsError = pageErr; break }
+          if (!page || page.length === 0) break
+          allBookings.push(...page)
+          if (page.length < PAGE) break
+        }
+      }
 
-      // Fetch contracts separately to avoid join issues
-      const { data: contractsData, error: contractsError } = await supabase
-        .from('contracts')
-        .select('booking_id, signed_pdf_url')
-
+      // Fetch contracts separately to avoid join issues. Paginato come i bookings
+      // (>1000 contratti) cosi' il link "contratto firmato" non sparisce sulle
+      // prenotazioni piu' vecchie.
       const contractsMap = new Map()
-      if (contractsData) {
-        contractsData.forEach(c => {
-          contractsMap.set(c.booking_id, c)
-        })
+      let contractsError: unknown = null
+      {
+        const PAGE = 1000
+        for (let start = 0; ; start += PAGE) {
+          const { data: page, error: pageErr } = await supabase
+            .from('contracts')
+            .select('booking_id, signed_pdf_url')
+            .range(start, start + PAGE - 1)
+          if (pageErr) { contractsError = pageErr; break }
+          if (!page || page.length === 0) break
+          page.forEach(c => contractsMap.set(c.booking_id, c))
+          if (page.length < PAGE) break
+        }
       }
 
       if (contractsError) {
