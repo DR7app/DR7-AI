@@ -150,7 +150,7 @@ export default function CustomerAddebitoButton({
                 </div>
                 {orderedSelected.length > 1 && (
                     <div className="text-[10px] text-theme-text-muted mt-1">
-                        Cascata: prova in ordine dall'alto e si ferma alla prima carta che accetta (per ogni carta: importo pieno, poi −10%, ecc.).
+                        Cascata: prova in ordine dall'alto e si ferma alla prima carta che accetta (per ogni carta: importo pieno, poi −€300, −€600, ecc.).
                     </div>
                 )}
             </div>

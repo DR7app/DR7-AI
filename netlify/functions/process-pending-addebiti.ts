@@ -281,15 +281,19 @@ const processHandler: Handler = async () => {
 
         try {
             const minAmountCents = 50 // €0.50 minimum
+            // Scalino della cascata: ad ogni rifiuto si scende di QUESTO importo
+            // fisso (prima era -10% percentuale). "Cascata di 300": full, poi
+            // -€300, -€600, ... finche' la carta accetta o si scende sotto il minimo.
+            const cascadeStepCents = 30000 // €300
             let lastError = ''
             let attempts = 0
 
-            // CASCATA SEQUENZIALE CON ACCUMULO. Si prova la PRIMA carta col
-            // ladder -10% partendo dall'importo da incassare; appena accetta un
-            // importo lo si incassa e si passa alla carta SUCCESSIVA per il
-            // RIMANENTE. Es: deve 10, carta1 ha solo ~1 -> incassa ~1 da carta1,
-            // poi prova ~9 (il resto) su carta2 col suo ladder, ecc. Cosi' si
-            // raccoglie il piu' possibile distribuendo sulle carte.
+            // CASCATA SEQUENZIALE CON ACCUMULO. Si prova la PRIMA carta con lo
+            // scalino fisso di €300 partendo dall'importo da incassare; appena
+            // accetta un importo lo si incassa e si passa alla carta SUCCESSIVA
+            // per il RIMANENTE. Es: deve 1000, carta1 accetta ~400 -> incassa 400
+            // da carta1, poi prova ~600 (il resto) su carta2 con lo stesso
+            // scalino, ecc. Cosi' si raccoglie il piu' possibile sulle carte.
             const cascadeCards: string[] = Array.isArray(addebito.cascade_contract_ids) && addebito.cascade_contract_ids.length > 0
                 ? addebito.cascade_contract_ids.filter((x: unknown) => typeof x === 'string' && x)
                 : [addebito.contract_id]
@@ -329,8 +333,10 @@ const processHandler: Handler = async () => {
                         console.log(`[process-pending-addebiti] ✅ Incassato €${amountEur.toFixed(2)} da carta ...${String(cid).slice(-6)} — rimane €${(remainingCents / 100).toFixed(2)}`)
                         break // passa alla carta successiva per il RIMANENTE
                     }
-                    // Questa carta ha rifiutato l'importo: scendi del 10% e riprova.
-                    amount = Math.round(amount * 0.9)
+                    // Questa carta ha rifiutato l'importo: scendi di €300 (scalino
+                    // fisso della cascata) e riprova. Se scende sotto il minimo il
+                    // while termina e si passa alla carta successiva.
+                    amount = amount - cascadeStepCents
                     if (amount >= minAmountCents) await new Promise(r => setTimeout(r, 200))
                 }
             }
