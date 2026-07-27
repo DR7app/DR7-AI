@@ -262,23 +262,6 @@ const processHandler: Handler = async () => {
         }
     }
 
-    // Scalino della cascata addebito, configurabile da Centralina Pro
-    // (Automazioni > "Addebito — scalino cascata"). Letto una volta per ciclo.
-    // Default €300 se assente o non valido.
-    let cascadeStepCents = 30000 // €300
-    try {
-        const { data: cfgRow } = await supabase
-            .from('centralina_pro_config')
-            .select('config')
-            .eq('id', 'main')
-            .maybeSingle()
-        const stepEur = Number((cfgRow?.config as any)?.automations?.addebito_cascade_step_eur)
-        if (Number.isFinite(stepEur) && stepEur > 0) cascadeStepCents = Math.round(stepEur * 100)
-    } catch (cfgErr) {
-        console.warn('[process-pending-addebiti] Scalino cascata da config non letto, uso €300:', cfgErr)
-    }
-    console.log(`[process-pending-addebiti] Scalino cascata: €${(cascadeStepCents / 100).toFixed(2)}`)
-
     // 2. Find addebiti ready for MIT charge (2 min after second email)
     const { data: readyForCharge } = await supabase
         .from('pending_addebiti')
@@ -298,11 +281,21 @@ const processHandler: Handler = async () => {
 
         try {
             const minAmountCents = 50 // €0.50 minimum
-            // cascadeStepCents e' letto sopra dalla Centralina Pro (default €300):
-            // ad ogni rifiuto l'importo scende di questo valore fisso finche' la
-            // carta accetta o si scende sotto il minimo.
+            // Scalino della cascata scelto PER-TRANSAZIONE al momento dell'addebito
+            // (default €300 se assente). Ad ogni rifiuto l'importo scende di questo
+            // valore fisso finche' la carta accetta o si scende sotto il minimo.
+            const rawStep = Number(addebito.cascade_step_cents)
+            const cascadeStepCents = Number.isFinite(rawStep) && rawStep > 0 ? rawStep : 30000
             let lastError = ''
             let attempts = 0
+
+            // Tetto tentativi PER-TRANSAZIONE (personalizzabile in fase di
+            // creazione addebito): la cascata si FERMA dopo questo numero di
+            // tentativi totali, anche se non ha incassato tutto. NULL/0 =
+            // illimitato (comportamento storico).
+            const rawMax = Number(addebito.max_attempts)
+            const maxAttempts = Number.isFinite(rawMax) && rawMax > 0 ? rawMax : Infinity
+            const hasMaxAttempts = Number.isFinite(maxAttempts)
 
             // CASCATA SEQUENZIALE CON ACCUMULO. Si prova la PRIMA carta con lo
             // scalino fisso di €300 partendo dall'importo da incassare; appena
@@ -320,8 +313,10 @@ const processHandler: Handler = async () => {
 
             for (const cid of cascadeCards) {
                 if (remainingCents < minAmountCents) break
+                if (attempts >= maxAttempts) break // tetto tentativi raggiunto → stop
                 let amount = remainingCents
                 while (amount >= minAmountCents) {
+                    if (attempts >= maxAttempts) break // tetto tentativi raggiunto → stop
                     attempts++
                     const amountEur = amount / 100
                     console.log(`[process-pending-addebiti] Attempt #${attempts} — €${amountEur.toFixed(2)} carta ...${String(cid).slice(-6)} (rimane €${(remainingCents / 100).toFixed(2)}) for addebito ${addebito.id}`)
@@ -372,7 +367,8 @@ const processHandler: Handler = async () => {
                 }).eq('id', addebito.id)
 
                 // Rimanente non incassato (carte esaurite): riprogramma un follow-up.
-                if (remainingCents >= minAmountCents) {
+                // Con tetto tentativi impostato NON si riprogramma: "N volte e poi stop".
+                if (remainingCents >= minAmountCents && !hasMaxAttempts) {
                     const nextChargeAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // retry in 30 days
                     await supabase.from('pending_addebiti').insert({
                         transaction_id: null,
@@ -401,7 +397,7 @@ const processHandler: Handler = async () => {
             if (!charged) {
                 console.error(`[process-pending-addebiti] All ${attempts} attempts failed for addebito ${addebito.id}`)
 
-                if (addebito.recurring && addebito.interval_hours) {
+                if (addebito.recurring && addebito.interval_hours && !hasMaxAttempts) {
                     const nextRetry = new Date(Date.now() + addebito.interval_hours * 60 * 60 * 1000).toISOString()
                     await supabase.from('pending_addebiti').update({
                         status: 'second_email_sent',

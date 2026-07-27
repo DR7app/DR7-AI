@@ -1472,7 +1472,11 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                   Addebita (debito reale, non pre-autorizzazione). */}
               {(() => {
                 const cards = listCardsFromMetadata(customer.metadata).filter(c => !deletedCardIds.has(c.contractId))
-                if (cards.length === 0) return null
+                // Il pulsante Addebito è SEMPRE presente nella scheda: senza carta
+                // tokenizzata resta visibile ma disabilitato (lo gestisce il componente).
+                if (cards.length === 0) return (
+                  <CustomerAddebitoButton cards={[]} customerEmail={customer.email} customerName={customerName} />
+                )
                 return (
                   <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-3">
                     <div className="flex items-center justify-between">

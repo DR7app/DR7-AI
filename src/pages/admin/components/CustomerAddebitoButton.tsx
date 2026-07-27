@@ -35,12 +35,13 @@ export default function CustomerAddebitoButton({
     const [open, setOpen] = useState(!!autoOpen)
     const [amount, setAmount] = useState('')
     const [causale, setCausale] = useState('')
+    // Parametri cascata scelti al momento dell'addebito (per-transazione).
+    const [maxAttempts, setMaxAttempts] = useState('')      // vuoto = illimitato
+    const [cascadeStepEur, setCascadeStepEur] = useState('300') // scalino €, default 300
     // Carte selezionate per l'addebito. Default: la carta predefinita. Si
     // possono selezionare piu' carte (o tutte): la cascata le prova in ordine.
     const [selected, setSelected] = useState<Record<string, boolean>>(defaultCid ? { [defaultCid]: true } : {})
     const [sending, setSending] = useState(false)
-
-    if (cards.length === 0) return null
 
     const cardLabel = (c: NexiCardView) => {
         const pan = c.maskedPan || `…${c.contractId.slice(-6)}`
@@ -78,6 +79,9 @@ export default function CustomerAddebitoButton({
                     causale: causale.trim() || `Addebito - ${customerName || customerEmail}`,
                     contractId: orderedSelected[0],
                     contractIds: orderedSelected.length > 1 ? orderedSelected : undefined,
+                    // Cascata scelta per-transazione. Vuoto = default (illimitato / €300).
+                    maxAttempts: parseInt(maxAttempts) > 0 ? parseInt(maxAttempts) : undefined,
+                    cascadeStepEur: parseFloat(cascadeStepEur) > 0 ? parseFloat(cascadeStepEur) : undefined,
                 }),
             })
             const data = await res.json().catch(() => ({}))
@@ -95,6 +99,22 @@ export default function CustomerAddebitoButton({
         } finally {
             setSending(false)
         }
+    }
+
+    // Il pulsante Addebito è SEMPRE presente nella scheda cliente. Se il cliente
+    // non ha ancora una carta tokenizzata non si può addebitare: il pulsante
+    // resta visibile ma disabilitato, con la spiegazione.
+    if (cards.length === 0) {
+        return (
+            <button
+                type="button"
+                disabled
+                title="Nessuna carta salvata: il cliente deve prima pagare online (così la carta viene tokenizzata) per poter essere addebitato."
+                className="w-full px-3 py-2 rounded-lg text-sm font-semibold bg-theme-bg-tertiary text-theme-text-muted border border-theme-border cursor-not-allowed"
+            >
+                Addebito — nessuna carta salvata
+            </button>
+        )
     }
 
     if (!open) {
@@ -150,12 +170,42 @@ export default function CustomerAddebitoButton({
                 </div>
                 {orderedSelected.length > 1 && (
                     <div className="text-[10px] text-theme-text-muted mt-1">
-                        Cascata: prova in ordine dall'alto e si ferma alla prima carta che accetta (per ogni carta: importo pieno, poi −€300, −€600, ecc.).
+                        Cascata: prova in ordine dall'alto e si ferma alla prima carta che accetta (per ogni carta: importo pieno, poi −€{cascadeStepEur || '300'}, e giù di quel passo).
                     </div>
                 )}
             </div>
 
-            {/* 3) Causale */}
+            {/* 3) Cascata: scalino + max tentativi (per-transazione) */}
+            <div className="grid grid-cols-2 gap-2">
+                <label className="text-[11px] text-theme-text-muted">
+                    Scalino cascata
+                    <div className="relative mt-1">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-theme-text-muted text-sm pointer-events-none">€</span>
+                        <input
+                            type="number" min="1" step="50" inputMode="decimal"
+                            value={cascadeStepEur}
+                            onChange={e => setCascadeStepEur(e.target.value)}
+                            placeholder="300"
+                            className="w-full pl-6 pr-2 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm text-right tabular-nums focus:outline-none focus:border-dr7-gold"
+                        />
+                    </div>
+                </label>
+                <label className="text-[11px] text-theme-text-muted">
+                    Max tentativi
+                    <input
+                        type="number" min="1" step="1" inputMode="numeric"
+                        value={maxAttempts}
+                        onChange={e => setMaxAttempts(e.target.value)}
+                        placeholder="illimitato"
+                        className="w-full mt-1 px-2 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm text-right tabular-nums focus:outline-none focus:border-dr7-gold"
+                    />
+                </label>
+            </div>
+            <div className="text-[10px] text-theme-text-muted -mt-1">
+                Prova a scendere di €{cascadeStepEur || '300'} ad ogni rifiuto{parseInt(maxAttempts) > 0 ? `, per max ${parseInt(maxAttempts)} tentativi, poi si ferma` : ' (nessun limite di tentativi)'}.
+            </div>
+
+            {/* 4) Causale */}
             <input
                 type="text"
                 value={causale}

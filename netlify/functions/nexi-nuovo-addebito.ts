@@ -43,7 +43,15 @@ export const handler: Handler = async (event) => {
             intervalHours,
             photoUrls,
             sendEmail,
+            maxAttempts,      // tetto tentativi per-transazione (undefined = illimitato)
+            cascadeStepEur,   // scalino cascata in € per-transazione (undefined = default €300)
         } = JSON.parse(event.body || '{}')
+
+        // Normalizza i parametri per-transazione della cascata.
+        const maxAttemptsInt = Number.isFinite(Number(maxAttempts)) && Number(maxAttempts) > 0
+            ? Math.floor(Number(maxAttempts)) : null
+        const cascadeStepCents = Number.isFinite(Number(cascadeStepEur)) && Number(cascadeStepEur) > 0
+            ? Math.round(Number(cascadeStepEur) * 100) : null
 
         // NESSUNA email per default: l'addebito va diretto alla fase di charge.
         // L'email parte SOLO se il chiamante passa esplicitamente sendEmail=true.
@@ -111,6 +119,10 @@ export const handler: Handler = async (event) => {
             // che accetta vince). Inclusa SOLO con 2+ carte: cosi' gli addebiti
             // a carta singola funzionano anche se la colonna non esiste ancora.
             ...((Array.isArray(contractIds) && contractIds.filter(Boolean).length > 1) ? { cascade_contract_ids: contractIds.filter(Boolean) } : {}),
+            // Parametri cascata per-transazione. Inclusi SOLO se valorizzati cosi'
+            // gli addebiti funzionano anche se le colonne non esistono ancora.
+            ...(maxAttemptsInt != null ? { max_attempts: maxAttemptsInt } : {}),
+            ...(cascadeStepCents != null ? { cascade_step_cents: cascadeStepCents } : {}),
             amount_cents: Math.round(parseFloat(amount) * 100),
             causale: causale,
             // Con email: parte dal flusso email. Senza email (default): salta

@@ -2060,8 +2060,11 @@ export default function CustomersTab() {
                   Ogni carta ha il proprio bottone Addebita. */}
               {(() => {
                 const cards = listCardsFromMetadata(viewingCustomerDetails.metadata).filter(c => !deletedCardIds.has(c.contractId))
-                if (cards.length === 0) return null
                 const custName = viewingCustomerDetails.full_name || `${viewingCustomerDetails.nome || ''} ${viewingCustomerDetails.cognome || ''}`.trim()
+                // Pulsante Addebito SEMPRE presente: senza carta resta disabilitato.
+                if (cards.length === 0) return (
+                  <CustomerAddebitoButton cards={[]} customerEmail={viewingCustomerDetails.email} customerName={custName} />
+                )
                 return (
                   <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 rounded-lg p-4 space-y-4">
                     <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-300 flex items-center justify-between border-b border-emerald-200 dark:border-emerald-900 pb-2">

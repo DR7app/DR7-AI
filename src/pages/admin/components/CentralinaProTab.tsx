@@ -561,10 +561,6 @@ type AutomationsConfig = {
   cross_vehicle_gap_minutes: number | ''
   pre_pickup_carwash_buffer_minutes: number | ''
   late_return_grace_minutes: number | ''
-  /** Scalino (€) della cascata addebito su carta tokenizzata: ad ogni rifiuto
-   *  l'importo scende di questo valore fisso finche' la carta accetta o si
-   *  scende sotto il minimo. Default 300. Letto da process-pending-addebiti. */
-  addebito_cascade_step_eur?: number | ''
   /** Periodi in cui le prenotazioni LAVAGGIO sono BLOCCATE: il sito non
    *  permette di prenotare in quelle date. Vuoto = nessun blocco. */
   carwash_block_ranges?: { from: string; to: string; message?: string }[]
@@ -625,7 +621,6 @@ const INITIAL_AUTOMATIONS: AutomationsConfig = {
   cross_vehicle_gap_minutes: 15,
   pre_pickup_carwash_buffer_minutes: 90,
   late_return_grace_minutes: 90,
-  addebito_cascade_step_eur: 300,
   carwash_block_ranges: [],
   cancellation_rules: [
     { id: 'standard',   label: 'Cancellazione standard',  applies_to: 'all',     requires_service: 'none',       min_days_notice: 5, refund_pct: 90, refund_method: 'wallet', is_active: true },
@@ -2232,9 +2227,6 @@ function computeChanges(current: Snapshot, saved: Snapshot): string[] {
   }
   if (current.automations.late_return_grace_minutes !== saved.automations.late_return_grace_minutes) {
     out.push(`Grace ritardo riconsegna: ${saved.automations.late_return_grace_minutes || 0} → ${current.automations.late_return_grace_minutes || 0} minuti`)
-  }
-  if ((current.automations.addebito_cascade_step_eur ?? 300) !== (saved.automations.addebito_cascade_step_eur ?? 300)) {
-    out.push(`Scalino cascata addebito: €${saved.automations.addebito_cascade_step_eur ?? 300} → €${current.automations.addebito_cascade_step_eur ?? 300}`)
   }
   // Cancellation rules
   {
@@ -6563,38 +6555,6 @@ function AutomazioniSection({
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">minuti</span>
             </div>
             <p className="text-[11px] text-theme-text-secondary mt-1.5">Default: 90 (1h30 prima del pickup time).</p>
-          </label>
-        </div>
-      </section>
-
-      {/* 4b) Scalino cascata addebito su carta tokenizzata */}
-      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden">
-        <header className="px-5 pt-5 pb-3 bg-[#fff4f2] border-b border-[#ff3b30]/15">
-          <h3 className="text-[15px] font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
-            <span className="inline-flex w-6 h-6 rounded-full bg-[#ff3b30] text-white items-center justify-center text-[12px] font-bold">€</span>
-            Addebito — scalino cascata
-          </h3>
-          <p className="text-[12px] text-[#3a3a3c] leading-relaxed pl-8">
-            Quando si addebita una carta tokenizzata e la carta <b>rifiuta</b> l'importo, la cascata riprova scendendo di questo <b>importo fisso</b> finché la carta accetta o si scende sotto il minimo (€0,50). Esempio con scalino €300: 1000 → 700 → 400 → 100. Prima era una riduzione del −10%.
-          </p>
-        </header>
-        <div className="p-5">
-          <label className="block max-w-xs">
-            <div className="relative">
-              <input
-                type="number"
-                min={1}
-                step={50}
-                value={automations.addebito_cascade_step_eur ?? 300}
-                onChange={(e) => {
-                  const v = e.target.value
-                  update({ addebito_cascade_step_eur: v === '' ? '' : Number(v) })
-                }}
-                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#af52de]/40"
-              />
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">€</span>
-            </div>
-            <p className="text-[11px] text-theme-text-secondary mt-1.5">Default: 300. Importi sotto lo scalino avranno un solo tentativo.</p>
           </label>
         </div>
       </section>
