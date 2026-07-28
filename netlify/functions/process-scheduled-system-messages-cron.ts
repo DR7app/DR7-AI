@@ -689,11 +689,14 @@ export async function processCauzioniRimborsoStaffReminder(now: number, opts?: {
     //    giorni precedenti — allineato al pannello "Da Restituire" (days<=0).
     //    Prima era filtrato a metodo='bonifico': le cauzioni su CARTA (la maggior
     //    parte della flotta) non venivano mai promemoria-te.
+    // NB: NON filtriamo su data_incasso. Nei dati reali TUTTE le cauzioni attive
+    // (carta e bonifico) hanno data_incasso valorizzato (= quando il deposito e'
+    // stato registrato), non significa "trattenuta". Il vero criterio "da
+    // restituire" e' lo STATO non terminale — lo stesso del KPI "Scadute".
     const { data: cauz } = await supabase
         .from('cauzioni')
         .select('id, cliente_id, importo, iban, intestatario_conto, metodo, stato, data_incasso, scadenza_cauzione, rimborso_reminder_sent_on')
         .lte('scadenza_cauzione', todayRome)
-        .is('data_incasso', null)
         .not('stato', 'in', '(Restituita,Sbloccata,Bloccata,Danno,Incassata)');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const due = (cauz || []).filter((c: any) => force || c.rimborso_reminder_sent_on !== todayRome);
