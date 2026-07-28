@@ -1661,7 +1661,14 @@ function NumeriAmministrazione() {
     async function save() {
         const clean = numbers.map(n => n.trim()).filter(n => n.replace(/\D/g, '').length >= 8)
         setSaving(true)
-        const newCfg = { ...cfg, notifications: { ...(cfg.notifications || {}), cauzioni_staff_phones: clean.join('\n') } }
+        // Read-modify-write sulla config FRESCA: rileggiamo la config completa
+        // subito prima di scrivere cosi' non si sovrascrive il resto della
+        // Centralina anche se lo stato locale fosse vecchio o non ancora caricato.
+        const { data: fresh, error: readErr } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+        if (readErr) { setSaving(false); toast.error('Lettura config fallita: ' + readErr.message); return }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const base = ((fresh?.config as any) || {})
+        const newCfg = { ...base, notifications: { ...(base.notifications || {}), cauzioni_staff_phones: clean.join('\n') } }
         const { error } = await supabase.from('centralina_pro_config').upsert({ id: 'main', config: newCfg }, { onConflict: 'id' })
         setSaving(false)
         if (error) { toast.error('Salvataggio fallito: ' + error.message); return }
@@ -1740,7 +1747,7 @@ function NumeriAmministrazione() {
                             </button>
                             <div className="flex gap-2">
                                 <button onClick={() => setOpen(false)} disabled={saving} className="px-3 py-2 rounded-lg text-xs font-semibold bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary">Chiudi</button>
-                                <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg text-xs font-semibold bg-dr7-gold text-white hover:opacity-90 disabled:opacity-50">{saving ? 'Salvataggio…' : 'Salva'}</button>
+                                <button onClick={save} disabled={saving || loading} className="px-4 py-2 rounded-lg text-xs font-semibold bg-dr7-gold text-white hover:opacity-90 disabled:opacity-50">{saving ? 'Salvataggio…' : 'Salva'}</button>
                             </div>
                         </div>
                     </div>
