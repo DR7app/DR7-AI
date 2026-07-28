@@ -683,22 +683,21 @@ export async function processCauzioniRimborsoStaffReminder(now: number, opts?: {
         if (romeHour < sendHour || romeHour >= QUIET_START_HOUR) return { sent, skipped, errors };
     }
 
-    // 3) Cauzioni bonifico da restituire OGGI o GIA' SCADUTE (non ancora
-    //    restituite/incassate), non gia' incluse in un promemoria di oggi.
-    //    NB: <= oggi (non solo = oggi) cosi' il promemoria copre anche le
-    //    cauzioni scadute nei giorni precedenti — allineato al pannello
-    //    "Da Restituire Oggi" (days_until_deadline <= 0). Continua a ricordare
-    //    ogni giorno finche' non vengono restituite (anti-doppio giornaliero).
+    // 3) Cauzioni da restituire OGGI o GIA' SCADUTE (QUALSIASI metodo: bonifico,
+    //    carta, contanti), non ancora restituite/incassate, non gia' incluse in
+    //    un promemoria di oggi. NB: <= oggi cosi' copre anche le scadute nei
+    //    giorni precedenti — allineato al pannello "Da Restituire" (days<=0).
+    //    Prima era filtrato a metodo='bonifico': le cauzioni su CARTA (la maggior
+    //    parte della flotta) non venivano mai promemoria-te.
     const { data: cauz } = await supabase
         .from('cauzioni')
         .select('id, cliente_id, importo, iban, intestatario_conto, metodo, stato, data_incasso, scadenza_cauzione, rimborso_reminder_sent_on')
-        .eq('metodo', 'bonifico')
         .lte('scadenza_cauzione', todayRome)
         .is('data_incasso', null)
         .not('stato', 'in', '(Restituita,Sbloccata,Bloccata,Danno,Incassata)');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const due = (cauz || []).filter((c: any) => force || c.rimborso_reminder_sent_on !== todayRome);
-    if (due.length === 0) return { sent, skipped, errors, reason: `Nessuna cauzione bonifico da restituire (scadenza <= ${todayRome})` };
+    if (due.length === 0) return { sent, skipped, errors, reason: `Nessuna cauzione da restituire (scadenza <= ${todayRome})` };
 
     // 4) Nomi cliente.
     const clienteIds = [...new Set(due.map((c: { cliente_id: string }) => c.cliente_id).filter(Boolean))];
@@ -721,9 +720,22 @@ export async function processCauzioniRimborsoStaffReminder(now: number, opts?: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const lista = due.map((c: any) => {
         const nome = nameMap[c.cliente_id] || 'Cliente';
-        const iban = (c.iban && String(c.iban).trim()) || 'IBAN MANCANTE';
-        const intest = (c.intestatario_conto && String(c.intestatario_conto).trim()) || 'INTESTATARIO MANCANTE';
-        return `• ${nome} — € ${Number(c.importo).toFixed(2)}\n  Intestatario: ${intest}\n  IBAN: ${iban}`;
+        const imp = Number(c.importo).toFixed(2);
+        const metodo = String(c.metodo || '').toLowerCase();
+        // Bonifico: servono IBAN + intestatario per il bonifico di rimborso.
+        if (metodo === 'bonifico') {
+            const iban = (c.iban && String(c.iban).trim()) || 'IBAN MANCANTE';
+            const intest = (c.intestatario_conto && String(c.intestatario_conto).trim()) || 'INTESTATARIO MANCANTE';
+            return `• ${nome} — € ${imp} (Bonifico)\n  Intestatario: ${intest}\n  IBAN: ${iban}`;
+        }
+        // Carta / contanti / altro: azione diversa (rilascio blocco carta o
+        // restituzione contanti), nessun IBAN.
+        const azione = metodo === 'carta'
+            ? 'Carta — rilascia il blocco/preautorizzazione'
+            : metodo === 'contanti'
+                ? 'Contanti — restituisci in contanti'
+                : (metodo ? metodo.charAt(0).toUpperCase() + metodo.slice(1) : 'Da restituire');
+        return `• ${nome} — € ${imp} (${azione})`;
     }).join('\n\n');
 
     const body = String(tpl.message_body)
