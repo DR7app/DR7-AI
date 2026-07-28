@@ -1635,8 +1635,6 @@ export default function CauzioniTab() {
 function NumeriAmministrazione() {
     const [open, setOpen] = useState(false)
     const [numbers, setNumbers] = useState<string[]>([''])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [cfg, setCfg] = useState<Record<string, any>>({})
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
     const [sending, setSending] = useState(false)
@@ -1646,7 +1644,6 @@ function NumeriAmministrazione() {
         const { data } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const c = ((data?.config as any) || {})
-        setCfg(c)
         const raw = String(c?.notifications?.cauzioni_staff_phones || '')
         const list = raw.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean)
         setNumbers(list.length ? list : [''])
@@ -1672,7 +1669,6 @@ function NumeriAmministrazione() {
         const { error } = await supabase.from('centralina_pro_config').upsert({ id: 'main', config: newCfg }, { onConflict: 'id' })
         setSaving(false)
         if (error) { toast.error('Salvataggio fallito: ' + error.message); return }
-        setCfg(newCfg)
         toast.success(clean.length ? `${clean.length} numero/i salvati` : 'Nessun numero valido — nessuno riceverà il promemoria')
     }
 
