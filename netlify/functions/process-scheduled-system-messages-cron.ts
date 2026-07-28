@@ -683,18 +683,22 @@ export async function processCauzioniRimborsoStaffReminder(now: number, opts?: {
         if (romeHour < sendHour || romeHour >= QUIET_START_HOUR) return { sent, skipped, errors };
     }
 
-    // 3) Cauzioni bonifico in scadenza OGGI, non ancora restituite/incassate, non
-    //    gia' incluse in un promemoria di oggi.
+    // 3) Cauzioni bonifico da restituire OGGI o GIA' SCADUTE (non ancora
+    //    restituite/incassate), non gia' incluse in un promemoria di oggi.
+    //    NB: <= oggi (non solo = oggi) cosi' il promemoria copre anche le
+    //    cauzioni scadute nei giorni precedenti — allineato al pannello
+    //    "Da Restituire Oggi" (days_until_deadline <= 0). Continua a ricordare
+    //    ogni giorno finche' non vengono restituite (anti-doppio giornaliero).
     const { data: cauz } = await supabase
         .from('cauzioni')
         .select('id, cliente_id, importo, iban, intestatario_conto, metodo, stato, data_incasso, scadenza_cauzione, rimborso_reminder_sent_on')
         .eq('metodo', 'bonifico')
-        .eq('scadenza_cauzione', todayRome)
+        .lte('scadenza_cauzione', todayRome)
         .is('data_incasso', null)
         .not('stato', 'in', '(Restituita,Sbloccata,Bloccata,Danno,Incassata)');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const due = (cauz || []).filter((c: any) => force || c.rimborso_reminder_sent_on !== todayRome);
-    if (due.length === 0) return { sent, skipped, errors, reason: `Nessuna cauzione bonifico in scadenza oggi (${todayRome})` };
+    if (due.length === 0) return { sent, skipped, errors, reason: `Nessuna cauzione bonifico da restituire (scadenza <= ${todayRome})` };
 
     // 4) Nomi cliente.
     const clienteIds = [...new Set(due.map((c: { cliente_id: string }) => c.cliente_id).filter(Boolean))];
