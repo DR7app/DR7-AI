@@ -99,17 +99,38 @@ export default function CassaCauzioneModal({ cauzione, onClose, onSuccess }: Pro
           .eq('id', cauzione.id)
 
         if (updateError) throw updateError
+      } else if (isPartial) {
+        // --- Manuale (bonifico/contanti) INCASSO PARZIALE ---
+        // I €X vengono TRATTENUTI; il RESIDUO va RESTITUITO al cliente (per
+        // bonifico non c'e' rilascio automatico come sulle carte). Quindi la
+        // cauzione resta ATTIVA "da restituire" con importo = residuo, NON la
+        // marchiamo Bloccata/incassata: cosi' resta nei "Da Restituire" e nel
+        // promemoria per il residuo. L'incassato viene accumulato per audit.
+        const prevIncassato = Number((cauzione as { importo_incassato?: number }).importo_incassato) || 0
+        const { error: updateError } = await supabase
+          .from('cauzioni')
+          .update({
+            importo: residuo,
+            importo_incassato: prevIncassato + amount,
+            causale_incasso: noteText,
+            note: `Incasso parziale: €${amount.toFixed(2)} trattenuti — residuo €${residuo.toFixed(2)} da restituire — ${noteText}`,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', cauzione.id)
+
+        if (updateError) throw updateError
       } else {
-        // --- Manual (no Nexi): just update DB ---
+        // --- Manuale INCASSO TOTALE: trattenuta interamente, niente da restituire. ---
+        const prevIncassato = Number((cauzione as { importo_incassato?: number }).importo_incassato) || 0
         const { error: updateError } = await supabase
           .from('cauzioni')
           .update({
             stato: 'Bloccata',
             data_incasso: new Date().toISOString(),
-            importo_incassato: amount,
-            importo_rilasciato: residuo,
+            importo_incassato: prevIncassato + amount,
+            importo_rilasciato: 0,
             causale_incasso: noteText,
-            note: `${isPartial ? 'Incasso parziale' : 'Incasso totale'}: €${amount.toFixed(2)} incassati${isPartial ? ` — €${residuo.toFixed(2)} rilasciati` : ''} — ${noteText}`,
+            note: `Incasso totale: €${amount.toFixed(2)} incassati — ${noteText}`,
             updated_at: new Date().toISOString()
           })
           .eq('id', cauzione.id)
@@ -130,7 +151,9 @@ export default function CassaCauzioneModal({ cauzione, onClose, onSuccess }: Pro
 
       toast.success(
         isPartial
-          ? `Incassati €${amount.toFixed(2)} — €${residuo.toFixed(2)} rilasciati al cliente`
+          ? (hasNexi
+              ? `Incassati €${amount.toFixed(2)} — €${residuo.toFixed(2)} rilasciati al cliente`
+              : `Incassati €${amount.toFixed(2)} — residuo €${residuo.toFixed(2)} da restituire`)
           : `Incassati €${amount.toFixed(2)} — Cauzione incassata totalmente`,
         { id: toastId, duration: 5000 }
       )
