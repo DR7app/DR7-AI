@@ -729,22 +729,13 @@ export async function processCauzioniRimborsoStaffReminder(now: number, opts?: {
     const lista = due.map((c: any) => {
         const nome = nameMap[c.cliente_id] || 'Cliente';
         const imp = Number(c.importo).toFixed(2);
-        const metodo = String(c.metodo || '').toLowerCase();
-        // Bonifico: servono IBAN + intestatario per il bonifico di rimborso.
-        // Fallback all'IBAN salvato sulla scheda cliente se manca sulla cauzione.
-        if (metodo === 'bonifico') {
-            const iban = (c.iban && String(c.iban).trim()) || custIbanMap[c.cliente_id] || 'IBAN MANCANTE';
-            const intest = (c.intestatario_conto && String(c.intestatario_conto).trim()) || custIntestMap[c.cliente_id] || 'INTESTATARIO MANCANTE';
-            return `• ${nome} — € ${imp} (Bonifico)\n  Intestatario: ${intest}\n  IBAN: ${iban}`;
-        }
-        // Carta / contanti / altro: azione diversa (rilascio blocco carta o
-        // restituzione contanti), nessun IBAN.
-        const azione = metodo === 'carta'
-            ? 'Carta — rilascia il blocco/preautorizzazione'
-            : metodo === 'contanti'
-                ? 'Contanti — restituisci in contanti'
-                : (metodo ? metodo.charAt(0).toUpperCase() + metodo.slice(1) : 'Da restituire');
-        return `• ${nome} — € ${imp} (${azione})`;
+        // FORMATO UNICO per TUTTE le cauzioni (carta e bonifico): la cauzione si
+        // restituisce SEMPRE via bonifico all'IBAN del cliente, a prescindere da
+        // come e' stata presa. Quindi ogni riga ha intestatario + IBAN. IBAN preso
+        // dalla cauzione o, in fallback, dalla scheda cliente.
+        const iban = (c.iban && String(c.iban).trim()) || custIbanMap[c.cliente_id] || 'IBAN MANCANTE';
+        const intest = (c.intestatario_conto && String(c.intestatario_conto).trim()) || custIntestMap[c.cliente_id] || 'INTESTATARIO MANCANTE';
+        return `• ${nome} — € ${imp}\n  Intestatario: ${intest}\n  IBAN: ${iban}`;
     }).join('\n\n');
 
     const body = String(tpl.message_body)
