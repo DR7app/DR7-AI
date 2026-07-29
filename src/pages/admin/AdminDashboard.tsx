@@ -65,6 +65,7 @@ const DashboardTab = lazyWithRetry(() => import('./components/DashboardTab'))
 const ReportPreventiviTab = lazyWithRetry(() => import('./components/ReportPreventiviTab'))
 const CentralinaProTab = lazyWithRetry(() => import('./components/CentralinaProTab'))
 const InterruttoriTab = lazyWithRetry(() => import('./components/InterruttoriTab'))
+const AccontiTab = lazyWithRetry(() => import('./components/AccontiTab'))
 const SitoTab = lazyWithRetry(() => import('./components/SitoTab'))
 const GestioneOtpTab = lazyWithRetry(() => import('./components/GestioneOtpTab'))
 const DocumentsVerificationTab = lazyWithRetry(() => import('./components/DocumentsVerificationTab'))
@@ -77,7 +78,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'immondizia' | 'ticket' | 'terra-catalog' | 'magazzino-generale' | 'interruttori'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'immondizia' | 'ticket' | 'terra-catalog' | 'magazzino-generale' | 'interruttori' | 'acconti'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -355,6 +356,7 @@ export default function AdminDashboard() {
       { tab: 'operatori', label: 'Operatori' },
       { tab: 'immondizia', label: 'Immondizia' },
       { tab: 'ticket', label: 'Ticket' },
+      { tab: 'acconti', label: 'Acconti' },
       { tab: 'fornitori', label: 'Fornitori' },
       { tab: 'nexi', label: 'Nexi' },
       { tab: 'gestione-otp', label: 'Gestione OTP' },
@@ -451,6 +453,7 @@ export default function AdminDashboard() {
     'emtn': 'DR7 Emtn',
     'gestione-otp': 'Gestione OTP',
     'interruttori': 'Interruttori ON/OFF',
+    'acconti': 'Acconti Giornalieri',
     'verifica-documenti': 'Verifica Documenti',
     'fornitori': 'Fornitori',
     'carwash': 'Prenotazioni Prime Wash',
@@ -1102,6 +1105,7 @@ export default function AdminDashboard() {
           {activeTab === 'dashboard-kpi' && <DashboardTab />}
           {activeTab === 'centralina-pro' && <CentralinaProTab />}
           {activeTab === 'interruttori' && <InterruttoriTab />}
+          {activeTab === 'acconti' && <AccontiTab />}
           {activeTab === 'sito' && <SitoTab />}
           {activeTab === 'gestione-otp' && <GestioneOtpTab />}
           {activeTab === 'verifica-documenti' && <DocumentsVerificationTab />}
