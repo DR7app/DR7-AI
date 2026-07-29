@@ -665,14 +665,17 @@ export async function processCauzioniRimborsoStaffReminder(now: number, opts?: {
 
     // 1) Template. In modalita' force basta is_enabled + body (ignora cron_approved:
     //    il tasto "Invia ora" serve proprio a testare prima di attivare il cron).
+    // SOLO il template canonico creato in Messaggi di Sistema Pro
+    // (message_key = 'pro_cauzioni_rimborso_staff'). Niente match per label:
+    // cosi' non si prende MAI una variante che non hai creato tu.
     const { data: tplRows } = await supabase
         .from('system_messages')
         .select('message_body, is_enabled, cron_approved, send_hour, message_key, label')
-        .or('message_key.eq.pro_cauzioni_rimborso_staff,label.ilike.%rimborso%cauzion%')
+        .eq('message_key', 'pro_cauzioni_rimborso_staff')
         .order('updated_at', { ascending: false });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tpl = (tplRows || []).find((r: any) => r.is_enabled !== false && !!r.message_body && (force || r.cron_approved === true));
-    if (!tpl) return { sent, skipped, errors, reason: force ? 'Template cauzioni non trovato o disabilitato' : 'Template non approvato per il cron (attiva Cron ON)' };
+    if (!tpl) return { sent, skipped, errors, reason: force ? 'Template "Promemoria Rimborso Cauzioni (Staff)" non trovato o disabilitato in Messaggi di Sistema Pro' : 'Template non approvato per il cron (attiva Cron ON)' };
 
     // 2) Gate orario (saltato in force).
     const todayRome = new Date(now).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }); // YYYY-MM-DD
