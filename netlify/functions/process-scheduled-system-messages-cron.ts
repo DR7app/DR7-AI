@@ -772,7 +772,9 @@ export async function processCauzioniRimborsoStaffReminder(now: number, opts?: {
             const res = await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ customPhone: r.phone, customMessage: finalBody, type: 'Promemoria Rimborso Cauzioni' }),
+                // skipHeader: invia ESATTAMENTE il testo del template Centralina Pro
+                // (pro_cauzioni_rimborso_staff) senza aggiungere header/footer globali.
+                body: JSON.stringify({ customPhone: r.phone, customMessage: finalBody, skipHeader: true, type: 'Promemoria Rimborso Cauzioni' }),
             });
             if (res.ok) sent++; else errors++;
         } catch { errors++; }
