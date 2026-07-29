@@ -702,19 +702,24 @@ export async function processCauzioniRimborsoStaffReminder(now: number, opts?: {
     const due = (cauz || []).filter((c: any) => force || c.rimborso_reminder_sent_on !== todayRome);
     if (due.length === 0) return { sent, skipped, errors, reason: `Nessuna cauzione da restituire (scadenza <= ${todayRome})` };
 
-    // 4) Nomi cliente.
+    // 4) Nomi cliente + IBAN/intestatario del CLIENTE (fallback: spesso l'IBAN e'
+    //    salvato sulla scheda cliente, non sulla singola cauzione).
     const clienteIds = [...new Set(due.map((c: { cliente_id: string }) => c.cliente_id).filter(Boolean))];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const nameMap: Record<string, string> = {};
+    const custIbanMap: Record<string, string> = {};
+    const custIntestMap: Record<string, string> = {};
     if (clienteIds.length > 0) {
         const { data: custs } = await supabase
             .from('customers_extended')
-            .select('id, nome, cognome, denominazione, ragione_sociale, tipo_cliente')
+            .select('id, nome, cognome, denominazione, ragione_sociale, tipo_cliente, iban, iban_intestatario')
             .in('id', clienteIds as string[]);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (custs || []).forEach((c: any) => {
             const azienda = c.tipo_cliente === 'azienda' ? (c.ragione_sociale || c.denominazione) : null;
             nameMap[c.id] = (azienda || `${c.nome || ''} ${c.cognome || ''}`.trim() || 'Cliente');
+            if (c.iban && String(c.iban).trim()) custIbanMap[c.id] = String(c.iban).trim();
+            if (c.iban_intestatario && String(c.iban_intestatario).trim()) custIntestMap[c.id] = String(c.iban_intestatario).trim();
         });
     }
 
@@ -726,9 +731,10 @@ export async function processCauzioniRimborsoStaffReminder(now: number, opts?: {
         const imp = Number(c.importo).toFixed(2);
         const metodo = String(c.metodo || '').toLowerCase();
         // Bonifico: servono IBAN + intestatario per il bonifico di rimborso.
+        // Fallback all'IBAN salvato sulla scheda cliente se manca sulla cauzione.
         if (metodo === 'bonifico') {
-            const iban = (c.iban && String(c.iban).trim()) || 'IBAN MANCANTE';
-            const intest = (c.intestatario_conto && String(c.intestatario_conto).trim()) || 'INTESTATARIO MANCANTE';
+            const iban = (c.iban && String(c.iban).trim()) || custIbanMap[c.cliente_id] || 'IBAN MANCANTE';
+            const intest = (c.intestatario_conto && String(c.intestatario_conto).trim()) || custIntestMap[c.cliente_id] || 'INTESTATARIO MANCANTE';
             return `• ${nome} — € ${imp} (Bonifico)\n  Intestatario: ${intest}\n  IBAN: ${iban}`;
         }
         // Carta / contanti / altro: azione diversa (rilascio blocco carta o
