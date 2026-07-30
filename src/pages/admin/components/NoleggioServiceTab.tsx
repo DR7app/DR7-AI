@@ -204,6 +204,10 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
   const [origDetails, setOrigDetails] = useState<Record<string, unknown>>({})
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
+  // Posti GIA' OCCUPATI da ALTRE prenotazioni sulla partenza corrispondente
+  // (stessa data+ora del ritiro). Cosi' il dropdown mostra come scegliibili SOLO
+  // i posti realmente disponibili sul tour.
+  const [occupiedSeats, setOccupiedSeats] = useState<Set<string>>(new Set())
 
   // Posti disponibili per l'elicottero scelto (1..capacità del catalogo) per
   // il dropdown "quale posto per quale passeggero". Solo Noleggio Aria.
@@ -211,6 +215,30 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
   const selectedAssetCapacity = selectedAssetObj?.capacity || 0
   const selectedAssetPriceCents = selectedAssetObj?.price_per_day || 0
   const seatOptions = Array.from({ length: selectedAssetCapacity }, (_, i) => String(i + 1))
+
+  // Carica i posti gia' occupati sulla partenza (data+ora ritiro) da ALTRE
+  // prenotazioni, cosi' nel dropdown restano scegliibili solo i posti liberi.
+  useEffect(() => {
+    if (serviceType !== 'heli_rental' && serviceType !== 'boat_rental') { setOccupiedSeats(new Set()); return }
+    if (!form.pickup_date || !form.pickup_time) { setOccupiedSeats(new Set()); return }
+    let cancelled = false
+    ;(async () => {
+      const hhmm = form.pickup_time.length >= 5 ? form.pickup_time.slice(0, 5) : form.pickup_time
+      const { data: deps } = await supabase.from('noleggio_tour_departures')
+        .select('id').eq('departure_date', form.pickup_date).eq('departure_time', hhmm)
+      const depId = deps && deps.length === 1 ? (deps[0] as { id: string }).id : null
+      if (!depId) { if (!cancelled) setOccupiedSeats(new Set()); return }
+      const { data: seats } = await supabase.from('noleggio_tour_seats')
+        .select('seat_label, status, booking_id').eq('departure_id', depId)
+      const taken = new Set<string>()
+      for (const s of (seats || []) as { seat_label: string; status: string | null; booking_id: string | null }[]) {
+        const isOccupied = (s.status && s.status !== 'available') || !!s.booking_id
+        if (isOccupied && s.booking_id !== form.id) taken.add(String(s.seat_label))
+      }
+      if (!cancelled) setOccupiedSeats(taken)
+    })()
+    return () => { cancelled = true }
+  }, [serviceType, form.pickup_date, form.pickup_time, form.id])
   // Prezzo "a listino" del tour (n. passeggeri × prezzo catalogo) e sconto
   // auto-calcolato quando l'admin mette un Prezzo Finale più basso — stesso
   // formato di Preventivo / Penali-Danni.
@@ -586,7 +614,11 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                         <select className={INPUT_CLS + ' max-w-[150px]'} value={p.seat}
                           onChange={e => setPassengers(arr => arr.map((x, j) => j === i ? { ...x, seat: e.target.value } : x))}>
                           <option value="">Posto…</option>
-                          {seatOptions.map(s => <option key={s} value={s} disabled={passengers.some((q, j) => j !== i && q.seat === s)}>Posto {s}</option>)}
+                          {seatOptions.map(s => {
+                            const takenBySelf = passengers.some((q, j) => j !== i && q.seat === s)
+                            const takenByOther = occupiedSeats.has(s)
+                            return <option key={s} value={s} disabled={takenBySelf || takenByOther}>Posto {s}{takenByOther ? ' (occupato)' : ''}</option>
+                          })}
                         </select>
                       )}
                       <button type="button" onClick={() => setPassengers(arr => arr.filter((_, j) => j !== i))} className="text-red-400 text-xl leading-none px-1 shrink-0" title="Rimuovi">×</button>
