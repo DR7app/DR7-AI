@@ -480,13 +480,11 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
   return (
     <div className="space-y-4">
       <Header title={`${labels.title} — Prenotazioni`} action={
-        <button onClick={() => {
-          // Aria/Mare = tour a posti: "Nuova prenotazione" porta al flusso Tour
-          // (scegli partenza -> posti -> passeggeri -> pagamento), come richiesto.
-          if (serviceType === 'heli_rental') window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: 'aria-tours' } }))
-          else if (serviceType === 'boat_rental') window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: 'mare-tours' } }))
-          else openCreate()
-        }} className={BTN_PRIMARY}>+ Nuova prenotazione</button>
+        // "Nuova prenotazione" apre SEMPRE il form di prenotazione (stesso flusso
+        // del Noleggio Terra: scegli cliente -> asset dal catalogo -> date ->
+        // prezzo -> pagamento). Il flusso Tour a posti resta accessibile dalla
+        // sotto-tab "Tour" dedicata.
+        <button onClick={openCreate} className={BTN_PRIMARY}>+ Nuova prenotazione</button>
       } />
       {error && <ErrorBox msg={error} />}
       {!loading && bookings.length === 0 && !error && <EmptyBox msg={`Nessuna prenotazione ${labels.title.toLowerCase()} al momento. Crea la prima con "+ Nuova prenotazione".`} />}
