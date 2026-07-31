@@ -1517,6 +1517,44 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
     if (e) { setRows(prev); toast.error('Eliminazione non riuscita: ' + e.message); return }
     toast.success('Preventivo eliminato')
   }
+
+  // Stessa logica dei preventivi Noleggio Terra: Accetta / Rifiuta lo stato.
+  async function setPrevStatus(p: PreventivoRow, status: string) {
+    const prev = rows
+    setRows(rs => rs.map(r => r.id === p.id ? { ...r, status } : r))
+    const { error: e } = await supabase.from('noleggio_preventivi').update({ status, updated_at: new Date().toISOString() }).eq('id', p.id)
+    if (e) { setRows(prev); toast.error('Errore: ' + e.message); return }
+    toast.success(status === 'accettato' ? 'Preventivo accettato' : status === 'rifiutato' ? 'Preventivo rifiutato' : 'Aggiornato')
+  }
+
+  // Converti in prenotazione: crea la prenotazione Mare/Aria dal preventivo
+  // (cliente, asset, date, importo) con stato Da Saldare — come ConvertPreventivoModal
+  // del Noleggio Terra. Poi segna il preventivo 'convertito'.
+  async function convertToBooking(p: PreventivoRow) {
+    if (p.status === 'convertito') { toast('Preventivo già convertito'); return }
+    if (!window.confirm(`Convertire il preventivo di ${p.customer_name || 'questo cliente'} in prenotazione (Da Saldare)?`)) return
+    const toIso = (d: string | null, t: string) => d ? new Date(`${d.substring(0, 10)}T${t}:00`).toISOString() : null
+    const payload = {
+      service_type: serviceType,
+      customer_name: p.customer_name || 'Cliente',
+      customer_phone: p.customer_phone || null,
+      guest_name: p.customer_name || 'Cliente',
+      guest_phone: p.customer_phone || null,
+      vehicle_name: p.asset_name || labels.asset,
+      pickup_date: toIso(p.start_date, '10:00'),
+      dropoff_date: toIso(p.end_date || p.start_date, '18:00'),
+      price_total: p.amount || 0,
+      status: 'confirmed',
+      payment_status: 'pending', // Da Saldare, come una nuova prenotazione
+      booking_details: { from_preventivo_id: p.id, ...(p.notes ? { note: p.notes } : {}) },
+      created_at: new Date().toISOString(),
+    }
+    const { error } = await supabase.from('bookings').insert(payload).select('id').single()
+    if (error) { toast.error('Conversione fallita: ' + error.message); return }
+    await supabase.from('noleggio_preventivi').update({ status: 'convertito', updated_at: new Date().toISOString() }).eq('id', p.id)
+    setRows(rs => rs.map(r => r.id === p.id ? { ...r, status: 'convertito' } : r))
+    toast.success('Convertito in prenotazione (Da Saldare) — vai in Prenotazioni per incassare')
+  }
   function waLink(p: PreventivoRow): string {
     const phone = (p.customer_phone || '').replace(/\D/g, '')
     const msg = `Ciao ${p.customer_name || ''}, ecco il preventivo ${labels.title}: ${p.asset_name || labels.asset} — ${eur(p.amount)}.`
@@ -1574,6 +1612,15 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
                   <td className="px-3 py-2"><Badge value={p.status} /></td>
                   <td className="px-3 py-2 text-right text-theme-text-primary tabular-nums">{eur(p.amount)}</td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">
+                    {p.status !== 'convertito' && (
+                      <button onClick={() => convertToBooking(p)} className="text-dr7-gold hover:underline font-semibold mr-3">Converti</button>
+                    )}
+                    {p.status !== 'accettato' && p.status !== 'convertito' && (
+                      <button onClick={() => setPrevStatus(p, 'accettato')} className="text-emerald-400 hover:underline mr-3">Accetta</button>
+                    )}
+                    {p.status !== 'rifiutato' && p.status !== 'convertito' && (
+                      <button onClick={() => setPrevStatus(p, 'rifiutato')} className="text-amber-400 hover:underline mr-3">Rifiuta</button>
+                    )}
                     {p.customer_phone && <a href={waLink(p)} target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline mr-3">WhatsApp</a>}
                     <button onClick={() => openEdit(p)} className="text-theme-text-secondary hover:underline mr-3">Modifica</button>
                     <button onClick={() => remove(p)} className="text-red-400 hover:underline">Elimina</button>
