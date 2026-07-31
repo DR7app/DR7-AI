@@ -33,6 +33,10 @@ function vehiclePhoto(v: CatalogVehicle): string | null {
 export default function TerraCatalogTab() {
   const [vehicles, setVehicles] = useState<CatalogVehicle[]>([])
   const [categories, setCategories] = useState<{ id: string; label: string }[]>([])
+  // Pricing da Centralina Pro (stessa fonte del SITO): prezzoDinamico.dynamic.base_prices
+  // per veicolo + prezzoDinamico.tariffe per categoria. daily_rate NON viene usato.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [proPricing, setProPricing] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState('all')
@@ -58,6 +62,8 @@ export default function TerraCatalogTab() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const cats = ((cfg?.config as any)?.categories || []) as { id: string; label: string }[]
       if (Array.isArray(cats)) setCategories(cats)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setProPricing((cfg?.config as any)?.prezzoDinamico || null)
     } catch { /* categorie opzionali */ }
     setLoading(false)
   }
@@ -65,6 +71,32 @@ export default function TerraCatalogTab() {
   useEffect(() => { let c = false; (async () => { if (!c) await load() })(); return () => { c = true } }, [])
 
   const catLabel = (id: string | null) => categories.find(c => c.id === id)?.label || id || 'Senza categoria'
+
+  // Prezzo €/giorno IDENTICO al sito (useVehicles): base_price per-veicolo dalla
+  // Centralina Pro, altrimenti la tariffa di categoria (giorno "1"). Il campo
+  // vehicles.daily_rate NON viene usato dal sito, quindi non lo usiamo neanche qui.
+  const PRO_TO_DB: Record<string, string> = { supercars: 'exotic', urban: 'urban', aziendali: 'aziendali' }
+  const catMatches = (dbCat: string, vehCat: string | null) =>
+    dbCat === vehCat || (dbCat === 'exotic' && vehCat === 'supercars') || (dbCat === 'supercars' && vehCat === 'exotic')
+  const getCatDayPrice = (category: string | null): number | null => {
+    const tariffe = proPricing?.tariffe
+    if (!Array.isArray(tariffe)) return null
+    for (const t of tariffe) {
+      const dbCat = PRO_TO_DB[t.id] || t.id
+      if (catMatches(dbCat, category)) {
+        const table = t.unica || t.residente || t.non_residente || {}
+        const day1 = table['1']
+        if (typeof day1 === 'number' && day1 > 0) return day1
+      }
+    }
+    return null
+  }
+  const priceFor = (v: CatalogVehicle): number | null => {
+    const raw = proPricing?.dynamic?.base_prices?.[v.id]
+    const perVeh = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN
+    if (!isNaN(perVeh) && perVeh > 0) return perVeh
+    return getCatDayPrice(v.category)
+  }
 
   const filtered = useMemo(() => vehicles.filter(v => {
     if (catFilter !== 'all' && v.category !== catFilter) return false
@@ -114,15 +146,36 @@ export default function TerraCatalogTab() {
     setSaving(true)
     try {
       const rate = Number.parseFloat(form.daily_rate)
-      const { error } = await supabase.from('vehicles').insert([{
+      const { data: inserted, error } = await supabase.from('vehicles').insert([{
         display_name: form.display_name.trim(),
         plate: form.plate.trim() || null,
         status: 'available',
         daily_rate: Number.isFinite(rate) ? rate : 0,
         category: form.category,
         metadata: form.image_url ? { image: form.image_url } : {},
-      }])
+      }]).select('id').single()
       if (error) throw error
+      // La tariffa va scritta nel PREZZO della Centralina Pro (base_prices per
+      // veicolo): e' quello che il SITO legge davvero. Read-modify-write del
+      // config così non si sovrascrive il resto della Centralina.
+      if (inserted?.id && Number.isFinite(rate) && rate > 0) {
+        try {
+          const { data: cfgRow } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const cfg = ((cfgRow?.config as any) || {})
+          const prezzoDinamico = { ...(cfg.prezzoDinamico || {}) }
+          const dynamic = { ...(prezzoDinamico.dynamic || {}) }
+          const base_prices = { ...(dynamic.base_prices || {}) }
+          base_prices[inserted.id] = rate
+          dynamic.base_prices = base_prices
+          prezzoDinamico.dynamic = dynamic
+          const newCfg = { ...cfg, prezzoDinamico }
+          await supabase.from('centralina_pro_config').upsert({ id: 'main', config: newCfg }, { onConflict: 'id' })
+          setProPricing(prezzoDinamico)
+        } catch (cfgErr) {
+          console.warn('[TerraCatalog] base_price non salvato in Centralina:', cfgErr)
+        }
+      }
       toast.success('Veicolo aggiunto al catalogo')
       setShowAdd(false)
       setForm({ display_name: '', plate: '', category: '', daily_rate: '', image_url: '' })
@@ -192,6 +245,19 @@ export default function TerraCatalogTab() {
                       </div>
                       <div className="p-3 flex-1 flex flex-col gap-2">
                         <h3 className="text-sm font-semibold text-theme-text-primary truncate">{v.display_name}</h3>
+                        {(() => {
+                          const price = priceFor(v)
+                          return (
+                            <div className="text-sm">
+                              {price != null && price > 0 ? (
+                                <span className="font-bold text-dr7-gold">€ {price.toLocaleString('it-IT')}<span className="text-[11px] text-theme-text-muted font-normal">/giorno</span></span>
+                              ) : (
+                                <span className="text-[11px] text-amber-500">Prezzo non impostato in Centralina Pro</span>
+                              )}
+                              <span className="ml-1 text-[10px] text-theme-text-muted">· da Centralina Pro</span>
+                            </div>
+                          )
+                        })()}
                         <div className="flex items-center gap-2 text-xs text-theme-text-muted flex-wrap">
                           {v.plate && <span className="tabular-nums">{v.plate}</span>}
                           {v.status && v.status !== 'available' && (
@@ -224,7 +290,7 @@ export default function TerraCatalogTab() {
                   <input value={form.plate} onChange={e => setForm({ ...form, plate: e.target.value.toUpperCase() })} placeholder="GA123BC" className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary font-mono" />
                 </div>
                 <div>
-                  <label className="block text-[11px] uppercase tracking-wide text-theme-text-muted mb-1">Tariffa/giorno €</label>
+                  <label className="block text-[11px] uppercase tracking-wide text-theme-text-muted mb-1">Tariffa/giorno € <span className="normal-case text-theme-text-muted/70">(salvata in Centralina Pro)</span></label>
                   <input type="number" step="0.01" value={form.daily_rate} onChange={e => setForm({ ...form, daily_rate: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary" />
                 </div>
               </div>
