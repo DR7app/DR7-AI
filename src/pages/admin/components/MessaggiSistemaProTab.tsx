@@ -1446,6 +1446,9 @@ export default function MessaggiSistemaProTab() {
     const [editingId, setEditingId] = useState<string | null>(null)
     const [editBody, setEditBody] = useState('')
     const [editLabel, setEditLabel] = useState('')
+    // Programmazione invio (per template automatici): anticipo in GIORNI e ora invio.
+    const [editOffsetDays, setEditOffsetDays] = useState('0')
+    const [editSendHour, setEditSendHour] = useState('9')
     const [saving, setSaving] = useState(false)
     // 2026-07-19: ricerca evento/trigger nella sezione "Eventi gestiti" (per
     // trovare velocemente su quale azione attivare il messaggio).
@@ -2024,6 +2027,16 @@ export default function MessaggiSistemaProTab() {
                 setTemplates(prev => prev.map(t => t.id === id ? fresh : t))
             } else {
                 setTemplates(prev => prev.map(t => t.id === id ? { ...t, ...payload, updated_at: updatedAt } : t))
+            }
+            // Programmazione invio (solo template automatici/programmati): salva
+            // anticipo (giorni -> ore) + ora invio. Direct update robusto a
+            // prescindere dalla funzione update-system-message.
+            const tplForSched = templates.find(t => t.id === id)
+            if (tplForSched && (tplForSched.is_automatic || (tplForSched.handled_events && tplForSched.handled_events.length > 0))) {
+                const offHours = Math.max(0, Math.round(Number(editOffsetDays) || 0)) * 24
+                const sh = editSendHour.trim() === '' ? null : Math.min(23, Math.max(0, Math.round(Number(editSendHour) || 0)))
+                const { error: schedErr } = await supabase.from('system_messages').update({ trigger_offset_hours: offHours, send_hour: sh }).eq('id', id)
+                if (!schedErr) setTemplates(prev => prev.map(t => t.id === id ? { ...t, trigger_offset_hours: offHours, send_hour: sh } : t))
             }
             setEditingId(null)
             toast.success('Messaggio salvato')
@@ -4171,6 +4184,23 @@ export default function MessaggiSistemaProTab() {
                                                             <TemplateVarLegend />
                             <p className="text-[11px] text-theme-text-muted mt-1.5">Esempio rapido: <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded text-dr7-gold">{"{nome}"}</code> verrà sostituito col nome del cliente.</p>
                                                         </div>
+                                                        {/* Programmazione invio: solo per template automatici/programmati */}
+                                                        {(template.is_automatic || (template.handled_events && template.handled_events.length > 0)) && (
+                                                            <div className="grid grid-cols-2 gap-3 pt-1">
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-theme-text-primary mb-1">Anticipo (giorni prima)</label>
+                                                                    <input type="number" min={0} value={editOffsetDays} onChange={e => setEditOffsetDays(e.target.value)}
+                                                                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-dr7-gold/50" />
+                                                                    <p className="text-[11px] text-theme-text-muted mt-1">0 = il giorno stesso · 1 = il giorno prima · 10 = 10 giorni prima</p>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="block text-xs font-medium text-theme-text-primary mb-1">Ora invio (0–23, Italia)</label>
+                                                                    <input type="number" min={0} max={23} value={editSendHour} onChange={e => setEditSendHour(e.target.value)} placeholder="es. 9"
+                                                                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-dr7-gold/50" />
+                                                                    <p className="text-[11px] text-theme-text-muted mt-1">Nota: il messaggio compleanno parte comunque nella finestra del mattino.</p>
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 ) : (
                                                     <>
@@ -4197,7 +4227,7 @@ export default function MessaggiSistemaProTab() {
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <button onClick={() => { setEditingId(template.id); setEditBody(template.message_body); setEditLabel(template.label) }}
+                                                            <button onClick={() => { setEditingId(template.id); setEditBody(template.message_body); setEditLabel(template.label); setEditOffsetDays(String(Math.round((Number(template.trigger_offset_hours) || 0) / 24))); setEditSendHour(template.send_hour == null ? '' : String(template.send_hour)) }}
                                                                 className="px-3 py-1.5 rounded-full text-xs font-medium bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover transition-colors">Modifica</button>
                                                             <button onClick={() => handleDeleteTemplate(template)}
                                                                 className="px-3 py-1.5 rounded-full text-xs font-medium bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors">Elimina</button>
