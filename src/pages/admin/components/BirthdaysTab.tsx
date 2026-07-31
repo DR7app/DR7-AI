@@ -888,8 +888,8 @@ export default function BirthdaysTab() {
                     </div>
                     <ul className="space-y-2 text-xs">
                         <li className="flex justify-between"><span className="text-theme-text-muted">Stato</span><span className="text-green-400 font-semibold">Attiva</span></li>
-                        <li className="flex justify-between"><span className="text-theme-text-muted">Anticipo</span><span className="text-theme-text-primary font-semibold">10 giorni prima</span></li>
-                        <li className="flex justify-between"><span className="text-theme-text-muted">Orario invio</span><span className="text-theme-text-primary font-semibold">08:00</span></li>
+                        <li className="flex justify-between"><span className="text-theme-text-muted">Anticipo</span><span className="text-theme-text-primary font-semibold">Segue il template (0 = giorno stesso)</span></li>
+                        <li className="flex justify-between"><span className="text-theme-text-muted">Orario invio</span><span className="text-theme-text-primary font-semibold">~09:00 (Italia)</span></li>
                         <li className="flex justify-between"><span className="text-theme-text-muted">Canale</span><span className="text-theme-text-primary font-semibold">WhatsApp</span></li>
                         <li className="flex justify-between"><span className="text-theme-text-muted">Codice sconto</span><span className="text-theme-text-primary font-semibold">Auto</span></li>
                     </ul>
