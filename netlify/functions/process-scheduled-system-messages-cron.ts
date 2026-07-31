@@ -734,10 +734,13 @@ export async function processCauzioniRimborsoStaffReminder(now: number, opts?: {
         const imp = Number(c.importo).toFixed(2);
         // FORMATO UNICO per TUTTE le cauzioni (carta e bonifico): la cauzione si
         // restituisce SEMPRE via bonifico all'IBAN del cliente, a prescindere da
-        // come e' stata presa. Quindi ogni riga ha intestatario + IBAN. IBAN preso
-        // dalla cauzione o, in fallback, dalla scheda cliente.
-        const iban = (c.iban && String(c.iban).trim()) || custIbanMap[c.cliente_id] || 'IBAN MANCANTE';
-        const intest = (c.intestatario_conto && String(c.intestatario_conto).trim()) || custIntestMap[c.cliente_id] || 'INTESTATARIO MANCANTE';
+        // come e' stata presa. Ogni riga ha intestatario + IBAN.
+        // PRIORITA' alla scheda cliente (customers_extended.iban / iban_intestatario):
+        // e' il campo "Dati per il rimborso cauzione" che l'admin gestisce ed e' la
+        // fonte di verita' (la copia sulla cauzione puo' essere vecchia = spesso il
+        // NOME del cliente di default, che confonde chi fa i bonifici — bug 31/07).
+        const iban = custIbanMap[c.cliente_id] || (c.iban && String(c.iban).trim()) || 'IBAN MANCANTE';
+        const intest = custIntestMap[c.cliente_id] || (c.intestatario_conto && String(c.intestatario_conto).trim()) || 'INTESTATARIO MANCANTE';
         return `• ${nome} — € ${imp}\n  Intestatario: ${intest}\n  IBAN: ${iban}`;
     }).join('\n\n');
 
