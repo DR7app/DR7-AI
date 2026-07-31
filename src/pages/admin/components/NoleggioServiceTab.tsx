@@ -672,7 +672,16 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
               </div>
               <div className="sm:col-span-2">
                 <label className="text-xs text-theme-text-muted">Metodo di Pagamento</label>
-                <select className={INPUT_CLS} value={payMethod} onChange={e => setPayMethod(e.target.value)}>
+                <select className={INPUT_CLS} value={payMethod} onChange={e => {
+                  const m = e.target.value
+                  setPayMethod(m)
+                  // Logica metodo di pagamento (come nel resto del gestionale):
+                  //  - Nexi Pay by Link = pagamento in sospeso (link da pagare) -> Da Saldare
+                  //  - qualsiasi altro metodo scelto (wallet, carta, contanti...) = pagamento
+                  //    ricevuto -> Pagato. L'admin puo' comunque cambiare lo stato qui sopra.
+                  if (!m) return
+                  setPayStatus(isNexiPbl(m) ? 'pending' : 'paid')
+                }}>
                   <option value="">— seleziona —</option>
                   {paymentMethods.filter(m => m.is_enabled !== false).map(m => <option key={m.key || m.label} value={m.label}>{m.label}</option>)}
                 </select>
