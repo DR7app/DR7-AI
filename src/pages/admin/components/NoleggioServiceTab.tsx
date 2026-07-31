@@ -49,7 +49,7 @@ interface BookingRow {
   dropoff_date: string | null
   price_total: number | null
   created_at: string | null
-  booking_details: { passengers?: { name: string; seat?: string; phone?: string }[]; seat_count?: number; seats?: string; note?: string | null } | null
+  booking_details: { passengers?: { name: string; seat?: string; phone?: string }[]; seat_count?: number; seats?: string; note?: string | null; con_skipper?: boolean } | null
 }
 
 interface TourDurationOpt {
@@ -460,31 +460,23 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     } catch { /* tabella tour assente per stay/altri: ignora */ }
   }
 
-  // Elimina come il Noleggio auto: libera i posti + usa la function
-  // delete-booking (annulla + pulisce firme/cauzioni/referral, evita il 409 da
-  // foreign key di fattura/contratto). Fallback al delete diretto se serve.
+  // Elimina come il Noleggio auto: usa la function delete-booking (service role,
+  // bypassa RLS) che annulla la prenotazione (status='cancelled'). La lista
+  // esclude le annullate, quindi la riga sparisce. NIENTE delete diretto lato
+  // client (RLS lo blocca in silenzio) ne' delete di contratti/fatture (i tour
+  // non ne hanno). Cosi' l'eliminazione funziona davvero.
   async function removeBooking(id: string): Promise<string | null> {
     await freeTourSeats(id)
-    // I Tour Aria/Mare NON hanno contratto: rimuovi firme/contratti/fatture
-    // collegati (residui del vecchio bug) così il delete non sbatte sui
-    // foreign key (contracts_booking_id_fkey, ecc.).
-    try { await supabase.from('signature_requests').delete().eq('booking_id', id) } catch { /* */ }
-    try { await supabase.from('contracts').delete().eq('booking_id', id) } catch { /* */ }
-    try { await supabase.from('fatture').delete().eq('booking_id', id) } catch { /* */ }
     try {
       const res = await authFetch('/.netlify/functions/delete-booking', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookingId: id }),
       })
       const data = await res.json().catch(() => ({}))
-      // Anche se delete-booking dice "già annullata", proviamo il delete diretto
-      // (ora i FK sono liberi) per rimuovere davvero la riga di test.
-      const { error } = await supabase.from('bookings').delete().eq('id', id)
-      if (error && !res.ok) return (data?.error || error.message)
+      if (!res.ok) return (data?.error || `Errore eliminazione (${res.status})`)
       return null
     } catch (e) {
-      const { error } = await supabase.from('bookings').delete().eq('id', id)
-      return error ? (e as Error).message : null
+      return (e as Error).message || 'Errore eliminazione'
     }
   }
 
@@ -494,14 +486,15 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     setSaving(true); setFormError('')
     const err = await removeBooking(form.id)
     setSaving(false)
-    if (err) { setFormError(err); return }
-    setShowForm(false); reload()
+    if (err) { setFormError(err); toast.error(err); return }
+    setShowForm(false); toast.success('Prenotazione eliminata'); reload()
   }
 
   async function deleteBookingRow(b: BookingRow) {
     if (!window.confirm(`Eliminare la prenotazione di ${b.customer_name || 'questo cliente'}?`)) return
     const err = await removeBooking(b.id)
-    if (err) { setFormError(err); return }
+    if (err) { toast.error('Eliminazione non riuscita: ' + err); return }
+    toast.success('Prenotazione eliminata')
     reload()
   }
 
@@ -534,7 +527,14 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
               {bookings.map(b => (
                 <tr key={b.id} className="border-t border-theme-border hover:bg-theme-bg-hover">
                   <td className="px-3 py-2 text-theme-text-primary">{b.customer_name || '—'}</td>
-                  <td className="px-3 py-2 text-theme-text-secondary">{b.vehicle_name || b.vehicle_plate || '—'}</td>
+                  <td className="px-3 py-2 text-theme-text-secondary">
+                    {b.vehicle_name || b.vehicle_plate || '—'}
+                    {serviceType === 'boat_rental' && (
+                      <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded-full border ${b.booking_details?.con_skipper === false ? 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border' : 'bg-dr7-gold/15 text-dr7-gold border-dr7-gold/30'}`}>
+                        {b.booking_details?.con_skipper === false ? 'Senza skipper' : 'Con skipper'}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-theme-text-secondary tabular-nums">{fmtDate(b.pickup_date)}</td>
                   <td className="px-3 py-2 text-theme-text-secondary tabular-nums">{isTour ? (b.booking_details?.seat_count ?? b.booking_details?.passengers?.length ?? '—') : fmtDate(b.dropoff_date)}</td>
                   <td className="px-3 py-2">{(() => { const st = payStato(b.payment_status, b.status); return <span className={`inline-block px-2 py-0.5 rounded-full text-xs border ${st.cls}`}>{st.label}</span> })()}</td>
@@ -1511,8 +1511,11 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
   }
   async function remove(p: PreventivoRow) {
     if (!window.confirm('Eliminare questo preventivo?')) return
-    await supabase.from('noleggio_preventivi').delete().eq('id', p.id)
-    load()
+    const prev = rows
+    setRows(rs => rs.filter(r => r.id !== p.id)) // rimozione ottimistica: sparisce subito
+    const { error: e } = await supabase.from('noleggio_preventivi').delete().eq('id', p.id)
+    if (e) { setRows(prev); toast.error('Eliminazione non riuscita: ' + e.message); return }
+    toast.success('Preventivo eliminato')
   }
   function waLink(p: PreventivoRow): string {
     const phone = (p.customer_phone || '').replace(/\D/g, '')
