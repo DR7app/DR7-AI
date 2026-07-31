@@ -1478,6 +1478,17 @@ export default function CentralinaProTab() {
 
   const [section, setSection] = useState<SectionId>(isCauzioniViewOnly ? 'p4' : 'categorie-fascia')
 
+  // Naviga a una sezione specifica su richiesta (es. dal Catalogo Terra dopo
+  // aver aggiunto un veicolo: "vai al Prezzo Dinamico per impostare la tariffa").
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { section?: string } | undefined
+      if (detail?.section) setSection(detail.section as SectionId)
+    }
+    window.addEventListener('centralina:goto-section', handler)
+    return () => window.removeEventListener('centralina:goto-section', handler)
+  }, [])
+
   // Permissions load async via useAdminRole. Al primo render isCauzioniViewOnly
   // e' false (permissions vuote) e section parte a 'categorie-fascia'. Quando
   // le permissions caricano e diventa true (caso collaboratore), forziamo

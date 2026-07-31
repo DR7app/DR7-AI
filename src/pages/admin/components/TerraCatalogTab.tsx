@@ -176,10 +176,19 @@ export default function TerraCatalogTab() {
           console.warn('[TerraCatalog] base_price non salvato in Centralina:', cfgErr)
         }
       }
-      toast.success('Veicolo aggiunto al catalogo')
       setShowAdd(false)
       setForm({ display_name: '', plate: '', category: '', daily_rate: '', image_url: '' })
       await load()
+      // Flusso guidato (step-by-step): il PREZZO vive in Centralina Pro. Se
+      // l'admin non ha messo la tariffa qui, lo mandiamo direttamente in
+      // Centralina Pro > Prezzo Dinamico a impostarla per il nuovo veicolo.
+      if (Number.isFinite(rate) && rate > 0) {
+        toast.success('Veicolo aggiunto — prezzo salvato in Centralina Pro')
+      } else {
+        toast.success('Veicolo aggiunto. Ora imposta il prezzo in Centralina Pro → Prezzo Dinamico', { duration: 6000 })
+        window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: 'centralina-pro' } }))
+        setTimeout(() => window.dispatchEvent(new CustomEvent('centralina:goto-section', { detail: { section: 'p6' } })), 500)
+      }
     } catch (e) { toast.error('Errore: ' + (e as Error).message) } finally { setSaving(false) }
   }
 
@@ -290,7 +299,7 @@ export default function TerraCatalogTab() {
                   <input value={form.plate} onChange={e => setForm({ ...form, plate: e.target.value.toUpperCase() })} placeholder="GA123BC" className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary font-mono" />
                 </div>
                 <div>
-                  <label className="block text-[11px] uppercase tracking-wide text-theme-text-muted mb-1">Tariffa/giorno € <span className="normal-case text-theme-text-muted/70">(salvata in Centralina Pro)</span></label>
+                  <label className="block text-[11px] uppercase tracking-wide text-theme-text-muted mb-1">Tariffa/giorno € <span className="normal-case text-theme-text-muted/70">(opzionale · altrimenti la imposti dopo in Centralina Pro)</span></label>
                   <input type="number" step="0.01" value={form.daily_rate} onChange={e => setForm({ ...form, daily_rate: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary" />
                 </div>
               </div>
