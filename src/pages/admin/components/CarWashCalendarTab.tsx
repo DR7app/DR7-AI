@@ -574,11 +574,19 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   // Filter by search query + date range
   const filteredEvents = useMemo(() => {
     let list = calendarEvents
-    // 2026-06-01: filtro periodo Da/A su appointment_date
+    // 2026-06-01: filtro periodo Da/A su appointment_date.
+    // 2026-07-31 FIX: normalizza la data a YYYY-MM-DD (Europe/Rome) con un vero
+    // parsing invece di String(...).slice(0,10). Prima, se appointment_date non
+    // era una stringa ISO pulita (timestamp numerico, Date, o ora UTC che
+    // sfora il giorno), lo slice produceva un valore che il confronto con
+    // from/to (ISO) scartava SEMPRE → il filtro periodo faceva "sparire tutto".
     if (dateRange.from || dateRange.to) {
       list = list.filter(evt => {
-        const d = String(evt.booking.appointment_date || '').slice(0, 10)
-        if (!d) return false
+        const raw = evt.booking.appointment_date
+        if (!raw) return false
+        const parsed = new Date(typeof raw === 'number' ? raw * 1000 : raw)
+        if (isNaN(parsed.getTime())) return false
+        const d = parsed.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }) // YYYY-MM-DD
         if (dateRange.from && d < dateRange.from) return false
         if (dateRange.to && d > dateRange.to) return false
         return true
