@@ -65,8 +65,10 @@ const birthdayHandler: Handler = async (event) => {
         .select('trigger_offset_hours, handled_events, message_key, is_enabled')
         .or('message_key.eq.pro_marketing_compleanno,handled_events.cs.{birthday_message},handled_events.cs.{before_birthday}');
       const tpl = (tplRows || []).find((r: { is_enabled?: boolean }) => r.is_enabled !== false) || (tplRows || [])[0];
+      // floor (non round): un offset < 24h NON deve diventare "1 giorno prima".
+      // Solo offset >= 24h contano come giorni interi di anticipo. 0 = il giorno stesso.
       const h = Number(tpl?.trigger_offset_hours);
-      if (Number.isFinite(h) && h > 0) offsetDays = Math.round(h / 24);
+      if (Number.isFinite(h) && h >= 24) offsetDays = Math.floor(h / 24);
     } catch (e) {
       console.warn('[Birthday Auto] lookup offset fallito, uso 0 (giorno stesso):', e);
     }
