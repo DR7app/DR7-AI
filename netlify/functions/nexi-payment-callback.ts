@@ -899,33 +899,41 @@ const handler: Handler = async (event) => {
                     console.error('[nexi-payment-callback] Topup fattura failed:', invErr);
                 }
 
-                // Regenerate the contract so it reflects the modified booking
-                // and re-send the signing link (old signed version was already
-                // cleared by generate-contract).
+                // Regenerate the contract so it reflects the modified booking.
+                // 2026-08-02: RICONDUZIONE anche sul topup (saldo di una MODIFICA).
+                // Come per l'estensione: se la prenotazione era gia' firmata il
+                // contratto viene ricondotto (firma originale ristampata sulle nuove
+                // condizioni, inviato via WhatsApp gia' firmato) e NON si chiede una
+                // nuova firma. Il link di firma parte solo se non c'era firma.
                 try {
                     const contractRes = await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/generate-contract`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
-                        body: JSON.stringify({ bookingId: booking.id })
+                        body: JSON.stringify({ bookingId: booking.id, reconduct: true })
                     });
                     if (contractRes.ok) {
-                        console.log('[nexi-payment-callback] Contract regenerated after topup');
-                        // Fire signature-init so the customer gets a fresh signing link
-                        // on the updated contract.
-                        const { data: contractRow } = await supabase
-                            .from('contracts')
-                            .select('id')
-                            .eq('booking_id', booking.id)
-                            .order('created_at', { ascending: false })
-                            .limit(1)
-                            .maybeSingle();
-                        if (contractRow?.id) {
-                            await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/signature-init`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ contractId: contractRow.id, bookingId: booking.id })
-                            });
-                            console.log('[nexi-payment-callback] Signature-init fired for updated contract');
+                        const cd = await contractRes.json().catch(() => ({} as any));
+                        if (cd?.reconducted) {
+                            console.log(`[nexi-payment-callback] Topup: contratto ricondotto senza nuova firma (booking ${booking.id}) — restamp=${cd?.signed}`);
+                        } else {
+                            console.log('[nexi-payment-callback] Contract regenerated after topup (nessuna firma precedente)');
+                            // Fire signature-init so the customer gets a fresh signing link
+                            // on the updated contract.
+                            const { data: contractRow } = await supabase
+                                .from('contracts')
+                                .select('id')
+                                .eq('booking_id', booking.id)
+                                .order('created_at', { ascending: false })
+                                .limit(1)
+                                .maybeSingle();
+                            if (contractRow?.id) {
+                                await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/signature-init`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ contractId: contractRow.id, bookingId: booking.id })
+                                });
+                                console.log('[nexi-payment-callback] Signature-init fired for updated contract');
+                            }
                         }
                     }
                 } catch (ctrErr) {

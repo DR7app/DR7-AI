@@ -3056,7 +3056,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     }
   }
 
-  async function handleGenerateContract(booking: Booking, _silent?: boolean) {
+  // opts.reconduct: se la prenotazione ha GIA' una firma valida, generate-contract
+  // riconduce il contratto (ristampa la firma sulle nuove date + invio WhatsApp del
+  // firmato) invece di invalidarla. Ritorna { reconducted } così il chiamante sa se
+  // deve ancora mandare il link di firma. Vedi handleConfirmExtend / handleResendContract.
+  async function handleGenerateContract(booking: Booking, _silent?: boolean, opts?: { reconduct?: boolean }) {
     logger.log('[ReservationsTab] 🖱️ Generating contract for booking:', booking.id)
     if (!booking.id) {
       console.error('[ReservationsTab] ❌ No booking ID found')
@@ -3107,7 +3111,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       const response = await authFetch('/.netlify/functions/generate-contract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: booking.id })
+        body: JSON.stringify({ bookingId: booking.id, ...(opts?.reconduct ? { reconduct: true } : {}) })
       })
 
       const data = await response.json().catch(() => ({} as Record<string, unknown>))
@@ -3116,12 +3120,16 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         throw new Error((data.error as string) || (data.message as string) || `HTTP ${response.status}`)
       }
 
+      const wasReconducted = !!data.reconducted
+
       // Open PDF in new tab — show explicit feedback when there's nothing to open
       // (skipped car_wash, success: false, missing url, etc.) so the button
       // never silently does nothing.
       if (data.url) {
         window.open(data.url as string, '_blank')
-        toast.success('Contratto generato')
+        toast.success(wasReconducted
+          ? 'Contratto ricondotto (già firmato, nuove date) — inviato al cliente'
+          : 'Contratto generato')
       } else if (data.skipped) {
         toast.error('Contratto non generato: ' + ((data.reason as string) || 'Servizio non richiede contratto'), { duration: 10000 })
       } else {
@@ -3136,10 +3144,12 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
       // Reload data to show the contract link in the UI
       await loadData()
+      return { reconducted: wasReconducted, signed: !!data.signed }
     } catch (error: unknown) {
       const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error generating contract:', error)
       toast.error('Errore generazione contratto: ' + _errMsg, { duration: 12000 })
+      return null
     } finally {
       setGeneratingContract(false)
     }
@@ -7186,9 +7196,20 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       // autista. L'autista NON firma alcun contratto (riceve solo l'avviso del
       // suo incarico, sotto), ma il cliente firma normalmente.
       const hasAnyAutista = !!(autistaRitiro || autistaRiconsegna)
+      // 2026-08-02 FIX (direzione): MODIFICA di una prenotazione GIA' FIRMATA =
+      // stessa logica dell'ESTENSIONE → RICONDUZIONE, non nuova firma. Prima la
+      // rigenerazione al salvataggio partiva SENZA reconduct: generate-contract
+      // superseder-ava la firma esistente (hash del PDF diverso) e subito dopo
+      // shouldSendSigningLink mandava un nuovo link di firma. Risultato: estensione
+      // = contratto già firmato, modifica = da rifirmare. Ora la modifica riconduce
+      // (firma originale ristampata sulle nuove condizioni + invio WhatsApp del
+      // contratto firmato) e il link di firma NON parte. Se non c'è nessuna firma
+      // precedente, reconduct è inerte e resta il flusso normale (link di firma).
+      let contractReconducted = false
       try {
-        await handleGenerateContract(insertedBooking, false)
-        logger.log('[Auto-Gen] ✅ Contract generated successfully')
+        const genRes = await handleGenerateContract(insertedBooking, false, { reconduct: !!editingId })
+        contractReconducted = !!genRes?.reconducted
+        logger.log('[Auto-Gen] ✅ Contract generated successfully', contractReconducted ? '(ricondotto — nessuna nuova firma)' : '')
       } catch (err) {
         console.error('[Auto-Gen] ⚠️ Failed to generate contract:', err)
       }
@@ -7545,11 +7566,18 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       // prenotazioni mantengono il gating originale: link firma solo se pagata o
       // "Conferma Prenotazione" spuntata (post-pagamento parte dal callback Nexi).
       // (editHasBalanceOwed / scheduleChanged restano usati altrove.)
+      // 2026-08-02: se la modifica è stata RICONDOTTA (contratto già firmato
+      // ristampato sulle nuove condizioni e già inviato via WhatsApp da
+      // generate-contract), NON si chiede una nuova firma — come per l'estensione.
       const shouldSendSigningLink = !!insertedBooking?.id
+        && !contractReconducted
         && (
           !!editingId                        // qualsiasi modifica → invia sempre il contratto aggiornato
           || currentlyPaid || confirmBooking // nuove: solo se pagata o confermata
         )
+      if (contractReconducted) {
+        toast.success('Contratto ricondotto e inviato al cliente — già firmato, nessuna nuova firma richiesta', { duration: 6000 })
+      }
       if (shouldSendSigningLink) {
         try {
           // Fetch the contract that was just generated for this booking
