@@ -294,7 +294,13 @@ export const handler: Handler = async (event) => {
             const bookingCancelled = (b.status || '').toLowerCase().match(/cancell|annull/)
 
             for (const entry of list) {
-              const entryTotal = entry.total || (entry.amount || 0) * (entry.quantity || 1)
+              // 2026-08-02: sottrai SEMPRE lo sconto (DanniPenaliModal salva
+              // `discount` per voce = differenza tra listino e prezzo finale
+              // concordato). Il report deve mostrare il PREZZO FINALE SCONTATO
+              // (quello che esce in fattura), non il listino. Es: €600 con
+              // sconto €150 → €450.
+              const entryGross = entry.total || (entry.amount || 0) * (entry.quantity || 1)
+              const entryTotal = Math.max(0, entryGross - (Number(entry.discount) || 0))
               if (entryTotal <= 0) continue
 
               if (!vehicleMap[plate]) {

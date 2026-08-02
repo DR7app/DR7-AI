@@ -333,9 +333,15 @@ async function generateVehicleReport(
     const items = f.items || []
     let penSum = 0
     let danSum = 0
+    let scontoSum = 0
     items.forEach((i: any) => {
       const desc = i.description || ''
       const amt = parseFloat(i.amountPaid ?? i.total ?? 0) || 0
+      // 2026-08-02: la riga "Sconto" (Prezzo finale desiderato di DanniPenaliModal)
+      // va SOTTRATTA — generate-penalty-invoice tiene la penale a listino + una
+      // riga Sconto negativa, quindi il totale reale (in fattura) e' listino−sconto.
+      // Senza questo il report mostrava il listino (es. 600 invece di 450).
+      if (/sconto|discount/i.test(desc)) { scontoSum += Math.abs(amt); return }
       if (amt <= 0) return
       // "Penale - ..." → penali, "Danno - ..." → danni. Un item non puo'
       // contare in entrambi (penal ha priorita', ma le descrizioni sono
@@ -343,6 +349,12 @@ async function generateVehicleReport(
       if (/penal/i.test(desc)) penSum += amt
       else if (/dann/i.test(desc)) danSum += amt
     })
+    // Applica lo sconto al PREZZO FINALE: prima riduce i penali, poi i danni.
+    if (scontoSum > 0) {
+      const takeFromPen = Math.min(penSum, scontoSum)
+      penSum -= takeFromPen
+      danSum = Math.max(0, danSum - (scontoSum - takeFromPen))
+    }
     if (penSum > 0) fatturePenaltyMap.set(f.booking_id, (fatturePenaltyMap.get(f.booking_id) || 0) + penSum)
     if (danSum > 0) fattureDanniMap.set(f.booking_id, (fattureDanniMap.get(f.booking_id) || 0) + danSum)
   })
