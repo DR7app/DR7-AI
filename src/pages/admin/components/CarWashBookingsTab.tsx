@@ -23,6 +23,7 @@ import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking a
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
 import { isCartaPunti, isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
 import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 const ROME_TZ = 'Europe/Rome'
 
@@ -4604,11 +4605,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Data *</label>
-                  <input
-                    type="date"
+                  <EuropeanDateInput
                     min={todayStr}
                     value={formData.appointment_date}
-                    onChange={(e) => setFormData({ ...formData, appointment_date: e.target.value })}
+                    onChange={(__v: string) => setFormData({ ...formData, appointment_date: __v })}
                     className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                   />
                 </div>
@@ -5649,8 +5649,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-theme-text-secondary mb-2">Data</label>
-                    <input
-                      type="date"
+                    <EuropeanDateInput
                       value={(() => {
                         // Normalizza a YYYY-MM-DD in Rome TZ, così la data visibile
                         // coincide con quella nel messaggio al cliente (UTC midnight
@@ -5667,7 +5666,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         } catch { /* blank */ }
                         return raw.slice(0, 10)
                       })()}
-                      onChange={(e) => setEditingBooking({ ...editingBooking, appointment_date: e.target.value })}
+                      onChange={(__v: string) => setEditingBooking({ ...editingBooking, appointment_date: __v })}
                       className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                     />
                   </div>

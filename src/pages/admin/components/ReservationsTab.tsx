@@ -102,6 +102,7 @@ import { getKmIncluded, getUnlimitedKmPrice as getUnlimitedKmPriceFromConfig, ge
 import { kmFromDR7Office } from '../../../utils/dr7Distance'
 import { resolvePacchetti } from '../../../utils/pacchettiResolver'
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 // --- Kasko Constants & Types ---
 type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
@@ -11266,10 +11267,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Nuova Data Riconsegna</label>
-                  <input
-                    type="date"
+                  <EuropeanDateInput
                     value={extendData.new_return_date}
-                    onChange={(e) => setExtendData({ ...extendData, new_return_date: e.target.value })}
+                    onChange={(__v: string) => setExtendData({ ...extendData, new_return_date: __v })}
                     className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
                   />
                 </div>

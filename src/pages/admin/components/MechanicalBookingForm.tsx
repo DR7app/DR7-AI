@@ -13,6 +13,7 @@ import {
 } from '../../../utils/bookingConflictUtils'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 interface Customer {
     id: string
@@ -471,12 +472,11 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className="block text-theme-text-primary font-semibold mb-2">Data</label>
-                        <input
-                            type="date"
-                            required
-                            value={formData.appointment_date}
-                            onChange={(e) => setFormData({ ...formData, appointment_date: e.target.value })}
-                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary"
+                        <EuropeanDateInput
+                          required
+                          value={formData.appointment_date}
+                          onChange={(__v: string) => setFormData({ ...formData, appointment_date: __v })}
+                          className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary"
                         />
                     </div>
                     <div>

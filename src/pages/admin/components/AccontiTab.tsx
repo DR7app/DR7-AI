@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 interface Acconto {
   id: string
@@ -109,7 +110,7 @@ export default function AccontiTab() {
           <p className="text-sm text-theme-text-muted mt-1">Registra gli acconti incassati nella giornata. Operatore: <span className="text-theme-text-secondary font-medium">{me.nome || '—'}</span></p>
         </div>
         <label className="text-xs text-theme-text-muted">Giornata
-          <input type="date" value={data} onChange={e => setData(e.target.value)} className="mt-1 block px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
+          <EuropeanDateInput value={data} onChange={(__v: string) => setData(__v)} className="mt-1 block px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
         </label>
       </div>
 

@@ -11,6 +11,7 @@ import { authFetch } from '../../../utils/authFetch'
 import { logger } from '../../../utils/logger'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 // 2026-05-22: Premium telemetry restyle scoped to this page only.
 // 2026-05-27: gated to dark mode only — overriding theme vars in light
@@ -1555,9 +1556,11 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Data</label>
-                  <input type="date" value={editingBooking.appointment_date}
-                    onChange={(e) => setEditingBooking({ ...editingBooking, appointment_date: e.target.value })}
-                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary" />
+                  <EuropeanDateInput
+                    value={editingBooking.appointment_date}
+                    onChange={(__v: string) => setEditingBooking({ ...editingBooking, appointment_date: __v })}
+                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Ora</label>

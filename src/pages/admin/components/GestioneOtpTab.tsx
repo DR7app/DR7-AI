@@ -20,6 +20,7 @@ import LimitationOverrideModal from '../../../components/LimitationOverrideModal
 import { OTP_ACTION_CATALOG, type OtpAction } from '../../../utils/otpActionCatalog'
 import { authFetch } from '../../../utils/authFetch'
 import { OTP_CONTEXT_FIELDS, OTP_OPERATORS, type OtpCondition, type OtpOperator, type ContextFieldDef } from '../../../utils/otpConditionEngine'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 interface OtpRow {
     id: string
@@ -1522,13 +1523,19 @@ function StoricoOtpSection() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
                         <label className="text-[11px] text-theme-text-muted">
                             <span className="block mb-1">Da</span>
-                            <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
-                                className="w-full px-2 py-1.5 bg-theme-bg-primary border border-theme-border rounded text-xs text-theme-text-primary"/>
+                            <EuropeanDateInput
+                              value={fromDate}
+                              onChange={(__v: string) => setFromDate(__v)}
+                              className="w-full px-2 py-1.5 bg-theme-bg-primary border border-theme-border rounded text-xs text-theme-text-primary"
+                            />
                         </label>
                         <label className="text-[11px] text-theme-text-muted">
                             <span className="block mb-1">A</span>
-                            <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
-                                className="w-full px-2 py-1.5 bg-theme-bg-primary border border-theme-border rounded text-xs text-theme-text-primary"/>
+                            <EuropeanDateInput
+                              value={toDate}
+                              onChange={(__v: string) => setToDate(__v)}
+                              className="w-full px-2 py-1.5 bg-theme-bg-primary border border-theme-border rounded text-xs text-theme-text-primary"
+                            />
                         </label>
                         <label className="text-[11px] text-theme-text-muted">
                             <span className="block mb-1">Stato</span>

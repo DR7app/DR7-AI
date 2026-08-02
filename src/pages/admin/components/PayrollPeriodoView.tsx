@@ -2,7 +2,9 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { REPORT_RESTRICTED_EMAILS } from '../../../utils/reportAccess'
+import { fetchPauseConfigAttive, pausaObbligatoriaDelGiorno } from '../../../utils/pauseObbligatorie'
 import OperatorProfileModal from './OperatorProfileModal'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 /**
  * PayrollPeriodoView — vista riassuntiva "buste paga del periodo".
@@ -145,6 +147,12 @@ export default function PayrollPeriodoView() {
                 dayMap.set(e.data, cur)
             }
 
+            // 2026-08-02 (#32): pausa obbligatoria da contratto. Le buste paga la
+            // ignoravano del tutto: un operatore con pausa fissa di 60 min non
+            // registrata veniva pagato un'ora in piu' al giorno rispetto a quanto
+            // mostrato in Rilevazione Orari / Report Operatori.
+            const pauseCfgByOp = await fetchPauseConfigAttive(opList.map(o => o.id))
+
             // 4. Calcolo per ogni operatore
             const result: PayrollRow[] = opList.map(op => {
                 const c = contractByOp.get(op.id) || null
@@ -212,16 +220,21 @@ export default function PayrollPeriodoView() {
                     // 1) minuti per giorno + straord giornaliero, raggruppati per settimana
                     const weekTotal = new Map<string, number>()
                     const weekDailyOT = new Map<string, number>()
+                    const pauseCfg = pauseCfgByOp.get(op.id)
                     dayMap.forEach((t, dataKey) => {
                         if (!t.entrata) return
                         const end = t.uscita ? new Date(t.uscita).getTime() : new Date(t.entrata).getTime()
-                        let m = Math.max(0, Math.round((end - new Date(t.entrata).getTime()) / 60000))
+                        const lordo = Math.max(0, Math.round((end - new Date(t.entrata).getTime()) / 60000))
+                        let pausaTimbrata = 0
                         for (let i = 0; i < t.pi.length; i++) {
                             const start = new Date(t.pi[i]).getTime()
                             const fin = t.pf[i] ? new Date(t.pf[i]).getTime() : start
-                            m -= Math.max(0, Math.round((fin - start) / 60000))
+                            pausaTimbrata += Math.max(0, Math.round((fin - start) / 60000))
                         }
-                        m = Math.max(0, m)
+                        // Si scala il MAX tra pausa timbrata e pausa obbligatoria del
+                        // contratto (solo se non pagata), come nelle altre viste.
+                        const pausaObbl = pausaObbligatoriaDelGiorno(pauseCfg, dataKey)
+                        const m = Math.max(0, lordo - Math.max(pausaTimbrata, pausaObbl.minutiDaScalare))
                         totalMinLav += m
                         if (m <= 0) return
                         // Spezza la settimana al confine di MESE: i giorni della stessa
@@ -375,15 +388,21 @@ export default function PayrollPeriodoView() {
                 <div className="flex flex-wrap items-end gap-2 ml-auto">
                     <label className="flex flex-col text-[10px] uppercase text-theme-text-muted">
                         Da
-                        <input type="date" value={from} max={to}
-                            onChange={(e) => setFrom(e.target.value || from)}
-                            className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary" />
+                        <EuropeanDateInput
+                          value={from}
+                          max={to}
+                          onChange={(__v: string) => setFrom(__v || from)}
+                          className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary"
+                        />
                     </label>
                     <label className="flex flex-col text-[10px] uppercase text-theme-text-muted">
                         A
-                        <input type="date" value={to} min={from}
-                            onChange={(e) => setTo(e.target.value || to)}
-                            className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary" />
+                        <EuropeanDateInput
+                          value={to}
+                          min={from}
+                          onChange={(__v: string) => setTo(__v || to)}
+                          className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary"
+                        />
                     </label>
                     <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-tertiary p-0.5 text-[11px]">
                         <button onClick={() => applyPreset('oggi')} className="px-2 py-1 rounded-full text-theme-text-secondary hover:bg-theme-bg-hover">Oggi</button>

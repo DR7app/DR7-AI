@@ -4,6 +4,7 @@ import { getResidenceStatus, getProvinciaByCity } from '../data/sardegnaProvince
 import toast from 'react-hot-toast'
 import { logger } from '../utils/logger'
 import CalcolaCFButton from './CalcolaCFButton'
+import EuropeanDateInput from './EuropeanDateInput'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -760,10 +761,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Data di Nascita
                   </label>
-                  <input
-                    type="date"
+                  <EuropeanDateInput
                     value={formData.data_nascita}
-                    onChange={(e) => setFormData({ ...formData, data_nascita: e.target.value })}
+                    onChange={(__v: string) => setFormData({ ...formData, data_nascita: __v })}
                     className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -948,10 +948,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                       Data Rilascio
                     </label>
-                    <input
-                      type="date"
+                    <EuropeanDateInput
                       value={formData.data_rilascio_patente}
-                      onChange={(e) => setFormData({ ...formData, data_rilascio_patente: e.target.value })}
+                      onChange={(__v: string) => setFormData({ ...formData, data_rilascio_patente: __v })}
                       className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -959,10 +958,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                       Scadenza
                     </label>
-                    <input
-                      type="date"
+                    <EuropeanDateInput
                       value={formData.scadenza_patente}
-                      onChange={(e) => setFormData({ ...formData, scadenza_patente: e.target.value })}
+                      onChange={(__v: string) => setFormData({ ...formData, scadenza_patente: __v })}
                       className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -1094,10 +1092,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                       Data di Nascita
                     </label>
-                    <input
-                      type="date"
+                    <EuropeanDateInput
                       value={formData.data_nascita_rappresentante}
-                      onChange={(e) => setFormData({ ...formData, data_nascita_rappresentante: e.target.value })}
+                      onChange={(__v: string) => setFormData({ ...formData, data_nascita_rappresentante: __v })}
                       className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -1163,10 +1160,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                       Data Rilascio
                     </label>
-                    <input
-                      type="date"
+                    <EuropeanDateInput
                       value={formData.data_rilascio_documento}
-                      onChange={(e) => setFormData({ ...formData, data_rilascio_documento: e.target.value })}
+                      onChange={(__v: string) => setFormData({ ...formData, data_rilascio_documento: __v })}
                       className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>

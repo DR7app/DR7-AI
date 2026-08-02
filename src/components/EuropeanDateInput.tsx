@@ -8,6 +8,16 @@ interface EuropeanDateInputProps {
   required?: boolean;
   className?: string;
   name?: string;
+  id?: string;
+  disabled?: boolean;
+  readOnly?: boolean;
+  autoFocus?: boolean;
+  title?: string;
+  placeholder?: string;
+  style?: React.CSSProperties;
+  wrapperClassName?: string;
+  onBlur?: () => void;
+  'aria-label'?: string;
 }
 
 /**
@@ -26,6 +36,16 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
   required = false,
   className = '',
   name,
+  id,
+  disabled = false,
+  readOnly = false,
+  autoFocus = false,
+  title,
+  placeholder = 'GG/MM/AAAA',
+  style,
+  wrapperClassName = '',
+  onBlur,
+  'aria-label': ariaLabel,
 }) => {
   const [displayValue, setDisplayValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -95,6 +115,7 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
     } else if (value) {
       setDisplayValue(isoToEuropean(value));
     }
+    onBlur?.();
   };
 
   // 2026-06-01: pulsante calendario apre il picker nativo del browser
@@ -120,17 +141,29 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
     el.click();
   };
 
+  // Il campo eredita la larghezza dal className del chiamante: se è w-full il
+  // wrapper deve esserlo anche lui, altrimenti l'inline-flex collassa e il campo
+  // diventa più stretto del layout originale (era un <input type="date"> pieno).
+  const isFullWidth = /(^|\s)w-full(\s|$)/.test(className);
+
   return (
-    <div className="relative inline-flex items-center">
+    <div className={`relative inline-flex items-center ${isFullWidth ? 'w-full' : ''} ${wrapperClassName}`.trim()}>
       <input
         type="text"
         name={name}
+        id={id}
         value={displayValue}
         onChange={handleInputChange}
         onFocus={handleFocus}
         onBlur={handleBlur}
-        placeholder="GG/MM/AAAA"
+        placeholder={placeholder}
         required={required}
+        disabled={disabled}
+        readOnly={readOnly}
+        autoFocus={autoFocus}
+        title={title}
+        style={style}
+        aria-label={ariaLabel}
         maxLength={10}
         inputMode="numeric"
         className={`${className} pr-8`}
@@ -139,6 +172,7 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
       <button
         type="button"
         onClick={openNativePicker}
+        disabled={disabled}
         aria-label="Apri calendario"
         title="Apri calendario"
         className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-theme-bg-hover text-theme-text-muted hover:text-theme-text-primary transition-colors"

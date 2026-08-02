@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { CATEGORIES } from './scadenzeConfig'
 import type { Scadenza, NewScadenzaForm } from './scadenzeConfig'
+import EuropeanDateInput from '../../../../components/EuropeanDateInput'
 
 interface ScadenzeEditModalProps {
   scadenza: Scadenza
@@ -66,10 +67,9 @@ export default function ScadenzeEditModal({ scadenza, onSave, onClose }: Scadenz
 
           <div>
             <label className="block text-sm font-medium text-theme-text-secondary mb-1">Data Scadenza</label>
-            <input
-              type="date"
+            <EuropeanDateInput
               value={form.due_date}
-              onChange={(e) => setForm({ ...form, due_date: e.target.value })}
+              onChange={(__v: string) => setForm({ ...form, due_date: __v })}
               className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border"
             />
           </div>

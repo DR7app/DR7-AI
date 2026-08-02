@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { validateIban, formatIbanGroups, maskIban } from '../../../utils/ibanValidation'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 interface NuovaCauzioneModalProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -287,12 +288,11 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
                                 <label className="block text-sm font-semibold text-theme-text-primary mb-2">
                                     Data Restituzione Veicolo *
                                 </label>
-                                <input
-                                    type="date"
-                                    value={formData.data_restituzione_veicolo}
-                                    onChange={(e) => setFormData({ ...formData, data_restituzione_veicolo: e.target.value })}
-                                    required
-                                    className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                                <EuropeanDateInput
+                                  value={formData.data_restituzione_veicolo}
+                                  onChange={(__v: string) => setFormData({ ...formData, data_restituzione_veicolo: __v })}
+                                  required
+                                  className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
                                 />
                                 <p className="text-xs text-theme-text-muted mt-1">
                                     La scadenza cauzione sarà calcolata automaticamente (14 giorni lavorativi dopo questa data)

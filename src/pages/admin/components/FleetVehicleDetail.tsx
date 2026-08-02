@@ -4,6 +4,7 @@ import type { Vehicle } from '../../../types'
 import Button from './Button'
 import toast from 'react-hot-toast'
 import FleetVehiclePanoramica from './FleetVehiclePanoramica'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 interface FleetVehicleDetailProps {
     vehicleId: string
@@ -880,38 +881,34 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-theme-text-secondary text-sm mb-2">Assicurazione</label>
-                                        <input
-                                            type="date"
-                                            value={editedVehicle.insurance_expiry || ''}
-                                            onChange={(e) => updateField('insurance_expiry', e.target.value)}
-                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                        <EuropeanDateInput
+                                          value={editedVehicle.insurance_expiry || ''}
+                                          onChange={(__v: string) => updateField('insurance_expiry', __v)}
+                                          className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         />
                                     </div>
                                     <div>
                                         <label className="block text-theme-text-secondary text-sm mb-2">Bollo</label>
-                                        <input
-                                            type="date"
-                                            value={editedVehicle.tax_expiry || ''}
-                                            onChange={(e) => updateField('tax_expiry', e.target.value)}
-                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                        <EuropeanDateInput
+                                          value={editedVehicle.tax_expiry || ''}
+                                          onChange={(__v: string) => updateField('tax_expiry', __v)}
+                                          className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         />
                                     </div>
                                     <div>
                                         <label className="block text-theme-text-secondary text-sm mb-2">Revisione</label>
-                                        <input
-                                            type="date"
-                                            value={editedVehicle.inspection_expiry || ''}
-                                            onChange={(e) => updateField('inspection_expiry', e.target.value)}
-                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                        <EuropeanDateInput
+                                          value={editedVehicle.inspection_expiry || ''}
+                                          onChange={(__v: string) => updateField('inspection_expiry', __v)}
+                                          className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         />
                                     </div>
                                     <div>
                                         <label className="block text-theme-text-secondary text-sm mb-2">Leasing</label>
-                                        <input
-                                            type="date"
-                                            value={editedVehicle.leasing_expiry || ''}
-                                            onChange={(e) => updateField('leasing_expiry', e.target.value)}
-                                            className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                        <EuropeanDateInput
+                                          value={editedVehicle.leasing_expiry || ''}
+                                          onChange={(__v: string) => updateField('leasing_expiry', __v)}
+                                          className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
                                         />
                                     </div>
                                 </div>
@@ -930,7 +927,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                                 <div>
                                     <label className="block text-xs text-theme-text-secondary mb-1">Data</label>
-                                    <input type="date" value={logForm.intervento_date} onChange={(e) => setLogForm({ ...logForm, intervento_date: e.target.value })} className="w-full bg-theme-bg-secondary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border" />
+                                    <EuropeanDateInput value={logForm.intervento_date} onChange={(__v: string) => setLogForm({ ...logForm, intervento_date: __v })} className="w-full bg-theme-bg-secondary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-theme-text-secondary mb-1">Tipo</label>

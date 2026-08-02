@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { logger } from '../utils/logger'
 import { authFetch } from '../utils/authFetch'
+import EuropeanDateInput from './EuropeanDateInput'
 
 interface MissingFieldsModalProps {
     isOpen: boolean
@@ -241,11 +242,10 @@ export default function MissingFieldsModal({
                     <label className="block text-sm font-medium text-theme-text-secondary mb-2">
                         {label} *
                     </label>
-                    <input
-                        type="date"
-                        value={value}
-                        onChange={(e) => handleChange(field, e.target.value)}
-                        className={`w-full bg-theme-bg-tertiary border rounded-full px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none ${showPatenteWarning ? 'border-red-500' : 'border-theme-border-light'}`}
+                    <EuropeanDateInput
+                      value={value}
+                      onChange={(__v: string) => handleChange(field, __v)}
+                      className={`w-full bg-theme-bg-tertiary border rounded-full px-4 py-2.5 text-theme-text-primary focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none ${showPatenteWarning ? 'border-red-500' : 'border-theme-border-light'}`}
                     />
                     {showPatenteWarning && (
                         <p className="text-red-500 text-sm font-semibold mt-2">Patente rilasciata da meno di 2 anni — noleggio non consentito</p>

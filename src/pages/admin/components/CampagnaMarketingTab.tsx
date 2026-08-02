@@ -4,6 +4,7 @@ import Button from './Button'
 import toast from 'react-hot-toast'
 import { useClientStatus } from '../../../contexts/ClientStatusContext'
 import CampaignCalendarView, { type ScheduledCampaign, type RecurrenceType } from './CampaignCalendarView'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 const ROME_TZ = 'Europe/Rome'
 
@@ -927,11 +928,10 @@ export default function CampagnaMarketingTab() {
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <label className="block text-xs font-medium text-theme-text-secondary mb-1">Data di invio</label>
-                                        <input
-                                            type="date"
-                                            value={scheduleDate}
-                                            onChange={(e) => setScheduleDate(e.target.value)}
-                                            className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
+                                        <EuropeanDateInput
+                                          value={scheduleDate}
+                                          onChange={(__v: string) => setScheduleDate(__v)}
+                                          className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
                                         />
                                     </div>
                                     <div>
@@ -977,11 +977,10 @@ export default function CampagnaMarketingTab() {
                                         </div>
                                         <div>
                                             <label className="block text-xs font-medium text-theme-text-secondary mb-1">Fine ricorrenza</label>
-                                            <input
-                                                type="date"
-                                                value={recurrenceEndDate}
-                                                onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                                                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
+                                            <EuropeanDateInput
+                                              value={recurrenceEndDate}
+                                              onChange={(__v: string) => setRecurrenceEndDate(__v)}
+                                              className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
                                             />
                                         </div>
                                     </div>
@@ -1370,11 +1369,10 @@ export default function CampagnaMarketingTab() {
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <label className="block text-xs font-medium text-theme-text-secondary mb-1">Data</label>
-                                <input
-                                    type="date"
-                                    value={editDate}
-                                    onChange={(e) => setEditDate(e.target.value)}
-                                    className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
+                                <EuropeanDateInput
+                                  value={editDate}
+                                  onChange={(__v: string) => setEditDate(__v)}
+                                  className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
                                 />
                             </div>
                             <div>
@@ -1415,11 +1413,10 @@ export default function CampagnaMarketingTab() {
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-theme-text-secondary mb-1">Fine</label>
-                                    <input
-                                        type="date"
-                                        value={editEndDate}
-                                        onChange={(e) => setEditEndDate(e.target.value)}
-                                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
+                                    <EuropeanDateInput
+                                      value={editEndDate}
+                                      onChange={(__v: string) => setEditEndDate(__v)}
+                                      className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary outline-none focus:border-dr7-gold"
                                     />
                                 </div>
                             </div>

@@ -14,6 +14,7 @@ import {
     fmtDateIT,
 } from './types'
 import type { Fornitore, FornitoreDocument, CrosscheckRow } from './types'
+import EuropeanDateInput from '../../../../components/EuropeanDateInput'
 
 interface Props {
     fornitore: Fornitore
@@ -702,8 +703,11 @@ function PaymentModal({ doc, onClose, onConfirm }: {
                 </p>
                 <label className="block mb-3 text-sm">
                     <span className="text-theme-text-secondary">Data pagamento</span>
-                    <input type="date" value={dataPag} onChange={e => setDataPag(e.target.value)}
-                        className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary" />
+                    <EuropeanDateInput
+                      value={dataPag}
+                      onChange={(__v: string) => setDataPag(__v)}
+                      className="mt-1 w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
+                    />
                 </label>
                 <label className="block mb-4 text-sm">
                     <span className="text-theme-text-secondary">Metodo</span>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 interface CustomerOption {
     id: string
@@ -401,22 +402,20 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <label className="block text-xs text-theme-text-muted mb-1">Inizio</label>
-                                <input
-                                    type="date"
-                                    value={formData.valid_from}
-                                    onChange={(e) => updateField('valid_from', e.target.value)}
-                                    required
-                                    className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                                <EuropeanDateInput
+                                  value={formData.valid_from}
+                                  onChange={(__v: string) => updateField('valid_from', __v)}
+                                  required
+                                  className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
                                 />
                             </div>
                             <div>
                                 <label className="block text-xs text-theme-text-muted mb-1">Fine</label>
-                                <input
-                                    type="date"
-                                    value={formData.valid_until}
-                                    onChange={(e) => updateField('valid_until', e.target.value)}
-                                    required
-                                    className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                                <EuropeanDateInput
+                                  value={formData.valid_until}
+                                  onChange={(__v: string) => updateField('valid_until', __v)}
+                                  required
+                                  className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
                                 />
                             </div>
                         </div>

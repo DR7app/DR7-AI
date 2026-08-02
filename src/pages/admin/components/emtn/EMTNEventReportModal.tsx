@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../../utils/authFetch'
+import EuropeanDateInput from '../../../../components/EuropeanDateInput'
 
 const TYPES: { id: string; label: string; helper: string }[] = [
     { id: 'UNPAID_DAMAGE', label: 'Danno non saldato', helper: 'Riparazioni dovute non pagate' },
@@ -162,8 +163,11 @@ export default function EMTNEventReportModal({ open, onClose, onCreated, clientI
                             <input type="text" value={headline} onChange={(e) => setHeadline(e.target.value)}
                                 placeholder="Titolo breve" maxLength={120}
                                 className="sm:col-span-2 bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold/40" />
-                            <input type="date" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)}
-                                className="bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/40" />
+                            <EuropeanDateInput
+                              value={occurredAt}
+                              onChange={(__v: string) => setOccurredAt(__v)}
+                              className="bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
+                            />
                         </div>
 
                         <textarea value={description} onChange={(e) => setDescription(e.target.value)}

@@ -15,6 +15,7 @@ import CarWashCatalogTab from './CarWashCatalogTab'
 import NoleggioServiceTab from './NoleggioServiceTab'
 import ClientStatusConfigSection from './ClientStatusConfigSection'
 import AutistiConfigSection from './AutistiConfigSection'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 type FleetVehicle = {
   id: string
@@ -5217,17 +5218,15 @@ function SpecialPeriodsSection({
           const invalidRange = !!p.start_date && !!p.end_date && p.end_date < p.start_date
           return (
             <div key={idx} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_auto_auto] gap-2 items-center">
-              <input
-                type="date"
+              <EuropeanDateInput
                 value={p.start_date}
-                onChange={(e) => patch(idx, { start_date: e.target.value })}
+                onChange={(__v: string) => patch(idx, { start_date: __v })}
                 className={`bg-theme-bg-secondary border rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 ${invalidRange ? 'border-red-400' : 'border-theme-border'}`}
               />
-              <input
-                type="date"
+              <EuropeanDateInput
                 value={p.end_date}
                 min={p.start_date || undefined}
-                onChange={(e) => patch(idx, { end_date: e.target.value })}
+                onChange={(__v: string) => patch(idx, { end_date: __v })}
                 className={`bg-theme-bg-secondary border rounded-lg px-2 py-1.5 text-[13px] text-black font-medium focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 ${invalidRange ? 'border-red-400' : 'border-theme-border'}`}
               />
               <select
@@ -6584,12 +6583,16 @@ function AutomazioniSection({
         <div className="p-5 space-y-3">
           {(automations.carwash_block_ranges || []).map((r, i) => (
             <div key={i} className="grid grid-cols-1 sm:grid-cols-[150px_150px_1fr_auto] gap-2 items-center">
-              <input type="date" value={r.from || ''}
-                onChange={(e) => update({ carwash_block_ranges: (automations.carwash_block_ranges || []).map((x, j) => j === i ? { ...x, from: e.target.value } : x) })}
-                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40" />
-              <input type="date" value={r.to || ''}
-                onChange={(e) => update({ carwash_block_ranges: (automations.carwash_block_ranges || []).map((x, j) => j === i ? { ...x, to: e.target.value } : x) })}
-                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40" />
+              <EuropeanDateInput
+                value={r.from || ''}
+                onChange={(__v: string) => update({ carwash_block_ranges: (automations.carwash_block_ranges || []).map((x, j) => j === i ? { ...x, from: __v } : x) })}
+                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
+              />
+              <EuropeanDateInput
+                value={r.to || ''}
+                onChange={(__v: string) => update({ carwash_block_ranges: (automations.carwash_block_ranges || []).map((x, j) => j === i ? { ...x, to: __v } : x) })}
+                className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40"
+              />
               <input type="text" placeholder="Messaggio mostrato al cliente (opzionale)" value={r.message || ''}
                 onChange={(e) => update({ carwash_block_ranges: (automations.carwash_block_ranges || []).map((x, j) => j === i ? { ...x, message: e.target.value } : x) })}
                 className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg px-2 py-1.5 text-[13px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#ff3b30]/40" />
@@ -6858,9 +6861,9 @@ function OrariLavaggioSection({
               <div key={b.id} className={`border border-theme-border rounded-xl p-3 space-y-2 ${b.active === false ? 'opacity-50' : ''}`}>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[11px] text-theme-text-muted">Dal</span>
-                  <input type="date" value={b.from} onChange={e => upd({ from: e.target.value })} className={inp} />
+                  <EuropeanDateInput value={b.from} onChange={(__v: string) => upd({ from: __v })} className={inp} />
                   <span className="text-[11px] text-theme-text-muted">al</span>
-                  <input type="date" value={b.to} onChange={e => upd({ to: e.target.value })} className={inp} />
+                  <EuropeanDateInput value={b.to} onChange={(__v: string) => upd({ to: __v })} className={inp} />
                   <span className="text-[11px] text-theme-text-muted ml-2">Fascia</span>
                   <input type="text" inputMode="numeric" maxLength={5} placeholder="13:00" value={b.start} onChange={e => upd({ start: e.target.value })} className={`${inp} w-16 text-center tabular-nums`} />
                   <span className="text-[12px] text-theme-text-muted">–</span>

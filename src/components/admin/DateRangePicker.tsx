@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import EuropeanDateInput from '../EuropeanDateInput'
 
 export type DateRangePreset = '7' | '30' | '90' | '365' | 'all' | 'custom'
 
@@ -90,21 +91,19 @@ export default function DateRangePicker({ value, onChange, className }: Props) {
           <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col gap-1">
               <span className="text-xs text-theme-text-secondary">Da</span>
-              <input
-                type="date"
+              <EuropeanDateInput
                 value={value.from || ''}
                 max={value.to || undefined}
-                onChange={(e) => onChange({ preset: 'custom', from: e.target.value || undefined, to: value.to })}
+                onChange={(__v: string) => onChange({ preset: 'custom', from: __v || undefined, to: value.to })}
                 className="px-2 py-1.5 text-sm bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary focus:outline-none focus:border-dr7-gold"
               />
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-xs text-theme-text-secondary">A</span>
-              <input
-                type="date"
+              <EuropeanDateInput
                 value={value.to || ''}
                 min={value.from || undefined}
-                onChange={(e) => onChange({ preset: 'custom', from: value.from, to: e.target.value || undefined })}
+                onChange={(__v: string) => onChange({ preset: 'custom', from: value.from, to: __v || undefined })}
                 className="px-2 py-1.5 text-sm bg-theme-bg-tertiary border border-theme-border rounded-md text-theme-text-primary focus:outline-none focus:border-dr7-gold"
               />
             </label>

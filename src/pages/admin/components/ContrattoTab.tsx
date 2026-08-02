@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
 import DateRangeFilter from '../../../components/DateRangeFilter'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 interface Contract {
   id: string
@@ -502,10 +503,9 @@ export default function ContrattoTab() {
             </div>
             <div>
               <label className="block text-sm font-medium text-theme-text-secondary mb-2">Data Contratto *</label>
-              <input
-                type="date"
+              <EuropeanDateInput
                 value={formData.contract_date}
-                onChange={(e) => setFormData({ ...formData, contract_date: e.target.value })}
+                onChange={(__v: string) => setFormData({ ...formData, contract_date: __v })}
                 className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                 required
               />
@@ -590,20 +590,18 @@ export default function ContrattoTab() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-2">Data Inizio *</label>
-                <input
-                  type="date"
+                <EuropeanDateInput
                   value={formData.rental_start_date}
-                  onChange={(e) => setFormData({ ...formData, rental_start_date: e.target.value })}
+                  onChange={(__v: string) => setFormData({ ...formData, rental_start_date: __v })}
                   className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                   required
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-2">Data Fine *</label>
-                <input
-                  type="date"
+                <EuropeanDateInput
                   value={formData.rental_end_date}
-                  onChange={(e) => setFormData({ ...formData, rental_end_date: e.target.value })}
+                  onChange={(__v: string) => setFormData({ ...formData, rental_end_date: __v })}
                   className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                   required
                 />

@@ -31,6 +31,7 @@ import {
   getOfficeMinuteRangesForDate,
   isWithinOfficeHoursForDate,
 } from '../../../utils/noleggioHours'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 // ─── Time slots ─────────────────────────────────────────────────────────────
 //
@@ -3511,11 +3512,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           </div>
           <div className="flex items-center gap-2">
             <label htmlFor="preventivi-date-filter" className="text-xs text-theme-text-muted whitespace-nowrap">Data:</label>
-            <input
+            <EuropeanDateInput
               id="preventivi-date-filter"
-              type="date"
               value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
+              onChange={(__v: string) => setDateFilter(__v)}
               className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
               title="Mostra solo i preventivi creati in questo giorno (Europe/Rome)"
             />

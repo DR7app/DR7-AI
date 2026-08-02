@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import EuropeanDateInput from '../components/EuropeanDateInput'
 
 interface InviteState {
     valid: boolean | null
@@ -338,18 +339,30 @@ function Field({ label, value, onChange, type = 'text', required, maxLength, min
     maxLength?: number
     minLength?: number
 }) {
+    const inputClass = "mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+    // 2026-08-02: mai il date picker nativo (mostra MM/GG/AAAA col locale OS).
+    // In Europa la data si scrive GG/MM/AAAA — vedi EuropeanDateInput.
     return (
         <label className="block">
             <span className="text-xs font-medium text-gray-700">{label}</span>
-            <input
-                type={type}
-                value={value}
-                onChange={e => onChange(e.target.value)}
-                required={required}
-                maxLength={maxLength}
-                minLength={minLength}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-            />
+            {type === 'date' ? (
+                <EuropeanDateInput
+                    value={value}
+                    onChange={onChange}
+                    required={required}
+                    className={inputClass}
+                />
+            ) : (
+                <input
+                    type={type}
+                    value={value}
+                    onChange={e => onChange(e.target.value)}
+                    required={required}
+                    maxLength={maxLength}
+                    minLength={minLength}
+                    className={inputClass}
+                />
+            )}
         </label>
     )
 }

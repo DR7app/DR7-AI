@@ -8,6 +8,7 @@ import PayrollPeriodoView from './PayrollPeriodoView'
 import InviteOperatoreModal, { PERMISSION_SECTIONS } from './InviteOperatoreModal'
 import ContrattiOperatoreView from './ContrattiOperatoreView'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 // 2026-05-18: Rilevazione Orari spostata DENTRO Operatori (sub-view).
 // Prima era una top-level tab "Rilevazione Orari" — ora vive insieme
@@ -1009,11 +1010,11 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
               <div className="flex flex-wrap gap-2 mb-3">
                 <div>
                   <label className="block text-[10px] font-medium text-theme-text-muted mb-1">Da</label>
-                  <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary text-xs focus:outline-none focus:border-dr7-gold" />
+                  <EuropeanDateInput value={dateFrom} onChange={(__v: string) => setDateFrom(__v)} className="px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary text-xs focus:outline-none focus:border-dr7-gold" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-medium text-theme-text-muted mb-1">A</label>
-                  <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary text-xs focus:outline-none focus:border-dr7-gold" />
+                  <EuropeanDateInput value={dateTo} onChange={(__v: string) => setDateTo(__v)} className="px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary text-xs focus:outline-none focus:border-dr7-gold" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-medium text-theme-text-muted mb-1">Azione</label>

@@ -9,6 +9,7 @@ import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import IncomingInvoicesView from './IncomingInvoicesView'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell } from 'recharts'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 interface Invoice {
   id: string
@@ -1085,19 +1086,17 @@ export default function FatturaTab() {
           </div>
           <div className="flex flex-col">
             <label className="text-[10px] text-theme-text-muted uppercase tracking-wider mb-1">Da</label>
-            <input
-              type="date"
+            <EuropeanDateInput
               value={filterDateFrom}
-              onChange={e => setFilterDateFrom(e.target.value)}
+              onChange={(__v: string) => setFilterDateFrom(__v)}
               className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
             />
           </div>
           <div className="flex flex-col">
             <label className="text-[10px] text-theme-text-muted uppercase tracking-wider mb-1">A</label>
-            <input
-              type="date"
+            <EuropeanDateInput
               value={filterDateTo}
-              onChange={e => setFilterDateTo(e.target.value)}
+              onChange={(__v: string) => setFilterDateTo(__v)}
               className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
             />
           </div>

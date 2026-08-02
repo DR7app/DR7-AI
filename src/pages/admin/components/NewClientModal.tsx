@@ -7,6 +7,7 @@ import { authFetch } from '../../../utils/authFetch'
 import CalcolaCFButton from '../../../components/CalcolaCFButton'
 import CompilaButton, { type ExtractedData, type DataConflict } from '../../../components/CompilaButton'
 import { validateIban, formatIbanGroups } from '../../../utils/ibanValidation'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -1167,8 +1168,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Data Nascita*</label>
-                      <input type="date" lang="it" value={formData.data_nascita || ''} onChange={(e) => setFormData({ ...formData, data_nascita: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                      <EuropeanDateInput
+                        value={formData.data_nascita || ''}
+                        onChange={(__v: string) => setFormData({ ...formData, data_nascita: __v })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
+                      />
                     </div>
                     <div>
                       <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Sesso</label>
@@ -1377,8 +1381,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Data Nascita</label>
-                      <input type="date" value={formData.rappresentante_data_nascita} onChange={(e) => setFormData({ ...formData, rappresentante_data_nascita: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                      <EuropeanDateInput
+                        value={formData.rappresentante_data_nascita}
+                        onChange={(__v: string) => setFormData({ ...formData, rappresentante_data_nascita: __v })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
+                      />
                     </div>
                     <div>
                       <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Luogo Nascita</label>
@@ -1444,13 +1451,19 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Data rilascio</label>
-                      <input type="date" lang="it" value={formData.patente_rilascio || ''} onChange={(e) => setFormData({ ...formData, patente_rilascio: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                      <EuropeanDateInput
+                        value={formData.patente_rilascio || ''}
+                        onChange={(__v: string) => setFormData({ ...formData, patente_rilascio: __v })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
+                      />
                     </div>
                     <div>
                       <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Scadenza</label>
-                      <input type="date" lang="it" value={formData.patente_scadenza || ''} onChange={(e) => setFormData({ ...formData, patente_scadenza: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                      <EuropeanDateInput
+                        value={formData.patente_scadenza || ''}
+                        onChange={(__v: string) => setFormData({ ...formData, patente_scadenza: __v })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
+                      />
                     </div>
                   </div>
 
@@ -1519,13 +1532,19 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Rilascio</label>
-                      <input type="date" value={formData.rappresentante_doc_rilascio} onChange={(e) => setFormData({ ...formData, rappresentante_doc_rilascio: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                      <EuropeanDateInput
+                        value={formData.rappresentante_doc_rilascio}
+                        onChange={(__v: string) => setFormData({ ...formData, rappresentante_doc_rilascio: __v })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
+                      />
                     </div>
                     <div>
                       <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Scadenza</label>
-                      <input type="date" value={formData.rappresentante_doc_scadenza} onChange={(e) => setFormData({ ...formData, rappresentante_doc_scadenza: e.target.value })}
-                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                      <EuropeanDateInput
+                        value={formData.rappresentante_doc_scadenza}
+                        onChange={(__v: string) => setFormData({ ...formData, rappresentante_doc_scadenza: __v })}
+                        className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
+                      />
                     </div>
                   </div>
                   <div>

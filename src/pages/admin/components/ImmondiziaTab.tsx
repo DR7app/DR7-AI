@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 interface ImmondiziaRule {
   id: string
@@ -139,7 +140,7 @@ export default function ImmondiziaTab() {
           ) : (
             <div>
               <label className="text-xs text-theme-text-muted block mb-1">Data</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary" />
+              <EuropeanDateInput value={date} onChange={(__v: string) => setDate(__v)} className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary" />
             </div>
           )}
           <div>

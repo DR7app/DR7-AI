@@ -11,6 +11,7 @@ import { authFetch } from '../../../utils/authFetch'
 import toast from 'react-hot-toast'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import { LeadPicker } from './LeadPicker'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 // Stati pagamento standard DR7 (come Noleggio auto / Car Wash): la label è
 // quella mostrata, il value è il payment_status salvato sul booking.
@@ -632,7 +633,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
 
               <div>
                 <label className="text-xs text-theme-text-muted">Ritiro</label>
-                <input className={INPUT_CLS} type="date" value={form.pickup_date} onChange={e => setForm({ ...form, pickup_date: e.target.value })} />
+                <EuropeanDateInput className={INPUT_CLS} value={form.pickup_date} onChange={(__v: string) => setForm({ ...form, pickup_date: __v })} />
               </div>
               <div>
                 <label className="text-xs text-theme-text-muted">Ora ritiro</label>
@@ -640,7 +641,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
               </div>
               <div>
                 <label className="text-xs text-theme-text-muted">Riconsegna</label>
-                <input className={INPUT_CLS} type="date" value={form.dropoff_date} onChange={e => setForm({ ...form, dropoff_date: e.target.value })} />
+                <EuropeanDateInput className={INPUT_CLS} value={form.dropoff_date} onChange={(__v: string) => setForm({ ...form, dropoff_date: __v })} />
               </div>
               <div>
                 <label className="text-xs text-theme-text-muted">Ora riconsegna</label>
@@ -1179,7 +1180,7 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
               </div>
               <div>
                 <label className="text-xs text-theme-text-muted">Ritiro</label>
-                <input className={INPUT_CLS} type="date" value={form.pickup_date} onChange={e => setForm({ ...form, pickup_date: e.target.value })} />
+                <EuropeanDateInput className={INPUT_CLS} value={form.pickup_date} onChange={(__v: string) => setForm({ ...form, pickup_date: __v })} />
               </div>
               <div>
                 <label className="text-xs text-theme-text-muted">Ora ritiro</label>
@@ -1187,7 +1188,7 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
               </div>
               <div>
                 <label className="text-xs text-theme-text-muted">Riconsegna</label>
-                <input className={INPUT_CLS} type="date" value={form.dropoff_date} onChange={e => setForm({ ...form, dropoff_date: e.target.value })} />
+                <EuropeanDateInput className={INPUT_CLS} value={form.dropoff_date} onChange={(__v: string) => setForm({ ...form, dropoff_date: __v })} />
               </div>
               <div>
                 <label className="text-xs text-theme-text-muted">Ora riconsegna</label>
@@ -1574,8 +1575,8 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
             <input className={INPUT_CLS} placeholder="Telefono (WhatsApp)" value={form.customer_phone} onChange={e => setForm({ ...form, customer_phone: e.target.value })} />
             <input className={INPUT_CLS} placeholder={labels.asset} value={form.asset_name} onChange={e => setForm({ ...form, asset_name: e.target.value })} />
             <input className={INPUT_CLS} placeholder="Importo (€)" inputMode="decimal" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} />
-            <input className={INPUT_CLS} type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} />
-            <input className={INPUT_CLS} type="date" value={form.end_date} onChange={e => setForm({ ...form, end_date: e.target.value })} />
+            <EuropeanDateInput className={INPUT_CLS} value={form.start_date} onChange={(__v: string) => setForm({ ...form, start_date: __v })} />
+            <EuropeanDateInput className={INPUT_CLS} value={form.end_date} onChange={(__v: string) => setForm({ ...form, end_date: __v })} />
             <select className={INPUT_CLS} value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
               {PREV_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
@@ -2383,7 +2384,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-theme-text-muted">Data</label>
-                <input className={INPUT_CLS} type="date" value={form.departure_date} onChange={e => setForm({ ...form, departure_date: e.target.value })} />
+                <EuropeanDateInput className={INPUT_CLS} value={form.departure_date} onChange={(__v: string) => setForm({ ...form, departure_date: __v })} />
               </div>
               <div>
                 <label className="text-xs text-theme-text-muted">Orario</label>
