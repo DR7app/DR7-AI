@@ -16,7 +16,13 @@ import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import {
+    fetchPauseConfigOperatore,
+    pausaObbligatoriaDelGiorno,
+    type PauseConfig as PauseConfigContratto,
+} from '../../../utils/pauseObbligatorie'
 import { MyDayEditorModal } from './RilevazioneOrariTab'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 interface Operatore {
     id: string
@@ -107,19 +113,25 @@ export default function OperatorProfileModal({
     const [targetGran, setTargetGran] = useState<TargetGranularita>('none')
     const [targetValueHours, setTargetValueHours] = useState<number>(0)
     // Pause obbligatorie del contratto (applicate come deduzione minima alle ore).
-    const [pauseConfig, setPauseConfig] = useState<PauseConfig | null>(null)
+    // 2026-08-02 (#32): lette dall'util condiviso (RPC SECURITY DEFINER) — la
+    // SELECT diretta veniva filtrata dalla RLS "solo direzione" e tornava vuota
+    // senza errore per gli altri admin.
+    const [pauseConfig, setPauseConfig] = useState<PauseConfigContratto | null>(null)
     useEffect(() => {
         let cancelled = false
         ;(async () => {
-            const { data } = await supabase
-                .from('operatore_contratto')
-                .select('ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, stipendio_frequenza, pause_config')
-                .eq('operatore_id', operatore.id)
-                .eq('attivo', true)
-                .maybeSingle()
+            const [{ data }, cfgPause] = await Promise.all([
+                supabase
+                    .from('operatore_contratto')
+                    .select('ore_target_giornaliere, ore_target_settimanali, ore_target_mensili, stipendio_frequenza')
+                    .eq('operatore_id', operatore.id)
+                    .eq('attivo', true)
+                    .maybeSingle(),
+                fetchPauseConfigOperatore(operatore.id),
+            ])
             if (cancelled) return
-            const c = data as { ore_target_giornaliere?: number | null; ore_target_settimanali?: number | null; ore_target_mensili?: number | null; stipendio_frequenza?: 'settimanale' | 'mensile' | null; pause_config?: PauseConfig | null } | null
-            setPauseConfig(c?.pause_config || null)
+            const c = data as { ore_target_giornaliere?: number | null; ore_target_settimanali?: number | null; ore_target_mensili?: number | null; stipendio_frequenza?: 'settimanale' | 'mensile' | null } | null
+            setPauseConfig(cfgPause)
             // 2026-06-06: default periodo Calcola Paga dalla frequenza stipendio.
             // settimanale → 7gg, mensile → 30gg (default gia' impostato). Solo
             // al primo caricamento, cosi' non sovrascrive le scelte dell'utente.
@@ -219,19 +231,14 @@ export default function OperatorProfileModal({
             if (!byDay.has(e.data)) byDay.set(e.data, [])
             byDay.get(e.data)!.push(e)
         }
-        // Pausa OBBLIGATORIA dal contratto, applicata SOLO se non pagata:
-        // durata giornaliera + somma delle fasce orarie fisse. Usata come MINIMO
-        // di pausa per ogni giorno lavorato (se il timbrato ne ha meno, si forza).
-        const fasceMin = (pauseConfig?.fasce ?? []).reduce((s, f) => {
-            const da = String(f.da || '').split(':').map(Number)
-            const a = String(f.a || '').split(':').map(Number)
-            if (da.length < 2 || a.length < 2 || da.some(n => Number.isNaN(n)) || a.some(n => Number.isNaN(n))) return s
-            return s + Math.max(0, (a[0] * 60 + a[1]) - (da[0] * 60 + da[1]))
-        }, 0)
-        const mandatoryPauseMin = (pauseConfig && pauseConfig.pagata === false)
-            ? (Number(pauseConfig.durata_min) || 0) + fasceMin
-            : 0
+        // Pausa OBBLIGATORIA dal contratto: durata giornaliera + fasce fisse,
+        // usata come MINIMO di pausa per ogni giorno lavorato (se il timbrato ne
+        // ha meno, si forza). Scalata dalle ore solo se non pagata.
+        // 2026-08-02 (#32): calcolata GIORNO PER GIORNO, cosi' rispetta i giorni
+        // della settimana configurati — prima veniva applicata a tutti i giorni
+        // anche quando il contratto la prevedeva solo, es., dal lunedi al venerdi.
         const breakdowns: DayBreakdown[] = range.days.map(d => {
+            const pausaObbl = pausaObbligatoriaDelGiorno(pauseConfig, d)
             const dayEntries = byDay.get(d) || []
             let entrata: string | null = null
             let uscita: string | null = null
@@ -253,10 +260,12 @@ export default function OperatorProfileModal({
             const minutiPausaLog = pauseWindows.reduce((s, p) => s + p.durMin, 0)
             const worked = !!(entrata && uscita)
             // Applica la pausa obbligatoria come MINIMO sui giorni lavorati.
-            const minutiPausa = worked ? Math.max(minutiPausaLog, mandatoryPauseMin) : minutiPausaLog
+            const minutiPausa = worked ? Math.max(minutiPausaLog, pausaObbl.minuti) : minutiPausaLog
             let minutiLavorati = 0
             if (worked) {
-                minutiLavorati = Math.max(0, Math.floor((new Date(uscita!).getTime() - new Date(entrata!).getTime()) / 60000) - minutiPausa)
+                const lordo = Math.floor((new Date(uscita!).getTime() - new Date(entrata!).getTime()) / 60000)
+                // La pausa pagata si vede ma non si scala.
+                minutiLavorati = Math.max(0, lordo - Math.max(minutiPausaLog, pausaObbl.minutiDaScalare))
             }
             return { data: d, entrata, uscita, pauseWindows, minutiLavorati, minutiPausa }
         })
@@ -362,9 +371,9 @@ export default function OperatorProfileModal({
                     </div>
                     {period === 'custom' && (
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-2 text-xs text-theme-text-primary min-h-[36px]" />
+                            <EuropeanDateInput value={customFrom} onChange={(__v: string) => setCustomFrom(__v)} className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-2 text-xs text-theme-text-primary min-h-[36px]" />
                             <span className="text-theme-text-muted text-xs">→</span>
-                            <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-2 text-xs text-theme-text-primary min-h-[36px]" />
+                            <EuropeanDateInput value={customTo} onChange={(__v: string) => setCustomTo(__v)} className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-2 text-xs text-theme-text-primary min-h-[36px]" />
                         </div>
                     )}
                     <div className="mt-2 text-[11px] text-theme-text-muted">
@@ -573,7 +582,10 @@ function KpiCard({ label, value, sub, tone = 'emerald' }: { label: string; value
 
 // 2026-07-17: pause obbligatorie fisse (direzione), per operatore.
 interface PausaFascia { da: string; a: string }
-interface PauseConfig { durata_min: number; pagata: boolean; fasce: PausaFascia[] }
+// `giorni` non e' editabile da questo modale (il selettore Lun-Dom sta in
+// Contratti Operatore) ma va dichiarato: il salvataggio riscrive pause_config
+// per intero e senza questo campo si perderebbero i giorni configurati.
+interface PauseConfig { durata_min: number; pagata: boolean; fasce: PausaFascia[]; giorni?: number[] }
 
 interface Contratto {
     id?: string
@@ -1000,13 +1012,33 @@ function Flag({ label, on }: { label: string; on: boolean }) {
 
 function LabeledInput({ label, ...props }: { label: string } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> & { onChange: (v: string) => void }) {
     const { onChange, ...rest } = props
+    const inputClass = "w-full px-2 py-1.5 text-xs bg-theme-bg-primary border border-theme-border rounded text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:border-dr7-gold"
+    // 2026-08-02: le date sono SEMPRE GG/MM/AAAA (mai il picker nativo, che
+    // segue il locale del sistema e mostrava MM/GG/AAAA).
+    if (rest.type === 'date') {
+        return (
+            <label className="block">
+                <span className="block text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">{label}</span>
+                <EuropeanDateInput
+                    value={typeof rest.value === 'string' ? rest.value : ''}
+                    onChange={onChange}
+                    min={typeof rest.min === 'string' ? rest.min : undefined}
+                    max={typeof rest.max === 'string' ? rest.max : undefined}
+                    required={rest.required}
+                    disabled={rest.disabled}
+                    name={rest.name}
+                    className={inputClass}
+                />
+            </label>
+        )
+    }
     return (
         <label className="block">
             <span className="block text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">{label}</span>
             <input
                 {...rest}
                 onChange={e => onChange(e.target.value)}
-                className="w-full px-2 py-1.5 text-xs bg-theme-bg-primary border border-theme-border rounded text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:border-dr7-gold"
+                className={inputClass}
             />
         </label>
     )
@@ -1422,18 +1454,16 @@ function CalcolaPagaSection({
                     date il parent forza period='custom'. rangeLabel resta
                     come fallback per accessibility / debug. */}
                 <div className="flex items-center gap-1.5" aria-label={rangeLabel}>
-                    <input
-                        type="date"
-                        value={customFrom}
-                        onChange={(e) => onChangeFrom(e.target.value)}
-                        className="bg-theme-bg-secondary border border-theme-border rounded px-2 py-1 text-[11px] text-theme-text-primary"
+                    <EuropeanDateInput
+                      value={customFrom}
+                      onChange={(__v: string) => onChangeFrom(__v)}
+                      className="bg-theme-bg-secondary border border-theme-border rounded px-2 py-1 text-[11px] text-theme-text-primary"
                     />
                     <span className="text-[11px] text-theme-text-muted">→</span>
-                    <input
-                        type="date"
-                        value={customTo}
-                        onChange={(e) => onChangeTo(e.target.value)}
-                        className="bg-theme-bg-secondary border border-theme-border rounded px-2 py-1 text-[11px] text-theme-text-primary"
+                    <EuropeanDateInput
+                      value={customTo}
+                      onChange={(__v: string) => onChangeTo(__v)}
+                      className="bg-theme-bg-secondary border border-theme-border rounded px-2 py-1 text-[11px] text-theme-text-primary"
                     />
                     {/* 2026-06-01: conteggio giorni del periodo selezionato,
                         cosi' l'admin vede subito "da questa data a questa data

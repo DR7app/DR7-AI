@@ -2,8 +2,10 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { REPORT_RESTRICTED_EMAILS } from '../../../utils/reportAccess'
+import { fetchPauseConfigAttive, pausaObbligatoriaDelGiorno, applicaPausaObbligatoria } from '../../../utils/pauseObbligatorie'
 import OperatorProfileModal from './OperatorProfileModal'
 import InviteOperatoreModal from './InviteOperatoreModal'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 /**
  * OperatoriReportDashboardV2 — dashboard a vista singola "tutto in uno",
@@ -368,9 +370,12 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
             const opIds = opListRaw.map(o => o.id)
             const contractsByOp = new Map<string, { giornaliere: number | null; settimanali: number | null; mensili: number | null; giorni_settimana: number | null; tipo_rapporto: string | null }>()
             // 2026-07-21: pausa OBBLIGATORIA per operatore (Contratto > pause_config).
-            // mandatoryPauseByOp = minuti/giorno da scalare SOLO se pausa NON pagata.
             // Vuoto per operatori senza config -> nessuna deduzione (es. Salvatore).
-            const mandatoryPauseByOp = new Map<string, { mand: number; giorni: number[] }>()
+            // 2026-08-02 (#32): la config si legge dall'util condiviso (RPC SECURITY
+            // DEFINER). La vecchia SELECT diretta veniva filtrata dalla RLS
+            // "solo direzione": per gli altri admin tornava vuota SENZA errore e le
+            // pause fisse sparivano dal report.
+            const pauseCfgByOp = await fetchPauseConfigAttive()
             if (opIds.length > 0) {
                 const { data: contracts } = await supabase
                     .from('operatore_contratto')
@@ -395,31 +400,6 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                         tipo_rapporto: c.tipo_rapporto,
                     })
                 }
-                // Query SEPARATA e RESILIENTE per pause_config: se la colonna non
-                // esiste ancora (migration non eseguita) NON deve rompere il report.
-                try {
-                    const { data: pcRows, error: pcErr } = await supabase
-                        .from('operatore_contratto')
-                        .select('operatore_id, pause_config')
-                        .in('operatore_id', opIds)
-                        .eq('attivo', true)
-                    if (!pcErr) {
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        for (const r of (pcRows || []) as Array<{ operatore_id: string; pause_config: any }>) {
-                            const pc = r.pause_config
-                            if (pc && pc.pagata === false) {
-                                const fasceMin = Array.isArray(pc.fasce) ? pc.fasce.reduce((s: number, f: { da?: string; a?: string }) => {
-                                    const [dh, dm] = String(f?.da || '').split(':').map(Number)
-                                    const [ah, am] = String(f?.a || '').split(':').map(Number)
-                                    const mins = ((Number.isFinite(ah) ? ah * 60 + (am || 0) : 0) - (Number.isFinite(dh) ? dh * 60 + (dm || 0) : 0))
-                                    return s + Math.max(0, mins || 0)
-                                }, 0) : 0
-                                const mand = (Number(pc.durata_min) || 0) + fasceMin
-                                if (mand > 0) mandatoryPauseByOp.set(r.operatore_id, { mand, giorni: Array.isArray(pc.giorni) ? pc.giorni : [] })
-                            }
-                        }
-                    }
-                } catch { /* colonna assente: nessuna deduzione, report resta ok */ }
             }
             const computeTarget = (op: Operatore): { gran: 'giornaliera' | 'settimanale' | 'mensile' | 'none'; value: number } => {
                 const c = contractsByOp.get(op.id)
@@ -478,12 +458,14 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                     // 2026-07-21: pausa OBBLIGATORIA da contratto (solo per chi ce l'ha).
                     // Si scala il MASSIMO tra pausa registrata e pausa obbligatoria,
                     // cosi' l'operatore non deve inserirla a mano ogni giorno.
-                    const mp = mandatoryPauseByOp.get(op.id)
-                    // Applica la pausa fissa solo se oggi rientra nei giorni scelti (vuoto = tutti).
-                    const todayDow = new Date().getDay()
-                    const mand = mp && (mp.giorni.length === 0 || mp.giorni.includes(todayDow)) ? mp.mand : 0
-                    minPausa = Math.max(loggedPausa, mand)
-                    minLav = Math.max(0, rawWorked - minPausa)
+                    // La funzione rispetta i giorni della settimana configurati.
+                    const applicata = applicaPausaObbligatoria({
+                        minutiLordi: rawWorked,
+                        minutiPausaTimbrata: loggedPausa,
+                        pausa: pausaObbligatoriaDelGiorno(pauseCfgByOp.get(op.id), today),
+                    })
+                    minPausa = applicata.minutiPausa
+                    minLav = applicata.minutiLavorati
                 }
                 let stato: DayRow['stato'] = 'fuori'
                 if (t.lastTipo === 'entrata' || t.lastTipo === 'pausa_fine') stato = 'lavoro'
@@ -570,7 +552,7 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
             const perOpMin = new Map<string, number>()
             byOpDay.forEach((dayMap, opId) => {
                 let opTot = 0
-                const mp = mandatoryPauseByOp.get(opId)
+                const pauseCfg = pauseCfgByOp.get(opId)
                 dayMap.forEach((t, dataKey) => {
                     if (!t.entrata) return
                     const end = t.uscita ? new Date(t.uscita).getTime() : new Date(t.entrata).getTime()
@@ -583,9 +565,11 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                     }
                     // 2026-07-21: scala il MAX tra pausa registrata e pausa obbligatoria da contratto.
                     // 2026-07-24: la pausa fissa vale solo nei giorni scelti (vuoto = tutti).
-                    const dow = new Date(`${dataKey}T12:00:00`).getDay()
-                    const mand = mp && (mp.giorni.length === 0 || mp.giorni.includes(dow)) ? mp.mand : 0
-                    opTot += Math.max(0, rawWorked - Math.max(loggedPausa, mand))
+                    opTot += applicaPausaObbligatoria({
+                        minutiLordi: rawWorked,
+                        minutiPausaTimbrata: loggedPausa,
+                        pausa: pausaObbligatoriaDelGiorno(pauseCfg, dataKey),
+                    }).minutiLavorati
                 })
                 perOpMin.set(opId, opTot)
                 totMinLav += opTot
@@ -802,13 +786,19 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                     <p className="text-xs text-theme-text-muted mt-1">Analisi completa delle performance del team, produttivita e rilevazione orari</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                    <input type="date" value={customFrom} max={customTo}
-                        onChange={(e) => { setPreset('custom'); setCustomFrom(e.target.value) }}
-                        className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary" />
+                    <EuropeanDateInput
+                      value={customFrom}
+                      max={customTo}
+                      onChange={(__v: string) => { setPreset('custom'); setCustomFrom(__v) }}
+                      className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary"
+                    />
                     <span className="text-theme-text-muted text-xs">→</span>
-                    <input type="date" value={customTo} min={customFrom}
-                        onChange={(e) => { setPreset('custom'); setCustomTo(e.target.value) }}
-                        className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary" />
+                    <EuropeanDateInput
+                      value={customTo}
+                      min={customFrom}
+                      onChange={(__v: string) => { setPreset('custom'); setCustomTo(__v) }}
+                      className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary"
+                    />
                     <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-tertiary p-0.5 text-xs">
                         {(['oggi', '7gg', '30gg', 'mese', 'quarter', 'anno', 'custom'] as RangePreset[]).map(p => (
                             <button key={p} onClick={() => setPreset(p)}

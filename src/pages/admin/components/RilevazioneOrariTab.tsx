@@ -4,6 +4,15 @@ import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import Button from './Button'
 import OperatorProfileModal from './OperatorProfileModal'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import {
+    fetchPauseConfigOperatore,
+    fetchPauseConfigAttive,
+    pausaObbligatoriaDelGiorno,
+    finestrePausaVirtuali,
+    PAUSA_NON_CONFIGURATA,
+    type PausaObbligatoria,
+} from '../../../utils/pauseObbligatorie'
 
 interface Operatore {
     id: string
@@ -26,6 +35,8 @@ interface DayRow {
     minuti_lavorati: number
     minuti_pausa: number
     stato: 'fuori' | 'lavoro' | 'pausa' | 'finito'
+    /** true = la pausa mostrata viene dal contratto, non e' stata timbrata. */
+    pausa_da_contratto?: boolean
 }
 
 const ROME_TZ = 'Europe/Rome'
@@ -318,37 +329,22 @@ export default function RilevazioneOrariTab() {
                 // o no (pagata) — non sul fatto che si veda. Prima le pause pagate
                 // venivano scartate del tutto e quelle non pagate comparivano solo dopo
                 // la timbratura → sembrava che "non mettesse le pause di default".
-                const mandPauseByOp = new Map<string, { mins: number; pagata: boolean }>()
-                const dowGiornaliera = new Date(d + 'T12:00:00').getDay() // 0=Dom..6=Sab
-                try {
-                    const { data: contratti } = await supabase
-                        .from('operatore_contratto')
-                        .select('operatore_id, pause_config')
-                        .eq('attivo', true)
-                    for (const c of (contratti || []) as { operatore_id: string; pause_config: { durata_min?: number; pagata?: boolean; fasce?: { da: string; a: string }[]; giorni?: number[] } | null }[]) {
-                        const pc = c.pause_config
-                        if (!pc) continue
-                        // Rispetta i giorni selezionati: vuoto = tutti i giorni.
-                        if (Array.isArray(pc.giorni) && pc.giorni.length > 0 && !pc.giorni.includes(dowGiornaliera)) continue
-                        let mins = Number(pc.durata_min) || 0
-                        for (const f of (pc.fasce || [])) {
-                            const [dh, dm] = (f.da || '').split(':').map(Number)
-                            const [ah, am] = (f.a || '').split(':').map(Number)
-                            if (Number.isFinite(dh) && Number.isFinite(ah)) {
-                                const diff = (ah * 60 + (am || 0)) - (dh * 60 + (dm || 0))
-                                if (diff > 0) mins += diff
-                            }
-                        }
-                        if (mins > 0) mandPauseByOp.set(c.operatore_id, { mins, pagata: pc.pagata === true })
-                    }
-                } catch { /* colonna pause_config assente: nessuna pausa fissa */ }
+                // 2026-08-02 (2° fix, #32): la SELECT diretta qui sotto veniva filtrata
+                // dalla RLS di operatore_contratto (solo direzione + se stesso): per
+                // qualunque altro admin tornava VUOTA *senza errore*, quindi le pause
+                // fisse sparivano comunque. Ora si passa da fetchPauseConfigAttive(),
+                // che usa la RPC SECURITY DEFINER operatore_pause_config_attive().
+                const pauseCfgByOp = await fetchPauseConfigAttive(opList.map(o => o.id))
 
                 const rows: DayRow[] = []
                 for (const op of opList) {
                     const data = byOp.get(op.id)
+                    const pausaObbl = pausaObbligatoriaDelGiorno(pauseCfgByOp.get(op.id), d)
                     let minuti = 0
                     let pausaMin = 0
-                    const mand = mandPauseByOp.get(op.id)
+                    let pausaInizi = data?.pi || []
+                    let pausaFini = data?.pf || []
+                    let daContratto = false
                     if (data) {
                         const { data: m } = await supabase.rpc('operatore_minuti_lavorati', { p_operatore_id: op.id, p_data: d })
                         minuti = Number(m) || 0
@@ -362,14 +358,28 @@ export default function RilevazioneOrariTab() {
                         }
                         // Applica la pausa fissa configurata (se maggiore della timbrata):
                         // la MOSTRA sempre; la DEDUCE dalle ore solo se NON è pagata.
-                        if (mand && mand.mins > pausaMin) {
-                            if (!mand.pagata) minuti = Math.max(0, minuti - (mand.mins - pausaMin))
-                            pausaMin = mand.mins
-                        }
-                    } else if (mand && mand.mins > 0) {
+                        // `minuti` dalla RPC e' gia' al netto delle pause timbrate (e di
+                        // un'eventuale pausa ancora aperta, chiusa a NOW lato SQL): tolgo
+                        // solo il DELTA che manca al minimo di contratto, senza ricostruire
+                        // il lordo — cosi' chi e' in pausa adesso non se la vede contata due volte.
+                        minuti = Math.max(0, minuti - Math.max(0, pausaObbl.minutiDaScalare - pausaMin))
+                        daContratto = pausaObbl.minuti > pausaMin
+                        pausaMin = Math.max(pausaMin, pausaObbl.minuti)
+                    } else if (pausaObbl.minuti > 0) {
                         // Nessuna timbratura ancora: mostra COMUNQUE la pausa fissa del
                         // giorno (di default), così compare in automatico per tutti.
-                        pausaMin = mand.mins
+                        pausaMin = pausaObbl.minuti
+                        daContratto = true
+                    }
+                    // 2026-08-02 (#32): finche' la pausa era solo un totale di minuti, le
+                    // colonne Inizio/Fine Pausa restavano "—" e "Pause #" a 0 — a schermo
+                    // sembrava che nessuna pausa fosse stata messa. Se l'operatore non ne
+                    // ha timbrata nessuna, mostro le fasce del contratto come finestre
+                    // vere. Sono VIRTUALI: non vengono scritte su timesheet_entries.
+                    if (pausaInizi.length === 0 && pausaObbl.fasce.length > 0) {
+                        const finestre = finestrePausaVirtuali(pausaObbl, d)
+                        pausaInizi = finestre.map(f => f.inizio)
+                        pausaFini = finestre.map(f => f.fine)
                     }
                     let stato: DayRow['stato'] = 'fuori'
                     if (data?.lastTipo === 'entrata' || data?.lastTipo === 'pausa_fine') stato = 'lavoro'
@@ -379,22 +389,60 @@ export default function RilevazioneOrariTab() {
                         operatore: op,
                         entrata: data?.entrata || null,
                         uscita: data?.uscita || null,
-                        pausa_inizi: data?.pi || [],
-                        pausa_fini: data?.pf || [],
+                        pausa_inizi: pausaInizi,
+                        pausa_fini: pausaFini,
                         minuti_lavorati: minuti,
                         minuti_pausa: pausaMin,
                         stato,
+                        pausa_da_contratto: daContratto,
                     })
                 }
                 setDailyRows(rows)
             } else {
+                // 2026-08-02 (#32): anche la vista PERIODICA deve scalare la pausa
+                // obbligatoria, altrimenti i totali del periodo non tornavano con la
+                // giornaliera e con le buste paga (qui si leggeva la RPC nuda).
+                const pauseCfgByOp = await fetchPauseConfigAttive(opList.map(o => o.id))
+                // Pause timbrate del periodo, per capire quanto manca al minimo di
+                // contratto: la RPC restituisce gia' il netto delle pause registrate.
+                const pausaTimbrataByOpDay = new Map<string, number>()
+                if (periodRange.days.length > 0) {
+                    const { data: pauseEntries } = await supabase
+                        .from('timesheet_entries')
+                        .select('operatore_id, tipo, timestamp, data')
+                        .gte('data', periodRange.days[0])
+                        .lte('data', periodRange.days[periodRange.days.length - 1])
+                        .in('tipo', ['pausa_inizio', 'pausa_fine'])
+                        .order('timestamp', { ascending: true })
+                    const aperte = new Map<string, string[]>()
+                    for (const e of (pauseEntries || []) as { operatore_id: string; tipo: string; timestamp: string; data: string }[]) {
+                        const key = `${e.operatore_id}|${e.data}`
+                        if (e.tipo === 'pausa_inizio') {
+                            aperte.set(key, [...(aperte.get(key) || []), e.timestamp])
+                        } else {
+                            const stack = aperte.get(key) || []
+                            const start = stack.shift()
+                            aperte.set(key, stack)
+                            if (!start) continue
+                            const diff = new Date(e.timestamp).getTime() - new Date(start).getTime()
+                            if (diff > 0) pausaTimbrataByOpDay.set(key, (pausaTimbrataByOpDay.get(key) || 0) + Math.round(diff / 60000))
+                        }
+                    }
+                }
                 const rows: { operatore: Operatore; daysData: Map<string, number> }[] = []
                 for (const op of opList) {
                     const map = new Map<string, number>()
+                    const cfg = pauseCfgByOp.get(op.id)
                     for (const d of periodRange.days) {
                         const { data: m } = await supabase.rpc('operatore_minuti_lavorati', { p_operatore_id: op.id, p_data: d })
                         const min = Number(m) || 0
-                        if (min > 0) map.set(d, min)
+                        if (min <= 0) continue
+                        const pausaObbl = pausaObbligatoriaDelGiorno(cfg, d)
+                        const timbrata = pausaTimbrataByOpDay.get(`${op.id}|${d}`) || 0
+                        // `min` e' gia' al netto della pausa timbrata: tolgo solo la
+                        // parte di pausa obbligatoria che eccede quella registrata.
+                        const extra = Math.max(0, pausaObbl.minutiDaScalare - timbrata)
+                        map.set(d, Math.max(0, min - extra))
                     }
                     rows.push({ operatore: op, daysData: map })
                 }
@@ -520,18 +568,20 @@ export default function RilevazioneOrariTab() {
                     <div className="flex items-center gap-2 flex-wrap">
                         <label className="flex items-center gap-1 text-xs text-theme-text-secondary">
                             Da
-                            <input type="date" value={customFrom}
-                                max={customTo}
-                                onChange={(e) => setCustomFrom(e.target.value || customFrom)}
-                                className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary"
+                            <EuropeanDateInput
+                              value={customFrom}
+                              max={customTo}
+                              onChange={(__v: string) => setCustomFrom(__v || customFrom)}
+                              className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary"
                             />
                         </label>
                         <label className="flex items-center gap-1 text-xs text-theme-text-secondary">
                             A
-                            <input type="date" value={customTo}
-                                min={customFrom}
-                                onChange={(e) => setCustomTo(e.target.value || customTo)}
-                                className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary"
+                            <EuropeanDateInput
+                              value={customTo}
+                              min={customFrom}
+                              onChange={(__v: string) => setCustomTo(__v || customTo)}
+                              className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary"
                             />
                         </label>
                         <button onClick={() => {
@@ -772,6 +822,11 @@ export default function RilevazioneOrariTab() {
                                         <td className="px-3 py-2 text-right tabular-nums">
                                             <div className="text-theme-text-muted text-xs">{fmtMin(r.minuti_pausa)}</div>
                                             <div className="text-[10px] text-theme-text-muted">{r.minuti_pausa} min</div>
+                                            {/* 2026-08-02 (#32): distingue la pausa automatica da contratto
+                                                da quella timbrata dall'operatore. */}
+                                            {r.pausa_da_contratto && (
+                                                <div className="text-[9px] uppercase tracking-wider text-amber-500">da contratto</div>
+                                            )}
                                         </td>
                                         <td className="px-3 py-2 text-right tabular-nums">
                                             <div className={straord > 0 ? 'text-sky-500 font-semibold' : 'text-theme-text-muted text-xs'}>{fmtMin(straord)}</div>
@@ -1470,6 +1525,9 @@ export function MyDayEditorModal({ operatore, data, onClose, onSaved }: {
     const [note, setNote] = useState('')
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
+    // 2026-08-02 (#32): pausa fissa del contratto pre-compilata anche qui,
+    // cosi' l'editor admin e quello dell'operatore mostrano la stessa cosa.
+    const [pausaObbl, setPausaObbl] = useState<PausaObbligatoria>(PAUSA_NON_CONFIGURATA)
 
     useEffect(() => {
         ;(async () => {
@@ -1497,6 +1555,18 @@ export function MyDayEditorModal({ operatore, data, onClose, onSaved }: {
                     pausa_fine: pFini[i] ? isoToHHMM(pFini[i].timestamp) : '',
                 })
             }
+
+            // Giornata senza pause timbrate: pre-inserisco le fasce del
+            // contratto (mai quelle pagate — salvarle le farebbe scalare).
+            const pausa = pausaObbligatoriaDelGiorno(
+                await fetchPauseConfigOperatore(operatore.id),
+                data,
+            )
+            setPausaObbl(pausa)
+            if (slots.length === 0 && !pausa.pagata && pausa.fasce.length > 0) {
+                for (const f of pausa.fasce) slots.push({ pausa_inizio: f.da, pausa_fine: f.a })
+            }
+
             if (slots.length === 0) slots.push({ pausa_inizio: '', pausa_fine: '' })
             setPause(slots)
 
@@ -1629,6 +1699,17 @@ export function MyDayEditorModal({ operatore, data, onClose, onSaved }: {
                                     + Aggiungi pausa
                                 </button>
                             </div>
+                            {pausaObbl.vale && (
+                                <div className="mb-2 rounded border border-amber-300 dark:border-amber-800 bg-amber-100 dark:bg-amber-900/30 px-3 py-2 text-[11px] text-amber-900 dark:text-amber-100">
+                                    {pausaObbl.pagata ? (
+                                        <>Pausa da contratto <strong>pagata</strong>: non viene scalata dalle ore.</>
+                                    ) : pausaObbl.fasce.length > 0 ? (
+                                        <>Pausa da contratto già inserita: <strong>{pausaObbl.fasce.map(f => `${f.da}–${f.a}`).join(', ')}</strong>.</>
+                                    ) : (
+                                        <>Pausa obbligatoria da contratto: <strong>{pausaObbl.minuti} min</strong>, scalati dalle ore anche se non registrata.</>
+                                    )}
+                                </div>
+                            )}
                             <div className="space-y-2">
                                 {pause.map((p, i) => (
                                     <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">

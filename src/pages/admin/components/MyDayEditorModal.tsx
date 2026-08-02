@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
+import {
+    fetchPauseConfigOperatore,
+    pausaObbligatoriaDelGiorno,
+    PAUSA_NON_CONFIGURATA,
+    type PausaObbligatoria,
+} from '../../../utils/pauseObbligatorie'
 
 const ROME_TZ = 'Europe/Rome'
 
@@ -100,22 +106,33 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const submitLockRef = useRef(false)
+    // 2026-08-02 (#32): pausa obbligatoria da contratto. Prima questo modale —
+    // che e' quello che gli operatori aprono ogni giorno da "I miei orari" —
+    // non leggeva affatto pause_config: i campi pausa restavano vuoti e
+    // sembrava che la pausa automatica non venisse mai messa.
+    const [pausaObbl, setPausaObbl] = useState<PausaObbligatoria>(PAUSA_NON_CONFIGURATA)
 
     // Calcolo live di pausa totale + lavoro netto/lordo (in minuti)
-    const livePausaMin = pause.reduce((sum, p) => {
+    const livePausaTimbrataMin = pause.reduce((sum, p) => {
         const a = hhmmToMinutes(p.pausa_inizio || '')
         const b = hhmmToMinutes(p.pausa_fine || '')
         if (a == null || b == null || b <= a) return sum
         return sum + (b - a)
     }, 0)
+    // Come nei report: la pausa mostrata e' il MAX tra timbrata e obbligatoria,
+    // ma si scala dalle ore solo se non e' pagata. Cosi' il netto qui coincide
+    // con quello di Rilevazione Orari e delle buste paga.
+    const livePausaMin = Math.max(livePausaTimbrataMin, pausaObbl.minuti)
+    const livePausaScalataMin = Math.max(livePausaTimbrataMin, pausaObbl.minutiDaScalare)
     const liveEntrataMin = hhmmToMinutes(entrata)
     const liveUscitaMin = hhmmToMinutes(uscita)
     const liveLordoMin = liveEntrataMin != null && liveUscitaMin != null && liveUscitaMin > liveEntrataMin
         ? liveUscitaMin - liveEntrataMin
         : 0
-    const liveNettoMin = Math.max(0, liveLordoMin - livePausaMin)
+    const liveNettoMin = Math.max(0, liveLordoMin - livePausaScalataMin)
 
     useEffect(() => {
+        let cancelled = false
         ;(async () => {
             const { data: { user } } = await supabase.auth.getUser()
             if (!user) { setLoading(false); setUnregistered(true); return }
@@ -213,6 +230,23 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
                     pausa_fine: pf[i] ? isoToHHMM(pf[i].timestamp) : '',
                 })
             }
+
+            // 2026-08-02 (#32): pausa obbligatoria del contratto per QUESTO
+            // giorno (rispetta i giorni della settimana configurati). Se la
+            // giornata non ha ancora nessuna pausa timbrata, le fasce fisse
+            // vengono pre-inserite: l'operatore se le ritrova gia' pronte
+            // ogni giorno invece di doverle riscrivere a mano.
+            // Le pause PAGATE non si pre-riempiono: salvate diventerebbero
+            // pause vere e verrebbero scalate dalle ore.
+            const pausa = pausaObbligatoriaDelGiorno(
+                await fetchPauseConfigOperatore(opRow.id),
+                dataRef,
+            )
+            if (!cancelled) setPausaObbl(pausa)
+            if (slots.length === 0 && !pausa.pagata && pausa.fasce.length > 0) {
+                for (const f of pausa.fasce) slots.push({ pausa_inizio: f.da, pausa_fine: f.a })
+            }
+
             if (slots.length === 0) slots.push({ pausa_inizio: '', pausa_fine: '' })
             setPause(slots)
 
@@ -226,6 +260,7 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
 
             setLoading(false)
         })()
+        return () => { cancelled = true }
     }, [dataRef, reloadKey])
 
     async function handleRegister() {
@@ -401,6 +436,21 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
                                         + Aggiungi pausa
                                     </button>
                                 </div>
+                                {/* 2026-08-02 (#32): pausa fissa del contratto, gia' compilata
+                                    qui sotto. Se e' impostata solo la durata (senza fasce) non
+                                    ci sono orari da precompilare: si avvisa che viene comunque
+                                    scalata dalle ore. */}
+                                {pausaObbl.vale && (
+                                    <div className="mb-2 rounded border border-amber-300 dark:border-amber-800 bg-amber-100 dark:bg-amber-900/30 px-3 py-2 text-[11px] text-amber-900 dark:text-amber-100">
+                                        {pausaObbl.pagata ? (
+                                            <>Pausa da contratto <strong>pagata</strong>: non viene scalata dalle ore.</>
+                                        ) : pausaObbl.fasce.length > 0 ? (
+                                            <>Pausa da contratto già inserita: <strong>{pausaObbl.fasce.map(f => `${f.da}–${f.a}`).join(', ')}</strong>. Se oggi l'hai fatta in un altro orario, correggila pure.</>
+                                        ) : (
+                                            <>Pausa obbligatoria da contratto: <strong>{pausaObbl.minuti} min</strong>, scalati dalle ore anche se non la registri.</>
+                                        )}
+                                    </div>
+                                )}
                                 <div className="space-y-2">
                                     {pause.map((p, i) => (
                                         <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
@@ -460,7 +510,10 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
                                 <div>
                                     <div className="text-[10px] text-theme-text-muted uppercase tracking-wider">Pausa totale</div>
                                     <div className="text-sm font-semibold text-amber-500 mt-0.5">{fmtDuration(livePausaMin)}</div>
-                                    <div className="text-[10px] text-theme-text-muted">{livePausaMin} min</div>
+                                    <div className="text-[10px] text-theme-text-muted">
+                                        {livePausaMin} min
+                                        {livePausaMin > livePausaTimbrataMin && <span className="ml-1">(min. contratto)</span>}
+                                    </div>
                                 </div>
                                 <div>
                                     <div className="text-[10px] text-theme-text-muted uppercase tracking-wider">Lavoro lordo</div>
