@@ -304,8 +304,8 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
       const d = b.booking_details?.danni || []
       const p = b.booking_details?.penalties || []
       // Prezzo FINALE scontato (come in fattura) via helper condiviso — mai il listino.
-      d.forEach((item) => { totalDanni += effectivePenaltyAmount(item); danniCount++ })
-      p.forEach((item) => { totalPenali += effectivePenaltyAmount(item); penaliCount++ })
+      d.forEach((item: { amount?: number; total?: number; quantity?: number; discount?: number }) => { totalDanni += effectivePenaltyAmount(item); danniCount++ })
+      p.forEach((item: { amount?: number; total?: number; quantity?: number; discount?: number }) => { totalPenali += effectivePenaltyAmount(item); penaliCount++ })
     })
 
     // Unpaid
