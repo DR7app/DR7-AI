@@ -312,7 +312,13 @@ export default function RilevazioneOrariTab() {
                 // pagate, si applicano come pausa minima (max tra timbrata e
                 // configurata) e si deducono dalle ore. Query resiliente: se la
                 // colonna manca, non rompe la giornaliera.
-                const mandPauseByOp = new Map<string, number>()
+                // 2026-08-02 FIX (#32): la pausa fissa deve COMPARIRE ogni giorno per
+                // ogni operatore, ANCHE se pagata e ANCHE senza timbratura. Il flag
+                // `pagata` incide solo sul fatto che venga DEDOTTA dalle ore (non pagata)
+                // o no (pagata) — non sul fatto che si veda. Prima le pause pagate
+                // venivano scartate del tutto e quelle non pagate comparivano solo dopo
+                // la timbratura → sembrava che "non mettesse le pause di default".
+                const mandPauseByOp = new Map<string, { mins: number; pagata: boolean }>()
                 const dowGiornaliera = new Date(d + 'T12:00:00').getDay() // 0=Dom..6=Sab
                 try {
                     const { data: contratti } = await supabase
@@ -321,7 +327,7 @@ export default function RilevazioneOrariTab() {
                         .eq('attivo', true)
                     for (const c of (contratti || []) as { operatore_id: string; pause_config: { durata_min?: number; pagata?: boolean; fasce?: { da: string; a: string }[]; giorni?: number[] } | null }[]) {
                         const pc = c.pause_config
-                        if (!pc || pc.pagata === true) continue
+                        if (!pc) continue
                         // Rispetta i giorni selezionati: vuoto = tutti i giorni.
                         if (Array.isArray(pc.giorni) && pc.giorni.length > 0 && !pc.giorni.includes(dowGiornaliera)) continue
                         let mins = Number(pc.durata_min) || 0
@@ -333,7 +339,7 @@ export default function RilevazioneOrariTab() {
                                 if (diff > 0) mins += diff
                             }
                         }
-                        if (mins > 0) mandPauseByOp.set(c.operatore_id, mins)
+                        if (mins > 0) mandPauseByOp.set(c.operatore_id, { mins, pagata: pc.pagata === true })
                     }
                 } catch { /* colonna pause_config assente: nessuna pausa fissa */ }
 
@@ -342,6 +348,7 @@ export default function RilevazioneOrariTab() {
                     const data = byOp.get(op.id)
                     let minuti = 0
                     let pausaMin = 0
+                    const mand = mandPauseByOp.get(op.id)
                     if (data) {
                         const { data: m } = await supabase.rpc('operatore_minuti_lavorati', { p_operatore_id: op.id, p_data: d })
                         minuti = Number(m) || 0
@@ -354,12 +361,15 @@ export default function RilevazioneOrariTab() {
                             if (diff > 0) pausaMin += Math.round(diff / 60000)
                         }
                         // Applica la pausa fissa configurata (se maggiore della timbrata):
-                        // deduce la differenza dalle ore lavorate e la mostra come pausa.
-                        const mand = mandPauseByOp.get(op.id) || 0
-                        if (mand > pausaMin) {
-                            minuti = Math.max(0, minuti - (mand - pausaMin))
-                            pausaMin = mand
+                        // la MOSTRA sempre; la DEDUCE dalle ore solo se NON è pagata.
+                        if (mand && mand.mins > pausaMin) {
+                            if (!mand.pagata) minuti = Math.max(0, minuti - (mand.mins - pausaMin))
+                            pausaMin = mand.mins
                         }
+                    } else if (mand && mand.mins > 0) {
+                        // Nessuna timbratura ancora: mostra COMUNQUE la pausa fissa del
+                        // giorno (di default), così compare in automatico per tutti.
+                        pausaMin = mand.mins
                     }
                     let stato: DayRow['stato'] = 'fuori'
                     if (data?.lastTipo === 'entrata' || data?.lastTipo === 'pausa_fine') stato = 'lavoro'
