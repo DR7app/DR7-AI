@@ -3240,6 +3240,26 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     try {
       toast.loading('Rinvio contratto...', { id: 'resend-contract' })
 
+      // 2026-08-02 FIX: se il contratto è GIÀ FIRMATO (es. dopo una MODIFICA di
+      // date/veicolo), NON chiedere una nuova firma: riconduci (ristampa la firma
+      // sulle nuove date) e invialo "già firmato" via WhatsApp — stessa identica
+      // logica dell'ESTENSIONE. generate-contract con reconduct:true riconduce se
+      // c'è una firma; se NON c'è, genera il contratto normale e proseguiamo col
+      // link di firma qui sotto. Cosi' estensione e modifica sono coerenti.
+      const rcRes = await authFetch('/.netlify/functions/generate-contract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: booking.id, reconduct: true })
+      })
+      const rcData = await rcRes.json().catch(() => ({} as any))
+      if (rcRes.ok && rcData?.reconducted) {
+        toast.dismiss('resend-contract')
+        toast.success('Contratto ricondotto (già firmato, nuove date) — nessuna nuova firma richiesta')
+        logAdminAction('resend_contract', 'booking', booking.id, buildBookingContext(booking))
+        return
+      }
+
+      // Non firmato in precedenza: invia il LINK DI FIRMA (flusso esistente).
       // signature-init can resolve the contract itself by booking_id using
       // service-role — bypasses any frontend RLS read issues. Just call it.
       // If no contract exists yet, it'll return 404 and we'll generate first.
