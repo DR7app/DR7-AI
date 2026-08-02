@@ -5,6 +5,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+import { effectivePenaltyAmount } from '../../../utils/penaltyAmount'
 import { statusColorClasses } from './ClientStatusConfigSection'
 import { listCardsFromMetadata } from '../../../utils/nexiCards'
 import CustomerAddebitoButton from './CustomerAddebitoButton'
@@ -302,8 +303,9 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
     bookings.forEach(b => {
       const d = b.booking_details?.danni || []
       const p = b.booking_details?.penalties || []
-      d.forEach((item: { amount?: number; total?: number }) => { totalDanni += (item.amount || item.total || 0); danniCount++ })
-      p.forEach((item: { amount?: number; total?: number }) => { totalPenali += (item.amount || item.total || 0); penaliCount++ })
+      // Prezzo FINALE scontato (come in fattura) via helper condiviso — mai il listino.
+      d.forEach((item) => { totalDanni += effectivePenaltyAmount(item); danniCount++ })
+      p.forEach((item) => { totalPenali += effectivePenaltyAmount(item); penaliCount++ })
     })
 
     // Unpaid

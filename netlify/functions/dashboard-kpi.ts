@@ -549,7 +549,8 @@ export const handler: Handler = async (event) => {
       if (Array.isArray(details.danni)) {
         details.danni.forEach((d: any) => {
           danniCount++
-          const total = parseFloat(d.total || 0)
+          // Prezzo FINALE scontato (come in fattura): listino − sconto.
+          const total = Math.max(0, parseFloat(d.total || 0) - parseFloat(d.discount || 0))
           danniAmount += total
           const paid = parseFloat(d.amountPaid || 0)
           if (paid < total) {
@@ -560,7 +561,7 @@ export const handler: Handler = async (event) => {
       }
       if (Array.isArray(details.penalties)) {
         details.penalties.forEach((p: any) => {
-          const total = parseFloat(p.total || 0)
+          const total = Math.max(0, parseFloat(p.total || 0) - parseFloat(p.discount || 0))
           const paid = parseFloat(p.amountPaid || 0)
           if (paid < total) {
             insolutiAmount += (total - paid)
@@ -574,7 +575,7 @@ export const handler: Handler = async (event) => {
       const details = b.booking_details || {}
       if (Array.isArray(details.danni)) {
         details.danni.forEach((d: any) => {
-          prevDanniAmount += parseFloat(d.total || 0)
+          prevDanniAmount += Math.max(0, parseFloat(d.total || 0) - parseFloat(d.discount || 0))
         })
       }
     })
