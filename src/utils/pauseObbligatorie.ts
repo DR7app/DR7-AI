@@ -178,6 +178,77 @@ export function applicaPausaObbligatoria(args: {
     }
 }
 
+/** Minuti-del-giorno (0..1439) in Europe/Rome di un istante ISO. -1 se invalido. */
+export function isoToRomeMinuti(iso: string): number {
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return -1
+    const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: ROME_TZ, hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(d)
+    const h = Number(parts.find(p => p.type === 'hour')?.value ?? NaN)
+    const m = Number(parts.find(p => p.type === 'minute')?.value ?? NaN)
+    if (Number.isNaN(h) || Number.isNaN(m)) return -1
+    return h * 60 + m
+}
+
+export interface FinestraPausaISO { inizio: string; fine: string; fonte: 'timbrata' | 'contratto' }
+
+/**
+ * 2026-08-04 (#32, modello PER-FASCIA scelto dalla direzione): pause di
+ * CONTRATTO e pause A MANO si combinano cosi':
+ *   - una fascia di contratto viene SOSTITUITA solo dalle pause a mano che la
+ *     SOVRAPPONGONO (si usano gli orari reali); le fasce non toccate RESTANO;
+ *   - le pause a mano valgono sempre.
+ * Cosi' l'operatore vede sia la pausa messa a mano SIA le pause del contratto,
+ * e chi timbra la sua versione di una fascia (es. Salvatore) non si vede
+ * sommare il doppio.
+ *
+ * Ritorna le finestre ISO da MOSTRARE (Inizio/Fine Pausa) + i minuti:
+ *   - mostrateMin: totale pausa da mostrare
+ *   - scalateMin : minuti da togliere dalle ore (pause a mano SEMPRE + contratto
+ *                  non-sovrapposto solo se NON pagata)
+ *   - extraContrattoMin: la sola parte di contratto oltre le pause a mano; utile
+ *                  per le viste dove i minuti arrivano gia' al netto delle pause
+ *                  timbrate (RPC operatore_minuti_lavorati).
+ */
+export function combinaPauseGiorno(
+    dataISO: string,
+    manualiISO: { inizio: string; fine: string }[],
+    pausa: PausaObbligatoria,
+): { finestre: FinestraPausaISO[]; mostrateMin: number; scalateMin: number; extraContrattoMin: number } {
+    const overlap = (x: { da: number; a: number }, y: { da: number; a: number }) => x.da < y.a && y.da < x.a
+    // Pause a mano -> minuti-del-giorno per il confronto di sovrapposizione.
+    const man = manualiISO
+        .map(w => ({ da: isoToRomeMinuti(w.inizio), a: isoToRomeMinuti(w.fine), iso: w }))
+        .filter(w => w.da >= 0 && w.a > w.da)
+    // Fasce di contratto -> minuti-del-giorno.
+    const fasce = pausa.fasce
+        .map(f => ({ da: hhmmToMinuti(f.da) ?? -1, a: hhmmToMinuti(f.a) ?? -1, hhmm: f }))
+        .filter(w => w.da >= 0 && w.a > w.da)
+    // Fasce NON sovrapposte da nessuna pausa a mano: restano.
+    const fasceKept = fasce.filter(cw => !man.some(mw => overlap(mw, cw)))
+
+    const manualiMin = man.reduce((s, w) => s + (w.a - w.da), 0)
+    const fasceKeptMin = fasceKept.reduce((s, w) => s + (w.a - w.da), 0)
+    const fasceTutteMin = fasce.reduce((s, w) => s + (w.a - w.da), 0)
+    const flatDurata = Math.max(0, pausa.minuti - fasceTutteMin)      // pausa senza fascia
+    const flatResidua = Math.max(0, flatDurata - manualiMin)          // parte flat non coperta a mano
+
+    const extraContrattoMin = pausa.pagata ? 0 : (fasceKeptMin + flatResidua)
+    const mostrateMin = manualiMin + fasceKeptMin + flatResidua
+    const scalateMin = manualiMin + extraContrattoMin                 // le pause a mano si scalano sempre
+
+    const finestre: FinestraPausaISO[] = man.map(w => ({ inizio: w.iso.inizio, fine: w.iso.fine, fonte: 'timbrata' as const }))
+    for (const w of fasceKept) {
+        const inizio = romeHHMMToISO(w.hhmm.da, dataISO)
+        const fine = romeHHMMToISO(w.hhmm.a, dataISO)
+        if (inizio && fine) finestre.push({ inizio, fine, fonte: 'contratto' })
+    }
+    finestre.sort((a, b) => new Date(a.inizio).getTime() - new Date(b.inizio).getTime())
+
+    return { finestre, mostrateMin, scalateMin, extraContrattoMin }
+}
+
 /** "13:00" + "2026-08-02" -> ISO UTC dell'istante corrispondente a Europe/Rome. */
 export function romeHHMMToISO(hhmm: string, dataISO: string): string | null {
     const minuti = hhmmToMinuti(hhmm)

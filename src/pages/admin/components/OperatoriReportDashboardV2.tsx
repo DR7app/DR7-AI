@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { REPORT_RESTRICTED_EMAILS } from '../../../utils/reportAccess'
-import { fetchPauseConfigAttive, pausaObbligatoriaDelGiorno, applicaPausaObbligatoria } from '../../../utils/pauseObbligatorie'
+import { fetchPauseConfigAttive, pausaObbligatoriaDelGiorno, combinaPauseGiorno } from '../../../utils/pauseObbligatorie'
 import OperatorProfileModal from './OperatorProfileModal'
 import InviteOperatoreModal from './InviteOperatoreModal'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
@@ -449,23 +449,16 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                 if (t.entrata) {
                     const end = t.uscita ? new Date(t.uscita).getTime() : Date.now()
                     const rawWorked = Math.max(0, Math.round((end - new Date(t.entrata).getTime()) / 60000))
-                    let loggedPausa = 0
+                    const manualiISO: { inizio: string; fine: string }[] = []
                     for (let i = 0; i < t.pi.length; i++) {
-                        const start = new Date(t.pi[i]).getTime()
-                        const fin = t.pf[i] ? new Date(t.pf[i]).getTime() : Date.now()
-                        loggedPausa += Math.max(0, Math.round((fin - start) / 60000))
+                        manualiISO.push({ inizio: t.pi[i], fine: t.pf[i] || new Date().toISOString() })
                     }
-                    // 2026-07-21: pausa OBBLIGATORIA da contratto (solo per chi ce l'ha).
-                    // Si scala il MASSIMO tra pausa registrata e pausa obbligatoria,
-                    // cosi' l'operatore non deve inserirla a mano ogni giorno.
-                    // La funzione rispetta i giorni della settimana configurati.
-                    const applicata = applicaPausaObbligatoria({
-                        minutiLordi: rawWorked,
-                        minutiPausaTimbrata: loggedPausa,
-                        pausa: pausaObbligatoriaDelGiorno(pauseCfgByOp.get(op.id), today),
-                    })
-                    minPausa = applicata.minutiPausa
-                    minLav = applicata.minutiLavorati
+                    // 2026-08-04 (#32, modello PER-FASCIA): coerente con Rilevazione
+                    // Orari e buste paga. La pausa a mano sostituisce solo la fascia
+                    // che sovrappone; le altre fasce di contratto restano.
+                    const combo = combinaPauseGiorno(today, manualiISO, pausaObbligatoriaDelGiorno(pauseCfgByOp.get(op.id), today))
+                    minPausa = combo.mostrateMin
+                    minLav = Math.max(0, rawWorked - combo.scalateMin)
                 }
                 let stato: DayRow['stato'] = 'fuori'
                 if (t.lastTipo === 'entrata' || t.lastTipo === 'pausa_fine') stato = 'lavoro'
@@ -557,19 +550,13 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                     if (!t.entrata) return
                     const end = t.uscita ? new Date(t.uscita).getTime() : new Date(t.entrata).getTime()
                     const rawWorked = Math.max(0, Math.round((end - new Date(t.entrata).getTime()) / 60000))
-                    let loggedPausa = 0
+                    const manualiISO: { inizio: string; fine: string }[] = []
                     for (let i = 0; i < t.pi.length; i++) {
-                        const start = new Date(t.pi[i]).getTime()
-                        const fin = t.pf[i] ? new Date(t.pf[i]).getTime() : start
-                        loggedPausa += Math.max(0, Math.round((fin - start) / 60000))
+                        if (t.pf[i]) manualiISO.push({ inizio: t.pi[i], fine: t.pf[i] })
                     }
-                    // 2026-07-21: scala il MAX tra pausa registrata e pausa obbligatoria da contratto.
-                    // 2026-07-24: la pausa fissa vale solo nei giorni scelti (vuoto = tutti).
-                    opTot += applicaPausaObbligatoria({
-                        minutiLordi: rawWorked,
-                        minutiPausaTimbrata: loggedPausa,
-                        pausa: pausaObbligatoriaDelGiorno(pauseCfg, dataKey),
-                    }).minutiLavorati
+                    // 2026-08-04 (#32, PER-FASCIA): coerente con le altre viste.
+                    const combo = combinaPauseGiorno(dataKey, manualiISO, pausaObbligatoriaDelGiorno(pauseCfg, dataKey))
+                    opTot += Math.max(0, rawWorked - combo.scalateMin)
                 })
                 perOpMin.set(opId, opTot)
                 totMinLav += opTot

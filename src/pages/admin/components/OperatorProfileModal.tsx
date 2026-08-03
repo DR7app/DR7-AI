@@ -19,8 +19,7 @@ import { useAdminRole } from '../../../hooks/useAdminRole'
 import {
     fetchPauseConfigOperatore,
     pausaObbligatoriaDelGiorno,
-    pausaMostrataMin,
-    pausaScalataMin,
+    combinaPauseGiorno,
     type PauseConfig as PauseConfigContratto,
 } from '../../../utils/pauseObbligatorie'
 import { MyDayEditorModal } from './RilevazioneOrariTab'
@@ -260,18 +259,28 @@ export default function OperatorProfileModal({
                     : 0
                 return { start, end, durMin }
             })
-            const minutiPausaLog = pauseWindows.reduce((s, p) => s + p.durMin, 0)
             const worked = !!(entrata && uscita)
-            // Pausa del contratto = default: se c'e' pausa a mano vale quella,
-            // altrimenti l'obbligatoria (solo nei giorni lavorati).
-            const minutiPausa = worked ? pausaMostrataMin(minutiPausaLog, pausaObbl) : minutiPausaLog
+            // Modello PER-FASCIA (#32): combina pause a mano e fasce di contratto.
+            // La fascia sovrapposta da una pausa a mano viene sostituita; le altre
+            // fasce restano e compaiono. Cosi' si vede sia la pausa messa a mano
+            // SIA quelle del contratto.
+            const manualiISO = pauseWindows
+                .filter(p => p.end)
+                .map(p => ({ inizio: p.start, fine: p.end as string }))
+            const combo = combinaPauseGiorno(d, manualiISO, pausaObbl)
+            const displayWindows = combo.finestre.map(f => ({
+                start: f.inizio,
+                end: f.fine,
+                durMin: Math.max(0, Math.floor((new Date(f.fine).getTime() - new Date(f.inizio).getTime()) / 60000)),
+            }))
+            const minutiPausa = combo.mostrateMin
             let minutiLavorati = 0
             if (worked) {
                 const lordo = Math.floor((new Date(uscita!).getTime() - new Date(entrata!).getTime()) / 60000)
-                // La pausa pagata si vede ma non si scala.
-                minutiLavorati = Math.max(0, lordo - pausaScalataMin(minutiPausaLog, pausaObbl))
+                // Pause a mano sempre scalate; contratto non-sovrapposto solo se non pagato.
+                minutiLavorati = Math.max(0, lordo - combo.scalateMin)
             }
-            return { data: d, entrata, uscita, pauseWindows, minutiLavorati, minutiPausa }
+            return { data: d, entrata, uscita, pauseWindows: displayWindows, minutiLavorati, minutiPausa }
         })
         setDays(breakdowns)
         setLoading(false)

@@ -5,8 +5,7 @@ import Button from './Button'
 import {
     fetchPauseConfigOperatore,
     pausaObbligatoriaDelGiorno,
-    pausaMostrataMin,
-    pausaScalataMin,
+    combinaPauseGiorno,
     PAUSA_NON_CONFIGURATA,
     type PausaObbligatoria,
 } from '../../../utils/pauseObbligatorie'
@@ -121,11 +120,21 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
         if (a == null || b == null || b <= a) return sum
         return sum + (b - a)
     }, 0)
-    // Come nei report: se c'e' pausa a mano vale quella (default obbligatoria
-    // solo nei giorni senza pausa registrata), e si scala solo se non pagata.
-    // Cosi' il netto qui coincide con Rilevazione Orari e le buste paga.
-    const livePausaMin = pausaMostrataMin(livePausaTimbrataMin, pausaObbl)
-    const livePausaScalataMin = pausaScalataMin(livePausaTimbrataMin, pausaObbl)
+    // 2026-08-04 (#32, modello PER-FASCIA): combino le pause a mano (HH:MM) con
+    // le fasce di contratto. La fascia sovrapposta da una pausa a mano viene
+    // sostituita; le altre fasce del contratto RESTANO. Cosi' l'operatore vede
+    // sia la sua pausa SIA quelle del contratto. Il netto coincide con
+    // Rilevazione Orari e le buste paga.
+    const liveManualiISO = pause
+        .map(p => {
+            const inizio = hhmmToISO(p.pausa_inizio || '', dataRef)
+            const fine = hhmmToISO(p.pausa_fine || '', dataRef)
+            return inizio && fine ? { inizio, fine } : null
+        })
+        .filter((x): x is { inizio: string; fine: string } => x !== null)
+    const liveCombo = combinaPauseGiorno(dataRef, liveManualiISO, pausaObbl)
+    const livePausaMin = liveCombo.mostrateMin
+    const livePausaScalataMin = liveCombo.scalateMin
     const liveEntrataMin = hhmmToMinutes(entrata)
     const liveUscitaMin = hhmmToMinutes(uscita)
     const liveLordoMin = liveEntrataMin != null && liveUscitaMin != null && liveUscitaMin > liveEntrataMin

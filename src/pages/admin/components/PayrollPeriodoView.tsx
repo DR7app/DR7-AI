@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { REPORT_RESTRICTED_EMAILS } from '../../../utils/reportAccess'
-import { fetchPauseConfigAttive, pausaObbligatoriaDelGiorno, pausaScalataMin } from '../../../utils/pauseObbligatorie'
+import { fetchPauseConfigAttive, pausaObbligatoriaDelGiorno, combinaPauseGiorno } from '../../../utils/pauseObbligatorie'
 import OperatorProfileModal from './OperatorProfileModal'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
@@ -225,17 +225,17 @@ export default function PayrollPeriodoView() {
                         if (!t.entrata) return
                         const end = t.uscita ? new Date(t.uscita).getTime() : new Date(t.entrata).getTime()
                         const lordo = Math.max(0, Math.round((end - new Date(t.entrata).getTime()) / 60000))
-                        let pausaTimbrata = 0
+                        const manualiISO: { inizio: string; fine: string }[] = []
                         for (let i = 0; i < t.pi.length; i++) {
-                            const start = new Date(t.pi[i]).getTime()
-                            const fin = t.pf[i] ? new Date(t.pf[i]).getTime() : start
-                            pausaTimbrata += Math.max(0, Math.round((fin - start) / 60000))
+                            if (t.pf[i]) manualiISO.push({ inizio: t.pi[i], fine: t.pf[i] })
                         }
-                        // Pausa del contratto = default: si scala solo nei giorni
-                        // SENZA pausa a mano. Se c'e' pausa timbrata/modificata,
-                        // vale quella reale (pausaScalataMin), come nelle altre viste.
+                        // Modello PER-FASCIA (#32): la pausa a mano sostituisce SOLO la
+                        // fascia di contratto che sovrappone; le altre fasce restano.
+                        // scalateMin = pause a mano (sempre) + contratto non-sovrapposto
+                        // (solo se non pagata).
                         const pausaObbl = pausaObbligatoriaDelGiorno(pauseCfg, dataKey)
-                        const m = Math.max(0, lordo - pausaScalataMin(pausaTimbrata, pausaObbl))
+                        const combo = combinaPauseGiorno(dataKey, manualiISO, pausaObbl)
+                        const m = Math.max(0, lordo - combo.scalateMin)
                         totalMinLav += m
                         if (m <= 0) return
                         // Spezza la settimana al confine di MESE: i giorni della stessa

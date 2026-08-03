@@ -9,7 +9,7 @@ import {
     fetchPauseConfigOperatore,
     fetchPauseConfigAttive,
     pausaObbligatoriaDelGiorno,
-    finestrePausaVirtuali,
+    combinaPauseGiorno,
     PAUSA_NON_CONFIGURATA,
     type PausaObbligatoria,
 } from '../../../utils/pauseObbligatorie'
@@ -342,50 +342,37 @@ export default function RilevazioneOrariTab() {
                     const pausaObbl = pausaObbligatoriaDelGiorno(pauseCfgByOp.get(op.id), d)
                     let minuti = 0
                     let pausaMin = 0
-                    let pausaInizi = data?.pi || []
-                    let pausaFini = data?.pf || []
+                    let pausaInizi: string[] = data?.pi || []
+                    let pausaFini: string[] = data?.pf || []
                     let daContratto = false
+                    // 2026-08-04 (#32, modello PER-FASCIA): combina pause a mano e fasce
+                    // di contratto. La fascia sovrapposta da una pausa a mano viene
+                    // sostituita; le altre fasce restano e compaiono come finestre
+                    // virtuali. Cosi' l'operatore vede la sua pausa E quelle del contratto.
+                    const manualiISO: { inizio: string; fine: string }[] = []
+                    if (data) {
+                        for (let i = 0; i < Math.min(data.pi.length, data.pf.length); i++) {
+                            manualiISO.push({ inizio: data.pi[i], fine: data.pf[i] })
+                        }
+                    }
+                    const combo = combinaPauseGiorno(d, manualiISO, pausaObbl)
                     if (data) {
                         const { data: m } = await supabase.rpc('operatore_minuti_lavorati', { p_operatore_id: op.id, p_data: d })
                         minuti = Number(m) || 0
-                        // Pairing: pausa_inizi[i] con pausa_fini[i] (entrambi ordinati
-                        // ASC per timestamp). Math.round per evitare di perdere un
-                        // minuto se i secondi salvati attraversano un boundary
-                        // (es. 10:57:30 -> 11:00:29 = 2.98 min -> floor 2 con bug).
-                        for (let i = 0; i < Math.min(data.pi.length, data.pf.length); i++) {
-                            const diff = new Date(data.pf[i]).getTime() - new Date(data.pi[i]).getTime()
-                            if (diff > 0) pausaMin += Math.round(diff / 60000)
-                        }
-                        // Applica la pausa fissa configurata (se maggiore della timbrata):
-                        // la MOSTRA sempre; la DEDUCE dalle ore solo se NON è pagata.
-                        // `minuti` dalla RPC e' gia' al netto delle pause timbrate (e di
-                        // un'eventuale pausa ancora aperta, chiusa a NOW lato SQL): tolgo
-                        // solo il DELTA che manca al minimo di contratto, senza ricostruire
-                        // il lordo — cosi' chi e' in pausa adesso non se la vede contata due volte.
-                        // 2026-08-03 (#32): la pausa del contratto e' solo il DEFAULT.
-                        // Se c'e' pausa a mano (pausaMin > 0) vale QUELLA: non tolgo
-                        // altro. Solo nei giorni SENZA pausa registrata scalo
-                        // l'obbligatoria non pagata. `minuti` (RPC) e' gia' al netto
-                        // della pausa timbrata.
-                        const conPausaManuale = pausaMin > 0
-                        minuti = Math.max(0, minuti - (conPausaManuale ? 0 : pausaObbl.minutiDaScalare))
-                        daContratto = !conPausaManuale && pausaObbl.minuti > 0
-                        pausaMin = conPausaManuale ? pausaMin : pausaObbl.minuti
-                    } else if (pausaObbl.minuti > 0) {
-                        // Nessuna timbratura ancora: mostra COMUNQUE la pausa fissa del
-                        // giorno (di default), così compare in automatico per tutti.
-                        pausaMin = pausaObbl.minuti
+                        // `minuti` (RPC) e' gia' al netto delle pause TIMBRATE: tolgo solo
+                        // la parte di contratto che eccede (fasce non toccate + flat), mai
+                        // se pagata.
+                        minuti = Math.max(0, minuti - combo.extraContrattoMin)
+                        pausaMin = combo.mostrateMin
+                        pausaInizi = combo.finestre.map(f => f.inizio)
+                        pausaFini = combo.finestre.map(f => f.fine)
+                        daContratto = combo.finestre.some(f => f.fonte === 'contratto') || combo.extraContrattoMin > 0
+                    } else if (combo.mostrateMin > 0) {
+                        // Nessuna timbratura: mostra le pause del contratto (default).
+                        pausaMin = combo.mostrateMin
+                        pausaInizi = combo.finestre.map(f => f.inizio)
+                        pausaFini = combo.finestre.map(f => f.fine)
                         daContratto = true
-                    }
-                    // 2026-08-02 (#32): finche' la pausa era solo un totale di minuti, le
-                    // colonne Inizio/Fine Pausa restavano "—" e "Pause #" a 0 — a schermo
-                    // sembrava che nessuna pausa fosse stata messa. Se l'operatore non ne
-                    // ha timbrata nessuna, mostro le fasce del contratto come finestre
-                    // vere. Sono VIRTUALI: non vengono scritte su timesheet_entries.
-                    if (pausaInizi.length === 0 && pausaObbl.fasce.length > 0) {
-                        const finestre = finestrePausaVirtuali(pausaObbl, d)
-                        pausaInizi = finestre.map(f => f.inizio)
-                        pausaFini = finestre.map(f => f.fine)
                     }
                     let stato: DayRow['stato'] = 'fuori'
                     if (data?.lastTipo === 'entrata' || data?.lastTipo === 'pausa_fine') stato = 'lavoro'
@@ -411,7 +398,10 @@ export default function RilevazioneOrariTab() {
                 const pauseCfgByOp = await fetchPauseConfigAttive(opList.map(o => o.id))
                 // Pause timbrate del periodo, per capire quanto manca al minimo di
                 // contratto: la RPC restituisce gia' il netto delle pause registrate.
-                const pausaTimbrataByOpDay = new Map<string, number>()
+                // 2026-08-04 (#32, PER-FASCIA): raccolgo le FINESTRE di pausa timbrate
+                // (non solo il totale) per poter combinare per-fascia con le fasce di
+                // contratto.
+                const pauseWinByOpDay = new Map<string, { inizio: string; fine: string }[]>()
                 if (periodRange.days.length > 0) {
                     const { data: pauseEntries } = await supabase
                         .from('timesheet_entries')
@@ -430,8 +420,7 @@ export default function RilevazioneOrariTab() {
                             const start = stack.shift()
                             aperte.set(key, stack)
                             if (!start) continue
-                            const diff = new Date(e.timestamp).getTime() - new Date(start).getTime()
-                            if (diff > 0) pausaTimbrataByOpDay.set(key, (pausaTimbrataByOpDay.get(key) || 0) + Math.round(diff / 60000))
+                            pauseWinByOpDay.set(key, [...(pauseWinByOpDay.get(key) || []), { inizio: start, fine: e.timestamp }])
                         }
                     }
                 }
@@ -444,13 +433,11 @@ export default function RilevazioneOrariTab() {
                         const min = Number(m) || 0
                         if (min <= 0) continue
                         const pausaObbl = pausaObbligatoriaDelGiorno(cfg, d)
-                        const timbrata = pausaTimbrataByOpDay.get(`${op.id}|${d}`) || 0
-                        // 2026-08-03 (#32): pausa contratto = default. Se c'e' pausa a
-                        // mano (timbrata > 0) vale quella e non tolgo altro; altrimenti
-                        // scalo l'obbligatoria non pagata. `min` (RPC) e' gia' al netto
-                        // della pausa timbrata.
-                        const extra = timbrata > 0 ? 0 : pausaObbl.minutiDaScalare
-                        map.set(d, Math.max(0, min - extra))
+                        const windows = pauseWinByOpDay.get(`${op.id}|${d}`) || []
+                        // `min` (RPC) e' gia' al netto delle pause timbrate: tolgo solo la
+                        // parte di contratto che eccede (fasce non toccate + flat, non pagata).
+                        const combo = combinaPauseGiorno(d, windows, pausaObbl)
+                        map.set(d, Math.max(0, min - combo.extraContrattoMin))
                     }
                     rows.push({ operatore: op, daysData: map })
                 }
