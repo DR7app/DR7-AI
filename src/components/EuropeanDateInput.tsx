@@ -119,27 +119,23 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
     onBlur?.();
   };
 
-  // 2026-06-01: pulsante calendario apre il picker nativo del browser
-  // tramite showPicker(). In IT mostra il calendario visivo con label
-  // DD/MM/YYYY. Fallback: focus + click sull'input nascosto, che apre
-  // comunque il picker nei browser piu' vecchi.
-  const openNativePicker = () => {
-    const el = nativeRef.current;
+  // 2026-08-03 FIX MOBILE: il calendario non si apriva piu' da telefono.
+  // Prima l'icona era un <button> che chiamava showPicker() su un input nativo
+  // con `pointer-events-none`: su iOS/Android quella chiamata non apre nulla
+  // (e il fallback focus()+click() su un elemento non interattivo viene
+  // ignorato da Safari mobile). Ora l'input nativo E' il bersaglio del tocco —
+  // trasparente sopra l'icona — quindi il telefono apre il suo picker da solo.
+  // Su desktop il click chiama comunque showPicker() (Chrome apre il calendario
+  // solo cliccando la sua icona interna, qui invisibile).
+  const openPickerFromNative = (el: HTMLInputElement | null) => {
     if (!el) return;
     try {
-      // showPicker() — supportato da Chrome 99+, Safari 16.4+, Firefox 101+
-      if (typeof (el as HTMLInputElement & { showPicker?: () => void }).showPicker === 'function') {
-        (el as HTMLInputElement & { showPicker?: () => void }).showPicker?.();
-        return;
-      }
+      // showPicker() — Chrome 99+, Safari 16.4+, Firefox 101+
+      (el as HTMLInputElement & { showPicker?: () => void }).showPicker?.();
     } catch {
-      // Some browsers throw if showPicker is called without user gesture
-      // (we ARE in a click handler so this shouldn't trigger, but safe-guard)
+      // Alcuni browser lanciano se non c'e' gesture utente: il tocco diretto
+      // sull'input basta comunque ad aprire il picker nativo.
     }
-    // Fallback: focus + click. Mobile Safari ignores .click() on hidden
-    // inputs, so we keep the input visually adjacent (small + opacity 0).
-    el.focus();
-    el.click();
   };
 
   // Il campo eredita la larghezza dal className del chiamante: se è w-full il
@@ -179,30 +175,31 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
         inputMode="numeric"
         className={`${className} pr-8${outOfRange ? ' ring-1 ring-orange-400' : ''}`}
       />
-      {/* Pulsante calendario — apre il picker nativo */}
-      <button
-        type="button"
-        onClick={openNativePicker}
-        disabled={disabled}
-        aria-label="Apri calendario"
-        title="Apri calendario"
-        className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-theme-bg-hover text-theme-text-muted hover:text-theme-text-primary transition-colors"
+      {/* Icona calendario — solo grafica: il tocco lo prende l'input nativo qui
+          sotto (pointer-events-none, altrimenti su mobile intercetterebbe il tap). */}
+      <span
+        aria-hidden="true"
+        className={`absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded text-theme-text-muted pointer-events-none ${disabled ? 'opacity-40' : ''}`}
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
-      </button>
-      {/* Input nativo nascosto — riceve i clic del bottone calendario.
-          Visualmente in posizione ma trasparente: alcuni browser ignorano
-          .click() su display:none o visibility:hidden. */}
+      </span>
+      {/* Input nativo TRASPARENTE sopra l'icona: e' lui a ricevere il tocco, cosi'
+          iOS/Android aprono il loro date picker senza passare da showPicker()
+          (che da mobile non apriva niente). Copre solo la zona dell'icona, il
+          resto del campo resta digitabile in GG/MM/AAAA. */}
       <input
         ref={nativeRef}
         type="date"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
+        onClick={(e) => openPickerFromNative(e.currentTarget)}
+        disabled={disabled}
         tabIndex={-1}
-        aria-hidden="true"
-        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 opacity-0 pointer-events-none"
+        aria-label="Apri calendario"
+        title="Apri calendario"
+        className="absolute right-0 top-0 h-full w-9 opacity-0 cursor-pointer disabled:cursor-not-allowed"
       />
     </div>
   );
