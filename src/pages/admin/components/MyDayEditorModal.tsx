@@ -5,6 +5,8 @@ import Button from './Button'
 import {
     fetchPauseConfigOperatore,
     pausaObbligatoriaDelGiorno,
+    pausaMostrataMin,
+    pausaScalataMin,
     PAUSA_NON_CONFIGURATA,
     type PausaObbligatoria,
 } from '../../../utils/pauseObbligatorie'
@@ -119,11 +121,11 @@ export default function MyDayEditorModal({ data, onClose, onSaved }: {
         if (a == null || b == null || b <= a) return sum
         return sum + (b - a)
     }, 0)
-    // Come nei report: la pausa mostrata e' il MAX tra timbrata e obbligatoria,
-    // ma si scala dalle ore solo se non e' pagata. Cosi' il netto qui coincide
-    // con quello di Rilevazione Orari e delle buste paga.
-    const livePausaMin = Math.max(livePausaTimbrataMin, pausaObbl.minuti)
-    const livePausaScalataMin = Math.max(livePausaTimbrataMin, pausaObbl.minutiDaScalare)
+    // Come nei report: se c'e' pausa a mano vale quella (default obbligatoria
+    // solo nei giorni senza pausa registrata), e si scala solo se non pagata.
+    // Cosi' il netto qui coincide con Rilevazione Orari e le buste paga.
+    const livePausaMin = pausaMostrataMin(livePausaTimbrataMin, pausaObbl)
+    const livePausaScalataMin = pausaScalataMin(livePausaTimbrataMin, pausaObbl)
     const liveEntrataMin = hhmmToMinutes(entrata)
     const liveUscitaMin = hhmmToMinutes(uscita)
     const liveLordoMin = liveEntrataMin != null && liveUscitaMin != null && liveUscitaMin > liveEntrataMin

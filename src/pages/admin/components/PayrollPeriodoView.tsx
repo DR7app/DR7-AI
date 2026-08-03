@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { REPORT_RESTRICTED_EMAILS } from '../../../utils/reportAccess'
-import { fetchPauseConfigAttive, pausaObbligatoriaDelGiorno } from '../../../utils/pauseObbligatorie'
+import { fetchPauseConfigAttive, pausaObbligatoriaDelGiorno, pausaScalataMin } from '../../../utils/pauseObbligatorie'
 import OperatorProfileModal from './OperatorProfileModal'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
@@ -231,10 +231,11 @@ export default function PayrollPeriodoView() {
                             const fin = t.pf[i] ? new Date(t.pf[i]).getTime() : start
                             pausaTimbrata += Math.max(0, Math.round((fin - start) / 60000))
                         }
-                        // Si scala il MAX tra pausa timbrata e pausa obbligatoria del
-                        // contratto (solo se non pagata), come nelle altre viste.
+                        // Pausa del contratto = default: si scala solo nei giorni
+                        // SENZA pausa a mano. Se c'e' pausa timbrata/modificata,
+                        // vale quella reale (pausaScalataMin), come nelle altre viste.
                         const pausaObbl = pausaObbligatoriaDelGiorno(pauseCfg, dataKey)
-                        const m = Math.max(0, lordo - Math.max(pausaTimbrata, pausaObbl.minutiDaScalare))
+                        const m = Math.max(0, lordo - pausaScalataMin(pausaTimbrata, pausaObbl))
                         totalMinLav += m
                         if (m <= 0) return
                         // Spezza la settimana al confine di MESE: i giorni della stessa

@@ -19,6 +19,8 @@ import { useAdminRole } from '../../../hooks/useAdminRole'
 import {
     fetchPauseConfigOperatore,
     pausaObbligatoriaDelGiorno,
+    pausaMostrataMin,
+    pausaScalataMin,
     type PauseConfig as PauseConfigContratto,
 } from '../../../utils/pauseObbligatorie'
 import { MyDayEditorModal } from './RilevazioneOrariTab'
@@ -259,13 +261,14 @@ export default function OperatorProfileModal({
             })
             const minutiPausaLog = pauseWindows.reduce((s, p) => s + p.durMin, 0)
             const worked = !!(entrata && uscita)
-            // Applica la pausa obbligatoria come MINIMO sui giorni lavorati.
-            const minutiPausa = worked ? Math.max(minutiPausaLog, pausaObbl.minuti) : minutiPausaLog
+            // Pausa del contratto = default: se c'e' pausa a mano vale quella,
+            // altrimenti l'obbligatoria (solo nei giorni lavorati).
+            const minutiPausa = worked ? pausaMostrataMin(minutiPausaLog, pausaObbl) : minutiPausaLog
             let minutiLavorati = 0
             if (worked) {
                 const lordo = Math.floor((new Date(uscita!).getTime() - new Date(entrata!).getTime()) / 60000)
                 // La pausa pagata si vede ma non si scala.
-                minutiLavorati = Math.max(0, lordo - Math.max(minutiPausaLog, pausaObbl.minutiDaScalare))
+                minutiLavorati = Math.max(0, lordo - pausaScalataMin(minutiPausaLog, pausaObbl))
             }
             return { data: d, entrata, uscita, pauseWindows, minutiLavorati, minutiPausa }
         })

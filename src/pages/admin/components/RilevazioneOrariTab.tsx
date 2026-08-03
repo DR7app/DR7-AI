@@ -362,9 +362,15 @@ export default function RilevazioneOrariTab() {
                         // un'eventuale pausa ancora aperta, chiusa a NOW lato SQL): tolgo
                         // solo il DELTA che manca al minimo di contratto, senza ricostruire
                         // il lordo — cosi' chi e' in pausa adesso non se la vede contata due volte.
-                        minuti = Math.max(0, minuti - Math.max(0, pausaObbl.minutiDaScalare - pausaMin))
-                        daContratto = pausaObbl.minuti > pausaMin
-                        pausaMin = Math.max(pausaMin, pausaObbl.minuti)
+                        // 2026-08-03 (#32): la pausa del contratto e' solo il DEFAULT.
+                        // Se c'e' pausa a mano (pausaMin > 0) vale QUELLA: non tolgo
+                        // altro. Solo nei giorni SENZA pausa registrata scalo
+                        // l'obbligatoria non pagata. `minuti` (RPC) e' gia' al netto
+                        // della pausa timbrata.
+                        const conPausaManuale = pausaMin > 0
+                        minuti = Math.max(0, minuti - (conPausaManuale ? 0 : pausaObbl.minutiDaScalare))
+                        daContratto = !conPausaManuale && pausaObbl.minuti > 0
+                        pausaMin = conPausaManuale ? pausaMin : pausaObbl.minuti
                     } else if (pausaObbl.minuti > 0) {
                         // Nessuna timbratura ancora: mostra COMUNQUE la pausa fissa del
                         // giorno (di default), così compare in automatico per tutti.
@@ -439,9 +445,11 @@ export default function RilevazioneOrariTab() {
                         if (min <= 0) continue
                         const pausaObbl = pausaObbligatoriaDelGiorno(cfg, d)
                         const timbrata = pausaTimbrataByOpDay.get(`${op.id}|${d}`) || 0
-                        // `min` e' gia' al netto della pausa timbrata: tolgo solo la
-                        // parte di pausa obbligatoria che eccede quella registrata.
-                        const extra = Math.max(0, pausaObbl.minutiDaScalare - timbrata)
+                        // 2026-08-03 (#32): pausa contratto = default. Se c'e' pausa a
+                        // mano (timbrata > 0) vale quella e non tolgo altro; altrimenti
+                        // scalo l'obbligatoria non pagata. `min` (RPC) e' gia' al netto
+                        // della pausa timbrata.
+                        const extra = timbrata > 0 ? 0 : pausaObbl.minutiDaScalare
                         map.set(d, Math.max(0, min - extra))
                     }
                     rows.push({ operatore: op, daysData: map })

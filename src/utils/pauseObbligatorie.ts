@@ -143,6 +143,24 @@ export function pausaObbligatoriaDelGiorno(cfg: PauseConfig | null | undefined, 
  * Cosi' l'operatore non deve inserirla a mano e le pause pagate non gli
  * mangiano le ore.
  */
+// 2026-08-03 (#32): la pausa del contratto e' solo il DEFAULT. Se quel giorno
+// c'e' una pausa registrata/modificata a mano (timbrata > 0) vale QUELLA, la
+// realta'; l'obbligatoria copre solo i giorni SENZA nessuna pausa a mano.
+// Prima si faceva MAX(timbrata, obbligatoria): imponeva l'obbligatoria anche
+// quando l'operatore aveva gia' registrato le sue pause vere (es. 2h12 timbrate
+// venivano portate a 2h40 di contratto). Queste due funzioni sono l'unica
+// fonte della regola: usarle ovunque per non farla divergere tra le viste.
+
+/** Pausa da MOSTRARE: se c'e' pausa a mano quel giorno vale quella, altrimenti l'obbligatoria. */
+export function pausaMostrataMin(timbrataMin: number, pausa: PausaObbligatoria): number {
+    return Math.max(0, timbrataMin) > 0 ? Math.max(0, timbrataMin) : pausa.minuti
+}
+
+/** Pausa da SCALARE dalle ore: pausa a mano se c'e', altrimenti l'obbligatoria non pagata. */
+export function pausaScalataMin(timbrataMin: number, pausa: PausaObbligatoria): number {
+    return Math.max(0, timbrataMin) > 0 ? Math.max(0, timbrataMin) : pausa.minutiDaScalare
+}
+
 export function applicaPausaObbligatoria(args: {
     /** Minuti entrata->uscita, PRIMA di togliere qualsiasi pausa. */
     minutiLordi: number
@@ -150,12 +168,13 @@ export function applicaPausaObbligatoria(args: {
     pausa: PausaObbligatoria
 }): { minutiPausa: number; minutiLavorati: number; daContratto: boolean } {
     const timbrata = Math.max(0, args.minutiPausaTimbrata)
-    const minutiPausa = Math.max(timbrata, args.pausa.minuti)
-    const scalati = Math.max(timbrata, args.pausa.minutiDaScalare)
+    const minutiPausa = pausaMostrataMin(timbrata, args.pausa)
+    const scalati = pausaScalataMin(timbrata, args.pausa)
     return {
         minutiPausa,
         minutiLavorati: Math.max(0, args.minutiLordi - scalati),
-        daContratto: args.pausa.minuti > timbrata,
+        // "da contratto" solo quando NON c'e' pausa a mano e l'obbligatoria vale.
+        daContratto: timbrata === 0 && args.pausa.minuti > 0,
     }
 }
 
