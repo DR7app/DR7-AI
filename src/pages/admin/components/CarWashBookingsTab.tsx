@@ -4617,6 +4617,19 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     onChange={(__v: string) => setFormData({ ...formData, appointment_date: __v })}
                     className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                   />
+                  {/* 2026-08: avviso NON bloccante quando la data/ora e' nel passato.
+                      La prenotazione resta possibile (OTP al salvataggio), ma la
+                      direzione (bypass OTP) deve vedere comunque che e' nel passato. */}
+                  {formData.appointment_date && (() => {
+                    const iso = formData.appointment_time
+                      ? combineRomeDateTimeToISO(formData.appointment_date, formData.appointment_time)
+                      : null
+                    const todayRome = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+                    const isPast = iso ? new Date(iso) < new Date() : formData.appointment_date < todayRome
+                    return isPast ? (
+                      <p className="mt-1 text-xs text-amber-500">Attenzione: la data{formData.appointment_time ? ' e ora' : ''} selezionata e' nel passato. Puoi comunque procedere.</p>
+                    ) : null
+                  })()}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Ora *</label>
