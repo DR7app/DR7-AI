@@ -5793,28 +5793,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               .maybeSingle()
             existingCustomer = data
           }
-          if (!existingCustomer && newCustomerData.telefono?.trim()) {
-            // Normalize phone before dedup lookup (same logic as save-customer)
-            let normNewPhone = newCustomerData.telefono.replace(/[\s\-+()]/g, '')
-            if (normNewPhone.startsWith('00')) normNewPhone = normNewPhone.substring(2)
-            if (normNewPhone.length === 10) normNewPhone = '39' + normNewPhone
-            const { data } = await supabase
-              .from('customers_extended')
-              .select('id')
-              .eq('telefono', normNewPhone)
-              .maybeSingle()
-            existingCustomer = data
-          }
-          // Last resort: check by nome + cognome (persona fisica only)
-          if (!existingCustomer && newCustomerData.tipo_cliente === 'persona_fisica' && newCustomerData.nome?.trim() && newCustomerData.cognome?.trim()) {
-            const { data } = await supabase
-              .from('customers_extended')
-              .select('id')
-              .ilike('nome', newCustomerData.nome.trim())
-              .ilike('cognome', newCustomerData.cognome.trim())
-              .maybeSingle()
-            existingCustomer = data
-          }
+          // (roadmap 19) NIENTE dedup per telefono NE' per nome+cognome: due o piu'
+          // lead possono condividere lo stesso numero o lo stesso nome (familiari,
+          // omonimi, stesso contatto di riferimento) e restano lead SEPARATE e
+          // distinte. Come in save-customer.ts, la deduplicazione avviene SOLO
+          // sull'identita' fiscale (CF / P.IVA / codice univoco) o sull'email dello
+          // stesso tipo_cliente. Prima qui si fondeva per telefono/nome e la
+          // direzione otteneva una lead sola invece di due (verifica 29/07).
 
           if (existingCustomer) {
             // Customer already exists -- reuse their ID instead of creating a duplicate
