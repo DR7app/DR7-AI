@@ -34,6 +34,12 @@ const ROLE_FAILSAFE: Record<string, ReadonlySet<AdminRoleTag>> = {
   'salvatore@dr7.app': new Set(['payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin']),
 }
 
+// Tab SELF-SERVICE: ogni operatore loggato le vede senza che la direzione
+// debba spuntare il permesso nell'invito. Sono tab dove l'operatore lavora sui
+// PROPRI dati (vedi AccontiTab: registra gli acconti che ha incassato lui).
+// Per toglierla a un singolo operatore: `hide:<tab>` in admins.permissions.
+const UNIVERSAL_TABS: ReadonlySet<string> = new Set(['acconti'])
+
 export interface AdminRole {
   role: 'superadmin' | 'admin'
   canViewFinancials: boolean
@@ -152,6 +158,11 @@ export function useAdminRole(): AdminRole {
       if (loading) return true // optimistic during initial load
       if (role === 'superadmin' || isDirezione || isDeveloper) return true
       if (permissions.includes('*')) return true
+      // 2026-08-03 (richiesta direzione 17/07): le tab SELF-SERVICE sono di
+      // TUTTI gli operatori — non passano dai permessi per-operatore perche'
+      // servono a lui (registra i propri acconti incassati in giornata).
+      // Resta escludibile per il singolo con la hide-key esplicita.
+      if (UNIVERSAL_TABS.has(tab) && !permissions.includes(`hide:${tab}`)) return true
       return permissions.includes(tab)
     },
     [loading, role, isDirezione, isDeveloper, permissions]

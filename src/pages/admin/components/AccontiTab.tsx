@@ -1,10 +1,17 @@
 // #42 Acconti — registrazione acconti incassati nella giornata.
 // Ogni operatore registra quanto ha incassato (con causale/nota); la direzione
-// vede il riepilogo per giornata con il totale. Operatore = utente loggato
-// (match per email su `admins`).
+// vede il riepilogo per giornata con il totale.
+//
+// 2026-08-03 (richiesta direzione 17/07): la tab e' di TUTTI gli operatori
+// (UNIVERSAL_TABS in useAdminRole, niente permesso da spuntare nell'invito).
+// Di conseguenza la vista e' scopata: l'operatore vede e cancella SOLO i propri
+// acconti della giornata, direzione/superadmin/developer vedono tutto con il
+// riepilogo per operatore. L'identita' arriva da useAdminRole (match su
+// admins.user_id, come il resto del gestionale) invece che dalla mail.
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
+import { useAdminRole } from '../../../hooks/useAdminRole'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
 interface Acconto {
@@ -26,43 +33,42 @@ function eur(cents: number): string {
 }
 
 export default function AccontiTab() {
+  const { role, adminId, adminName, adminEmail, hasRole, loading: roleLoading } = useAdminRole()
   const [data, setData] = useState<string>(todayRome())
   const [rows, setRows] = useState<Acconto[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [me, setMe] = useState<{ id: string | null; nome: string }>({ id: null, nome: '' })
 
   // Form
   const [importo, setImporto] = useState('')
   const [causale, setCausale] = useState('')
   const [note, setNote] = useState('')
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data: u } = await supabase.auth.getUser()
-        const email = u.user?.email || ''
-        if (email) {
-          const { data: adm } = await supabase.from('admins').select('id, nome').eq('email', email).maybeSingle()
-          if (adm) setMe({ id: adm.id, nome: adm.nome || email.split('@')[0] })
-          else setMe({ id: null, nome: email.split('@')[0] })
-        }
-      } catch { /* ignore */ }
-    })()
-  }, [])
+  // Direzione/superadmin/developer: riepilogo di TUTTI. Operatore: i suoi.
+  const canSeeAll = role === 'superadmin' || hasRole('direzione') || hasRole('developer')
+  const me = useMemo(
+    () => ({ id: adminId, nome: adminName || (adminEmail || '').split('@')[0] || '' }),
+    [adminId, adminName, adminEmail]
+  )
 
   async function load() {
+    if (roleLoading) return
     setLoading(true)
-    const { data: d, error } = await supabase
+    let q = supabase
       .from('acconti_giornalieri')
       .select('*')
       .eq('data', data)
-      .order('created_at', { ascending: false })
+    if (!canSeeAll) {
+      // Senza operatore_id (admin non ancora collegato) si ripiega sul nome
+      // denormalizzato, cosi' l'operatore rivede comunque cio' che ha inserito.
+      q = me.id ? q.eq('operatore_id', me.id) : q.eq('operatore_nome', me.nome)
+    }
+    const { data: d, error } = await q.order('created_at', { ascending: false })
     if (error) toast.error('Errore caricamento: ' + error.message)
     setRows((d as Acconto[]) || [])
     setLoading(false)
   }
-  useEffect(() => { load() }, [data]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load() }, [data, roleLoading, canSeeAll, me.id, me.nome]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function registra() {
     const cents = Math.round(parseFloat((importo || '').replace(',', '.')) * 100)
@@ -82,6 +88,13 @@ export default function AccontiTab() {
     setImporto(''); setCausale(''); setNote('')
     toast.success('Acconto registrato')
     load()
+  }
+
+  // L'operatore cancella solo i PROPRI acconti; direzione puo' correggere tutto.
+  function canDelete(r: Acconto): boolean {
+    if (canSeeAll) return true
+    if (me.id && r.operatore_id) return r.operatore_id === me.id
+    return !!me.nome && r.operatore_nome === me.nome
   }
 
   async function elimina(id: string) {
@@ -107,7 +120,10 @@ export default function AccontiTab() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-theme-text-primary">Acconti Giornalieri</h1>
-          <p className="text-sm text-theme-text-muted mt-1">Registra gli acconti incassati nella giornata. Operatore: <span className="text-theme-text-secondary font-medium">{me.nome || '—'}</span></p>
+          <p className="text-sm text-theme-text-muted mt-1">
+            Registra gli acconti incassati nella giornata. Operatore: <span className="text-theme-text-secondary font-medium">{me.nome || '—'}</span>
+            {!canSeeAll && <span className="ml-1">· vedi solo i tuoi</span>}
+          </p>
         </div>
         <label className="text-xs text-theme-text-muted">Giornata
           <EuropeanDateInput value={data} onChange={(__v: string) => setData(__v)} className="mt-1 block px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
@@ -136,24 +152,26 @@ export default function AccontiTab() {
       {/* Riepilogo */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
-          <p className="text-xs text-theme-text-muted">Totale giornata</p>
+          <p className="text-xs text-theme-text-muted">{canSeeAll ? 'Totale giornata' : 'Totale incassato da te'}</p>
           <p className="text-2xl font-bold text-dr7-gold tabular-nums">{eur(totale)}</p>
           <p className="text-xs text-theme-text-muted mt-1">{rows.length} acconto/i</p>
         </div>
-        <div className="md:col-span-2 bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
-          <p className="text-xs text-theme-text-muted mb-2">Per operatore</p>
-          {perOperatore.length === 0 ? (
-            <p className="text-sm text-theme-text-muted">Nessun acconto.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {perOperatore.map(([nome, cents]) => (
-                <span key={nome} className="px-2.5 py-1 rounded-full bg-theme-bg-tertiary border border-theme-border text-xs text-theme-text-secondary">
-                  {nome}: <span className="text-theme-text-primary font-semibold tabular-nums">{eur(cents)}</span>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
+        {canSeeAll && (
+          <div className="md:col-span-2 bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+            <p className="text-xs text-theme-text-muted mb-2">Per operatore</p>
+            {perOperatore.length === 0 ? (
+              <p className="text-sm text-theme-text-muted">Nessun acconto.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {perOperatore.map(([nome, cents]) => (
+                  <span key={nome} className="px-2.5 py-1 rounded-full bg-theme-bg-tertiary border border-theme-border text-xs text-theme-text-secondary">
+                    {nome}: <span className="text-theme-text-primary font-semibold tabular-nums">{eur(cents)}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Lista */}
@@ -164,7 +182,7 @@ export default function AccontiTab() {
         {loading ? (
           <p className="p-4 text-sm text-theme-text-muted">Caricamento…</p>
         ) : rows.length === 0 ? (
-          <p className="p-4 text-sm text-theme-text-muted">Nessun acconto registrato per questa giornata.</p>
+          <p className="p-4 text-sm text-theme-text-muted">{canSeeAll ? 'Nessun acconto registrato per questa giornata.' : 'Non hai registrato acconti per questa giornata.'}</p>
         ) : (
           <div className="divide-y divide-theme-border">
             {rows.map(r => (
@@ -173,7 +191,9 @@ export default function AccontiTab() {
                   <p className="text-sm text-theme-text-primary font-medium">{eur(r.importo_cents)} <span className="text-theme-text-muted font-normal">— {r.operatore_nome || 'Sconosciuto'}</span></p>
                   <p className="text-xs text-theme-text-muted truncate">{[r.causale, r.note].filter(Boolean).join(' · ') || '—'} · {new Date(r.created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })}</p>
                 </div>
-                <button onClick={() => elimina(r.id)} className="text-[11px] px-2 py-1 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10 shrink-0">Elimina</button>
+                {canDelete(r) && (
+                  <button onClick={() => elimina(r.id)} className="text-[11px] px-2 py-1 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10 shrink-0">Elimina</button>
+                )}
               </div>
             ))}
           </div>
