@@ -919,7 +919,20 @@ export default function UnpaidBookingsTab() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const arr: any[] = [...(details[type] || [])]
       if (arr[originalIndex]) {
-        arr[originalIndex] = { ...arr[originalIndex], total: newAmount, amount: newAmount, quantity: 1 }
+        // 2026-08-03 BUG (direzione): la riga MOSTRA il netto (total - discount,
+        // vedi costruzione di danniItems/penaliItems) ma qui si scriveva solo
+        // `total`, lasciando lo sconto. Digitando 855 su una voce da 852,50 con
+        // sconto 2,50 la riga tornava a 852,50 — sembrava "non ha salvato" — e
+        // aggiungendo 2,50 l'importo scendeva invece di salire.
+        // L'importo digitato in questa tab E' quello da pagare: azzeriamo lo
+        // sconto gia' applicato cosi' netto == digitato.
+        arr[originalIndex] = {
+          ...arr[originalIndex],
+          total: newAmount,
+          amount: newAmount,
+          quantity: 1,
+          discount: 0,
+        }
       }
 
       const { error } = await supabase
