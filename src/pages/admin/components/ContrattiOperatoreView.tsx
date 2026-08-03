@@ -370,7 +370,7 @@ export default function ContrattiOperatoreView() {
                                     min={0}
                                     value={contratto.pause_config?.durata_min ? contratto.pause_config.durata_min : ''}
                                     onChange={e => setPause({ durata_min: Number(e.target.value) || 0 })}
-                                    placeholder="30"
+                                    placeholder="es. 30 (vuoto = nessuna pausa)"
                                 />
                                 <label className="flex items-center gap-2 md:mt-6 cursor-pointer">
                                     <input
