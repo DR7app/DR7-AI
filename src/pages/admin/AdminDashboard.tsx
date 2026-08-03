@@ -284,21 +284,18 @@ export default function AdminDashboard() {
       { tab: 'cargos', label: 'Cargos' },
       // 2026-06-10: sezione "Flotta" spostata DENTRO Noleggio.
       { tab: 'vehicles', label: 'Veicoli' },
-      { tab: 'terra-catalog', label: 'Catalogo' },
       { tab: 'magazzino', label: 'Magazzino' },
       { tab: 'gps-keyless', label: 'GPS Flotta' },
     ] },
     { name: 'Noleggio Mare', tabs: [
       { tab: 'mare-bookings', label: 'Prenotazioni' },
       { tab: 'mare-calendar', label: 'Calendario' },
-      { tab: 'mare-catalog', label: 'Catalogo' },
       { tab: 'mare-tours', label: 'Tour' },
       { tab: 'mare-preventivi', label: 'Preventivi' },
     ] },
     { name: 'Noleggio Aria', tabs: [
       { tab: 'aria-bookings', label: 'Prenotazioni' },
       { tab: 'aria-calendar', label: 'Calendario' },
-      { tab: 'aria-catalog', label: 'Catalogo' },
       { tab: 'aria-tours', label: 'Tour' },
       { tab: 'aria-preventivi', label: 'Preventivi' },
       { tab: 'aria-movimenti', label: 'Movimenti' },
@@ -306,14 +303,12 @@ export default function AdminDashboard() {
     { name: 'Soggiorni & Ospitalità', tabs: [
       { tab: 'stay-bookings', label: 'Prenotazioni' },
       { tab: 'stay-calendar', label: 'Calendario' },
-      { tab: 'stay-catalog', label: 'Catalogo' },
       { tab: 'stay-tours', label: 'Tour' },
       { tab: 'stay-preventivi', label: 'Preventivi' },
     ] },
     { name: 'Lavaggio & Meccanica', tabs: [
       { tab: 'carwash', label: 'Prenotazioni' },
       { tab: 'carwash-calendar', label: 'Calendario' },
-      { tab: 'carwash-catalog', label: 'Catalogo' },
     ] },
     { name: 'Clienti', tabs: [
       { tab: 'customers', label: 'Lead' },
