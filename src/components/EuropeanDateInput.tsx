@@ -93,8 +93,9 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
     if (formatted.length === 10) {
       const isoDate = europeanToIso(formatted);
       if (isoDate) {
-        if (min && isoDate < min) return;
-        if (max && isoDate > max) return;
+        // 2026-08-03: min/max sono un AVVISO, non un blocco. Prima la data fuori
+        // intervallo veniva scartata in silenzio (il campo non si aggiornava e
+        // nessuno capiva perche'): regola direzione = mai bloccare, si segnala.
         onChange(isoDate);
       }
     } else if (formatted === '') {
@@ -146,6 +147,16 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
   // diventa più stretto del layout originale (era un <input type="date"> pieno).
   const isFullWidth = /(^|\s)w-full(\s|$)/.test(className);
 
+  // 2026-08-03 (direzione): min/max NON bloccano piu'. Il bubble nativo
+  // ("Il valore deve essere 03/08/2026 o successivo") impediva di salvare senza
+  // alcun modo di forzare — regola DR7: mai un blocco secco, si avvisa e basta.
+  // Quindi: niente min/max sull'input nativo (che li trasformerebbe in
+  // constraint validation del browser) e bordo rosso di avviso se fuori range.
+  const outOfRange = !!value && ((!!min && value < min) || (!!max && value > max));
+  const warnTitle = outOfRange
+    ? `Attenzione: data fuori dall'intervallo consigliato${min ? ` (dal ${isoToEuropean(min)}` : ''}${max ? `${min ? ' ' : ' ('}al ${isoToEuropean(max)}` : ''}${min || max ? ')' : ''} — puoi salvare comunque`
+    : title;
+
   return (
     <div className={`relative inline-flex items-center ${isFullWidth ? 'w-full' : ''} ${wrapperClassName}`.trim()}>
       <input
@@ -161,12 +172,12 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
         disabled={disabled}
         readOnly={readOnly}
         autoFocus={autoFocus}
-        title={title}
+        title={warnTitle}
         style={style}
         aria-label={ariaLabel}
         maxLength={10}
         inputMode="numeric"
-        className={`${className} pr-8`}
+        className={`${className} pr-8${outOfRange ? ' ring-1 ring-orange-400' : ''}`}
       />
       {/* Pulsante calendario — apre il picker nativo */}
       <button
@@ -189,8 +200,6 @@ const EuropeanDateInput: React.FC<EuropeanDateInputProps> = ({
         type="date"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
-        min={min}
-        max={max}
         tabIndex={-1}
         aria-hidden="true"
         className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 opacity-0 pointer-events-none"
