@@ -3871,7 +3871,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       // got "Conferma Da Saldare" on initial save; on payment they only
       // need the per-method "Pagamento ricevuto", not another conferma).
       _wasConfirmedAtLoad: booking.booking_details?.manually_confirmed === true,
-      amount_paid: booking.booking_details?.amountPaid ? centsToEurStr(Math.round(booking.booking_details.amountPaid)) : '0',
+      // 2026-08-03: l'importo incassato sta in booking_details.amountPaid MA
+      // alcuni flussi scrivono solo la colonna bookings.amount_paid (callback
+      // Nexi pagamento pieno, incassi registrati altrove). Leggendo solo i
+      // details il campo si apriva a 0 su prenotazioni davvero pagate/parziali
+      // e il salvataggio azzerava l'acconto. Ora: details, poi colonna.
+      amount_paid: centsToEurStr(Math.round(
+        Number(booking.booking_details?.amountPaid ?? booking.amount_paid ?? 0) || 0
+      )),
       // 2026-05-30: carica il TOTALE pieno. Prima si sottraevano consegna/ritiro
       // per ottenere il "base", perché il save li ri-aggiungeva — ma quel
       // doppio conteggio è stato rimosso (price_total = total_amount esatto).
@@ -6072,9 +6079,15 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         // era forzato a 'unpaid', quindi quando il cliente pagava il link del
         // RESIDUO il callback topup partiva da 0 → restava "in attesa" perché il
         // residuo da solo non copriva il totale. Ora salviamo l'acconto.
-        amount_paid: (!editingId && formData.payment_status === 'partial')
+        // 2026-08-03: in MODIFICA l'importo pagato del form e' la verita' e
+        // finisce anche nella COLONNA. Prima si aggiornava solo
+        // booking_details.amountPaid: lista e scheda (che leggono la colonna)
+        // continuavano a mostrare il vecchio "Parziale €X" mentre il form ne
+        // mostrava un altro. Su NUOVA prenotazione resta il comportamento
+        // precedente (solo 'partial' valorizza, altrimenti default DB).
+        amount_paid: editingId
           ? eurToCents(formData.amount_paid || '0')
-          : undefined,
+          : (formData.payment_status === 'partial' ? eurToCents(formData.amount_paid || '0') : undefined),
         // Pay by Link bookings start as pending_payment/unpaid;
         // other payment methods start as confirmed/paid.
         // 2026-05-28: se l'admin ha spuntato "Conferma Prenotazione" il
@@ -10045,13 +10058,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                   // i recalc effects dall'overridarlo (consegna/ritiro/pacchetti
                   // non possono piu' modificare il totale dopo questa azione).
                   setTotalLock(true)
-                  setFormData(prev => {
-                    // 2026-05-18: total_amount include GIA' delivery + pickup nel
-                    // recalc; ora che admin lo decide a mano, prendiamo newTotal
-                    // come VERITA' assoluta. amount_paid = newTotal (no doppi).
-                    const newPaid = prev.payment_status === 'paid' ? newTotal : prev.amount_paid
-                    return { ...prev, total_amount: newTotal, amount_paid: newPaid }
-                  })
+                  // 2026-08-03 BUG (direzione): scrivere qui il TOTALE cambiava
+                  // anche l'IMPORTO PAGATO. Con stato "Pagato" l'acconto gia'
+                  // incassato veniva riscritto col totale — e mentre si cancella
+                  // il campo per ridigitarlo (newTotal = '') l'importo pagato
+                  // spariva del tutto. Un campo modifica SOLO se stesso: il
+                  // pagato si tocca dal suo campo o cambiando Stato Pagamento
+                  // (che continua a precompilarlo).
+                  setFormData(prev => ({ ...prev, total_amount: newTotal }))
                 }}
               />
               {totalAmountManuallyOverriddenRef.current && (
@@ -10288,21 +10302,32 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 </div>
               )}
 
-              <Input
-                label="Importo Pagato (€)"
-                type="number"
-                step="0.01"
-                required
-                value={formData.amount_paid}
-                onChange={(e) => {
-                  // Simply update the amount_paid without auto-calculating payment_status
-                  // The user controls payment_status via the dropdown above
-                  setFormData({
-                    ...formData,
-                    amount_paid: e.target.value
-                  })
-                }}
-              />
+              <div>
+                <Input
+                  label="Importo Pagato (€)"
+                  type="number"
+                  step="0.01"
+                  required
+                  value={formData.amount_paid}
+                  onChange={(e) => {
+                    // Simply update the amount_paid without auto-calculating payment_status
+                    // The user controls payment_status via the dropdown above
+                    setFormData({
+                      ...formData,
+                      amount_paid: e.target.value
+                    })
+                  }}
+                />
+                {/* 2026-08-03: il totale non riscrive piu' il pagato (bug: cancellava
+                    l'acconto). Se restano disallineati su "Pagato" lo si segnala —
+                    avviso, mai un blocco. */}
+                {formData.payment_status === 'paid'
+                  && eurToCents(formData.amount_paid || '0') !== eurToCents(formData.total_amount || '0') && (
+                  <p className="text-xs text-amber-400 mt-1">
+                    Stato "Pagato" ma importo pagato diverso dal totale — correggilo qui se serve (il totale non lo aggiorna piu' da solo).
+                  </p>
+                )}
+              </div>
               <Input
                 label="Valuta"
                 value={formData.currency}
