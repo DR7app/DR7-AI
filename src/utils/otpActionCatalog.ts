@@ -81,6 +81,14 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
     wired: true,
   },
   {
+    id: 'carwash_data_passata',
+    label: 'Data lavaggio nel passato',
+    used_in: 'Prime Wash > Salva prenotazione con data/ora nel passato',
+    reason: 'La data e ora del lavaggio sono nel passato: prenotare nel passato richiede autorizzazione direzionale.',
+    group: 'Lavaggio',
+    wired: true,
+  },
+  {
     id: 'slot_unavailable',
     label: 'Forza prenotazione su slot occupato',
     used_in: 'Salva prenotazione su slot non disponibile',

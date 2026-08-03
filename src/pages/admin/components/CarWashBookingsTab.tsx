@@ -2012,8 +2012,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       return
     }
     const appointmentDate = new Date(appointmentDateTime)
-    if (appointmentDate < new Date()) {
-      toast.error('La data e ora dell\'appuntamento non può essere nel passato.')
+    // 2026-08: prenotare nel PASSATO non e' un hard-block (bug: bloccava senza
+    // nemmeno chiedere OTP). Come gli altri gate lavaggio, forzarlo richiede
+    // autorizzazione direzionale via OTP ('carwash_data_passata'); il save
+    // riprende dopo l'approvazione (resume hook). Test/override attivo passano.
+    if (!currentVehicleIsTest && appointmentDate < new Date() && !override.hasOverride('carwash_data_passata')) {
+      pendingCreateBookingRef.current = { force: forceBooking }
+      createBookingLockRef.current = false
+      override.requestOverride('carwash_data_passata', `La data e ora scelte (${formData.appointment_date} ${formData.appointment_time}) sono nel passato. Prenotare nel passato richiede autorizzazione direzionale.`)
       return
     }
 
@@ -4605,8 +4611,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Data *</label>
+                  {/* 2026-08: niente min -> si puo' scegliere una data passata.
+                      La prenotazione nel passato non e' bloccata: al salvataggio
+                      scatta l'OTP 'carwash_data_passata' (gate direzionale). */}
                   <EuropeanDateInput
-                    min={todayStr}
                     value={formData.appointment_date}
                     onChange={(__v: string) => setFormData({ ...formData, appointment_date: __v })}
                     className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
