@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
+import MoneyInput from '../../../components/MoneyInput'
 
 /**
  * Promo Incassi.
@@ -235,14 +236,12 @@ export default function PromoIncassiTab() {
 
                     <div>
                         <label className="block text-sm font-semibold text-theme-text-primary mb-2">Coefficiente soglia</label>
-                        <input
-                            type="number"
-                            step="0.05"
-                            min="0.1"
-                            max="1"
-                            value={draftThreshold}
-                            onChange={(e) => setDraftThreshold(e.target.value)}
-                            className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                        <MoneyInput
+                          min="0.1"
+                          max="1"
+                          value={draftThreshold}
+                          onChange={(__v: string) => setDraftThreshold(__v)}
+                          className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
                         />
                         <p className="text-xs text-theme-text-muted mt-2">
                             La promo parte quando il coefficiente attivo del veicolo è ≤ a questo valore. Default <span className="text-dr7-gold">0.8</span>.

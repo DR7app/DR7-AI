@@ -25,6 +25,7 @@ import {
 } from '../../../utils/pauseObbligatorie'
 import { MyDayEditorModal } from './RilevazioneOrariTab'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import MoneyInput from '../../../components/MoneyInput'
 
 interface Operatore {
     id: string
@@ -1617,18 +1618,29 @@ function QuickPagaCalc({ days, rangeLabel }: { days: DayBreakdown[]; rangeLabel:
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
                 <label className="block">
                     <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">Paga oraria (€/h)</span>
-                    <input type="number" step="0.01" value={oraria} onChange={(e) => setOraria(e.target.value)} placeholder="es. 10.00"
-                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-sm text-theme-text-primary mt-1" />
+                    <MoneyInput
+                      value={oraria}
+                      onChange={(__v: string) => setOraria(__v)}
+                      placeholder="es. 10.00"
+                      className="w-full bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-sm text-theme-text-primary mt-1"
+                    />
                 </label>
                 <label className="block">
                     <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">Straordinario (€/h)</span>
-                    <input type="number" step="0.01" value={straord} onChange={(e) => setStraord(e.target.value)} placeholder="es. 15.00"
-                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-sm text-theme-text-primary mt-1" />
+                    <MoneyInput
+                      value={straord}
+                      onChange={(__v: string) => setStraord(__v)}
+                      placeholder="es. 15.00"
+                      className="w-full bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-sm text-theme-text-primary mt-1"
+                    />
                 </label>
                 <label className="block">
                     <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">Soglia straord. (h/giorno)</span>
-                    <input type="number" step="0.5" value={sogliaH} onChange={(e) => setSogliaH(e.target.value)}
-                        className="w-full bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-sm text-theme-text-primary mt-1" />
+                    <MoneyInput
+                      value={sogliaH}
+                      onChange={(__v: string) => setSogliaH(__v)}
+                      className="w-full bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-sm text-theme-text-primary mt-1"
+                    />
                 </label>
             </div>
             <div className="grid grid-cols-3 gap-2">

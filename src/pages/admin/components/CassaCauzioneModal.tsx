@@ -2,6 +2,7 @@ import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import MoneyInput from '../../../components/MoneyInput'
 
 interface Cauzione {
   id: string
@@ -219,13 +220,11 @@ export default function CassaCauzioneModal({ cauzione, onClose, onSuccess }: Pro
             </label>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-semibold text-theme-text-secondary">€</span>
-              <input
-                type="number"
-                step="0.01"
+              <MoneyInput
                 min="0.01"
                 max={maxAmount}
                 value={importoDaIncassare}
-                onChange={(e) => setImportoDaIncassare(e.target.value)}
+                onChange={(__v: string) => setImportoDaIncassare(__v)}
                 disabled={processing}
                 className="w-full pl-10 pr-4 py-3 bg-theme-bg-primary border border-theme-border rounded-xl text-xl font-bold text-theme-text-primary focus:outline-none focus:border-red-500 transition-colors disabled:opacity-50"
                 placeholder="0.00"

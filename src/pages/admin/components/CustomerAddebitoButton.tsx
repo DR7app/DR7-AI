@@ -2,6 +2,7 @@ import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
 import type { NexiCardView } from '../../../utils/nexiCards'
+import MoneyInput from '../../../components/MoneyInput'
 
 /**
  * Single "Addebito" control for a customer that owns one or more tokenized
@@ -137,16 +138,13 @@ export default function CustomerAddebitoButton({
             {/* 1) Importo */}
             <div className="flex items-center gap-2">
                 <span className="text-theme-text-muted text-sm">€</span>
-                <input
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    step="0.01"
-                    value={amount}
-                    onChange={e => setAmount(e.target.value)}
-                    placeholder="Importo da addebitare"
-                    autoFocus
-                    className="flex-1 px-2 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
+                <MoneyInput
+                  min="0"
+                  value={amount}
+                  onChange={(__v: string) => setAmount(__v)}
+                  placeholder="Importo da addebitare"
+                  autoFocus
+                  className="flex-1 px-2 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
                 />
             </div>
 

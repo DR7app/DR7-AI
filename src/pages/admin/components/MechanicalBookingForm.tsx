@@ -14,6 +14,7 @@ import {
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import MoneyInput from '../../../components/MoneyInput'
 
 interface Customer {
     id: string
@@ -541,23 +542,19 @@ export default function MechanicalBookingForm({ initialData, customers, onSave, 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label className="block text-theme-text-primary font-semibold mb-2">Prezzo Totale (€)</label>
-                        <input
-                            type="number"
-                            step="0.01"
-                            required
-                            value={formData.price_total}
-                            onChange={(e) => setFormData({ ...formData, price_total: parseFloat(e.target.value) })}
-                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary font-bold text-lg"
+                        <MoneyInput
+                          required
+                          value={formData.price_total}
+                          onChange={(__v: string) => setFormData({ ...formData, price_total: parseFloat(__v) })}
+                          className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary font-bold text-lg"
                         />
                     </div>
                     <div>
                         <label className="block text-theme-text-primary font-semibold mb-2">Importo Pagato (€)</label>
-                        <input
-                            type="number"
-                            step="0.01"
-                            value={formData.amount_paid}
-                            onChange={(e) => setFormData({ ...formData, amount_paid: parseFloat(e.target.value) })}
-                            className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary"
+                        <MoneyInput
+                          value={formData.amount_paid}
+                          onChange={(__v: string) => setFormData({ ...formData, amount_paid: parseFloat(__v) })}
+                          className="w-full px-4 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary"
                         />
                     </div>
                     <div>

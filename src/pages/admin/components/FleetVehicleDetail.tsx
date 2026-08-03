@@ -5,6 +5,7 @@ import Button from './Button'
 import toast from 'react-hot-toast'
 import FleetVehiclePanoramica from './FleetVehiclePanoramica'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import MoneyInput from '../../../components/MoneyInput'
 
 interface FleetVehicleDetailProps {
     vehicleId: string
@@ -450,14 +451,12 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                 </div>
                                 <div>
                                     <label className="text-theme-text-muted text-sm block mb-1">0-100 km/h (sec)</label>
-                                    <input
-                                        type="number"
-                                        step="0.1"
-                                        value={editedVehicle.metadata?.acceleration_0_100 || ''}
-                                        onChange={(e) => updateField('metadata', { ...editedVehicle.metadata, acceleration_0_100: e.target.value ? parseFloat(e.target.value) : null })}
-                                        onFocus={(e) => e.target.select()}
-                                        className="w-full bg-theme-bg-tertiary text-theme-text-primary font-bold rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
-                                        placeholder="es. 3.8"
+                                    <MoneyInput
+                                      value={editedVehicle.metadata?.acceleration_0_100 || ''}
+                                      onChange={(__v: string) => updateField('metadata', { ...editedVehicle.metadata, acceleration_0_100: __v ? parseFloat(__v) : null })}
+                                      onFocus={(e) => e.target.select()}
+                                      className="w-full bg-theme-bg-tertiary text-theme-text-primary font-bold rounded px-3 py-2 border border-theme-border-light focus:border-dr7-gold focus:outline-none"
+                                      placeholder="es. 3.8"
                                     />
                                 </div>
                             </div>
@@ -941,7 +940,7 @@ export default function FleetVehicleDetail({ vehicleId, onBack }: FleetVehicleDe
                                 </div>
                                 <div>
                                     <label className="block text-xs text-theme-text-secondary mb-1">Costo (€)</label>
-                                    <input type="number" step="0.01" value={logForm.costo} onChange={(e) => setLogForm({ ...logForm, costo: e.target.value })} placeholder="opzionale" className="w-full bg-theme-bg-secondary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border" />
+                                    <MoneyInput value={logForm.costo} onChange={(__v: string) => setLogForm({ ...logForm, costo: __v })} placeholder="opzionale" className="w-full bg-theme-bg-secondary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border" />
                                 </div>
                                 <div className="md:col-span-4">
                                     <label className="block text-xs text-theme-text-secondary mb-1">Descrizione / lavori effettuati</label>

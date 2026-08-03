@@ -4,6 +4,7 @@ import Button from './Button'
 import toast from 'react-hot-toast'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import MoneyInput from '../../../components/MoneyInput'
 
 interface Invoice {
   id: string
@@ -399,11 +400,9 @@ export default function InvoicesTab() {
                     />
                   </div>
                   <div className="col-span-3 md:col-span-2">
-                    <input
-                      type="number"
-                      step="0.01"
+                    <MoneyInput
                       value={item.unit_price}
-                      onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                      onChange={(__v: string) => updateItem(index, 'unit_price', parseFloat(__v) || 0)}
                       className="w-full bg-theme-bg-secondary border-theme-border rounded-full px-3 py-2 text-theme-text-primary text-sm"
                       placeholder="Prezzo"
                       required

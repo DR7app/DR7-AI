@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import WalletAnalytics from './WalletAnalytics'
+import MoneyInput from '../../../components/MoneyInput'
 
 interface CustomerResult {
   id: string
@@ -1012,13 +1013,11 @@ export default function CustomerWalletTab() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Importo</label>
                 <div className="relative">
-                  <input
-                    type="number"
+                  <MoneyInput
                     value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
+                    onChange={(__v: string) => setAmount(__v)}
                     placeholder="0.00"
                     min="0.01"
-                    step="0.01"
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 text-lg font-semibold outline-none focus:border-[#3a6a6a] focus:ring-1 focus:ring-[#3a6a6a] transition-all"
                   />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">&euro;</span>

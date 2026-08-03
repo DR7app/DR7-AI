@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { validateIban, formatIbanGroups, maskIban } from '../../../utils/ibanValidation'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import MoneyInput from '../../../components/MoneyInput'
 
 interface NuovaCauzioneModalProps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -304,15 +305,13 @@ export default function NuovaCauzioneModal({ cauzione, onClose, onSave }: NuovaC
                                 <label className="block text-sm font-semibold text-theme-text-primary mb-2">
                                     Importo (€) *
                                 </label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0.01"
-                                    value={formData.importo}
-                                    onChange={(e) => setFormData({ ...formData, importo: e.target.value })}
-                                    required
-                                    placeholder="0.00"
-                                    className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                                <MoneyInput
+                                  min="0.01"
+                                  value={formData.importo}
+                                  onChange={(__v: string) => setFormData({ ...formData, importo: __v })}
+                                  required
+                                  placeholder="0.00"
+                                  className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
                                 />
                             </div>
 

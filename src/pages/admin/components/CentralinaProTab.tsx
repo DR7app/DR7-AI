@@ -16,6 +16,7 @@ import NoleggioServiceTab from './NoleggioServiceTab'
 import ClientStatusConfigSection from './ClientStatusConfigSection'
 import AutistiConfigSection from './AutistiConfigSection'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import MoneyInput from '../../../components/MoneyInput'
 
 type FleetVehicle = {
   id: string
@@ -3337,13 +3338,11 @@ function KmSforoSection({
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-theme-text-muted pointer-events-none">
                     €
                   </span>
-                  <input
-                    type="number"
+                  <MoneyInput
                     min={0}
-                    step={0.01}
                     value={cat.sforo}
-                    onChange={(e) => {
-                      const v = e.target.value
+                    onChange={(__v: string) => {
+                      const v = __v
                       patch(cat.id, { sforo: v === '' ? '' : Number(v) })
                     }}
                     className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-14 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
@@ -3396,14 +3395,12 @@ function KmSforoSection({
               {(cat.unlimitedMode || 'all_tiers') === 'all_tiers' ? (
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[16px] font-medium text-theme-text-secondary pointer-events-none">€</span>
-                  <input
-                    type="number"
+                  <MoneyInput
                     min={0}
-                    step={0.01}
                     placeholder="0"
                     value={cat.unlimitedPerDay}
-                    onChange={(e) => {
-                      const v = e.target.value
+                    onChange={(__v: string) => {
+                      const v = __v
                       patch(cat.id, { unlimitedPerDay: v === '' ? '' : Number(v) })
                     }}
                     className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-8 pr-20 py-3 text-[18px] font-semibold text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
@@ -3421,14 +3418,12 @@ function KmSforoSection({
                         </label>
                         <div className="relative">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[16px] font-medium text-theme-text-secondary pointer-events-none">€</span>
-                          <input
-                            type="number"
+                          <MoneyInput
                             min={0}
-                            step={0.01}
                             placeholder="0"
                             value={val}
-                            onChange={(e) => {
-                              const v = e.target.value
+                            onChange={(__v: string) => {
+                              const v = __v
                               patch(cat.id, {
                                 unlimitedByFascia: {
                                   ...(cat.unlimitedByFascia || {}),
@@ -4009,15 +4004,13 @@ function ServiziSection({
                   <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-[13px] pointer-events-none ${s.unit === 'per_km' ? 'text-theme-text-muted/40' : 'text-theme-text-muted'}`}>
                     €
                   </span>
-                  <input
-                    type="number"
+                  <MoneyInput
                     min={0}
-                    step={0.01}
                     value={s.unit === 'per_km' ? '' : s.price}
                     disabled={s.unit === 'per_km'}
                     placeholder={s.unit === 'per_km' ? 'manuale' : ''}
-                    onChange={(e) => {
-                      const v = e.target.value
+                    onChange={(__v: string) => {
+                      const v = __v
                       patchExp(s.id, { price: v === '' ? '' : Number(v) })
                     }}
                     className={`w-24 bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-2 py-1.5 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40 ${s.unit === 'per_km' ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -4128,13 +4121,11 @@ function ServiziSection({
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">
                   €
                 </span>
-                <input
-                  type="number"
+                <MoneyInput
                   min={0}
-                  step={0.01}
                   value={servizi.dr7_flex.daily_price}
-                  onChange={(e) => {
-                    const v = e.target.value
+                  onChange={(__v: string) => {
+                    const v = __v
                     setServizi({ ...servizi, dr7_flex: { ...servizi.dr7_flex, daily_price: v === '' ? '' : Number(v) } })
                   }}
                   className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
@@ -4212,13 +4203,11 @@ function ServiziSection({
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">
                 €
               </span>
-              <input
-                type="number"
+              <MoneyInput
                 min={0}
-                step={0.01}
                 value={servizi.lavaggio.fee}
-                onChange={(e) => {
-                  const v = e.target.value
+                onChange={(__v: string) => {
+                  const v = __v
                   setServizi({ ...servizi, lavaggio: { ...servizi.lavaggio, fee: v === '' ? '' : Number(v) } })
                 }}
                 className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
@@ -4269,13 +4258,11 @@ function ServiziSection({
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">
                         €
                       </span>
-                      <input
-                        type="number"
+                      <MoneyInput
                         min={0}
-                        step={0.01}
                         value={value}
-                        onChange={(e) => {
-                          const v = e.target.value
+                        onChange={(__v: string) => {
+                          const v = __v
                           const nextByCat = { ...(servizi.delivery.by_category ?? {}) }
                           if (v === '') {
                             delete nextByCat[cat.id]
@@ -4838,11 +4825,9 @@ function NamedCoefficientTable({
               onChange={(e) => patchRow(idx, { label: e.target.value })}
               className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-[14px] text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
             />
-            <input
-              type="number"
-              step={0.01}
+            <MoneyInput
               value={r.coeff}
-              onChange={(e) => patchRow(idx, { coeff: e.target.value === '' ? '' : Number(e.target.value) })}
+              onChange={(__v: string) => patchRow(idx, { coeff: __v === '' ? '' : Number(__v) })}
               className="bg-theme-bg-secondary border border-theme-border rounded-lg px-3 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
             />
             <button
@@ -5382,14 +5367,12 @@ function PriceBox({
   return (
     <div className="relative">
       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">€</span>
-      <input
-        type="number"
+      <MoneyInput
         min={0}
-        step={0.01}
         placeholder={placeholder}
         value={value}
-        onChange={(e) => {
-          const v = e.target.value
+        onChange={(__v: string) => {
+          const v = __v
           onChange(v === '' ? '' : Number(v))
         }}
         className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
@@ -5410,14 +5393,12 @@ function CoeffBox({
   return (
     <div className="relative">
       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">×</span>
-      <input
-        type="number"
+      <MoneyInput
         min={0}
-        step={0.01}
         placeholder={placeholder}
         value={value}
-        onChange={(e) => {
-          const v = e.target.value
+        onChange={(__v: string) => {
+          const v = __v
           onChange(v === '' ? '' : Number(v))
         }}
         className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-7 pr-3 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
@@ -5488,12 +5469,10 @@ function CoefficientTable({
                 }}
                 className="bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
               />
-              <input
-                type="number"
-                step={0.01}
+              <MoneyInput
                 value={r.coeff}
-                onChange={(e) => {
-                  const v = e.target.value
+                onChange={(__v: string) => {
+                  const v = __v
                   patch(r.id, { coeff: v === '' ? '' : Number(v) })
                 }}
                 className="bg-theme-bg-secondary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
@@ -5833,13 +5812,11 @@ function FeeListEditor({
                 />
                 <div className="relative w-32 flex-shrink-0">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-theme-text-muted pointer-events-none">€</span>
-                  <input
-                    type="number"
+                  <MoneyInput
                     min={0}
-                    step={0.01}
                     value={it.amount}
-                    onChange={(e) => {
-                      const v = e.target.value
+                    onChange={(__v: string) => {
+                      const v = __v
                       patchItem(idx, { amount: v === '' ? '' : Number(v) })
                     }}
                     placeholder="0"
@@ -5942,14 +5919,12 @@ function FiscaleSection({
             Aliquota IVA
           </span>
           <div className="relative">
-            <input
-              type="number"
+            <MoneyInput
               min={0}
               max={100}
-              step={0.01}
               value={fiscal.vat_rate}
-              onChange={(e) => {
-                const v = e.target.value
+              onChange={(__v: string) => {
+                const v = __v
                 setFiscal({ ...fiscal, vat_rate: v === '' ? '' : Number(v) })
               }}
               className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-3 pr-10 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
@@ -6202,14 +6177,12 @@ function DR7ClubSection({
                 />
               </div>
               <div className={`relative ${!t.is_active ? 'opacity-50' : ''}`}>
-                <input
-                  type="number"
+                <MoneyInput
                   min={0}
                   max={100}
-                  step={0.1}
                   value={t.rate_pct}
-                  onChange={(e) => {
-                    const v = e.target.value
+                  onChange={(__v: string) => {
+                    const v = __v
                     patchTier(t.id, { rate_pct: v === '' ? '' : Number(v) })
                   }}
                   className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-3 pr-8 py-2 text-[14px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"

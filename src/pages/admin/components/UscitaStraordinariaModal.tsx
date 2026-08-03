@@ -21,6 +21,7 @@ import {
   type UscitaVehicleCard,
   type UscitaServizioExtra,
 } from '../../../utils/uscitaStraordinaria'
+import MoneyInput from '../../../components/MoneyInput'
 
 interface VehicleLite {
   id: string
@@ -907,7 +908,7 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
                         )}
                       </div>
                       <input type="number" min={1} value={s.quantity} onChange={e => patchServizio(card, i, { quantity: Number(e.target.value) || 1 })} className="col-span-2 bg-theme-bg-secondary border border-theme-border rounded px-2 py-1.5 text-xs text-theme-text-primary" placeholder="Qtà" />
-                      <input type="number" step="0.01" value={s.price} onChange={e => patchServizio(card, i, { price: e.target.value })} className="col-span-3 bg-theme-bg-secondary border border-theme-border rounded px-2 py-1.5 text-xs text-theme-text-primary" placeholder="Prezzo €" />
+                      <MoneyInput value={s.price} onChange={(__v: string) => patchServizio(card, i, { price: __v })} className="col-span-3 bg-theme-bg-secondary border border-theme-border rounded px-2 py-1.5 text-xs text-theme-text-primary" placeholder="Prezzo €" />
                       <button type="button" onClick={() => removeServizio(card, i)} className="col-span-2 text-xs text-red-400 hover:text-red-300">Rimuovi</button>
                     </div>
                   ))}

@@ -24,6 +24,7 @@ import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoic
 import { isCartaPunti, isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
 import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import MoneyInput from '../../../components/MoneyInput'
 
 const ROME_TZ = 'Europe/Rome'
 
@@ -4006,12 +4007,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Prezzo (EUR) — Minimo €{selectedService.price.toFixed(2)}
                   </label>
-                  <input
-                    type="number"
+                  <MoneyInput
                     min={selectedService.price}
-                    step="0.01"
                     value={customPrice}
-                    onChange={(e) => setCustomPrice(e.target.value)}
+                    onChange={(__v: string) => setCustomPrice(__v)}
                     placeholder={`Minimo ${selectedService.price.toFixed(2)}`}
                     className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:border-dr7-gold focus:outline-none"
                   />
@@ -4539,12 +4538,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 <div className="flex items-center gap-3">
                   <div className="relative flex-1">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted text-sm">EUR</span>
-                    <input
-                      type="number"
-                      step="0.01"
+                    <MoneyInput
                       min="0"
                       value={manualPrice ?? ''}
-                      onChange={(e) => setManualPrice(e.target.value === '' ? null : e.target.value)}
+                      onChange={(__v: string) => setManualPrice(__v === '' ? null : __v)}
                       placeholder={getTotal().toFixed(2)}
                       className="w-full pl-12 pr-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary placeholder-theme-text-muted"
                     />
@@ -5646,11 +5643,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 {/* Manual price override */}
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-2">Prezzo manuale (€) — lascia vuoto per usare il totale calcolato</label>
-                  <input
-                    type="number" step="0.01" min="0"
+                  <MoneyInput
+                    min="0"
                     placeholder={getEditTotal().toFixed(2)}
                     value={editingBooking.price_total !== Math.round(getEditTotal() * 100) ? (editingBooking.price_total / 100).toFixed(2) : ''}
-                    onChange={(e) => setEditingBooking({ ...editingBooking, price_total: e.target.value ? Math.round(parseFloat(e.target.value) * 100) : Math.round(getEditTotal() * 100) })}
+                    onChange={(__v: string) => setEditingBooking({ ...editingBooking, price_total: __v ? Math.round(parseFloat(__v) * 100) : Math.round(getEditTotal() * 100) })}
                     className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
                   />
                 </div>
@@ -5740,12 +5737,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       <div className="mt-2 space-y-2 p-3 bg-theme-bg-tertiary/50 rounded-lg border border-theme-border/30">
                         <div>
                           <label className="block text-xs font-medium text-theme-text-secondary mb-1">Importo già pagato (€)</label>
-                          <input
-                            type="number" step="0.01" min="0"
+                          <MoneyInput
+                            min="0"
                             value={(editingBooking.booking_details?.amountPaid || 0) / 100}
-                            onChange={(e) => setEditingBooking({
+                            onChange={(__v: string) => setEditingBooking({
                               ...editingBooking,
-                              booking_details: { ...(editingBooking.booking_details || {}), amountPaid: Math.round(parseFloat(e.target.value || '0') * 100) }
+                              booking_details: { ...(editingBooking.booking_details || {}), amountPaid: Math.round(parseFloat(__v || '0') * 100) }
                             })}
                             placeholder="0.00"
                             className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm"

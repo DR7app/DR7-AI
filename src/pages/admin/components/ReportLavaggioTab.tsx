@@ -8,6 +8,7 @@ import {
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { useTheme } from '../../../contexts/ThemeContext'
+import MoneyInput from '../../../components/MoneyInput'
 
 interface WashTypeBreakdown {
   type: string
@@ -503,10 +504,10 @@ export default function ReportLavaggioTab() {
               </div>
               {stipendioEditing && canEditStipendio ? (
                 <div className="flex items-center gap-1 mt-1.5">
-                  <input
-                    type="number" step="0.01" min="0"
+                  <MoneyInput
+                    min="0"
                     value={stipendioInput}
-                    onChange={e => setStipendioInput(e.target.value)}
+                    onChange={(__v: string) => setStipendioInput(__v)}
                     className="flex-1 px-2 py-1 rounded text-[12px] font-bold tabular-nums bg-white text-zinc-900 ring-1 ring-zinc-300 dark:bg-zinc-900 dark:text-cyan-100 dark:ring-cyan-500/30 focus:outline-none focus:ring-cyan-500/60"
                     autoFocus
                   />

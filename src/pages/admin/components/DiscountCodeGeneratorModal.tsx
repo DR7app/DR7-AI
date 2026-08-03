@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import MoneyInput from '../../../components/MoneyInput'
 
 interface CustomerOption {
     id: string
@@ -354,16 +355,14 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
                                 <span className="text-theme-text-primary">Percentuale (%)</span>
                             </label>
                         </div>
-                        <input
-                            type="number"
-                            step="0.01"
-                            min="0.01"
-                            max={formData.value_type === 'percentage' ? 100 : undefined}
-                            value={formData.value_amount}
-                            onChange={(e) => updateField('value_amount', e.target.value)}
-                            placeholder={formData.value_type === 'fixed' ? '0.00 €' : '0 %'}
-                            required
-                            className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                        <MoneyInput
+                          min="0.01"
+                          max={formData.value_type === 'percentage' ? 100 : undefined}
+                          value={formData.value_amount}
+                          onChange={(__v: string) => updateField('value_amount', __v)}
+                          placeholder={formData.value_type === 'fixed' ? '0.00 €' : '0 %'}
+                          required
+                          className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
                         />
                         {formData.code_type === 'gift_card' && (
                             <p className="text-xs text-theme-text-muted mt-1">Le gift card hanno sempre un valore fisso in euro</p>
@@ -382,14 +381,12 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
                             <span className="text-sm font-semibold text-theme-text-primary">Spesa minima</span>
                         </label>
                         {formData.has_minimum_spend && (
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={formData.minimum_spend}
-                                onChange={(e) => updateField('minimum_spend', e.target.value)}
-                                placeholder="Importo minimo in €"
-                                className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                            <MoneyInput
+                              min="0"
+                              value={formData.minimum_spend}
+                              onChange={(__v: string) => updateField('minimum_spend', __v)}
+                              placeholder="Importo minimo in €"
+                              className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
                             />
                         )}
                     </div>

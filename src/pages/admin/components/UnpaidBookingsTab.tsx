@@ -9,6 +9,7 @@ import { authFetch } from '../../../utils/authFetch'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
+import MoneyInput from '../../../components/MoneyInput'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -2614,10 +2615,10 @@ export default function UnpaidBookingsTab() {
       <div className="flex items-center gap-1 mt-1">
         <div className="relative flex-1">
           <span className="absolute left-2 top-1/2 -translate-y-1/2 text-theme-text-muted text-xs">€</span>
-          <input
-            type="number" step="0.01" min="0.01"
+          <MoneyInput
+            min="0.01"
             value={partialPayValue}
-            onChange={e => setPartialPayValue(e.target.value)}
+            onChange={(__v: string) => setPartialPayValue(__v)}
             placeholder="Importo"
             className="w-full pl-5 pr-2 py-1 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/50"
             onKeyDown={e => {
@@ -2645,10 +2646,10 @@ export default function UnpaidBookingsTab() {
       <div className="flex items-center gap-1 mt-1">
         <div className="relative flex-1">
           <span className="absolute left-2 top-1/2 -translate-y-1/2 text-theme-text-muted text-xs">€</span>
-          <input
-            type="number" step="0.01" min="0.01"
+          <MoneyInput
+            min="0.01"
             value={editAmountValue}
-            onChange={e => setEditAmountValue(e.target.value)}
+            onChange={(__v: string) => setEditAmountValue(__v)}
             placeholder={currentAmount.toFixed(2)}
             className="w-full pl-5 pr-2 py-1 bg-theme-bg-tertiary border border-theme-border rounded text-theme-text-primary text-xs focus:outline-none focus:ring-1 focus:ring-dr7-gold/50"
             onKeyDown={e => {
@@ -2798,8 +2799,11 @@ export default function UnpaidBookingsTab() {
                           )}
                           {partialLinkKey === extPartialKey && (
                             <div className="flex items-center gap-1 w-full mt-1">
-                              <input type="number" step="0.01" min="1" max={extRemaining}
-                                value={partialLinkValue} onChange={e => setPartialLinkValue(e.target.value)}
+                              <MoneyInput
+                                min="1"
+                                max={extRemaining}
+                                value={partialLinkValue}
+                                onChange={(__v: string) => setPartialLinkValue(__v)}
                                 placeholder={`Max €${extRemaining.toFixed(2)}`}
                                 className="flex-1 px-2 py-1 bg-theme-bg-tertiary border border-purple-500/50 rounded text-xs text-theme-text-primary"
                                 autoFocus
@@ -2881,8 +2885,11 @@ export default function UnpaidBookingsTab() {
                 )}
                 {partialLinkKey === bkKey && (
                   <div className="flex items-center gap-1 w-full mt-1">
-                    <input type="number" step="0.01" min="1" max={remainingCents / 100}
-                      value={partialLinkValue} onChange={e => setPartialLinkValue(e.target.value)}
+                    <MoneyInput
+                      min="1"
+                      max={remainingCents / 100}
+                      value={partialLinkValue}
+                      onChange={(__v: string) => setPartialLinkValue(__v)}
                       placeholder={`Max €${(remainingCents / 100).toFixed(2)}`}
                       className="flex-1 px-2 py-1 bg-theme-bg-tertiary border border-purple-500/50 rounded text-xs text-theme-text-primary"
                       autoFocus
@@ -2988,8 +2995,11 @@ export default function UnpaidBookingsTab() {
                 )}
                 {partialLinkKey === bkKey && (
                   <div className="flex items-center gap-1 w-full mt-1">
-                    <input type="number" step="0.01" min="1" max={remainingCents / 100}
-                      value={partialLinkValue} onChange={e => setPartialLinkValue(e.target.value)}
+                    <MoneyInput
+                      min="1"
+                      max={remainingCents / 100}
+                      value={partialLinkValue}
+                      onChange={(__v: string) => setPartialLinkValue(__v)}
                       placeholder={`Max €${(remainingCents / 100).toFixed(2)}`}
                       className="flex-1 px-2 py-1 bg-theme-bg-tertiary border border-purple-500/50 rounded text-xs text-theme-text-primary"
                       autoFocus
@@ -3124,8 +3134,11 @@ export default function UnpaidBookingsTab() {
                     )}
                     {partialLinkKey === itemKey && (
                       <div className="flex items-center gap-1 w-full mt-1">
-                        <input type="number" step="0.01" min="1" max={item.remaining}
-                          value={partialLinkValue} onChange={e => setPartialLinkValue(e.target.value)}
+                        <MoneyInput
+                          min="1"
+                          max={item.remaining}
+                          value={partialLinkValue}
+                          onChange={(__v: string) => setPartialLinkValue(__v)}
                           placeholder={`Max €${item.remaining.toFixed(2)}`}
                           className="flex-1 px-2 py-1 bg-theme-bg-tertiary border border-purple-500/50 rounded text-xs text-theme-text-primary"
                           autoFocus

@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+import MoneyInput from '../../../components/MoneyInput'
 
 interface CatalogVehicle {
   id: string
@@ -300,7 +301,7 @@ export default function TerraCatalogTab() {
                 </div>
                 <div>
                   <label className="block text-[11px] uppercase tracking-wide text-theme-text-muted mb-1">Tariffa/giorno € <span className="normal-case text-theme-text-muted/70">(opzionale · altrimenti la imposti dopo in Centralina Pro)</span></label>
-                  <input type="number" step="0.01" value={form.daily_rate} onChange={e => setForm({ ...form, daily_rate: e.target.value })} className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary" />
+                  <MoneyInput value={form.daily_rate} onChange={(__v: string) => setForm({ ...form, daily_rate: __v })} className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary" />
                 </div>
               </div>
               <div>

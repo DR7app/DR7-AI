@@ -2,6 +2,7 @@ import { useState, useEffect, memo } from 'react'
 import { createPortal } from 'react-dom'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
+import MoneyInput from '../../../components/MoneyInput'
 
 /**
  * Modal "Accetta preventivo" — same UX pattern as PreventivoRejectModal:
@@ -191,14 +192,12 @@ function PreventivoAcceptModal({ onConfirm, customers }: Props) {
                 {paymentStatus === 'pending' && (
                     <div className="mb-4">
                         <label className="block text-sm font-medium text-theme-text-secondary mb-1">Acconto incassato (EUR)</label>
-                        <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={amountPaid}
-                            onChange={(e) => setAmountPaid(e.target.value)}
-                            placeholder="0.00"
-                            className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
+                        <MoneyInput
+                          min="0"
+                          value={amountPaid}
+                          onChange={(__v: string) => setAmountPaid(__v)}
+                          placeholder="0.00"
+                          className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
                         />
                         <p className="text-xs text-theme-text-muted mt-1">Lascia 0 se nulla e' stato ancora pagato.</p>
                     </div>

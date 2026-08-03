@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+import MoneyInput from '../../../components/MoneyInput'
 
 interface PriceOption {
   label: string
@@ -349,12 +350,10 @@ export default function CarWashCatalogTab() {
               <div className="flex items-center gap-2 flex-shrink-0">
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-theme-text-muted pointer-events-none">€</span>
-                  <input
-                    type="number"
+                  <MoneyInput
                     min={0}
-                    step={0.01}
                     value={primeFlexPrice}
-                    onChange={(e) => setPrimeFlexPrice(e.target.value)}
+                    onChange={(__v: string) => setPrimeFlexPrice(__v)}
                     className="w-32 bg-theme-bg-primary border border-theme-border rounded-lg pl-7 pr-3 py-2 text-sm text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
                     placeholder="0.00"
                   />
@@ -385,8 +384,12 @@ export default function CarWashCatalogTab() {
             </div>
             <div>
               <label className="block text-xs text-theme-text-muted mb-1">Prezzo (€)</label>
-              <input type="number" step="0.01" value={newService.price} onChange={e => setNewService(prev => ({ ...prev, price: e.target.value }))}
-                className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold" placeholder="29.90" />
+              <MoneyInput
+                value={newService.price}
+                onChange={(__v: string) => setNewService(prev => ({ ...prev, price: __v }))}
+                className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
+                placeholder="29.90"
+              />
             </div>
             <div>
               <label className="block text-xs text-theme-text-muted mb-1">Durata</label>
@@ -597,13 +600,11 @@ function ServiceCard({
                 <div key={i} className="flex items-center gap-2">
                   <span className="text-sm text-theme-text-muted min-w-[40px]">{opt.label}</span>
                   <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      step="0.01"
+                    <MoneyInput
                       value={opt.price}
-                      onChange={e => {
+                      onChange={(__v: string) => {
                         const updated = [...editPriceOptions]
-                        updated[i] = { ...updated[i], price: parseFloat(e.target.value) || 0 }
+                        updated[i] = { ...updated[i], price: parseFloat(__v) || 0 }
                         onEditPriceOptions(updated)
                       }}
                       className="w-24 px-2 py-1 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm text-right focus:outline-none focus:border-dr7-gold"
@@ -617,11 +618,9 @@ function ServiceCard({
         ) : (
           <div className="mb-3">
             <label className="block text-xs text-theme-text-muted mb-1">Prezzo (&euro;)</label>
-            <input
-              type="number"
-              step="0.01"
+            <MoneyInput
               value={editPrice}
-              onChange={e => onEditPrice(e.target.value)}
+              onChange={(__v: string) => onEditPrice(__v)}
               className="w-full px-3 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
             />
           </div>

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CATEGORIES } from './scadenzeConfig'
 import type { Scadenza, NewScadenzaForm } from './scadenzeConfig'
 import EuropeanDateInput from '../../../../components/EuropeanDateInput'
+import MoneyInput from '../../../../components/MoneyInput'
 
 interface ScadenzeEditModalProps {
   scadenza: Scadenza
@@ -89,11 +90,9 @@ export default function ScadenzeEditModal({ scadenza, onSave, onClose }: Scadenz
 
           <div>
             <label className="block text-sm font-medium text-theme-text-secondary mb-1">Importo</label>
-            <input
-              type="number"
-              step="0.01"
+            <MoneyInput
               value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: e.target.value })}
+              onChange={(__v: string) => setForm({ ...form, amount: __v })}
               placeholder="0,00"
               className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 border border-theme-border"
             />

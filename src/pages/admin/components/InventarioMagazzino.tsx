@@ -10,6 +10,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+import MoneyInput from '../../../components/MoneyInput'
 
 // ── Tipi ─────────────────────────────────────────────────────────────────────
 interface Categoria { id: string; codice: string; nome: string; ordine: number; attiva: boolean }
@@ -565,8 +566,13 @@ function MovimentoModal({ ctx, busy, onClose, onConfirm }: { ctx: { articolo: Ar
         <h3 className="text-base font-semibold text-theme-text-primary">{titolo}</h3>
         <p className="text-xs text-theme-text-muted mt-0.5">{ctx.articolo.nome} · {ctx.articolo.codice}</p>
         <label className="block text-xs text-theme-text-secondary mt-4 mb-1">{help}</label>
-        <input autoFocus type="number" step="0.01" min="0" value={valore} onChange={e => setValore(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary" />
+        <MoneyInput
+          autoFocus
+          min="0"
+          value={valore}
+          onChange={(__v: string) => setValore(__v)}
+          className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary"
+        />
         <label className="block text-xs text-theme-text-secondary mt-3 mb-1">Motivo</label>
         <input value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Es. rifornimento sala, evento clienti…"
           className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary" />
@@ -611,12 +617,12 @@ function ArticoloModal({ initial, categorie, fornitori, busy, nextCodeFor, onClo
             <label className={lblCls}>Nome articolo</label>
             <input value={f.nome || ''} onChange={e => set('nome', e.target.value)} className={inputCls} />
           </div>
-          <div><label className={lblCls}>Quantita</label><input type="number" step="0.01" value={f.quantita ?? ''} onChange={e => set('quantita', e.target.value)} className={inputCls} /></div>
+          <div><label className={lblCls}>Quantita</label><MoneyInput value={f.quantita ?? ''} onChange={(__v: string) => set('quantita', __v)} className={inputCls} /></div>
           <div><label className={lblCls}>Unita</label><input value={f.unita || ''} onChange={e => set('unita', e.target.value)} placeholder="pezzi, flaconi…" className={inputCls} /></div>
           <div><label className={lblCls}>Giacenza % (solo contenitori)</label><input type="number" step="1" min="0" max="100" value={f.giacenza_pct ?? ''} onChange={e => set('giacenza_pct', e.target.value)} placeholder="0–100" className={inputCls} /></div>
-          <div><label className={lblCls}>Prezzo unitario €</label><input type="number" step="0.01" value={f.prezzo ?? ''} onChange={e => set('prezzo', e.target.value)} className={inputCls} /></div>
-          <div><label className={lblCls}>Soglia minima</label><input type="number" step="0.01" value={f.soglia_minima ?? ''} onChange={e => set('soglia_minima', e.target.value)} placeholder="riordino sotto questo" className={inputCls} /></div>
-          <div><label className={lblCls}>Quantita di riordino</label><input type="number" step="0.01" value={f.quantita_riordino ?? ''} onChange={e => set('quantita_riordino', e.target.value)} className={inputCls} /></div>
+          <div><label className={lblCls}>Prezzo unitario €</label><MoneyInput value={f.prezzo ?? ''} onChange={(__v: string) => set('prezzo', __v)} className={inputCls} /></div>
+          <div><label className={lblCls}>Soglia minima</label><MoneyInput value={f.soglia_minima ?? ''} onChange={(__v: string) => set('soglia_minima', __v)} placeholder="riordino sotto questo" className={inputCls} /></div>
+          <div><label className={lblCls}>Quantita di riordino</label><MoneyInput value={f.quantita_riordino ?? ''} onChange={(__v: string) => set('quantita_riordino', __v)} className={inputCls} /></div>
           <div><label className={lblCls}>Fornitore</label>
             <select value={f.fornitore_id || ''} onChange={e => set('fornitore_id', e.target.value)} className={inputCls}>
               <option value="">—</option>

@@ -103,6 +103,7 @@ import { kmFromDR7Office } from '../../../utils/dr7Distance'
 import { resolvePacchetti } from '../../../utils/pacchettiResolver'
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import MoneyInput from '../../../components/MoneyInput'
 
 // --- Kasko Constants & Types ---
 type KaskoTier = 'RCA' | 'KASKO_BASE' | 'KASKO_BLACK' | 'KASKO_SIGNATURE' | 'DR7';
@@ -11340,12 +11341,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
                 <div>
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">Importo Aggiuntivo (€)</label>
-                  <input
-                    type="number"
-                    step="0.01"
+                  <MoneyInput
                     min="0"
                     value={extendData.additional_amount}
-                    onChange={(e) => setExtendData({ ...extendData, additional_amount: e.target.value })}
+                    onChange={(__v: string) => setExtendData({ ...extendData, additional_amount: __v })}
                     className="w-full px-3 py-2 bg-theme-bg-secondary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-purple-500"
                     placeholder="0.00"
                   />

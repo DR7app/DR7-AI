@@ -4,6 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import MoneyInput from '../../../components/MoneyInput'
 
 interface Contract {
   id: string
@@ -608,22 +609,18 @@ export default function ContrattoTab() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-2">Tariffa Giornaliera (€) *</label>
-                <input
-                  type="number"
-                  step="0.01"
+                <MoneyInput
                   value={formData.daily_rate}
-                  onChange={(e) => setFormData({ ...formData, daily_rate: parseFloat(e.target.value) })}
+                  onChange={(__v: string) => setFormData({ ...formData, daily_rate: parseFloat(__v) })}
                   className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                   required
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-2">Cauzione (€)</label>
-                <input
-                  type="number"
-                  step="0.01"
+                <MoneyInput
                   value={formData.deposit_amount}
-                  onChange={(e) => setFormData({ ...formData, deposit_amount: parseFloat(e.target.value) })}
+                  onChange={(__v: string) => setFormData({ ...formData, deposit_amount: parseFloat(__v) })}
                   className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                 />
               </div>

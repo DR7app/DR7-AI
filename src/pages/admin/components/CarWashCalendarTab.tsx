@@ -12,6 +12,7 @@ import { logger } from '../../../utils/logger'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import MoneyInput from '../../../components/MoneyInput'
 
 // 2026-05-22: Premium telemetry restyle scoped to this page only.
 // 2026-05-27: gated to dark mode only — overriding theme vars in light
@@ -1572,10 +1573,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
 
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-2">Prezzo manuale (€) — lascia vuoto per usare il totale calcolato</label>
-                <input type="number" step="0.01" placeholder={getEditTotal().toFixed(2)}
+                <MoneyInput
+                  placeholder={getEditTotal().toFixed(2)}
                   value={editingBooking.price_total !== Math.round(getEditTotal() * 100) ? (editingBooking.price_total / 100).toFixed(2) : ''}
-                  onChange={(e) => setEditingBooking({ ...editingBooking, price_total: e.target.value ? parseFloat(e.target.value) * 100 : Math.round(getEditTotal() * 100) })}
-                  className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary" />
+                  onChange={(__v: string) => setEditingBooking({ ...editingBooking, price_total: __v ? parseFloat(__v) * 100 : Math.round(getEditTotal() * 100) })}
+                  className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -1608,11 +1611,13 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                   {editingBooking.payment_status === 'partial' && (
                     <div className="mt-2">
                       <label className="block text-xs font-medium text-theme-text-secondary mb-1">Importo già pagato (€)</label>
-                      <input type="number" step="0.01" min="0"
+                      <MoneyInput
+                        min="0"
                         value={(editingBooking.booking_details?.amountPaid || 0) / 100}
-                        onChange={(e) => setEditingBooking({ ...editingBooking, booking_details: { ...(editingBooking.booking_details || {}), amountPaid: Math.round(parseFloat(e.target.value || '0') * 100) } })}
+                        onChange={(__v: string) => setEditingBooking({ ...editingBooking, booking_details: { ...(editingBooking.booking_details || {}), amountPaid: Math.round(parseFloat(__v || '0') * 100) } })}
                         placeholder="0.00"
-                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm" />
+                        className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary text-sm"
+                      />
                       <p className="text-xs text-cyan-700 dark:text-cyan-300 mt-1">
                         Rimanente: EUR {(((editingBooking.price_total || 0) - (editingBooking.booking_details?.amountPaid || 0)) / 100).toFixed(2)}
                       </p>

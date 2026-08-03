@@ -1,4 +1,5 @@
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import MoneyInput from '../../../components/MoneyInput'
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string
@@ -35,6 +36,42 @@ export default function Input({ label, className = '', ...props }: InputProps) {
           name={props.name}
           id={props.id}
           title={props.title}
+          className={`${BASE_CLASS} ${className}`}
+        />
+      </div>
+    )
+  }
+
+  // 2026-08-03 (direzione): i campi IMPORTO non usano piu' type="number". Con
+  // locale di sistema italiano il campo numerico rifiuta il separatore decimale
+  // (155,50 non digitabile, restano gli interi). step decimale => e' un importo.
+  const stepStr = props.step === undefined || props.step === null ? '' : String(props.step)
+  if (props.type === 'number' && /^0?\.\d+$/.test(stepStr)) {
+    const onChange = props.onChange
+    return (
+      <div>
+        {label && (
+          <label className="block text-sm font-medium text-theme-text-primary mb-2">
+            {label}
+          </label>
+        )}
+        <MoneyInput
+          value={typeof props.value === 'string' || typeof props.value === 'number' ? props.value : ''}
+          onChange={(v) => onChange?.({
+            target: { value: v, name: props.name ?? '' },
+            currentTarget: { value: v, name: props.name ?? '' },
+          } as React.ChangeEvent<HTMLInputElement>)}
+          min={typeof props.min === 'string' || typeof props.min === 'number' ? props.min : undefined}
+          max={typeof props.max === 'string' || typeof props.max === 'number' ? props.max : undefined}
+          placeholder={props.placeholder}
+          required={props.required}
+          disabled={props.disabled}
+          readOnly={props.readOnly}
+          name={props.name}
+          id={props.id}
+          title={props.title}
+          onKeyDown={props.onKeyDown}
+          onBlur={props.onBlur}
           className={`${BASE_CLASS} ${className}`}
         />
       </div>

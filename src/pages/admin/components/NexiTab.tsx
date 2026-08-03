@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
 import CustomerAddebitoButton from './CustomerAddebitoButton'
 import DateRangeFilter from '../../../components/DateRangeFilter'
+import MoneyInput from '../../../components/MoneyInput'
 
 interface PendingAddebito {
     id: string
@@ -1539,14 +1540,12 @@ export default function NexiTab() {
 
                         <div>
                             <label className="block text-sm font-medium text-theme-text-secondary mb-1">Importo (€) *</label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0.01"
-                                value={addebitoAmount}
-                                onChange={(e) => setAddebitoAmount(e.target.value)}
-                                placeholder="es. 150.00"
-                                className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50"
+                            <MoneyInput
+                              min="0.01"
+                              value={addebitoAmount}
+                              onChange={(__v: string) => setAddebitoAmount(__v)}
+                              placeholder="es. 150.00"
+                              className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-dr7-gold/50"
                             />
                         </div>
 
@@ -1674,16 +1673,14 @@ export default function NexiTab() {
 
                             <div>
                                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Importo (€) *</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0.01"
-                                    value={preauthAmount}
-                                    onChange={(e) => setPreauthAmount(e.target.value)}
-                                    placeholder="es. 500.00"
-                                    disabled={preauthSending}
-                                    className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                                    autoFocus
+                                <MoneyInput
+                                  min="0.01"
+                                  value={preauthAmount}
+                                  onChange={(__v: string) => setPreauthAmount(__v)}
+                                  placeholder="es. 500.00"
+                                  disabled={preauthSending}
+                                  className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                  autoFocus
                                 />
                             </div>
 
@@ -1793,14 +1790,12 @@ export default function NexiTab() {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <label className="block">
                                         <span className="text-xs text-theme-text-muted">Importo (€) *</span>
-                                        <input
-                                            type="number"
-                                            min="0.01"
-                                            step="0.01"
-                                            value={preauthLinkAmount}
-                                            onChange={e => setPreauthLinkAmount(e.target.value)}
-                                            placeholder="es. 500.00"
-                                            className="w-full mt-1 px-3 py-2 text-sm bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                                        <MoneyInput
+                                          min="0.01"
+                                          value={preauthLinkAmount}
+                                          onChange={(__v: string) => setPreauthLinkAmount(__v)}
+                                          placeholder="es. 500.00"
+                                          className="w-full mt-1 px-3 py-2 text-sm bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
                                         />
                                     </label>
                                     <label className="block">
