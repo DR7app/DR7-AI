@@ -5,23 +5,7 @@ import { logAdminAction } from '../../../utils/logAdminAction'
 import { buildBookingContext } from '../../../utils/adminLogHelpers'
 import { authFetch } from '../../../utils/authFetch'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
-
-/**
- * Normalizza un input monetario: accetta sia "." che "," come separatore
- * decimale. Risolve il bug "non riesco a digitare il punto" su browser
- * in locale italiano (type=number rifiutava il punto).
- */
-function sanitizeMoney(raw: string): string {
-    if (!raw) return ''
-    let s = String(raw).trim().replace(/,/g, '.')
-    s = s.replace(/[^0-9.\-]/g, '')
-    s = s.replace(/(?!^)-/g, '')
-    const firstDot = s.indexOf('.')
-    if (firstDot !== -1) {
-        s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, '')
-    }
-    return s
-}
+import { sanitizeMoney } from '../../../utils/money'
 
 interface PenaltyModalProps {
     isOpen: boolean

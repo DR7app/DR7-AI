@@ -5,6 +5,7 @@ import { logAdminAction } from '../../../utils/logAdminAction'
 import { buildBookingContext } from '../../../utils/adminLogHelpers'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import { authFetch } from '../../../utils/authFetch'
+import { sanitizeMoney, parseMoney } from '../../../utils/money'
 
 interface DanniModalProps {
     isOpen: boolean
@@ -159,7 +160,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
     }
 
     function addToCart() {
-        const amt = parseFloat(customAmount)
+        const amt = parseMoney(customAmount)
         if (!customLabel.trim() || isNaN(amt) || amt <= 0) return
         setCart(prev => [...prev, { id: `danno_${Date.now()}`, label: customLabel.trim(), unitPrice: amt, quantity: 1 }])
         setCustomAmount('')
@@ -215,7 +216,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
             const existingDanni = details.danni || []
             const italyDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
 
-            const paidAmount = amountPaid ? parseFloat(amountPaid) : cartTotal
+            const paidAmount = amountPaid ? parseMoney(amountPaid) : cartTotal
             const isPartial = paymentStatus === 'paid' && paidAmount < cartTotal
 
             // For partial payments, distribute paid amount proportionally across items
@@ -489,11 +490,10 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                                 <div className="relative flex-1">
                                     <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-theme-text-muted text-[13px]">&euro;</span>
                                     <input
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
+                                        type="text"
+                                        inputMode="decimal"
                                         value={customAmount}
-                                        onChange={e => setCustomAmount(e.target.value)}
+                                        onChange={e => setCustomAmount(sanitizeMoney(e.target.value))}
                                         placeholder="Importo"
                                         className="w-full pl-7 pr-2 py-2 bg-white/[0.06] border border-white/[0.08] rounded-xl text-theme-text-primary text-[13px] placeholder-theme-text-muted/50 focus:outline-none focus:ring-1 focus:ring-red-500/50"
                                         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addToCart() } }}
@@ -502,7 +502,7 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                                 <button
                                     type="button"
                                     onClick={addToCart}
-                                    disabled={!customLabel.trim() || !customAmount || parseFloat(customAmount) <= 0}
+                                    disabled={!customLabel.trim() || !customAmount || !(parseMoney(customAmount) > 0)}
                                     className="w-9 h-9 rounded-full bg-red-500/15 text-red-400 hover:bg-red-500/25 flex items-center justify-center transition-all disabled:opacity-20 disabled:cursor-not-allowed shrink-0"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
@@ -701,10 +701,10 @@ export default function DanniModal({ isOpen, booking, onClose, onSuccess, onEdit
                         <div className="flex items-center gap-3">
                             <span className="text-[13px] text-theme-text-muted">Importo pagato (€)</span>
                             <input
-                                type="number"
-                                step="0.01"
+                                type="text"
+                                inputMode="decimal"
                                 value={amountPaid}
-                                onChange={e => setAmountPaid(e.target.value)}
+                                onChange={e => setAmountPaid(sanitizeMoney(e.target.value))}
                                 placeholder={cartTotal.toFixed(2)}
                                 disabled={isGenerating}
                                 className="flex-1 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-xl text-theme-text-primary text-[13px] focus:outline-none focus:ring-1 focus:ring-red-500/50 placeholder-theme-text-muted/50"

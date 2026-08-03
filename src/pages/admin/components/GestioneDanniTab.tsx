@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import DateRangeFilter from '../../../components/DateRangeFilter'
+import { sanitizeMoney, parseMoney } from '../../../utils/money'
 
 // ── Keyword classification (mirrors report-danni.ts) ──────────────────────────
 const DANNI_KEYWORDS = [
@@ -711,7 +712,7 @@ export default function GestioneDanniTab() {
   // ── Modal: add new item ────────────────────────────────────────────────────
   async function handleAddItem() {
     if (!editModal) return
-    const amount = parseFloat(newAmount)
+    const amount = parseMoney(newAmount)
     if (!newLabel.trim() || isNaN(amount) || amount <= 0) {
       toast.error('Inserisci descrizione e importo valido')
       return
@@ -1076,11 +1077,10 @@ export default function GestioneDanniTab() {
                     <div className="relative flex-1">
                       <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-theme-text-muted text-[13px]">&euro;</span>
                       <input
-                        type="number"
-                        step="0.01"
-                        min="0"
+                        type="text"
+                        inputMode="decimal"
                         value={newAmount}
-                        onChange={e => setNewAmount(e.target.value)}
+                        onChange={e => setNewAmount(sanitizeMoney(e.target.value))}
                         placeholder="Importo"
                         disabled={saving}
                         className={`w-full pl-7 pr-2 py-2 bg-white/[0.06] border border-white/[0.08] rounded-xl text-theme-text-primary text-[13px] placeholder-theme-text-muted/50 focus:outline-none focus:ring-1 ${editModal.type === 'penali' ? 'focus:ring-orange-500/50' : 'focus:ring-red-500/50'}`}
@@ -1090,7 +1090,7 @@ export default function GestioneDanniTab() {
                     <button
                       type="button"
                       onClick={handleAddItem}
-                      disabled={saving || !newLabel.trim() || !newAmount || parseFloat(newAmount) <= 0}
+                      disabled={saving || !newLabel.trim() || !newAmount || !(parseMoney(newAmount) > 0)}
                       className={`w-9 h-9 rounded-full flex items-center justify-center transition-all disabled:opacity-20 disabled:cursor-not-allowed shrink-0 ${editModal.type === 'penali' ? 'bg-orange-500/15 text-orange-400 hover:bg-orange-500/25' : 'bg-red-500/15 text-red-400 hover:bg-red-500/25'}`}
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
@@ -1183,15 +1183,23 @@ function ItemRow({ item, accentColor, onDelete, onUpdateAmount, onPartialPayment
   const accent = accentColor === 'orange' ? 'orange' : 'red'
 
   function handleSaveEdit() {
-    const val = parseFloat(editValue)
+    const val = parseMoney(editValue)
     if (isNaN(val) || val <= 0) return
     onUpdateAmount(val)
     setEditing(false)
   }
 
   function handleSavePayment() {
-    const val = parseFloat(payValue)
-    if (isNaN(val) || val <= 0 || val > remaining + 0.005) return
+    const val = parseMoney(payValue)
+    if (isNaN(val) || val <= 0) return
+    // 2026-08-03: l'importo non puo' superare il residuo. Prima lo impediva
+    // l'attributo max del campo numerico (rimosso col passaggio a text per
+    // poter digitare i decimali) e qui si usciva in SILENZIO: il pulsante
+    // sembrava rotto. Ora si dice perche'.
+    if (val > remaining + 0.005) {
+      toast.error(`Massimo incassabile: €${remaining.toFixed(2)}`)
+      return
+    }
     onPartialPayment(val)
     setPaying(false)
     setPayValue('')
@@ -1247,19 +1255,17 @@ function ItemRow({ item, accentColor, onDelete, onUpdateAmount, onPartialPayment
               <div className="relative">
                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-theme-text-muted text-[12px]">&euro;</span>
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  max={remaining}
+                  type="text"
+                  inputMode="decimal"
                   value={payValue}
-                  onChange={e => setPayValue(e.target.value)}
+                  onChange={e => setPayValue(sanitizeMoney(e.target.value))}
                   placeholder={remaining.toFixed(2)}
                   className={`w-20 pl-5 pr-1 py-1 bg-white/[0.06] border border-white/[0.08] rounded-lg text-theme-text-primary text-[12px] focus:outline-none focus:ring-1 focus:ring-blue-500/50`}
                   onKeyDown={e => { if (e.key === 'Enter') handleSavePayment(); if (e.key === 'Escape') { setPaying(false); setPayValue('') } }}
                   autoFocus
                 />
               </div>
-              <button onClick={handleSavePayment} disabled={saving || !payValue || parseFloat(payValue) <= 0} className="w-6 h-6 rounded-full bg-green-500/15 text-green-400 hover:bg-green-500/25 flex items-center justify-center disabled:opacity-30">
+              <button onClick={handleSavePayment} disabled={saving || !payValue || !(parseMoney(payValue) > 0)} className="w-6 h-6 rounded-full bg-green-500/15 text-green-400 hover:bg-green-500/25 flex items-center justify-center disabled:opacity-30">
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
               </button>
               <button onClick={() => { setPaying(false); setPayValue('') }} className="w-6 h-6 rounded-full bg-white/10 text-theme-text-muted hover:bg-white/20 flex items-center justify-center">
@@ -1271,10 +1277,10 @@ function ItemRow({ item, accentColor, onDelete, onUpdateAmount, onPartialPayment
               <div className="relative">
                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-theme-text-muted text-[12px]">&euro;</span>
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={editValue}
-                  onChange={e => setEditValue(e.target.value)}
+                  onChange={e => setEditValue(sanitizeMoney(e.target.value))}
                   className={`w-20 pl-5 pr-1 py-1 bg-white/[0.06] border border-white/[0.08] rounded-lg text-theme-text-primary text-[12px] focus:outline-none focus:ring-1 focus:ring-${accent}-500/50`}
                   onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(); if (e.key === 'Escape') setEditing(false) }}
                   autoFocus

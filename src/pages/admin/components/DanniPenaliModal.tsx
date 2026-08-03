@@ -5,33 +5,7 @@ import { logAdminAction } from '../../../utils/logAdminAction'
 import { buildBookingContext } from '../../../utils/adminLogHelpers'
 import { authFetch } from '../../../utils/authFetch'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
-
-/**
- * Normalizza un input monetario digitato dall'admin:
- * - accetta sia "." che "," come separatore decimale
- * - blocca caratteri non numerici (tranne separatori e meno)
- * - permette un solo separatore decimale (il primo vince)
- *
- * Risolve il bug "non riesco a digitare il punto": il vecchio
- * type="number" in locale italiano (Chrome/Safari) rifiutava il punto
- * lasciando solo gli interi. Ora usiamo type="text" + inputMode="decimal"
- * + questo sanitizer cosi\' funziona sia col punto sia con la virgola.
- */
-function sanitizeMoney(raw: string): string {
-    if (!raw) return ''
-    // Trim, mantengo "-" se in prima posizione, sostituisco "," con "."
-    // per uniformare. Tolgo tutto cio\' che non e\' cifra/punto/meno.
-    let s = String(raw).trim().replace(/,/g, '.')
-    s = s.replace(/[^0-9.\-]/g, '')
-    // "-" solo in prima posizione
-    s = s.replace(/(?!^)-/g, '')
-    // Un solo "." (il primo). Tronco il resto dei punti.
-    const firstDot = s.indexOf('.')
-    if (firstDot !== -1) {
-        s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, '')
-    }
-    return s
-}
+import { sanitizeMoney } from '../../../utils/money'
 
 interface DanniPenaliModalProps {
     isOpen: boolean
