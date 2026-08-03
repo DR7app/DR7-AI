@@ -320,6 +320,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // approvazione), quindi ogni approvazione avanza di un gate senza loop.
     const anyGateApproved =
       override.overrideCodes.has('carwash_blocked_slot') ||
+      override.overrideCodes.has('carwash_data_passata') ||
       override.overrideCodes.has('prenotazione_lavaggio_conferma') ||
       override.overrideCodes.has('carta_punti_lavaggio')
     if (anyGateApproved) {
