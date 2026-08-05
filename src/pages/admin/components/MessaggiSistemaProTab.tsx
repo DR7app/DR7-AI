@@ -2138,6 +2138,13 @@ export default function MessaggiSistemaProTab() {
             toast.error('Il nome del messaggio è obbligatorio')
             return
         }
+        // Ricorrenza a calendario senza giorni = CSV vuoto, che il cron leggeva
+        // come "tutti i giorni". Meglio chiederlo subito che far partire per
+        // sbaglio un messaggio ogni giorno.
+        if (newTriggerEvent === 'on_schedule' && newTargetDays.size === 0) {
+            toast.error('Seleziona almeno un giorno della settimana per la ricorrenza')
+            return
+        }
         setCreatingNew(true)
         const messageKey = 'pro_custom_' + newLabel
             .toLowerCase()
@@ -2943,7 +2950,16 @@ export default function MessaggiSistemaProTab() {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="col-span-2">
                                         <label className="block text-xs font-medium text-theme-text-muted mb-1">Evento</label>
-                                        <select value={newTriggerEvent} onChange={e => setNewTriggerEvent(e.target.value)}
+                                        <select value={newTriggerEvent} onChange={e => {
+                                            const ev = e.target.value
+                                            setNewTriggerEvent(ev)
+                                            // 2026-08-05: una ricorrenza a calendario parte da ZERO giorni
+                                            // selezionati, così un click = "voglio QUESTO giorno". Prima i 7
+                                            // giorni erano tutti preselezionati (filtro storico degli eventi
+                                            // legati a una pratica) e il primo click TOGLIEVA il giorno scelto:
+                                            // chi cliccava "Sab" salvava "tutti tranne sabato".
+                                            setNewTargetDays(ev === 'on_schedule' ? new Set<number>() : new Set([0, 1, 2, 3, 4, 5, 6]))
+                                        }}
                                             className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
                                             {Object.entries(TRIGGER_LABELS).map(([k, v]) => (
                                                 <option key={k} value={k}>{v}</option>
@@ -2992,7 +3008,19 @@ export default function MessaggiSistemaProTab() {
                                     {newTriggerEvent === 'on_schedule' && (
                                         <div className="col-span-2 rounded-lg border border-dr7-gold/30 bg-dr7-gold/5 p-3 space-y-3">
                                             <div>
-                                                <label className="block text-xs font-medium text-theme-text-muted mb-1.5">In quali giorni parte</label>
+                                                <div className="flex items-center justify-between mb-1.5">
+                                                    <label className="block text-xs font-medium text-theme-text-muted">In quali giorni parte</label>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <button type="button" onClick={() => setNewTargetDays(new Set([0, 1, 2, 3, 4, 5, 6]))}
+                                                            className="px-2 py-0.5 rounded-full text-[10px] border border-theme-border bg-theme-bg-tertiary text-theme-text-muted hover:border-theme-text-muted transition-colors">
+                                                            Tutti
+                                                        </button>
+                                                        <button type="button" onClick={() => setNewTargetDays(new Set<number>())}
+                                                            className="px-2 py-0.5 rounded-full text-[10px] border border-theme-border bg-theme-bg-tertiary text-theme-text-muted hover:border-theme-text-muted transition-colors">
+                                                            Nessuno
+                                                        </button>
+                                                    </div>
+                                                </div>
                                                 <div className="flex flex-wrap gap-1.5">
                                                     {['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'].map((d, i) => {
                                                         const active = newTargetDays.has(i)
@@ -3016,9 +3044,15 @@ export default function MessaggiSistemaProTab() {
                                                         )
                                                     })}
                                                 </div>
-                                                <p className="text-[11px] text-theme-text-muted mt-1.5">
-                                                    Es. solo "Sab" = il messaggio parte ogni sabato all'orario impostato qui sopra.
-                                                </p>
+                                                {newTargetDays.size === 0 ? (
+                                                    <p className="text-[11px] text-amber-300 mt-1.5">
+                                                        Nessun giorno selezionato — clicca i giorni in cui vuoi che parta (es. solo "Sab" = ogni sabato).
+                                                    </p>
+                                                ) : (
+                                                    <p className="text-[11px] text-theme-text-muted mt-1.5">
+                                                        Parte {newTargetDays.size === 7 ? 'tutti i giorni' : Array.from(newTargetDays).sort((a, b) => a - b).map(d => DAY_LABELS_IT[d]).join(', ')} all'orario impostato qui sopra.
+                                                    </p>
+                                                )}
                                             </div>
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div>
@@ -3101,16 +3135,22 @@ export default function MessaggiSistemaProTab() {
                                             </div>
                                         )}
                                     </div>
+                                    {/* Categoria e stati filtrano una PRENOTAZIONE: su una ricorrenza
+                                        a calendario (che puo' riguardare mare, aria o nessun servizio)
+                                        il cron non li guarda proprio, quindi restano nascosti. */}
+                                    {newTriggerEvent !== 'on_schedule' && (
                                     <div>
                                         <label className="block text-xs font-medium text-theme-text-muted mb-1">Categoria veicolo</label>
                                         <select value={newTargetCategory} onChange={e => setNewTargetCategory(e.target.value)}
                                             className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
-                                            <option value="all">Tutti i veicoli</option>
+                                            <option value="all">Tutte le categorie</option>
                                             {proCategories.map(c => (
                                                 <option key={c.id} value={c.id}>{c.label}</option>
                                             ))}
                                         </select>
                                     </div>
+                                    )}
+                                    {newTriggerEvent !== 'on_schedule' && (
                                     <div className="col-span-2">
                                         <label className="block text-xs font-medium text-theme-text-muted mb-1">
                                             Stati prenotazione ammessi
@@ -3148,6 +3188,7 @@ export default function MessaggiSistemaProTab() {
                                             Il messaggio parte SOLO per prenotazioni in uno di questi stati. Lascia vuoto per accettare tutti gli stati. <strong>Importante:</strong> per i trigger "Alla creazione della prenotazione" su sito (cliente non ancora pagato) seleziona anche "In attesa".
                                         </p>
                                     </div>
+                                    )}
                                 </div>
 
                                 {/* Filtri avanzati — phase 1 */}
@@ -3818,10 +3859,28 @@ export default function MessaggiSistemaProTab() {
                                                         {template.trigger_event === 'on_schedule' && (
                                                             <div className="rounded-lg border border-dr7-gold/30 bg-dr7-gold/5 p-3 space-y-3">
                                                                 <div>
-                                                                    <span className="text-[11px] uppercase tracking-wider text-theme-text-muted font-semibold">Giorni di invio</span>
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="text-[11px] uppercase tracking-wider text-theme-text-muted font-semibold">Giorni di invio</span>
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <button type="button"
+                                                                                onClick={() => handleUpdateAutomation(template.id, 'target_days_of_week', '0,1,2,3,4,5,6')}
+                                                                                className="px-2 py-0.5 rounded-full text-[10px] border border-theme-border bg-theme-bg-tertiary text-theme-text-muted hover:border-theme-text-muted transition-colors">
+                                                                                Tutti
+                                                                            </button>
+                                                                            <button type="button"
+                                                                                onClick={() => handleUpdateAutomation(template.id, 'target_days_of_week', '')}
+                                                                                className="px-2 py-0.5 rounded-full text-[10px] border border-theme-border bg-theme-bg-tertiary text-theme-text-muted hover:border-theme-text-muted transition-colors"
+                                                                                title="Svuota la selezione, poi clicca solo i giorni che vuoi">
+                                                                                Nessuno
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
                                                                     <div className="flex flex-wrap gap-1.5 mt-1.5">
                                                                         {['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'].map((d, i) => {
-                                                                            const csv = template.target_days_of_week ?? '0,1,2,3,4,5,6'
+                                                                            // Ricorrenza: nessun fallback "tutti i giorni". Il CSV vuoto
+                                                                            // significa "nessun giorno scelto" e si vede — così un click
+                                                                            // AGGIUNGE il giorno invece di toglierlo da una preselezione.
+                                                                            const csv = template.target_days_of_week ?? ''
                                                                             const set = new Set(csv.split(',').map(s => s.trim()).filter(Boolean))
                                                                             const active = set.has(String(i))
                                                                             return (
@@ -3844,6 +3903,11 @@ export default function MessaggiSistemaProTab() {
                                                                             )
                                                                         })}
                                                                     </div>
+                                                                    {(template.target_days_of_week ?? '').split(',').filter(Boolean).length === 0 && (
+                                                                        <p className="text-[11px] text-amber-300 mt-1.5">
+                                                                            Nessun giorno selezionato — la ricorrenza non parte. Clicca i giorni in cui vuoi che parta.
+                                                                        </p>
+                                                                    )}
                                                                 </div>
                                                                 <div className="flex flex-wrap items-center gap-3">
                                                                     <div className="flex items-center gap-1">
@@ -3941,43 +4005,54 @@ export default function MessaggiSistemaProTab() {
                                                                     ))}
                                                                 </select>
                                                             </div>
-                                                            <span className="text-theme-text-muted text-xs">―</span>
-                                                            <div className="flex items-center gap-1">
-                                                                <input type="number" value={template.trigger_offset_hours || 24}
-                                                                    onChange={e => handleUpdateAutomation(template.id, 'trigger_offset_hours', parseInt(e.target.value) || 0)}
-                                                                    className="w-12 text-xs text-center bg-dr7-gold/15 text-dr7-gold font-bold rounded-full px-2 py-1 border-none focus:outline-none" />
-                                                                <span className="text-xs text-dr7-gold font-bold">ore</span>
-                                                            </div>
-                                                            <span className="text-theme-text-muted text-xs">―</span>
-                                                            <div className="flex items-center gap-1">
-                                                                <select value={template.send_hour ?? ''}
-                                                                    onChange={e => handleUpdateAutomation(template.id, 'send_hour', e.target.value === '' ? null : parseInt(e.target.value))}
-                                                                    className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
-                                                                    <option value="">Subito</option>
-                                                                    {Array.from({ length: 24 }, (_, i) => (
-                                                                        <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
-                                                                    ))}
-                                                                </select>
-                                                            </div>
-                                                            <span className="text-theme-text-muted text-xs">―</span>
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
-                                                                <select value={template.target_category || 'all'}
-                                                                    onChange={e => handleUpdateAutomation(template.id, 'target_category', e.target.value)}
-                                                                    className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
-                                                                    <option value="all">Tutti i veicoli</option>
-                                                                    {proCategories.map(c => (
-                                                                        <option key={c.id} value={c.id}>{c.label}</option>
-                                                                    ))}
-                                                                </select>
-                                                            </div>
+                                                            {/* 2026-08-05: offset, orario, categoria e stati sono
+                                                                filtri della PRENOTAZIONE. Una ricorrenza a calendario
+                                                                non ne ha una (e puo' riguardare mare, aria o niente
+                                                                di tutto cio'), quindi il cron li ignora del tutto:
+                                                                mostrarli faceva credere di poterci filtrare. Giorni
+                                                                e orario della ricorrenza si impostano nel riquadro
+                                                                oro qui sopra. */}
+                                                            {template.trigger_event !== 'on_schedule' && (
+                                                                <>
+                                                                    <span className="text-theme-text-muted text-xs">―</span>
+                                                                    <div className="flex items-center gap-1">
+                                                                        <input type="number" value={template.trigger_offset_hours || 24}
+                                                                            onChange={e => handleUpdateAutomation(template.id, 'trigger_offset_hours', parseInt(e.target.value) || 0)}
+                                                                            className="w-12 text-xs text-center bg-dr7-gold/15 text-dr7-gold font-bold rounded-full px-2 py-1 border-none focus:outline-none" />
+                                                                        <span className="text-xs text-dr7-gold font-bold">ore</span>
+                                                                    </div>
+                                                                    <span className="text-theme-text-muted text-xs">―</span>
+                                                                    <div className="flex items-center gap-1">
+                                                                        <select value={template.send_hour ?? ''}
+                                                                            onChange={e => handleUpdateAutomation(template.id, 'send_hour', e.target.value === '' ? null : parseInt(e.target.value))}
+                                                                            className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
+                                                                            <option value="">Subito</option>
+                                                                            {Array.from({ length: 24 }, (_, i) => (
+                                                                                <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
+                                                                            ))}
+                                                                        </select>
+                                                                    </div>
+                                                                    <span className="text-theme-text-muted text-xs">―</span>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
+                                                                        <select value={template.target_category || 'all'}
+                                                                            onChange={e => handleUpdateAutomation(template.id, 'target_category', e.target.value)}
+                                                                            className="text-xs bg-transparent border-none text-theme-text-secondary focus:outline-none cursor-pointer">
+                                                                            <option value="all">Tutte le categorie</option>
+                                                                            {proCategories.map(c => (
+                                                                                <option key={c.id} value={c.id}>{c.label}</option>
+                                                                            ))}
+                                                                        </select>
+                                                                    </div>
+                                                                </>
+                                                            )}
                                                         </div>
                                                         {/* Stati prenotazione (target_status) — pillole on/off.
                                                             Prima erano hardcoded a 'confirmed,active' senza UI;
                                                             risultato: i messaggi non partivano su prenotazioni
                                                             in stato `pending` (es. on_booking pre-pagamento)
                                                             e l'admin non aveva modo di accorgersene. */}
-                                                        <div className="pt-2 border-t border-theme-border/40">
+                                                        <div className={`pt-2 border-t border-theme-border/40 ${template.trigger_event === 'on_schedule' ? 'hidden' : ''}`}>
                                                             <div className="flex items-center justify-between mb-1.5">
                                                                 <span className="text-[11px] uppercase tracking-wider text-theme-text-muted font-semibold">Stati ammessi</span>
                                                                 <span className="text-[10px] text-theme-text-muted">

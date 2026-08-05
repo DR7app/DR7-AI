@@ -147,12 +147,19 @@ function isRecurringTemplate(tpl: SystemMessage): boolean {
 function recurringDueNow(tpl: SystemMessage, nowMs: number): boolean {
     const rome = getRomeParts(nowMs);
 
-    // Giorni della settimana: CSV 0-6. Vuoto/assente = tutti i giorni.
+    // Giorni della settimana: CSV 0-6 (0 = domenica).
+    // 2026-08-05: per una RICORRENZA il CSV vuoto significa "nessun giorno
+    // scelto" → non parte. Prima valeva "tutti i giorni": bastava svuotare la
+    // selezione per far partire il messaggio ogni giorno senza averlo chiesto.
+    // (Il CSV vuoto resta "nessun filtro" per gli eventi legati a una pratica,
+    // che non passano di qui.)
     const daysCsv = (tpl.target_days_of_week ?? '').trim();
-    if (daysCsv) {
-        const days = daysCsv.split(',').map(s => Number(s.trim())).filter(n => !Number.isNaN(n));
-        if (days.length > 0 && !days.includes(rome.dow)) return false;
+    const days = daysCsv.split(',').map(s => Number(s.trim())).filter(n => !Number.isNaN(n));
+    if (days.length === 0) {
+        console.log(`[scheduled-msgs] ricorrenza "${tpl.label}": nessun giorno selezionato — non parte`);
+        return false;
     }
+    if (!days.includes(rome.dow)) return false;
 
     // Intervallo di validita' (date incluse).
     if (tpl.recurrence_start_date && rome.date < tpl.recurrence_start_date) return false;
