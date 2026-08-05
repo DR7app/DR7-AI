@@ -512,24 +512,9 @@ export default function CustomersTab() {
     }
   }
 
-  // Tagga / de-tagga un cliente come AUTISTA (metadata.role). Una volta
-  // taggato compare con badge AUTISTA e nel dropdown di "+ Uscita Straordinaria".
-  async function toggleAutistaTag(customer: Customer) {
-    const makeAutista = customer.metadata?.role !== 'autista'
-    try {
-      const res = await authFetch('/.netlify/functions/autisti', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'set_role', customerId: customer.id, isAutista: makeAutista }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) { toast.error('Errore: ' + (data.error || res.statusText)); return }
-      toast.success(makeAutista ? `${customer.full_name} segnato come Autista` : `${customer.full_name} rimosso dagli Autisti`)
-      loadCustomers()
-    } catch (e) {
-      toast.error('Errore: ' + (e instanceof Error ? e.message : String(e)))
-    }
-  }
+  // 2026-08: gli AUTISTI si gestiscono ESCLUSIVAMENTE da Centralina Pro > Autisti
+  // (AutistiConfigSection): aggiunta/rimozione lì. Rimossi dalla sezione Lead —
+  // niente badge/bottone "Autista" per riga (restano filtrati fuori dalla lista).
 
   async function loadCustomers() {
     setLoading(true)
@@ -2674,12 +2659,6 @@ export default function CustomersTab() {
                         CARTA
                       </span>
                     )}
-                    {customer.metadata?.role === 'autista' && (
-                      <span title="Autista DR7 — selezionabile in + Uscita Straordinaria"
-                        className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-sky-500/20 text-sky-500 dark:text-sky-400 flex-shrink-0">
-                        AUTISTA
-                      </span>
-                    )}
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                     {customer.tipo_cliente && (
@@ -2766,14 +2745,6 @@ export default function CustomersTab() {
               </Button>
               <Button onClick={() => handleEdit(customer)} variant="secondary" className="text-xs py-1 px-2 bg-green-900 hover:bg-green-800 flex-1">
                 Modifica
-              </Button>
-              <Button
-                onClick={() => toggleAutistaTag(customer)}
-                variant="secondary"
-                className={`text-xs py-1 px-2 flex-1 ${customer.metadata?.role === 'autista' ? 'bg-sky-600/80 hover:bg-sky-600 text-white' : 'bg-theme-bg-primary hover:bg-theme-bg-hover text-theme-text-primary border border-theme-border'}`}
-                title={customer.metadata?.role === 'autista' ? 'Rimuovi tag Autista' : 'Segna come Autista (compare in + Uscita Straordinaria)'}
-              >
-                {customer.metadata?.role === 'autista' ? '★ Autista' : '+ Autista'}
               </Button>
               <Button onClick={() => handleDelete(customer.id)} variant="secondary" className="text-xs py-1 px-2 bg-red-900 hover:bg-red-800">
                 ×
@@ -2867,12 +2838,6 @@ export default function CustomersTab() {
                   <td className="px-4 py-3 text-sm text-theme-text-primary">
                     <span className="inline-flex items-center gap-1.5">
                       {customer.full_name}
-                      {customer.metadata?.role === 'autista' && (
-                        <span title="Autista DR7 — selezionabile in + Uscita Straordinaria"
-                          className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-sky-500/20 text-sky-500 dark:text-sky-400">
-                          AUTISTA
-                        </span>
-                      )}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm whitespace-nowrap">
@@ -2925,14 +2890,6 @@ export default function CustomersTab() {
                         className="text-xs py-1 px-3 bg-green-900 hover:bg-green-800"
                       >
                         Modifica
-                      </Button>
-                      <Button
-                        onClick={() => toggleAutistaTag(customer)}
-                        variant="secondary"
-                        className={`text-xs py-1 px-3 ${customer.metadata?.role === 'autista' ? 'bg-sky-600/80 hover:bg-sky-600 text-white' : 'bg-theme-bg-primary hover:bg-theme-bg-hover text-theme-text-primary border border-theme-border'}`}
-                        title={customer.metadata?.role === 'autista' ? 'Rimuovi tag Autista' : 'Segna come Autista (compare in + Uscita Straordinaria)'}
-                      >
-                        {customer.metadata?.role === 'autista' ? '★ Autista' : '+ Autista'}
                       </Button>
                     </div>
                   </td>
