@@ -70,18 +70,22 @@ export default function AutistiConfigSection() {
     } catch (e) { toast.error('Errore: ' + (e as Error).message) } finally { setBusy(false) }
   }
 
-  const inputCls = 'px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary'
+  // 2026-08-05: gli <input> hanno una larghezza intrinseca (size=20) che nella
+  // griglia faceva da min-content: le colonne 1fr non potevano restringersi e il
+  // bottone "Aggiungi" usciva fuori dal bordo della card. w-full + min-w-0 sugli
+  // input e shrink-0 sul bottone tengono tutto dentro il padding.
+  const inputCls = 'w-full min-w-0 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary'
 
   return (
     <div className="space-y-4">
       <div className="bg-theme-bg-secondary rounded-2xl border border-theme-border p-5">
         <div className="text-[15px] font-semibold text-theme-text-primary">Aggiungi autista</div>
         <p className="text-[13px] text-theme-text-muted mt-0.5 mb-4">Gli autisti si gestiscono qui e compaiono nel dropdown delle Uscite Straordinarie. Non appaiono più tra le Lead.</p>
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 items-center">
           <input value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} placeholder="Nome" className={inputCls} />
           <input value={form.cognome} onChange={e => setForm({ ...form, cognome: e.target.value })} placeholder="Cognome" className={inputCls} />
           <input value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} placeholder="Telefono" className={inputCls} />
-          <button onClick={addAutista} disabled={busy} className="px-4 py-2 rounded-lg bg-[#007aff] text-white text-sm font-semibold disabled:opacity-50">Aggiungi</button>
+          <button onClick={addAutista} disabled={busy} className="shrink-0 whitespace-nowrap px-4 py-2 rounded-lg bg-[#007aff] hover:bg-[#0071eb] text-white text-sm font-semibold disabled:opacity-50">Aggiungi</button>
         </div>
       </div>
 
