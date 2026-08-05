@@ -1889,11 +1889,6 @@ export default function CentralinaProTab() {
                 )
               })}
             </div>
-            {businessId !== 'terra' && (
-              <p className="mt-2 text-[12px] text-amber-600 dark:text-amber-400">
-                Configurazione indipendente per <strong>{BUSINESSES.find(b => b.id === businessId)?.label}</strong> — seminata da Noleggio Terra, modificabile liberamente. Non tocca la config di Terra.
-              </p>
-            )}
           </div>
         )}
 
