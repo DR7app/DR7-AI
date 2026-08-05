@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { SECTIONS, BUSINESSES, type BusinessId } from './CentralinaProTab'
+import { MARE_FORM_SECTIONS, BOOKING_FORM_OFF_KEY } from './mareFormSections'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Cfg = Record<string, any>
@@ -26,6 +27,10 @@ export default function InterruttoriTab() {
   const [off, setOff] = useState<Record<BusinessId, Set<string>>>(() => ({} as Record<BusinessId, Set<string>>))
   // modalita' sito per business (default 'bookable' = comportamento attuale)
   const [modes, setModes] = useState<Record<BusinessId, BookingMode>>(() => ({} as Record<BusinessId, BookingMode>))
+  // Sezioni del FORM di prenotazione spente (oggi solo Noleggio Mare, che ha la
+  // modale completa allineata al Noleggio Terra). Chiave separata da
+  // `sezioni_off` perche' riguarda il form, non la configurazione Centralina.
+  const [formOff, setFormOff] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState<string | null>(null)
 
   useEffect(() => {
@@ -44,6 +49,8 @@ export default function InterruttoriTab() {
         offMap[b.id] = new Set(arr)
         modeMap[b.id] = cfg.booking_mode === 'preventivo' ? 'preventivo' : 'bookable'
       }
+      const mareCfg = cfgByRow['business_mare'] || {}
+      setFormOff(new Set(Array.isArray(mareCfg[BOOKING_FORM_OFF_KEY]) ? (mareCfg[BOOKING_FORM_OFF_KEY] as string[]) : []))
       setConfigs(cfgByRow)
       setOff(offMap)
       setModes(modeMap)
@@ -93,6 +100,20 @@ export default function InterruttoriTab() {
     } else {
       toast.success(wasOff ? 'Sezione attivata' : 'Sezione disattivata')
     }
+  }
+
+  // Accende/spegne una sezione della modale di prenotazione Noleggio Mare.
+  async function toggleForm(sectionId: string) {
+    const cur = formOff
+    const next = new Set(cur)
+    const wasOff = next.has(sectionId)
+    if (wasOff) next.delete(sectionId); else next.add(sectionId)
+    setFormOff(next)
+    setSaving(`mare:form:${sectionId}`)
+    const error = await writeConfig('mare', { [BOOKING_FORM_OFF_KEY]: Array.from(next) })
+    setSaving(null)
+    if (error) { setFormOff(cur); toast.error('Salvataggio fallito: ' + error.message) }
+    else toast.success(wasOff ? 'Sezione attivata nel form' : 'Sezione nascosta dal form')
   }
 
   const businessList = useMemo(() => BUSINESSES, [])
@@ -166,6 +187,44 @@ export default function InterruttoriTab() {
                     )
                   })}
                 </div>
+
+                {/* Sezioni della modale "Nuova prenotazione" — solo Noleggio Mare,
+                    che usa la modale completa allineata al Noleggio Terra.
+                    Cliente, Barca, Date/Orari, Riepilogo e Pagamento non sono
+                    spegnibili: senza quelli non esiste una prenotazione. */}
+                {b.id === 'mare' && (
+                  <div className="border-t-2 border-theme-border">
+                    <div className="px-4 py-3 bg-theme-bg-tertiary/40">
+                      <p className="text-sm font-semibold text-theme-text-primary">Form prenotazione</p>
+                      <p className="text-[11px] text-theme-text-muted mt-0.5">
+                        Quali blocchi vedi quando apri <em>+ Nuova prenotazione</em>. Km/Sforo e Assicurazioni non ci sono: su una barca non si applicano.
+                      </p>
+                    </div>
+                    <div className="divide-y divide-theme-border">
+                      {MARE_FORM_SECTIONS.map(s => {
+                        const isOff = formOff.has(s.id)
+                        const busy = saving === `mare:form:${s.id}`
+                        return (
+                          <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                            <div className="min-w-0">
+                              <p className={`text-sm ${isOff ? 'text-theme-text-muted line-through' : 'text-theme-text-primary'}`}>{s.title}</p>
+                              <p className="text-[11px] text-theme-text-muted">{s.hint}</p>
+                            </div>
+                            <button
+                              role="switch"
+                              aria-checked={!isOff}
+                              disabled={busy}
+                              onClick={() => toggleForm(s.id)}
+                              className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${isOff ? 'bg-theme-bg-tertiary border border-theme-border' : 'bg-emerald-500'}`}
+                            >
+                              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${isOff ? 'translate-x-1' : 'translate-x-[18px]'}`} />
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}

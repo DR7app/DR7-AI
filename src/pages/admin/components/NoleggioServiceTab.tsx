@@ -5,14 +5,19 @@
 //
 // Prenotazioni + Calendario: tabella `bookings`.
 // Catalogo: tabella `noleggio_catalog`. Preventivi: tabella `noleggio_preventivi`.
-import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode, type CSSProperties } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
 import toast from 'react-hot-toast'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import { LeadPicker } from './LeadPicker'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
-import { isWithinOfficeHoursForDate, getOfficeMinuteRangesForDate } from '../../../utils/noleggioHours'
+import MareBookingModal, { type MareAsset, type MareBookingRow } from './MareBookingModal'
+import TimeSelect from './TimeSelect'
+import {
+  INPUT_CLS, rentalDaysBetween, addDaysYmd, romeOffsetMinutes,
+  eur, eurToCents, centsToEur,
+} from './noleggioFormBits'
 
 // Stati pagamento standard DR7 (come Noleggio auto / Car Wash): la label è
 // quella mostrata, il value è il payment_status salvato sul booking.
@@ -50,6 +55,8 @@ interface BookingRow {
   pickup_date: string | null
   dropoff_date: string | null
   price_total: number | null
+  amount_paid: number | null
+  user_id: string | null
   created_at: string | null
   booking_details: { passengers?: { name: string; seat?: string; phone?: string }[]; seat_count?: number; seats?: string; note?: string | null; con_skipper?: boolean } | null
 }
@@ -103,107 +110,9 @@ const STATUS_BADGE: Record<string, string> = {
   rifiutato: 'bg-red-500/15 text-red-400 border-red-500/30',
 }
 
-const INPUT_CLS = 'px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-sm w-full placeholder:text-theme-text-muted focus:outline-none focus:border-dr7-gold'
 const BTN_PRIMARY = 'px-4 py-2 rounded-full bg-dr7-gold text-white text-sm font-semibold hover:bg-[#0A8FA3] transition-colors disabled:opacity-50'
 const BTN_GHOST = 'px-3 py-1.5 rounded-lg border border-theme-border text-theme-text-secondary text-sm hover:bg-theme-bg-hover'
 
-/* ─────────────────────── Orari ritiro / riconsegna ───────────────────────
- * Stessa meccanica del Noleggio Terra (ReservationsTab / PreventiviTab):
- * griglia di slot da 15 minuti su tutte le 24h, TUTTI selezionabili — quelli
- * fuori dagli orari ufficio (Centralina Pro > Orari Noleggio, letti da
- * utils/noleggioHours) vengono solo marcati in rosso. Nessun hard-block:
- * l'admin resta libero di scegliere qualsiasi orario.
- * Niente <input type="time">: sui browser con locale non italiano mostra
- * AM/PM, mentre in DR7 l'orario è sempre 24h.
- */
-const TIME_SLOTS: string[] = Array.from({ length: 96 }, (_, i) =>
-  `${String(Math.floor(i / 4)).padStart(2, '0')}:${String((i % 4) * 15).padStart(2, '0')}`,
-)
-const FLAGGED_TIME_STYLE: CSSProperties = { color: 'white', backgroundColor: '#dc2626', fontWeight: 600 }
-const NORMAL_TIME_STYLE: CSSProperties = { color: 'black', backgroundColor: 'white' }
-
-function isOutOfHours(dateStr: string, time: string, kind: 'pickup' | 'return'): boolean {
-  if (!dateStr || !time) return false
-  return !isWithinOfficeHoursForDate(dateStr, time, kind)
-}
-
-// Opzioni per la select dell'ora. Se l'orario già salvato non cade sulla
-// griglia dei 15' (prenotazioni vecchie, import) viene aggiunto in testa: così
-// aprendo "Modifica" l'orario esistente non viene perso.
-function buildTimeOptions(dateStr: string, kind: 'pickup' | 'return', current?: string) {
-  const slots = current && !TIME_SLOTS.includes(current) ? [current, ...TIME_SLOTS] : TIME_SLOTS
-  return slots.map(v => {
-    const flagged = isOutOfHours(dateStr, v, kind)
-    return { value: v, label: flagged ? `🔴 ${v}  FUORI ORARIO` : v, style: flagged ? FLAGGED_TIME_STYLE : NORMAL_TIME_STYLE }
-  })
-}
-
-// "10:30–12:30 / 16:30–18:30", oppure null se quel giorno la sede è chiusa.
-function officeHoursLabel(dateStr: string, kind: 'pickup' | 'return'): string | null {
-  if (!dateStr) return null
-  const ranges = getOfficeMinuteRangesForDate(dateStr, kind)
-  if (ranges.length === 0) return null
-  const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
-  return ranges.map(([a, b]) => `${fmt(a)}–${fmt(b)}`).join(' / ')
-}
-
-// Select dell'ora riusata da Prenotazioni e Calendario: stessa griglia, stesso
-// avviso fuori-orario, look degli altri campi della modale.
-function TimeSelect({ label, value, dateStr, kind, onChange }: {
-  label: string
-  value: string
-  dateStr: string
-  kind: 'pickup' | 'return'
-  onChange: (v: string) => void
-}) {
-  const flagged = isOutOfHours(dateStr, value, kind)
-  const hours = officeHoursLabel(dateStr, kind)
-  return (
-    <div>
-      <label className="text-xs text-theme-text-muted">{label}</label>
-      <select className={INPUT_CLS} value={value} onChange={e => onChange(e.target.value)}>
-        {buildTimeOptions(dateStr, kind, value).map(o => (
-          <option key={o.value} value={o.value} style={o.style}>{o.label}</option>
-        ))}
-      </select>
-      {flagged && (
-        <p className="mt-1 text-[11px] text-red-400 font-semibold">
-          Fuori orario {kind === 'pickup' ? 'ritiro' : 'riconsegna'} {hours ? `(${hours})` : '(giorno di chiusura)'}
-        </p>
-      )}
-    </div>
-  )
-}
-
-// Giorni di noleggio — stessa formula del Noleggio Terra (PreventiviTab):
-// differenza arrotondata per eccesso sulle 24h, minimo 1. Torna 0 se la
-// riconsegna non è successiva al ritiro (dati non validi).
-function rentalDaysBetween(pd: string, pt: string, dd: string, dt: string): number {
-  if (!pd || !dd) return 0
-  const a = new Date(`${pd}T${pt || '00:00'}:00`)
-  const b = new Date(`${dd}T${dt || '00:00'}:00`)
-  if (isNaN(a.getTime()) || isNaN(b.getTime()) || b.getTime() <= a.getTime()) return 0
-  return Math.max(1, Math.ceil((b.getTime() - a.getTime()) / 86_400_000))
-}
-
-// yyyy-mm-dd + n giorni (mezzogiorno: immune ai cambi di ora legale).
-function addDaysYmd(ymd: string, n: number): string {
-  if (!ymd) return ''
-  const d = new Date(`${ymd}T12:00:00`)
-  d.setDate(d.getDate() + n)
-  return d.toLocaleDateString('en-CA')
-}
-
-function eur(cents: number | null | undefined): string {
-  return ((Number(cents) || 0) / 100).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })
-}
-function eurToCents(s: string): number {
-  const n = parseFloat((s || '').replace(',', '.'))
-  return Number.isFinite(n) ? Math.round(n * 100) : 0
-}
-function centsToEur(c: number): string {
-  return ((Number(c) || 0) / 100).toFixed(2)
-}
 function fmtDate(s: string | null): string {
   if (!s) return '—'
   try {
@@ -232,7 +141,7 @@ function useBookings(serviceType: NoleggioServiceType) {
       for (let start = 0; ; start += 1000) {
         const { data, error: e } = await supabase
           .from('bookings')
-          .select('id, customer_name, customer_phone, vehicle_name, vehicle_plate, status, payment_status, payment_method, pickup_date, dropoff_date, price_total, created_at, booking_details')
+          .select('id, customer_name, customer_phone, vehicle_name, vehicle_plate, status, payment_status, payment_method, pickup_date, dropoff_date, price_total, amount_paid, user_id, created_at, booking_details')
           .eq('service_type', serviceType)
           // Nascondi le annullate/eliminate (delete-booking le annulla, non cancella).
           .not('status', 'in', '(cancelled,annullata,deleted)')
@@ -371,7 +280,17 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [passengers.length, formAsset, showForm, rentalDays, selectedAssetPriceCents])
 
+  // Mare: la prenotazione passa dalla modale completa (MareBookingModal),
+  // allineata al Noleggio Terra. Aria/Soggiorni restano sul form lean qui sotto.
+  const [showMare, setShowMare] = useState(false)
+  const [mareBooking, setMareBooking] = useState<BookingRow | null>(null)
+  const mareAssets: MareAsset[] = useMemo(
+    () => assets.map(a => ({ id: a.id, name: a.name, capacity: a.capacity ?? null, price_per_day: a.price_per_day || 0, is_active: a.is_active !== false })),
+    [assets],
+  )
+
   function openCreate() {
+    if (isPeriodo) { setMareBooking(null); setShowMare(true); return }
     const todayYmd = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
     // Noleggio a periodo (Mare): riconsegna proposta al giorno dopo il ritiro,
     // come il Noleggio Terra. Tour (Aria): stesso giorno.
@@ -384,6 +303,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     setShowForm(true)
   }
   function openEdit(b: BookingRow) {
+    if (isPeriodo) { setMareBooking(b); setShowMare(true); return }
     priceEditedRef.current = true // modifica: NON sovrascrivere il prezzo salvato
     const pk = b.pickup_date ? new Date(b.pickup_date) : null
     const dr = b.dropoff_date ? new Date(b.dropoff_date) : null
@@ -704,7 +624,17 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
         </div>
       )}
 
-      {/* Modal create/edit prenotazione */}
+      {/* Mare: modale completa allineata al Noleggio Terra */}
+      {showMare && (
+        <MareBookingModal
+          assets={mareAssets}
+          booking={mareBooking as unknown as MareBookingRow | null}
+          onClose={() => setShowMare(false)}
+          onSaved={() => { setShowMare(false); reload() }}
+        />
+      )}
+
+      {/* Modal create/edit prenotazione (Aria / Soggiorni) */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !saving && setShowForm(false)}>
           <div className="bg-theme-bg-secondary border border-theme-border rounded-xl w-full max-w-lg p-5 space-y-4" onClick={e => e.stopPropagation()}>
@@ -1103,6 +1033,10 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
   const [form, setForm] = useState<CalBookingForm>(EMPTY_CAL_FORM)
   const [formAsset, setFormAsset] = useState<string>('') // vehicle_name pre-compilato
   const [saving, setSaving] = useState(false)
+  // Mare: apre la modale completa (stessa della tab Prenotazioni).
+  const [showMare, setShowMare] = useState(false)
+  const [mareBooking, setMareBooking] = useState<BookingRow | null>(null)
+  const [marePreset, setMarePreset] = useState<{ asset: string; pickup: string; dropoff: string } | null>(null)
   const calRentalDays = useMemo(
     () => rentalDaysBetween(form.pickup_date, form.pickup_time, form.dropoff_date, form.dropoff_time),
     [form.pickup_date, form.pickup_time, form.dropoff_date, form.dropoff_time],
@@ -1112,7 +1046,8 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     setAssetsLoading(true); setError('')
     const { data, error: e } = await supabase
       .from('noleggio_catalog')
-      .select('id, name, image_url, is_active')
+      // capacity + price_per_day servono alla modale completa del Mare
+      .select('id, name, image_url, is_active, capacity, price_per_day')
       .eq('service_type', serviceType)
       .eq('is_active', true)
       .order('sort_order', { ascending: true })
@@ -1202,11 +1137,20 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     const ymd = `${monthYmdPrefix}-${String(day).padStart(2, '0')}`
     const next = new Date(year, month, day + 1)
     const nextYmd = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`
+    if (isPeriodo) {
+      // Mare: stessa modale completa della tab Prenotazioni, con barca e
+      // periodo già impostati dalla cella cliccata sulla timeline.
+      setMareBooking(null)
+      setMarePreset({ asset: assetName, pickup: ymd, dropoff: nextYmd })
+      setShowMare(true)
+      return
+    }
     setForm({ ...EMPTY_CAL_FORM, pickup_date: ymd, dropoff_date: nextYmd })
     setFormAsset(assetName)
     setShowForm(true)
   }
   function openEdit(b: BookingRow, assetName: string) {
+    if (isPeriodo) { setMareBooking(b); setMarePreset(null); setShowMare(true); return }
     const pk = b.pickup_date ? new Date(b.pickup_date) : null
     const dr = b.dropoff_date ? new Date(b.dropoff_date) : null
     const ymd = (d: Date | null) => d ? d.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }) : ''
@@ -1358,6 +1302,18 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
         </div>
       )}
 
+      {/* Mare: modale completa (stessa della tab Prenotazioni) */}
+      {showMare && (
+        <MareBookingModal
+          assets={assets.map(a => ({ id: a.id, name: a.name, capacity: a.capacity ?? null, price_per_day: a.price_per_day || 0, is_active: a.is_active !== false }))}
+          booking={mareBooking as unknown as MareBookingRow | null}
+          assetPreset={marePreset?.asset}
+          datePreset={marePreset ? { pickup: marePreset.pickup, dropoff: marePreset.dropoff } : undefined}
+          onClose={() => setShowMare(false)}
+          onSaved={() => { setShowMare(false); reload() }}
+        />
+      )}
+
       {/* Modal create/edit */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !saving && setShowForm(false)}>
@@ -1426,14 +1382,6 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
       )}
     </div>
   )
-}
-
-// Offset (minuti) del fuso Europe/Rome per una data yyyy-mm-dd: +60 (CET) o
-// +120 (CEST). Calcolato confrontando la stessa istante formattato in Rome vs UTC.
-function romeOffsetMinutes(ymd: string): number {
-  const noonUtc = new Date(`${ymd}T12:00:00Z`)
-  const romeHour = parseInt(noonUtc.toLocaleString('en-GB', { hour: '2-digit', hour12: false, timeZone: 'Europe/Rome' }).slice(0, 2), 10)
-  return (romeHour - 12) * 60
 }
 
 function CalRow({
