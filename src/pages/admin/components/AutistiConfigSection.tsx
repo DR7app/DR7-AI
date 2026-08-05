@@ -5,17 +5,17 @@ import { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
 
+// La funzione /autisti (mapRow) restituisce { id, full_name, phone }.
+// 2026-08: il frontend leggeva nome/cognome/telefono (che NON arrivano) e
+// mostrava "Autista" senza numero — i dati c'erano, era solo il mapping sbagliato.
 interface Autista {
   id: string
-  nome: string | null
-  cognome: string | null
-  denominazione: string | null
-  ragione_sociale: string | null
-  telefono: string | null
+  full_name: string
+  phone: string
 }
 
 function autistaName(a: Autista): string {
-  return `${a.nome || ''} ${a.cognome || ''}`.trim() || a.denominazione || a.ragione_sociale || 'Autista'
+  return (a.full_name || '').trim() || 'Autista'
 }
 
 export default function AutistiConfigSection() {
@@ -96,7 +96,7 @@ export default function AutistiConfigSection() {
             {autisti.map(a => (
               <div key={a.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-theme-bg-tertiary/40">
                 <span className="flex-1 text-sm text-theme-text-primary">{autistaName(a)}</span>
-                {a.telefono && <span className="text-xs text-theme-text-muted font-mono">{a.telefono}</span>}
+                {a.phone && <span className="text-xs text-theme-text-muted font-mono">{a.phone}</span>}
                 <button onClick={() => removeAutista(a)} disabled={busy} className="px-2.5 py-1 rounded-lg border border-red-500/40 text-red-400 text-xs disabled:opacity-50">Rimuovi</button>
               </div>
             ))}
