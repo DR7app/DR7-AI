@@ -61,6 +61,19 @@ interface SystemMessage {
     target_extension_count_max?: number | null
     /** CSV di JS day-of-week (0=Dom..6=Sab) Europe/Rome — default tutti i giorni */
     target_days_of_week?: string
+    // ── Programmazione ricorrente + destinatari (migration 20260805) ──────
+    /** Minuti di invio (0-59, Roma). Con send_hour dà l'orario preciso. */
+    send_minute?: number | null
+    /** Prima data valida della ricorrenza (yyyy-mm-dd). NULL = nessun limite. */
+    recurrence_start_date?: string | null
+    /** Ultima data valida della ricorrenza (yyyy-mm-dd). NULL = nessun limite. */
+    recurrence_end_date?: string | null
+    /** customer | custom_phones | admin_roles | all_customers */
+    recipient_mode?: string | null
+    /** CSV di numeri quando recipient_mode = custom_phones */
+    recipient_phones?: string | null
+    /** CSV di role tag quando recipient_mode = admin_roles */
+    recipient_admin_roles?: string | null
     /** Ora inizio fascia silenziosa Europe/Rome (0-23). NULL = nessuna fascia. */
     quiet_hours_start?: number | null
     /** Ora fine fascia silenziosa esclusiva (0-23). Se start>end, attraversa mezzanotte. */
@@ -88,6 +101,8 @@ interface SentMessageLog {
 }
 
 const TRIGGER_LABELS: Record<string, string> = {
+    // Programmazione a calendario — NON legata a una prenotazione
+    'on_schedule': 'Programmazione ricorrente (giorni + ora precisa)',
     // Booking lifecycle
     'before_pickup': 'Prima del ritiro',
     'after_pickup': 'Dopo il ritiro',
@@ -517,11 +532,66 @@ function nextCronAttemptText(sendHour: number | null): string {
  * il template). Se nessun canale è attivo, l'unica riga è "Manuale —
  * invio solo a mano dall'admin".
  */
+// ── Destinatari configurabili ────────────────────────────────────────────────
+// Prima il destinatario era sempre e solo "il cliente della pratica": ogni
+// altro caso (autista, staff cauzioni) era hardcoded nel cron. Adesso si
+// sceglie qui e il cron lo rispetta — nessuna modifica al codice per un
+// destinatario nuovo.
+const RECIPIENT_MODES: Array<{ value: string; label: string; hint: string }> = [
+  { value: 'customer', label: 'Cliente della pratica', hint: 'Il cliente della prenotazione che ha fatto scattare l\'evento (comportamento standard).' },
+  { value: 'custom_phones', label: 'Numeri specifici', hint: 'Uno o più numeri scritti da te. Separali con virgola o a capo.' },
+  { value: 'admin_roles', label: 'Operatori per ruolo', hint: 'Tutti gli operatori con i ruoli scelti (numero preso da "Contatto interno" in Operatori).' },
+  { value: 'all_customers', label: 'Tutti i clienti', hint: 'Broadcast a ogni cliente con un telefono in anagrafica. Usare con cautela.' },
+]
+
+const ADMIN_ROLE_TAGS: string[] = [
+  'direzione', 'developer', 'bypass-otp', 'otp-admin',
+  'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin',
+]
+
+/** Riga di riepilogo "a chi va" per il preview Programmazione. */
+function recipientSummary(t: { recipient_mode?: string | null; recipient_phones?: string | null; recipient_admin_roles?: string | null }): string {
+  const mode = (t.recipient_mode || 'customer').trim()
+  if (mode === 'custom_phones') {
+    const list = String(t.recipient_phones || '').split(/[,;\n]/).map(s => s.trim()).filter(Boolean)
+    return list.length === 0 ? 'numeri specifici — NESSUN numero inserito, non partirà' : `${list.length} numero/i: ${list.join(', ')}`
+  }
+  if (mode === 'admin_roles') {
+    const roles = String(t.recipient_admin_roles || '').split(',').map(s => s.trim()).filter(Boolean)
+    return roles.length === 0 ? 'operatori per ruolo — NESSUN ruolo scelto, non partirà' : `operatori con ruolo: ${roles.join(', ')}`
+  }
+  if (mode === 'all_customers') return 'tutti i clienti con telefono in anagrafica'
+  return 'il cliente della pratica'
+}
+
 function buildScheduleSummary(
-  t: { message_key?: string; label?: string | null; is_automatic?: boolean; trigger_event?: string; trigger_offset_hours?: number; send_hour?: number | null; target_status?: string | null; target_category?: string | null; handled_events?: string[] | null },
+  t: { message_key?: string; label?: string | null; is_automatic?: boolean; trigger_event?: string; trigger_offset_hours?: number; send_hour?: number | null; send_minute?: number | null; target_status?: string | null; target_category?: string | null; handled_events?: string[] | null; target_days_of_week?: string | null; recurrence_start_date?: string | null; recurrence_end_date?: string | null; recipient_mode?: string | null; recipient_phones?: string | null; recipient_admin_roles?: string | null },
   categoryLabels: Record<string, string>,
 ): string[] {
   const lines: string[] = []
+
+  // Programmazione ricorrente: nessuna prenotazione di mezzo, quindi il
+  // riepilogo descrive giorni + orario + destinatari, non l'offset.
+  if (t.trigger_event === 'on_schedule') {
+    const dayNames = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab']
+    const daysCsv = (t.target_days_of_week ?? '').trim()
+    const days = daysCsv
+      ? daysCsv.split(',').map(s => Number(s.trim())).filter(n => !Number.isNaN(n))
+      : [0, 1, 2, 3, 4, 5, 6]
+    const daysText = days.length === 7 ? 'tutti i giorni' : days.sort((a, b) => a - b).map(d => dayNames[d]).join(', ')
+    const hh = String(t.send_hour == null ? 9 : t.send_hour).padStart(2, '0')
+    const mm = String(t.send_minute ?? 0).padStart(2, '0')
+    if (t.is_automatic) {
+      lines.push(`Ricorrente · ${daysText} alle ${hh}:${mm} (Roma)`)
+    } else {
+      lines.push(`Ricorrente configurata (${daysText} alle ${hh}:${mm}) — "Invio Automatico" è OFF, quindi non parte`)
+    }
+    if (t.recurrence_start_date || t.recurrence_end_date) {
+      lines.push(`Valida · dal ${t.recurrence_start_date || 'sempre'} al ${t.recurrence_end_date || 'sempre'}`)
+    }
+    lines.push(`Destinatari · ${recipientSummary(t)}`)
+    return lines
+  }
 
   // 2026-05-19: il preview Programmazione ora rispecchia ESATTAMENTE
   // gli `handled_events` selezionati dall'admin in "EVENTI GESTITI DA
@@ -608,6 +678,7 @@ function buildScheduleSummary(
 
 // Descrizioni in linguaggio naturale per ogni evento — mostrate sotto la select.
 const TRIGGER_DESCRIPTIONS: Record<string, string> = {
+    'on_schedule': 'Il messaggio NON dipende da nessuna prenotazione: parte nei giorni della settimana che scegli, all\'ora e ai minuti esatti che imposti (fuso Roma), ai destinatari che indichi qui sotto. Es. ogni sabato alle 18:30 alla lista numeri.',
     'before_pickup': 'Il messaggio parte prima del ritiro veicolo. Es. 24 ore prima per ricordare al cliente.',
     'after_pickup': 'Il messaggio parte dopo il ritiro veicolo. Es. 1 ora dopo per chiedere come e\' andato.',
     'before_dropoff': 'Il messaggio parte prima della riconsegna. Es. 24 ore prima per ricordare orario.',
@@ -1474,6 +1545,13 @@ export default function MessaggiSistemaProTab() {
     const [newTriggerEvent, setNewTriggerEvent] = useState('before_dropoff')
     const [newTriggerOffset, setNewTriggerOffset] = useState(24)
     const [newSendHour, setNewSendHour] = useState<number | null>(9)
+    // Programmazione ricorrente (trigger_event = on_schedule) + destinatari.
+    const [newSendMinute, setNewSendMinute] = useState<number>(0)
+    const [newRecurrenceStart, setNewRecurrenceStart] = useState('')
+    const [newRecurrenceEnd, setNewRecurrenceEnd] = useState('')
+    const [newRecipientMode, setNewRecipientMode] = useState('customer')
+    const [newRecipientPhones, setNewRecipientPhones] = useState('')
+    const [newRecipientRoles, setNewRecipientRoles] = useState<Set<string>>(new Set())
     const [newTargetCategory, setNewTargetCategory] = useState('all')
     // Stati prenotazione esplicitamente selezionati nel form di creazione.
     // Default `confirmed,active` per retro-compat: prima era hardcoded e
@@ -1553,6 +1631,12 @@ export default function MessaggiSistemaProTab() {
         setNewTriggerEvent('before_dropoff')
         setNewTriggerOffset(24)
         setNewSendHour(9)
+        setNewSendMinute(0)
+        setNewRecurrenceStart('')
+        setNewRecurrenceEnd('')
+        setNewRecipientMode('customer')
+        setNewRecipientPhones('')
+        setNewRecipientRoles(new Set())
         setNewTargetCategory('all')
         setNewTargetStatus(new Set(['confirmed', 'active']))
         setNewTargetServiceType('all')
@@ -2061,10 +2145,14 @@ export default function MessaggiSistemaProTab() {
             .replace(/\s+/g, '_')
             .substring(0, 40) + '_' + Date.now()
 
+        // Campi introdotti dalla migration 20260805 (ricorrenza + destinatari).
+        // Finché la migration non è stata eseguita sul DB, l'insert fallirebbe
+        // con "column ... does not exist": in quel caso si riprova senza quei
+        // campi, così creare un messaggio non si rompe mai.
+        const RECURRING_FIELDS = ['send_minute', 'recurrence_start_date', 'recurrence_end_date', 'recipient_mode', 'recipient_phones', 'recipient_admin_roles']
+
         try {
-            const { data, error } = await supabase
-                .from('system_messages')
-                .insert({
+            const payload: Record<string, unknown> = {
                     message_key: messageKey,
                     label: newLabel.trim(),
                     description: newDescription.trim(),
@@ -2074,6 +2162,14 @@ export default function MessaggiSistemaProTab() {
                     trigger_event: newTriggerEvent,
                     trigger_offset_hours: newTriggerOffset,
                     send_hour: newSendHour,
+                    // Ricorrenza a calendario + destinatari (validi anche per
+                    // gli altri eventi: il destinatario è sempre configurabile).
+                    send_minute: newSendMinute,
+                    recurrence_start_date: newRecurrenceStart || null,
+                    recurrence_end_date: newRecurrenceEnd || null,
+                    recipient_mode: newRecipientMode,
+                    recipient_phones: newRecipientPhones.trim() || null,
+                    recipient_admin_roles: Array.from(newRecipientRoles).join(',') || null,
                     target_category: newTargetCategory,
                     // Stati esplicitamente scelti dall'admin nel form. Se
                     // l'utente non ne ha selezionato nessuno passa stringa
@@ -2106,9 +2202,28 @@ export default function MessaggiSistemaProTab() {
                     target_used_promo_before: newTargetUsedPromoBefore === 'any' ? null : newTargetUsedPromoBefore === 'yes',
                     target_extension_count_min: newTargetExtensionCountMin ? parseInt(newTargetExtensionCountMin, 10) : null,
                     target_extension_count_max: newTargetExtensionCountMax ? parseInt(newTargetExtensionCountMax, 10) : null,
-                })
+            }
+
+            let { data, error } = await supabase
+                .from('system_messages')
+                .insert(payload)
                 .select()
                 .single()
+
+            if (error && /does not exist|schema cache/i.test(error.message || '')) {
+                const legacyPayload = { ...payload }
+                for (const f of RECURRING_FIELDS) delete legacyPayload[f]
+                const retry = await supabase
+                    .from('system_messages')
+                    .insert(legacyPayload)
+                    .select()
+                    .single()
+                data = retry.data
+                error = retry.error
+                if (!retry.error) {
+                    console.warn('[MessaggiSistemaPro] creato senza i campi ricorrenza/destinatari: migration 20260805 non ancora eseguita sul DB')
+                }
+            }
 
             if (error) throw error
             setTemplates(prev => [...prev, data])
@@ -2838,21 +2953,153 @@ export default function MessaggiSistemaProTab() {
                                             {TRIGGER_DESCRIPTIONS[newTriggerEvent] || ''}
                                         </p>
                                     </div>
+                                    {/* L'offset ha senso solo per gli eventi legati a una
+                                        pratica ("24h prima del ritiro"). Una ricorrenza a
+                                        calendario ha invece un orario assoluto. */}
+                                    {newTriggerEvent !== 'on_schedule' && (
+                                        <div>
+                                            <label className="block text-xs font-medium text-theme-text-muted mb-1">Quanto prima/dopo (ore)</label>
+                                            <input type="number" value={newTriggerOffset} onChange={e => setNewTriggerOffset(parseInt(e.target.value) || 0)}
+                                                className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
+                                            <p className="text-xs text-theme-text-muted mt-1">1 = 1 ora · 24 = 1 giorno · 48 = 2 giorni · 0 = subito</p>
+                                        </div>
+                                    )}
                                     <div>
-                                        <label className="block text-xs font-medium text-theme-text-muted mb-1">Quanto prima/dopo (ore)</label>
-                                        <input type="number" value={newTriggerOffset} onChange={e => setNewTriggerOffset(parseInt(e.target.value) || 0)}
-                                            className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
-                                        <p className="text-xs text-theme-text-muted mt-1">1 = 1 ora · 24 = 1 giorno · 48 = 2 giorni · 0 = subito</p>
+                                        <label className="block text-xs font-medium text-theme-text-muted mb-1">
+                                            {newTriggerEvent === 'on_schedule' ? 'Orario esatto (Roma)' : 'Ora di invio (Roma)'}
+                                        </label>
+                                        <div className="flex items-center gap-2">
+                                            <select value={newSendHour ?? ''} onChange={e => setNewSendHour(e.target.value === '' ? null : parseInt(e.target.value))}
+                                                className="flex-1 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
+                                                {newTriggerEvent !== 'on_schedule' && <option value="">Appena possibile</option>}
+                                                {Array.from({ length: 24 }, (_, i) => (
+                                                    <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
+                                                ))}
+                                            </select>
+                                            <span className="text-theme-text-muted text-sm">:</span>
+                                            <select value={newSendMinute} onChange={e => setNewSendMinute(parseInt(e.target.value) || 0)}
+                                                className="flex-1 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
+                                                {Array.from({ length: 12 }, (_, i) => i * 5).map(m => (
+                                                    <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <p className="text-xs text-theme-text-muted mt-1">Formato 24h. Es. 18:30 = sei e mezza di sera.</p>
                                     </div>
-                                    <div>
-                                        <label className="block text-xs font-medium text-theme-text-muted mb-1">Ora di invio (Roma)</label>
-                                        <select value={newSendHour ?? ''} onChange={e => setNewSendHour(e.target.value === '' ? null : parseInt(e.target.value))}
-                                            className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
-                                            <option value="">Appena possibile</option>
-                                            {Array.from({ length: 24 }, (_, i) => (
-                                                <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
-                                            ))}
-                                        </select>
+
+                                    {/* Ricorrenza a calendario: giorni della settimana +
+                                        finestra di validità. Nessuna prenotazione di mezzo. */}
+                                    {newTriggerEvent === 'on_schedule' && (
+                                        <div className="col-span-2 rounded-lg border border-dr7-gold/30 bg-dr7-gold/5 p-3 space-y-3">
+                                            <div>
+                                                <label className="block text-xs font-medium text-theme-text-muted mb-1.5">In quali giorni parte</label>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'].map((d, i) => {
+                                                        const active = newTargetDays.has(i)
+                                                        return (
+                                                            <button
+                                                                type="button"
+                                                                key={d}
+                                                                onClick={() => setNewTargetDays(prev => {
+                                                                    const next = new Set(prev)
+                                                                    if (next.has(i)) next.delete(i); else next.add(i)
+                                                                    return next
+                                                                })}
+                                                                className={`px-3 py-1 rounded-full text-xs border transition-colors ${
+                                                                    active
+                                                                        ? 'bg-dr7-gold/20 border-dr7-gold/60 text-dr7-gold'
+                                                                        : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:border-theme-text-muted'
+                                                                }`}
+                                                            >
+                                                                {d}
+                                                            </button>
+                                                        )
+                                                    })}
+                                                </div>
+                                                <p className="text-[11px] text-theme-text-muted mt-1.5">
+                                                    Es. solo "Sab" = il messaggio parte ogni sabato all'orario impostato qui sopra.
+                                                </p>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-xs font-medium text-theme-text-muted mb-1">Attiva dal (opzionale)</label>
+                                                    <input type="date" value={newRecurrenceStart} onChange={e => setNewRecurrenceStart(e.target.value)}
+                                                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-medium text-theme-text-muted mb-1">Fino al (opzionale)</label>
+                                                    <input type="date" value={newRecurrenceEnd} onChange={e => setNewRecurrenceEnd(e.target.value)}
+                                                        className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm" />
+                                                </div>
+                                            </div>
+                                            <p className="text-[11px] text-theme-text-muted">
+                                                Lascia vuote le date per una ricorrenza senza scadenza. Il messaggio parte una sola volta per giorno e per destinatario.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* Destinatari — vale per QUALSIASI evento, non solo
+                                        per le ricorrenze. */}
+                                    <div className="col-span-2 rounded-lg border border-theme-border bg-theme-bg-primary p-3 space-y-3">
+                                        <div>
+                                            <label className="block text-xs font-medium text-theme-text-muted mb-1">A chi va il messaggio</label>
+                                            <select value={newRecipientMode} onChange={e => setNewRecipientMode(e.target.value)}
+                                                className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
+                                                {RECIPIENT_MODES.map(m => (
+                                                    <option key={m.value} value={m.value}>{m.label}</option>
+                                                ))}
+                                            </select>
+                                            <p className="text-[11px] text-theme-text-muted mt-1.5">
+                                                {RECIPIENT_MODES.find(m => m.value === newRecipientMode)?.hint || ''}
+                                            </p>
+                                            {newTriggerEvent === 'on_schedule' && newRecipientMode === 'customer' && (
+                                                <p className="text-[11px] text-amber-300 mt-1.5">
+                                                    Una programmazione ricorrente non ha una pratica di riferimento: scegli numeri specifici, operatori o tutti i clienti, altrimenti non partirà.
+                                                </p>
+                                            )}
+                                        </div>
+                                        {newRecipientMode === 'custom_phones' && (
+                                            <div>
+                                                <label className="block text-xs font-medium text-theme-text-muted mb-1">Numeri destinatari</label>
+                                                <textarea
+                                                    value={newRecipientPhones}
+                                                    onChange={e => setNewRecipientPhones(e.target.value)}
+                                                    rows={2}
+                                                    placeholder="393401234567, 393339876543"
+                                                    className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm font-mono"
+                                                />
+                                                <p className="text-[11px] text-theme-text-muted mt-1">Con prefisso internazionale, separati da virgola o a capo.</p>
+                                            </div>
+                                        )}
+                                        {newRecipientMode === 'admin_roles' && (
+                                            <div>
+                                                <label className="block text-xs font-medium text-theme-text-muted mb-1.5">Ruoli destinatari</label>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {ADMIN_ROLE_TAGS.map(tag => {
+                                                        const active = newRecipientRoles.has(tag)
+                                                        return (
+                                                            <button
+                                                                type="button"
+                                                                key={tag}
+                                                                onClick={() => setNewRecipientRoles(prev => {
+                                                                    const next = new Set(prev)
+                                                                    if (next.has(tag)) next.delete(tag); else next.add(tag)
+                                                                    return next
+                                                                })}
+                                                                className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                                                                    active
+                                                                        ? 'bg-dr7-gold/20 border-dr7-gold/60 text-dr7-gold'
+                                                                        : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:border-theme-text-muted'
+                                                                }`}
+                                                            >
+                                                                {tag}
+                                                            </button>
+                                                        )
+                                                    })}
+                                                </div>
+                                                <p className="text-[11px] text-theme-text-muted mt-1.5">Il numero è quello in "Contatto interno" nella scheda operatore.</p>
+                                            </div>
+                                        )}
                                     </div>
                                     <div>
                                         <label className="block text-xs font-medium text-theme-text-muted mb-1">Categoria veicolo</label>
@@ -3267,8 +3514,15 @@ export default function MessaggiSistemaProTab() {
                                 trigger_event: newTriggerEvent,
                                 trigger_offset_hours: newTriggerOffset,
                                 send_hour: newSendHour,
+                                send_minute: newSendMinute,
                                 target_status: Array.from(newTargetStatus).join(','),
                                 target_category: newTargetCategory,
+                                target_days_of_week: Array.from(newTargetDays).sort((a, b) => a - b).join(','),
+                                recurrence_start_date: newRecurrenceStart || null,
+                                recurrence_end_date: newRecurrenceEnd || null,
+                                recipient_mode: newRecipientMode,
+                                recipient_phones: newRecipientPhones,
+                                recipient_admin_roles: Array.from(newRecipientRoles).join(','),
                             }
                             const lines = buildScheduleSummary(previewTpl, Object.fromEntries(proCategories.map(c => [c.id, c.label])))
                             const hasCron = lines.some(l => l.startsWith('Cron ·'))
@@ -3558,6 +3812,124 @@ export default function MessaggiSistemaProTab() {
                                                                 <span className="font-semibold">Automatico è OFF</span> — le impostazioni qui sotto sono salvate ma il cron non le userà finché non clicchi il badge "Manuale" in alto per metterlo a "Automatico".
                                                             </div>
                                                         )}
+                                                        {/* Programmazione ricorrente a calendario — visibile solo
+                                                            quando l'evento scelto è "on_schedule". Giorni + orario
+                                                            preciso + finestra di validità, senza prenotazione. */}
+                                                        {template.trigger_event === 'on_schedule' && (
+                                                            <div className="rounded-lg border border-dr7-gold/30 bg-dr7-gold/5 p-3 space-y-3">
+                                                                <div>
+                                                                    <span className="text-[11px] uppercase tracking-wider text-theme-text-muted font-semibold">Giorni di invio</span>
+                                                                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                                                        {['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'].map((d, i) => {
+                                                                            const csv = template.target_days_of_week ?? '0,1,2,3,4,5,6'
+                                                                            const set = new Set(csv.split(',').map(s => s.trim()).filter(Boolean))
+                                                                            const active = set.has(String(i))
+                                                                            return (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    key={d}
+                                                                                    onClick={() => {
+                                                                                        if (active) set.delete(String(i)); else set.add(String(i))
+                                                                                        const next = Array.from(set).map(Number).sort((a, b) => a - b).join(',')
+                                                                                        handleUpdateAutomation(template.id, 'target_days_of_week', next)
+                                                                                    }}
+                                                                                    className={`px-3 py-1 rounded-full text-xs border transition-colors ${
+                                                                                        active
+                                                                                            ? 'bg-dr7-gold/20 border-dr7-gold/60 text-dr7-gold'
+                                                                                            : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:border-theme-text-muted'
+                                                                                    }`}
+                                                                                >
+                                                                                    {d}
+                                                                                </button>
+                                                                            )
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex flex-wrap items-center gap-3">
+                                                                    <div className="flex items-center gap-1">
+                                                                        <span className="text-[11px] text-theme-text-muted">Orario</span>
+                                                                        <select value={template.send_hour ?? 9}
+                                                                            onChange={e => handleUpdateAutomation(template.id, 'send_hour', parseInt(e.target.value))}
+                                                                            className="text-xs bg-theme-bg-tertiary border border-theme-border rounded-md px-1.5 py-1 text-theme-text-primary focus:outline-none cursor-pointer">
+                                                                            {Array.from({ length: 24 }, (_, i) => (
+                                                                                <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
+                                                                            ))}
+                                                                        </select>
+                                                                        <span className="text-xs text-theme-text-muted">:</span>
+                                                                        <select value={template.send_minute ?? 0}
+                                                                            onChange={e => handleUpdateAutomation(template.id, 'send_minute', parseInt(e.target.value))}
+                                                                            className="text-xs bg-theme-bg-tertiary border border-theme-border rounded-md px-1.5 py-1 text-theme-text-primary focus:outline-none cursor-pointer">
+                                                                            {Array.from({ length: 12 }, (_, i) => i * 5).map(m => (
+                                                                                <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+                                                                            ))}
+                                                                        </select>
+                                                                        <span className="text-[11px] text-theme-text-muted">Roma</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1">
+                                                                        <span className="text-[11px] text-theme-text-muted">dal</span>
+                                                                        <input type="date" value={template.recurrence_start_date ?? ''}
+                                                                            onChange={e => handleUpdateAutomation(template.id, 'recurrence_start_date', e.target.value || null)}
+                                                                            className="text-xs bg-theme-bg-tertiary border border-theme-border rounded-md px-1.5 py-1 text-theme-text-primary focus:outline-none" />
+                                                                        <span className="text-[11px] text-theme-text-muted">al</span>
+                                                                        <input type="date" value={template.recurrence_end_date ?? ''}
+                                                                            onChange={e => handleUpdateAutomation(template.id, 'recurrence_end_date', e.target.value || null)}
+                                                                            className="text-xs bg-theme-bg-tertiary border border-theme-border rounded-md px-1.5 py-1 text-theme-text-primary focus:outline-none" />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Destinatari — configurabili per qualsiasi evento. */}
+                                                        <div className="rounded-lg border border-theme-border/60 bg-theme-bg-secondary/40 p-3 space-y-2">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <span className="text-[11px] uppercase tracking-wider text-theme-text-muted font-semibold">Destinatari</span>
+                                                                <select value={template.recipient_mode || 'customer'}
+                                                                    onChange={e => handleUpdateAutomation(template.id, 'recipient_mode', e.target.value)}
+                                                                    className="text-xs bg-theme-bg-tertiary border border-theme-border rounded-md px-2 py-1 text-theme-text-primary focus:outline-none cursor-pointer">
+                                                                    {RECIPIENT_MODES.map(m => (
+                                                                        <option key={m.value} value={m.value}>{m.label}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                            {(template.recipient_mode || 'customer') === 'custom_phones' && (
+                                                                <input
+                                                                    type="text"
+                                                                    defaultValue={template.recipient_phones ?? ''}
+                                                                    onBlur={e => handleUpdateAutomation(template.id, 'recipient_phones', e.target.value.trim() || null)}
+                                                                    placeholder="393401234567, 393339876543"
+                                                                    className="w-full text-xs font-mono bg-theme-bg-tertiary border border-theme-border rounded-md px-2 py-1.5 text-theme-text-primary focus:outline-none"
+                                                                />
+                                                            )}
+                                                            {(template.recipient_mode || 'customer') === 'admin_roles' && (
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {ADMIN_ROLE_TAGS.map(tag => {
+                                                                        const set = new Set(String(template.recipient_admin_roles || '').split(',').map(s => s.trim()).filter(Boolean))
+                                                                        const active = set.has(tag)
+                                                                        return (
+                                                                            <button
+                                                                                type="button"
+                                                                                key={tag}
+                                                                                onClick={() => {
+                                                                                    if (active) set.delete(tag); else set.add(tag)
+                                                                                    handleUpdateAutomation(template.id, 'recipient_admin_roles', Array.from(set).join(',') || null)
+                                                                                }}
+                                                                                className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                                                                                    active
+                                                                                        ? 'bg-dr7-gold/20 border-dr7-gold/60 text-dr7-gold'
+                                                                                        : 'bg-theme-bg-tertiary border-theme-border text-theme-text-muted hover:border-theme-text-muted'
+                                                                                }`}
+                                                                            >
+                                                                                {tag}
+                                                                            </button>
+                                                                        )
+                                                                    })}
+                                                                </div>
+                                                            )}
+                                                            <p className="text-[11px] text-theme-text-muted">
+                                                                {RECIPIENT_MODES.find(m => m.value === (template.recipient_mode || 'customer'))?.hint || ''}
+                                                            </p>
+                                                        </div>
+
                                                         <div className="flex flex-wrap items-center gap-3">
                                                             <div className="flex items-center gap-2">
                                                                 <div className="w-2 h-2 rounded-full bg-green-400 shrink-0" />

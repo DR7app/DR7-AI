@@ -64,6 +64,13 @@ interface SystemMessage {
     target_rental_duration_min?: number | null;
     target_rental_duration_max?: number | null;
     target_customer_tags?: string | null;
+    // 2026-08-05 — programmazione ricorrente + destinatari configurabili.
+    send_minute?: number | null;
+    recurrence_start_date?: string | null;
+    recurrence_end_date?: string | null;
+    recipient_mode?: string | null;
+    recipient_phones?: string | null;
+    recipient_admin_roles?: string | null;
 }
 
 const LOOKBACK_MS = 30 * 60 * 1000;  // 30 min: forgive previous-cron failures
@@ -87,6 +94,183 @@ function getRomeHour(nowMs: number): number {
 function isRomeQuietHours(nowMs: number): boolean {
     const h = getRomeHour(nowMs);
     return h >= QUIET_START_HOUR || h < QUIET_END_HOUR;
+}
+
+// ── Programmazione ricorrente a calendario (trigger_event = 'on_schedule') ────
+//
+// Slegata dalle prenotazioni: l'admin sceglie i giorni della settimana, l'ora
+// e i minuti (Roma), un eventuale intervallo di date e i destinatari. Serve
+// per i messaggi che NON hanno una pratica di riferimento — es. "ogni sabato
+// alle 18:30 manda la promo della vettura X a questa lista di numeri".
+export const RECURRING_EVENT = 'on_schedule';
+
+/** Finestra di tolleranza dopo l'orario configurato (il cron gira ogni 8 min). */
+const RECURRING_WINDOW_MIN = 20;
+
+interface RomeParts {
+    /** 0 = domenica ... 6 = sabato — stessa convenzione di target_days_of_week. */
+    dow: number;
+    hour: number;
+    minute: number;
+    /** yyyy-mm-dd nel fuso di Roma (chiave di dedup giornaliera). */
+    date: string;
+}
+
+/** Scompone "adesso" nel fuso Europe/Rome (giorno settimana, ora, minuti, data). */
+function getRomeParts(nowMs: number): RomeParts {
+    const d = new Date(nowMs);
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Rome',
+        weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+    });
+    const parts = Object.fromEntries(fmt.formatToParts(d).map(p => [p.type, p.value]));
+    const dowMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    return {
+        dow: dowMap[String(parts.weekday)] ?? 0,
+        hour: Number(parts.hour) === 24 ? 0 : Number(parts.hour),
+        minute: Number(parts.minute),
+        date: `${parts.year}-${parts.month}-${parts.day}`,
+    };
+}
+
+/** True se il template e' una programmazione ricorrente a calendario. */
+function isRecurringTemplate(tpl: SystemMessage): boolean {
+    return tpl.trigger_event === RECURRING_EVENT;
+}
+
+/**
+ * True se "adesso" (Roma) cade nella finestra di invio della ricorrenza:
+ * giorno della settimana selezionato, dentro l'intervallo di date, e orario
+ * compreso tra [ora:minuti configurati, +RECURRING_WINDOW_MIN].
+ */
+function recurringDueNow(tpl: SystemMessage, nowMs: number): boolean {
+    const rome = getRomeParts(nowMs);
+
+    // Giorni della settimana: CSV 0-6. Vuoto/assente = tutti i giorni.
+    const daysCsv = (tpl.target_days_of_week ?? '').trim();
+    if (daysCsv) {
+        const days = daysCsv.split(',').map(s => Number(s.trim())).filter(n => !Number.isNaN(n));
+        if (days.length > 0 && !days.includes(rome.dow)) return false;
+    }
+
+    // Intervallo di validita' (date incluse).
+    if (tpl.recurrence_start_date && rome.date < tpl.recurrence_start_date) return false;
+    if (tpl.recurrence_end_date && rome.date > tpl.recurrence_end_date) return false;
+
+    // Orario: send_hour = null significa "appena possibile" → mezzanotte non ha
+    // senso per una ricorrenza, quindi trattiamo null come 9:00 (stesso default
+    // storico del resto del cron).
+    const targetHour = tpl.send_hour == null ? 9 : Number(tpl.send_hour);
+    const targetMinute = Number(tpl.send_minute ?? 0) || 0;
+    const nowMin = rome.hour * 60 + rome.minute;
+    const targetMin = targetHour * 60 + targetMinute;
+    return nowMin >= targetMin && nowMin < targetMin + RECURRING_WINDOW_MIN;
+}
+
+/** Un destinatario risolto dalla configurazione del template. */
+interface ResolvedRecipient {
+    nome: string;
+    phone: string;
+    email?: string | null;
+}
+
+/** Normalizza un numero a sole cifre (Green API rifiuta i caratteri nascosti). */
+function normalizePhoneDigits(raw: string): string {
+    return String(raw || '').replace(/\D/g, '');
+}
+
+/**
+ * Risolve i destinatari configurati dall'admin sul template.
+ * NB: 'customer' non passa di qui — resta il percorso storico booking-anchored.
+ */
+async function resolveConfiguredRecipients(tpl: SystemMessage): Promise<ResolvedRecipient[]> {
+    const mode = (tpl.recipient_mode || 'customer').trim();
+    const out = new Map<string, ResolvedRecipient>();
+
+    if (mode === 'custom_phones') {
+        for (const part of String(tpl.recipient_phones || '').split(/[,;\n]/)) {
+            const phone = normalizePhoneDigits(part);
+            if (phone.length >= 8 && !out.has(phone)) out.set(phone, { nome: 'Destinatario', phone });
+        }
+        return [...out.values()];
+    }
+
+    if (mode === 'admin_roles') {
+        const roles = String(tpl.recipient_admin_roles || '')
+            .split(',').map(s => s.trim()).filter(Boolean);
+        if (roles.length === 0) return [];
+        // Role tag = voce `role:<tag>` dentro admins.permissions[] (useAdminRole).
+        const { data: admins } = await supabase
+            .from('admins')
+            .select('nome, contatto_interno, permissions');
+        for (const a of (admins || []) as Array<{ nome?: string; contatto_interno?: string; permissions?: string[] }>) {
+            const perms = Array.isArray(a.permissions) ? a.permissions : [];
+            const match = roles.some(r => perms.includes(`role:${r}`)) || perms.includes('*');
+            if (!match) continue;
+            const phone = normalizePhoneDigits(a.contatto_interno || '');
+            if (phone.length >= 8 && !out.has(phone)) out.set(phone, { nome: a.nome || 'Staff', phone });
+        }
+        return [...out.values()];
+    }
+
+    if (mode === 'all_customers') {
+        const { data: rows } = await supabase
+            .from('customers_extended')
+            .select('nome, cognome, telefono, email')
+            .not('telefono', 'is', null);
+        for (const c of (rows || []) as Array<{ nome?: string; cognome?: string; telefono?: string; email?: string }>) {
+            const phone = normalizePhoneDigits(c.telefono || '');
+            if (phone.length >= 8 && !out.has(phone)) {
+                out.set(phone, {
+                    nome: [c.nome, c.cognome].filter(Boolean).join(' ') || 'Cliente',
+                    phone,
+                    email: c.email || null,
+                });
+            }
+        }
+        return [...out.values()];
+    }
+
+    return [];
+}
+
+/**
+ * Processa un template con programmazione ricorrente: se "adesso" e' nella
+ * finestra, invia ai destinatari configurati. Dedup per (template, giorno) su
+ * ciascun destinatario, così il messaggio parte una sola volta anche se il
+ * cron gira piu' volte dentro la finestra.
+ */
+async function processRecurringSchedule(
+    tpl: SystemMessage,
+    now: number
+): Promise<{ sent: number; skipped: number; errors: number }> {
+    if (!recurringDueNow(tpl, now)) return { sent: 0, skipped: 0, errors: 0 };
+
+    const recipients = await resolveConfiguredRecipients(tpl);
+    if (recipients.length === 0) {
+        console.log(`[scheduled-msgs] ricorrenza "${tpl.label}": nessun destinatario configurato (mode=${tpl.recipient_mode})`);
+        return { sent: 0, skipped: 1, errors: 0 };
+    }
+
+    const dayKey = getRomeParts(now).date;
+    let sent = 0, skipped = 0, errors = 0;
+
+    for (const r of recipients) {
+        // entityId = chiave di dedup: un invio per destinatario per giornata.
+        const entityId = `recur-${tpl.id}-${dayKey}-${r.phone}`;
+        const res = await fireToCustomer(tpl, entityId, r.nome, r.email ?? null, r.phone, {
+            // Variabili disponibili nel testo anche senza prenotazione.
+            targa: tpl.target_plate || '',
+            vehicle_plate: tpl.target_plate || '',
+        });
+        if (res.sent) sent++;
+        else if (res.skipped) skipped++;
+        if (res.error) errors++;
+    }
+
+    console.log(`[scheduled-msgs] ricorrenza "${tpl.label}" (${dayKey}): ${sent} inviati, ${skipped} saltati, ${errors} errori`);
+    return { sent, skipped, errors };
 }
 
 /**
@@ -795,17 +979,46 @@ const cronHandler = async () => {
 
     // Quiet hours: non inviare NULLA tra le 22:00 e le 07:00 (Rome). I messaggi
     // il cui target cade di notte partiranno al primo giro dopo le 07:00.
-    if (isRomeQuietHours(now)) {
-        console.log(`[scheduled-msgs] quiet hours (Rome ${getRomeHour(now)}:00) — nessun invio, skip run`);
-        return { statusCode: 200, body: JSON.stringify({ ok: true, skipped: 'quiet_hours', romeHour: getRomeHour(now) }) };
+    //
+    // ECCEZIONE (2026-08-05): le programmazioni ricorrenti (`on_schedule`) hanno
+    // un orario scelto esplicitamente dall'admin. Se sceglie le 23:00 deve
+    // partire alle 23:00. Durante le quiet hours il cron processa quindi SOLO
+    // quei template — tutto il resto (booking-anchored) resta silenziato come
+    // prima, quindi la protezione anti mass-send notturno non cambia.
+    const quietHours = isRomeQuietHours(now);
+    if (quietHours) {
+        console.log(`[scheduled-msgs] quiet hours (Rome ${getRomeHour(now)}:00) — solo programmazioni ricorrenti`);
     }
 
     // 1. Carica tutti i template automatici attivi
-    const { data: templates, error: tplErr } = await supabase
+    const BASE_COLUMNS = 'id, message_key, label, is_automatic, is_enabled, cron_approved, trigger_event, trigger_offset_hours, send_hour, target_category, target_status, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end, target_membership_tier, target_min_prev_bookings, target_max_prev_bookings, target_rental_duration_min, target_rental_duration_max, target_customer_tags, target_residency, target_age_min, target_age_max, target_pickup_hour_min, target_pickup_hour_max, target_source_channel, target_province, target_min_lifetime_value, target_has_unpaid_invoices, target_used_promo_before, target_extension_count_min, target_extension_count_max';
+    // Colonne della migration 20260805 (ricorrenze + destinatari). Se la
+    // migration non e' ancora stata eseguita, PostgREST fallisce la select:
+    // in quel caso si riparte con le sole colonne storiche, così il cron
+    // continua a lavorare esattamente come prima invece di morire.
+    const RECURRING_COLUMNS = 'send_minute, recurrence_start_date, recurrence_end_date, recipient_mode, recipient_phones, recipient_admin_roles';
+
+    let templates: SystemMessage[] | null = null;
+    let tplErr: { message: string } | null = null;
+
+    const withRecurring = await supabase
         .from('system_messages')
-        .select('id, message_key, label, is_automatic, is_enabled, cron_approved, trigger_event, trigger_offset_hours, send_hour, target_category, target_status, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end, target_membership_tier, target_min_prev_bookings, target_max_prev_bookings, target_rental_duration_min, target_rental_duration_max, target_customer_tags, target_residency, target_age_min, target_age_max, target_pickup_hour_min, target_pickup_hour_max, target_source_channel, target_province, target_min_lifetime_value, target_has_unpaid_invoices, target_used_promo_before, target_extension_count_min, target_extension_count_max')
+        .select(`${BASE_COLUMNS}, ${RECURRING_COLUMNS}`)
         .eq('is_automatic', true)
         .eq('is_enabled', true);
+    templates = (withRecurring.data as unknown as SystemMessage[] | null);
+    tplErr = withRecurring.error;
+
+    if (tplErr) {
+        console.warn('[scheduled-msgs] select con colonne ricorrenza fallita, fallback alle colonne storiche:', tplErr.message);
+        const fallback = await supabase
+            .from('system_messages')
+            .select(BASE_COLUMNS)
+            .eq('is_automatic', true)
+            .eq('is_enabled', true);
+        templates = (fallback.data as unknown as SystemMessage[] | null);
+        tplErr = fallback.error;
+    }
 
     if (tplErr) {
         console.error('[scheduled-msgs] templates fetch failed:', tplErr.message);
@@ -858,6 +1071,20 @@ const cronHandler = async () => {
     for (const tpl of templates as SystemMessage[]) {
         // Gate: parte SOLO cio' che l'admin ha approvato per il cron.
         if (!(tpl as { cron_approved?: boolean }).cron_approved) continue;
+
+        // ── Programmazione ricorrente a calendario ────────────────────────
+        // Va valutata PRIMA delle guardie legacy/event-driven: un template
+        // ricorrente non e' legato a nessuna prenotazione, quindi non deve
+        // essere scartato dai controlli pensati per i template booking-anchored
+        // (che matchano per label/message_key).
+        if (isRecurringTemplate(tpl)) {
+            const r = await processRecurringSchedule(tpl, now);
+            totalSent += r.sent; totalSkipped += r.skipped; totalErrors += r.errors;
+            continue;
+        }
+
+        // Fuori dalle ricorrenze, durante le quiet hours non parte nulla.
+        if (quietHours) continue;
 
         // Skip eventi non gestiti (preventivo gestito altrove)
         if (tpl.trigger_event === 'on_preventivo') continue;
@@ -1117,6 +1344,17 @@ const cronHandler = async () => {
                 results.push({ template: tpl.label, booking_id: booking.id, status: 'error', reason: msg });
             }
         }
+    }
+
+    // I blocchi dedicati qui sotto (autista, cauzioni) restano soggetti alle
+    // quiet hours come prima: durante la fascia silenziosa il cron arriva fin
+    // qui solo per le programmazioni ricorrenti, quindi si esce.
+    if (quietHours) {
+        console.log(`[scheduled-msgs] quiet hours — done (solo ricorrenti). sent=${totalSent} skipped=${totalSkipped} errors=${totalErrors}`);
+        return {
+            statusCode: 200,
+            body: JSON.stringify({ ok: true, quietHours: true, sent: totalSent, skipped: totalSkipped, errors: totalErrors }),
+        };
     }
 
     // Promemoria autista corsa straordinaria (destinatari = autisti, blocco dedicato).
