@@ -5,13 +5,14 @@
 //
 // Prenotazioni + Calendario: tabella `bookings`.
 // Catalogo: tabella `noleggio_catalog`. Preventivi: tabella `noleggio_preventivi`.
-import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode, type CSSProperties } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
 import toast from 'react-hot-toast'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import { LeadPicker } from './LeadPicker'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import { isWithinOfficeHoursForDate, getOfficeMinuteRangesForDate } from '../../../utils/noleggioHours'
 
 // Stati pagamento standard DR7 (come Noleggio auto / Car Wash): la label è
 // quella mostrata, il value è il payment_status salvato sul booking.
@@ -106,6 +107,93 @@ const INPUT_CLS = 'px-3 py-2 bg-theme-bg-tertiary border border-theme-border rou
 const BTN_PRIMARY = 'px-4 py-2 rounded-full bg-dr7-gold text-white text-sm font-semibold hover:bg-[#0A8FA3] transition-colors disabled:opacity-50'
 const BTN_GHOST = 'px-3 py-1.5 rounded-lg border border-theme-border text-theme-text-secondary text-sm hover:bg-theme-bg-hover'
 
+/* ─────────────────────── Orari ritiro / riconsegna ───────────────────────
+ * Stessa meccanica del Noleggio Terra (ReservationsTab / PreventiviTab):
+ * griglia di slot da 15 minuti su tutte le 24h, TUTTI selezionabili — quelli
+ * fuori dagli orari ufficio (Centralina Pro > Orari Noleggio, letti da
+ * utils/noleggioHours) vengono solo marcati in rosso. Nessun hard-block:
+ * l'admin resta libero di scegliere qualsiasi orario.
+ * Niente <input type="time">: sui browser con locale non italiano mostra
+ * AM/PM, mentre in DR7 l'orario è sempre 24h.
+ */
+const TIME_SLOTS: string[] = Array.from({ length: 96 }, (_, i) =>
+  `${String(Math.floor(i / 4)).padStart(2, '0')}:${String((i % 4) * 15).padStart(2, '0')}`,
+)
+const FLAGGED_TIME_STYLE: CSSProperties = { color: 'white', backgroundColor: '#dc2626', fontWeight: 600 }
+const NORMAL_TIME_STYLE: CSSProperties = { color: 'black', backgroundColor: 'white' }
+
+function isOutOfHours(dateStr: string, time: string, kind: 'pickup' | 'return'): boolean {
+  if (!dateStr || !time) return false
+  return !isWithinOfficeHoursForDate(dateStr, time, kind)
+}
+
+// Opzioni per la select dell'ora. Se l'orario già salvato non cade sulla
+// griglia dei 15' (prenotazioni vecchie, import) viene aggiunto in testa: così
+// aprendo "Modifica" l'orario esistente non viene perso.
+function buildTimeOptions(dateStr: string, kind: 'pickup' | 'return', current?: string) {
+  const slots = current && !TIME_SLOTS.includes(current) ? [current, ...TIME_SLOTS] : TIME_SLOTS
+  return slots.map(v => {
+    const flagged = isOutOfHours(dateStr, v, kind)
+    return { value: v, label: flagged ? `🔴 ${v}  FUORI ORARIO` : v, style: flagged ? FLAGGED_TIME_STYLE : NORMAL_TIME_STYLE }
+  })
+}
+
+// "10:30–12:30 / 16:30–18:30", oppure null se quel giorno la sede è chiusa.
+function officeHoursLabel(dateStr: string, kind: 'pickup' | 'return'): string | null {
+  if (!dateStr) return null
+  const ranges = getOfficeMinuteRangesForDate(dateStr, kind)
+  if (ranges.length === 0) return null
+  const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+  return ranges.map(([a, b]) => `${fmt(a)}–${fmt(b)}`).join(' / ')
+}
+
+// Select dell'ora riusata da Prenotazioni e Calendario: stessa griglia, stesso
+// avviso fuori-orario, look degli altri campi della modale.
+function TimeSelect({ label, value, dateStr, kind, onChange }: {
+  label: string
+  value: string
+  dateStr: string
+  kind: 'pickup' | 'return'
+  onChange: (v: string) => void
+}) {
+  const flagged = isOutOfHours(dateStr, value, kind)
+  const hours = officeHoursLabel(dateStr, kind)
+  return (
+    <div>
+      <label className="text-xs text-theme-text-muted">{label}</label>
+      <select className={INPUT_CLS} value={value} onChange={e => onChange(e.target.value)}>
+        {buildTimeOptions(dateStr, kind, value).map(o => (
+          <option key={o.value} value={o.value} style={o.style}>{o.label}</option>
+        ))}
+      </select>
+      {flagged && (
+        <p className="mt-1 text-[11px] text-red-400 font-semibold">
+          Fuori orario {kind === 'pickup' ? 'ritiro' : 'riconsegna'} {hours ? `(${hours})` : '(giorno di chiusura)'}
+        </p>
+      )}
+    </div>
+  )
+}
+
+// Giorni di noleggio — stessa formula del Noleggio Terra (PreventiviTab):
+// differenza arrotondata per eccesso sulle 24h, minimo 1. Torna 0 se la
+// riconsegna non è successiva al ritiro (dati non validi).
+function rentalDaysBetween(pd: string, pt: string, dd: string, dt: string): number {
+  if (!pd || !dd) return 0
+  const a = new Date(`${pd}T${pt || '00:00'}:00`)
+  const b = new Date(`${dd}T${dt || '00:00'}:00`)
+  if (isNaN(a.getTime()) || isNaN(b.getTime()) || b.getTime() <= a.getTime()) return 0
+  return Math.max(1, Math.ceil((b.getTime() - a.getTime()) / 86_400_000))
+}
+
+// yyyy-mm-dd + n giorni (mezzogiorno: immune ai cambi di ora legale).
+function addDaysYmd(ymd: string, n: number): string {
+  if (!ymd) return ''
+  const d = new Date(`${ymd}T12:00:00`)
+  d.setDate(d.getDate() + n)
+  return d.toLocaleDateString('en-CA')
+}
+
 function eur(cents: number | null | undefined): string {
   return ((Number(cents) || 0) / 100).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })
 }
@@ -165,8 +253,12 @@ function useBookings(serviceType: NoleggioServiceType) {
 
 function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceType; labels: NoleggioServiceLabels }) {
   const { bookings, loading, error, reload } = useBookings(serviceType)
-  // Aria/Mare = tour a posti: la lista mostra Partenza + Posti (non Ritiro/Riconsegna).
-  const isTour = serviceType === 'heli_rental' || serviceType === 'boat_rental'
+  // Aria = tour a posti: la lista mostra Partenza + Posti.
+  // Mare = noleggio a periodo come il Noleggio Terra (ritiro → riconsegna,
+  // giorni × tariffa): la lista mostra Ritiro/Riconsegna. I tour Mare restano
+  // gestiti dalla sotto-tab "Tour" dedicata.
+  const isTour = serviceType === 'heli_rental'
+  const isPeriodo = serviceType === 'boat_rental'
 
   // Asset = TUTTO il catalogo di questo servizio (stessa query della tab
   // Catalogo: NESSUN filtro is_active, cosi' la select mostra ogni voce
@@ -240,30 +332,50 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     })()
     return () => { cancelled = true }
   }, [serviceType, form.pickup_date, form.pickup_time, form.id])
-  // Prezzo "a listino" del tour (n. passeggeri × prezzo catalogo) e sconto
-  // auto-calcolato quando l'admin mette un Prezzo Finale più basso — stesso
-  // formato di Preventivo / Penali-Danni.
-  const defaultTourCents = passengers.length > 0 && selectedAssetPriceCents > 0 ? passengers.length * selectedAssetPriceCents : 0
+  // Durata del noleggio (Mare = noleggio a periodo): stessa formula del
+  // Noleggio Terra — 24h arrotondate per eccesso, minimo 1 giorno.
+  const rentalDays = useMemo(
+    () => rentalDaysBetween(form.pickup_date, form.pickup_time, form.dropoff_date, form.dropoff_time),
+    [form.pickup_date, form.pickup_time, form.dropoff_date, form.dropoff_time],
+  )
+
+  // Prezzo "a listino" e sconto auto-calcolato quando l'admin mette un Prezzo
+  // Finale più basso — stesso formato di Preventivo / Penali-Danni.
+  //   Mare  → giorni × tariffa giornaliera del catalogo (come il Noleggio Terra)
+  //   Aria  → n. passeggeri × prezzo posto del catalogo (tour)
+  const defaultTourCents = isPeriodo
+    ? (rentalDays > 0 && selectedAssetPriceCents > 0 ? rentalDays * selectedAssetPriceCents : 0)
+    : (passengers.length > 0 && selectedAssetPriceCents > 0 ? passengers.length * selectedAssetPriceCents : 0)
+  const listinoLabel = isPeriodo
+    ? `${rentalDays} giorn${rentalDays === 1 ? 'o' : 'i'} × €${centsToEur(selectedAssetPriceCents)}`
+    : `${passengers.length} × €${centsToEur(selectedAssetPriceCents)}`
   const finalTourCents = form.price_eur ? eurToCents(form.price_eur) : 0
   const tourScontoCents = defaultTourCents > 0 && finalTourCents > 0 && finalTourCents < defaultTourCents ? defaultTourCents - finalTourCents : 0
 
   // True appena l'admin tocca a mano il campo Prezzo: da quel momento NON si
   // ricalcola più in automatico, così il prezzo digitato resta.
   const priceEditedRef = useRef(false)
-  // Totale calcolato automaticamente (Aria): n° passeggeri × prezzo posto del
-  // catalogo. Solo se il prezzo catalogo è impostato (>0) E l'admin non l'ha
-  // ancora modificato a mano (altrimenti sovrascriveva il prezzo digitato).
+  // Totale calcolato automaticamente — Aria: n° passeggeri × prezzo posto;
+  // Mare: giorni × tariffa giornaliera (come il Noleggio Terra). Solo se il
+  // prezzo catalogo è impostato (>0) E l'admin non l'ha ancora modificato a
+  // mano (altrimenti sovrascriveva il prezzo digitato).
   useEffect(() => {
-    if (serviceType !== 'heli_rental' || !showForm) return
-    if (!priceEditedRef.current && passengers.length > 0 && selectedAssetPriceCents > 0) {
+    if (!showForm || priceEditedRef.current || selectedAssetPriceCents <= 0) return
+    if (isPeriodo) {
+      if (rentalDays > 0) setForm(f => ({ ...f, price_eur: centsToEur(rentalDays * selectedAssetPriceCents) }))
+      return
+    }
+    if (serviceType === 'heli_rental' && passengers.length > 0) {
       setForm(f => ({ ...f, price_eur: centsToEur(passengers.length * selectedAssetPriceCents) }))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [passengers.length, formAsset, showForm])
+  }, [passengers.length, formAsset, showForm, rentalDays, selectedAssetPriceCents])
 
   function openCreate() {
     const todayYmd = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
-    setForm({ ...EMPTY_CAL_FORM, pickup_date: todayYmd, dropoff_date: todayYmd })
+    // Noleggio a periodo (Mare): riconsegna proposta al giorno dopo il ritiro,
+    // come il Noleggio Terra. Tour (Aria): stesso giorno.
+    setForm({ ...EMPTY_CAL_FORM, pickup_date: todayYmd, dropoff_date: isPeriodo ? addDaysYmd(todayYmd, 1) : todayYmd })
     setFormAsset(assets[0]?.name || '')
     setPayStatus('pending'); setPayMethod(''); setOrigPayStatus('')
     setPassengers([]); setOrigDetails({}); setConSkipper(true)
@@ -297,6 +409,40 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     setShowForm(true)
   }
 
+  // Disponibilità (Mare): avvisa se la stessa barca è già impegnata in un
+  // periodo che si sovrappone. Avviso NON bloccante — l'admin può comunque
+  // salvare (mezza giornata, spostamento in corso, doppio uso concordato).
+  const [assetConflict, setAssetConflict] = useState('')
+  useEffect(() => {
+    if (!isPeriodo || !showForm || !formAsset || rentalDays <= 0) { setAssetConflict(''); return }
+    const start = toIso(form.pickup_date, form.pickup_time)
+    const end = toIso(form.dropoff_date, form.dropoff_time)
+    if (!start || !end) { setAssetConflict(''); return }
+    let cancelled = false
+    ;(async () => {
+      // Sovrapposizione: inizio_altra < nostra_fine && fine_altra > nostro_inizio
+      const { data } = await supabase
+        .from('bookings')
+        .select('id, customer_name, pickup_date, dropoff_date, status')
+        .eq('service_type', serviceType)
+        .eq('vehicle_name', formAsset)
+        .not('status', 'in', '(cancelled,annullata,deleted)')
+        .lt('pickup_date', end)
+        .gt('dropoff_date', start)
+      if (cancelled) return
+      const clash = (data || []).filter(b => b.id !== form.id)
+      if (clash.length === 0) { setAssetConflict(''); return }
+      const first = clash[0] as { customer_name: string | null; pickup_date: string; dropoff_date: string }
+      setAssetConflict(
+        `${formAsset} già impegnata dal ${fmtDate(first.pickup_date)} al ${fmtDate(first.dropoff_date)}` +
+        `${first.customer_name ? ` — ${first.customer_name}` : ''}` +
+        `${clash.length > 1 ? ` (+${clash.length - 1} altre)` : ''}`,
+      )
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPeriodo, showForm, formAsset, form.pickup_date, form.pickup_time, form.dropoff_date, form.dropoff_time, form.id, rentalDays])
+
   function toIso(date: string, time: string): string | null {
     if (!date) return null
     const romeOffsetMin = romeOffsetMinutes(date)
@@ -309,6 +455,12 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
 
   async function saveBooking() {
     if (!form.customer_name.trim()) { setFormError('Il nome cliente è obbligatorio.'); return }
+    // Noleggio a periodo: senza una riconsegna successiva al ritiro non ci sono
+    // giorni da fatturare né una barra sul calendario.
+    if (isPeriodo && rentalDays <= 0) {
+      setFormError('La data/ora di riconsegna deve essere successiva al ritiro.')
+      return
+    }
     setSaving(true); setFormError('')
     // Passeggeri -> booking_details.passengers (preserva le altre chiavi su modifica).
     const cleanPassengers = passengers.map(p => ({ name: p.name.trim(), ...(p.seat ? { seat: p.seat } : {}) })).filter(p => p.name)
@@ -632,28 +784,55 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
               </div>
 
               <div>
-                <label className="text-xs text-theme-text-muted">Ritiro</label>
-                <EuropeanDateInput className={INPUT_CLS} value={form.pickup_date} onChange={(__v: string) => setForm({ ...form, pickup_date: __v })} />
+                <label className="text-xs text-theme-text-muted">{isPeriodo ? 'Data ritiro' : 'Ritiro'}</label>
+                <EuropeanDateInput className={INPUT_CLS} value={form.pickup_date} onChange={(__v: string) => setForm(f => ({
+                  ...f,
+                  pickup_date: __v,
+                  // Noleggio a periodo: la riconsegna insegue il ritiro (+1
+                  // giorno) finché l'admin non sceglie una data successiva —
+                  // stesso comportamento del Noleggio Terra.
+                  dropoff_date: isPeriodo && (!f.dropoff_date || f.dropoff_date <= __v) ? addDaysYmd(__v, 1) : f.dropoff_date,
+                }))} />
               </div>
+              <TimeSelect label="Ora ritiro" value={form.pickup_time} dateStr={form.pickup_date} kind="pickup"
+                onChange={v => setForm(f => ({ ...f, pickup_time: v }))} />
               <div>
-                <label className="text-xs text-theme-text-muted">Ora ritiro</label>
-                <input className={INPUT_CLS} type="time" value={form.pickup_time} onChange={e => setForm({ ...form, pickup_time: e.target.value })} />
+                <label className="text-xs text-theme-text-muted">{isPeriodo ? 'Data riconsegna' : 'Riconsegna'}</label>
+                <EuropeanDateInput className={INPUT_CLS} value={form.dropoff_date} min={isPeriodo ? form.pickup_date : undefined} onChange={(__v: string) => setForm({ ...form, dropoff_date: __v })} />
               </div>
-              <div>
-                <label className="text-xs text-theme-text-muted">Riconsegna</label>
-                <EuropeanDateInput className={INPUT_CLS} value={form.dropoff_date} onChange={(__v: string) => setForm({ ...form, dropoff_date: __v })} />
-              </div>
-              <div>
-                <label className="text-xs text-theme-text-muted">Ora riconsegna</label>
-                <input className={INPUT_CLS} type="time" value={form.dropoff_time} onChange={e => setForm({ ...form, dropoff_time: e.target.value })} />
-              </div>
+              <TimeSelect label="Ora riconsegna" value={form.dropoff_time} dateStr={form.dropoff_date} kind="return"
+                onChange={v => setForm(f => ({ ...f, dropoff_time: v }))} />
+
+              {/* Durata + disponibilità (solo noleggio a periodo) */}
+              {isPeriodo && (
+                <div className="sm:col-span-2 space-y-2">
+                  {rentalDays > 0 ? (
+                    <p className="text-xs text-theme-text-secondary">
+                      Durata: <strong className="text-theme-text-primary">{rentalDays} giorn{rentalDays === 1 ? 'o' : 'i'}</strong>
+                      {selectedAssetPriceCents > 0 && <> · tariffa €{centsToEur(selectedAssetPriceCents)}/giorno</>}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-amber-400">La riconsegna deve essere successiva al ritiro.</p>
+                  )}
+                  {assetConflict && (
+                    <div className="flex items-start gap-2 p-2.5 rounded-lg bg-red-500/10 border border-red-500/30">
+                      <span className="text-red-400 leading-none">⚠</span>
+                      <div>
+                        <p className="text-xs text-red-300 font-medium">Sovrapposizione</p>
+                        <p className="text-[11px] text-red-300/80 mt-0.5">{assetConflict}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
                 <label className="text-xs text-theme-text-muted">Prezzo Finale (€)</label>
                 <input className={INPUT_CLS} inputMode="decimal" placeholder={defaultTourCents > 0 ? `Listino ${centsToEur(defaultTourCents)}` : '0,00'} value={form.price_eur} onChange={e => { priceEditedRef.current = true; setForm({ ...form, price_eur: e.target.value }) }} />
                 {defaultTourCents > 0 && (
                   <div className="mt-1 space-y-0.5 text-[11px]">
                     <div className="flex items-center justify-between text-theme-text-muted">
-                      <span>Listino</span>
+                      <span>Listino <span className="text-theme-text-muted/70">({listinoLabel})</span></span>
                       <span className="tabular-nums">€{centsToEur(defaultTourCents)}</span>
                     </div>
                     {tourScontoCents > 0 && (
@@ -727,7 +906,20 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                 <Row k="Telefono" v={b.customer_phone} />
                 <Row k={labels.asset} v={b.vehicle_name} />
                 <Row k={isTour ? 'Partenza' : 'Ritiro'} v={fmtDate(b.pickup_date)} />
-                <Row k="Posti" v={bd?.seat_count ?? pax.length} />
+                {isPeriodo ? (
+                  <>
+                    <Row k="Riconsegna" v={fmtDate(b.dropoff_date)} />
+                    {(() => {
+                      const gg = b.pickup_date && b.dropoff_date
+                        ? Math.max(1, Math.ceil((new Date(b.dropoff_date).getTime() - new Date(b.pickup_date).getTime()) / 86_400_000))
+                        : 0
+                      return gg > 0 ? <Row k="Durata" v={`${gg} giorn${gg === 1 ? 'o' : 'i'}`} /> : null
+                    })()}
+                    <Row k="Conduzione" v={bd?.con_skipper === false ? 'Senza skipper' : 'Con skipper'} />
+                  </>
+                ) : (
+                  <Row k="Posti" v={bd?.seat_count ?? pax.length} />
+                )}
                 <Row k="Stato" v={<Badge value={b.status} />} />
                 <Row k="Pagamento" v={<Badge value={b.payment_status} />} />
                 <Row k="Metodo" v={b.payment_method} />
@@ -899,6 +1091,8 @@ function TourCalendarSection({ serviceType, year, month }: { serviceType: Nolegg
 
 function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceType; labels: NoleggioServiceLabels }) {
   const { bookings, loading: bookingsLoading, reload } = useBookings(serviceType)
+  // Mare = noleggio a periodo (ritiro → riconsegna) come il Noleggio Terra.
+  const isPeriodo = serviceType === 'boat_rental'
   const [assets, setAssets] = useState<CalAsset[]>([])
   const [assetsLoading, setAssetsLoading] = useState(false)
   const [error, setError] = useState('')
@@ -909,6 +1103,10 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
   const [form, setForm] = useState<CalBookingForm>(EMPTY_CAL_FORM)
   const [formAsset, setFormAsset] = useState<string>('') // vehicle_name pre-compilato
   const [saving, setSaving] = useState(false)
+  const calRentalDays = useMemo(
+    () => rentalDaysBetween(form.pickup_date, form.pickup_time, form.dropoff_date, form.dropoff_time),
+    [form.pickup_date, form.pickup_time, form.dropoff_date, form.dropoff_time],
+  )
 
   const loadAssets = useCallback(async () => {
     setAssetsLoading(true); setError('')
@@ -1179,21 +1377,28 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                 <input className={INPUT_CLS} placeholder="Telefono (opzionale)" value={form.customer_phone} onChange={e => setForm({ ...form, customer_phone: e.target.value })} />
               </div>
               <div>
-                <label className="text-xs text-theme-text-muted">Ritiro</label>
-                <EuropeanDateInput className={INPUT_CLS} value={form.pickup_date} onChange={(__v: string) => setForm({ ...form, pickup_date: __v })} />
+                <label className="text-xs text-theme-text-muted">{isPeriodo ? 'Data ritiro' : 'Ritiro'}</label>
+                <EuropeanDateInput className={INPUT_CLS} value={form.pickup_date} onChange={(__v: string) => setForm(f => ({
+                  ...f,
+                  pickup_date: __v,
+                  dropoff_date: isPeriodo && (!f.dropoff_date || f.dropoff_date <= __v) ? addDaysYmd(__v, 1) : f.dropoff_date,
+                }))} />
               </div>
+              <TimeSelect label="Ora ritiro" value={form.pickup_time} dateStr={form.pickup_date} kind="pickup"
+                onChange={v => setForm(f => ({ ...f, pickup_time: v }))} />
               <div>
-                <label className="text-xs text-theme-text-muted">Ora ritiro</label>
-                <input className={INPUT_CLS} type="time" value={form.pickup_time} onChange={e => setForm({ ...form, pickup_time: e.target.value })} />
+                <label className="text-xs text-theme-text-muted">{isPeriodo ? 'Data riconsegna' : 'Riconsegna'}</label>
+                <EuropeanDateInput className={INPUT_CLS} value={form.dropoff_date} min={isPeriodo ? form.pickup_date : undefined} onChange={(__v: string) => setForm({ ...form, dropoff_date: __v })} />
               </div>
-              <div>
-                <label className="text-xs text-theme-text-muted">Riconsegna</label>
-                <EuropeanDateInput className={INPUT_CLS} value={form.dropoff_date} onChange={(__v: string) => setForm({ ...form, dropoff_date: __v })} />
-              </div>
-              <div>
-                <label className="text-xs text-theme-text-muted">Ora riconsegna</label>
-                <input className={INPUT_CLS} type="time" value={form.dropoff_time} onChange={e => setForm({ ...form, dropoff_time: e.target.value })} />
-              </div>
+              <TimeSelect label="Ora riconsegna" value={form.dropoff_time} dateStr={form.dropoff_date} kind="return"
+                onChange={v => setForm(f => ({ ...f, dropoff_time: v }))} />
+              {isPeriodo && (
+                <div className="sm:col-span-2 -mt-1">
+                  {calRentalDays > 0
+                    ? <p className="text-xs text-theme-text-secondary">Durata: <strong className="text-theme-text-primary">{calRentalDays} giorn{calRentalDays === 1 ? 'o' : 'i'}</strong></p>
+                    : <p className="text-xs text-amber-400">La riconsegna deve essere successiva al ritiro.</p>}
+                </div>
+              )}
               <div>
                 <label className="text-xs text-theme-text-muted">Totale (€)</label>
                 <input className={INPUT_CLS} inputMode="decimal" placeholder="0,00" value={form.price_eur} onChange={e => setForm({ ...form, price_eur: e.target.value })} />
