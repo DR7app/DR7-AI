@@ -1331,7 +1331,7 @@ async function loadPersistedFromSupabase(rowId: string = 'main'): Promise<Persis
   }
 }
 
-function savePersisted(snap: PersistedSnapshot, rowId: string = 'main') {
+async function savePersisted(snap: PersistedSnapshot, rowId: string = 'main') {
   // Cache locale solo per il business principale (Terra/'main'): la cache legacy
   // e' single-business, non deve mescolare config di business diversi.
   if (rowId === 'main') {
@@ -1340,16 +1340,27 @@ function savePersisted(snap: PersistedSnapshot, rowId: string = 'main') {
     } catch { /* ignore quota / private mode errors */ }
   }
   // Then persist to Supabase so the website + other admins see it.
+  // 2026-08-05: read-modify-write. La riga contiene anche chiavi che NON stanno
+  // in questo snapshot (booking_form_off e booking_mode scritte dagli
+  // Interruttori ON/OFF): l'upsert secco della sola snapshot le cancellava a
+  // ogni salvataggio della Centralina.
+  let existing: Record<string, unknown> = {}
+  try {
+    const { data } = await supabase
+      .from('centralina_pro_config')
+      .select('config')
+      .eq('id', rowId)
+      .maybeSingle()
+    if (data?.config && typeof data.config === 'object') existing = data.config as Record<string, unknown>
+  } catch { /* riga assente o rete KO: si salva comunque lo snapshot */ }
   // Use upsert so a missing row is created, not silently ignored.
-  supabase
+  const { error } = await supabase
     .from('centralina_pro_config')
-    .upsert({ id: rowId, config: snap }, { onConflict: 'id' })
-    .then(({ error }) => {
-      if (error) {
-        console.error('[CentralinaPro] failed to save to Supabase:', error)
-        toast.error(`Salvataggio DB fallito: ${error.message}`)
-      }
-    })
+    .upsert({ id: rowId, config: { ...existing, ...snap } }, { onConflict: 'id' })
+  if (error) {
+    console.error('[CentralinaPro] failed to save to Supabase:', error)
+    toast.error(`Salvataggio DB fallito: ${error.message}`)
+  }
 }
 
 // Accept both the legacy single-tier shape ({ min_revenue, coeff }) and the new

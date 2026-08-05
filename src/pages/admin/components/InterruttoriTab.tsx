@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { SECTIONS, BUSINESSES, type BusinessId } from './CentralinaProTab'
-import { MARE_FORM_SECTIONS, BOOKING_FORM_OFF_KEY } from './mareFormSections'
+import { MARE_FORM_SECTIONS, BOOKING_FORM_OFF_KEY, CENTRALINA_SECTION_BY_FORM_SECTION } from './mareFormSections'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Cfg = Record<string, any>
@@ -202,18 +202,26 @@ export default function InterruttoriTab() {
                     </div>
                     <div className="divide-y divide-theme-border">
                       {MARE_FORM_SECTIONS.map(s => {
-                        const isOff = formOff.has(s.id)
+                        // Sezione Centralina che pilota questo blocco: se e' OFF
+                        // qui sopra, il blocco e' spento anche nel form e
+                        // l'interruttore non puo' riaccenderlo.
+                        const parent = CENTRALINA_SECTION_BY_FORM_SECTION[s.id]
+                        const forcedOff = !!parent && offSet.has(parent.id)
+                        const isOff = formOff.has(s.id) || forcedOff
                         const busy = saving === `mare:form:${s.id}`
                         return (
                           <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
                             <div className="min-w-0">
                               <p className={`text-sm ${isOff ? 'text-theme-text-muted line-through' : 'text-theme-text-primary'}`}>{s.title}</p>
-                              <p className="text-[11px] text-theme-text-muted">{s.hint}</p>
+                              <p className="text-[11px] text-theme-text-muted">
+                                {forcedOff ? `Spenta da «${parent!.title}» qui sopra` : s.hint}
+                              </p>
                             </div>
                             <button
                               role="switch"
                               aria-checked={!isOff}
-                              disabled={busy}
+                              disabled={busy || forcedOff}
+                              title={forcedOff ? `Riaccendi «${parent!.title}» qui sopra per usarla nel form` : undefined}
                               onClick={() => toggleForm(s.id)}
                               className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${isOff ? 'bg-theme-bg-tertiary border border-theme-border' : 'bg-emerald-500'}`}
                             >

@@ -7,7 +7,9 @@
 //   - Assicurazioni/Kasko: non si vendono sul noleggio mare.
 //
 // Ogni sezione OPZIONALE si accende/spegne dagli Interruttori ON/OFF
-// (centralina_pro_config, riga `business_mare`, chiave `booking_form_off`).
+// (centralina_pro_config, riga `business_mare`, chiave `booking_form_off`)
+// oppure spegnendo la sezione corrispondente in Centralina Pro (`sezioni_off`,
+// es. Cauzioni -> blocco Cauzione): vedi mareFormSectionsOff().
 // Spegnere una sezione la nasconde dal form senza cancellare nulla: i dati già
 // salvati su prenotazioni esistenti restano in booking_details.
 //
@@ -21,7 +23,7 @@ import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import TimeSelect from './TimeSelect'
-import { BOOKING_FORM_OFF_KEY } from './mareFormSections'
+import { mareFormSectionsOff } from './mareFormSections'
 import {
   INPUT_CLS, rentalDaysBetween, addDaysYmd, toRomeIso,
   eurToCents, centsToEur, eur,
@@ -128,9 +130,7 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
     ;(async () => {
       const { data } = await supabase.from('centralina_pro_config').select('config').eq('id', 'business_mare').maybeSingle()
       if (cancelled) return
-      const cfg = (data?.config || {}) as Record<string, unknown>
-      const off = Array.isArray(cfg[BOOKING_FORM_OFF_KEY]) ? (cfg[BOOKING_FORM_OFF_KEY] as string[]) : []
-      setSectionsOff(new Set(off))
+      setSectionsOff(mareFormSectionsOff(data?.config as Record<string, unknown> | null))
     })()
     return () => { cancelled = true }
   }, [])
