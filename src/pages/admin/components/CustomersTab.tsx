@@ -12,6 +12,7 @@ import { listCardsFromMetadata } from '../../../utils/nexiCards'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { useClientStatus } from '../../../contexts/ClientStatusContext'
+import { clientStatusColor } from '../../../utils/clientStatusConfig'
 
 interface Customer {
   id: string
@@ -22,7 +23,9 @@ interface Customer {
   notes: string | null
   created_at: string
   updated_at: string
-  status?: 'blacklist' | 'member' | 'elite' | null
+  // Chiave dello status cliente: i 4 di sistema o una creata in Centralina
+  // Pro > Status Clienti, quindi stringa libera.
+  status?: string | null
   verification?: {
     idStatus: 'unverified' | 'pending' | 'verified'
     stripeVerificationSessionId?: string
@@ -116,13 +119,14 @@ interface Customer {
 }
 
 export default function CustomersTab() {
-  const { refresh: refreshClientStatus, setTier: setClientStatusTier, tierMeta: clientTierMetaCfg } = useClientStatus()
-  // Nomi degli status come personalizzati in Centralina Pro > Status Clienti.
-  // Le sigle dei pulsanti (BL/MEM/ELT) derivano dal nome configurato, cosi'
-  // rinominando uno status cambiano anche qui.
-  const statusName = (tier: 'blacklist' | 'member' | 'elite') => clientTierMetaCfg(tier).label
-  const statusAbbr = (tier: 'blacklist' | 'member' | 'elite') =>
-    statusName(tier).replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3).toUpperCase() || '—'
+  const { refresh: refreshClientStatus, setTier: setClientStatusTier, tierMeta: clientTierMetaCfg, statusDefs } = useClientStatus()
+  // Status assegnabili = tutti quelli configurati in Centralina Pro > Status
+  // Clienti tranne quello base ('standard' = nessuno status). Include quelli
+  // creati dall'admin. La sigla del pulsante deriva dal nome configurato.
+  const assignableStatuses = statusDefs.filter(d => d.key !== 'standard')
+  const statusAbbrFrom = (label: string) =>
+    label.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3).toUpperCase() || '—'
+  const statusName = (key: string) => clientTierMetaCfg(key).label
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -1407,7 +1411,7 @@ export default function CustomersTab() {
   // disabled, nothing is sent.
   async function sendStatusPromotionMessage(
     customer: Customer | undefined,
-    newStatus: 'blacklist' | 'member' | 'elite' | null
+    newStatus: string | null
   ) {
     if (!customer) return
     if (newStatus !== 'member' && newStatus !== 'elite') return
@@ -1460,7 +1464,7 @@ export default function CustomersTab() {
     }
   }
 
-  async function handleUpdateCustomerStatus(customerId: string, newStatus: 'blacklist' | 'member' | 'elite' | null) {
+  async function handleUpdateCustomerStatus(customerId: string, newStatus: string | null) {
     const statusLabel = newStatus ? statusName(newStatus) : 'Nessuno'
 
     try {
@@ -1473,6 +1477,11 @@ export default function CustomersTab() {
       const result = await response.json()
 
       if (!response.ok) {
+        // 23514 = vecchio CHECK su customers_extended.status, che ammetteva
+        // solo tre valori storici. Messaggio esplicito invece di "errore".
+        if (/check constraint|23514/i.test(String(result.error || ''))) {
+          throw new Error('Il database rifiuta questo status: esegui la migration 20260806_customers_status_custom_keys.sql (rimuove il vecchio vincolo su customers_extended.status).')
+        }
         throw new Error(result.error || 'Errore durante l\'aggiornamento')
       }
 
@@ -1503,7 +1512,7 @@ export default function CustomersTab() {
     }
   }
 
-  async function handleBulkStatusUpdate(newStatus: 'blacklist' | 'member' | 'elite' | null) {
+  async function handleBulkStatusUpdate(newStatus: string | null) {
     try {
       const customerIds = Array.from(selectedCustomerIds)
 
@@ -2454,27 +2463,17 @@ export default function CustomersTab() {
             {selectedCustomerIds.size > 0 && (
               <div className="flex gap-2 items-center border-l border-theme-border-light pl-4 overflow-x-auto">
                 <span className="text-sm text-theme-text-muted">Status:</span>
-                <button
-                  onClick={() => handleBulkStatusUpdate('blacklist')}
-                  className="px-3 py-2 rounded-full text-sm font-bold bg-red-800 text-white hover:bg-red-600 border border-red-500 transition-all"
-                  title="Imposta come Blacklist"
-                >
-                  Blacklist
-                </button>
-                <button
-                  onClick={() => handleBulkStatusUpdate('member')}
-                  className="px-3 py-2 rounded-full text-sm font-bold bg-blue-800 text-white hover:bg-blue-600 border border-blue-500 transition-all"
-                  title="Imposta come Member"
-                >
-                  Member
-                </button>
-                <button
-                  onClick={() => handleBulkStatusUpdate('elite')}
-                  className="px-3 py-2 rounded-full text-sm font-bold bg-dr7-gold text-white hover:bg-[#0A8FA3] border border-dr7-gold transition-all"
-                  title="Imposta come Elite"
-                >
-                  Elite
-                </button>
+                {/* Azioni massive: un pulsante per ogni status configurato. */}
+                {assignableStatuses.map(st => (
+                  <button
+                    key={st.key}
+                    onClick={() => handleBulkStatusUpdate(st.key)}
+                    className={`px-3 py-2 rounded-full text-sm font-bold border transition-all ${clientStatusColor(st.colore).badge}`}
+                    title={`Imposta come ${st.label}`}
+                  >
+                    {st.label}
+                  </button>
+                ))}
                 <button
                   onClick={() => handleBulkStatusUpdate(null)}
                   className="px-3 py-2 rounded-full text-sm font-bold bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover border border-theme-border transition-all"
@@ -2899,40 +2898,24 @@ export default function CustomersTab() {
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex gap-2 items-center justify-end">
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={() => handleUpdateCustomerStatus(customer.id, 'blacklist')}
-                          className={`px-2.5 py-1.5 rounded-full text-xs font-bold border transition-all ${
-                            customer.status === 'blacklist'
-                              ? 'bg-red-600 text-white border-red-400 ring-2 ring-red-400'
-                              : 'bg-red-900/80 text-red-100 hover:bg-red-700 border-red-600'
-                          }`}
-                          title={statusName('blacklist')}
-                        >
-                          {statusAbbr('blacklist')}
-                        </button>
-                        <button
-                          onClick={() => handleUpdateCustomerStatus(customer.id, 'member')}
-                          className={`px-2.5 py-1.5 rounded-full text-xs font-bold border transition-all ${
-                            customer.status === 'member'
-                              ? 'bg-blue-600 text-white border-blue-400 ring-2 ring-blue-400'
-                              : 'bg-blue-900/80 text-blue-100 hover:bg-blue-700 border-blue-600'
-                          }`}
-                          title={statusName('member')}
-                        >
-                          {statusAbbr('member')}
-                        </button>
-                        <button
-                          onClick={() => handleUpdateCustomerStatus(customer.id, 'elite')}
-                          className={`px-2.5 py-1.5 rounded-full text-xs font-bold border transition-all ${
-                            customer.status === 'elite'
-                              ? 'bg-amber-500 text-white border-amber-300 ring-2 ring-amber-400'
-                              : 'bg-amber-900/80 text-amber-100 hover:bg-amber-600 border-amber-600'
-                          }`}
-                          title={statusName('elite')}
-                        >
-                          {statusAbbr('elite')}
-                        </button>
+                      {/* Pulsanti generati dalla configurazione: i quattro di
+                          sistema piu' quelli creati in Centralina Pro > Status
+                          Clienti. Colore e sigla vengono da li'. */}
+                      <div className="flex gap-1.5 flex-wrap justify-end">
+                        {assignableStatuses.map(st => {
+                          const attivo = customer.status === st.key
+                          const col = clientStatusColor(st.colore)
+                          return (
+                            <button
+                              key={st.key}
+                              onClick={() => handleUpdateCustomerStatus(customer.id, st.key)}
+                              className={`px-2.5 py-1.5 rounded-full text-xs font-bold border transition-all ${col.badge} ${attivo ? 'ring-2 ring-offset-1 ring-offset-transparent ring-current' : 'opacity-70 hover:opacity-100'}`}
+                              title={st.label}
+                            >
+                              {statusAbbrFrom(st.label)}
+                            </button>
+                          )
+                        })}
                         {customer.status && (
                           <button
                             onClick={() => handleUpdateCustomerStatus(customer.id, null)}

@@ -17,7 +17,9 @@ import {
   DEFAULT_CLIENT_STATUS,
   avvisoClasses,
   clientStatusColor,
+  isBuiltinStatus,
   loadClientStatusConfig,
+  makeStatusKey,
   normalizeClientStatus,
   saveClientStatusConfig,
   type AvvisoLivello,
@@ -32,6 +34,7 @@ export default function ClientStatusConfigSection() {
   const [saved, setSaved] = useState<ClientStatusDef[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [nuovoNome, setNuovoNome] = useState('')
 
   useEffect(() => {
     let alive = true
@@ -69,8 +72,32 @@ export default function ClientStatusConfigSection() {
   }
 
   function resetDefaults() {
-    if (!window.confirm('Ripristinare nomi, colori e avvertenze di fabbrica? Dovrai comunque salvare.')) return
-    setRows(normalizeClientStatus(DEFAULT_CLIENT_STATUS))
+    if (!window.confirm('Ripristinare nomi, colori e avvertenze di fabbrica? Gli status aggiunti da te restano. Dovrai comunque salvare.')) return
+    const custom = rows.filter(r => !isBuiltinStatus(r.key))
+    setRows(normalizeClientStatus([...DEFAULT_CLIENT_STATUS, ...custom]))
+  }
+
+  function addStatus() {
+    const label = nuovoNome.trim()
+    if (!label) { toast.error('Scrivi il nome del nuovo status'); return }
+    if (rows.some(r => r.label.trim().toLowerCase() === label.toLowerCase())) {
+      toast.error('Esiste già uno status con questo nome'); return
+    }
+    const key = makeStatusKey(label, rows.map(r => r.key))
+    const ordine = Math.max(0, ...rows.map(r => r.ordine)) + 1
+    setRows(prev => [...prev, {
+      key, label, descrizione: '', colore: 'purple',
+      avviso: '', avviso_livello: 'info', badge_visibile: true, ordine,
+    }])
+    setNuovoNome('')
+    toast.success(`"${label}" aggiunto — ricordati di salvare`)
+  }
+
+  function removeStatus(r: ClientStatusDef) {
+    // I clienti che ce l'hanno addosso non vengono toccati: il loro status
+    // torna semplicemente a mostrarsi come quello base.
+    if (!window.confirm(`Eliminare lo status "${r.label}"?\n\nI clienti a cui è assegnato torneranno a mostrare lo status base. Dovrai salvare per confermare.`)) return
+    setRows(prev => prev.filter(x => x.key !== r.key))
   }
 
   if (loading) {
@@ -108,9 +135,24 @@ export default function ClientStatusConfigSection() {
                 )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-[11px] font-mono uppercase text-theme-text-muted">{r.key}</span>
                 {isDefault && r.label !== isDefault.label && (
                   <span className="text-[11px] text-theme-text-muted">(di fabbrica: {isDefault.label})</span>
+                )}
+                <span className="text-[11px] font-mono uppercase text-theme-text-muted">{r.key}</span>
+                {isBuiltinStatus(r.key) ? (
+                  <span
+                    className="text-[11px] text-theme-text-muted"
+                    title="Status di sistema: si rinomina e ricolora, ma non si elimina (lo usano filtri campagne e report)."
+                  >
+                    di sistema
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => removeStatus(r)}
+                    className="px-2 py-1 rounded-lg border border-red-500/40 text-red-500 dark:text-red-400 text-xs hover:bg-red-500/10"
+                  >
+                    Elimina
+                  </button>
                 )}
               </div>
             </div>
@@ -210,6 +252,30 @@ export default function ClientStatusConfigSection() {
           </div>
         )
       })}
+
+      {/* Nuovo status: chiave generata dal nome, poi immutabile. */}
+      <div className="bg-theme-bg-secondary rounded-2xl border border-dashed border-theme-border p-5">
+        <div className="text-[15px] font-semibold text-theme-text-primary">Aggiungi uno status</div>
+        <p className="text-[13px] text-theme-text-muted mt-0.5 mb-3">
+          Oltre ai quattro di sistema puoi crearne di tuoi (es. &quot;Cliente VIP&quot;, &quot;Da richiamare&quot;).
+          Compaiono nei pulsanti della tab Lead, nei badge e nei filtri delle campagne.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 items-center">
+          <input
+            value={nuovoNome}
+            onChange={e => setNuovoNome(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addStatus() } }}
+            placeholder="Nome del nuovo status"
+            className={INPUT_CLS}
+          />
+          <button
+            onClick={addStatus}
+            className="shrink-0 whitespace-nowrap px-4 py-2 rounded-lg bg-[#007aff] hover:bg-[#0071eb] text-white text-sm font-semibold"
+          >
+            Aggiungi
+          </button>
+        </div>
+      </div>
 
       <div className="flex items-center justify-between gap-3">
         <button

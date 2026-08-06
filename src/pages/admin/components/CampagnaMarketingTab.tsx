@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import toast from 'react-hot-toast'
-import { useClientStatus, type ClientTier } from '../../../contexts/ClientStatusContext'
+import { useClientStatus, tierToStatusKey } from '../../../contexts/ClientStatusContext'
 import { clientStatusColor } from '../../../utils/clientStatusConfig'
 import CampaignCalendarView, { type ScheduledCampaign, type RecurrenceType } from './CampaignCalendarView'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
@@ -65,18 +65,21 @@ interface CampaignRow {
 }
 
 interface AudienceFilters {
+    // Legacy: i quattro status di sistema come booleani. Restano scritti per
+    // non rompere le campagne gia' programmate.
     excludeBlacklist: boolean
     excludeMember: boolean
     excludeElite: boolean
     excludeNewEntry: boolean
     excludeDr7Club: boolean
-    // Inclusion-mode flags (mutually exclusive). Quando uno è true
-    // l'audience si restringe ai SOLI clienti di quella categoria.
-    // Aggiunti per risolvere il bug "Solo DR7 Club mostrava 0".
     onlyDr7Club?: boolean
     onlyMember?: boolean
     onlyElite?: boolean
     onlyNewEntry?: boolean
+    // Liste di chiavi status: coprono anche quelli creati in Centralina Pro.
+    // Quando presenti hanno la precedenza sui booleani qui sopra.
+    onlyStatuses?: string[]
+    excludeStatuses?: string[]
     selectedCustomerIds: string[] | null
 }
 
@@ -159,20 +162,24 @@ export default function CampagnaMarketingTab() {
     const [campaigns, setCampaigns] = useState<CampaignRow[]>([])
     const [loadingCampaigns, setLoadingCampaigns] = useState(false)
 
-    // Exclusion filters (blacklist excluded by default — never message blacklisted leads)
-    const [excludeBlacklist, setExcludeBlacklist] = useState(true)
-    const [excludeMember, setExcludeMember] = useState(false)
-    const [excludeElite, setExcludeElite] = useState(false)
-    const [excludeNewEntry, setExcludeNewEntry] = useState(false)
-    // Inclusion-mode toggles: quando uno di questi è ON, l'audience
-    // si riduce ai SOLI clienti con quel tier/flag, ignorando tutti i
-    // filtri di esclusione qui sopra. Mutualmente esclusivi: attivarne
-    // uno spegne gli altri (vedi setOnly* helpers nella UI).
+    // Filtri per status. Sono insiemi di CHIAVI status (standard/member/elite/
+    // blacklist piu' quelle create in Centralina Pro > Status Clienti), non piu'
+    // quattro booleani fissi: cosi' anche gli status nuovi si filtrano.
+    // Blacklist esclusa di default — non si scrive mai a un cliente in blacklist.
+    const [excludeStatuses, setExcludeStatuses] = useState<Set<string>>(() => new Set(['blacklist']))
+    // Inclusion mode: quando c'e' almeno uno status selezionato qui (o il
+    // DR7 Club), l'audience si riduce ai SOLI clienti che matchano e gli
+    // esclusi qui sopra vengono ignorati (tranne la blacklist).
+    const [onlyStatuses, setOnlyStatuses] = useState<Set<string>>(() => new Set())
     const [onlyDr7Club, setOnlyDr7Club] = useState(false)
-    const [onlyMember, setOnlyMember] = useState(false)
-    const [onlyElite, setOnlyElite] = useState(false)
-    const [onlyNewEntry, setOnlyNewEntry] = useState(false)
     const [excludeDr7Club, setExcludeDr7Club] = useState(false)
+
+    const toggleInSet = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) =>
+        setter(prev => {
+            const next = new Set(prev)
+            if (next.has(key)) next.delete(key); else next.add(key)
+            return next
+        })
 
     // Scheduling state — programmatic invio
     const [viewMode, setViewMode] = useState<'form' | 'calendar'>('form')
@@ -198,13 +205,10 @@ export default function CampagnaMarketingTab() {
     const [editEndDate, setEditEndDate] = useState('')
     const [savingEdit, setSavingEdit] = useState(false)
 
+    // Nomi e colori degli status arrivano da Centralina Pro > Status Clienti:
+    // i filtri li chiamano come li chiama la direzione, e comprendono anche
+    // gli status creati dall'admin (clientStatus.statusDefs).
     const clientStatus = useClientStatus()
-    // Nomi e colori degli status come personalizzati in Centralina Pro >
-    // Status Clienti: i filtri devono chiamarli come li chiama la direzione.
-    const tierLabel = (t: ClientTier) => clientStatus.tierMeta(t).label
-    const tierText = (t: ClientTier) => clientStatusColor(
-        clientStatus.statusDefs.find(d => d.key === (t === 'new' ? 'standard' : t))?.colore || 'gray'
-    ).text
 
 
     // Auto-refresh storico every 5s while a campaign is in flight ('pending' or 'sending'),
@@ -241,16 +245,21 @@ export default function CampagnaMarketingTab() {
         // Scheduled sends recompute the audience at fire time using these
         // filters. selectedCustomerIds is intentionally null so that newly
         // added (or newly elevated) clients are picked up on each run.
+        // I booleani restano per compatibilita' con le campagne gia'
+        // programmate e con chi legge i filtri vecchi; le liste coprono
+        // anche gli status creati dall'admin.
         return {
-            excludeBlacklist,
-            excludeMember,
-            excludeElite,
-            excludeNewEntry,
+            excludeBlacklist: excludeStatuses.has('blacklist'),
+            excludeMember: excludeStatuses.has('member'),
+            excludeElite: excludeStatuses.has('elite'),
+            excludeNewEntry: excludeStatuses.has('standard'),
             excludeDr7Club,
             onlyDr7Club,
-            onlyMember,
-            onlyElite,
-            onlyNewEntry,
+            onlyMember: onlyStatuses.has('member'),
+            onlyElite: onlyStatuses.has('elite'),
+            onlyNewEntry: onlyStatuses.has('standard'),
+            onlyStatuses: Array.from(onlyStatuses),
+            excludeStatuses: Array.from(excludeStatuses),
             selectedCustomerIds: null,
         }
     }
@@ -728,32 +737,28 @@ export default function CampagnaMarketingTab() {
     //   2. EXCLUSION (tutti gli only* a false) → rimuovi le categorie
     //      ticchettate, tieni tutto il resto. Modalità storica.
     const eligible = useMemo(() => {
-        const anyInclusionMode = onlyDr7Club || onlyMember || onlyElite || onlyNewEntry
+        const anyInclusionMode = onlyDr7Club || onlyStatuses.size > 0
         return customers.filter(c => {
             const status = clientStatus.lookup({
                 customerId: c.id,
                 email: c.email,
                 phone: c.phone,
             })
-            const tier = status?.tier ?? 'new'
+            // Chiave status: il tier 'new' (nessuno status) e' 'standard'.
+            const key = tierToStatusKey(status?.tier ?? 'new')
             const isDr7 = status?.dr7Club ?? false
             if (anyInclusionMode) {
                 if (onlyDr7Club && !isDr7) return false
-                if (onlyMember && tier !== 'member') return false
-                if (onlyElite && tier !== 'elite') return false
-                if (onlyNewEntry && tier !== 'new') return false
+                if (onlyStatuses.size > 0 && !onlyStatuses.has(key)) return false
                 // Anche in inclusion mode rispetta la blacklist esplicita
-                if (excludeBlacklist && tier === 'blacklist') return false
+                if (excludeStatuses.has('blacklist') && key === 'blacklist') return false
                 return true
             }
-            if (excludeBlacklist && tier === 'blacklist') return false
-            if (excludeMember && tier === 'member') return false
-            if (excludeElite && tier === 'elite') return false
-            if (excludeNewEntry && tier === 'new') return false
+            if (excludeStatuses.has(key)) return false
             if (excludeDr7Club && isDr7) return false
             return true
         })
-    }, [customers, clientStatus, excludeBlacklist, excludeMember, excludeElite, excludeNewEntry, excludeDr7Club, onlyDr7Club, onlyMember, onlyElite, onlyNewEntry])
+    }, [customers, clientStatus, excludeStatuses, excludeDr7Club, onlyDr7Club, onlyStatuses])
 
     const excludedCount = customers.length - eligible.length
 
@@ -1110,47 +1115,32 @@ export default function CampagnaMarketingTab() {
                                     onChange={(e) => {
                                         const v = e.target.checked
                                         setOnlyDr7Club(v)
-                                        if (v) { setOnlyMember(false); setOnlyElite(false); setOnlyNewEntry(false) }
+                                        if (v) setOnlyStatuses(new Set())
                                     }}
                                 />
                                 <span className="text-[#D4B896]">Solo DR7 Club</span>
                             </label>
-                            <label className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full cursor-pointer transition-colors ${onlyMember ? 'bg-blue-400/20 border border-blue-400/60' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>
-                                <input
-                                    type="checkbox"
-                                    checked={onlyMember}
-                                    onChange={(e) => {
-                                        const v = e.target.checked
-                                        setOnlyMember(v)
-                                        if (v) { setOnlyDr7Club(false); setOnlyElite(false); setOnlyNewEntry(false) }
-                                    }}
-                                />
-                                <span className={tierText('member')}>Solo {tierLabel('member')}</span>
-                            </label>
-                            <label className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full cursor-pointer transition-colors ${onlyElite ? 'bg-amber-400/20 border border-amber-400/60' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>
-                                <input
-                                    type="checkbox"
-                                    checked={onlyElite}
-                                    onChange={(e) => {
-                                        const v = e.target.checked
-                                        setOnlyElite(v)
-                                        if (v) { setOnlyDr7Club(false); setOnlyMember(false); setOnlyNewEntry(false) }
-                                    }}
-                                />
-                                <span className={tierText('elite')}>Solo {tierLabel('elite')}</span>
-                            </label>
-                            <label className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full cursor-pointer transition-colors ${onlyNewEntry ? 'bg-emerald-400/20 border border-emerald-400/60' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>
-                                <input
-                                    type="checkbox"
-                                    checked={onlyNewEntry}
-                                    onChange={(e) => {
-                                        const v = e.target.checked
-                                        setOnlyNewEntry(v)
-                                        if (v) { setOnlyDr7Club(false); setOnlyMember(false); setOnlyElite(false) }
-                                    }}
-                                />
-                                <span className={tierText('new')}>Solo {tierLabel('new')}</span>
-                            </label>
+                            {/* Uno per ogni status configurato in Centralina Pro,
+                                inclusi quelli creati dall'admin. */}
+                            {clientStatus.statusDefs.map(st => {
+                                const attivo = onlyStatuses.has(st.key)
+                                return (
+                                    <label
+                                        key={st.key}
+                                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full cursor-pointer transition-colors ${attivo ? clientStatusColor(st.colore).banner + ' border' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={attivo}
+                                            onChange={() => {
+                                                toggleInSet(setOnlyStatuses, st.key)
+                                                setOnlyDr7Club(false)
+                                            }}
+                                        />
+                                        <span className={clientStatusColor(st.colore).text}>Solo {st.label}</span>
+                                    </label>
+                                )
+                            })}
                         </div>
                     </div>
 
@@ -1169,38 +1159,16 @@ export default function CampagnaMarketingTab() {
                             )}
                         </div>
                         <div className="flex flex-wrap gap-2 text-xs">
-                            <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-theme-bg-tertiary cursor-pointer hover:bg-theme-bg-hover">
-                                <input
-                                    type="checkbox"
-                                    checked={excludeBlacklist}
-                                    onChange={(e) => setExcludeBlacklist(e.target.checked)}
-                                />
-                                <span className={tierText('blacklist')}>Escludi {tierLabel('blacklist')}</span>
-                            </label>
-                            <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-theme-bg-tertiary cursor-pointer hover:bg-theme-bg-hover">
-                                <input
-                                    type="checkbox"
-                                    checked={excludeMember}
-                                    onChange={(e) => setExcludeMember(e.target.checked)}
-                                />
-                                <span className={tierText('member')}>Escludi {tierLabel('member')}</span>
-                            </label>
-                            <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-theme-bg-tertiary cursor-pointer hover:bg-theme-bg-hover">
-                                <input
-                                    type="checkbox"
-                                    checked={excludeElite}
-                                    onChange={(e) => setExcludeElite(e.target.checked)}
-                                />
-                                <span className={tierText('elite')}>Escludi {tierLabel('elite')}</span>
-                            </label>
-                            <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-theme-bg-tertiary cursor-pointer hover:bg-theme-bg-hover">
-                                <input
-                                    type="checkbox"
-                                    checked={excludeNewEntry}
-                                    onChange={(e) => setExcludeNewEntry(e.target.checked)}
-                                />
-                                <span className={tierText('new')}>Escludi {tierLabel('new')}</span>
-                            </label>
+                            {clientStatus.statusDefs.map(st => (
+                                <label key={st.key} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-theme-bg-tertiary cursor-pointer hover:bg-theme-bg-hover">
+                                    <input
+                                        type="checkbox"
+                                        checked={excludeStatuses.has(st.key)}
+                                        onChange={() => toggleInSet(setExcludeStatuses, st.key)}
+                                    />
+                                    <span className={clientStatusColor(st.colore).text}>Escludi {st.label}</span>
+                                </label>
+                            ))}
                             <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-theme-bg-tertiary cursor-pointer hover:bg-theme-bg-hover">
                                 <input
                                     type="checkbox"

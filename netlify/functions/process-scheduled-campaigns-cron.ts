@@ -30,6 +30,10 @@ const SITE_URL = process.env.URL || process.env.DEPLOY_URL || ''
 type RecurrenceType = 'none' | 'daily' | 'weekly' | 'monthly'
 
 interface AudienceFilters {
+    // Liste di chiavi status (anche quelle create in Centralina Pro > Status
+    // Clienti). Quando presenti hanno la precedenza sui booleani legacy.
+    onlyStatuses?: string[]
+    excludeStatuses?: string[]
     excludeBlacklist?: boolean
     excludeMember?: boolean
     excludeElite?: boolean
@@ -64,14 +68,16 @@ function normalisePhone(raw: string | null): string {
     return clean
 }
 
-function tierOf(c: CustomerRow): 'blacklist' | 'elite' | 'member' | 'new' {
+/**
+ * Chiave status del cliente. Oltre ai 4 di sistema puo' essere una chiave
+ * creata in Centralina Pro > Status Clienti: si restituisce cosi' com'e'.
+ * Nessuno status = 'standard' (il "New entry" della configurazione).
+ */
+function statusKeyOf(c: CustomerRow): string {
     const manual = (c.status_cliente && c.status_cliente !== 'standard')
         ? c.status_cliente
         : (c.status && c.status !== 'standard' ? c.status : null)
-    if (manual === 'blacklist') return 'blacklist'
-    if (manual === 'elite') return 'elite'
-    if (manual === 'member') return 'member'
-    return 'new'
+    return manual || 'standard'
 }
 
 function nextOccurrence(from: Date, type: RecurrenceType, interval: number): Date {
@@ -129,11 +135,34 @@ async function computeAudience(
     const all = await loadAllCustomers(sb)
     const dr7 = await loadDr7ClubKeys()
 
-    const anyInclusionMode = !!(filters.onlyDr7Club || filters.onlyMember || filters.onlyElite || filters.onlyNewEntry)
+    // Le campagne salvate prima degli status personalizzati hanno solo i
+    // booleani: si convertono nelle stesse liste, cosi' la logica e' una sola.
+    const onlyStatuses = new Set<string>(
+        Array.isArray(filters.onlyStatuses) && filters.onlyStatuses.length > 0
+            ? filters.onlyStatuses
+            : [
+                ...(filters.onlyMember ? ['member'] : []),
+                ...(filters.onlyElite ? ['elite'] : []),
+                ...(filters.onlyNewEntry ? ['standard'] : []),
+            ]
+    )
+    const excludeStatuses = new Set<string>(
+        Array.isArray(filters.excludeStatuses) && filters.excludeStatuses.length > 0
+            ? filters.excludeStatuses
+            : [
+                // Blacklist esclusa salvo indicazione esplicita contraria.
+                ...(filters.excludeBlacklist !== false ? ['blacklist'] : []),
+                ...(filters.excludeMember ? ['member'] : []),
+                ...(filters.excludeElite ? ['elite'] : []),
+                ...(filters.excludeNewEntry ? ['standard'] : []),
+            ]
+    )
+
+    const anyInclusionMode = !!filters.onlyDr7Club || onlyStatuses.size > 0
     const eligible = all.filter(c => {
         const phone = normalisePhone(c.telefono)
         if (!phone) return false
-        const tier = tierOf(c)
+        const key = statusKeyOf(c)
         const isDr7 = !!((c.user_id && dr7.userIds.has(c.user_id))
             || (c.email && dr7.emails.has(c.email.toLowerCase())))
         // Inclusion mode: include ONLY the chosen category, ignore other
@@ -141,16 +170,11 @@ async function computeAudience(
         // Blacklist resta rispettata anche in inclusion mode per safety.
         if (anyInclusionMode) {
             if (filters.onlyDr7Club && !isDr7) return false
-            if (filters.onlyMember && tier !== 'member') return false
-            if (filters.onlyElite && tier !== 'elite') return false
-            if (filters.onlyNewEntry && tier !== 'new') return false
-            if (filters.excludeBlacklist !== false && tier === 'blacklist') return false
+            if (onlyStatuses.size > 0 && !onlyStatuses.has(key)) return false
+            if (excludeStatuses.has('blacklist') && key === 'blacklist') return false
             return true
         }
-        if (filters.excludeBlacklist !== false && tier === 'blacklist') return false
-        if (filters.excludeMember && tier === 'member') return false
-        if (filters.excludeElite && tier === 'elite') return false
-        if (filters.excludeNewEntry && tier === 'new') return false
+        if (excludeStatuses.has(key)) return false
         if (filters.excludeDr7Club && isDr7) return false
         return true
     })

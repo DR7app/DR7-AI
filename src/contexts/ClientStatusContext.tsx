@@ -29,8 +29,13 @@ export interface ClientTierMeta {
 // Il tier 'new' e' lo status 'standard' lato configurazione: stessa cosa vista
 // da due punti (qui e' "nessuno status assegnato", in Centralina e' la riga
 // personalizzabile "New entry").
-const TIER_TO_KEY: Record<ClientTier, ClientStatusKey> = {
-  new: 'standard', member: 'member', elite: 'elite', blacklist: 'blacklist',
+export function tierToStatusKey(tier: ClientTier): ClientStatusKey {
+  return tier === 'new' ? 'standard' : tier
+}
+
+/** Inverso: la riga di configurazione 'standard' e' il tier 'new'. */
+export function statusKeyToTier(key: ClientStatusKey): ClientTier {
+  return key === 'standard' ? 'new' : key
 }
 
 function metaFromDef(tier: ClientTier, def: ClientStatusDef): ClientTierMeta {
@@ -47,21 +52,16 @@ function metaFromDef(tier: ClientTier, def: ClientStatusDef): ClientTierMeta {
 
 export const DR7_CLUB_BADGE_CLASS = 'bg-[#C9A96E]/20 text-[#D4B896] border-[#C9A96E]/50'
 
-// Fallback sincrono: usato finche' la config non e' caricata e da chi legge il
-// tier fuori dal provider. Sono gli stessi valori di DEFAULT_CLIENT_STATUS.
-const DEFAULT_META: Record<ClientTier, ClientTierMeta> = Object.fromEntries(
-  (Object.keys(TIER_TO_KEY) as ClientTier[]).map(tier => {
-    const def = normalizeClientStatus([]).find(d => d.key === TIER_TO_KEY[tier])!
-    return [tier, metaFromDef(tier, def)]
-  })
-) as Record<ClientTier, ClientTierMeta>
-
 /**
- * Metadati di default (nomi/colori di fabbrica). Preferire `tierMeta` del
- * contesto, che rispetta la personalizzazione fatta in Centralina Pro.
+ * Metadati di fabbrica: fallback finche' la configurazione non e' caricata e
+ * per chi legge il tier fuori dal provider. Preferire `tierMeta` del contesto,
+ * che rispetta la personalizzazione fatta in Centralina Pro (e conosce gli
+ * status aggiunti dall'admin, che qui non possono esistere).
  */
 export function clientTierMeta(tier: ClientTier): ClientTierMeta {
-  return DEFAULT_META[tier]
+  const defs = normalizeClientStatus([])
+  const def = defs.find(d => d.key === tierToStatusKey(tier)) || defs[0]
+  return metaFromDef(tier, def)
 }
 
 export interface ClientStatusInfo {
@@ -104,7 +104,9 @@ export function useClientStatus() {
   return v
 }
 
-type RawStatus = 'standard' | 'member' | 'elite' | 'blacklist' | null
+// Sul DB lo status e' testo libero: oltre ai 4 di sistema puo' contenere una
+// chiave creata in Centralina Pro > Status Clienti.
+type RawStatus = string | null
 
 interface RawCustomer {
   id: string
@@ -183,11 +185,8 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
           ? c.status_cliente
           : (c.status && c.status !== 'standard' ? c.status : null)
 
-        let tier: ClientTier
-        if (manual === 'blacklist') tier = 'blacklist'
-        else if (manual === 'elite') tier = 'elite'
-        else if (manual === 'member') tier = 'member'
-        else tier = 'new'
+        // Qualsiasi chiave configurata vale come tier; vuoto/standard = 'new'.
+        const tier: ClientTier = manual || 'new'
 
         const info: ClientStatusInfo = { tier, dr7Club: isDr7 }
         idMap.set(c.id, info)
@@ -229,8 +228,12 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const tierMeta = useCallback((tier: ClientTier): ClientTierMeta => {
-    const def = statusDefs.find(d => d.key === TIER_TO_KEY[tier])
-    return def ? metaFromDef(tier, def) : DEFAULT_META[tier]
+    const def = statusDefs.find(d => d.key === tierToStatusKey(tier))
+    // Status cancellato dalla Centralina ma ancora scritto su qualche cliente:
+    // si ricade sullo status base invece di mostrare una chiave grezza.
+    if (def) return metaFromDef(tier, def)
+    const fallback = statusDefs.find(d => d.key === 'standard')
+    return fallback ? metaFromDef('new', fallback) : clientTierMeta('new')
   }, [statusDefs])
 
   const setTier = useCallback((keys: ClientStatusLookupKeys, tier: ClientTier) => {
