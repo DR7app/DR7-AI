@@ -510,10 +510,12 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
           }),
         }).catch(() => { /* best effort */ })
       }
-      // Fattura: se metodo non-wallet e auto_invoice (Centralina Pro) != false
-      const methodCfg = paymentMethods.find(m => m.label === payMethod)
-      const isWallet = /wallet|credit/i.test(payMethod)
-      if (payMethod && !isWallet && methodCfg?.auto_invoice !== false) {
+      // 2026-08: la regola auto-fattura per metodo vive SOLO nel server
+      // (generate-invoice-from-booking → Centralina Pro > Fiscale). Su 'Pagato'
+      // chiamiamo sempre; il server salta wallet e i metodi con auto_invoice=false.
+      // Prima il match locale (m.label === payMethod, case-sensitive) poteva
+      // divergere dal server e saltare la fattura.
+      if (payMethod) {
         await fetch('/.netlify/functions/generate-invoice-from-booking', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ bookingId }),
@@ -2186,12 +2188,10 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
       }
     }
 
-    // Fattura automatica: come gli altri servizi, se il metodo NON è wallet
-    // e il pagamento è Pagato, genera la fattura. La regola auto_invoice arriva
-    // da Centralina Pro (payment_methods[].auto_invoice).
-    const methodCfg = tourPaymentMethods.find(m => m.label === tourPayMethod)
-    const isWallet = /wallet|credit/i.test(tourPayMethod)
-    if (isPaid && tourPayMethod && !isWallet && methodCfg?.auto_invoice !== false) {
+    // 2026-08: gate auto-fattura per metodo = SOLO server (Centralina Pro >
+    // Fiscale). Su 'Pagato' chiamiamo sempre; il server salta wallet e metodi
+    // con auto_invoice=false. Niente pre-check locale (divergeva).
+    if (isPaid && tourPayMethod) {
       await fetch('/.netlify/functions/generate-invoice-from-booking', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookingId }),

@@ -2329,12 +2329,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // auto_invoice=true in Centralina Pro > Fiscale (admin-managed —
     // niente piu' liste hardcoded di metodi). Inoltre niente fattura
     // se il prezzo finale e' 0 (lavaggio in omaggio / override admin).
+    // 2026-08: la regola auto-fattura per metodo di pagamento vive SOLO nel server
+    // (generate-invoice-from-booking legge Centralina Pro > Fiscale e salta se il
+    // metodo ha auto_invoice=false). Niente pre-check client (divergeva su cache/label).
+    // Su 'paid' chiamiamo sempre; il server rispetta Centralina per metodo.
     const isPaid = formData.payment_status === 'paid' || formData.payment_status === 'completed' || formData.payment_status === 'succeeded'
-    const skipFattura = !(await paymentMethodAutoInvoice(formData.payment_method))
     const _priceCents = Number(data?.price_total) || 0
     const isZeroPrice = _priceCents <= 0
 
-    if (isPaid && !skipFattura && !isZeroPrice) {
+    if (isPaid && !isZeroPrice) {
       try {
         const invoiceResponse = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
           method: 'POST',
@@ -6103,9 +6106,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       // Auto-generate fattura if payment changed to paid.
                       // Skip = method ha auto_invoice=false in Centralina
                       // Pro > Fiscale (admin-managed, niente liste hardcoded).
-                      const editPaymentMethod = editingBooking.payment_method || ''
-                      const editSkipFattura = !(await paymentMethodAutoInvoice(editPaymentMethod))
-                      if (!editSkipFattura && (editingBooking.payment_status === 'paid' || editingBooking.payment_status === 'completed' || editingBooking.payment_status === 'succeeded')) {
+                      // 2026-08: gate auto-fattura per metodo = solo server (Centralina).
+                      if (editingBooking.payment_status === 'paid' || editingBooking.payment_status === 'completed' || editingBooking.payment_status === 'succeeded') {
                         try {
                           // Check if fattura already exists for this booking
                           const { data: existingFattura } = await supabase

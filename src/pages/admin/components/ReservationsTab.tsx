@@ -101,7 +101,8 @@ import { buildConfigOverlay, getVehicleSforoOverride } from '../../../utils/conf
 import { getKmIncluded, getUnlimitedKmPrice as getUnlimitedKmPriceFromConfig, getInsuranceOptions as getInsuranceOptionsFromConfig, getInsuranceNameById, getInsuranceOptionById, getDeliveryPricePerKmForCategory } from '../../../utils/configLookup'
 import { kmFromDR7Office } from '../../../utils/dr7Distance'
 import { resolvePacchetti } from '../../../utils/pacchettiResolver'
-import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
+// 2026-08: il gate auto-fattura per metodo di pagamento vive SOLO nel server
+// (generate-invoice-from-booking → Centralina Pro > Fiscale). Niente pre-check client.
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
 
@@ -7320,13 +7321,16 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         && editingOriginalPaymentStatus !== 'completed'
         && editingOriginalPaymentStatus !== 'succeeded'
 
-      // Auto-generate fattura when payment status is "paid". Skip if the
-      // payment method has auto_invoice=false in Centralina Pro > Fiscale
-      // (admin-managed). Skip on edit if payment was ALREADY paid before.
-      const autoInvoice = await paymentMethodAutoInvoice(formData.payment_method)
+      // 2026-08: la decisione "questo metodo genera fattura o no" e' UNA sola e
+      // vive nel SERVER (generate-invoice-from-booking → shouldAutoInvoice legge
+      // Centralina Pro > Fiscale e torna skipped:true con reason='auto_invoice_disabled'
+      // quando il metodo ha auto_invoice=false). NON pre-gatiamo piu' lato client:
+      // il vecchio pre-check paymentMethodAutoInvoice() poteva divergere (cache
+      // stantia / label) e SALTARE la chiamata anche con metodo ON in Centralina
+      // (bonifico ON ma nessuna fattura — caso Balducci). Ora su 'paid' chiamiamo
+      // SEMPRE e il server applica la regola di Centralina.
       const shouldGenerateFattura = formData.payment_status === 'paid'
         && insertedBooking?.id
-        && autoInvoice
         && (!editingId || justMarkedPaid)
       if (shouldGenerateFattura) {
         // Always try to generate fattura — backend has fallbacks for missing data

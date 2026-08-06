@@ -29,8 +29,12 @@ async function fetchMethods(): Promise<Method[]> {
         .select('config')
         .eq('id', 'main')
         .maybeSingle()
-    const fiscale = (data?.config as { fiscale?: { payment_methods?: unknown } } | null)?.fiscale
-    const list = Array.isArray(fiscale?.payment_methods) ? fiscale.payment_methods : []
+    // 2026-08 FIX: la config si salva sotto `fiscal` (senza 'e') — vedi
+    // CentralinaProTab. Prima si leggeva `fiscale` (chiave inesistente) → lista
+    // vuota → auto_invoice sempre true (il toggle non aveva alcun effetto lato
+    // client). Il server (generate-invoice-from-booking) leggeva gia' `fiscal`.
+    const fiscal = (data?.config as { fiscal?: { payment_methods?: unknown } } | null)?.fiscal
+    const list = Array.isArray(fiscal?.payment_methods) ? fiscal.payment_methods : []
     return list
         .filter((m): m is Method =>
             typeof m === 'object' && m !== null &&
