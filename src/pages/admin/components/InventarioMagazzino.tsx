@@ -37,7 +37,7 @@ interface Movimento { id: string; tipo: string; delta: number | null; qta_prima:
 interface Ordine { id: string; articolo_id: string; fornitore_id: string | null; canale: string; quantita: number; stato: string; auto: boolean; created_at: string }
 
 type Semaforo = 'rosso' | 'giallo' | 'verde' | 'grigio'
-const CANALI = ['whatsapp', 'email', 'amazon', 'manuale'] as const
+const CANALI = ['whatsapp', 'email', 'amazon', 'shein', 'temu', 'manuale'] as const
 
 // ── Utilita ──────────────────────────────────────────────────────────────────
 function eur(n: number | null | undefined): string {
