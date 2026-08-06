@@ -7,6 +7,12 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
 import DateRangePicker, { resolveDateRange, isInRange, type DateRangeValue } from '../../../components/admin/DateRangePicker'
+import toast from 'react-hot-toast'
+// #38 Modifica manuale del report: correggi/rimuovi/aggiungi voci. Gli override
+// (report_overrides) si applicano PRIMA dei totali, cosi' correzioni e rimozioni
+// entrano anche nelle somme/KPI. Complementare al #35 (importi reali).
+import { loadReportOverrides, applyOverrides, saveEditOverride, saveRemoveOverride, saveAddOverride, deleteOverrideByRow, deleteOverrideById, type LoadedOverrides } from '../../../utils/reportOverrides'
+import { ReportRowModal, type FieldDef } from './ReportRowModal'
 
 // ─── Types matching netlify/functions/report-danni.ts response ────────────────
 interface Entry {
@@ -109,6 +115,14 @@ export default function ReportPenaliDanniTab() {
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 8
 
+  // #38 Modifica manuale report
+  const [overrides, setOverrides] = useState<LoadedOverrides>({ raw: [], removed: new Set(), edits: new Map(), added: [], notesByRow: new Map() })
+  const [editReport, setEditReport] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [editRow, setEditRow] = useState<any | null>(null)
+  const [addMode, setAddMode] = useState(false)
+  const EDIT_FIELDS: FieldDef[] = [{ key: 'amount', label: 'Importo €' }]
+
   useEffect(() => { fetchReports() }, [])
   useEffect(() => { setPage(1) }, [tableFilter, dateRange])
 
@@ -125,6 +139,7 @@ export default function ReportPenaliDanniTab() {
       if (!danniRes.ok) throw new Error(danniJson.error || 'Errore danni')
       setPenaliData(penaliJson)
       setDanniData(danniJson)
+      setOverrides(await loadReportOverrides('penali_danni'))
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Errore sconosciuto')
     } finally {
@@ -132,19 +147,53 @@ export default function ReportPenaliDanniTab() {
     }
   }
 
+  async function reloadOv() { setOverrides(await loadReportOverrides('penali_danni')) }
+  async function saveEdit(changes: Record<string, number>, note: string) {
+    if (!editRow) return
+    for (const [field, value] of Object.entries(changes)) await saveEditOverride('penali_danni', editRow.id, field, value, note)
+    setEditRow(null); await reloadOv(); toast.success('Voce corretta')
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function saveAdd(row: any, note: string) {
+    await saveAddOverride('penali_danni', { ...row, id: `manual_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, date: new Date().toISOString() }, note)
+    setAddMode(false); await reloadOv(); toast.success('Voce aggiunta')
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function removeEntry(e: any) {
+    if (!window.confirm('Rimuovere questa voce dal report?')) return
+    if (e._isManual) await deleteOverrideById(e._manualId); else await saveRemoveOverride('penali_danni', e.id, null)
+    await reloadOv(); toast.success('Voce rimossa')
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function restoreEntry(e: any) {
+    if (e._isManual) await deleteOverrideById(e._manualId); else await deleteOverrideByRow('penali_danni', e.id)
+    await reloadOv(); toast.success('Voce ripristinata')
+  }
+
   // ── Cutoff & filtered entries ─────────────────────────────────────────────
   const range = useMemo(() => resolveDateRange(dateRange), [dateRange])
 
-  const allEntries: Entry[] = useMemo(() => {
+  const rawEntries: Entry[] = useMemo(() => {
     const e: Entry[] = []
     if (penaliData?.entries) e.push(...penaliData.entries)
     if (danniData?.entries) e.push(...danniData.entries)
     return e
   }, [penaliData, danniData])
 
+  // #38: applica gli override (correzioni/rimozioni/aggiunte) PRIMA dei totali.
+  const allEntries: Entry[] = useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return applyOverrides(rawEntries as any, overrides, (x: any) => x.id) as unknown as Entry[]
+  }, [rawEntries, overrides])
+
   const filteredEntries: Entry[] = useMemo(() => {
     return allEntries.filter(e => isInRange(e.date, range))
   }, [allEntries, range])
+
+  // Voci rimosse a mano nel periodo (ripristinabili in modalita' modifica).
+  const removedEntries: Entry[] = useMemo(() =>
+    rawEntries.filter(e => overrides.removed.has(e.id) && isInRange(e.date, range)),
+    [rawEntries, overrides, range])
 
   // ── KPIs (7 cards) ────────────────────────────────────────────────────────
   const kpi = useMemo(() => {
@@ -559,22 +608,31 @@ export default function ReportPenaliDanniTab() {
           subtitle={`${detailEntries.length} ${detailEntries.length === 1 ? 'pratica' : 'pratiche'}`}
           className="xl:col-span-3"
           headerRight={
-            <div className="inline-flex rounded-full bg-theme-bg-tertiary/40 p-1 border border-theme-border">
-              {([
-                { k: 'all' as TableFilter, l: 'Tutti', n: filteredEntries.length },
-                { k: 'danni' as TableFilter, l: 'Danni', n: filteredEntries.filter(e => e.type === 'danni').length },
-                { k: 'penali' as TableFilter, l: 'Penali', n: filteredEntries.filter(e => e.type === 'penali').length },
-              ]).map(t => (
-                <button
-                  key={t.k}
-                  onClick={() => setTableFilter(t.k)}
-                  className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-                    tableFilter === t.k
-                      ? 'bg-theme-bg-primary text-theme-text-primary shadow-sm border border-theme-border'
-                      : 'text-theme-text-secondary hover:text-theme-text-primary'
-                  }`}
-                >{t.l} <span className="text-theme-text-muted">{t.n}</span></button>
-              ))}
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <button onClick={() => setEditReport(v => !v)} title="Correggi/rimuovi/aggiungi voci a mano"
+                className={`px-3 py-1 text-xs font-medium rounded-full border ${editReport ? 'bg-amber-500/20 border-amber-500/40 text-amber-400' : 'bg-theme-bg-tertiary/40 border-theme-border text-theme-text-secondary'}`}>
+                {editReport ? '✓ Modifica report' : '✎ Modifica report'}
+              </button>
+              {editReport && (
+                <button onClick={() => setAddMode(true)} className="px-3 py-1 text-xs font-medium rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-400">+ Voce</button>
+              )}
+              <div className="inline-flex rounded-full bg-theme-bg-tertiary/40 p-1 border border-theme-border">
+                {([
+                  { k: 'all' as TableFilter, l: 'Tutti', n: filteredEntries.length },
+                  { k: 'danni' as TableFilter, l: 'Danni', n: filteredEntries.filter(e => e.type === 'danni').length },
+                  { k: 'penali' as TableFilter, l: 'Penali', n: filteredEntries.filter(e => e.type === 'penali').length },
+                ]).map(t => (
+                  <button
+                    key={t.k}
+                    onClick={() => setTableFilter(t.k)}
+                    className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                      tableFilter === t.k
+                        ? 'bg-theme-bg-primary text-theme-text-primary shadow-sm border border-theme-border'
+                        : 'text-theme-text-secondary hover:text-theme-text-primary'
+                    }`}
+                  >{t.l} <span className="text-theme-text-muted">{t.n}</span></button>
+                ))}
+              </div>
             </div>
           }
         >
@@ -598,6 +656,7 @@ export default function ReportPenaliDanniTab() {
                       <th className="px-3 py-2.5 text-right font-medium">Importo</th>
                       <th className="px-3 py-2.5 text-left font-medium">Stato</th>
                       <th className="px-3 py-2.5 text-left font-medium">Servizio</th>
+                      {editReport && <th className="px-3 py-2.5 text-right font-medium">Azioni</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -625,13 +684,27 @@ export default function ReportPenaliDanniTab() {
                           <div className="text-[10px] text-theme-text-muted">{e.vehiclePlate}</div>
                         </td>
                         <td className="px-3 py-2.5 text-theme-text-secondary text-xs max-w-[220px] truncate" title={e.description}>{e.description}</td>
-                        <td className="px-3 py-2.5 text-right font-semibold text-dr7-gold whitespace-nowrap">{fmtEur2(e.amount)}</td>
+                        <td className="px-3 py-2.5 text-right font-semibold text-dr7-gold whitespace-nowrap">
+                          {fmtEur2(e.amount)}
+                          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                          {(e as any)._overrideNote && <span className="ml-1 text-[11px] text-amber-400" title={(e as any)._overrideNote}>✎</span>}
+                          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                          {(e as any)._isManual && <span className="ml-1 text-[10px] text-emerald-400" title="Voce aggiunta a mano">+</span>}
+                        </td>
                         <td className="px-3 py-2.5">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${STATUS_STYLES[e.status].cls}`}>
                             {STATUS_STYLES[e.status].label}
                           </span>
                         </td>
                         <td className="px-3 py-2.5 text-[11px] text-theme-text-secondary capitalize">{e.serviceType}</td>
+                        {editReport && (
+                          <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                            <button onClick={() => setEditRow(e)} className="text-[11px] px-1.5 py-0.5 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary">Modifica</button>
+                            <button onClick={() => removeEntry(e)} className="ml-1 text-[11px] px-1.5 py-0.5 rounded border border-red-500/40 text-red-400">Rimuovi</button>
+                            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                            {((e as any)._overrideNote && !(e as any)._isManual) && <button onClick={() => restoreEntry(e)} className="ml-1 text-[11px] px-1.5 py-0.5 rounded border border-theme-border text-theme-text-muted">Ripristina</button>}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -650,6 +723,19 @@ export default function ReportPenaliDanniTab() {
                     ))}
                     <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
                       className="px-2 py-1 rounded border border-theme-border bg-theme-bg-primary disabled:opacity-40 hover:bg-theme-bg-hover">›</button>
+                  </div>
+                </div>
+              )}
+              {editReport && removedEntries.length > 0 && (
+                <div className="pt-3 border-t border-theme-border mt-2">
+                  <div className="text-[11px] text-theme-text-muted mb-1">Voci rimosse ({removedEntries.length}) — ripristinabili</div>
+                  <div className="flex flex-col gap-1">
+                    {removedEntries.map(e => (
+                      <div key={e.id} className="flex items-center justify-between text-xs px-2 py-1 rounded bg-theme-bg-tertiary/30 text-theme-text-muted">
+                        <span className="truncate line-through">{e.type === 'danni' ? 'Danno' : 'Penale'} · {e.customerName || e.vehiclePlate} · {fmtEur2(e.amount)}</span>
+                        <button onClick={() => restoreEntry(e)} className="ml-2 text-[11px] px-1.5 py-0.5 rounded border border-theme-border text-theme-text-secondary">Ripristina</button>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -792,6 +878,19 @@ export default function ReportPenaliDanniTab() {
         <span>Report aggiornato il {new Date().toLocaleString('it-IT', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
         <span>{filteredEntries.length} pratiche nel periodo · {allEntries.length} totali</span>
       </div>
+
+      {(editRow || addMode) && (
+        <ReportRowModal
+          mode={addMode ? 'add' : 'edit'}
+          row={editRow}
+          fields={EDIT_FIELDS}
+          identityFields={addMode ? [{ key: 'description', label: 'Descrizione', required: true }, { key: 'customerName', label: 'Cliente' }] : []}
+          addTemplate={{ type: 'danni', serviceType: 'altro', status: 'paid', source: 'pending', category: 'Manuale', vehicleName: '—', vehiclePlate: '', description: '', customerName: '' }}
+          onClose={() => { setEditRow(null); setAddMode(false) }}
+          onSaveEdit={saveEdit}
+          onSaveAdd={saveAdd}
+        />
+      )}
     </div>
   )
 }
