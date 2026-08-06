@@ -27,6 +27,7 @@ interface PauseConfig {
     pagata: boolean      // true = pausa pagata (NON scalata); false = non pagata (scalata)
     fasce: PausaFascia[] // fasce orarie fisse opzionali (in quelle ore non si contano ore)
     giorni?: number[]    // giorni della settimana in cui vale (getDay(): 0=Dom..6=Sab). Vuoto/assente = tutti i giorni.
+    decorrenza?: string  // YYYY-MM-DD: la pausa vale solo DA questa data in poi. Vuoto = da sempre.
 }
 
 interface Contratto {
@@ -381,6 +382,15 @@ export default function ContrattiOperatoreView() {
                                     />
                                     <span className="text-sm text-theme-text-secondary">Pausa pagata (non scalata dalle ore)</span>
                                 </label>
+                            </div>
+                            <div>
+                                <Input
+                                    label="In vigore da (opzionale)"
+                                    type="date"
+                                    value={contratto.pause_config?.decorrenza ?? ''}
+                                    onChange={e => setPause({ decorrenza: e.target.value || undefined })}
+                                />
+                                <p className="text-xs text-theme-text-muted mt-1">Prima di questa data la pausa di contratto NON viene applicata (l'operatore ha lavorato senza pause). Vuoto = vale da sempre.</p>
                             </div>
                             <div className="space-y-2">
                                 <div className="text-xs uppercase tracking-wider font-semibold text-theme-text-muted">Fasce orarie fisse (opzionale)</div>

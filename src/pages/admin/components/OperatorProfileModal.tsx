@@ -598,7 +598,7 @@ interface PausaFascia { da: string; a: string }
 // `giorni` non e' editabile da questo modale (il selettore Lun-Dom sta in
 // Contratti Operatore) ma va dichiarato: il salvataggio riscrive pause_config
 // per intero e senza questo campo si perderebbero i giorni configurati.
-interface PauseConfig { durata_min: number; pagata: boolean; fasce: PausaFascia[]; giorni?: number[] }
+interface PauseConfig { durata_min: number; pagata: boolean; fasce: PausaFascia[]; giorni?: number[]; decorrenza?: string }
 
 interface Contratto {
     id?: string
@@ -960,6 +960,16 @@ function ContrattoSection({ operatoreId }: { operatoreId: string }) {
                                     <span className={`inline-block w-4 h-4 rounded-full bg-white shadow transform transition-transform ${draft.pause_config?.pagata ? 'translate-x-4' : 'translate-x-0.5'}`} />
                                 </span>
                             </button>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">In vigore da (opzionale)</label>
+                            <input
+                                type="date"
+                                value={draft.pause_config?.decorrenza ?? ''}
+                                onChange={e => setPause({ decorrenza: e.target.value || undefined })}
+                                className="w-full px-2 py-1.5 rounded border border-theme-border bg-theme-bg-primary text-theme-text-primary text-sm"
+                            />
+                            <p className="text-[10px] text-theme-text-muted mt-1">Prima di questa data la pausa di contratto NON viene applicata (l'operatore ha lavorato senza pause). Vuoto = vale da sempre.</p>
                         </div>
                         <div className="space-y-1.5">
                             <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Fasce orarie fisse (opzionale)</div>

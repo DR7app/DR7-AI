@@ -41,6 +41,14 @@ export interface PauseConfig {
     pagata?: boolean
     fasce?: PauseFascia[]
     giorni?: number[]
+    /**
+     * Data (YYYY-MM-DD, Europe/Rome) da cui la pausa di contratto ENTRA in
+     * vigore. I giorni PRECEDENTI non hanno alcuna pausa obbligatoria (utile
+     * quando un operatore ha lavorato senza pause prima che la regola partisse).
+     * Vuoto/assente = vale da sempre. 2026-08-06: Salvatore -> decorrenza
+     * 2026-07-15 (1-14 luglio ha lavorato al posto delle pause).
+     */
+    decorrenza?: string
 }
 
 export interface FasciaRisolta { da: string; a: string; minuti: number }
@@ -97,11 +105,14 @@ export function normalizzaPauseConfig(raw: unknown): PauseConfig | null {
     const giorni: number[] = Array.isArray(o.giorni)
         ? (o.giorni as unknown[]).map(Number).filter(n => Number.isInteger(n) && n >= 0 && n <= 6)
         : []
+    const decorrenzaRaw = String(o.decorrenza ?? '').trim()
+    const decorrenza = /^\d{4}-\d{2}-\d{2}$/.test(decorrenzaRaw) ? decorrenzaRaw : undefined
     return {
         durata_min: Number(o.durata_min) || 0,
         pagata: o.pagata === true,
         fasce,
         giorni,
+        decorrenza,
     }
 }
 
@@ -111,6 +122,9 @@ export function normalizzaPauseConfig(raw: unknown): PauseConfig | null {
  */
 export function pausaObbligatoriaDelGiorno(cfg: PauseConfig | null | undefined, dataISO: string): PausaObbligatoria {
     if (!cfg) return PAUSA_NON_CONFIGURATA
+    // Decorrenza: prima di questa data la pausa di contratto non esiste ancora.
+    // Confronto lessicografico su YYYY-MM-DD (stesso formato) = confronto per data.
+    if (cfg.decorrenza && /^\d{4}-\d{2}-\d{2}$/.test(dataISO) && dataISO < cfg.decorrenza) return PAUSA_NON_CONFIGURATA
     const giorni = cfg.giorni ?? []
     if (giorni.length > 0 && !giorni.includes(dowDelGiorno(dataISO))) return PAUSA_NON_CONFIGURATA
 
