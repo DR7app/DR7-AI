@@ -2,6 +2,11 @@ import { useState, useMemo } from 'react'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import type { ClientTier } from '../../../contexts/ClientStatusContext'
 import DateRangePicker, { resolveDateRange, isInRange, type DateRangeValue } from '../../../components/admin/DateRangePicker'
+import toast from 'react-hot-toast'
+// #38 Modifica manuale report: correggi/rimuovi/aggiungi voci; gli override
+// (report_overrides) si applicano PRIMA dei totali.
+import { loadReportOverrides, applyOverrides, saveEditOverride, saveRemoveOverride, saveAddOverride, deleteOverrideByRow, deleteOverrideById, type LoadedOverrides } from '../../../utils/reportOverrides'
+import { ReportRowModal, type FieldDef } from './ReportRowModal'
 
 interface CustomerReport {
   customerId: string
@@ -200,6 +205,41 @@ export default function ReportClientiTab() {
   const [sortField, setSortField] = useState<SortField>('totale_spesa')
   const [sortAsc, setSortAsc] = useState(false)
 
+  // #38 Modifica manuale report
+  const [overrides, setOverrides] = useState<LoadedOverrides>({ raw: [], removed: new Set(), edits: new Map(), added: [], notesByRow: new Map() })
+  const [editReport, setEditReport] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [editRow, setEditRow] = useState<any | null>(null)
+  const [addMode, setAddMode] = useState(false)
+  const EDIT_FIELDS: FieldDef[] = [
+    { key: 'totale_spesa', label: 'Spesa €' },
+    { key: 'totale_prenotazioni', label: 'Prenotazioni' },
+    { key: 'penali_spesa', label: 'Penali €' },
+    { key: 'danni_spesa', label: 'Danni €' },
+  ]
+  async function reloadOv() { setOverrides(await loadReportOverrides('clienti')) }
+  async function saveEdit(changes: Record<string, number>, note: string) {
+    if (!editRow) return
+    for (const [field, value] of Object.entries(changes)) await saveEditOverride('clienti', editRow.customerId, field, value, note)
+    setEditRow(null); await reloadOv(); toast.success('Voce corretta')
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function saveAdd(row: any, note: string) {
+    await saveAddOverride('clienti', { ...row, customerId: `manual_${Date.now()}_${Math.random().toString(36).slice(2, 7)}` }, note)
+    setAddMode(false); await reloadOv(); toast.success('Voce aggiunta')
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function removeRow(c: any) {
+    if (!window.confirm(`Rimuovere ${c.name || 'questo cliente'} dal report?`)) return
+    if (c._isManual) await deleteOverrideById(c._manualId); else await saveRemoveOverride('clienti', c.customerId, null)
+    await reloadOv(); toast.success('Voce rimossa')
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function restoreRow(c: any) {
+    if (c._isManual) await deleteOverrideById(c._manualId); else await deleteOverrideByRow('clienti', c.customerId)
+    await reloadOv(); toast.success('Voce ripristinata')
+  }
+
   function handleSort(field: SortField) {
     if (sortField === field) {
       setSortAsc(!sortAsc)
@@ -222,6 +262,7 @@ export default function ReportClientiTab() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.details || data.error || 'Errore nel caricamento')
       setClientiData(data)
+      setOverrides(await loadReportOverrides('clienti'))
     } catch (err: unknown) {
       const _errMsg = err instanceof Error ? err.message : String(err)
       setError(_errMsg || 'Errore sconosciuto')
@@ -249,10 +290,21 @@ export default function ReportClientiTab() {
     })
   }, [clientiData, search, range])
 
+  // #38: applica gli override PRIMA di ordinare/totalizzare.
+  const adjustedClienti = useMemo(() =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    applyOverrides(filteredClienti as any, overrides, (c: any) => c.customerId) as any,
+    [filteredClienti, overrides])
+
   const sortedClienti = useMemo(() =>
-    [...filteredClienti].sort((a, b) => sortAsc ? a[sortField] - b[sortField] : b[sortField] - a[sortField]),
-    [filteredClienti, sortField, sortAsc]
+    [...adjustedClienti].sort((a, b) => sortAsc ? a[sortField] - b[sortField] : b[sortField] - a[sortField]),
+    [adjustedClienti, sortField, sortAsc]
   )
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const removedClienti = useMemo(() =>
+    (clientiData?.customers || []).filter((c: any) => overrides.removed.has(c.customerId)),
+    [clientiData, overrides])
 
   // Compute footer totals from filtered data
   const footerTotals = useMemo(() => {
@@ -324,6 +376,8 @@ export default function ReportClientiTab() {
               className="px-4 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm placeholder-theme-text-muted w-full max-w-xs"
             />
             <div className="flex items-center gap-2">
+              <button onClick={() => setEditReport(v => !v)} title="Correggi/rimuovi/aggiungi voci a mano" className={`px-3 py-2 text-xs font-medium rounded border ${editReport ? 'bg-amber-500/20 border-amber-500/40 text-amber-400' : 'bg-theme-bg-tertiary border-theme-border-light text-theme-text-secondary'}`}>{editReport ? '✓ Modifica report' : '✎ Modifica report'}</button>
+              {editReport && <button onClick={() => setAddMode(true)} className="px-3 py-2 text-xs font-medium rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-400">+ Voce</button>}
               <label className="text-xs text-theme-text-muted">Ordina per:</label>
               <select
                 value={sortField}
@@ -414,6 +468,16 @@ export default function ReportClientiTab() {
                         {c.ultima_prenotazione && (
                           <div className="text-[10px] text-theme-text-muted/70 leading-tight">
                             Ultima: {new Date(c.ultima_prenotazione).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                          </div>
+                        )}
+                        {editReport && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <button onClick={() => setEditRow(c)} className="text-[10px] px-1.5 py-0.5 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary">Modifica</button>
+                            <button onClick={() => removeRow(c)} className="text-[10px] px-1.5 py-0.5 rounded border border-red-500/40 text-red-400">Rimuovi</button>
+                            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                            {((c as any)._overrideNote && !(c as any)._isManual) && <button onClick={() => restoreRow(c)} className="text-[10px] px-1.5 py-0.5 rounded border border-theme-border text-theme-text-muted">Ripristina</button>}
+                            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                            {(c as any)._overrideNote && <span className="text-[11px] text-amber-400" title={(c as any)._overrideNote}>✎</span>}
                           </div>
                         )}
                       </td>
@@ -581,6 +645,34 @@ export default function ReportClientiTab() {
           <p className="text-theme-text-muted text-lg mb-2">Clicca "Genera Report" per visualizzare i dati</p>
           <p className="text-theme-text-muted text-sm">Il report include noleggi, lavaggi, meccanica, penali e danni per cliente</p>
         </div>
+      )}
+
+      {editReport && removedClienti.length > 0 && (
+        <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+          <div className="text-[11px] text-theme-text-muted mb-1">Clienti rimossi ({removedClienti.length}) — ripristinabili</div>
+          <div className="flex flex-col gap-1">
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {removedClienti.map((c: any) => (
+              <div key={c.customerId} className="flex items-center justify-between text-xs px-2 py-1 rounded bg-theme-bg-tertiary/30 text-theme-text-muted">
+                <span className="truncate line-through">{c.name} · {formatCurrency(c.totale_spesa || 0)}</span>
+                <button onClick={() => restoreRow(c)} className="ml-2 text-[11px] px-1.5 py-0.5 rounded border border-theme-border text-theme-text-secondary">Ripristina</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(editRow || addMode) && (
+        <ReportRowModal
+          mode={addMode ? 'add' : 'edit'}
+          row={editRow}
+          fields={EDIT_FIELDS}
+          identityFields={addMode ? [{ key: 'name', label: 'Nome cliente', required: true }] : []}
+          addTemplate={{ name: '', email: '-', phone: '-', totale_giorni: 0, totale_prenotazioni: 0, totale_spesa: 0, penali_spesa: 0, danni_spesa: 0, penali_eventi: 0, danni_eventi: 0, annullate_count: 0, cauzioni_attive_count: 0, cauzioni_attive: 0, status_cliente: 'standard', dr7_club: false, prima_prenotazione: null, ultima_prenotazione: null }}
+          onClose={() => { setEditRow(null); setAddMode(false) }}
+          onSaveEdit={saveEdit}
+          onSaveAdd={saveAdd}
+        />
       )}
     </div>
   )
