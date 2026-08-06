@@ -22,11 +22,14 @@
  * target_category: 'all' o categoria veicolo (matching su vehicle_category top-level oppure
  *                  booking_details.vehicle.category).
  *
- * Cadenza cron: ogni 2 minuti (allineata a netlify.toml). Finestra
+ * Cadenza cron: ogni 8 minuti, allineata a netlify.toml (prima il codice
+ * dichiarava ogni 2 minuti e il toml ogni 8: la stessa finestra poteva essere
+ * ritentata 4 volte piu' spesso). Finestra
  * leggermente sovrapposta per non perdere sends se un cron precedente
  * fallisce.
  */
 import { schedule } from '@netlify/functions';
+import { createHash } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { matchesAdvancedFilters, passesCustomerFilters, loadPaymentMethodAliases, loadResidentProvinces } from './utils/triggerSystemMessageEvent';
 import { getProKeyEventTriggers, OLD_TO_PRO } from '../../src/utils/proTemplateRouting';
@@ -414,6 +417,31 @@ function computeTargetMs(template: SystemMessage, booking: Booking): number | nu
 //
 // eslint-disable @typescript-eslint/no-explicit-any
 
+// 2026-08-06 — system_message_send_log.booking_id e' UUID NOT NULL, ma diversi
+// percorsi usano chiavi TESTUALI come entity id (`recur-<tpl>-<data>-<tel>`,
+// `inactive-<email>-<gg>d`, `scadenza-<id>-<gg>d`). Su una colonna uuid quelle
+// query danno errore di cast: la select tornava vuota e l'insert falliva, quindi
+// il dedup non registrava NULLA e il messaggio ripartiva a ogni giro del cron
+// (il caso "un messaggio ogni pochi minuti"). Qui le chiavi non-UUID diventano
+// un UUID v5 deterministico, cosi' il vincolo UNIQUE funziona davvero. Gli id
+// gia' UUID (booking, cauzione, customer) passano invariati: il dedup storico
+// resta valido e nulla viene rimandato.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DEDUP_NAMESPACE = 'b7c1f0de-3a54-4c2f-9a1e-5d6c8f2b4a70';
+
+function dedupKey(entityId: string): string {
+    if (UUID_RE.test(entityId)) return entityId;
+    const hash = createHash('sha1')
+        .update(Buffer.from(DEDUP_NAMESPACE.replace(/-/g, ''), 'hex'))
+        .update(entityId, 'utf8')
+        .digest();
+    const b = Buffer.from(hash.subarray(0, 16));
+    b[6] = (b[6] & 0x0f) | 0x50; // versione 5
+    b[8] = (b[8] & 0x3f) | 0x80; // variante RFC 4122
+    const h = b.toString('hex');
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
 async function fireToCustomer(
     tpl: SystemMessage,
     entityId: string,
@@ -424,13 +452,23 @@ async function fireToCustomer(
 ): Promise<{ sent: boolean; skipped: boolean; error: boolean }> {
     if (!custPhone) return { sent: false, skipped: true, error: false };
 
-    // Dedup
-    const { data: existing } = await supabase
+    // Dedup. NB: la chiave passa da dedupKey() perche' system_message_send_log
+    // .booking_id e' UUID: le chiavi testuali (recur-*, inactive-*, scadenza-*)
+    // facevano fallire SIA la select SIA l'insert → nessun log → il messaggio
+    // ripartiva a OGNI giro del cron. Vedi dedupKey().
+    const logKey = dedupKey(entityId);
+    const { data: existing, error: dedupErr } = await supabase
         .from('system_message_send_log')
         .select('id')
         .eq('system_message_id', tpl.id)
-        .eq('booking_id', entityId)
+        .eq('booking_id', logKey)
         .maybeSingle();
+    // Fail-closed: se non riusciamo a verificare il dedup NON inviamo. Meglio un
+    // messaggio in meno che lo stesso messaggio a ripetizione.
+    if (dedupErr) {
+        console.error(`[scheduled-msgs] dedup non verificabile per ${tpl.message_key}/${entityId} — non invio:`, dedupErr.message);
+        return { sent: false, skipped: true, error: true };
+    }
     if (existing?.id) return { sent: false, skipped: true, error: false };
 
     // Synthetic booking — i campi standard usati da send-whatsapp-notification
@@ -443,6 +481,25 @@ async function fireToCustomer(
         ...extraVars,
     };
 
+    // "Claim" PRIMA di inviare, come nel percorso booking-anchored: il vincolo
+    // UNIQUE(system_message_id, booking_id) rende l'invio at-most-once anche se
+    // due tick del cron si sovrappongono. Prima si inviava e POI si loggava: se
+    // il log falliva, il giro dopo il messaggio ripartiva.
+    const { data: claim, error: claimErr } = await supabase
+        .from('system_message_send_log')
+        .insert({
+            system_message_id: tpl.id,
+            booking_id: logKey,
+            customer_phone: custPhone,
+            status: 'sending',
+        })
+        .select('id')
+        .maybeSingle();
+    if (claimErr || !claim?.id) {
+        console.log(`[scheduled-msgs] claim fallito per ${tpl.message_key}/${entityId} (gia' inviato o log KO) — skip${claimErr ? ': ' + claimErr.message : ''}`);
+        return { sent: false, skipped: true, error: !!claimErr };
+    }
+
     const baseUrl = process.env.URL || 'https://platform.dr7ai.com';
     try {
         const res = await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
@@ -453,26 +510,21 @@ async function fireToCustomer(
         const ok = res.ok;
         let resp: any = null;
         try { resp = await res.json(); } catch { /* ignore */ }
-        await supabase.from('system_message_send_log').insert({
-            system_message_id: tpl.id,
-            booking_id: entityId,
-            customer_phone: custPhone,
-            status: ok ? (resp?.skipped ? 'skipped' : 'sent') : 'error',
-            error: ok ? null : `HTTP ${res.status}`,
-        });
+        await supabase.from('system_message_send_log')
+            .update({
+                status: ok ? (resp?.skipped ? 'skipped' : 'sent') : 'error',
+                error: ok ? null : `HTTP ${res.status}`,
+            })
+            .eq('id', claim.id);
         if (!ok) return { sent: false, skipped: false, error: true };
         return { sent: !resp?.skipped, skipped: !!resp?.skipped, error: false };
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
-        try {
-            await supabase.from('system_message_send_log').insert({
-                system_message_id: tpl.id,
-                booking_id: entityId,
-                customer_phone: custPhone,
-                status: 'error',
-                error: msg.slice(0, 500),
-            });
-        } catch { /* ok */ }
+        // La riga di claim resta a bloccare il doppio invio: per ritentare a
+        // mano si cancella la riga di log.
+        await supabase.from('system_message_send_log')
+            .update({ status: 'error', error: msg.slice(0, 500) })
+            .eq('id', claim.id);
         return { sent: false, skipped: false, error: true };
     }
 }
@@ -1408,4 +1460,4 @@ const cronHandler = async () => {
 // In passato c'era un mismatch (file `*/15`, toml `*/2`) che lasciava il
 // comportamento ambiguo: i messaggi automatici a volte non partivano nei
 // tempi previsti perché la pianificazione effettiva era indeterminata.
-export const handler = schedule('*/2 * * * *', cronHandler);
+export const handler = schedule('*/8 * * * *', cronHandler);

@@ -2165,6 +2165,10 @@ export default function MessaggiSistemaProTab() {
                     description: newDescription.trim(),
                     message_body: newBody.trim(),
                     is_automatic: newIsAutomatic,
+                    // Un solo interruttore in UI: chi crea un messaggio
+                    // "Automatico" si aspetta che parta. cron_approved resta il
+                    // gate del cron, ma lo scriviamo insieme a is_automatic.
+                    cron_approved: newIsAutomatic,
                     is_enabled: true,
                     trigger_event: newTriggerEvent,
                     trigger_offset_hours: newTriggerOffset,
@@ -2254,15 +2258,27 @@ export default function MessaggiSistemaProTab() {
         }
     }
 
+    // 2026-08-06: un solo interruttore Automatico/Manuale. Prima ce n'erano due
+    // (Automatico + "Cron ON/OFF") e nessuno dei due bastava da solo: il cron
+    // richiede is_automatic AND cron_approved, quindi un template marcato
+    // "Automatico" con Cron OFF non partiva mai e la UI diceva il falso.
+    // Ora il pulsante scrive entrambi i flag insieme. Il flag DB cron_approved
+    // resta (e resta il gate del cron): le decine di template mis-flaggati
+    // is_automatic=true dopo l'incident del 2026-05-13 hanno cron_approved=false,
+    // quindi restano SPENTI finche' qualcuno non li accende esplicitamente qui.
+    function isEffectivelyAutomatic(template: SystemMessage): boolean {
+        return !!template.is_automatic && template.cron_approved === true
+    }
+
     async function handleToggleAutomatic(template: SystemMessage) {
         try {
-            const newVal = !template.is_automatic
+            const newVal = !isEffectivelyAutomatic(template)
             const { error } = await supabase
                 .from('system_messages')
-                .update({ is_automatic: newVal, updated_at: new Date().toISOString() })
+                .update({ is_automatic: newVal, cron_approved: newVal, updated_at: new Date().toISOString() })
                 .eq('id', template.id)
             if (error) throw error
-            setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, is_automatic: newVal } : t))
+            setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, is_automatic: newVal, cron_approved: newVal } : t))
             toast.success(newVal ? 'Invio automatico attivato' : 'Invio automatico disattivato')
         } catch (err: unknown) {
             const _errMsg = err instanceof Error ? err.message : String(err)
@@ -2280,22 +2296,6 @@ export default function MessaggiSistemaProTab() {
             if (error) throw error
             setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, is_enabled: newVal } : t))
             toast.success(newVal ? 'Messaggio attivato' : 'Messaggio disattivato')
-        } catch (err: unknown) {
-            const _errMsg = err instanceof Error ? err.message : String(err)
-            toast.error('Errore: ' + _errMsg)
-        }
-    }
-
-    async function handleToggleCronApproved(template: SystemMessage) {
-        try {
-            const newVal = !template.cron_approved
-            const { error } = await supabase
-                .from('system_messages')
-                .update({ cron_approved: newVal, updated_at: new Date().toISOString() })
-                .eq('id', template.id)
-            if (error) throw error
-            setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, cron_approved: newVal } : t))
-            toast.success(newVal ? 'Invio automatico su pianificazione ATTIVATO' : 'Invio automatico su pianificazione disattivato')
         } catch (err: unknown) {
             const _errMsg = err instanceof Error ? err.message : String(err)
             toast.error('Errore: ' + _errMsg)
@@ -3665,32 +3665,22 @@ export default function MessaggiSistemaProTab() {
                                                         {template.message_key}
                                                     </code>
                                                     <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                                                        {/* Un solo interruttore: Automatico = il messaggio parte
+                                                            da solo secondo la Programmazione; Manuale = parte solo
+                                                            quando lo mandi tu. Scrive is_automatic + cron_approved
+                                                            insieme (vedi handleToggleAutomatic). */}
                                                         <button
                                                             onClick={(e) => { e.preventDefault(); handleToggleAutomatic(template) }}
+                                                            title={isEffectivelyAutomatic(template)
+                                                                ? 'Parte da solo secondo la Programmazione. Clic per passare a Manuale.'
+                                                                : 'Parte solo quando lo invii tu. Clic per farlo partire da solo.'}
                                                             className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
-                                                                template.is_automatic
+                                                                isEffectivelyAutomatic(template)
                                                                     ? 'bg-green-600/20 text-green-400 hover:bg-green-600/30'
                                                                     : 'bg-purple-600/20 text-purple-400 hover:bg-purple-600/30'
                                                             }`}
                                                         >
-                                                            {template.is_automatic ? 'Automatico' : 'Manuale'}
-                                                        </button>
-                                                        {/* 2026-07-12: approvazione invio pianificato (cron).
-                                                            Il promemoria parte dal cron SOLO se questo è ON
-                                                            (oltre a Attivo + Automatico). Parte esclusivamente
-                                                            ciò che approvi qui — nessun invio di massa. */}
-                                                        <button
-                                                            onClick={(e) => { e.preventDefault(); handleToggleCronApproved(template) }}
-                                                            title={template.cron_approved
-                                                                ? 'Il cron può inviare questo promemoria automaticamente. Clic per disattivare.'
-                                                                : 'Il cron NON invierà questo promemoria finché non lo attivi qui.'}
-                                                            className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
-                                                                template.cron_approved
-                                                                    ? 'bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'
-                                                                    : 'bg-gray-600/20 text-gray-400 hover:bg-gray-600/30'
-                                                            }`}
-                                                        >
-                                                            {template.cron_approved ? 'Cron ON' : 'Cron OFF'}
+                                                            {isEffectivelyAutomatic(template) ? 'Automatico' : 'Manuale'}
                                                         </button>
                                                         {template.is_enabled === false && (
                                                             <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-600/20 text-red-400">OFF</span>
@@ -3848,9 +3838,9 @@ export default function MessaggiSistemaProTab() {
                                                     le righe "Evento ·" nel preview Programmazione. */}
                                                 {getProKeyEventTriggers(template.message_key, template.label).length === 0 && (
                                                     <div className="rounded-lg bg-theme-bg-primary border border-theme-border/50 p-3 space-y-2">
-                                                        {!template.is_automatic && (
+                                                        {!isEffectivelyAutomatic(template) && (
                                                             <div className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-md px-2 py-1.5">
-                                                                <span className="font-semibold">Automatico è OFF</span> — le impostazioni qui sotto sono salvate ma il cron non le userà finché non clicchi il badge "Manuale" in alto per metterlo a "Automatico".
+                                                                <span className="font-semibold">Questo messaggio è su Manuale</span> — le impostazioni qui sotto sono salvate ma non partirà da solo finché non clicchi il badge "Manuale" in alto per metterlo su "Automatico".
                                                             </div>
                                                         )}
                                                         {/* Programmazione ricorrente a calendario — visibile solo
