@@ -111,6 +111,29 @@ function rangeFromPreset(preset: RangePreset): { from: string; to: string } {
     return { from: to, to }
 }
 
+const MESI_IT = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre']
+
+/** Range di un mese preciso (YYYY-MM). `to` mai oltre oggi (mese in corso). */
+function rangeFromMonth(anno: number, mese0: number): { from: string; to: string } {
+    const start = new Date(anno, mese0, 1)
+    const end = new Date(anno, mese0 + 1, 0)        // ultimo giorno del mese
+    const today = new Date()
+    const to = end > today ? today : end
+    return { from: toRomeDate(start), to: toRomeDate(to) }
+}
+
+/** Ultimi N mesi (incluso il corrente), piu recente prima. value = "YYYY-MM". */
+function ultimiMesi(n: number): { value: string; label: string }[] {
+    const out: { value: string; label: string }[] = []
+    const today = new Date()
+    for (let i = 0; i < n; i++) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
+        const y = d.getFullYear(), m = d.getMonth()
+        out.push({ value: `${y}-${String(m + 1).padStart(2, '0')}`, label: `${MESI_IT[m]} ${y}` })
+    }
+    return out
+}
+
 function KpiCard({ label, value, sub, accent, icon, delta }: {
     label: string; value: string | number; sub?: string;
     accent?: 'gold' | 'emerald' | 'sky' | 'violet' | 'rose' | 'amber' | 'cyan' | 'lime'
@@ -218,6 +241,19 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
     const [{ from: rangeFrom, to: rangeTo }, setRange] = useState(() => rangeFromPreset('mese'))
     const [customFrom, setCustomFrom] = useState<string>(rangeFrom)
     const [customTo, setCustomTo] = useState<string>(rangeTo)
+    // Mese specifico scelto dal menu (YYYY-MM); '' = nessuna selezione mese.
+    const [monthSel, setMonthSel] = useState<string>('')
+    const monthOpts = useMemo(() => ultimiMesi(18), [])
+
+    function selezionaMese(v: string) {
+        setMonthSel(v)
+        if (!v) return
+        const [y, m] = v.split('-').map(Number)
+        const r = rangeFromMonth(y, m - 1)
+        setPreset('custom')
+        setCustomFrom(r.from); setCustomTo(r.to)
+        setRange(r)
+    }
 
     useEffect(() => {
         if (preset !== 'custom') {
@@ -773,22 +809,30 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                     <p className="text-xs text-theme-text-muted mt-1">Analisi completa delle performance del team, produttivita e rilevazione orari</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={monthSel}
+                      onChange={e => selezionaMese(e.target.value)}
+                      title="Scegli un mese"
+                      className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary">
+                        <option value="">Mese…</option>
+                        {monthOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
                     <EuropeanDateInput
                       value={customFrom}
                       max={customTo}
-                      onChange={(__v: string) => { setPreset('custom'); setCustomFrom(__v) }}
+                      onChange={(__v: string) => { setPreset('custom'); setMonthSel(''); setCustomFrom(__v) }}
                       className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary"
                     />
                     <span className="text-theme-text-muted text-xs">→</span>
                     <EuropeanDateInput
                       value={customTo}
                       min={customFrom}
-                      onChange={(__v: string) => { setPreset('custom'); setCustomTo(__v) }}
+                      onChange={(__v: string) => { setPreset('custom'); setMonthSel(''); setCustomTo(__v) }}
                       className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-xs text-theme-text-primary"
                     />
                     <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-tertiary p-0.5 text-xs">
                         {(['oggi', '7gg', '30gg', 'mese', 'quarter', 'anno', 'custom'] as RangePreset[]).map(p => (
-                            <button key={p} onClick={() => setPreset(p)}
+                            <button key={p} onClick={() => { setPreset(p); setMonthSel('') }}
                                 className={`px-3 py-1 rounded-full ${preset === p ? 'bg-dr7-gold text-black font-semibold' : 'text-theme-text-secondary hover:bg-theme-bg-hover'}`}>
                                 {p === 'oggi' ? 'Oggi' : p === '7gg' ? '7 Giorni' : p === '30gg' ? '30 Giorni' : p === 'mese' ? 'Questo Mese' : p === 'quarter' ? 'Trimestre' : p === 'anno' ? 'Anno' : 'Custom'}
                             </button>
