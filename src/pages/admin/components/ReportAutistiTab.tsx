@@ -3,6 +3,10 @@ import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { USCITA_SERVICE_TYPE, bookingStatusToUscitaStato } from '../../../utils/uscitaStraordinaria'
+import toast from 'react-hot-toast'
+// #38 Modifica manuale report: correggi/rimuovi/aggiungi voci autista.
+import { loadReportOverrides, applyOverrides, saveEditOverride, saveRemoveOverride, saveAddOverride, deleteOverrideByRow, deleteOverrideById, type LoadedOverrides } from '../../../utils/reportOverrides'
+import { ReportRowModal, type FieldDef } from './ReportRowModal'
 
 interface AutistaLite { id: string; full_name: string; phone: string }
 
@@ -136,6 +140,37 @@ export default function ReportAutistiTab() {
   const [vehicles, setVehicles] = useState<Map<string, VehicleLite>>(new Map())
   const [autisti, setAutisti] = useState<AutistaLite[]>([])
 
+  // #38 Modifica manuale report
+  const [overrides, setOverrides] = useState<LoadedOverrides>({ raw: [], removed: new Set(), edits: new Map(), added: [], notesByRow: new Map() })
+  const [editReport, setEditReport] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [editRow, setEditRow] = useState<any | null>(null)
+  const [addMode, setAddMode] = useState(false)
+  const EDIT_FIELDS: FieldDef[] = [{ key: 'count', label: 'Uscite' }]
+  useEffect(() => { loadReportOverrides('autisti').then(setOverrides) }, [])
+  async function reloadOv() { setOverrides(await loadReportOverrides('autisti')) }
+  async function saveEdit(changes: Record<string, number>, note: string) {
+    if (!editRow) return
+    for (const [field, value] of Object.entries(changes)) await saveEditOverride('autisti', editRow.id, field, value, note)
+    setEditRow(null); await reloadOv(); toast.success('Voce corretta')
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function saveAdd(row: any, note: string) {
+    await saveAddOverride('autisti', { ...row, id: `manual_${Date.now()}_${Math.random().toString(36).slice(2, 7)}` }, note)
+    setAddMode(false); await reloadOv(); toast.success('Voce aggiunta')
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function removeRow(s: any) {
+    if (!window.confirm(`Rimuovere ${s.name || 'questo autista'} dal report?`)) return
+    if (s._isManual) await deleteOverrideById(s._manualId); else await saveRemoveOverride('autisti', s.id, null)
+    await reloadOv(); toast.success('Voce rimossa')
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function restoreRow(s: any) {
+    if (s._isManual) await deleteOverrideById(s._manualId); else await deleteOverrideByRow('autisti', s.id)
+    await reloadOv(); toast.success('Voce ripristinata')
+  }
+
   // Tutti gli autisti registrati (anche senza attività nel periodo).
   useEffect(() => {
     (async () => {
@@ -219,7 +254,7 @@ export default function ReportAutistiTab() {
 
   // Per-autista summary — parte da TUTTI gli autisti registrati (anche con 0
   // movimenti nel periodo), poi aggancia i conteggi dei movimenti.
-  const summary = useMemo(() => {
+  const summaryBase = useMemo(() => {
     const counts = new Map<string, { count: number; last: string | null; name: string }>()
     for (const r of rows) {
       const cur = counts.get(r.autistaId) || { count: 0, last: null, name: r.autistaName }
@@ -239,6 +274,15 @@ export default function ReportAutistiTab() {
     return base.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
   }, [rows, autisti])
 
+  // #38: override manuali (report_overrides, report_type 'autisti') applicati sul
+  // riepilogo PRIMA di grafici/tabella/KPI. row_key = id autista.
+  const summary = useMemo(() =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    applyOverrides(summaryBase as any, overrides, (s: any) => s.id) as any,
+    [summaryBase, overrides])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const removedAutisti = useMemo(() => summaryBase.filter((s: any) => overrides.removed.has(s.id)), [summaryBase, overrides])
+
   // ─── Dati derivati per i grafici ─────────────────────────────────────────────
   // Andamento movimenti per giorno (ordine cronologico).
   const trendValues = useMemo(() => {
@@ -252,7 +296,8 @@ export default function ReportAutistiTab() {
   }, [rows])
 
   const topAutisti = useMemo(
-    () => summary.filter(s => s.count > 0).slice(0, 5).map(s => ({ name: s.name, value: s.count })),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    () => summary.filter((s: any) => s.count > 0).slice(0, 5).map((s: any) => ({ name: s.name, value: s.count })),
     [summary],
   )
 
@@ -278,7 +323,8 @@ export default function ReportAutistiTab() {
   // KPI
   const usciteCount = useMemo(() => new Set(rows.map(r => r.bookingId)).size, [rows])
   const veicoliCount = useMemo(() => new Set(rows.filter(r => r.vehicleLabel !== '—').map(r => r.vehicleLabel)).size, [rows])
-  const attiviCount = useMemo(() => summary.filter(s => s.count > 0).length, [summary])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const attiviCount = useMemo(() => summary.filter((s: any) => s.count > 0).length, [summary])
   const statoCount = (s: string) => statoDist.find(d => d.label === s)?.value || 0
   const completate = statoCount('Completata')
   const inCorso = statoCount('In Corso')
@@ -296,7 +342,8 @@ export default function ReportAutistiTab() {
     return map[s] || 'bg-theme-bg-tertiary text-theme-text-secondary'
   }
 
-  const topAutista = summary.find(s => s.count > 0)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const topAutista = summary.find((s: any) => s.count > 0)
 
   return (
     <div className="space-y-5">
@@ -359,7 +406,13 @@ export default function ReportAutistiTab() {
 
           {/* Per-autista summary */}
           <div className="rounded-xl border border-theme-border overflow-hidden">
-            <div className="px-4 py-2.5 bg-theme-bg-secondary/60 text-sm font-semibold text-theme-text-primary border-b border-theme-border">Riepilogo per Autista</div>
+            <div className="px-4 py-2.5 bg-theme-bg-secondary/60 border-b border-theme-border flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-sm font-semibold text-theme-text-primary">Riepilogo per Autista</span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setEditReport(v => !v)} title="Correggi/rimuovi/aggiungi voci a mano" className={`px-2.5 py-1 text-xs font-medium rounded border ${editReport ? 'bg-amber-500/20 border-amber-500/40 text-amber-400' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary'}`}>{editReport ? '✓ Modifica report' : '✎ Modifica report'}</button>
+                {editReport && <button onClick={() => setAddMode(true)} className="px-2.5 py-1 text-xs font-medium rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-400">+ Voce</button>}
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -368,19 +421,33 @@ export default function ReportAutistiTab() {
                     <th className="px-4 py-2">Telefono</th>
                     <th className="px-4 py-2">Movimenti</th>
                     <th className="px-4 py-2">Ultimo movimento</th>
+                    {editReport && <th className="px-4 py-2 text-right">Azioni</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {summary.map((s, i) => (
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {summary.map((s: any, i: number) => (
                     <tr key={i} className="border-t border-theme-border/40">
-                      <td className="px-4 py-2 font-medium text-theme-text-primary">{s.name}</td>
+                      <td className="px-4 py-2 font-medium text-theme-text-primary">
+                        {s.name}
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                        {(s as any)._overrideNote && <span className="ml-1 text-[11px] text-amber-400" title={(s as any)._overrideNote}>✎</span>}
+                      </td>
                       <td className="px-4 py-2 text-theme-text-secondary">{s.phone || '—'}</td>
                       <td className="px-4 py-2"><span className={s.count > 0 ? 'text-theme-text-primary font-semibold' : 'text-theme-text-muted'}>{s.count}</span></td>
                       <td className="px-4 py-2 text-theme-text-secondary">{fmtDate(s.last)}</td>
+                      {editReport && (
+                        <td className="px-4 py-2 text-right whitespace-nowrap">
+                          <button onClick={() => setEditRow(s)} className="text-[11px] px-1.5 py-0.5 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary">Modifica</button>
+                          <button onClick={() => removeRow(s)} className="ml-1 text-[11px] px-1.5 py-0.5 rounded border border-red-500/40 text-red-400">Rimuovi</button>
+                          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                          {((s as any)._overrideNote && !(s as any)._isManual) && <button onClick={() => restoreRow(s)} className="ml-1 text-[11px] px-1.5 py-0.5 rounded border border-theme-border text-theme-text-muted">Ripristina</button>}
+                        </td>
+                      )}
                     </tr>
                   ))}
                   {summary.length === 0 && !loading && (
-                    <tr><td colSpan={4} className="px-4 py-6 text-center text-theme-text-muted">Nessun autista registrato. Tagga un cliente come Autista dalla scheda Clienti.</td></tr>
+                    <tr><td colSpan={editReport ? 5 : 4} className="px-4 py-6 text-center text-theme-text-muted">Nessun autista registrato. Tagga un cliente come Autista dalla scheda Clienti.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -461,6 +528,32 @@ export default function ReportAutistiTab() {
           </div>
         </aside>
       </div>
+
+      {editReport && removedAutisti.length > 0 && (
+        <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/5 p-3">
+          <div className="text-[11px] uppercase tracking-wider text-red-400 mb-1.5">Voci rimosse dal report</div>
+          <div className="flex flex-wrap gap-2">
+            {removedAutisti.map((s: any, i: number) => (
+              <button key={i} onClick={() => restoreRow(s)} title="Ripristina" className="text-[11px] px-2 py-1 rounded border border-theme-border bg-theme-bg-tertiary text-theme-text-secondary line-through hover:no-underline">
+                {s.name} ↺
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(editRow || addMode) && (
+        <ReportRowModal
+          mode={addMode ? 'add' : 'edit'}
+          row={editRow}
+          fields={EDIT_FIELDS}
+          identityFields={addMode ? [{ key: 'name', label: 'Nome autista', required: true }] : []}
+          addTemplate={{ name: '', phone: '', count: 0, last: null }}
+          onClose={() => { setEditRow(null); setAddMode(false) }}
+          onSaveEdit={saveEdit}
+          onSaveAdd={saveAdd}
+        />
+      )}
     </div>
   )
 }

@@ -9,7 +9,10 @@ import {
   type ClientStatusKey,
 } from '../utils/clientStatusConfig'
 
-export type ClientTier = 'new' | 'member' | 'elite' | 'blacklist'
+// 'new' = nessuno status assegnato (in configurazione e' la riga 'standard').
+// Oltre ai 4 di sistema il tier puo' essere una chiave creata dall'admin in
+// Centralina Pro > Status Clienti: da qui in giu' e' una stringa qualsiasi.
+export type ClientTier = 'new' | 'member' | 'elite' | 'blacklist' | (string & {})
 
 export interface ClientTierMeta {
   tier: ClientTier

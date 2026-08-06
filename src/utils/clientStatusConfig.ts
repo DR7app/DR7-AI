@@ -11,13 +11,44 @@
 // migration da applicare, e il salvataggio della Centralina non la tocca
 // (savePersisted fa read-modify-write).
 //
-// Le CHIAVI restano fisse (standard/member/elite/blacklist): le usano i filtri
-// campagne, i report e la logica interna. Personalizzabile tutto cio' che vede
-// una persona: nome, descrizione, colore, avvertenza.
+// I 4 status storici (standard/member/elite/blacklist) non si cancellano — li
+// usano filtri campagne, report e logica interna — ma si rinominano e
+// ricolorano come tutti gli altri. L'admin puo' aggiungerne di propri: chiave
+// generata dallo slug del nome, scritta su customers_extended.status come le
+// altre, riconosciuta ovunque (badge, campagne, cron).
 import { supabase } from '../supabaseClient'
 
-export type ClientStatusKey = 'standard' | 'member' | 'elite' | 'blacklist'
-export const CLIENT_STATUS_KEYS: ClientStatusKey[] = ['standard', 'member', 'elite', 'blacklist']
+// Le 4 chiavi storiche non si cancellano: le usano filtri campagne, report e
+// logica interna. Gli status aggiunti dall'admin hanno una chiave generata
+// (slug del nome) e sono cancellabili.
+export type ClientStatusKey = string
+export const BUILTIN_STATUS_KEYS = ['standard', 'member', 'elite', 'blacklist'] as const
+export type BuiltinStatusKey = typeof BUILTIN_STATUS_KEYS[number]
+
+export function isBuiltinStatus(key: string): boolean {
+  return (BUILTIN_STATUS_KEYS as readonly string[]).includes(key)
+}
+
+/**
+ * Chiave stabile per un nuovo status: slug del nome, con suffisso numerico se
+ * gia' preso. Resta scritta sulle schede cliente, quindi non cambia piu' anche
+ * se poi il nome viene modificato.
+ */
+export function makeStatusKey(label: string, existing: string[]): string {
+  const base = label
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 24) || 'status'
+  const taken = new Set(existing)
+  if (!taken.has(base) && !isBuiltinStatus(base)) return base
+  for (let i = 2; i < 999; i++) {
+    const candidate = `${base}_${i}`
+    if (!taken.has(candidate)) return candidate
+  }
+  return `${base}_${existing.length + 1}`
+}
 
 /** Gravita' dell'avvertenza mostrata a chi apre la scheda del cliente. */
 export type AvvisoLivello = 'info' | 'attenzione' | 'critico'
@@ -88,7 +119,10 @@ const CONFIG_ROW = 'main'
 
 /** Completa una riga parziale con i default della sua chiave. */
 function withDefaults(raw: Partial<ClientStatusDef>, key: ClientStatusKey): ClientStatusDef {
-  const base = DEFAULT_CLIENT_STATUS.find(d => d.key === key) || DEFAULT_CLIENT_STATUS[0]
+  // Per gli status aggiunti dall'admin non esiste un default di fabbrica: si
+  // parte dal neutro (grigio, nessuna avvertenza) e il nome e' obbligatorio.
+  const base = DEFAULT_CLIENT_STATUS.find(d => d.key === key)
+    || { ...DEFAULT_CLIENT_STATUS[0], label: key, descrizione: '', colore: 'gray', avviso: '' }
   return {
     key,
     label: (raw.label ?? '').trim() || base.label,
@@ -103,12 +137,27 @@ function withDefaults(raw: Partial<ClientStatusDef>, key: ClientStatusKey): Clie
   }
 }
 
-/** Normalizza una lista qualsiasi: sempre 4 chiavi, sempre tutti i campi. */
+/**
+ * Normalizza una lista qualsiasi: i 4 status di sistema ci sono sempre, gli
+ * status personalizzati vengono dopo, tutti con i campi completi.
+ */
 export function normalizeClientStatus(raw: unknown): ClientStatusDef[] {
   const list = Array.isArray(raw) ? (raw as Partial<ClientStatusDef>[]) : []
-  return CLIENT_STATUS_KEYS
+  const builtin = (BUILTIN_STATUS_KEYS as readonly string[])
     .map(key => withDefaults(list.find(r => r?.key === key) || {}, key))
+  const custom = list
+    .filter(r => typeof r?.key === 'string' && r.key.trim() && !isBuiltinStatus(r.key))
+    .map(r => withDefaults(r, r.key as string))
+  // Chiavi duplicate: vince la prima (l'ordine di salvataggio).
+  const seen = new Set<string>()
+  return [...builtin, ...custom]
+    .filter(d => (seen.has(d.key) ? false : (seen.add(d.key), true)))
     .sort((a, b) => a.ordine - b.ordine)
+}
+
+/** True se lo status esiste ancora nella configurazione. */
+export function statusExists(defs: ClientStatusDef[], key: string | null | undefined): boolean {
+  return !!key && defs.some(d => d.key === key)
 }
 
 /**
