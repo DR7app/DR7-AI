@@ -7,6 +7,13 @@ import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { effectivePenaltyAmount } from '../../../utils/penaltyAmount'
 import { statusColorClasses } from './ClientStatusConfigSection'
+import {
+  avvisoClasses,
+  clientStatusColor,
+  loadClientStatusConfig,
+  normalizeClientStatus,
+  type ClientStatusDef,
+} from '../../../utils/clientStatusConfig'
 import { listCardsFromMetadata } from '../../../utils/nexiCards'
 import CustomerAddebitoButton from './CustomerAddebitoButton'
 import CardDeleteButton from './CardDeleteButton'
@@ -57,17 +64,19 @@ type TabId = 'stato' | 'anagrafica' | 'storico' | 'economica'
 export default function ReportClienteModal({ customerId, onClose }: ReportClienteProps) {
   const [customer, setCustomer] = useState<CustomerData | null>(null)
   const [uploadingFoto, setUploadingFoto] = useState(false)
-  // Status clienti personalizzabili (roadmap 20): label/descrizione/colore da Centralina.
-  const [statusCfg, setStatusCfg] = useState<Record<string, { label: string; descrizione: string | null; color: string }>>({})
+  // Status clienti personalizzabili: nome/descrizione/colore/avvertenza da
+  // Centralina Pro > Status Clienti (utils/clientStatusConfig).
+  const [statusDefs, setStatusDefs] = useState<ClientStatusDef[]>(() => normalizeClientStatus([]))
   useEffect(() => {
-    supabase.from('client_status_config').select('status_key, label, descrizione, color').then(({ data }) => {
-      if (data) {
-        const m: Record<string, { label: string; descrizione: string | null; color: string }> = {}
-        for (const r of data as { status_key: string; label: string; descrizione: string | null; color: string }[]) m[r.status_key] = r
-        setStatusCfg(m)
-      }
-    }, () => {})
+    let alive = true
+    loadClientStatusConfig().then(defs => { if (alive) setStatusDefs(defs) })
+    return () => { alive = false }
   }, [])
+  const statusCfg = useMemo(() => {
+    const m: Record<string, ClientStatusDef> = {}
+    for (const d of statusDefs) m[d.key] = d
+    return m
+  }, [statusDefs])
   const [deletedCardIds, setDeletedCardIds] = useState<Set<string>>(new Set())
 
   // Foto cliente (roadmap 21): upload diretto dalla scheda + salva su DB.
@@ -417,15 +426,12 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   // Insight
   const insight = useMemo(() => {
     const status = customer?.status_cliente
-    // roadmap 20: usa la config personalizzata da Centralina (label/descrizione/colore).
+    // Nome/descrizione/colore come personalizzati in Centralina Pro.
     if (status && statusCfg[status]) {
       const c = statusCfg[status]
-      const cls = statusColorClasses(c.color)
+      const cls = statusColorClasses(c.colore)
       return { label: c.descrizione ? `${c.label} — ${c.descrizione}` : c.label, color: cls.text, bg: cls.bg }
     }
-    if (status === 'blacklist') return { label: 'Cliente in Blacklist', color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/30' }
-    if (status === 'elite') return { label: 'Cliente Elite — alto valore, basso rischio', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' }
-    if (status === 'member') return { label: 'Cliente Member — fidelizzato', color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/30' }
     if (riskScore >= 8 && kpis.totalSpent > 1000) return { label: 'Cliente affidabile con alto valore', color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/30' }
     if (riskScore < 5) return { label: 'Attenzione: rischio elevato', color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/30' }
     return { label: 'Cliente standard', color: 'text-theme-text-muted', bg: 'bg-theme-bg-tertiary border-theme-border' }
@@ -528,14 +534,26 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
 
   const customerName = customer ? (customer.denominazione || `${customer.nome || ''} ${customer.cognome || ''}`.trim() || customer.email || 'N/A') : ''
 
+  // Badge con nome e colore configurati in Centralina Pro > Status Clienti.
   const statusBadge = (s?: string) => {
-    switch (s) {
-      case 'elite': return <span className="px-2 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/50">Elite</span>
-      case 'member': return <span className="px-2 py-1 rounded-full text-xs font-bold bg-blue-500/20 text-blue-400 border border-blue-500/50">Member</span>
-      case 'blacklist': return <span className="px-2 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/50">Blacklist</span>
-      default: return <span className="px-2 py-1 rounded-full text-xs font-bold bg-theme-bg-tertiary text-theme-text-muted border border-theme-border">Standard</span>
-    }
+    const def = statusCfg[s || 'standard'] || statusCfg.standard
+    if (!def) return null
+    return (
+      <span
+        className={`px-2 py-1 rounded-full text-xs font-bold border ${clientStatusColor(def.colore).badge}`}
+        title={def.avviso || def.descrizione || undefined}
+      >
+        {def.label}
+      </span>
+    )
   }
+
+  // Avvertenza dello status, se configurata: e' il motivo per cui la direzione
+  // voleva gli status personalizzabili (es. blacklist -> non procedere).
+  const statusAvviso = (() => {
+    const def = statusCfg[customer?.status_cliente || 'standard']
+    return def && def.avviso.trim() ? def : null
+  })()
 
   const fmtEur = (v: number) => `€${v.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   const fmtDate = (d: string) => new Date(d).toLocaleDateString('it-IT')
@@ -659,6 +677,12 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                     <span>Iscritto dal {fmtDate(customer.created_at)} · {daysSince(new Date(customer.created_at))} giorni</span>
                   </div>
                 </div>
+                {/* Avvertenza dello status, testo e gravita' da Centralina Pro. */}
+                {statusAvviso && (
+                  <div className={`mt-3 rounded-lg border px-3 py-2 text-[12px] font-medium ${avvisoClasses(statusAvviso.avviso_livello)}`}>
+                    {statusAvviso.avviso}
+                  </div>
+                )}
               </div>
             </div>
 

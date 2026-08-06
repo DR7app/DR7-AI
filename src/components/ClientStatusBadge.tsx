@@ -1,5 +1,4 @@
 import {
-  clientTierMeta,
   DR7_CLUB_BADGE_CLASS,
   useClientStatus,
   type ClientTier,
@@ -23,7 +22,7 @@ export default function ClientStatusBadge({
   size = 'sm',
   className = '',
 }: Props) {
-  const { lookup } = useClientStatus()
+  const { lookup, tierMeta } = useClientStatus()
   const hasAnyKey = !!(customerId || userId || email || phone)
   const looked = lookup({ customerId, userId, email, phone })
 
@@ -36,16 +35,20 @@ export default function ClientStatusBadge({
   const sizeCls = size === 'md' ? 'px-2 py-0.5 text-xs' : 'px-1.5 py-0.5 text-[10px]'
   const baseCls = `inline-flex items-center rounded font-bold border whitespace-nowrap ${sizeCls}`
 
-  const tierMeta = resolvedTier ? clientTierMeta(resolvedTier) : null
+  // Nome, colore e avvertenza arrivano da Centralina Pro > Status Clienti.
+  // `badgeVisibile` a false nasconde il badge senza togliere lo status.
+  const meta = resolvedTier ? tierMeta(resolvedTier) : null
+  const showTier = !!meta && meta.badgeVisibile
+  if (!showTier && !resolvedDr7) return null
 
   return (
     <span className={`inline-flex items-center gap-1 flex-wrap ${className}`}>
-      {tierMeta && (
+      {showTier && meta && (
         <span
-          className={`${baseCls} ${tierMeta.badgeClass}`}
-          title={`Stato cliente: ${tierMeta.label}`}
+          className={`${baseCls} ${meta.badgeClass}`}
+          title={meta.avviso ? `${meta.label} — ${meta.avviso}` : `Stato cliente: ${meta.label}`}
         >
-          {tierMeta.label}
+          {meta.label}
         </span>
       )}
       {resolvedDr7 && (

@@ -116,7 +116,13 @@ interface Customer {
 }
 
 export default function CustomersTab() {
-  const { refresh: refreshClientStatus, setTier: setClientStatusTier } = useClientStatus()
+  const { refresh: refreshClientStatus, setTier: setClientStatusTier, tierMeta: clientTierMetaCfg } = useClientStatus()
+  // Nomi degli status come personalizzati in Centralina Pro > Status Clienti.
+  // Le sigle dei pulsanti (BL/MEM/ELT) derivano dal nome configurato, cosi'
+  // rinominando uno status cambiano anche qui.
+  const statusName = (tier: 'blacklist' | 'member' | 'elite') => clientTierMetaCfg(tier).label
+  const statusAbbr = (tier: 'blacklist' | 'member' | 'elite') =>
+    statusName(tier).replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3).toUpperCase() || '—'
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -1455,9 +1461,7 @@ export default function CustomersTab() {
   }
 
   async function handleUpdateCustomerStatus(customerId: string, newStatus: 'blacklist' | 'member' | 'elite' | null) {
-    const statusLabel = newStatus === 'blacklist' ? 'Blacklist' :
-      newStatus === 'elite' ? 'Elite' :
-        newStatus === 'member' ? 'Member' : 'Nessuno'
+    const statusLabel = newStatus ? statusName(newStatus) : 'Nessuno'
 
     try {
       const response = await authFetch('/.netlify/functions/manage-customer', {
@@ -2903,9 +2907,9 @@ export default function CustomersTab() {
                               ? 'bg-red-600 text-white border-red-400 ring-2 ring-red-400'
                               : 'bg-red-900/80 text-red-100 hover:bg-red-700 border-red-600'
                           }`}
-                          title="Blacklist"
+                          title={statusName('blacklist')}
                         >
-                          BL
+                          {statusAbbr('blacklist')}
                         </button>
                         <button
                           onClick={() => handleUpdateCustomerStatus(customer.id, 'member')}
@@ -2914,9 +2918,9 @@ export default function CustomersTab() {
                               ? 'bg-blue-600 text-white border-blue-400 ring-2 ring-blue-400'
                               : 'bg-blue-900/80 text-blue-100 hover:bg-blue-700 border-blue-600'
                           }`}
-                          title="Member"
+                          title={statusName('member')}
                         >
-                          MEM
+                          {statusAbbr('member')}
                         </button>
                         <button
                           onClick={() => handleUpdateCustomerStatus(customer.id, 'elite')}
@@ -2925,9 +2929,9 @@ export default function CustomersTab() {
                               ? 'bg-amber-500 text-white border-amber-300 ring-2 ring-amber-400'
                               : 'bg-amber-900/80 text-amber-100 hover:bg-amber-600 border-amber-600'
                           }`}
-                          title="Elite"
+                          title={statusName('elite')}
                         >
-                          ELT
+                          {statusAbbr('elite')}
                         </button>
                         {customer.status && (
                           <button

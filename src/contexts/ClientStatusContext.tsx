@@ -1,5 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { supabase } from '../supabaseClient'
+import {
+  clientStatusColor,
+  loadClientStatusConfig,
+  normalizeClientStatus,
+  type AvvisoLivello,
+  type ClientStatusDef,
+  type ClientStatusKey,
+} from '../utils/clientStatusConfig'
 
 export type ClientTier = 'new' | 'member' | 'elite' | 'blacklist'
 
@@ -7,19 +15,50 @@ export interface ClientTierMeta {
   tier: ClientTier
   label: string
   badgeClass: string
+  /** Avvertenza configurata in Centralina Pro (vuota = nessuna). */
+  avviso: string
+  avvisoLivello: AvvisoLivello
+  /** Se false il badge non va mostrato nelle liste. */
+  badgeVisibile: boolean
+  descrizione: string
 }
 
-const TIER_META: Record<ClientTier, ClientTierMeta> = {
-  elite:     { tier: 'elite',     label: 'Elite',     badgeClass: 'bg-amber-500/20 text-amber-400 border-amber-500/50' },
-  member:    { tier: 'member',    label: 'Member',    badgeClass: 'bg-blue-500/20 text-blue-400 border-blue-500/50' },
-  blacklist: { tier: 'blacklist', label: 'Blacklist', badgeClass: 'bg-red-500/20 text-red-400 border-red-500/50' },
-  new:       { tier: 'new',       label: 'New entry', badgeClass: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' },
+// Il tier 'new' e' lo status 'standard' lato configurazione: stessa cosa vista
+// da due punti (qui e' "nessuno status assegnato", in Centralina e' la riga
+// personalizzabile "New entry").
+const TIER_TO_KEY: Record<ClientTier, ClientStatusKey> = {
+  new: 'standard', member: 'member', elite: 'elite', blacklist: 'blacklist',
+}
+
+function metaFromDef(tier: ClientTier, def: ClientStatusDef): ClientTierMeta {
+  return {
+    tier,
+    label: def.label,
+    badgeClass: clientStatusColor(def.colore).badge,
+    avviso: def.avviso,
+    avvisoLivello: def.avviso_livello,
+    badgeVisibile: def.badge_visibile,
+    descrizione: def.descrizione,
+  }
 }
 
 export const DR7_CLUB_BADGE_CLASS = 'bg-[#C9A96E]/20 text-[#D4B896] border-[#C9A96E]/50'
 
+// Fallback sincrono: usato finche' la config non e' caricata e da chi legge il
+// tier fuori dal provider. Sono gli stessi valori di DEFAULT_CLIENT_STATUS.
+const DEFAULT_META: Record<ClientTier, ClientTierMeta> = Object.fromEntries(
+  (Object.keys(TIER_TO_KEY) as ClientTier[]).map(tier => {
+    const def = normalizeClientStatus([]).find(d => d.key === TIER_TO_KEY[tier])!
+    return [tier, metaFromDef(tier, def)]
+  })
+) as Record<ClientTier, ClientTierMeta>
+
+/**
+ * Metadati di default (nomi/colori di fabbrica). Preferire `tierMeta` del
+ * contesto, che rispetta la personalizzazione fatta in Centralina Pro.
+ */
 export function clientTierMeta(tier: ClientTier): ClientTierMeta {
-  return TIER_META[tier]
+  return DEFAULT_META[tier]
 }
 
 export interface ClientStatusInfo {
@@ -46,6 +85,12 @@ interface ClientStatusContextValue {
   refresh: () => Promise<void>
   lookup: (keys: ClientStatusLookupKeys) => ClientStatusInfo | null
   setTier: (keys: ClientStatusLookupKeys, tier: ClientTier) => void
+  /** Nome/colore/avvertenza come personalizzati in Centralina Pro. */
+  tierMeta: (tier: ClientTier) => ClientTierMeta
+  /** Configurazione completa (per la sezione di Centralina Pro). */
+  statusDefs: ClientStatusDef[]
+  /** Ricarica la configurazione dopo un salvataggio in Centralina Pro. */
+  refreshStatusConfig: () => Promise<void>
 }
 
 const Ctx = createContext<ClientStatusContextValue | undefined>(undefined)
@@ -169,6 +214,22 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
     load()
   }, [load])
 
+  // Configurazione status (nomi, colori, avvertenze) da Centralina Pro.
+  const [statusDefs, setStatusDefs] = useState<ClientStatusDef[]>(() => normalizeClientStatus([]))
+  const refreshStatusConfig = useCallback(async () => {
+    setStatusDefs(await loadClientStatusConfig())
+  }, [])
+  useEffect(() => {
+    let alive = true
+    loadClientStatusConfig().then(defs => { if (alive) setStatusDefs(defs) })
+    return () => { alive = false }
+  }, [])
+
+  const tierMeta = useCallback((tier: ClientTier): ClientTierMeta => {
+    const def = statusDefs.find(d => d.key === TIER_TO_KEY[tier])
+    return def ? metaFromDef(tier, def) : DEFAULT_META[tier]
+  }, [statusDefs])
+
   const setTier = useCallback((keys: ClientStatusLookupKeys, tier: ClientTier) => {
     const apply = <K,>(map: Map<K, ClientStatusInfo>, key: K | null | undefined): Map<K, ClientStatusInfo> => {
       if (!key) return map
@@ -190,6 +251,9 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
     loading,
     refresh: load,
     setTier,
+    tierMeta,
+    statusDefs,
+    refreshStatusConfig,
     lookup: ({ customerId, userId, email, phone }) => {
       if (customerId) {
         const s = byCustomerId.get(customerId)
@@ -212,7 +276,7 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
       }
       return null
     },
-  }), [loading, load, setTier, byCustomerId, byUserId, byEmail, byPhone])
+  }), [loading, load, setTier, tierMeta, statusDefs, refreshStatusConfig, byCustomerId, byUserId, byEmail, byPhone])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

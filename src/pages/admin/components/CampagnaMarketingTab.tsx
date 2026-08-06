@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import toast from 'react-hot-toast'
-import { useClientStatus } from '../../../contexts/ClientStatusContext'
+import { useClientStatus, type ClientTier } from '../../../contexts/ClientStatusContext'
+import { clientStatusColor } from '../../../utils/clientStatusConfig'
 import CampaignCalendarView, { type ScheduledCampaign, type RecurrenceType } from './CampaignCalendarView'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 
@@ -198,6 +199,13 @@ export default function CampagnaMarketingTab() {
     const [savingEdit, setSavingEdit] = useState(false)
 
     const clientStatus = useClientStatus()
+    // Nomi e colori degli status come personalizzati in Centralina Pro >
+    // Status Clienti: i filtri devono chiamarli come li chiama la direzione.
+    const tierLabel = (t: ClientTier) => clientStatus.tierMeta(t).label
+    const tierText = (t: ClientTier) => clientStatusColor(
+        clientStatus.statusDefs.find(d => d.key === (t === 'new' ? 'standard' : t))?.colore || 'gray'
+    ).text
+
 
     // Auto-refresh storico every 5s while a campaign is in flight ('pending' or 'sending'),
     // so progress counters update without the user clicking Aggiorna.
@@ -1117,7 +1125,7 @@ export default function CampagnaMarketingTab() {
                                         if (v) { setOnlyDr7Club(false); setOnlyElite(false); setOnlyNewEntry(false) }
                                     }}
                                 />
-                                <span className="text-blue-400">Solo Member</span>
+                                <span className={tierText('member')}>Solo {tierLabel('member')}</span>
                             </label>
                             <label className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full cursor-pointer transition-colors ${onlyElite ? 'bg-amber-400/20 border border-amber-400/60' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>
                                 <input
@@ -1129,7 +1137,7 @@ export default function CampagnaMarketingTab() {
                                         if (v) { setOnlyDr7Club(false); setOnlyMember(false); setOnlyNewEntry(false) }
                                     }}
                                 />
-                                <span className="text-amber-400">Solo Elite</span>
+                                <span className={tierText('elite')}>Solo {tierLabel('elite')}</span>
                             </label>
                             <label className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full cursor-pointer transition-colors ${onlyNewEntry ? 'bg-emerald-400/20 border border-emerald-400/60' : 'bg-theme-bg-tertiary hover:bg-theme-bg-hover'}`}>
                                 <input
@@ -1141,7 +1149,7 @@ export default function CampagnaMarketingTab() {
                                         if (v) { setOnlyDr7Club(false); setOnlyMember(false); setOnlyElite(false) }
                                     }}
                                 />
-                                <span className="text-emerald-400">Solo New entry</span>
+                                <span className={tierText('new')}>Solo {tierLabel('new')}</span>
                             </label>
                         </div>
                     </div>
@@ -1167,7 +1175,7 @@ export default function CampagnaMarketingTab() {
                                     checked={excludeBlacklist}
                                     onChange={(e) => setExcludeBlacklist(e.target.checked)}
                                 />
-                                <span className="text-red-400">Escludi Blacklist</span>
+                                <span className={tierText('blacklist')}>Escludi {tierLabel('blacklist')}</span>
                             </label>
                             <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-theme-bg-tertiary cursor-pointer hover:bg-theme-bg-hover">
                                 <input
@@ -1175,7 +1183,7 @@ export default function CampagnaMarketingTab() {
                                     checked={excludeMember}
                                     onChange={(e) => setExcludeMember(e.target.checked)}
                                 />
-                                <span className="text-blue-400">Escludi Member</span>
+                                <span className={tierText('member')}>Escludi {tierLabel('member')}</span>
                             </label>
                             <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-theme-bg-tertiary cursor-pointer hover:bg-theme-bg-hover">
                                 <input
@@ -1183,7 +1191,7 @@ export default function CampagnaMarketingTab() {
                                     checked={excludeElite}
                                     onChange={(e) => setExcludeElite(e.target.checked)}
                                 />
-                                <span className="text-amber-400">Escludi Elite</span>
+                                <span className={tierText('elite')}>Escludi {tierLabel('elite')}</span>
                             </label>
                             <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-theme-bg-tertiary cursor-pointer hover:bg-theme-bg-hover">
                                 <input
@@ -1191,7 +1199,7 @@ export default function CampagnaMarketingTab() {
                                     checked={excludeNewEntry}
                                     onChange={(e) => setExcludeNewEntry(e.target.checked)}
                                 />
-                                <span className="text-emerald-400">Escludi New entry</span>
+                                <span className={tierText('new')}>Escludi {tierLabel('new')}</span>
                             </label>
                             <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-theme-bg-tertiary cursor-pointer hover:bg-theme-bg-hover">
                                 <input
