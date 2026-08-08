@@ -419,30 +419,51 @@ export default function UnpaidBookingsTab() {
       for (const f of (fatture || [])) {
         if (!f.items || !Array.isArray(f.items) || !f.booking_id) continue
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        f.items.forEach((fi: any, idx: number) => {
-          if (!fi.description) return
-          const desc = fi.description as string
-          const isDanniPenali = desc.includes('Penale prenotazione') || desc.includes('Danno prenotazione')
-          if (!isDanniPenali) return
-          if (fi.paymentStatus === 'paid') return
+        const rawItems = f.items as any[]
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const lineTotal = (fi: any) => Number(fi.total) || (Number(fi.unit_price) || 0) * (Number(fi.quantity) || 1)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const isScontoLine = (fi: any) => /sconto|discount/i.test(String(fi.description || '')) || lineTotal(fi) < 0
 
-          const total = fi.total || (fi.unit_price || 0) * (fi.quantity || 1)
+        // 2026-08-08 (direzione, "prezzo reale mai listino"): generate-penalty-invoice
+        // salva le penali/danni a LISTINO + una riga "Sconto" negativa a parte.
+        // Prima qui si leggeva solo la riga penale/danno (listino) ignorando lo
+        // sconto: una penale 1600 ridotta a 550 mostrava ancora 1600 in "Da Saldare".
+        // Ora distribuiamo lo sconto della fattura sulle voci (penali prima, poi
+        // danni — stessa regola di monthly-report/report-danni) e teniamo il NETTO.
+        let scontoResiduo = rawItems.filter(isScontoLine).reduce((s, fi) => s + Math.abs(lineTotal(fi)), 0)
+        const dpIdx = rawItems
+          .map((fi, idx) => ({ fi, idx }))
+          .filter(({ fi }) => {
+            const desc = String(fi.description || '')
+            return !isScontoLine(fi) && (desc.includes('Penale prenotazione') || desc.includes('Danno prenotazione'))
+          })
+          .map(({ fi, idx }) => ({ fi, idx, order: String(fi.description).includes('Danno prenotazione') ? 1 : 0 }))
+          .sort((a, b) => a.order - b.order || a.idx - b.idx)
+
+        for (const e of dpIdx) {
+          const listino = lineTotal(e.fi)
+          const applied = Math.min(scontoResiduo, listino)
+          scontoResiduo -= applied
+          const net = Math.max(0, listino - applied)   // prezzo finale reale della voce
+          if (e.fi.paymentStatus === 'paid') continue    // gia' saldata: fuori da "Da Saldare"
+          const desc = String(e.fi.description || '')
           const type: 'penalties' | 'danni' = desc.includes('Danno prenotazione') ? 'danni' : 'penalties'
           const item: FatturaItem = {
             fatturaId: f.id,
             fatturaNumero: f.numero_fattura || '',
             bookingId: f.booking_id,
             description: desc,
-            total,
-            amountPaid: fi.amountPaid || 0,
-            paymentStatus: fi.paymentStatus || 'pending',
+            total: net,
+            amountPaid: e.fi.amountPaid || 0,
+            paymentStatus: e.fi.paymentStatus || 'pending',
             type,
-            itemIndex: idx,
+            itemIndex: e.idx,
           }
           if (!fItemsMap[f.booking_id]) fItemsMap[f.booking_id] = []
           fItemsMap[f.booking_id].push(item)
           bookingIdsWithFatturaItems.add(f.booking_id)
-        })
+        }
       }
 
       setFatturaItemsMap(fItemsMap)
@@ -1184,7 +1205,10 @@ export default function UnpaidBookingsTab() {
       const items: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
       if (items[fi.itemIndex]) {
         const existing = items[fi.itemIndex]
-        const total = existing.total || (existing.unit_price || 0) * (existing.quantity || 1)
+        // 2026-08-08: il tetto e' il NETTO (listino - sconto), non il listino DB.
+        // fi.total arriva gia' netto dal collector, cosi' il residuo va a 0 quando
+        // il cliente ha pagato il prezzo reale concordato (es. 550, non 1600).
+        const total = fi.total
         const newAmountPaid = Math.min((existing.amountPaid || 0) + paymentAmount, total)
         items[fi.itemIndex] = {
           ...existing,
@@ -1401,8 +1425,9 @@ export default function UnpaidBookingsTab() {
       const items: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
       if (items[fi.itemIndex]) {
         const existing = items[fi.itemIndex]
-        const total = existing.total || (existing.unit_price || 0) * (existing.quantity || 1)
-        items[fi.itemIndex] = { ...existing, amountPaid: total, paymentStatus: 'paid' }
+        // 2026-08-08: salda al NETTO reale (fi.total = listino - sconto), non al
+        // listino DB, cosi' non resta un residuo fantasma dopo il pagamento.
+        items[fi.itemIndex] = { ...existing, amountPaid: fi.total, paymentStatus: 'paid' }
       }
 
       await supabase.from('fatture').update({ items }).eq('id', fi.fatturaId)
