@@ -39,6 +39,24 @@ interface Ordine { id: string; articolo_id: string; fornitore_id: string | null;
 type Semaforo = 'rosso' | 'giallo' | 'verde' | 'grigio'
 const CANALI = ['whatsapp', 'email', 'amazon', 'shein', 'temu', 'manuale'] as const
 
+// Canali e-commerce: l'ordine si fa aprendo il sito, NON mandando un WhatsApp a
+// un fornitore. "Ordina" per questi apre direttamente il link giusto.
+const ECOM_CANALI = new Set(['amazon', 'shein', 'temu'])
+
+/** Link del sito per completare l'ordine e-commerce dell'articolo. null se non applicabile. */
+function ecommerceUrl(a: { nome?: string | null; amazon_url?: string | null; amazon_asin?: string | null } | undefined, canale: string): string | null {
+  if (!a) return null
+  const q = encodeURIComponent(String(a.nome || '').trim())
+  if (canale === 'amazon') {
+    if (a.amazon_url) return a.amazon_url
+    if (a.amazon_asin) return `https://www.amazon.it/dp/${encodeURIComponent(a.amazon_asin)}`
+    return `https://www.amazon.it/s?k=${q}`
+  }
+  if (canale === 'shein') return `https://www.shein.com/pdsearch/${q}`
+  if (canale === 'temu') return `https://www.temu.com/search_result.html?search_key=${q}`
+  return null
+}
+
 // ── Utilita ──────────────────────────────────────────────────────────────────
 function eur(n: number | null | undefined): string {
   if (n == null) return '—'
@@ -364,7 +382,15 @@ export default function InventarioMagazzino() {
         articolo_id: a.id, fornitore_id: a.fornitore_id, canale, quantita, stato: 'bozza', auto: false,
       })
       if (error) throw error
-      toast.success('Ordine creato — invialo via WhatsApp al numero che vuoi')
+      // E-commerce (Amazon/Shein/Temu): l'ordine si fa sul sito. Apriamo il link
+      // giusto invece di proporre un invio WhatsApp a un fornitore inesistente.
+      const shopUrl = ECOM_CANALI.has(canale) ? ecommerceUrl(a, canale) : null
+      if (shopUrl) {
+        window.open(shopUrl, '_blank', 'noopener,noreferrer')
+        toast.success(`Ordine creato — completa l'acquisto su ${canale.charAt(0).toUpperCase() + canale.slice(1)}, poi segna "inviato"`)
+      } else {
+        toast.success('Ordine creato — invialo via WhatsApp al numero che vuoi')
+      }
       await load()
     } catch (e) { toast.error(`Errore: ${(e as Error).message}`) } finally { setBusy(false) }
   }
@@ -459,7 +485,7 @@ export default function InventarioMagazzino() {
                             <button onClick={() => setMovModal({ articolo: a, tipo: 'carico' })} className="w-7 h-7 grid place-items-center rounded bg-emerald-600/80 hover:bg-emerald-600 text-white text-sm font-bold" title="Carico">+</button>
                             <button onClick={() => setMovModal({ articolo: a, tipo: 'scarico' })} className="w-7 h-7 grid place-items-center rounded bg-red-600/80 hover:bg-red-600 text-white text-sm font-bold" title="Scarico">−</button>
                             <button onClick={() => setMovModal({ articolo: a, tipo: 'rettifica' })} className="px-2 h-7 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary text-xs" title="Rettifica inventario fisico">Rett.</button>
-                            {!hasOpenOrder && <button onClick={() => creaOrdineManuale(a)} disabled={busy} className="px-2 h-7 rounded bg-green-600/80 hover:bg-green-600 text-white text-xs font-semibold disabled:opacity-50" title="Crea ordine e invialo via WhatsApp a un numero a scelta">Ordina</button>}
+                            {!hasOpenOrder && <button onClick={() => creaOrdineManuale(a)} disabled={busy} className="px-2 h-7 rounded bg-green-600/80 hover:bg-green-600 text-white text-xs font-semibold disabled:opacity-50" title="Crea un ordine di riordino (Amazon/Shein/Temu apre il sito; WhatsApp/email invia al numero scelto)">Ordina</button>}
                             <button onClick={() => setEditArticolo(a)} className="px-2 h-7 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary text-xs">Modifica</button>
                           </div>
                         </div>
@@ -488,13 +514,20 @@ export default function InventarioMagazzino() {
                   <span className="text-[11px] px-1.5 py-0.5 rounded bg-theme-bg-tertiary text-theme-text-muted uppercase">{o.canale}</span>
                   {forn && <span className="text-[11px] text-theme-text-muted">{forn.nome}</span>}
                   <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 uppercase">{o.stato}</span>
-                  {o.stato === 'bozza' && sendOrderId !== o.id && (
+                  {o.stato === 'bozza' && ECOM_CANALI.has(o.canale) && (
+                    <button
+                      onClick={() => { const u = ecommerceUrl(a, o.canale); if (u) window.open(u, '_blank', 'noopener,noreferrer') }}
+                      className="px-2 py-1 rounded bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold"
+                      title={`Apri ${o.canale} per completare l'ordine`}
+                    >Apri {o.canale}</button>
+                  )}
+                  {o.stato === 'bozza' && !ECOM_CANALI.has(o.canale) && sendOrderId !== o.id && (
                     <button
                       onClick={() => { setSendOrderId(o.id); setSendPhone(forn?.telefono ? forn.telefono.replace(/\D/g, '') : '') }}
                       className="px-2 py-1 rounded bg-green-600 hover:bg-green-700 text-white text-xs font-semibold"
                     >Invia WhatsApp</button>
                   )}
-                  {o.stato === 'bozza' && sendOrderId === o.id && (
+                  {o.stato === 'bozza' && !ECOM_CANALI.has(o.canale) && sendOrderId === o.id && (
                     <div className="flex items-center gap-1 w-full mt-1">
                       <input
                         type="tel" value={sendPhone} onChange={e => setSendPhone(e.target.value)}
