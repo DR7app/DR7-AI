@@ -5098,21 +5098,26 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           }
         }
 
-        // If not found by email, try by phone
+        // If not found by email, try by phone — MA solo se UNIVOCO (roadmap #19).
+        // Piu' lead possono condividere lo stesso numero e restano SEPARATE: se il
+        // numero identifica piu' clienti NON si sceglie a caso (si legava la
+        // prenotazione/contratto alla lead sbagliata, caso Mario Ambu). In caso di
+        // ambiguita' si usa l'identita' selezionata (localCustomer piu' sotto).
         if ((!customerData || customerData.length === 0) && localCustomer?.phone) {
           let normPhone = localCustomer.phone.replace(/[\s\-+()]/g, '')
           if (normPhone.startsWith('00')) normPhone = normPhone.substring(2)
           if (normPhone.length === 10) normPhone = '39' + normPhone
-          logger.log('[processBookingSubmission] Trying lookup by phone:', normPhone)
+          logger.log('[processBookingSubmission] Trying lookup by phone (solo se univoco):', normPhone)
           const { data: phoneData } = await supabase
             .from('customers_extended')
             .select('*')
             .eq('telefono', normPhone)
-            .limit(1)
-          if (phoneData && phoneData.length > 0) {
+          if (phoneData && phoneData.length === 1) {
             customerData = phoneData
             foundDirectlyInDB = true
-            logger.log('[processBookingSubmission] ✅ Found by phone:', phoneData[0].id)
+            logger.log('[processBookingSubmission] ✅ Found by phone (univoco):', phoneData[0].id)
+          } else if (phoneData && phoneData.length > 1) {
+            logger.log(`[processBookingSubmission] ⚠️ Numero ${normPhone} condiviso da ${phoneData.length} lead: salto match per telefono (roadmap #19), uso il cliente selezionato`)
           }
         }
 
@@ -5699,18 +5704,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               .maybeSingle()
             existingSecondDriver = data
           }
-          if (!existingSecondDriver && formData.second_driver_phone?.trim()) {
-            // Normalize phone before dedup lookup (same logic as save-customer)
-            let normSDPhone = formData.second_driver_phone.replace(/[\s\-+()]/g, '')
-            if (normSDPhone.startsWith('00')) normSDPhone = normSDPhone.substring(2)
-            if (normSDPhone.length === 10) normSDPhone = '39' + normSDPhone
-            const { data } = await supabase
-              .from('customers_extended')
-              .select('id')
-              .eq('telefono', normSDPhone)
-              .maybeSingle()
-            existingSecondDriver = data
-          }
+          // roadmap #19: NIENTE dedup del secondo guidatore per telefono (ne' per
+          // nome). Come per l'intestatario, due persone possono condividere lo
+          // stesso numero e restano lead separate: si deduplica SOLO su CF/email.
+          // Prima un match per telefono riusava la lead sbagliata come 2° guidatore.
 
           if (existingSecondDriver) {
             secondDriverId = existingSecondDriver.id

@@ -356,8 +356,11 @@ export async function passesCustomerFilters(tpl: any, booking: any, supabase: an
         customer = data
     }
     if (!customer && booking.customer_phone) {
-        const { data } = await supabase.from('customers_extended').select('*').eq('telefono', booking.customer_phone).maybeSingle()
-        customer = data
+        // roadmap #19: piu' lead possono avere lo stesso numero e restano SEPARATE.
+        // Uso il telefono per identificare il cliente SOLO se e' univoco, altrimenti
+        // rischio di personalizzare/instradare il messaggio verso la lead sbagliata.
+        const { data: rows } = await supabase.from('customers_extended').select('*').eq('telefono', booking.customer_phone)
+        if (Array.isArray(rows) && rows.length === 1) customer = rows[0]
     }
 
     // Tier — confronta con i tier definiti in centralina_pro_config.config.dr7_club.tiers.

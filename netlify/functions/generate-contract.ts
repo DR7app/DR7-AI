@@ -367,14 +367,21 @@ export const handler: Handler = async (event) => {
             if (!phone.startsWith('39') && phone.length === 10) phoneVariants.push('39' + phone) // with 39
             phoneVariants.push('+' + phone) // with +
 
+            // roadmap #19: due o piu' lead possono condividere lo STESSO numero e
+            // restano SEPARATE. Non si sceglie una a caso (prima: "piu' recente"),
+            // altrimenti il contratto viene intestato alla persona sbagliata (caso
+            // Mario Ambu). Il telefono si usa SOLO se identifica un UNICO cliente.
+            const phoneMatches = new Map<string, typeof customer>()
             for (const pv of phoneVariants) {
-                const { data: cData } = await supabase.from('customers_extended').select('*').eq('telefono', pv).order('updated_at', { ascending: false }).limit(1).maybeSingle()
-                if (cData) {
-                    console.log('[generate-contract] Found customer by Phone:', cData.id, cData.nome, cData.cognome, 'variant:', pv)
-                    customer = cData
-                    matchedBy = 'phone'
-                    break
-                }
+                const { data: rows } = await supabase.from('customers_extended').select('*').eq('telefono', pv)
+                for (const r of (rows || [])) phoneMatches.set(r.id, r)
+            }
+            if (phoneMatches.size === 1) {
+                customer = [...phoneMatches.values()][0]
+                matchedBy = 'phone'
+                console.log('[generate-contract] Found customer by Phone (univoco):', customer?.id, customer?.nome, customer?.cognome)
+            } else if (phoneMatches.size > 1) {
+                console.warn(`[generate-contract] Telefono ${resolvedPhone} condiviso da ${phoneMatches.size} lead: salto il match per telefono (roadmap #19). Servono id/email per non intestare al cliente sbagliato.`)
             }
         }
 
@@ -383,13 +390,16 @@ export const handler: Handler = async (event) => {
             console.log('[generate-contract] Fallback: Fetching by name from customers_extended...')
             const nameParts = resolvedName.trim().split(/\s+/)
             if (nameParts.length >= 2) {
-                const { data: cData } = await supabase.from('customers_extended').select('*')
+                // roadmap #19: gli omonimi restano lead separate. Uso il nome SOLO se
+                // identifica un UNICO cliente, mai il "piu' recente".
+                const { data: nameRows } = await supabase.from('customers_extended').select('*')
                     .or(`and(nome.ilike.%${nameParts[0]}%,cognome.ilike.%${nameParts[nameParts.length - 1]}%),and(nome.ilike.%${nameParts[nameParts.length - 1]}%,cognome.ilike.%${nameParts[0]}%)`)
-                    .order('updated_at', { ascending: false }).limit(1).maybeSingle()
-                if (cData) {
-                    console.log('[generate-contract] Found customer by Name:', cData.id, cData.nome, cData.cognome)
-                    customer = cData
+                if (Array.isArray(nameRows) && nameRows.length === 1) {
+                    customer = nameRows[0]
                     matchedBy = 'name'
+                    console.log('[generate-contract] Found customer by Name (univoco):', customer?.id, customer?.nome, customer?.cognome)
+                } else if (Array.isArray(nameRows) && nameRows.length > 1) {
+                    console.warn(`[generate-contract] Nome "${resolvedName}" condiviso da ${nameRows.length} lead: salto il match per nome (roadmap #19).`)
                 }
             }
         }
