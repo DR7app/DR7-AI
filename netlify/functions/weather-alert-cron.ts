@@ -127,9 +127,15 @@ const handler: Handler = async () => {
   }
 
   // Persisti lo stato aggiornato (merge nel config esistente).
+  // 2026-08-08: rileggi la config FRESCA subito prima di scrivere. `config` era
+  // stato letto a inizio cron; tra la lettura e qui passano secondi di invio
+  // messaggi e un salvataggio concorrente (es. numeri direzione cauzioni) verrebbe
+  // sovrascritto. Si fonde SOLO la chiave weather_alert_state.
   try {
+    const { data: freshRow } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+    const freshConfig = ((freshRow?.config as Record<string, unknown>) || config)
     await supabase.from('centralina_pro_config')
-      .update({ config: { ...config, weather_alert_state: { ...state, updated_at: nowIso } } })
+      .update({ config: { ...freshConfig, weather_alert_state: { ...state, updated_at: nowIso } } })
       .eq('id', 'main')
   } catch (e) {
     console.error('[weather-alert-cron] state persist failed:', e)

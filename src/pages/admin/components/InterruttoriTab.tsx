@@ -62,11 +62,28 @@ export default function InterruttoriTab() {
   // Read-modify-write dell'INTERA config del business, seminando da 'main' se la
   // riga non esiste ancora (come fa Centralina Pro), cosi' non si crea una riga
   // quasi-vuota. Ritorna l'errore eventuale.
+  // 2026-08-08: la base DEVE essere una lettura FRESCA dal DB, non lo stato
+  // `configs` caricato al mount. Prima si scriveva `{ ...configStato, ...patch }`
+  // con lo snapshot vecchio: ogni ON/OFF (operazione giornaliera) riscriveva
+  // l'INTERA config con la versione stantia, cancellando le chiavi modificate
+  // altrove nel frattempo (es. notifications.cauzioni_staff_phones — i numeri
+  // direzione per i solleciti cauzioni "sparivano ogni giorno").
   async function writeConfig(business: BusinessId, patch: Cfg) {
     const b = BUSINESSES.find(x => x.id === business)!
-    const base: Cfg = (configs[b.row] && Object.keys(configs[b.row]).length > 0)
-      ? configs[b.row]
-      : (configs['main'] || {})
+    let base: Cfg = {}
+    try {
+      const { data: freshRow } = await supabase.from('centralina_pro_config').select('config').eq('id', b.row).maybeSingle()
+      if (freshRow?.config && Object.keys(freshRow.config as Cfg).length > 0) {
+        base = freshRow.config as Cfg
+      } else {
+        // Riga assente: semina dalla config 'main' FRESCA (non dallo stato).
+        const { data: mainRow } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+        base = (mainRow?.config as Cfg) || configs['main'] || {}
+      }
+    } catch {
+      // Rete KO: ripiega sullo stato in memoria pur di non perdere il toggle.
+      base = (configs[b.row] && Object.keys(configs[b.row]).length > 0) ? configs[b.row] : (configs['main'] || {})
+    }
     const newConfig: Cfg = { ...base, ...patch }
     const { error } = await supabase.from('centralina_pro_config').upsert({ id: b.row, config: newConfig }, { onConflict: 'id' })
     if (!error) setConfigs(prev => ({ ...prev, [b.row]: newConfig }))
