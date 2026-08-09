@@ -395,7 +395,14 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     // spostano sulla partenza corretta invece di restare su quella vecchia
     // (causa del caso "10:25 sold-out" con una prenotazione delle 11:25).
     let tourDepId: string | null = (origDetails.tour_departure_id as string | undefined) || null
-    if ((serviceType === 'heli_rental' || serviceType === 'boat_rental') && form.pickup_date && form.pickup_time) {
+    // 2026-08-10 (roadmap #12): l'aggancio AUTOMATICO a una partenza tour vale
+    // solo per l'Aria. Prima valeva anche per il Mare: bastava che un noleggio
+    // barca cadesse nella stessa data/ora di un tour perche' diventasse in
+    // silenzio una prenotazione a posti — da cui "la scelta skipper fa partire
+    // un tour anziche' un noleggio classico". I tour veri del Mare nascono
+    // dalla sotto-tab Tour, che scrive tour_departure_id esplicitamente, e
+    // continuano a funzionare: qui si legge comunque da origDetails.
+    if (serviceType === 'heli_rental' && form.pickup_date && form.pickup_time) {
       const hhmm = form.pickup_time.length === 5 ? `${form.pickup_time}:00` : form.pickup_time
       const { data: deps } = await supabase.from('noleggio_tour_departures')
         .select('id').eq('departure_date', form.pickup_date).eq('departure_time', hhmm)
@@ -1244,7 +1251,13 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
 
       {/* Tour & Posti: prossime partenze con la mappa posti (verde pagato /
           giallo in attesa / rosso non pagato), sola lettura. */}
-      <TourCalendarSection serviceType={serviceType} year={year} month={month} />
+      {/* 2026-08-10 (roadmap #11/#12): il calendario del NOLEGGIO deve essere
+          uguale a quello del Noleggio Terra, che non ha una sezione tour.
+          Per il Mare i tour hanno la loro sotto-tab dedicata. Resta sull'Aria,
+          dove il tour a posti e' il flusso principale. */}
+      {serviceType !== 'boat_rental' && (
+        <TourCalendarSection serviceType={serviceType} year={year} month={month} />
+      )}
 
       {error && <ErrorBox msg={error} />}
       {loading && <div className="text-theme-text-muted text-sm">Caricamento…</div>}
