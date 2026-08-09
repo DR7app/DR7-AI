@@ -652,30 +652,43 @@ export default function FatturaTab() {
     }
   }
 
-  function requireOtpConfirm(label: string): boolean {
-    const code = String(Math.floor(1000 + Math.random() * 9000))
-    const input = window.prompt(`⚠️ ${label}\n\nDigita il codice ${code} per confermare:`)
-    return input === code
-  }
+  // 2026-08-09 (roadmap #43): rimosso `requireOtpConfirm`. Non era un OTP: si
+  // limitava a estrarre un numero a caso e a chiedere di ricopiarlo in un
+  // prompt. Chi elimina una fattura doveva quindi digitare DUE codici — quello
+  // finto e poi l'OTP vero della direzione — e la sola cosa che autorizzava
+  // davvero era il secondo. Ora la conferma e' UNA: l'avviso esplicito, poi
+  // l'OTP.
+  const SDI_SENT_STATES = ['sending', 'sent', 'accepted']
 
   async function handleDelete(id: string) {
     const invoice = invoices.find(i => i.id === id)
     if (!invoice) return
 
-    // Block deletion of fatture already sent to SDI
-    if (invoice.sdi_status && ['sending', 'sent', 'accepted'].includes(invoice.sdi_status)) {
-      alert(`Impossibile eliminare ${invoice.numero_fattura}: fattura già inviata a SDI (stato: ${invoice.sdi_status}).\n\nSe necessario, crea una Nota di Credito.`)
-      return
+    // 2026-08-09 (roadmap #43, postilla direzione 03/08: "avviso sempre, blocco
+    // mai"): la fattura gia' trasmessa a SDI non e' piu' un muro. Prima qui
+    // c'era `alert() + return` piazzato PRIMA del gate OTP dieci righe sotto,
+    // quindi per queste fatture l'OTP non veniva mai raggiunto: il meccanismo
+    // esisteva ma era irraggiungibile proprio nel caso in cui serviva.
+    const sdiSent = !!invoice.sdi_status && SDI_SENT_STATES.includes(invoice.sdi_status)
+    if (sdiSent) {
+      const proceed = window.confirm(
+        `⚠️ OPERAZIONE NORMALMENTE NON CONSENTITA\n\n` +
+        `La fattura ${invoice.numero_fattura} è già stata inviata a SDI (stato: ${invoice.sdi_status}).\n\n` +
+        `Eliminarla dal gestionale NON la annulla presso l'Agenzia delle Entrate: ` +
+        `la procedura corretta è emettere una Nota di Credito.\n\n` +
+        `Vuoi procedere lo stesso? Serve l'autorizzazione OTP della direzione.`
+      )
+      if (!proceed) return
     }
-
-    if (!requireOtpConfirm(`Eliminare fattura ${invoice.numero_fattura} — ${invoice.customer_name}?`)) return
 
     // OTP gate (auto-bypass if rule disabled in Gestione OTP). Pass rich
     // fattura context so the OTP email shows numero, cliente, importo, IVA,
     // metodo pagamento, stato SDI invece di un generico "Eliminare fattura".
     gatedAction(
       'fattura.delete',
-      `Eliminare la fattura ${invoice.numero_fattura} — ${invoice.customer_name}: azione irreversibile.`,
+      sdiSent
+        ? `Eliminare la fattura ${invoice.numero_fattura} — ${invoice.customer_name}: GIÀ INVIATA A SDI (stato: ${invoice.sdi_status}). Azione irreversibile e NON sostituisce la Nota di Credito.`
+        : `Eliminare la fattura ${invoice.numero_fattura} — ${invoice.customer_name}: azione irreversibile.`,
       async () => {
         try {
           const { error } = await supabase.from('fatture').delete().eq('id', id)
@@ -689,7 +702,9 @@ export default function FatturaTab() {
       },
       {
         gate: {
-          'Motivo OTP': 'Eliminazione fattura — azione irreversibile, blocca solo se non ancora inviata a SDI.',
+          'Motivo OTP': sdiSent
+            ? 'Eliminazione fattura GIÀ TRASMESSA A SDI — irreversibile e non equivale a una Nota di Credito. Autorizzare solo se consapevoli.'
+            : 'Eliminazione fattura — azione irreversibile.',
         },
         customer: {
           Cliente: invoice.customer_name || null,
@@ -723,33 +738,67 @@ export default function FatturaTab() {
   }
 
   async function handleBulkDelete() {
-    // Block if any selected fattura was sent to SDI
-    const sentInvoices = invoices.filter(i => selectedIds.includes(i.id) && i.sdi_status && ['sending', 'sent', 'accepted'].includes(i.sdi_status))
+    if (selectedIds.length === 0) return
+    const selected = invoices.filter(i => selectedIds.includes(i.id))
+    const sentInvoices = selected.filter(i => i.sdi_status && SDI_SENT_STATES.includes(i.sdi_status))
+
+    // 2026-08-09 (roadmap #43): stessa regola della cancellazione singola —
+    // avviso esplicito invece del muro, poi OTP. Prima qui c'era `alert() +
+    // return` ("Rimuovile dalla selezione") e, per le altre, SOLO il finto
+    // prompt locale: l'eliminazione in blocco di N fatture era quindi MENO
+    // protetta di quella di una sola, che almeno passava dal gate OTP. Ora
+    // anche il blocco passa da `gatedAction`.
     if (sentInvoices.length > 0) {
-      alert(`Impossibile eliminare: ${sentInvoices.length} fattura/e già inviate a SDI.\n\n${sentInvoices.map(i => i.numero_fattura).join(', ')}\n\nRimuovile dalla selezione.`)
-      return
+      const proceed = window.confirm(
+        `⚠️ OPERAZIONE NORMALMENTE NON CONSENTITA\n\n` +
+        `${sentInvoices.length} fattura/e della selezione sono già state inviate a SDI:\n` +
+        `${sentInvoices.map(i => i.numero_fattura).join(', ')}\n\n` +
+        `Eliminarle dal gestionale NON le annulla presso l'Agenzia delle Entrate: ` +
+        `la procedura corretta è emettere una Nota di Credito.\n\n` +
+        `Vuoi procedere lo stesso? Serve l'autorizzazione OTP della direzione.`
+      )
+      if (!proceed) return
     }
 
-    if (!requireOtpConfirm(`Eliminare ${selectedIds.length} fatture selezionate?`)) return
-
-    try {
-      const { error } = await supabase.from('fatture').delete().in('id', selectedIds)
-      if (error) throw error
-      setSelectedIds([])
+    const total = selected.reduce((sum, i) => sum + (i.importo_totale || 0), 0)
+    gatedAction(
+      'fattura.delete',
+      sentInvoices.length > 0
+        ? `Eliminare ${selected.length} fatture, di cui ${sentInvoices.length} GIÀ INVIATE A SDI. Azione irreversibile.`
+        : `Eliminare ${selected.length} fatture selezionate: azione irreversibile.`,
+      async () => {
+        try {
+          const ids = selected.map(i => i.id)
+          const { error } = await supabase.from('fatture').delete().in('id', ids)
+          if (error) throw error
+          setSelectedIds([])
+          logAdminAction('bulk_delete_fatture', 'fattura', ids.join(','), {
+            count: selected.length,
+            fatture: selected.map(i => i.numero_fattura).join(', '),
+            customers: Array.from(new Set(selected.map(i => i.customer_name).filter(Boolean))).join(', '),
+            total,
+            gia_inviate_sdi: sentInvoices.length,
+          })
+          loadInvoices()
+        } catch (error) {
+          console.error('Error bulk deleting invoices:', error)
+          alert('Errore durante l\'eliminazione multipla')
+        }
+      },
       {
-        const deleted = invoices.filter(i => selectedIds.includes(i.id))
-        logAdminAction('bulk_delete_fatture', 'fattura', selectedIds.join(','), {
-          count: deleted.length,
-          fatture: deleted.map(i => i.numero_fattura).join(', '),
-          customers: Array.from(new Set(deleted.map(i => i.customer_name).filter(Boolean))).join(', '),
-          total: deleted.reduce((sum, i) => sum + (i.importo_totale || 0), 0),
-        })
+        gate: {
+          'Motivo OTP': sentInvoices.length > 0
+            ? `Eliminazione multipla con ${sentInvoices.length} fattura/e GIÀ TRASMESSE A SDI — irreversibile, non equivale a Note di Credito.`
+            : 'Eliminazione multipla di fatture — azione irreversibile.',
+        },
+        operation: {
+          'Fatture selezionate': String(selected.length),
+          'Di cui inviate a SDI': String(sentInvoices.length),
+          'Numeri': selected.map(i => i.numero_fattura).join(', '),
+          'Totale complessivo': total ? `€ ${total.toFixed(2)}` : null,
+        },
       }
-      loadInvoices()
-    } catch (error) {
-      console.error('Error bulk deleting invoices:', error)
-      alert('Errore durante l\'eliminazione multipla')
-    }
+    )
   }
 
   async function downloadPDF(invoice: Invoice) {
