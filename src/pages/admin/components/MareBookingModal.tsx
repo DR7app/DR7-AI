@@ -144,9 +144,25 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
       const { data } = await supabase.from('centralina_pro_config').select('id, config').in('id', ['business_mare', 'main'])
       if (cancelled) return
       const rows = (data || []) as { id: string; config: Record<string, unknown> }[]
-      const pick = rows.find(r => r.id === 'business_mare' && Array.isArray((r.config || {}).experience))
-        || rows.find(r => r.id === 'main')
-      const list = (((pick?.config || {}).experience) || []) as ServiceDef[]
+      // 2026-08-09 (roadmap #13): la Centralina Pro salva l'intero blocco
+      // Servizi sotto la chiave `servizi` (CentralinaProTab.savePersisted),
+      // quindi il percorso reale e' config.servizi.experience. Qui si leggeva
+      // config.experience (top-level): chiave che non esiste ne' su
+      // business_mare ne' su main -> lista SEMPRE vuota -> la sezione mostrava
+      // "Nessun servizio configurato in Centralina Pro > Servizi" anche quando
+      // i servizi erano configurati. E' il motivo per cui i servizi experience
+      // per le barche "non c'erano". Il vecchio percorso resta come fallback
+      // per eventuali righe legacy.
+      const readExperience = (cfg: Record<string, unknown> | undefined): ServiceDef[] => {
+        const servizi = (cfg || {}).servizi as { experience?: unknown } | undefined
+        if (Array.isArray(servizi?.experience)) return servizi.experience as ServiceDef[]
+        const legacy = (cfg || {}).experience
+        return Array.isArray(legacy) ? (legacy as ServiceDef[]) : []
+      }
+      // Preferenza alla riga del business Mare; si ripiega su `main` solo se
+      // il Mare non ha una lista propria (stessa semantica di prima).
+      const fromMare = readExperience(rows.find(r => r.id === 'business_mare')?.config)
+      const list = fromMare.length ? fromMare : readExperience(rows.find(r => r.id === 'main')?.config)
       setServiceDefs(list.filter(s => s && s.is_active !== false))
     })()
     return () => { cancelled = true }
