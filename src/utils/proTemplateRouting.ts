@@ -313,10 +313,13 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
   fattura_sdi_accettata_admin: 'FATTURA: SDI ha ACCETTATO la fattura — avviso amministrazione',
   fattura_sdi_rifiutata_admin: 'FATTURA: SDI ha SCARTATO la fattura — avviso amministrazione',
 
-  // CAUZIONI (completano i trigger gia' esistenti)
-  cauzione_preauth_link_customer: 'CAUZIONE: link di PREAUTORIZZAZIONE inviato al cliente',
-  cauzione_incassata_customer: 'CAUZIONE: cauzione incassata — conferma al cliente',
-  cauzione_restituita_customer: 'CAUZIONE: cauzione restituita — conferma al cliente',
+  // CAUZIONI — NON aggiunte di proposito. Il gestionale ha DUE meccanismi:
+  // `handled_events` (questo elenco) e `trigger_event` (Alla creazione, Al
+  // pagamento, Cauzione incassata, Cauzione restituita...). Incasso e
+  // restituzione esistono gia' come trigger_event 'on_cauzione_collected' e
+  // 'on_cauzione_refunded', e CauzioniTab li EMETTE davvero al clic sui
+  // bottoni Incassata / Restituita. Duplicarli qui avrebbe dato due strade per
+  // la stessa cosa, con il rischio di doppio invio.
 
   // MULTE
   multa_conducente_identificato_admin: 'MULTA: conducente identificato — avviso amministrazione',
@@ -337,6 +340,31 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
   cliente_status_blacklist: 'CLIENTE: inserito in Blacklist',
   cliente_status_member: 'CLIENTE: promosso a Member',
   cliente_status_elite: 'CLIENTE: promosso a Elite',
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 2026-08-10 — Chiavi che il codice EMETTE GIA' ma che non erano
+  // selezionabili: la direzione non poteva quindi modificarne il testo dai
+  // Messaggi di Sistema Pro, pur essendo messaggi che partono ogni giorno.
+  // Nessun badge "da collegare": sono attive.
+  // ─────────────────────────────────────────────────────────────────────────
+  invoice_pdf_whatsapp: 'FATTURA: didascalia del PDF fattura inviato su WhatsApp',
+  penalty_invoice_pdf_whatsapp: 'FATTURA: didascalia del PDF fattura penali/danni su WhatsApp',
+  admin_contract_signed_alert: 'CONTRATTO: contratto firmato — avviso allo staff',
+  pro_email_contratto: 'CONTRATTO: corpo della email con il contratto',
+  pro_email_contratto_subject: 'CONTRATTO: oggetto della email con il contratto',
+  cancellation_admin_alert: 'ANNULLAMENTO: prenotazione annullata — avviso allo staff',
+  nexi_payment_received_admin: 'PAGAMENTO: incasso Nexi ricevuto — avviso allo staff',
+  pro_richiesta_pagamento: 'PAGAMENTO: richiesta di pagamento al cliente',
+  pro_email_addebito: 'PAGAMENTO: corpo della email di addebito',
+  pro_email_addebito_subject: 'PAGAMENTO: oggetto della email di addebito',
+  pro_custom_link_pagamento_penali_e_danni_17: 'PAGAMENTO: link di pagamento penali e danni',
+  prepaid_card_blocked_customer: 'PAGAMENTO: carta prepagata rifiutata — avviso al cliente',
+  prepaid_card_blocked_admin: 'PAGAMENTO: carta prepagata rifiutata — avviso allo staff',
+  pro_allerta_meteo: 'METEO: allerta meteo — Noleggio Terra',
+  pro_allerta_meteo_mare: 'METEO: allerta meteo — Noleggio Mare',
+  wallet_auto_recharge: 'WALLET: ricarica automatica ricorrente accreditata',
+  wallet_bonus_credit_admin: 'WALLET: bonus accreditato — avviso allo staff',
+  referral_otp_whatsapp: 'REFERRAL: codice OTP di verifica al partecipante',
 
 }
 
@@ -733,7 +761,6 @@ export const PENDING_EVENTS: ReadonlySet<string> = new Set([
   'stay_new_admin', 'stay_modified', 'stay_cancelled', 'stay_da_saldare_customer', 'stay_pronto',
   'fattura_generata_customer', 'fattura_inviata_customer', 'nota_credito_emessa_customer',
   'fattura_sdi_accettata_admin', 'fattura_sdi_rifiutata_admin',
-  'cauzione_preauth_link_customer', 'cauzione_incassata_customer', 'cauzione_restituita_customer',
   'multa_conducente_identificato_admin', 'multa_pec_inviata_admin', 'multa_notifica_cliente',
   'veicolo_scadenza_assicurazione', 'veicolo_scadenza_tagliando', 'veicolo_scadenza_gomme',
   'veicolo_scadenza_pastiglie', 'veicolo_scadenza_generica',

@@ -207,7 +207,7 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; area: 
     label: 'Contratti & Firma',
     color: 'violet',
     area: 'terra',
-    keys: ['signature_request_link', 'document_signature_link', 'signature_reminder_whatsapp', 'signature_otp_whatsapp'],
+    keys: ['signature_request_link', 'document_signature_link', 'signature_reminder_whatsapp', 'signature_otp_whatsapp', 'admin_contract_signed_alert', 'pro_email_contratto', 'pro_email_contratto_subject'],
   },
   // ── PAGAMENTI (Amministrazione > Attesa di pagamento) ───────────────────
   {
@@ -221,6 +221,8 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; area: 
       'payment_received_extension', 'payment_received_extension_admin',
       'payment_received_damages', 'payment_received_damages_admin',
       'on_payment_failed', 'on_payment_link_expired', 'on_partial_payment_received',
+      'nexi_payment_received_admin', 'pro_richiesta_pagamento', 'pro_email_addebito', 'pro_email_addebito_subject',
+      'pro_custom_link_pagamento_penali_e_danni_17', 'prepaid_card_blocked_customer', 'prepaid_card_blocked_admin',
     ],
   },
   // ── CAUZIONI (Amministrazione > Cauzioni) ───────────────────────────────
@@ -241,7 +243,7 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; area: 
     label: 'Annullamento Prenotazione',
     color: 'rose',
     area: 'terra',
-    keys: ['booking_cancelled_whatsapp', 'website_booking_cancelled_customer'],
+    keys: ['booking_cancelled_whatsapp', 'website_booking_cancelled_customer', 'cancellation_admin_alert'],
   },
   // ── ESTENSIONI & EXTRA ──────────────────────────────────────────────────
   {
@@ -306,7 +308,7 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; area: 
     label: 'DR7 Club & Wallet',
     color: 'pink',
     area: 'clienti',
-    keys: ['on_first_booking', 'on_club_subscription', 'on_club_tier_promotion', 'on_club_renewal_due', 'on_wallet_recharge', 'on_wallet_low_balance', 'wallet_bonus_credit', 'fidelity_voucher_whatsapp'],
+    keys: ['on_first_booking', 'on_club_subscription', 'on_club_tier_promotion', 'on_club_renewal_due', 'on_wallet_recharge', 'on_wallet_low_balance', 'wallet_bonus_credit', 'wallet_bonus_credit_admin', 'wallet_auto_recharge', 'fidelity_voucher_whatsapp', 'referral_otp_whatsapp'],
   },
   // ── MARKETING > PROMO ───────────────────────────────────────────────────
   {
@@ -314,6 +316,13 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; area: 
     color: 'rose',
     area: 'marketing',
     keys: ['promo_incassi_whatsapp', 'maxi_promo_gap_whatsapp', 'on_promo_gap'],
+  },
+  // ── ALLERTE METEO (2026-08-10) ──────────────────────────────────────────
+  {
+    label: 'Allerte Meteo',
+    color: 'cyan',
+    area: 'terra',
+    keys: ['pro_allerta_meteo', 'pro_allerta_meteo_mare'],
   },
   // ── NOLEGGIO MARE (2026-08-09) ──────────────────────────────────────────
   {
@@ -341,7 +350,7 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; area: 
     label: 'Fatture & Nota di Credito',
     color: 'emerald',
     area: 'amministrazione',
-    keys: ['fattura_generata_customer', 'fattura_inviata_customer', 'nota_credito_emessa_customer', 'fattura_sdi_accettata_admin', 'fattura_sdi_rifiutata_admin'],
+    keys: ['invoice_pdf_whatsapp', 'penalty_invoice_pdf_whatsapp', 'fattura_generata_customer', 'fattura_inviata_customer', 'nota_credito_emessa_customer', 'fattura_sdi_accettata_admin', 'fattura_sdi_rifiutata_admin'],
   },
   // ── MULTE (2026-08-09) ──────────────────────────────────────────────────
   {
