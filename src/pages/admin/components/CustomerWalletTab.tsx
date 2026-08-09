@@ -74,6 +74,12 @@ export default function CustomerWalletTab() {
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
+  // 2026-08-08: natura del credito. Un credito inserito qui può essere denaro
+  // REALMENTE INCASSATO (bonifico, contanti, recupero di una ricarica Nexi non
+  // andata a buon fine) oppure un OMAGGIO. Prima non si distingueva: tutto
+  // scriveva reference_type='admin_manual', classificato come bonus, quindi una
+  // ricarica reale finiva nel bonus e il bonus del pacchetto nel credito reale.
+  const [creditNature, setCreditNature] = useState<'real' | 'bonus'>('real')
 
   // Recurring
   const [recurringEnabled, setRecurringEnabled] = useState(false)
@@ -292,6 +298,10 @@ export default function CustomerWalletTab() {
     setRecurringDay(existing?.day || 1)
     setRecurringHour(Number.isFinite(existing?.hour) ? Number(existing?.hour) : 9)
     setRecurringAmount(existing ? String(existing.amount) : '')
+    // Il credito una tantum inserito qui è di norma denaro incassato.
+    // (La ricarica automatica mensile è sempre un omaggio: la scrive il cron
+    // con reference_type 'wallet_auto_recharge', non passa da qui.)
+    setCreditNature('real')
     setDetailLoading(true)
     setWallet(null)
     setTransactions([])
@@ -446,6 +456,9 @@ export default function CustomerWalletTab() {
         customer_id: modalCustomer.id,
         amount: parsedAmount,
         description: description || undefined,
+        // 'real' -> credito reale (capitale, matura interessi DR7 Club)
+        // 'bonus' -> omaggio (non è capitale, non matura interessi)
+        nature: modalAction === 'credit' ? creditNature : undefined,
       })
 
       if (data.success) {
@@ -1023,6 +1036,39 @@ export default function CustomerWalletTab() {
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">&euro;</span>
                 </div>
               </div>
+
+              {/* Natura del credito — determina se l'importo è capitale del
+                  cliente (denaro incassato) o un omaggio DR7. Da questa scelta
+                  dipendono: la voce "Credito reale" vs "Bonus" sul profilo del
+                  cliente, il capitale che matura lo 0,1%/giorno del DR7 Club e
+                  il bonus referral (che scatta solo sugli incassi reali). */}
+              {modalAction === 'credit' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Natura del credito</label>
+                  <div className="flex rounded-lg overflow-hidden border border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => setCreditNature('real')}
+                      className={`flex-1 py-2 px-3 text-sm font-semibold transition-colors ${creditNature === 'real' ? 'text-white' : 'text-gray-600 bg-gray-50 hover:bg-gray-100'}`}
+                      style={creditNature === 'real' ? { backgroundColor: TEAL } : {}}
+                    >
+                      Ricarica reale
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCreditNature('bonus')}
+                      className={`flex-1 py-2 px-3 text-sm font-semibold transition-colors ${creditNature === 'bonus' ? 'bg-amber-500 text-white' : 'text-gray-600 bg-gray-50 hover:bg-gray-100'}`}
+                    >
+                      Bonus / Omaggio
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {creditNature === 'real'
+                      ? 'Denaro realmente incassato (bonifico, contanti, recupero di una ricarica non riuscita). Conta come credito reale del cliente e matura gli interessi DR7 Club.'
+                      : 'Credito regalato da DR7 (es. ricarica ricorrente assegnata dalla direzione). Compare come Bonus sul profilo del cliente e NON matura interessi.'}
+                  </p>
+                </div>
+              )}
 
               {/* Nota */}
               <div>

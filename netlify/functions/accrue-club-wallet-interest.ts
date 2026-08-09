@@ -4,9 +4,8 @@
  * For each active club member:
  *   1. Compute today's "card-paid principal":
  *        principal = MAX(0, current_balance - lifetime_bonus_credits_remaining)
- *      Bonus credits (reference_type IN 'card_bonus', 'admin_manual',
- *      'referral', 'club_interest_payout', etc.) are spent last — interest
- *      only earns on what the customer actually paid by card.
+ *      Bonus credits (elenco unico in ./utils/walletCredit.ts) are spent
+ *      last — interest only earns on what the customer actually paid.
  *   2. Insert a row into wallet_interest_accruals with
  *      accrual_eur = principal × 0.001.
  *
@@ -14,33 +13,18 @@
  */
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { computeRealPrincipalEur } from './utils/walletCredit'
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || ''
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
 const DAILY_RATE = 0.001 // 0.1% per day
 
-// reference_types that count as BONUS credit (NOT card-paid).
-// 'cashback_3_percent' is the legacy reference_type used by the website
-// before the migration to dynamic tier-based cashback (now writes
-// 'card_bonus' in line with admin). Kept here so historical website
-// cashback rows stop accumulating interest.
-const BONUS_REFERENCE_TYPES = new Set([
-    'card_bonus',
-    'cashback_3_percent',
-    'admin_manual',
-    'admin_credit',
-    'referral',
-    'referral_bonus',
-    'milestone',
-    'registration_bonus',
-    'club_interest_payout',
-    'gift',
-    'voucher',
-    'compensation',
-    'wallet_package_bonus', // bonus pacchetto ricarica (non pagato con carta) — niente interessi
-])
-
+// 2026-08-08: l'elenco dei reference_type "bonus" NON vive piu' qui. E'
+// centralizzato in ./utils/walletCredit.ts (mirror di Sito/utils/walletCredit.ts),
+// cosi' il capitale su cui matura lo 0,1%/giorno e il "Credito reale" mostrato
+// al cliente sul profilo sono per costruzione lo stesso numero. Le copie
+// divergenti erano la causa dell'inversione credito/bonus.
 const handler: Handler = async () => {
     if (!supabaseUrl || !supabaseServiceKey) {
         return { statusCode: 500, body: JSON.stringify({ error: 'Missing Supabase env vars' }) }
@@ -74,23 +58,14 @@ const handler: Handler = async () => {
             const currentBalance = Number(bal?.balance || 0)
             if (currentBalance <= 0) { skipped++; continue }
 
-            // 2b. Lifetime bonus credits (sum of all credit transactions where
-            // reference_type is in BONUS_REFERENCE_TYPES). Bonuses are
-            // assumed to be spent last so principal = balance - bonusRemaining.
+            // 2b. Capitale = saldo - bonus residuo. Il bonus si consuma per
+            // ultimo, quindi il capitale e' il credito realmente pagato ancora
+            // a saldo. Classificazione in ./utils/walletCredit.ts.
             const { data: txs } = await supabase
                 .from('credit_transactions')
                 .select('amount, transaction_type, reference_type')
                 .eq('user_id', userId)
-            let lifetimeBonusCredits = 0
-            for (const t of (txs || [])) {
-                if (t.transaction_type !== 'credit') continue
-                const ref = String(t.reference_type || '').toLowerCase()
-                if (BONUS_REFERENCE_TYPES.has(ref)) {
-                    lifetimeBonusCredits += Number(t.amount || 0)
-                }
-            }
-
-            const principal = Math.max(0, currentBalance - lifetimeBonusCredits)
+            const principal = computeRealPrincipalEur(currentBalance, txs)
             if (principal <= 0) { skipped++; continue }
 
             const accrual = Math.round(principal * DAILY_RATE * 10000) / 10000 // 4 decimals (sub-cent)

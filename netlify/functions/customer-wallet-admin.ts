@@ -34,7 +34,7 @@ const handler: Handler = async (event) => {
       return { statusCode: 401, headers, body: JSON.stringify({ error: 'Token non valido' }) };
     }
 
-    const { action, customer_id, user_id, amount, description, query } = JSON.parse(event.body || '{}');
+    const { action, customer_id, user_id, amount, description, query, nature } = JSON.parse(event.body || '{}');
 
     switch (action) {
       case 'list_all_balances': {
@@ -288,13 +288,27 @@ const handler: Handler = async (event) => {
         }
 
         // Record transaction
+        //
+        // 2026-08-08: la natura del credito arriva dalla tab Wallet e decide il
+        // reference_type. Prima si scriveva sempre 'admin_manual', classificato
+        // come BONUS: una ricarica reale registrata a mano finiva quindi nel
+        // bonus del cliente (e il bonus del pacchetto nel credito reale) — è la
+        // causa dell'inversione credito/bonus segnalata. Ora:
+        //   'admin_topup' -> denaro incassato: credito reale, è capitale,
+        //                    matura gli interessi DR7 Club, attiva il referral.
+        //   'admin_bonus' -> omaggio: è bonus, niente interessi, niente referral.
+        // Assente/non riconosciuta -> 'admin_topup' (il caso più frequente per
+        // un credito una tantum inserito da un operatore).
+        const creditReferenceType = String(nature || '').toLowerCase() === 'bonus'
+          ? 'admin_bonus'
+          : 'admin_topup';
         await serviceSupabase.from('credit_transactions').insert({
           user_id: userId,
           transaction_type: isCredit ? 'credit' : 'debit',
           amount: amountEur,
           balance_after: newBalance,
           description: description || (isCredit ? 'Credito manuale admin' : 'Addebito manuale admin'),
-          reference_type: 'admin_manual'
+          reference_type: isCredit ? creditReferenceType : 'admin_manual'
         });
 
         return {

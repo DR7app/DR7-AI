@@ -37,6 +37,97 @@ export interface TierThreshold {
  * explicitly saves an empty list or disables every tier, that intent
  * wins (no cashback).
  */
+// ────────────────────────────────────────────────────────────────────────────
+// REGOLE SPESA ANNUA — devono restare IDENTICHE in tre punti:
+//   1. Sito/utils/dr7club.ts::getAnnualSpend            (cosa VEDE il cliente)
+//   2. Sito/netlify/functions/utils/dr7ClubCashback.js  (cashback lato sito)
+//   3. DR7-staging/netlify/functions/utils/dr7ClubCashback.ts (questo file)
+// Prima del 2026-08-08 divergevano: solo il frontend escludeva le ricariche
+// registrate in doppio, quindi il backend calcolava una spesa più alta e
+// versava il cashback del tier superiore (Runchina: mostrato 3%, versato 4%).
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Stati prenotazione che contano come spesa. */
+export const BOOKING_COUNTED_STATUSES = ['completed', 'completata', 'confirmed', 'active']
+
+/**
+ * Ricariche registrate DUE VOLTE in credit_wallet_purchases (pagate una sola
+ * volta dal cliente). Vanno escluse: gonfiano il tier e quindi il cashback.
+ * Fallback usato quando la colonna `excluded_from_tier` non è ancora presente.
+ */
+export const DUPLICATE_PURCHASE_IDS = new Set<string>([
+    '39a4c9cd-5670-465c-977d-cce805514c38', // Runchina 26/02 €1.000 — doppione
+    '4e6364d9-8707-4f12-897d-e02d63e0682d', // Runchina 05/05 €2.000 — doppione
+])
+
+/**
+ * Spesa "congelata" pre-fix per clienti grandfathered. È un PAVIMENTO, mai una
+ * sostituzione. Mirror di Sito/utils/dr7club.ts::TIER_SPEND_OVERRIDES.
+ */
+export const TIER_SPEND_OVERRIDES: Record<string, number> = {
+    '3b896d05-3d65-4819-a46a-ea9894343935': 3155.20, // Massimo Runchina
+}
+
+/** true se il metodo di pagamento è wallet/gift card (credito riciclato). */
+export function isWalletOrGiftMethod(pm: unknown): boolean {
+    const m = String(pm || '').toLowerCase().trim()
+    if (!m) return false
+    return m === 'credit' || m === 'credito' || m.includes('wallet') || m.includes('gift')
+}
+
+/** Email dell'utente, per agganciare le prenotazioni create in admin. */
+async function getUserEmail(supabase: SupabaseClient, userId: string): Promise<string | null> {
+    try {
+        const { data } = await supabase.auth.admin.getUserById(userId)
+        return data?.user?.email ?? null
+    } catch (err) {
+        console.warn('[dr7ClubCashback] getUserEmail failed (non-blocking):', (err as Error).message)
+        return null
+    }
+}
+
+/**
+ * Somma delle ricariche wallet pagate negli ultimi 12 mesi, in euro.
+ * Usa `recharge_amount` (quanto ha pagato il cliente), NON `received_amount`
+ * (che include il bonus pacchetto). Esclude i doppioni.
+ */
+export async function getRechargeSpendEur(
+    supabase: SupabaseClient,
+    userId: string,
+    sinceIso: string
+): Promise<number> {
+    // La colonna excluded_from_tier arriva con la migrazione 20260808000000: se
+    // non c'è ancora, si ripiega sulla lista statica senza far fallire il
+    // calcolo (un errore qui azzererebbe la spesa e il cashback di tutti).
+    let rows: any[] | null = null
+    const withFlag = await supabase
+        .from('credit_wallet_purchases')
+        .select('id, recharge_amount, excluded_from_tier')
+        .eq('user_id', userId)
+        .eq('payment_status', 'succeeded')
+        .gte('created_at', sinceIso)
+    if (withFlag.error) {
+        const fallback = await supabase
+            .from('credit_wallet_purchases')
+            .select('id, recharge_amount')
+            .eq('user_id', userId)
+            .eq('payment_status', 'succeeded')
+            .gte('created_at', sinceIso)
+        rows = fallback.data
+    } else {
+        rows = withFlag.data
+    }
+
+    let total = 0
+    for (const r of (rows || [])) {
+        if (r.excluded_from_tier === true) continue
+        if (DUPLICATE_PURCHASE_IDS.has(String(r.id))) continue
+        const amount = Number(r.recharge_amount || 0)
+        if (amount > 0) total += amount
+    }
+    return total
+}
+
 export const TIER_THRESHOLDS: TierThreshold[] = [
     { tier: 'access',    min: 0,     max: 2999,     rewardPercent: 2, label: 'Access' },
     { tier: 'black',     min: 3000,  max: 9999,     rewardPercent: 3, label: 'Black' },
@@ -146,42 +237,40 @@ export async function getAnnualSpendEur(supabase: SupabaseClient, userId: string
     since.setFullYear(since.getFullYear() - 1)
     const sinceIso = since.toISOString()
 
-    // Card-paid bookings in the last 12 months.
+    // Prenotazioni: stessi TRE percorsi di aggancio usati dal frontend, senno'
+    // le prenotazioni create in admin o prima dell'account non contano.
+    const email = await getUserEmail(supabase, userId)
+    const orClauses = [
+        `user_id.eq.${userId}`,
+        `booking_details->customer->>customerId.eq.${userId}`,
+    ]
+    if (email) orClauses.push(`customer_email.ilike.${email}`)
+
     const { data: bookings } = await supabase
         .from('bookings')
-        .select('price_total, total_amount, payment_method, payment_status, status, created_at')
-        .eq('user_id', userId)
-        .gte('created_at', sinceIso)
+        .select('price_total, payment_method, payment_status, status, created_at')
+        .or(orClauses.join(','))
+        .in('status', BOOKING_COUNTED_STATUSES)
         .in('payment_status', ['paid', 'completed', 'succeeded'])
+        .gte('created_at', sinceIso)
 
     let totalEur = 0
     for (const b of (bookings || [])) {
-        const pm = String((b as any).payment_method || '').toLowerCase()
-        if (!pm.includes('nexi') && !pm.includes('card') && !pm.includes('stripe')) continue
-        const status = String((b as any).status || '').toLowerCase()
-        if (status === 'cancelled' || status === 'annullata') continue
-        // 2026-07-13 FIX: bookings.price_total è in CENTESIMI → /100. Prima
-        // veniva sommato come euro (spesa annua x100 → tier gonfiato al 4%).
-        const rawTot = (b as any).price_total ?? (b as any).total_amount ?? 0
-        const amount = Number(rawTot) / 100
+        // Conta OGNI metodo che porta denaro nuovo (carta, Nexi, bonifico,
+        // contanti...) ed esclude solo wallet/gift card = credito riciclato.
+        // Prima c'era una whitelist nexi|card|stripe che tagliava i bonifici.
+        if (isWalletOrGiftMethod((b as any).payment_method)) continue
+        // bookings.price_total è in CENTESIMI.
+        const amount = Number((b as any).price_total || 0) / 100
         if (amount > 0) totalEur += amount
     }
 
-    // Wallet recharges (use `recharge_amount`, not `received_amount`,
-    // so package bonuses don't compound into tier).
-    const { data: recharges } = await supabase
-        .from('credit_wallet_purchases')
-        .select('recharge_amount, payment_status, created_at')
-        .eq('user_id', userId)
-        .eq('payment_status', 'succeeded')
-        .gte('created_at', sinceIso)
+    totalEur += await getRechargeSpendEur(supabase, userId, sinceIso)
 
-    for (const r of (recharges || [])) {
-        const amount = Number((r as any).recharge_amount || 0)
-        if (amount > 0) totalEur += amount
-    }
-
-    return Math.round(totalEur * 100) / 100
+    const computed = Math.round(totalEur * 100) / 100
+    const override = TIER_SPEND_OVERRIDES[userId]
+    // L'override è un PAVIMENTO (mai una sostituzione): stessa regola del sito.
+    return typeof override === 'number' ? Math.max(override, computed) : computed
 }
 
 /**

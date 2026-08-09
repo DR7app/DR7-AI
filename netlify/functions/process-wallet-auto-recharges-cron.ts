@@ -18,6 +18,7 @@
  *   3. Skips if last_run_at == today's date (idempotency — safe to retry).
  *   4. Credits user_credit_balance.balance += amount.
  *   5. Inserts credit_transactions row (reference_type='wallet_auto_recharge').
+ *      E' un OMAGGIO: classificato come bonus, non matura interessi DR7 Club.
  *   6. Updates last_run_at to today.
  *   7. Sends a WhatsApp via Pro template `wallet_auto_recharge` (best effort).
  *
@@ -128,6 +129,10 @@ const cronHandler: Handler = async (_event: HandlerEvent, _context: HandlerConte
             continue
         }
 
+        // La ricarica ricorrente assegnata dalla direzione è SEMPRE un omaggio:
+        // 'wallet_auto_recharge' è classificato come BONUS in
+        // utils/walletCredit.ts -> compare come Bonus sul profilo del cliente e
+        // non matura gli interessi DR7 Club (prima invece finiva nel capitale).
         const { error: txErr } = await sb
             .from('credit_transactions')
             .insert({
