@@ -4,6 +4,8 @@ import Button from './Button'
 import DiscountCodeGeneratorModal from './DiscountCodeGeneratorModal'
 import { QRCodeSVG } from 'qrcode.react'
 import toast from 'react-hot-toast'
+import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
+import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 
 // Static accent palette mirrored on the screenshot — keeps each panel
 // visually distinct without inventing data.
@@ -54,6 +56,12 @@ interface DiscountCodeUsage {
 type DiscountCodeFilter = 'all' | 'active' | 'deactivated' | 'expired'
 
 export default function CodiciScontoTab() {
+    // 2026-08-09 (roadmap #43): gate OTP per le operazioni normalmente non
+    // consentite. "Avviso sempre, blocco mai".
+    const {
+        limitationState, draftSessionId, flowType,
+        requestOverride, hasOverride, handleOverrideApproved, closeLimitation, cancelLimitation,
+    } = useLimitationOverride()
     const [discountCodes, setDiscountCodes] = useState<DiscountCode[]>([])
     const [discountCodesLoading, setDiscountCodesLoading] = useState(false)
     const [showDiscountCodeModal, setShowDiscountCodeModal] = useState(false)
@@ -158,8 +166,16 @@ export default function CodiciScontoTab() {
     }
 
     async function toggleCodeStatus(id: string, currentStatus: string) {
-        if (currentStatus === 'expired') {
-            toast.error('Un codice scaduto non può essere riattivato.')
+        // 2026-08-09 (roadmap #43): riattivare un codice scaduto era vietato in
+        // assoluto. Ora si avvisa e si procede con autorizzazione OTP — capita
+        // di dover riaprire una promozione appena scaduta per un cliente.
+        if (currentStatus === 'expired' && !hasOverride('codice_sconto_riattiva_scaduto')) {
+            const code = discountCodes.find(c => c.id === id)
+            toast.error('Codice scaduto: la riattivazione richiede l\'autorizzazione della direzione.', { duration: 8000 })
+            requestOverride(
+                'codice_sconto_riattiva_scaduto',
+                `Riattivare il codice sconto scaduto${code?.code ? ` "${code.code}"` : ''}: tornerebbe utilizzabile dai clienti.`
+            )
             return
         }
 
@@ -1119,6 +1135,20 @@ export default function CodiciScontoTab() {
                     </div>
                 </div>
             )}
+            {/* Gate OTP (roadmap #43): nessun blocco forzato, si procede con
+                autorizzazione della direzione. */}
+            <LimitationOverrideModal
+                isOpen={limitationState.isOpen}
+                limitationCode={limitationState.limitationCode}
+                limitationMessage={limitationState.limitationMessage}
+                actionContext={limitationState.actionContext}
+                draftSessionId={draftSessionId}
+                flowType={flowType}
+                showNotes
+                onClose={closeLimitation}
+                onCancel={cancelLimitation}
+                onOverrideApproved={handleOverrideApproved}
+            />
         </div>
     )
 }

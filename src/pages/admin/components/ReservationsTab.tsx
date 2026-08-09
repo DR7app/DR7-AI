@@ -2916,15 +2916,22 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     // non-Nexi (Contanti / Bonifico / Carta fisica). Il bottone era
     // visibile su qualsiasi booking non pagato, e in piu' codepath chiamano
     // questa funzione senza filtrare → cliente Contanti riceveva link.
-    if (!isNexiPayByLink(booking.payment_method)) {
-      toast.error(`Metodo di pagamento "${booking.payment_method || '—'}": niente link inviato. Cambia metodo a "Nexi - Pay by Link" se vuoi generarlo.`, { duration: 8000 })
+    // 2026-08-09 (roadmap #43, "avviso sempre, blocco mai"): i due safety gate
+    // qui sotto erano muri. Restano avvisi espliciti, ma ora si possono
+    // superare con autorizzazione OTP della direzione — un codice non
+    // configurato in Gestione OTP richiede l'OTP per default
+    // (otpConfigCache.isOtpRequired), quindi la protezione resta.
+    if (!isNexiPayByLink(booking.payment_method) && !hasOverride('payment_link_wrong_method')) {
+      toast.error(`Metodo di pagamento "${booking.payment_method || '—'}": il link non andrebbe generato. Per procedere serve l'autorizzazione della direzione.`, { duration: 8000 })
+      requestOverride('payment_link_wrong_method', `Inviare un link di pagamento Nexi su una prenotazione con metodo "${booking.payment_method || '—'}" (non Pay by Link).`)
       return
     }
     // 2026-06-03 SAFETY GATE: se la prenotazione è già pagata NON si rigenera
     // né si reinvia il link di pagamento (bug Fofana — cliente pagato riceveva
     // di nuovo il link modificando/salvando la prenotazione).
-    if (['paid', 'succeeded', 'completed'].includes((booking.payment_status || '').toLowerCase())) {
-      toast.error('Prenotazione già pagata: nessun link di pagamento inviato.', { duration: 6000 })
+    if (['paid', 'succeeded', 'completed'].includes((booking.payment_status || '').toLowerCase()) && !hasOverride('payment_link_already_paid')) {
+      toast.error('Prenotazione già pagata: il link non andrebbe reinviato. Per procedere serve l\'autorizzazione della direzione.', { duration: 8000 })
+      requestOverride('payment_link_already_paid', `Reinviare il link di pagamento su una prenotazione GIÀ PAGATA (${booking.customer_name || 'cliente'}, stato ${booking.payment_status}). Il cliente rischia di pagare due volte.`)
       return
     }
     const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone

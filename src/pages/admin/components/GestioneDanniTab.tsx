@@ -5,6 +5,8 @@ import { authFetch } from '../../../utils/authFetch'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { sanitizeMoney, parseMoney } from '../../../utils/money'
+import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
+import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 
 // ── Keyword classification (mirrors report-danni.ts) ──────────────────────────
 const DANNI_KEYWORDS = [
@@ -1171,6 +1173,11 @@ function ItemRow({ item, accentColor, onDelete, onUpdateAmount, onPartialPayment
   onPartialPayment: (val: number) => void
   saving: boolean
 }) {
+  // 2026-08-09 (roadmap #43): gate OTP invece del blocco secco.
+  const {
+    limitationState, draftSessionId, flowType,
+    requestOverride, hasOverride, handleOverrideApproved, closeLimitation, cancelLimitation,
+  } = useLimitationOverride()
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState(item.total.toString())
   const [paying, setPaying] = useState(false)
@@ -1196,8 +1203,15 @@ function ItemRow({ item, accentColor, onDelete, onUpdateAmount, onPartialPayment
     // l'attributo max del campo numerico (rimosso col passaggio a text per
     // poter digitare i decimali) e qui si usciva in SILENZIO: il pulsante
     // sembrava rotto. Ora si dice perche'.
-    if (val > remaining + 0.005) {
-      toast.error(`Massimo incassabile: €${remaining.toFixed(2)}`)
+    // 2026-08-09 (roadmap #43): incassare piu' del residuo era vietato in
+    // assoluto. Capita pero' di dover registrare un acconto cumulativo o un
+    // sovra-incasso concordato: si avvisa e si procede con autorizzazione OTP.
+    if (val > remaining + 0.005 && !hasOverride('danni_incasso_oltre_residuo')) {
+      toast.error(`Massimo incassabile: €${remaining.toFixed(2)}. Per incassare di piu' serve l'autorizzazione della direzione.`, { duration: 8000 })
+      requestOverride(
+        'danni_incasso_oltre_residuo',
+        `Incassare €${val.toFixed(2)} su "${item.label}" quando il residuo e' €${remaining.toFixed(2)}: si incasserebbero €${(val - remaining).toFixed(2)} in piu' del dovuto.`
+      )
       return
     }
     onPartialPayment(val)
@@ -1334,6 +1348,18 @@ function ItemRow({ item, accentColor, onDelete, onUpdateAmount, onPartialPayment
           )}
         </div>
       </div>
+      <LimitationOverrideModal
+        isOpen={limitationState.isOpen}
+        limitationCode={limitationState.limitationCode}
+        limitationMessage={limitationState.limitationMessage}
+        actionContext={limitationState.actionContext}
+        draftSessionId={draftSessionId}
+        flowType={flowType}
+        showNotes
+        onClose={closeLimitation}
+        onCancel={cancelLimitation}
+        onOverrideApproved={handleOverrideApproved}
+      />
     </div>
   )
 }
