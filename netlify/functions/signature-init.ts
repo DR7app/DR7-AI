@@ -293,15 +293,15 @@ export const handler: Handler = async (event) => {
         const { data: signedByBooking } = effBookingIdForCancel
             ? await supabase.from('signature_requests').select('signer_name, signer_phone, original_pdf_hash').eq('booking_id', effBookingIdForCancel).eq('status', 'signed')
             : { data: null }
+        // Solo i NOMI: il telefono non identifica un firmatario (due lead
+        // distinte possono condividerlo) — vedi roadmap #19 piu' avanti.
         const signedNames = new Set<string>()
-        const signedPhones = new Set<string>()
         for (const r of [...(signedByContract || []), ...(signedByBooking || [])]) {
             // Skip se questa firma e' su una versione obsoleta del PDF —
             // il signer deve firmare la nuova versione.
             const sigHash = (r as { original_pdf_hash?: string | null }).original_pdf_hash
             if (sigHash && sigHash !== originalPdfHash) continue
             const n = normName((r as { signer_name?: string }).signer_name); if (n) signedNames.add(n)
-            const p = normPh((r as { signer_phone?: string }).signer_phone); if (p) signedPhones.add(p)
         }
 
         // Build list of all signers
@@ -469,12 +469,19 @@ export const handler: Handler = async (event) => {
         const results: { name: string; role: string; sent: boolean }[] = []
 
         for (const signer of signers) {
-            // Salta chi ha già firmato (match per NOME o TELEFONO): non ricreare
-            // la richiesta né reinviare il link. Così il garante che ha già
-            // firmato (es. Daniele) NON viene ridisturbato a un rinvio contratto.
+            // Salta chi ha già firmato: non ricreare la richiesta né reinviare
+            // il link. Così il garante che ha già firmato (es. Daniele) NON
+            // viene ridisturbato a un rinvio contratto.
+            //
+            // 2026-08-09 (roadmap #19): il match e' per NOME soltanto. Prima
+            // bastava il TELEFONO, ma due lead distinte possono condividere lo
+            // stesso numero (caso reale: prenotazione admin fatta col numero di
+            // un cliente): la seconda veniva marcata "ha già firmato" e non
+            // riceveva MAI il suo link. Una firma sola valeva per due persone.
+            // Il nome e' l'identita' del firmatario sul documento, quindi resta
+            // il criterio corretto; il telefono e' solo un recapito.
             const sName = normName(signer.name)
-            const sPhone = normPh(signer.phone)
-            const alreadySigned = (sName && signedNames.has(sName)) || (sPhone && signedPhones.has(sPhone))
+            const alreadySigned = !!(sName && signedNames.has(sName))
             if (alreadySigned) {
                 console.log(`[signature-init] ${signer.name} (${signer.role}) ha già firmato — skip reinvio`)
                 results.push({ name: signer.name, role: signer.role, sent: true })

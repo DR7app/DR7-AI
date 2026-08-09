@@ -343,15 +343,22 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        // 2. Fallback: Try by email (case-insensitive, use maybeSingle to handle duplicates)
+        // 2. Fallback: Try by email
+        // roadmap #19: nemmeno l'email e' univoca — la stessa casella (quella
+        // dell'agenzia, o dell'admin) puo' stare su piu' lead distinte. Prima
+        // si prendeva la piu' recente (`order updated_at .limit(1)`): stesso
+        // identico difetto gia' corretto per telefono e nome, rimasto qui.
+        // Ora si usa SOLO se identifica un UNICO cliente.
         if (!customer && resolvedEmail) {
             console.log('[generate-contract] Fallback: Fetching by email from customers_extended...', resolvedEmail)
-            const { data: cData, error: cError } = await supabase.from('customers_extended').select('*').ilike('email', resolvedEmail).order('updated_at', { ascending: false }).limit(1).maybeSingle()
+            const { data: emailRows, error: cError } = await supabase.from('customers_extended').select('*').ilike('email', resolvedEmail)
             if (cError) console.error('[generate-contract] Error fetching by email:', cError)
-            if (cData) {
-                console.log('[generate-contract] Found customer by Email:', cData.id, cData.nome, cData.cognome)
-                customer = cData
+            if (Array.isArray(emailRows) && emailRows.length === 1) {
+                customer = emailRows[0]
                 matchedBy = 'email'
+                console.log('[generate-contract] Found customer by Email (univoco):', customer?.id, customer?.nome, customer?.cognome)
+            } else if (Array.isArray(emailRows) && emailRows.length > 1) {
+                console.warn(`[generate-contract] Email ${resolvedEmail} condivisa da ${emailRows.length} lead: salto il match per email (roadmap #19). Servono id per non intestare al cliente sbagliato.`)
             }
         }
 
@@ -418,7 +425,14 @@ export const handler: Handler = async (event) => {
         console.log(`[generate-contract] Customer resolution: matched by "${matchedBy}", customer ID: ${customer?.id || 'NONE'}`)
 
         // AUTO-LINKING: If we found a customer but the booking wasn't linked, link it now!
-        if (customer && !customerId) {
+        // roadmap #19: si scrive `bookings.user_id` SOLO se il match e' certo.
+        // Ogni fallback qui sopra ormai aggancia solo se il criterio identifica
+        // un UNICO cliente; l'unica eccezione e' `basic_customers` (tabella
+        // legacy, `.limit(1)`), che quindi non deve mai essere persistita:
+        // scriverla renderebbe DEFINITIVO un aggancio incerto e da li' in poi
+        // contratto, fattura, messaggi e cauzioni punterebbero alla lead
+        // sbagliata senza piu' possibilita' di accorgersene.
+        if (customer && !customerId && matchedBy !== 'basic_customers') {
             console.log(`[generate-contract] Auto-linking booking ${bookingId} to customer ${customer.id}`)
             const { error: linkError } = await supabase
                 .from('bookings')
