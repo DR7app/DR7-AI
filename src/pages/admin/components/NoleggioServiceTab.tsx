@@ -544,32 +544,13 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     setSaving(false); setShowForm(false); reload()
   }
   // Libera i posti tour collegati al booking (tornano available) prima di eliminarlo.
-  async function freeTourSeats(bookingId: string) {
-    try {
-      await supabase.from('noleggio_tour_seats')
-        .update({ status: 'available', booking_id: null, customer_name: null, customer_phone: null })
-        .eq('booking_id', bookingId)
-    } catch { /* tabella tour assente per stay/altri: ignora */ }
-  }
-
   // Elimina come il Noleggio auto: usa la function delete-booking (service role,
   // bypassa RLS) che annulla la prenotazione (status='cancelled'). La lista
   // esclude le annullate, quindi la riga sparisce. NIENTE delete diretto lato
   // client (RLS lo blocca in silenzio) ne' delete di contratti/fatture (i tour
   // non ne hanno). Cosi' l'eliminazione funziona davvero.
   async function removeBooking(id: string): Promise<string | null> {
-    await freeTourSeats(id)
-    try {
-      const res = await authFetch('/.netlify/functions/delete-booking', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: id }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) return (data?.error || `Errore eliminazione (${res.status})`)
-      return null
-    } catch (e) {
-      return (e as Error).message || 'Errore eliminazione'
-    }
+    return cancelBookingViaFunction(id)
   }
 
   async function deleteBooking() {
@@ -903,6 +884,33 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
 // prenotazione ritiro→riconsegna), stesso formato del Calendario Noleggio Terra
 // (CalendarTab.tsx). Versione "lean": niente centralina/realtime/netlify, solo
 // noleggio_catalog (righe) + bookings filtrate per service_type (barre).
+
+// 2026-08-10 (roadmap #11): eliminazione prenotazione, UNICA implementazione.
+// La lista lo faceva gia' bene tramite la function `delete-booking` (service
+// role, ANNULLA con status='cancelled'); il calendario invece faceva un
+// `supabase.from('bookings').delete()` diretto dal client — che la RLS blocca
+// in SILENZIO: l'operatore cliccava Elimina, nessun errore, e la prenotazione
+// restava li'. Ora entrambi passano di qui.
+async function cancelBookingViaFunction(bookingId: string): Promise<string | null> {
+  try {
+    // Libera i posti tour se la prenotazione ne occupava (tabella assente per
+    // stay/altri business: si ignora).
+    try {
+      await supabase.from('noleggio_tour_seats')
+        .update({ status: 'available', booking_id: null, customer_name: null, customer_phone: null })
+        .eq('booking_id', bookingId)
+    } catch { /* nessuna tabella tour: ok */ }
+    const res = await authFetch('/.netlify/functions/delete-booking', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bookingId }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) return (data?.error || `Errore eliminazione (${res.status})`)
+    return null
+  } catch (e) {
+    return (e as Error).message || 'Errore eliminazione'
+  }
+}
 
 const CAL_CELL_W = 45 // larghezza colonna giorno
 const CAL_ROW_H = 56  // altezza riga asset
@@ -1249,11 +1257,11 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
   }
   async function deleteBooking() {
     if (!form.id) return
-    if (!window.confirm('Eliminare questa prenotazione?')) return
+    if (!window.confirm('Annullare questa prenotazione?')) return
     setSaving(true); setError('')
-    const { error: e } = await supabase.from('bookings').delete().eq('id', form.id)
+    const err = await cancelBookingViaFunction(form.id)
     setSaving(false)
-    if (e) { setError(e.message); return }
+    if (err) { setError(err); return }
     setShowForm(false); reload()
   }
 
