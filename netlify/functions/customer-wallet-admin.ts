@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { hasApprovedOverride } from './utils/verifyOverride';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -34,7 +35,7 @@ const handler: Handler = async (event) => {
       return { statusCode: 401, headers, body: JSON.stringify({ error: 'Token non valido' }) };
     }
 
-    const { action, customer_id, user_id, amount, description, query, nature } = JSON.parse(event.body || '{}');
+    const { action, customer_id, user_id, amount, description, query, nature, overrideId } = JSON.parse(event.body || '{}');
 
     switch (action) {
       case 'list_all_balances': {
@@ -266,12 +267,26 @@ const handler: Handler = async (event) => {
           ? Math.round((currentBalance + amountEur) * 100) / 100
           : Math.round((currentBalance - amountEur) * 100) / 100;
 
+        // 2026-08-09 (roadmap #43, "avviso sempre, blocco mai"): portare il
+        // wallet in negativo era vietato in assoluto. Serve pero' quando la
+        // direzione addebita una penale o un danno superiore al credito
+        // residuo. Ora si puo', con autorizzazione OTP verificata qui dal
+        // server: il client manda l'id, non la parola "sono autorizzato".
         if (newBalance < 0) {
-          return {
-            statusCode: 400,
-            headers,
-            body: JSON.stringify({ error: 'Saldo insufficiente per questo addebito' }),
-          };
+          const authorized = await hasApprovedOverride(serviceSupabase, overrideId, 'wallet.saldo_negativo');
+          if (!authorized) {
+            return {
+              statusCode: 400,
+              headers,
+              body: JSON.stringify({
+                error: `Saldo insufficiente: dopo l'addebito il wallet andrebbe a €${newBalance.toFixed(2)}.`,
+                overridable: true,
+                overrideCode: 'wallet.saldo_negativo',
+                resulting_balance: newBalance,
+              }),
+            };
+          }
+          console.log(`[customer-wallet-admin] Saldo negativo (€${newBalance.toFixed(2)}) AUTORIZZATO dalla direzione per ${userId}`);
         }
 
         if (!creditBalance) {

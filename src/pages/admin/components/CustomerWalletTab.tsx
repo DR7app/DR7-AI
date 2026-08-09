@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
+import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
+import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import { authFetch } from '../../../utils/authFetch'
 import WalletAnalytics from './WalletAnalytics'
 import MoneyInput from '../../../components/MoneyInput'
@@ -63,6 +65,10 @@ export default function CustomerWalletTab() {
   const [expandedTransactions, setExpandedTransactions] = useState<any[]>([])
   const [loadingTransactions, setLoadingTransactions] = useState(false)
 
+  // 2026-08-09 (roadmap #43): autorizzazione DIREZIONE per il saldo negativo.
+  // Distinta dall'OTP operatore gia' presente in questa tab: quello conferma
+  // che l'operazione e' voluta, questa autorizza un'eccezione alla regola.
+  const overrideDir = useLimitationOverride()
   // Modal state
   const [modalCustomer, setModalCustomer] = useState<CustomerResult | null>(null)
   const [modalAction, setModalAction] = useState<'credit' | 'debit'>('credit')
@@ -459,6 +465,9 @@ export default function CustomerWalletTab() {
         // 'real' -> credito reale (capitale, matura interessi DR7 Club)
         // 'bonus' -> omaggio (non è capitale, non matura interessi)
         nature: modalAction === 'credit' ? creditNature : undefined,
+        // Presente solo dopo l'autorizzazione della direzione: il server lo
+        // rilegge da limitation_overrides, non si fida di questo campo.
+        overrideId: overrideDir.activeOverrides.find(o => o.limitationCode === 'wallet.saldo_negativo')?.overrideId,
       })
 
       if (data.success) {
@@ -474,6 +483,19 @@ export default function CustomerWalletTab() {
         ))
         closeModal()
         loadAllWalletCustomers()
+      } else if (data.overridable && data.overrideCode === 'wallet.saldo_negativo') {
+        // "Avviso sempre, blocco mai": il server ha rifiutato il saldo
+        // negativo, ma l'operazione e' autorizzabile dalla direzione.
+        toast.error(
+          `${data.error || 'Saldo insufficiente.'} Per procedere serve l'autorizzazione della direzione.`,
+          { duration: 9000 }
+        )
+        overrideDir.requestOverride(
+          'wallet.saldo_negativo',
+          `Addebitare €${parsedAmount.toFixed(2)} a ${modalCustomer.full_name || 'cliente'} portando il wallet in NEGATIVO`
+          + (typeof data.resulting_balance === 'number' ? ` (saldo risultante €${data.resulting_balance.toFixed(2)})` : '')
+          + '.'
+        )
       } else {
         console.error('[Wallet] API error:', data)
         toast.error(data.error || `Errore: ${JSON.stringify(data).substring(0, 150)}`)
@@ -1259,6 +1281,18 @@ export default function CustomerWalletTab() {
           </div>
         </div>
       )}
+      <LimitationOverrideModal
+        isOpen={overrideDir.limitationState.isOpen}
+        limitationCode={overrideDir.limitationState.limitationCode}
+        limitationMessage={overrideDir.limitationState.limitationMessage}
+        actionContext={overrideDir.limitationState.actionContext}
+        draftSessionId={overrideDir.draftSessionId}
+        flowType={overrideDir.flowType}
+        showNotes
+        onClose={overrideDir.closeLimitation}
+        onCancel={overrideDir.cancelLimitation}
+        onOverrideApproved={overrideDir.handleOverrideApproved}
+      />
     </div>
   )
 }
