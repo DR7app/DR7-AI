@@ -18,6 +18,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
+import { authFetch } from '../../../utils/authFetch'
+import { logAdminAction } from '../../../utils/logAdminAction'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
@@ -424,12 +426,60 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
       booking_details: d,
     }
 
-    const { error } = booking
-      ? await supabase.from('bookings').update(payload).eq('id', booking.id)
-      : await supabase.from('bookings').insert({ ...payload, created_at: new Date().toISOString() })
+    const { data: savedRow, error } = booking
+      ? await supabase.from('bookings').update(payload).eq('id', booking.id).select('id').single()
+      : await supabase.from('bookings').insert({ ...payload, created_at: new Date().toISOString() }).select('id').single()
     setSaving(false)
     if (error) { setFormError(error.message); return }
+    const savedId = (savedRow as { id: string } | null)?.id || booking?.id || null
     toast.success(booking ? 'Prenotazione aggiornata' : 'Prenotazione creata')
+
+    // 2026-08-10 (roadmap #11): il salvataggio del Mare non aveva NESSUNO
+    // degli effetti collaterali del Noleggio Terra. Due mancavano davvero:
+    //
+    // 1) AUDIT — nessuna riga nel log attivita' operatori. Una prenotazione
+    //    Mare poteva essere creata o modificata senza lasciare traccia di chi
+    //    e quando, mentre ogni azione su Terra e' tracciata.
+    if (savedId) {
+      logAdminAction(booking ? 'edit_booking' : 'create_booking', 'booking', savedId, {
+        business: 'Noleggio Mare',
+        cliente: customerName.trim(),
+        mezzo: assetName,
+        dal: pickupDate,
+        al: dropoffDate,
+        totale: (eurToCents(priceFinal) / 100).toFixed(2),
+        stato_pagamento: payStatus,
+        metodo_pagamento: payMethod || null,
+      })
+    }
+
+    // 2) FATTURA sul passaggio a "Pagato" — su Terra e Lavaggio parte
+    //    automaticamente, qui no: un noleggio barca incassato restava senza
+    //    fattura finche' qualcuno non se ne accorgeva. La regola su QUALI
+    //    metodi di pagamento fatturano vive solo nel server (Centralina Pro >
+    //    Fiscale): qui si chiama e basta, il server decide. Niente fattura a
+    //    prezzo zero (uscita in omaggio).
+    const isPaidNow = ['paid', 'completed', 'succeeded'].includes(payStatus)
+    const wasPaid = ['paid', 'completed', 'succeeded'].includes(String(booking?.payment_status || ''))
+    if (savedId && isPaidNow && !wasPaid && eurToCents(priceFinal) > 0) {
+      try {
+        const invRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bookingId: savedId, includeIVA: true }),
+        })
+        if (!invRes.ok) {
+          const errData = await invRes.json().catch(() => ({}))
+          const errMsg = errData.message || errData.error || invRes.statusText
+          console.warn('[MareBookingModal] fattura non generata:', errMsg)
+          if (String(errMsg).match(/obbligatorio|incomplete|missing/i)) {
+            toast.error('Dati cliente incompleti per la fattura: completali nella scheda cliente.', { duration: 8000 })
+          }
+        }
+      } catch (invErr) {
+        console.warn('[MareBookingModal] chiamata fattura fallita (non blocca il salvataggio):', invErr)
+      }
+    }
 
     // 2026-08-10 (roadmap #44 + #11): il Noleggio Mare non inviava NIENTE al
     // cliente — ne' alla creazione ne' alla modifica. Il Noleggio Terra lo fa
