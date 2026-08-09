@@ -271,6 +271,73 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
 
   // Prime Wash — auto pronta (admin clicca AUTO PRONTA su CarWashBookingsTab)
   service_ready_customer: 'PRIME WASH: auto pronta / lavaggio concluso (admin clicca "Auto Pronta" sulla riga della prenotazione)',
+  // ─────────────────────────────────────────────────────────────────────────
+  // 2026-08-09 — Trigger aggiunti per coprire i business e le sezioni che non
+  // avevano NESSUN evento (Mare, Aria, Soggiorni, Fatture, Multe, Scadenze
+  // veicolo, Magazzino, Status cliente).
+  //
+  // ATTENZIONE: sono selezionabili ma NON ancora emessi dal codice — vedi
+  // PENDING_EVENTS piu' sotto. Un messaggio collegato a uno di questi non
+  // partira' finche' l'emissione non viene aggiunta nel punto giusto. In
+  // MessaggiSistemaProTab compaiono con il badge "da collegare".
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // NOLEGGIO MARE
+  boat_new_customer: 'MARE: conferma prenotazione al cliente',
+  boat_new_admin: 'MARE: nuova prenotazione — avviso allo staff',
+  boat_modified: 'MARE: prenotazione modificata (date, mezzo, importo)',
+  boat_cancelled: 'MARE: prenotazione annullata',
+  boat_da_saldare_customer: 'MARE: prenotazione confermata da saldare',
+  boat_pronto: 'MARE: mezzo pronto per il ritiro',
+
+  // NOLEGGIO ARIA
+  heli_new_customer: 'ARIA: conferma prenotazione al cliente',
+  heli_new_admin: 'ARIA: nuova prenotazione — avviso allo staff',
+  heli_modified: 'ARIA: prenotazione modificata (date, velivolo, importo)',
+  heli_cancelled: 'ARIA: prenotazione annullata',
+  heli_da_saldare_customer: 'ARIA: prenotazione confermata da saldare',
+  heli_pronto: 'ARIA: velivolo pronto per la partenza',
+
+  // SOGGIORNI E OSPITALITA'
+  stay_new_customer: 'SOGGIORNI: conferma prenotazione al cliente',
+  stay_new_admin: 'SOGGIORNI: nuova prenotazione — avviso allo staff',
+  stay_modified: 'SOGGIORNI: prenotazione modificata (date, struttura, importo)',
+  stay_cancelled: 'SOGGIORNI: prenotazione annullata',
+  stay_da_saldare_customer: 'SOGGIORNI: prenotazione confermata da saldare',
+  stay_pronto: 'SOGGIORNI: struttura pronta per il check-in',
+
+  // FATTURE (Amministrazione > Fatture)
+  fattura_generata_customer: 'FATTURA: fattura emessa — invio al cliente',
+  fattura_inviata_customer: 'FATTURA: fattura inoltrata al cliente (reinvio manuale)',
+  nota_credito_emessa_customer: 'FATTURA: nota di credito emessa — invio al cliente',
+  fattura_sdi_accettata_admin: 'FATTURA: SDI ha ACCETTATO la fattura — avviso amministrazione',
+  fattura_sdi_rifiutata_admin: 'FATTURA: SDI ha SCARTATO la fattura — avviso amministrazione',
+
+  // CAUZIONI (completano i trigger gia' esistenti)
+  cauzione_preauth_link_customer: 'CAUZIONE: link di PREAUTORIZZAZIONE inviato al cliente',
+  cauzione_incassata_customer: 'CAUZIONE: cauzione incassata — conferma al cliente',
+  cauzione_restituita_customer: 'CAUZIONE: cauzione restituita — conferma al cliente',
+
+  // MULTE
+  multa_conducente_identificato_admin: 'MULTA: conducente identificato — avviso amministrazione',
+  multa_pec_inviata_admin: 'MULTA: PEC inviata all\'ente — conferma amministrazione',
+  multa_notifica_cliente: 'MULTA: notifica al cliente della multa a suo carico',
+
+  // VEICOLI — SCADENZE (dal cruscotto veicolo)
+  veicolo_scadenza_assicurazione: 'VEICOLO: assicurazione in scadenza — avviso staff',
+  veicolo_scadenza_tagliando: 'VEICOLO: tagliando in scadenza (km o data) — avviso staff',
+  veicolo_scadenza_gomme: 'VEICOLO: gomme da sostituire — avviso staff',
+  veicolo_scadenza_pastiglie: 'VEICOLO: pastiglie freni da sostituire — avviso staff',
+  veicolo_scadenza_generica: 'VEICOLO: altra scadenza amministrativa — avviso staff',
+
+  // MAGAZZINO
+  magazzino_ordine_fornitore: 'MAGAZZINO: ordine inviato al fornitore',
+
+  // CLIENTI — STATUS
+  cliente_status_blacklist: 'CLIENTE: inserito in Blacklist',
+  cliente_status_member: 'CLIENTE: promosso a Member',
+  cliente_status_elite: 'CLIENTE: promosso a Elite',
+
 }
 
 /**
@@ -646,3 +713,25 @@ export function getProKeyEventTriggers(
 
   return matches
 }
+
+/**
+ * Trigger presenti nel catalogo ma NON ancora emessi da nessun punto del
+ * codice (aggiunti il 2026-08-09). Restano selezionabili — la direzione deve
+ * poter preparare il messaggio prima che l'evento esista — ma l'interfaccia li
+ * marca "da collegare" cosi' nessuno crea un automatismo credendolo attivo.
+ *
+ * Togliere la chiave da qui quando l'emissione viene aggiunta nel codice.
+ */
+export const PENDING_EVENTS: ReadonlySet<string> = new Set([
+  'boat_new_customer', 'boat_new_admin', 'boat_modified', 'boat_cancelled', 'boat_da_saldare_customer', 'boat_pronto',
+  'heli_new_customer', 'heli_new_admin', 'heli_modified', 'heli_cancelled', 'heli_da_saldare_customer', 'heli_pronto',
+  'stay_new_customer', 'stay_new_admin', 'stay_modified', 'stay_cancelled', 'stay_da_saldare_customer', 'stay_pronto',
+  'fattura_generata_customer', 'fattura_inviata_customer', 'nota_credito_emessa_customer',
+  'fattura_sdi_accettata_admin', 'fattura_sdi_rifiutata_admin',
+  'cauzione_preauth_link_customer', 'cauzione_incassata_customer', 'cauzione_restituita_customer',
+  'multa_conducente_identificato_admin', 'multa_pec_inviata_admin', 'multa_notifica_cliente',
+  'veicolo_scadenza_assicurazione', 'veicolo_scadenza_tagliando', 'veicolo_scadenza_gomme',
+  'veicolo_scadenza_pastiglie', 'veicolo_scadenza_generica',
+  'magazzino_ordine_fornitore',
+  'cliente_status_blacklist', 'cliente_status_member', 'cliente_status_elite',
+])

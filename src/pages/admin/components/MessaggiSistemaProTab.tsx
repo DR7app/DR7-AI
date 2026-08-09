@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
 import SocialLinksTab from './SocialLinksTab'
-import { getProKeyEventTriggers, EVENT_DESCRIPTIONS, suggestEventsForTemplate } from '../../../utils/proTemplateRouting'
+import { getProKeyEventTriggers, EVENT_DESCRIPTIONS, suggestEventsForTemplate, PENDING_EVENTS } from '../../../utils/proTemplateRouting'
 const EVENT_LABELS_IT = EVENT_DESCRIPTIONS
 import toast from 'react-hot-toast'
 
@@ -189,11 +189,16 @@ const DAY_LABELS_IT = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab']
 // INVARIATE (il backend fa fire su quelle): cambia solo raggruppamento/ordine/
 // etichette. Il tag `service` resta SOLO sui gruppi mono-servizio (Noleggio /
 // Lavaggio) per non alterare il filtro per target_service_type.
-const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; service?: 'rental' | 'car_wash' | 'mechanical' }> = [
+// 2026-08-09: aggiunto `area` — la macro-sezione del gestionale. Serve al
+// filtro a chip sopra l'elenco: prima i gruppi erano tutti aperti insieme e
+// trovare il trigger giusto voleva dire scorrere un muro di caselle.
+type EventArea = 'terra' | 'mare' | 'aria' | 'soggiorni' | 'lavaggio' | 'amministrazione' | 'clienti' | 'marketing' | 'veicoli'
+const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; area: EventArea; service?: 'rental' | 'car_wash' | 'mechanical' }> = [
   // ── NOLEGGIO TERRA ──────────────────────────────────────────────────────
   {
     label: 'Noleggio Terra — Prenotazioni',
     color: 'blue',
+    area: 'terra',
     service: 'rental',
     keys: ['rental_new_customer', 'rental_new', 'rental_new_admin', 'rental_modified', 'rental_auto_pronta', 'rental_da_saldare_customer', 'tour_new_customer'],
   },
@@ -201,12 +206,14 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; servic
   {
     label: 'Contratti & Firma',
     color: 'violet',
+    area: 'terra',
     keys: ['signature_request_link', 'document_signature_link', 'signature_reminder_whatsapp', 'signature_otp_whatsapp'],
   },
   // ── PAGAMENTI (Amministrazione > Attesa di pagamento) ───────────────────
   {
     label: 'Pagamenti',
     color: 'emerald',
+    area: 'amministrazione',
     keys: [
       'payment_link_customer',
       'booking_confirmed_da_saldare',
@@ -220,6 +227,7 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; servic
   {
     label: 'Cauzioni',
     color: 'amber',
+    area: 'amministrazione',
     keys: [
       'deposit_request_customer',       // admin invia link cauzione manuale
       'deposit_return_iban',            // richiesta IBAN per rimborso cauzione
@@ -232,36 +240,42 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; servic
   {
     label: 'Annullamento Prenotazione',
     color: 'rose',
+    area: 'terra',
     keys: ['booking_cancelled_whatsapp', 'website_booking_cancelled_customer'],
   },
   // ── ESTENSIONI & EXTRA ──────────────────────────────────────────────────
   {
     label: 'Estensioni & Extra',
     color: 'violet',
+    area: 'terra',
     keys: ['on_extension_requested', 'on_extra_added'],
   },
   // ── PREVENTIVI & NO CAUZIONE ────────────────────────────────────────────
   {
     label: 'Preventivi & No Cauzione',
     color: 'orange',
+    area: 'terra',
     keys: ['admin_new_website_quote', 'admin_no_cauzione_request', 'no_cauzione_approved', 'no_cauzione_rejected', 'quote_discount_offered'],
   },
   // ── VERIFICA DOCUMENTI ──────────────────────────────────────────────────
   {
     label: 'Documenti Cliente',
     color: 'teal',
+    area: 'clienti',
     keys: ['on_doc_uploaded', 'on_doc_verified', 'on_doc_rejected'],
   },
   // ── RITARDI & NO-SHOW ───────────────────────────────────────────────────
   {
     label: 'Ritardi & No-show',
     color: 'amber',
+    area: 'terra',
     keys: ['on_late_pickup', 'on_late_return', 'on_no_show'],
   },
   // ── LAVAGGIO & MECCANICA (Prime Wash) ───────────────────────────────────
   {
     label: 'Lavaggio & Meccanica',
     color: 'cyan',
+    area: 'lavaggio',
     service: 'car_wash',
     keys: [
       'carwash_new_customer', 'carwash_new', 'carwash_new_admin', 'carwash_modified',
@@ -277,25 +291,85 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; servic
   {
     label: 'Marketing — Recensioni',
     color: 'pink',
+    area: 'marketing',
     keys: ['review_request_whatsapp', 'on_review_received', 'review_discount_code'],
   },
   // ── MARKETING > COMPLEANNI ──────────────────────────────────────────────
   {
     label: 'Marketing — Compleanni',
     color: 'pink',
+    area: 'marketing',
     keys: ['birthday_message', 'before_birthday'],
   },
   // ── DR7 CLUB & WALLET ───────────────────────────────────────────────────
   {
     label: 'DR7 Club & Wallet',
     color: 'pink',
+    area: 'clienti',
     keys: ['on_first_booking', 'on_club_subscription', 'on_club_tier_promotion', 'on_club_renewal_due', 'on_wallet_recharge', 'on_wallet_low_balance', 'wallet_bonus_credit', 'fidelity_voucher_whatsapp'],
   },
   // ── MARKETING > PROMO ───────────────────────────────────────────────────
   {
     label: 'Marketing — Promo',
     color: 'rose',
+    area: 'marketing',
     keys: ['promo_incassi_whatsapp', 'maxi_promo_gap_whatsapp', 'on_promo_gap'],
+  },
+  // ── NOLEGGIO MARE (2026-08-09) ──────────────────────────────────────────
+  {
+    label: 'Noleggio Mare',
+    color: 'cyan',
+    area: 'mare',
+    keys: ['boat_new_customer', 'boat_new_admin', 'boat_modified', 'boat_cancelled', 'boat_da_saldare_customer', 'boat_pronto', 'tour_new_customer'],
+  },
+  // ── NOLEGGIO ARIA (2026-08-09) ──────────────────────────────────────────
+  {
+    label: 'Noleggio Aria',
+    color: 'teal',
+    area: 'aria',
+    keys: ['heli_new_customer', 'heli_new_admin', 'heli_modified', 'heli_cancelled', 'heli_da_saldare_customer', 'heli_pronto'],
+  },
+  // ── SOGGIORNI (2026-08-09) ──────────────────────────────────────────────
+  {
+    label: 'Soggiorni & Ospitalità',
+    color: 'orange',
+    area: 'soggiorni',
+    keys: ['stay_new_customer', 'stay_new_admin', 'stay_modified', 'stay_cancelled', 'stay_da_saldare_customer', 'stay_pronto'],
+  },
+  // ── FATTURE (2026-08-09) ────────────────────────────────────────────────
+  {
+    label: 'Fatture & Nota di Credito',
+    color: 'emerald',
+    area: 'amministrazione',
+    keys: ['fattura_generata_customer', 'fattura_inviata_customer', 'nota_credito_emessa_customer', 'fattura_sdi_accettata_admin', 'fattura_sdi_rifiutata_admin'],
+  },
+  // ── MULTE (2026-08-09) ──────────────────────────────────────────────────
+  {
+    label: 'Multe',
+    color: 'rose',
+    area: 'amministrazione',
+    keys: ['multa_conducente_identificato_admin', 'multa_pec_inviata_admin', 'multa_notifica_cliente'],
+  },
+  // ── VEICOLI — SCADENZE (2026-08-09) ─────────────────────────────────────
+  {
+    label: 'Veicoli — Scadenze & Manutenzione',
+    color: 'amber',
+    area: 'veicoli',
+    keys: ['veicolo_scadenza_assicurazione', 'veicolo_scadenza_tagliando', 'veicolo_scadenza_gomme', 'veicolo_scadenza_pastiglie', 'veicolo_scadenza_generica'],
+  },
+  // ── MAGAZZINO (2026-08-09) ──────────────────────────────────────────────
+  {
+    label: 'Magazzino',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: ['magazzino_ordine_fornitore'],
+  },
+  // ── STATUS CLIENTE (2026-08-09) ─────────────────────────────────────────
+  {
+    label: 'Clienti — Status',
+    color: 'pink',
+    area: 'clienti',
+    keys: ['cliente_status_blacklist', 'cliente_status_member', 'cliente_status_elite'],
   },
 ]
 
@@ -1524,6 +1598,16 @@ export default function MessaggiSistemaProTab() {
     // 2026-07-19: ricerca evento/trigger nella sezione "Eventi gestiti" (per
     // trovare velocemente su quale azione attivare il messaggio).
     const [eventSearch, setEventSearch] = useState('')
+    // 2026-08-09: filtro per macro-sezione + gruppi richiudibili. Prima erano
+    // tutti aperti insieme e trovare un trigger voleva dire scorrere un muro
+    // di caselle; ora si parte chiusi e si apre solo cio' che serve.
+    const [eventArea, setEventArea] = useState<'all' | EventArea>('all')
+    const [openEventGroups, setOpenEventGroups] = useState<Set<string>>(new Set())
+    const toggleEventGroup = (label: string) => setOpenEventGroups(prev => {
+        const next = new Set(prev)
+        if (next.has(label)) next.delete(label); else next.add(label)
+        return next
+    })
     // 2026-07-20: sub-tab Messaggi | Social Links (Social spostato da Marketing).
     const [proSubTab, setProSubTab] = useState<'messaggi' | 'social'>('messaggi')
     const [searchQuery, setSearchQuery] = useState('')
@@ -4173,8 +4257,49 @@ export default function MessaggiSistemaProTab() {
                                                             <button type="button" onClick={() => setEventSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary text-sm">×</button>
                                                         )}
                                                     </div>
+                                                    {/* 2026-08-09: filtro per macro-sezione. Mostra solo le
+                                                        aree che hanno davvero gruppi per questo template. */}
+                                                    {(() => {
+                                                        const AREA_LABELS: Record<string, string> = {
+                                                            all: 'Tutte', terra: 'Noleggio Terra', mare: 'Mare', aria: 'Aria',
+                                                            soggiorni: 'Soggiorni', lavaggio: 'Lavaggio & Meccanica',
+                                                            amministrazione: 'Amministrazione', clienti: 'Clienti',
+                                                            marketing: 'Marketing', veicoli: 'Veicoli',
+                                                        }
+                                                        const avail = eventGroupsForServiceType(template.target_service_type)
+                                                        const areas = Array.from(new Set(avail.map(g => g.area)))
+                                                        if (areas.length <= 1) return null
+                                                        const assignedByArea = (a: string) => avail
+                                                            .filter(g => a === 'all' || g.area === a)
+                                                            .reduce((n, g) => n + g.keys.filter(k => (template.handled_events || []).includes(k)).length, 0)
+                                                        return (
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {(['all', ...areas] as const).map(a => {
+                                                                    const active = eventArea === a
+                                                                    const n = assignedByArea(a)
+                                                                    return (
+                                                                        <button
+                                                                            key={a}
+                                                                            type="button"
+                                                                            onClick={() => setEventArea(a as 'all' | EventArea)}
+                                                                            className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                                                                                active
+                                                                                    ? 'bg-dr7-gold/20 border-dr7-gold/60 text-dr7-gold'
+                                                                                    : 'bg-theme-bg-tertiary/50 border-theme-border/60 text-theme-text-muted hover:bg-theme-bg-hover'
+                                                                            }`}
+                                                                        >
+                                                                            {AREA_LABELS[a] || a}
+                                                                            {n > 0 && <span className="ml-1 opacity-70">({n})</span>}
+                                                                        </button>
+                                                                    )
+                                                                })}
+                                                            </div>
+                                                        )
+                                                    })()}
                                                     <div className="space-y-2.5">
-                                                        {eventGroupsForServiceType(template.target_service_type).map(group => {
+                                                        {eventGroupsForServiceType(template.target_service_type)
+                                                          .filter(group => eventArea === 'all' || group.area === eventArea)
+                                                          .map(group => {
                                                             const colorMap: Record<string, { dot: string; pillOn: string; pillTxt: string }> = {
                                                                 blue:    { dot: 'bg-blue-400',    pillOn: 'bg-blue-500/25 border-blue-400/70',       pillTxt: 'text-blue-100' },
                                                                 cyan:    { dot: 'bg-cyan-400',    pillOn: 'bg-cyan-500/25 border-cyan-400/70',       pillTxt: 'text-cyan-100' },
@@ -4196,20 +4321,44 @@ export default function MessaggiSistemaProTab() {
                                                             })
                                                             if (knownKeys.length === 0) return null
                                                             const assignedInGroup = knownKeys.filter(k => (template.handled_events || []).includes(k)).length
+                                                            // Aperto quando: l'admin l'ha aperto, oppure c'e' una
+                                                            // ricerca in corso, oppure il gruppo ha gia' eventi
+                                                            // assegnati (cosi' si vede subito cosa e' collegato).
+                                                            const isOpen = openEventGroups.has(group.label) || !!q || assignedInGroup > 0
+                                                            const allSelected = assignedInGroup === knownKeys.length && knownKeys.length > 0
                                                             return (
-                                                                <div key={group.label} className="space-y-1.5">
+                                                                <div key={group.label} className="space-y-1.5 rounded-lg border border-theme-border/50 bg-theme-bg-tertiary/20 p-2">
                                                                     <div className="flex items-center gap-2">
-                                                                        <span className={`w-2 h-2 rounded-full ${colors.dot}`} />
-                                                                        <span className="text-[10px] uppercase tracking-wider font-bold text-theme-text-muted">
-                                                                            {group.label}
-                                                                        </span>
-                                                                        {assignedInGroup > 0 && (
-                                                                            <span className="text-[9px] text-theme-text-muted/70">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => toggleEventGroup(group.label)}
+                                                                            className="flex items-center gap-2 flex-1 text-left min-w-0"
+                                                                        >
+                                                                            <span className={`text-theme-text-muted transition-transform ${isOpen ? 'rotate-90' : ''}`}>›</span>
+                                                                            <span className={`w-2 h-2 rounded-full shrink-0 ${colors.dot}`} />
+                                                                            <span className="text-[10px] uppercase tracking-wider font-bold text-theme-text-muted truncate">
+                                                                                {group.label}
+                                                                            </span>
+                                                                            <span className={`text-[9px] shrink-0 ${assignedInGroup > 0 ? 'text-dr7-gold' : 'text-theme-text-muted/70'}`}>
                                                                                 ({assignedInGroup}/{knownKeys.length})
                                                                             </span>
-                                                                        )}
+                                                                        </button>
+                                                                        {/* Seleziona / deseleziona l'intero gruppo in un colpo
+                                                                            solo: prima si spuntava riga per riga. */}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                const current = new Set(template.handled_events || [])
+                                                                                if (allSelected) knownKeys.forEach(k => current.delete(k))
+                                                                                else knownKeys.forEach(k => current.add(k))
+                                                                                handleUpdateAutomation(template.id, 'handled_events', Array.from(current))
+                                                                            }}
+                                                                            className="shrink-0 px-2 py-0.5 rounded text-[10px] border border-theme-border/60 text-theme-text-muted hover:bg-theme-bg-hover transition-colors"
+                                                                        >
+                                                                            {allSelected ? 'Deseleziona' : 'Tutti'}
+                                                                        </button>
                                                                     </div>
-                                                                    <div className="flex flex-col gap-1 pl-3.5">
+                                                                    <div className={`flex-col gap-1 pl-3.5 ${isOpen ? 'flex' : 'hidden'}`}>
                                                                         {knownKeys.map(eventKey => {
                                                                             const desc = EVENT_LABELS_IT[eventKey as keyof typeof EVENT_LABELS_IT] || eventKey
                                                                             const assigned = (template.handled_events || []).includes(eventKey)
@@ -4238,6 +4387,17 @@ export default function MessaggiSistemaProTab() {
                                                                                         )}
                                                                                     </span>
                                                                                     <span className="text-xs leading-snug">{desc}</span>
+                                                                                    {/* Trigger presente in catalogo ma non ancora
+                                                                                        emesso dal codice: se lo colleghi, il
+                                                                                        messaggio non partira'. */}
+                                                                                    {PENDING_EVENTS.has(eventKey) && (
+                                                                                        <span
+                                                                                            title="Trigger non ancora attivo: il messaggio collegato non verra' inviato finche' l'evento non viene emesso dal gestionale."
+                                                                                            className="ml-auto shrink-0 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-400/40"
+                                                                                        >
+                                                                                            da collegare
+                                                                                        </span>
+                                                                                    )}
                                                                                 </button>
                                                                             )
                                                                         })}
