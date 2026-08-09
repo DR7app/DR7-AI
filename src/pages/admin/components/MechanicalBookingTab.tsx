@@ -6,6 +6,8 @@ import { logAdminAction } from '../../../utils/logAdminAction'
 import { buildMechanicalContext } from '../../../utils/adminLogHelpers'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
+import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
+import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 
@@ -44,6 +46,8 @@ interface MechanicalBooking {
 
 
 export default function MechanicalBookingTab() {
+  // 2026-08-09 (roadmap #43): gate OTP invece del blocco secco.
+  const override = useLimitationOverride()
   const [bookings, setBookings] = useState<MechanicalBooking[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
@@ -162,12 +166,24 @@ export default function MechanicalBookingTab() {
   async function handleGenerateInvoice(booking: MechanicalBooking) {
     if (!booking.id) return
 
-    // Never generate fattura for unpaid bookings
+    // 2026-08-09 (roadmap #43, "avviso sempre, blocco mai"): fatturare un
+    // intervento non pagato non e' piu' un muro. Si avvisa, si chiede l'OTP e
+    // si passa l'id dell'autorizzazione al server, che la rilegge dal database
+    // (generate-invoice-from-booking + utils/verifyOverride). Senza quel
+    // passaggio l'operatore avrebbe ottenuto l'OTP e poi comunque un 400.
     const ps = booking.payment_status
-    if (ps !== 'paid' && ps !== 'completed' && ps !== 'succeeded') {
-      alert('Impossibile generare fattura: la prenotazione non è stata pagata')
+    const notPaid = ps !== 'paid' && ps !== 'completed' && ps !== 'succeeded'
+    if (notPaid && !override.hasOverride('fattura.booking_non_pagato')) {
+      alert(`⚠️ OPERAZIONE NORMALMENTE NON CONSENTITA\n\nLa prenotazione non risulta pagata (stato: ${ps || 'N/A'}).\n\nPer emettere comunque la fattura serve l'autorizzazione della direzione.`)
+      override.requestOverride(
+        'fattura.booking_non_pagato',
+        `Emettere fattura per l'intervento di meccanica di ${booking.customer_name || 'cliente'} NON pagato (stato: ${ps || 'N/A'}).`
+      )
       return
     }
+    const fatturaOverrideId = notPaid
+      ? override.activeOverrides.find(o => o.limitationCode === 'fattura.booking_non_pagato')?.overrideId
+      : undefined
 
     // Include IVA (22%) in invoice breakdown
     const includeIVA = true
@@ -177,7 +193,7 @@ export default function MechanicalBookingTab() {
       const response = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: booking.id, includeIVA })
+        body: JSON.stringify({ bookingId: booking.id, includeIVA, ...(fatturaOverrideId ? { overrideId: fatturaOverrideId } : {}) })
       })
 
       const data = await response.json()
@@ -435,6 +451,18 @@ export default function MechanicalBookingTab() {
       </div>
 
 
+      <LimitationOverrideModal
+        isOpen={override.limitationState.isOpen}
+        limitationCode={override.limitationState.limitationCode}
+        limitationMessage={override.limitationState.limitationMessage}
+        actionContext={override.limitationState.actionContext}
+        draftSessionId={override.draftSessionId}
+        flowType={override.flowType}
+        showNotes
+        onClose={override.closeLimitation}
+        onCancel={override.cancelLimitation}
+        onOverrideApproved={override.handleOverrideApproved}
+      />
     </div>
   )
 }

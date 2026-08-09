@@ -6,6 +6,7 @@ import { generateInvoicePDF } from './invoice-pdf-utils'
 import { renderTemplate } from './utils/messageTemplates'
 import { requireAuth } from './require-auth'
 import { computeRentalBillingDays } from './utils/computeRentalBillingDays'
+import { hasApprovedOverride } from './utils/verifyOverride'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -190,14 +191,28 @@ export const handler: Handler = async (event) => {
         const bookingCategory = await resolveBookingCategory(booking)
         const dynamicVatRate = await loadVatRate(bookingCategory)
 
-        // Guard: never generate fattura for unpaid bookings
+        // Guard: never generate fattura for unpaid bookings.
+        // 2026-08-09 (roadmap #43, "avviso sempre, blocco mai"): superabile con
+        // autorizzazione OTP della direzione. Il client avvisa, ottiene l'OTP e
+        // ripassa qui con `overrideId`; il server NON si fida della parola del
+        // client e rilegge l'autorizzazione dal database (stato, scadenza e
+        // codice devono corrispondere). Senza questo controllo lato server
+        // l'operatore avrebbe ottenuto l'OTP e poi comunque un 400.
         const paymentStatus = booking.payment_status || ''
         if (paymentStatus !== 'paid' && paymentStatus !== 'completed' && paymentStatus !== 'succeeded') {
-            console.log(`[Invoice] Skipping — booking ${bookingId} not paid (status: ${paymentStatus})`)
-            return {
-                statusCode: 400,
-                body: JSON.stringify({ error: 'Booking non pagato. Fattura non generata.' })
+            const authorized = await hasApprovedOverride(supabase, body.overrideId, 'fattura.booking_non_pagato')
+            if (!authorized) {
+                console.log(`[Invoice] Skipping — booking ${bookingId} not paid (status: ${paymentStatus})`)
+                return {
+                    statusCode: 400,
+                    body: JSON.stringify({
+                        error: 'Booking non pagato. Fattura non generata.',
+                        overridable: true,
+                        overrideCode: 'fattura.booking_non_pagato',
+                    })
+                }
             }
+            console.log(`[Invoice] Booking ${bookingId} non pagato (${paymentStatus}) ma AUTORIZZATO dalla direzione — procedo`)
         }
 
         // Guard: never generate fattura for Wallet / Credit / Gift Card payments.

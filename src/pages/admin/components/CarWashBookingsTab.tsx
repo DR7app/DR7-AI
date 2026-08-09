@@ -1696,12 +1696,25 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       return
     }
 
-    // Never generate fattura for unpaid bookings
+    // 2026-08-09 (roadmap #43, "avviso sempre, blocco mai"): fatturare un
+    // lavaggio non pagato non e' piu' un muro. Si avvisa, si chiede l'OTP alla
+    // direzione e si passa l'id dell'autorizzazione al server, che la rilegge
+    // dal database (generate-invoice-from-booking + utils/verifyOverride):
+    // senza quel passaggio l'operatore avrebbe ottenuto l'OTP e poi comunque
+    // un 400.
     const ps = booking.payment_status
-    if (ps !== 'paid' && ps !== 'completed' && ps !== 'succeeded') {
-      toast.error(`Impossibile generare fattura: il lavaggio non è stato pagato (stato: ${ps || 'N/A'})`)
+    const notPaid = ps !== 'paid' && ps !== 'completed' && ps !== 'succeeded'
+    if (notPaid && !override.hasOverride('fattura.booking_non_pagato')) {
+      toast.error(`Il lavaggio non risulta pagato (stato: ${ps || 'N/A'}): fatturarlo richiede l'autorizzazione della direzione.`, { duration: 8000 })
+      override.requestOverride(
+        'fattura.booking_non_pagato',
+        `Emettere fattura per il lavaggio di ${booking.customer_name || 'cliente'} NON pagato (stato: ${ps || 'N/A'}).`
+      )
       return
     }
+    const fatturaOverrideId = notPaid
+      ? override.activeOverrides.find(o => o.limitationCode === 'fattura.booking_non_pagato')?.overrideId
+      : undefined
 
     // Never generate fattura for €0 bookings (lavaggio in omaggio, override
     // manuale a 0). Niente importo da fatturare = niente fattura.
@@ -1747,6 +1760,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           bookingId: booking.id,
           includeIVA,
           ...(explicitCustomerId ? { customerId: explicitCustomerId } : {}),
+          ...(fatturaOverrideId ? { overrideId: fatturaOverrideId } : {}),
         })
       })
 
