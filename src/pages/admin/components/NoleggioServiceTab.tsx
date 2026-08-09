@@ -908,6 +908,8 @@ const CAL_CELL_W = 45 // larghezza colonna giorno
 const CAL_ROW_H = 56  // altezza riga asset
 const CAL_LEFT_W = 220 // larghezza colonna sinistra (asset)
 const CAL_HEADER_H = 42
+const BAR_H = 32      // altezza barra prenotazione (h-8)
+const BAR_GAP = 6     // spazio sopra/fra le corsie
 
 interface CalAsset { id: string; name: string; image_url: string | null; is_active?: boolean; capacity?: number | null; price_per_day?: number | null }
 
@@ -1130,8 +1132,13 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
 
   // Barre visibili nel mese per una lista di prenotazioni: clamp ai giorni del
   // mese, posiziona left/width in px sulla griglia giorni.
+  // 2026-08-10 (roadmap #11): allineato al motore del Noleggio Terra
+  // (utils/calendarLogic.computeLanes). Prima ogni barra veniva disegnata
+  // centrata verticalmente e SENZA corsia: due prenotazioni sovrapposte sullo
+  // stesso mezzo finivano esattamente una sopra l'altra e la seconda spariva
+  // dalla vista. Ora, come su Terra, si impilano su corsie diverse.
   const barsFor = useCallback((rows: BookingRow[]) => {
-    const out: { booking: BookingRow; left: number; width: number }[] = []
+    const spans: { booking: BookingRow; startDay: number; endDay: number }[] = []
     rows.forEach(b => {
       if (!b.pickup_date) return
       const pYmd = romeYmd(b.pickup_date)
@@ -1140,9 +1147,23 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
       if (dYmd < `${monthYmdPrefix}-01` || pYmd > `${monthYmdPrefix}-${String(daysInMonth).padStart(2, '0')}`) return
       const startDay = pYmd.startsWith(monthYmdPrefix) ? romeDayOfMonth(b.pickup_date) : 1
       const endDay = dYmd.startsWith(monthYmdPrefix) ? romeDayOfMonth(b.dropoff_date || b.pickup_date) : daysInMonth
-      const left = (startDay - 1) * cellW
-      const width = Math.max(cellW, (endDay - startDay + 1) * cellW)
-      out.push({ booking: b, left, width })
+      spans.push({ booking: b, startDay, endDay })
+    })
+    // Stesso ordinamento deterministico di computeLanes: inizio crescente, a
+    // parita' di inizio la piu' lunga per prima.
+    spans.sort((a, b) => (a.startDay - b.startDay) || ((b.endDay - b.startDay) - (a.endDay - a.startDay)))
+    const laneEnds: number[] = [] // ultimo giorno occupato per corsia
+    const out: { booking: BookingRow; left: number; width: number; lane: number }[] = []
+    spans.forEach(sp => {
+      let lane = laneEnds.findIndex(end => end < sp.startDay)
+      if (lane === -1) { lane = laneEnds.length; laneEnds.push(sp.endDay) }
+      else laneEnds[lane] = sp.endDay
+      out.push({
+        booking: sp.booking,
+        left: (sp.startDay - 1) * cellW,
+        width: Math.max(cellW, (sp.endDay - sp.startDay + 1) * cellW),
+        lane,
+      })
     })
     return out
   }, [monthYmdPrefix, daysInMonth, cellW])
@@ -1413,7 +1434,7 @@ function CalRow({
   asset, bars, daysArray, cellW, year, month, isTodayDay, onCellClick, onBarClick, disableCreate,
 }: {
   asset: CalAsset
-  bars: { booking: BookingRow; left: number; width: number }[]
+  bars: { booking: BookingRow; left: number; width: number; lane: number }[]
   daysArray: number[]
   cellW: number
   year: number
@@ -1423,8 +1444,12 @@ function CalRow({
   onBarClick: (b: BookingRow) => void
   disableCreate?: boolean
 }) {
+  // La riga cresce con le corsie: con una sola prenotazione resta alta come
+  // prima, con sovrapposizioni si allunga invece di nascondere le barre.
+  const laneCount = bars.reduce((max, b) => Math.max(max, b.lane + 1), 1)
+  const rowHeight = Math.max(CAL_ROW_H, laneCount * (BAR_H + BAR_GAP) + BAR_GAP)
   return (
-    <div className="flex border-b border-theme-border group relative" style={{ height: CAL_ROW_H }}>
+    <div className="flex border-b border-theme-border group relative" style={{ height: rowHeight }}>
       {/* Colonna sinistra asset */}
       <div
         className="sticky left-0 z-20 shrink-0 bg-theme-bg-primary group-hover:bg-theme-bg-secondary border-r border-theme-border flex items-center gap-2 px-3"
@@ -1456,13 +1481,19 @@ function CalRow({
         </div>
         {/* barre */}
         <div className="absolute inset-0 pointer-events-none">
-          {bars.map(({ booking, left, width }) => {
+          {bars.map(({ booking, left, width, lane }) => {
             const st = barStyle(booking.status, booking.payment_status)
             return (
               <div
                 key={booking.id}
-                className={`absolute top-1/2 -translate-y-1/2 h-8 rounded border shadow-sm pointer-events-auto cursor-pointer overflow-hidden flex items-center px-2 hover:brightness-110 transition ${st.bar}`}
-                style={{ left, width }}
+                className={`absolute h-8 rounded border shadow-sm pointer-events-auto cursor-pointer overflow-hidden flex items-center px-2 hover:brightness-110 transition ${st.bar}`}
+                style={{
+                  left, width,
+                  // Nessuna sovrapposizione: barra centrata come prima, cosi'
+                  // il caso normale non cambia aspetto. Con piu' corsie si
+                  // impila dall'alto.
+                  top: laneCount === 1 ? (rowHeight - BAR_H) / 2 : BAR_GAP + lane * (BAR_H + BAR_GAP),
+                }}
                 onClick={(e) => { e.stopPropagation(); onBarClick(booking) }}
                 title={booking.customer_name || ''}
               >
