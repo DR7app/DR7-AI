@@ -494,8 +494,18 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customPhone: r.phone,
-            templateKey: serviceType === 'heli_rental' || serviceType === 'boat_rental' ? 'tour_new_customer' : 'rental_new_customer',
-            booking: { service_type: 'rental' },
+            // 2026-08-10: ogni business usa la PROPRIA chiave. Prima Mare e
+            // Aria mandavano 'tour_new_customer' (messaggio da tour, non da
+            // noleggio) e dichiaravano service_type 'rental', quindi la
+            // direzione non poteva scrivere un testo dedicato ne' limitare un
+            // template al solo Mare. I tour veri restano su tour_new_customer.
+            templateKey: tourDepId
+              ? 'tour_new_customer'
+              : serviceType === 'boat_rental' ? 'boat_new_customer'
+              : serviceType === 'heli_rental' ? 'heli_new_customer'
+              : serviceType === 'stay_rental' ? 'stay_new_customer'
+              : 'rental_new_customer',
+            booking: { service_type: serviceType || 'rental' },
             templateVars: {
               nome: rFirst, customer_name: r.name,
               esperienza: formAsset, servizio: formAsset, service_name: formAsset,

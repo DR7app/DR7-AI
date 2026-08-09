@@ -430,6 +430,44 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
     setSaving(false)
     if (error) { setFormError(error.message); return }
     toast.success(booking ? 'Prenotazione aggiornata' : 'Prenotazione creata')
+
+    // 2026-08-10 (roadmap #44 + #11): il Noleggio Mare non inviava NIENTE al
+    // cliente — ne' alla creazione ne' alla modifica. Il Noleggio Terra lo fa
+    // da sempre; qui la prenotazione veniva salvata in silenzio. Ora parte la
+    // notifica con le chiavi dedicate al Mare (boat_new_customer /
+    // boat_modified), cosi' la direzione puo' scriverne il testo dai Messaggi
+    // di Sistema Pro senza passare dallo sviluppo.
+    //
+    // Best-effort: se l'invio fallisce la prenotazione resta salvata. Non si
+    // blocca un salvataggio riuscito per un problema di WhatsApp.
+    if (customerPhone.trim()) {
+      try {
+        const firstName = (customerName.trim().split(' ')[0]) || 'Cliente'
+        const totalStr = (eurToCents(priceFinal) / 100).toFixed(2)
+        await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customPhone: customerPhone.trim(),
+            templateKey: booking ? 'boat_modified' : 'boat_new_customer',
+            booking: { service_type: 'boat_rental' },
+            templateVars: {
+              nome: firstName, customer_name: customerName.trim(),
+              mezzo: assetName, servizio: assetName, service_name: assetName, vehicle_name: assetName,
+              data: pickupDate, date: pickupDate,
+              data_ritiro: pickupDate, data_riconsegna: dropoffDate,
+              orario: pickupTime, ora: pickupTime, time: pickupTime,
+              luogo_ritiro: luogoRitiro || '', luogo_riconsegna: luogoRiconsegna || '',
+              total: totalStr, totale: totalStr, importo: totalStr, amount: totalStr,
+            },
+            skipHeader: true,
+          }),
+        })
+      } catch (waErr) {
+        console.warn('[MareBookingModal] notifica WhatsApp non inviata (non blocca il salvataggio):', waErr)
+      }
+    }
+
     onSaved()
   }
 

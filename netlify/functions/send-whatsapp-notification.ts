@@ -181,9 +181,17 @@ const handler: Handler = async (event) => {
         // 'rental' è il default per i booking senza service_type esplicito.
         // 'prime_wash' è l'umbrella che racchiude car_wash + mechanical —
         // stesso semantic della cron filter in triggerSystemMessageEvent.ts.
+        // 2026-08-10: prima QUALSIASI service_type diverso da car_wash /
+        // mechanical veniva schiacciato su 'rental'. Un template limitato a
+        // "Solo Mare" non poteva quindi matchare nulla: le prenotazioni barca
+        // risultavano 'rental' e il guard le scartava. Mare, Aria e Soggiorni
+        // ora conservano la propria identita'.
         const normalised = bookingSvc === 'mechanical_service' ? 'mechanical'
           : bookingSvc === 'car_wash' ? 'car_wash'
           : bookingSvc === 'mechanical' ? 'mechanical'
+          : bookingSvc === 'boat_rental' ? 'boat_rental'
+          : bookingSvc === 'heli_rental' ? 'heli_rental'
+          : bookingSvc === 'stay_rental' ? 'stay_rental'
           : 'rental';
         const matches =
           tplSvc === normalised
@@ -449,10 +457,20 @@ const handler: Handler = async (event) => {
     // skipped: service_type_mismatch, anche se Branch 1 lo aveva accettato.
     const serviceType = booking.service_type;
     const isEdit = booking.isEdit;
+    // 2026-08-10: Mare, Aria e Soggiorni hanno finalmente le loro chiavi.
+    // Prima cadevano nell'`else` insieme al Noleggio Terra, quindi chi
+    // prenotava una barca riceveva il messaggio della macchina — e la
+    // direzione non aveva modo di scrivergli un testo diverso.
     if (serviceType === 'car_wash') {
       messageKey = isEdit ? 'carwash_modified' : (isCustomerMessage ? 'carwash_new_customer' : 'carwash_new');
     } else if (serviceType === 'mechanical') {
       messageKey = isEdit ? 'mechanical_modified' : (isCustomerMessage ? 'mechanical_new_customer' : 'mechanical_new');
+    } else if (serviceType === 'boat_rental') {
+      messageKey = isEdit ? 'boat_modified' : (isCustomerMessage ? 'boat_new_customer' : 'boat_new_admin');
+    } else if (serviceType === 'heli_rental') {
+      messageKey = isEdit ? 'heli_modified' : (isCustomerMessage ? 'heli_new_customer' : 'heli_new_admin');
+    } else if (serviceType === 'stay_rental') {
+      messageKey = isEdit ? 'stay_modified' : (isCustomerMessage ? 'stay_new_customer' : 'stay_new_admin');
     } else {
       messageKey = isEdit ? 'rental_modified' : (isCustomerMessage ? 'rental_new_customer' : 'rental_new');
     }
