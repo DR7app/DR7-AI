@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { loadReportOverrides, applyOverrides, saveEditOverride, saveRemoveOverride, deleteOverrideByRow, deleteOverrideById, type LoadedOverrides } from '../../../utils/reportOverrides'
+import { ReportRowModal, type FieldDef } from './ReportRowModal'
 import toast from 'react-hot-toast'
 import { motion } from 'framer-motion'
 import {
@@ -66,6 +68,41 @@ export default function ReportLavaggioTab() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [washData, setWashData] = useState<WashReportData | null>(null)
+  // 2026-08-10 (roadmap #38): correzione manuale delle voci, come sul Report
+  // Noleggio. Gli override si applicano SOPRA lo snapshot e PRIMA dei totali,
+  // quindi si riapplicano a ogni rigenerazione e restano annullabili.
+  const [overrides, setOverrides] = useState<LoadedOverrides>({ raw: [], removed: new Set(), edits: new Map(), added: [], notesByRow: new Map() })
+  const [editReport, setEditReport] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [editRow, setEditRow] = useState<any | null>(null)
+  const EDIT_FIELDS: FieldDef[] = [
+    { key: 'revenue', label: 'Ricavo €' },
+    { key: 'count', label: 'Numero lavaggi' },
+  ]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rowKeyOf = (r: any) => String(r.type || '-')
+  async function reloadOv() { setOverrides(await loadReportOverrides('lavaggio')) }
+  async function saveEdit(changes: Record<string, number>, note: string) {
+    if (!editRow) return
+    for (const [field, value] of Object.entries(changes)) await saveEditOverride('lavaggio', rowKeyOf(editRow), field, value, note)
+    setEditRow(null); await reloadOv(); toast.success('Voce corretta')
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function removeRow(r: any) {
+    if (!window.confirm(`Rimuovere "${r.type}" dal report?`)) return
+    if (r._isManual) await deleteOverrideById(r._manualId); else await saveRemoveOverride('lavaggio', rowKeyOf(r), null)
+    await reloadOv(); toast.success('Voce rimossa')
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function restoreRow(r: any) {
+    if (r._isManual) await deleteOverrideById(r._manualId); else await deleteOverrideByRow('lavaggio', rowKeyOf(r))
+    await reloadOv(); toast.success('Voce ripristinata')
+  }
+  // Righe con gli override gia' applicati: usate da tabella, grafici e totali.
+  const byTypeRows = useMemo(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    () => applyOverrides((washData?.byType || []) as any, overrides, rowKeyOf) as any[],
+    [washData, overrides]) // eslint-disable-line react-hooks/exhaustive-deps
   const [trend, setTrend] = useState<MonthlyTrendPoint[]>([])
   const [trendLoading, setTrendLoading] = useState(false)
 
@@ -172,6 +209,7 @@ export default function ReportLavaggioTab() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Errore nel caricamento')
       setWashData(data)
+      setOverrides(await loadReportOverrides('lavaggio'))
     } catch (err: unknown) {
       const _errMsg = err instanceof Error ? err.message : String(err)
       setError(_errMsg || 'Errore sconosciuto')
@@ -222,13 +260,13 @@ export default function ReportLavaggioTab() {
   const avgRevenuePerWash = lavaggiFatt > 0 ? ricavo / lavaggiFatt : 0
 
   const pieData = useMemo(() => {
-    if (!washData?.byType?.length) return []
-    return washData.byType.map(t => ({ name: t.type, value: t.revenue, count: t.count }))
+    if (!byTypeRows.length) return []
+    return byTypeRows.map(t => ({ name: t.type, value: t.revenue, count: t.count }))
   }, [washData])
 
   const barData = useMemo(() => {
-    if (!washData?.byType?.length) return []
-    return washData.byType.map(t => ({
+    if (!byTypeRows.length) return []
+    return byTypeRows.map(t => ({
       type: t.type.length > 14 ? t.type.slice(0, 12) + '…' : t.type,
       fullType: t.type,
       count: t.count,
@@ -576,11 +614,19 @@ export default function ReportLavaggioTab() {
                       <th className="text-left py-1.5 px-2">Servizio</th>
                       <th className="text-right py-1.5 px-2">Qta</th>
                       <th className="text-right py-1.5 px-2">Ricavo</th>
-                      <th className="text-right py-1.5 px-2">%</th>
+                      <th className="text-right py-1.5 px-2">
+                        <button
+                          onClick={() => setEditReport(v => !v)}
+                          title="Correggi, rimuovi o ripristina a mano le voci del report"
+                          className={`px-1.5 py-0.5 rounded text-[10px] border ${editReport ? 'bg-dr7-gold/20 border-dr7-gold/60 text-dr7-gold' : 'border-theme-border text-theme-text-muted hover:bg-theme-bg-hover'}`}
+                        >
+                          {editReport ? '\u2713 modifica' : '\u270E modifica'}
+                        </button>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200 dark:divide-cyan-500/5">
-                    {washData?.byType.map((item, i) => {
+                    {byTypeRows.map((item, i) => {
                       const pct = ricavo > 0 ? Math.round((item.revenue / ricavo) * 100) : 0
                       return (
                         <tr key={item.type} className="hover:bg-zinc-100/60 dark:hover:bg-cyan-500/5 transition-colors">
@@ -592,7 +638,16 @@ export default function ReportLavaggioTab() {
                           </td>
                           <td className="text-right tabular-nums font-mono py-1.5 px-2">{item.count}</td>
                           <td className="text-right tabular-nums font-bold text-cyan-700 dark:text-cyan-200 py-1.5 px-2">{formatCurrencyShort(item.revenue)}</td>
-                          <td className="text-right tabular-nums text-zinc-500 py-1.5 px-2 font-mono">{pct}%</td>
+                          <td className="text-right tabular-nums text-zinc-500 py-1.5 px-2 font-mono">
+                            {editReport ? (
+                              <span className="flex items-center justify-end gap-1">
+                                <button onClick={() => setEditRow(item)} className="px-1.5 py-0.5 rounded text-[10px] border border-theme-border hover:bg-theme-bg-hover">Correggi</button>
+                                {item._overrideNote !== undefined
+                                  ? <button onClick={() => restoreRow(item)} className="px-1.5 py-0.5 rounded text-[10px] border border-amber-400/50 text-amber-500">Ripristina</button>
+                                  : <button onClick={() => removeRow(item)} className="px-1.5 py-0.5 rounded text-[10px] border border-red-400/40 text-red-500">Rimuovi</button>}
+                              </span>
+                            ) : `${pct}%`}
+                          </td>
                         </tr>
                       )
                     })}
@@ -645,6 +700,18 @@ export default function ReportLavaggioTab() {
           )}
         </Card>
       </div>
+      {editRow && (
+        <ReportRowModal
+          mode="edit"
+          row={editRow}
+          fields={EDIT_FIELDS}
+          identityFields={[]}
+          addTemplate={{}}
+          onClose={() => setEditRow(null)}
+          onSaveEdit={saveEdit}
+          onSaveAdd={async () => { /* aggiunta manuale non prevista su questo report */ }}
+        />
+      )}
     </div>
   )
 }
