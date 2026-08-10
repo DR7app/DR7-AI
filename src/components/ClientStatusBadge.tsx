@@ -1,3 +1,4 @@
+import { avvisoClasses } from '../utils/clientStatusConfig'
 import {
   DR7_CLUB_BADGE_CLASS,
   useClientStatus,
@@ -49,6 +50,22 @@ export default function ClientStatusBadge({
           title={meta.avviso ? `${meta.label} — ${meta.avviso}` : `Stato cliente: ${meta.label}`}
         >
           {meta.label}
+        </span>
+      )}
+      {/* 2026-08-10 (roadmap #20): l'avvertenza configurata in Centralina Pro >
+          Status Clienti esisteva SOLO come tooltip `title=`. Un avviso
+          "critico" — es. "Cliente in blacklist: non procedere senza
+          autorizzazione della direzione" — non lo vedeva nessuno: bisognava
+          fermare il mouse sul badge per scoprirlo. Ora un avviso di livello
+          attenzione/critico e' visibile accanto al badge, ovunque il badge
+          compaia. Il livello 'info' resta solo nel tooltip per non riempire
+          le liste di rumore. */}
+      {showTier && meta?.avviso && meta.avvisoLivello !== 'info' && (
+        <span
+          className={`${baseCls} ${avvisoClasses(meta.avvisoLivello)}`}
+          title={meta.avviso}
+        >
+          {meta.avvisoLivello === 'critico' ? '\u26A0 ' : ''}{meta.avviso}
         </span>
       )}
       {resolvedDr7 && (
