@@ -1,4 +1,5 @@
 import { Handler } from '@netlify/functions'
+import { scadenzaGiorniLavorativi } from './utils/giorniLavorativi'
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
@@ -172,28 +173,19 @@ export const handler: Handler = async (event) => {
         }
         const cauzioneMetodo = mapToCauzioneMetodo(paymentMethod)
 
-        // Calculate scadenza: 14 business days starting the day after return
-        function calcScadenza(returnDateStr: string): string {
-            const returnD = new Date(returnDateStr)
-            let current = new Date(returnD)
-            current.setDate(current.getDate() + 1) // start day after return
-            let businessDays = 0
-            // skip to first weekday if starting on weekend
-            while (current.getDay() === 0 || current.getDay() === 6) {
-                current.setDate(current.getDate() + 1)
-            }
-            businessDays = 1
-            while (businessDays < 14) {
-                current.setDate(current.getDate() + 1)
-                if (current.getDay() !== 0 && current.getDay() !== 6) {
-                    businessDays++
-                }
-            }
-            return current.toISOString().split('T')[0]
-        }
-
-        const scadenzaDate = calcScadenza(returnDate)
-        console.log(`📅 Calculated scadenza: ${scadenzaDate} (14 business days after ${returnDate})`)
+        // 2026-08-10 BUG CAUZIONI (direzione): la scadenza risultava sempre
+        // ANTICIPATA. Il calcolo precedente aveva due difetti:
+        //   1. contava 14 giorni lavorativi invece di 15;
+        //   2. non escludeva i FESTIVI — Natale, Ferragosto, Pasqua e gli
+        //      altri venivano contati come giorni lavorativi, quindi nei
+        //      periodi di festa la scadenza cadeva anche 2-3 giorni prima.
+        // In piu' usava toISOString(), che in Europe/Rome puo' retrocedere di
+        // un giorno rispetto alla data locale.
+        // Regola corretta: 15 giorni lavorativi (lun-ven, festivi esclusi), a
+        // partire dal primo lavorativo DOPO la restituzione — se l'auto torna
+        // venerdi', il giorno 1 e' il lunedi'.
+        const scadenzaDate = scadenzaGiorniLavorativi(returnDate, 15)
+        console.log(`📅 Calculated scadenza: ${scadenzaDate} (15 giorni lavorativi, festivi esclusi, dopo ${returnDate})`)
 
         const cauzioneData: Record<string, any> = {
             cliente_id: customerId,
