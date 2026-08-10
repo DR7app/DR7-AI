@@ -7,6 +7,7 @@
 // Catalogo: tabella `noleggio_catalog`. Preventivi: tabella `noleggio_preventivi`.
 import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from 'react'
 import { supabase } from '../../../supabaseClient'
+import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
 import { authFetch } from '../../../utils/authFetch'
 import toast from 'react-hot-toast'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
@@ -1365,14 +1366,21 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
               <div className="flex">
                 {daysArray.map(day => {
                   const d = new Date(year, month, day)
+                  // 2026-08-10 (roadmap #11): domeniche e festivi evidenziati
+                  // come sul Noleggio Terra. Qui mancavano del tutto: una
+                  // consegna programmata a Ferragosto sembrava un giorno
+                  // qualsiasi.
+                  const hol = getHolidayForDate(d)
+                  const isRed = !!hol || isSunday(d)
                   return (
                     <div
                       key={day}
-                      className={`flex flex-col items-center justify-center border-r border-theme-border/60 shrink-0 ${isTodayDay(day) ? 'bg-dr7-gold/30' : ''}`}
+                      title={hol ? hol.label : undefined}
+                      className={`flex flex-col items-center justify-center border-r border-theme-border/60 shrink-0 ${isTodayDay(day) ? 'bg-dr7-gold/30' : isRed ? 'bg-red-500/10' : ''}`}
                       style={{ width: cellW }}
                     >
-                      <span className="text-[10px] text-theme-text-primary">{day}</span>
-                      <span className="text-[8px] uppercase text-theme-text-muted">{d.toLocaleDateString('it-IT', { weekday: 'short' })}</span>
+                      <span className={`text-[10px] ${isRed ? 'text-red-500 font-semibold' : 'text-theme-text-primary'}`}>{day}</span>
+                      <span className={`text-[8px] uppercase ${isRed ? 'text-red-400' : 'text-theme-text-muted'}`}>{d.toLocaleDateString('it-IT', { weekday: 'short' })}</span>
                     </div>
                   )
                 })}
@@ -1536,7 +1544,7 @@ function CalRow({
           {daysArray.map(day => (
             <div
               key={day}
-              className={`h-full shrink-0 border-r border-theme-border/50 ${isTodayDay(day) ? 'bg-dr7-gold/15' : ''} ${disableCreate ? '' : 'hover:bg-theme-text-primary/5 cursor-pointer'}`}
+              className={`h-full shrink-0 border-r border-theme-border/50 ${isTodayDay(day) ? 'bg-dr7-gold/15' : (getHolidayForDate(new Date(year, month, day)) || isSunday(new Date(year, month, day))) ? 'bg-red-500/[0.06]' : ''} ${disableCreate ? '' : 'hover:bg-theme-text-primary/5 cursor-pointer'}`}
               style={{ width: cellW }}
               onClick={disableCreate ? undefined : () => onCellClick(day)}
               title={disableCreate ? undefined : `Nuova prenotazione: ${day}/${month + 1}/${year}`}
