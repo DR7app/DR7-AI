@@ -16,8 +16,10 @@
 -- restituite prima del dovuto.
 --
 -- Questa migrazione: crea la funzione di calcolo e RETTIFICA le cauzioni
--- ancora aperte. Le cauzioni chiuse (Restituita / Incassata / con
--- data_incasso) NON vengono toccate: sono storia, non vanno riscritte.
+-- ancora APERTE (Attiva, In scadenza, Incassata). Restano intatte quelle
+-- chiuse — 'Restituita' e 'Sbloccata' (denaro tornato al cliente) e 'Bloccata'
+-- (denaro trattenuto da DR7): li' non c'e' piu' nessun termine che corre, e
+-- riscrivere una data passata falserebbe lo storico.
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION public.dr7_festivo_it(d DATE)
@@ -83,8 +85,17 @@ SELECT c.id,
        c.stato
   FROM public.cauzioni c
  WHERE c.data_restituzione_veicolo IS NOT NULL
-   AND c.data_incasso IS NULL
-   AND coalesce(c.stato, '') NOT IN ('Restituita', 'Incassata')
+   -- Aperte = il denaro e' ancora di DR7 e va restituito, quindi il termine
+   -- dei 15 giorni lavorativi sta ancora correndo.
+   -- Significato degli stati, chiarito dalla direzione il 10/08:
+   --   'Incassata' = presa, ma la rendo  -> APERTA, il termine corre
+   --   'Bloccata'  = l'ho trattenuta      -> CHIUSA, niente restituzione
+   --   'Restituita'/'Sbloccata'           -> CHIUSE, denaro gia' tornato
+   -- Nella prima stesura 'Incassata' era esclusa insieme a 'Restituita', e con
+   -- lei tutte le righe con `data_incasso` valorizzato — cioe' proprio il caso
+   -- principale: una cauzione incassata e non ancora restituita HA quella
+   -- data. Il filtro escludeva le righe che contano.
+   AND coalesce(c.stato, '') IN ('Attiva', 'In scadenza', 'Incassata')
    AND c.scadenza_cauzione IS DISTINCT FROM public.dr7_scadenza_lavorativi(c.data_restituzione_veicolo)
  ORDER BY c.scadenza_cauzione;
 
@@ -95,8 +106,17 @@ UPDATE public.cauzioni c
    SET scadenza_cauzione = public.dr7_scadenza_lavorativi(c.data_restituzione_veicolo),
        updated_at = NOW()
  WHERE c.data_restituzione_veicolo IS NOT NULL
-   AND c.data_incasso IS NULL
-   AND coalesce(c.stato, '') NOT IN ('Restituita', 'Incassata')
+   -- Aperte = il denaro e' ancora di DR7 e va restituito, quindi il termine
+   -- dei 15 giorni lavorativi sta ancora correndo.
+   -- Significato degli stati, chiarito dalla direzione il 10/08:
+   --   'Incassata' = presa, ma la rendo  -> APERTA, il termine corre
+   --   'Bloccata'  = l'ho trattenuta      -> CHIUSA, niente restituzione
+   --   'Restituita'/'Sbloccata'           -> CHIUSE, denaro gia' tornato
+   -- Nella prima stesura 'Incassata' era esclusa insieme a 'Restituita', e con
+   -- lei tutte le righe con `data_incasso` valorizzato — cioe' proprio il caso
+   -- principale: una cauzione incassata e non ancora restituita HA quella
+   -- data. Il filtro escludeva le righe che contano.
+   AND coalesce(c.stato, '') IN ('Attiva', 'In scadenza', 'Incassata')
    AND c.scadenza_cauzione IS DISTINCT FROM public.dr7_scadenza_lavorativi(c.data_restituzione_veicolo);
 
 
@@ -105,6 +125,15 @@ UPDATE public.cauzioni c
 SELECT count(*) AS cauzioni_ancora_fuori_regola
   FROM public.cauzioni c
  WHERE c.data_restituzione_veicolo IS NOT NULL
-   AND c.data_incasso IS NULL
-   AND coalesce(c.stato, '') NOT IN ('Restituita', 'Incassata')
+   -- Aperte = il denaro e' ancora di DR7 e va restituito, quindi il termine
+   -- dei 15 giorni lavorativi sta ancora correndo.
+   -- Significato degli stati, chiarito dalla direzione il 10/08:
+   --   'Incassata' = presa, ma la rendo  -> APERTA, il termine corre
+   --   'Bloccata'  = l'ho trattenuta      -> CHIUSA, niente restituzione
+   --   'Restituita'/'Sbloccata'           -> CHIUSE, denaro gia' tornato
+   -- Nella prima stesura 'Incassata' era esclusa insieme a 'Restituita', e con
+   -- lei tutte le righe con `data_incasso` valorizzato — cioe' proprio il caso
+   -- principale: una cauzione incassata e non ancora restituita HA quella
+   -- data. Il filtro escludeva le righe che contano.
+   AND coalesce(c.stato, '') IN ('Attiva', 'In scadenza', 'Incassata')
    AND c.scadenza_cauzione IS DISTINCT FROM public.dr7_scadenza_lavorativi(c.data_restituzione_veicolo);
