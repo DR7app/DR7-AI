@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import toast from 'react-hot-toast'
+import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
 import { appendPreventivoEvent } from '../../../utils/preventivoEvents'
@@ -419,6 +420,20 @@ async function getBossPhone(): Promise<string> {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking }: Props) {
+  // 2026-08-10 (roadmap #43): gate OTP per la CONVERSIONE preventivo ->
+  // prenotazione. Volutamente separato dal flusso OTP interno di questa tab
+  // (trippedCodes/motivazioni), che governa il SALVATAGGIO del preventivo:
+  // sono due azioni diverse e non vanno mescolate.
+  const convOverride = useLimitationOverride()
+  // 2026-08-10 (roadmap #43): le opzioni disattivate in Centralina Pro per la
+  // fascia erano caselle GRIGIE e basta — nessun modo di procedere, nemmeno
+  // per la direzione. "Avviso sempre, blocco mai": ora si clicca, si viene
+  // avvisati e si prosegue con autorizzazione OTP.
+  const gateDisabledOption = (code: string, label: string, apply: () => void) => {
+    if (convOverride.hasOverride(code)) { apply(); return }
+    toast.error(`"${label}" e' disattivata in Centralina Pro per questa fascia: per usarla serve l'autorizzazione della direzione.`, { duration: 9000 })
+    convOverride.requestOverride(code, `Applicare "${label}" su un preventivo, benche' disattivata in Centralina Pro per la fascia del cliente.`)
+  }
   const { adminEmail, hasRole, hasPermission, permissions, loading: adminRoleLoading } = useAdminRole()
   // Collaboratore = ha solo `reservations-preventivi`, NON `reservations`.
   // Per coerenza con "non puo' vedere le prenotazioni di altri", restringe
@@ -3007,8 +3022,16 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
     // pagato il link Nexi col totale corretto).
     const eurToCents = (eur: number) => Math.round((eur || 0) * 100)
     const totalCents = eurToCents(p.total_final || (p as { subtotal?: number }).subtotal || 0)
-    if (totalCents <= 0) {
-      toast.error('Totale del preventivo a 0 EUR — impossibile convertire. Imposta un prezzo nel preventivo.', { duration: 10000 })
+    // 2026-08-10 (roadmap #43, "avviso sempre, blocco mai"): un preventivo a
+    // 0 EUR non e' sempre un errore — esiste il preventivo di cortesia o
+    // l'omaggio deciso dalla direzione. Prima era un muro; ora si avvisa e si
+    // procede con autorizzazione OTP.
+    if (totalCents <= 0 && !convOverride.hasOverride('preventivo_converti_totale_zero')) {
+      toast.error('Totale del preventivo a 0 EUR: convertirlo richiede l\'autorizzazione della direzione.', { duration: 9000 })
+      convOverride.requestOverride(
+        'preventivo_converti_totale_zero',
+        `Convertire in prenotazione il preventivo di ${(p as { customer_name?: string }).customer_name || 'cliente'} con totale 0 EUR: la prenotazione nascerebbe senza importo da incassare.`
+      )
       return
     }
     // 2026-05-18: payment_status "paid" e' una delle TRE varianti pagate
@@ -5572,33 +5595,33 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             <input type="checkbox" checked={form.include_lavaggio} onChange={(e) => setForm(prev => ({ ...prev, include_lavaggio: e.target.checked }))} className="w-4 h-4 accent-dr7-gold" />
             <span className="text-sm text-theme-text-primary">Lavaggio ({formatEur(proLavaggioFee)})</span>
           </label>
-          <label className={`flex items-center gap-3 p-2 rounded-lg border border-theme-border/50 ${noCauzioneAvailable ? 'cursor-pointer hover:bg-theme-bg-tertiary/30' : 'opacity-50 cursor-not-allowed'}`}>
-            <input type="checkbox" disabled={!noCauzioneAvailable} checked={form.include_no_cauzione && noCauzioneAvailable} onChange={(e) => handleNoCauzioneToggle(e.target.checked)} className="w-4 h-4 accent-dr7-gold disabled:cursor-not-allowed" />
+          <label className={`flex items-center gap-3 p-2 rounded-lg border border-theme-border/50 ${noCauzioneAvailable ? 'cursor-pointer hover:bg-theme-bg-tertiary/30' : 'cursor-pointer opacity-70 hover:bg-theme-bg-tertiary/20'}`}>
+            <input type="checkbox" checked={form.include_no_cauzione && (noCauzioneAvailable || convOverride.hasOverride('preventivo_no_cauzione_disattivata'))} onChange={(e) => { const v = e.target.checked; if (!noCauzioneAvailable) { gateDisabledOption('preventivo_no_cauzione_disattivata', 'No Cauzione', () => handleNoCauzioneToggle(v)); return } handleNoCauzioneToggle(v) }} className="w-4 h-4 accent-dr7-gold" />
             <span className="text-sm text-theme-text-primary">
               No Cauzione ({formatEur(noCauzioneResolvedDaily)}/giorno)
               {!noCauzioneAvailable && (
-                <span className="ml-2 text-xs text-theme-text-muted">(Disattivato in Centralina Pro per questa fascia)</span>
+                <span className="ml-2 text-xs text-amber-400">(Disattivato in Centralina Pro → richiede autorizzazione)</span>
               )}
               {noCauzioneAvailable && isFasciaB && !isValerio && (
                 <span className="ml-2 text-xs text-amber-400">(Fascia B → richiede autorizzazione)</span>
               )}
             </span>
           </label>
-          <label className={`flex items-center gap-3 p-2 rounded-lg border border-theme-border/50 ${cauzioneVeicoloAvailable ? 'cursor-pointer hover:bg-theme-bg-tertiary/30' : 'opacity-50 cursor-not-allowed'}`}>
-            <input type="checkbox" disabled={!cauzioneVeicoloAvailable} checked={form.include_cauzione_veicoli && cauzioneVeicoloAvailable} onChange={(e) => setForm(prev => ({ ...prev, include_cauzione_veicoli: e.target.checked }))} className="w-4 h-4 accent-dr7-gold disabled:cursor-not-allowed" />
+          <label className={`flex items-center gap-3 p-2 rounded-lg border border-theme-border/50 ${cauzioneVeicoloAvailable ? 'cursor-pointer hover:bg-theme-bg-tertiary/30' : 'cursor-pointer opacity-70 hover:bg-theme-bg-tertiary/20'}`}>
+            <input type="checkbox" checked={form.include_cauzione_veicoli && (cauzioneVeicoloAvailable || convOverride.hasOverride('preventivo_cauzione_veicolo_disattivata'))} onChange={(e) => { const v = e.target.checked; const set = () => setForm(prev => ({ ...prev, include_cauzione_veicoli: v })); if (!cauzioneVeicoloAvailable) { gateDisabledOption('preventivo_cauzione_veicolo_disattivata', 'Cauzione Veicolo di proprieta\'', set); return } set() }} className="w-4 h-4 accent-dr7-gold" />
             <span className="text-sm text-theme-text-primary">
               Cauzione Veicolo di proprietà ({formatEur(cauzioneVeicoliResolvedDaily)}/giorno)
               {!cauzioneVeicoloAvailable && (
-                <span className="ml-2 text-xs text-theme-text-muted">(Disattivato in Centralina Pro per questa fascia)</span>
+                <span className="ml-2 text-xs text-amber-400">(Disattivato in Centralina Pro → richiede autorizzazione)</span>
               )}
             </span>
           </label>
-          <label className={`flex items-center gap-3 p-2 rounded-lg border border-theme-border/50 ${unlimitedKmAvailable ? 'cursor-pointer hover:bg-theme-bg-tertiary/30' : 'opacity-50 cursor-not-allowed'}`}>
-            <input type="checkbox" disabled={!unlimitedKmAvailable} checked={form.include_unlimited_km && unlimitedKmAvailable} onChange={(e) => setForm(prev => ({ ...prev, include_unlimited_km: e.target.checked, ...(e.target.checked ? { km_package_id: '' } : {}) }))} className="w-4 h-4 accent-dr7-gold disabled:cursor-not-allowed" />
+          <label className={`flex items-center gap-3 p-2 rounded-lg border border-theme-border/50 ${unlimitedKmAvailable ? 'cursor-pointer hover:bg-theme-bg-tertiary/30' : 'cursor-pointer opacity-70 hover:bg-theme-bg-tertiary/20'}`}>
+            <input type="checkbox" checked={form.include_unlimited_km && (unlimitedKmAvailable || convOverride.hasOverride('preventivo_km_illimitati_disattivati'))} onChange={(e) => { const v = e.target.checked; const set = () => setForm(prev => ({ ...prev, include_unlimited_km: v, ...(v ? { km_package_id: '' } : {}) })); if (!unlimitedKmAvailable) { gateDisabledOption('preventivo_km_illimitati_disattivati', 'Km Illimitati', set); return } set() }} className="w-4 h-4 accent-dr7-gold" />
             <span className="text-sm text-theme-text-primary">
               Km Illimitati ({formatEur(proUnlimitedKmDaily)}/giorno)
               {!unlimitedKmAvailable && (
-                <span className="ml-2 text-xs text-theme-text-muted">(Disattivato in Centralina Pro)</span>
+                <span className="ml-2 text-xs text-amber-400">(Disattivato in Centralina Pro → richiede autorizzazione)</span>
               )}
             </span>
           </label>
@@ -6162,6 +6185,18 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           righe non causa re-render della lista. */}
       <PreventivoRejectModal onConfirm={confirmReject} />
       <PreventivoAcceptModal onConfirm={confirmAccept} customers={customers} />
+      <LimitationOverrideModal
+        isOpen={convOverride.limitationState.isOpen}
+        limitationCode={convOverride.limitationState.limitationCode}
+        limitationMessage={convOverride.limitationState.limitationMessage}
+        actionContext={convOverride.limitationState.actionContext}
+        draftSessionId={convOverride.draftSessionId}
+        flowType={convOverride.flowType}
+        showNotes
+        onClose={convOverride.closeLimitation}
+        onCancel={convOverride.cancelLimitation}
+        onOverrideApproved={convOverride.handleOverrideApproved}
+      />
     </div>
   )
 }
