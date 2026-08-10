@@ -505,11 +505,44 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
       } catch (le) { toast.error('Errore Pay by Link: ' + (le as Error).message) }
     }
 
+    const PAID = ['paid', 'completed', 'succeeded']
+    const becamePaid = PAID.includes(payStatus) && !PAID.includes(origPayStatus)
+
+    // 2026-08-10 (roadmap #44): avviso di MODIFICA. Su Terra e Lavaggio il
+    // cliente viene informato quando la sua prenotazione cambia; su Aria e
+    // Soggiorni non partiva niente — date, mezzo o importo cambiavano in
+    // silenzio. Si invia solo quando NON e' anche il passaggio a pagato, per
+    // non mandare due messaggi di fila. Se nessun template gestisce la chiave
+    // il sender blocca il corpo vuoto: nulla parte finche' la direzione non
+    // scrive il testo.
+    if (form.id && bookingId && !becamePaid && form.customer_phone.trim()) {
+      const modKey = serviceType === 'boat_rental' ? 'boat_modified'
+        : serviceType === 'heli_rental' ? 'heli_modified'
+        : serviceType === 'stay_rental' ? 'stay_modified'
+        : 'rental_modified'
+      const firstName = form.customer_name.trim().split(' ')[0] || 'Cliente'
+      const totalStr = (eurToCents(form.price_eur) / 100).toFixed(2)
+      fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customPhone: form.customer_phone.trim(),
+          templateKey: modKey,
+          booking: { service_type: serviceType || 'rental' },
+          templateVars: {
+            nome: firstName, customer_name: form.customer_name.trim(),
+            servizio: formAsset, service_name: formAsset, mezzo: formAsset,
+            data: form.pickup_date, date: form.pickup_date,
+            orario: form.pickup_time, ora: form.pickup_time,
+            total: totalStr, totale: totalStr, importo: totalStr, amount: totalStr,
+          },
+          skipHeader: true,
+        }),
+      }).catch(err => console.warn('[NoleggioServiceTab] avviso modifica non inviato:', err))
+    }
+
     // Quando il pagamento passa a PAGATO (come ovunque): invia la conferma al
     // cliente + ai passeggeri con telefono, e genera la fattura se NON è wallet
     // (regola auto_invoice da Centralina Pro). Vale sia in modifica sia in creazione.
-    const PAID = ['paid', 'completed', 'succeeded']
-    const becamePaid = PAID.includes(payStatus) && !PAID.includes(origPayStatus)
     if (bookingId && becamePaid) {
       const ref = (bookingId || '').substring(0, 8).toUpperCase()
       const pax = (origDetails.passengers as { name?: string; phone?: string }[] | undefined) || []

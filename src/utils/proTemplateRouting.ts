@@ -757,8 +757,8 @@ export const PENDING_EVENTS: ReadonlySet<string> = new Set([
   // send-whatsapp-notification ora deriva le chiavi per boat/heli/stay dal
   // service_type invece di schiacciare tutto su 'rental'.
   'boat_new_admin', 'boat_cancelled', 'boat_da_saldare_customer', 'boat_pronto',
-  'heli_new_admin', 'heli_modified', 'heli_cancelled', 'heli_da_saldare_customer', 'heli_pronto',
-  'stay_new_admin', 'stay_modified', 'stay_cancelled', 'stay_da_saldare_customer', 'stay_pronto',
+  'heli_new_admin', 'heli_cancelled', 'heli_da_saldare_customer', 'heli_pronto',
+  'stay_new_admin', 'stay_cancelled', 'stay_da_saldare_customer', 'stay_pronto',
   'fattura_generata_customer', 'fattura_inviata_customer', 'nota_credito_emessa_customer',
   'fattura_sdi_accettata_admin', 'fattura_sdi_rifiutata_admin',
   'multa_conducente_identificato_admin', 'multa_pec_inviata_admin', 'multa_notifica_cliente',
