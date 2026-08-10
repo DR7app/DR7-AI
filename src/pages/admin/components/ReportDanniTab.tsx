@@ -1,4 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
+import toast from 'react-hot-toast'
+import { loadReportOverrides, applyOverrides, saveEditOverride, saveRemoveOverride, deleteOverrideByRow, deleteOverrideById, type LoadedOverrides } from '../../../utils/reportOverrides'
+import { ReportRowModal, type FieldDef } from './ReportRowModal'
 
 interface VehicleEntry {
   vehicleName: string
@@ -46,6 +49,38 @@ function avatarColor(seed: string): string {
 
 export default function ReportDanniTab() {
   const [data, setData] = useState<ReportData | null>(null)
+  // 2026-08-10 (roadmap #38): correzione manuale delle voci. L'infrastruttura
+  // (report_overrides) esisteva gia' ma copriva solo 4 report su 11: qui una
+  // voce sbagliata o di troppo non era correggibile senza intervento tecnico.
+  // Gli override si applicano SOPRA lo snapshot calcolato e PRIMA dei totali,
+  // quindi si riapplicano a ogni rigenerazione e restano annullabili.
+  const [overrides, setOverrides] = useState<LoadedOverrides>({ raw: [], removed: new Set(), edits: new Map(), added: [], notesByRow: new Map() })
+  const [editReport, setEditReport] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [editRow, setEditRow] = useState<any | null>(null)
+  const EDIT_FIELDS: FieldDef[] = [
+    { key: 'totalAmount', label: 'Importo €' },
+    { key: 'count', label: 'Numero voci' },
+  ]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rowKeyOf = (v: any) => `${v.vehiclePlate || v.vehicleName || '-'}|${v.customerName || '-'}`
+  async function reloadOv() { setOverrides(await loadReportOverrides('danni')) }
+  async function saveEdit(changes: Record<string, number>, note: string) {
+    if (!editRow) return
+    for (const [field, value] of Object.entries(changes)) await saveEditOverride('danni', rowKeyOf(editRow), field, value, note)
+    setEditRow(null); await reloadOv(); toast.success('Voce corretta')
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function removeRow(v: any) {
+    if (!window.confirm(`Rimuovere questa voce dal report?`)) return
+    if (v._isManual) await deleteOverrideById(v._manualId); else await saveRemoveOverride('danni', rowKeyOf(v), null)
+    await reloadOv(); toast.success('Voce rimossa')
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function restoreRow(v: any) {
+    if (v._isManual) await deleteOverrideById(v._manualId); else await deleteOverrideByRow('danni', rowKeyOf(v))
+    await reloadOv(); toast.success('Voce ripristinata')
+  }
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [sortField, setSortField] = useState<'totalAmount' | 'count'>('totalAmount')
@@ -72,10 +107,13 @@ export default function ReportDanniTab() {
 
   const sorted = useMemo(() => {
     if (!data?.vehicles) return []
-    return [...data.vehicles].sort((a, b) =>
+    // Override applicati PRIMA dell'ordinamento e dei totali.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const withOv = applyOverrides(data.vehicles as any, overrides, rowKeyOf) as any[]
+    return [...withOv].sort((a, b) =>
       sortField === 'totalAmount' ? b.totalAmount - a.totalAmount : b.count - a.count
     )
-  }, [data, sortField])
+  }, [data, sortField, overrides]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const topCustomers = useMemo(() => {
     const map = new Map<string, { name: string; total: number; count: number }>()
@@ -145,6 +183,15 @@ export default function ReportDanniTab() {
               <span className="text-xs text-rose-600/70">{data.totalCount}</span>
             </div>
             <div className="flex items-center gap-2">
+              {/* 2026-08-10 (roadmap #38): correzione manuale delle voci,
+                  come sul Report Noleggio. */}
+              <button
+                onClick={() => setEditReport(v => !v)}
+                title="Correggi, rimuovi o ripristina a mano le voci del report"
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${editReport ? 'bg-dr7-gold/20 border-dr7-gold/60 text-dr7-gold' : 'border-theme-border text-theme-text-muted hover:bg-theme-bg-hover'}`}
+              >
+                {editReport ? '\u2713 Modifica report attiva' : '\u270E Modifica report'}
+              </button>
               <label className="text-xs text-theme-text-muted">Ordina per</label>
               <select
                 value={sortField}
@@ -227,7 +274,18 @@ export default function ReportDanniTab() {
                             {v.count}
                           </span>
                         </div>
-                        <div className="text-right font-semibold text-dr7-gold">{formatCurrencyDecimal(v.totalAmount)}</div>
+                        <div className="flex items-center justify-between gap-2">
+                          {editReport ? (
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => setEditRow(v)} title="Correggi importo o numero voci" className="px-2 py-0.5 rounded text-[11px] border border-theme-border text-theme-text-muted hover:bg-theme-bg-hover">Correggi</button>
+                              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                              {(v as any)._overrideNote !== undefined
+                                ? <button onClick={() => restoreRow(v)} title="Annulla la correzione manuale" className="px-2 py-0.5 rounded text-[11px] border border-amber-400/50 text-amber-500 hover:bg-amber-500/10">Ripristina</button>
+                                : <button onClick={() => removeRow(v)} title="Rimuovi questa voce dal report" className="px-2 py-0.5 rounded text-[11px] border border-red-400/40 text-red-500 hover:bg-red-500/10">Rimuovi</button>}
+                            </div>
+                          ) : <span />}
+                          <span className="text-right font-semibold text-dr7-gold">{formatCurrencyDecimal(v.totalAmount)}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -281,6 +339,18 @@ export default function ReportDanniTab() {
         <div className="bg-theme-bg-primary border border-theme-border rounded-2xl p-12 text-center">
           <p className="text-theme-text-muted text-sm">Caricamento report danni…</p>
         </div>
+      )}
+      {editRow && (
+        <ReportRowModal
+          mode="edit"
+          row={editRow}
+          fields={EDIT_FIELDS}
+          identityFields={[]}
+          addTemplate={{}}
+          onClose={() => setEditRow(null)}
+          onSaveEdit={saveEdit}
+          onSaveAdd={async () => { /* aggiunta manuale non prevista su questo report */ }}
+        />
       )}
     </div>
   )
