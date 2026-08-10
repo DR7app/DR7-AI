@@ -1311,6 +1311,22 @@ export const BUSINESSES: { id: BusinessId; label: string; row: string }[] = [
   { id: 'soggiorni', label: 'Soggiorni & Ospitalità', row: 'business_soggiorni' },
   { id: 'lavaggio',  label: 'Lavaggio & Meccanica',  row: 'business_lavaggio' },
 ]
+// 2026-08-10 (roadmap #13): sezioni STRUTTURALMENTE non pertinenti a un
+// business. La direzione ha chiesto di "rimuovere l'assicurazione dalle
+// barche": finora l'unico modo era che un operatore spegnesse a mano il
+// toggle (sezioni_off), quindi su ogni installazione nuova l'assicurazione
+// ricompariva sul Mare. Km & Sforo idem: una barca non fa chilometri.
+// Diverso da `sezioni_off`, che resta la scelta REVERSIBILE dell'operatore.
+const SECTIONS_HIDDEN_BY_BUSINESS: Partial<Record<BusinessId, SectionId[]>> = {
+  mare: ['p2', 'p3'],       // Assicurazioni, Km & Sforo
+  aria: ['p2', 'p3'],       // idem per i velivoli
+  soggiorni: ['p2', 'p3'],  // idem per le strutture
+}
+function sectionsForBusiness(id: BusinessId): { id: SectionId; title: string }[] {
+  const hidden = new Set(SECTIONS_HIDDEN_BY_BUSINESS[id] || [])
+  return hidden.size ? SECTIONS.filter(s => !hidden.has(s.id)) : SECTIONS
+}
+
 function businessRow(id: BusinessId): string {
   return BUSINESSES.find(b => b.id === id)?.row || 'main'
 }
@@ -1906,7 +1922,7 @@ export default function CentralinaProTab() {
         <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-6">
           <aside className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm overflow-hidden h-fit">
             <nav className="py-2">
-              {(isCauzioniViewOnly ? SECTIONS.filter(s => s.id === 'p4') : SECTIONS).map((s, idx) => {
+              {(isCauzioniViewOnly ? SECTIONS.filter(s => s.id === 'p4') : sectionsForBusiness(businessId)).map((s, idx) => {
                 const active = section === s.id
                 const off = sezioniOff.includes(s.id)
                 // Il toggle ON/OFF per sezione compare solo nella centralina piena
