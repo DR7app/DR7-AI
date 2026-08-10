@@ -136,6 +136,29 @@ function useBookings(serviceType: NoleggioServiceType) {
   const [error, setError] = useState('')
   const load = useCallback(async () => {
     setLoading(true); setError('')
+    const HIDDEN = new Set(['cancelled', 'annullata', 'deleted'])
+    try {
+      // 2026-08-10 (roadmap #11): come il Noleggio Terra, si passa PRIMA dalla
+      // function `list-bookings` (service role, bypassa RLS). Qui si leggeva
+      // solo col client del browser: le prenotazioni non visibili all'utente
+      // per RLS sparivano dalla lista e dal calendario senza alcun errore —
+      // sembravano semplicemente non esistere. Il vecchio percorso resta come
+      // fallback se la function non risponde.
+      const res = await authFetch('/.netlify/functions/list-bookings')
+      if (res.ok) {
+        const json = await res.json().catch(() => ({}))
+        const rows = (json?.bookings || []) as BookingRow[]
+        if (Array.isArray(json?.bookings)) {
+          const filtered = rows
+            .filter(b => (b as unknown as { service_type?: string }).service_type === serviceType)
+            .filter(b => !HIDDEN.has(String(b.status || '').toLowerCase()))
+            .sort((a, b) => String(b.pickup_date || '').localeCompare(String(a.pickup_date || '')))
+          setBookings(filtered)
+          setLoading(false)
+          return
+        }
+      }
+    } catch { /* function non raggiungibile: si continua col fallback */ }
     try {
       const acc: BookingRow[] = []
       for (let start = 0; ; start += 1000) {

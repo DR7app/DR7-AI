@@ -453,6 +453,68 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
       })
     }
 
+    // 3) NEXI PAY BY LINK — su Terra, Aria e Lavaggio una prenotazione creata
+    //    con metodo "Nexi - Pay by Link" e stato "Da Saldare" genera e invia
+    //    subito il link di pagamento. Sul Mare non partiva niente: la
+    //    prenotazione restava da saldare e nessuno mandava il link al cliente.
+    //    Solo alla CREAZIONE, come negli altri business.
+    if (!booking && savedId && payStatus === 'pending' && isNexiPbl(payMethod)) {
+      try {
+        const amountEuros = eurToCents(priceFinal) / 100
+        const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookingId: savedId,
+            amount: amountEuros,
+            customerEmail: customerEmail.trim() || '',
+            customerName: customerName.trim() || 'Cliente',
+            description: `Noleggio Mare - ${assetName}`.trim(),
+            expirationHours: 1,
+          }),
+        })
+        const linkData = await linkRes.json()
+        if (linkRes.ok && linkData.paymentUrl) {
+          await supabase.from('bookings').update({
+            booking_details: {
+              ...d,
+              nexi_payment_link: linkData.paymentUrl,
+              nexi_order_id: linkData.orderId || null,
+              payment_link_created_at: new Date().toISOString(),
+              payment_link_expires_at: linkData.expiresAt || new Date(Date.now() + 3600000).toISOString(),
+            },
+          }).eq('id', savedId)
+          const phone = customerPhone.trim()
+          if (phone) {
+            const firstName = customerName.trim().split(' ')[0] || 'Cliente'
+            const amountStr = amountEuros.toFixed(2)
+            const ref = savedId.substring(0, 8).toUpperCase()
+            await fetch('/.netlify/functions/send-whatsapp-notification', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                customPhone: phone,
+                templateKey: 'payment_link_customer',
+                booking: { service_type: 'boat_rental' },
+                templateVars: {
+                  customer_name: firstName, nome: firstName,
+                  amount: amountStr, total: amountStr, importo: amountStr, totale: amountStr,
+                  link: linkData.paymentUrl, payment_link: linkData.paymentUrl,
+                  booking_id: ref, booking_ref: ref, expiry: '1 ora',
+                },
+                skipHeader: true,
+              }),
+            })
+          }
+          toast.success('Link di pagamento inviato al cliente')
+        } else {
+          toast.error('Prenotazione salvata, ma link di pagamento non generato: ' + (linkData.error || ''))
+        }
+      } catch (le) {
+        toast.error('Errore Pay by Link: ' + (le as Error).message)
+      }
+    }
+
     // 2) FATTURA sul passaggio a "Pagato" — su Terra e Lavaggio parte
     //    automaticamente, qui no: un noleggio barca incassato restava senza
     //    fattura finche' qualcuno non se ne accorgeva. La regola su QUALI
