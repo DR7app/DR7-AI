@@ -18,6 +18,7 @@ interface Acconto {
   id: string
   operatore_id: string | null
   operatore_nome: string | null
+  metodo_pagamento?: string | null
   data: string
   importo_cents: number
   causale: string | null
@@ -70,6 +71,12 @@ export default function AccontiTab() {
   }
   useEffect(() => { load() }, [data, roleLoading, canSeeAll, me.id, me.nome]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 2026-08-10 (roadmap #42): senza il metodo di incasso la quadratura di
+  // cassa e' impossibile — la direzione vede un totale ma non sa quanta parte
+  // deve trovarsi fisicamente in cassa a fine giornata.
+  const METODI = ['Contanti', 'POS', 'Bonifico', 'Nexi', 'Altro']
+  const [metodo, setMetodo] = useState<string>('Contanti')
+
   async function registra() {
     const cents = Math.round(parseFloat((importo || '').replace(',', '.')) * 100)
     if (!Number.isFinite(cents) || cents <= 0) { toast.error('Inserisci un importo valido'); return }
@@ -81,11 +88,12 @@ export default function AccontiTab() {
       importo_cents: cents,
       causale: causale.trim() || null,
       note: note.trim() || null,
+      metodo_pagamento: metodo || null,
       created_by: me.id,
     })
     setSaving(false)
     if (error) { toast.error('Salvataggio fallito: ' + error.message); return }
-    setImporto(''); setCausale(''); setNote('')
+    setImporto(''); setCausale(''); setNote(''); setMetodo('Contanti')
     toast.success('Acconto registrato')
     load()
   }
@@ -133,9 +141,14 @@ export default function AccontiTab() {
       {/* Registra */}
       <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
         <h2 className="text-sm font-semibold text-theme-text-primary mb-3">Registra acconto</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
           <label className="text-xs text-theme-text-muted">Importo €
             <input value={importo} onChange={e => setImporto(e.target.value)} inputMode="decimal" placeholder="0,00" className="mt-1 w-full px-3 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm text-right tabular-nums" />
+          </label>
+          <label className="text-xs text-theme-text-muted">Incassato con
+            <select value={metodo} onChange={e => setMetodo(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm">
+              {METODI.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
           </label>
           <label className="text-xs text-theme-text-muted sm:col-span-1">Causale
             <input value={causale} onChange={e => setCausale(e.target.value)} placeholder="Es. Contanti noleggio" className="mt-1 w-full px-3 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm" />
@@ -188,7 +201,7 @@ export default function AccontiTab() {
             {rows.map(r => (
               <div key={r.id} className="flex items-center justify-between gap-3 px-4 py-3">
                 <div className="min-w-0">
-                  <p className="text-sm text-theme-text-primary font-medium">{eur(r.importo_cents)} <span className="text-theme-text-muted font-normal">— {r.operatore_nome || 'Sconosciuto'}</span></p>
+                  <p className="text-sm text-theme-text-primary font-medium">{eur(r.importo_cents)} <span className="text-theme-text-muted font-normal">— {r.operatore_nome || 'Sconosciuto'}</span>{r.metodo_pagamento && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] border border-theme-border text-theme-text-muted">{r.metodo_pagamento}</span>}</p>
                   <p className="text-xs text-theme-text-muted truncate">{[r.causale, r.note].filter(Boolean).join(' · ') || '—'} · {new Date(r.created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })}</p>
                 </div>
                 {canDelete(r) && (
