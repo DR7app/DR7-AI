@@ -124,6 +124,18 @@ export default function CustomersTab() {
   // Clienti tranne quello base ('standard' = nessuno status). Include quelli
   // creati dall'admin. La sigla del pulsante deriva dal nome configurato.
   const assignableStatuses = statusDefs.filter(d => d.key !== 'standard')
+  // 2026-08-10 (roadmap #20): l'evidenziazione della riga usava colori
+  // CABLATI (blacklist rosso, elite ambra, member blu). Se la direzione
+  // ricolorava uno status in Centralina Pro il badge cambiava ma la riga no,
+  // e i due colori si contraddicevano. Ora la riga legge lo stesso colore
+  // configurato del badge; uno status su misura eredita il suo.
+  const rowHighlight = (status: string | null | undefined): string => {
+    if (!status || status === 'standard') return ''
+    const def = statusDefs.find(d => d.key === status)
+    if (!def) return ''
+    const col = clientStatusColor(def.colore)
+    return `border-l-4 ${col.dot.replace('bg-', 'border-l-')} ${col.banner}`
+  }
   const statusAbbrFrom = (label: string) =>
     label.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3).toUpperCase() || '—'
   const statusName = (key: string) => clientTierMetaCfg(key).label
@@ -2659,13 +2671,7 @@ export default function CustomersTab() {
         {customers.map((customer) => (
           <div
             key={customer.id}
-            className={`bg-theme-bg-secondary rounded-lg border border-theme-border p-3 ${customer.status === 'blacklist'
-              ? 'border-l-4 border-l-red-500 bg-red-900/30'
-              : customer.status === 'elite'
-                ? 'border-l-4 border-l-amber-500 bg-amber-500/20'
-                : customer.status === 'member'
-                  ? 'border-l-4 border-l-blue-500 bg-blue-500/20'
-                  : ''
+            className={`bg-theme-bg-secondary rounded-lg border border-theme-border p-3 ${rowHighlight(customer.status)
             }`}
           >
             <div className="flex items-start justify-between gap-2 mb-2">
@@ -2845,13 +2851,7 @@ export default function CustomersTab() {
               {customers.map((customer) => (
                 <tr
                   key={customer.id}
-                  className={`border-t border-theme-border hover:bg-theme-text-primary/5 transition-all duration-200 ${customer.status === 'blacklist'
-                    ? 'border-l-4 border-l-red-500 bg-red-900/30'
-                    : customer.status === 'elite'
-                      ? 'border-l-4 border-l-amber-500 bg-amber-500/20'
-                      : customer.status === 'member'
-                        ? 'border-l-4 border-l-blue-500 bg-blue-500/20'
-                        : ''
+                  className={`border-t border-theme-border hover:bg-theme-text-primary/5 transition-all duration-200 ${rowHighlight(customer.status)
                     }`}
                 >
                   <td className="px-4 py-3">
