@@ -765,5 +765,4 @@ export const PENDING_EVENTS: ReadonlySet<string> = new Set([
   'veicolo_scadenza_assicurazione', 'veicolo_scadenza_tagliando', 'veicolo_scadenza_gomme',
   'veicolo_scadenza_pastiglie', 'veicolo_scadenza_generica',
   'magazzino_ordine_fornitore',
-  'cliente_status_blacklist', 'cliente_status_member', 'cliente_status_elite',
 ])

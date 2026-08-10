@@ -1499,6 +1499,38 @@ export default function CustomersTab() {
       )
       refreshClientStatus()
 
+      // 2026-08-10 (roadmap #44): il cambio di status cliente non emetteva
+      // alcun evento, quindi la direzione non poteva collegarci un messaggio
+      // (es. benvenuto Elite, comunicazione Member). Ora l'evento parte; se
+      // nessun template lo gestisce non viene inviato NULLA — il sender
+      // blocca i corpi vuoti — quindi attivarlo qui non fa partire messaggi
+      // finche' non li scrivi in Messaggi di Sistema Pro.
+      const STATUS_EVENT: Record<string, string> = {
+        blacklist: 'cliente_status_blacklist',
+        member: 'cliente_status_member',
+        elite: 'cliente_status_elite',
+      }
+      const evKey = newStatus ? STATUS_EVENT[newStatus] : undefined
+      const phone = target?.phone
+      if (evKey && phone) {
+        const firstName = (target?.nome || target?.full_name || '').split(' ')[0] || 'Cliente'
+        fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customPhone: phone,
+            templateKey: evKey,
+            templateVars: {
+              nome: firstName,
+              customer_name: target?.full_name || firstName,
+              status: statusLabel,
+              stato: statusLabel,
+            },
+            skipHeader: true,
+          }),
+        }).catch(err => console.warn('[CustomersTab] evento status cliente non inviato:', err))
+      }
+
       // Fire-and-forget WhatsApp notification when promoting to Member/Elite.
       // Body comes from "Promozione a MEMBER" / "Promozione a ELITE" in
       // Messaggi di Sistema Pro (matched by label).
