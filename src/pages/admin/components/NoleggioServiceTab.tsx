@@ -980,13 +980,25 @@ interface CalAsset { id: string; name: string; image_url: string | null; is_acti
 
 // Colore barra in base al PAGAMENTO (come richiesto):
 //   Pagato = VERDE · Parziale/in attesa = GIALLO · Da Saldare = ROSSO · Annullata = grigio.
-function barStyle(status: string | null, paymentStatus: string | null): { bar: string } {
+// 2026-08-12 (roadmap #11): stessa semantica dei colori del Noleggio Terra.
+// Prima questo calendario colorava per stato di PAGAMENTO (verde = pagato)
+// mentre Terra colora per stato della PRENOTAZIONE (oro = confermata, giallo =
+// in attesa, rosso = da saldare). Lo stesso colore voleva dire due cose
+// diverse: un operatore che passava da un calendario all'altro leggeva il
+// verde come "confermato" quando significava "pagato". Ora coincidono.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function barStyle(status: string | null, paymentStatus: string | null, details?: any): { bar: string } {
   const s = (status || '').toLowerCase()
   if (s === 'cancelled' || s === 'annullata') return { bar: 'bg-zinc-500/60 border-zinc-400/40' }
   const ps = (paymentStatus || '').toLowerCase()
-  if (['paid', 'succeeded', 'completed'].includes(ps)) return { bar: 'bg-emerald-500/80 border-emerald-400/50' } // VERDE pagato
-  if (ps === 'partial') return { bar: 'bg-amber-500/80 border-amber-400/50' } // GIALLO in attesa
-  return { bar: 'bg-red-500/80 border-red-400/50' } // ROSSO da saldare
+  const pending = ps === 'pending' || ps === 'unpaid' || ps === 'partial'
+  const manual = details?.manually_confirmed === true
+  // Da saldare CONFERMATA a mano: rosso, come su Terra.
+  if (pending && manual) return { bar: 'bg-red-600/80 border-red-500/50' }
+  // In attesa di pagamento: giallo.
+  if (pending) return { bar: 'bg-yellow-500/80 border-yellow-400/50' }
+  // Confermata: oro DR7, come su Terra.
+  return { bar: 'bg-dr7-gold/80 border-dr7-gold/50' }
 }
 
 // Badge STATO pagamento per la lista (stesso schema colori del car rental).
@@ -1554,7 +1566,7 @@ function CalRow({
         {/* barre */}
         <div className="absolute inset-0 pointer-events-none">
           {bars.map(({ booking, left, width, lane }) => {
-            const st = barStyle(booking.status, booking.payment_status)
+            const st = barStyle(booking.status, booking.payment_status, booking.booking_details)
             return (
               <div
                 key={booking.id}
