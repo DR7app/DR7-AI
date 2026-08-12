@@ -8,6 +8,29 @@
 //   // ...calcola i totali su `adjusted`, non su `rows`.
 import { supabase } from '../supabaseClient'
 
+/**
+ * PERIMETRO (deciso il 12/08/2026, roadmap #38).
+ *
+ * Gli override valgono per i report a VOCI, dove una riga puo' essere
+ * sbagliata, di troppo o mancante e va corretta dall'amministrazione senza
+ * interventi tecnici:
+ *   noleggio · clienti · autisti · penali_danni · penali · danni · lavaggio
+ *
+ * NON vanno estesi a questi quattro, e non e' una dimenticanza:
+ *   - Traffico (ga-report) e Google My Business (gbp-report) leggono dati
+ *     ESTERNI di Google. "Correggere" una riga significherebbe falsificarli:
+ *     il report direbbe 500 visite mentre Google ne conta 300.
+ *   - Preventivi calcola tassi di conversione dai preventivi reali. Se un
+ *     preventivo e' sbagliato si corregge IL PREVENTIVO (gia' modificabile),
+ *     non la statistica che ne deriva.
+ *   - Dashboard operatori aggrega ore timbrate e paghe. Le ore si correggono
+ *     in Rilevazione Orari, gia' editabile: un layer di override qui creerebbe
+ *     una SECONDA verita' su dati di stipendio.
+ *
+ * Regola generale: si corregge il dato alla fonte. L'override esiste solo dove
+ * la fonte e' un calcolo aggregato che non ha una riga sorgente modificabile.
+ */
+
 export type OverrideAction = 'edit' | 'remove' | 'add'
 
 export interface ReportOverride {
