@@ -762,7 +762,5 @@ export const PENDING_EVENTS: ReadonlySet<string> = new Set([
   'fattura_generata_customer', 'fattura_inviata_customer', 'nota_credito_emessa_customer',
   'fattura_sdi_accettata_admin', 'fattura_sdi_rifiutata_admin',
   'multa_conducente_identificato_admin', 'multa_pec_inviata_admin', 'multa_notifica_cliente',
-  'veicolo_scadenza_assicurazione', 'veicolo_scadenza_tagliando', 'veicolo_scadenza_gomme',
-  'veicolo_scadenza_pastiglie', 'veicolo_scadenza_generica',
   'magazzino_ordine_fornitore',
 ])
