@@ -506,8 +506,36 @@ type FiscalPaymentMethod = {
   is_enabled?: boolean
 }
 
+// 2026-08-12 (roadmap #33): l'aliquota per TIPOLOGIA DI VOCE.
+// Prima esisteva solo `vat_rate` (l'aliquota generale, 22%) e lo 0% di danni
+// e penali era CABLATO nel codice delle funzioni fattura: in Centralina si
+// vedeva una sola aliquota e non c'era modo di cambiare le altre. La
+// direzione deve poter decidere l'aliquota di ogni tipologia senza toccare il
+// codice — comprese quelle oggi a 0.
+type VoiceVatRate = {
+  /** Chiave stabile della tipologia — usata dalle funzioni fattura. */
+  key: string
+  label: string
+  /** Aliquota IVA in percentuale. 0 e' un valore VALIDO e voluto qui. */
+  rate: number | ''
+}
+
+const DEFAULT_VOICE_VAT_RATES: VoiceVatRate[] = [
+  { key: 'noleggio',   label: 'Noleggio',                 rate: 22 },
+  { key: 'servizi',    label: 'Servizi ed extra',         rate: 22 },
+  { key: 'estensione', label: 'Estensione noleggio',      rate: 22 },
+  { key: 'lavaggio',   label: 'Lavaggio',                 rate: 22 },
+  { key: 'meccanica',  label: 'Meccanica',                rate: 22 },
+  { key: 'penali',     label: 'Penali',                   rate: 0  },
+  { key: 'danni',      label: 'Danni',                    rate: 0  },
+  { key: 'cauzione',   label: 'Cauzione',                 rate: 0  },
+]
+
 type FiscalConfig = {
+  /** Aliquota generale: vale per le tipologie senza voce dedicata. */
   vat_rate: number | ''
+  /** Aliquota per tipologia di voce (roadmap #33). */
+  voice_vat_rates?: VoiceVatRate[]
   payment_methods: FiscalPaymentMethod[]
 }
 
@@ -550,6 +578,7 @@ const DEFAULT_PAYMENT_METHODS: FiscalPaymentMethod[] = [
 
 const INITIAL_FISCAL: FiscalConfig = {
   vat_rate: 22,
+  voice_vat_rates: DEFAULT_VOICE_VAT_RATES,
   payment_methods: DEFAULT_PAYMENT_METHODS,
 }
 
@@ -5954,6 +5983,44 @@ function FiscaleSection({
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-theme-text-muted pointer-events-none">%</span>
           </div>
         </label>
+        <p className="text-[12px] text-theme-text-muted mt-2">
+          Vale per le tipologie che non hanno un&apos;aliquota dedicata qui sotto.
+        </p>
+      </section>
+
+      {/* Aliquota per TIPOLOGIA DI VOCE (roadmap #33) */}
+      <section className="bg-theme-bg-secondary rounded-2xl border border-theme-border shadow-sm p-5 space-y-3">
+        <div>
+          <h3 className="text-[16px] font-semibold text-theme-text-primary mb-1">
+            Aliquota IVA per tipologia di voce
+          </h3>
+          <p className="text-[13px] text-theme-text-secondary">
+            Ogni tipologia di riga in fattura ha la sua aliquota. Prima lo <strong>0%</strong> di
+            danni e penali era fisso nel codice e non si poteva cambiare: adesso si imposta qui,
+            come tutte le altre. Lo 0 e&apos; un valore valido.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {(fiscal.voice_vat_rates || DEFAULT_VOICE_VAT_RATES).map((v, i) => (
+            <label key={v.key} className="flex items-center justify-between gap-3 rounded-lg border border-theme-border bg-theme-bg-primary/40 px-3 py-2">
+              <span className="text-[13px] text-theme-text-primary">{v.label}</span>
+              <span className="relative w-28 shrink-0">
+                <MoneyInput
+                  min={0}
+                  max={100}
+                  value={v.rate}
+                  onChange={(__v: string) => {
+                    const list = [...(fiscal.voice_vat_rates || DEFAULT_VOICE_VAT_RATES)]
+                    list[i] = { ...list[i], rate: __v === '' ? '' : Number(__v) }
+                    setFiscal({ ...fiscal, voice_vat_rates: list })
+                  }}
+                  className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-3 pr-8 py-1.5 text-[13px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                />
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-theme-text-muted pointer-events-none">%</span>
+              </span>
+            </label>
+          ))}
+        </div>
       </section>
 
       {/* Metodi di pagamento + Fattura toggle */}

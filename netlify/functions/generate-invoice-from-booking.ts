@@ -18,6 +18,41 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
  * config row is missing, the fiscal section was never saved, or the value
  * is out of the [0, 100] range.
  */
+/**
+ * 2026-08-12 (roadmap #33): aliquota per TIPOLOGIA DI VOCE, presa da
+ * Centralina Pro > Fiscale > "Aliquota IVA per tipologia".
+ *
+ * Prima lo 0% di danni, penali e cauzione era scritto in duro nel codice: in
+ * Centralina compariva una sola aliquota (22%) e non c'era modo di cambiare le
+ * altre. Ora ogni tipologia ha la sua, 0 compreso, e si modifica senza dev.
+ *
+ * Fallback: se la tipologia non e' configurata si usa `fallback` (per il
+ * noleggio l'aliquota generale/di categoria, per danni e penali 0), cosi' una
+ * configurazione incompleta non cambia il comportamento storico.
+ */
+async function loadVoiceVatRate(voiceKey: string, fallback: number): Promise<number> {
+    try {
+        const { data } = await supabase
+            .from('centralina_pro_config')
+            .select('config')
+            .eq('id', 'main')
+            .maybeSingle()
+        const cfg = (data?.config ?? null) as Record<string, unknown> | null
+        const fiscal = cfg?.fiscal as Record<string, unknown> | undefined
+        const list = fiscal?.voice_vat_rates
+        if (!Array.isArray(list)) return fallback
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const row = (list as any[]).find(r => r?.key === voiceKey)
+        const rate = row?.rate
+        // 0 e' un valore VALIDO qui (a differenza dell'aliquota generale, dove
+        // uno 0 salvato per errore faceva emettere fatture a IVA 0).
+        if (typeof rate === 'number' && rate >= 0 && rate <= 100) return rate
+        return fallback
+    } catch {
+        return fallback
+    }
+}
+
 async function loadVatRate(categoryId?: string | null): Promise<number> {
     try {
         const { data } = await supabase
@@ -763,6 +798,10 @@ export const handler: Handler = async (event) => {
         if (includePenalties) {
             const vatRate = includeIVA ? dynamicVatRate : 0
             const vatDivisor = 1 + dynamicVatRate / 100
+            // roadmap #33: aliquota configurabile per tipologia. Default 0,
+            // che e' il comportamento storico di danni e penali.
+            const vatPenali = includeIVA ? await loadVoiceVatRate('penali', 0) : 0
+            const vatDanni = includeIVA ? await loadVoiceVatRate('danni', 0) : 0
 
             // 2026-07-20: SOLO danni e penali sono IVA 0 (fuori campo). Quindi
             // NIENTE divisione per 1.22 e vat_rate 0: l'importo tipizzato e' gia'
@@ -777,7 +816,7 @@ export const handler: Handler = async (event) => {
                             description: `Penale: ${p.label || 'Penale'}`,
                             unit_price: gross,
                             quantity: 1,
-                            vat_rate: 0,
+                            vat_rate: vatPenali,
                             total: gross
                         })
                     }
@@ -793,7 +832,7 @@ export const handler: Handler = async (event) => {
                             description: `Danno: ${d.label || 'Danno'}`,
                             unit_price: gross,
                             quantity: 1,
-                            vat_rate: 0,
+                            vat_rate: vatDanni,
                             total: gross
                         })
                     }

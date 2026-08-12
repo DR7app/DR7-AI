@@ -5,6 +5,32 @@ import { uploadInvoiceToAruba } from './aruba-utils'
 import { generateInvoicePDF } from './invoice-pdf-utils'
 import { renderTemplate } from './utils/messageTemplates'
 
+/**
+ * 2026-08-12 (roadmap #33): aliquota per tipologia di voce, da Centralina Pro
+ * > Fiscale. Prima lo 0% di danni e penali era scritto in duro qui: la
+ * direzione vedeva una sola aliquota in Centralina e non poteva cambiarla.
+ * Default 0 = comportamento storico, quindi finche' non si tocca la
+ * configurazione nulla cambia.
+ */
+async function loadVoiceVatRate(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    sb: any, voiceKey: string, fallback = 0
+): Promise<number> {
+    try {
+        const { data } = await sb.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+        const list = data?.config?.fiscal?.voice_vat_rates
+        if (!Array.isArray(list)) return fallback
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const row = (list as any[]).find(r => r?.key === voiceKey)
+        const rate = row?.rate
+        if (typeof rate === 'number' && rate >= 0 && rate <= 100) return rate
+        return fallback
+    } catch {
+        return fallback
+    }
+}
+
+
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
@@ -221,6 +247,8 @@ export const handler: Handler = async (event) => {
         // "Danno - <nome>" so each line reads as the penale type and name.
         const isDanni = type === 'danni'
         const typeLabel = isDanni ? 'Danno' : 'Penale'
+        // Aliquota configurabile per tipologia (roadmap #33). Default 0.
+        const vatVoce = await loadVoiceVatRate(supabase, isDanni ? 'danni' : 'penali', 0)
 
         const items = cartItems.map(item => {
             const description = rawDescriptions
@@ -231,7 +259,7 @@ export const handler: Handler = async (event) => {
                 description,
                 unit_price: item.amount,
                 quantity: item.quantity,
-                vat_rate: 0,
+                vat_rate: vatVoce,
                 total: itemTotal,
                 ...(paymentStatus === 'paid' ? { paymentStatus: 'paid', amountPaid: itemTotal } : {})
             }
@@ -245,16 +273,21 @@ export const handler: Handler = async (event) => {
                 description: 'Sconto',
                 unit_price: -effectiveDiscount,
                 quantity: 1,
-                vat_rate: 0,
+                vat_rate: vatVoce,
                 total: -effectiveDiscount,
                 ...(paymentStatus === 'paid' ? { paymentStatus: 'paid', amountPaid: -effectiveDiscount } : {})
             })
         }
 
-        // Calculate totals (penalties are exempt from VAT)
-        const subtotal = 0
-        const vatAmount = 0
-        const exemptAmount = totalAmount
+        // Totali. Con aliquota 0 (default storico) l'intero importo e' fuori
+        // campo IVA, come prima. Con un'aliquota impostata in Centralina si
+        // scorpora: l'importo inserito dall'operatore e' SEMPRE lordo
+        // (vedi regola "gli importi digitati in admin sono IVA inclusa"),
+        // quindi imponibile = lordo / (1 + aliquota) e IVA = lordo - imponibile,
+        // mai imponibile x aliquota, per non introdurre l'errore di 1 centesimo.
+        const subtotal = vatVoce > 0 ? Math.round((totalAmount / (1 + vatVoce / 100)) * 100) / 100 : 0
+        const vatAmount = vatVoce > 0 ? Math.round((totalAmount - subtotal) * 100) / 100 : 0
+        const exemptAmount = vatVoce > 0 ? 0 : totalAmount
         const total = totalAmount
 
         // Skip fattura if total is 0
