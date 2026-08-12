@@ -6,12 +6,15 @@
  *   - esclusi TUTTI i festivi;
  *   - il conteggio parte dal PRIMO giorno lavorativo DOPO la restituzione:
  *     se l'auto torna venerdi', il giorno 1 e' il lunedi' successivo;
- *   - la scadenza e' il 15esimo giorno lavorativo.
+ *   - la scadenza e' il 14esimo giorno lavorativo (valore storico, confermato
+ *     dalla direzione il 12/08: il commit 219f636c lo aveva fissato a 14 di
+ *     proposito). Il difetto era un altro: i FESTIVI non venivano esclusi.
  *
- * Perche' esiste questo file: `sync-booking-cauzione` calcolava 14 giorni e
- * NON escludeva i festivi. Ogni scadenza risultava quindi anticipata — di un
- * giorno sempre, di piu' nei periodi con festivita' (Natale, Ferragosto,
- * Pasqua). Le cauzioni venivano sollecitate e restituite prima del dovuto.
+ * Perche' esiste questo file: `sync-booking-cauzione` non escludeva i FESTIVI.
+ * Natale, Ferragosto, Pasqua, 25 aprile venivano contati come giorni
+ * lavorativi, quindi nei periodi di festa la scadenza cadeva fino a 4 giorni
+ * prima del dovuto e le cauzioni venivano sollecitate e restituite troppo
+ * presto. Il numero di giorni (14) era corretto.
  *
  * L'elenco dei festivi e' lo stesso mostrato dai calendari del gestionale
  * (src/data/italianHolidays.ts): duplicato qui perche' le Netlify Functions
@@ -56,13 +59,13 @@ export function isNonLavorativo(d: Date): boolean {
  * Scadenza a N giorni lavorativi dalla restituzione del veicolo.
  *
  * @param dataRestituzione 'YYYY-MM-DD' (o ISO: si usa solo la parte data)
- * @param giorni numero di giorni lavorativi (default 15)
+ * @param giorni numero di giorni lavorativi (default 14)
  * @returns 'YYYY-MM-DD' del giorno di scadenza
  *
  * Esempio: restituzione venerdi' 07/08/2026 -> giorno 1 = lunedi' 10/08,
- * Ferragosto (sabato) non conta, scadenza = 15esimo lavorativo.
+ * scadenza = 14esimo giorno lavorativo, festivi esclusi.
  */
-export function scadenzaGiorniLavorativi(dataRestituzione: string, giorni = 15): string {
+export function scadenzaGiorniLavorativi(dataRestituzione: string, giorni = 14): string {
     // Parsing esplicito dei componenti: `new Date('2026-08-07')` viene letto
     // come UTC e in Europe/Rome puo' retrocedere di un giorno.
     const [y, m, g] = String(dataRestituzione).slice(0, 10).split('-').map(Number)

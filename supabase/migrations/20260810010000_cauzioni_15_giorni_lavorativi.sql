@@ -1,19 +1,17 @@
 -- ============================================================================
--- BUG CAUZIONI (direzione, 2026-08-10): scadenze tutte ANTICIPATE
+-- BUG CAUZIONI (direzione, 2026-08-10, rettificato il 12/08): festivi non esclusi
 --
--- La scadenza di restituzione cauzione deve essere a 15 GIORNI LAVORATIVI:
+-- La scadenza di restituzione cauzione e' a 14 GIORNI LAVORATIVI:
 --   - lavorativi = lunedi'-venerdi';
 --   - esclusi TUTTI i festivi;
 --   - il conteggio parte dal primo giorno lavorativo DOPO la restituzione:
 --     se l'auto torna venerdi', il giorno 1 e' il lunedi' successivo.
 --
--- Il calcolo in `sync-booking-cauzione` aveva due difetti:
---   1. contava 14 giorni lavorativi invece di 15;
---   2. non escludeva i festivi.
--- Risultato: ogni scadenza anticipata di 1 giorno sempre, fino a 5 giorni nei
--- periodi di festa (es. restituzione 11/12/2026 -> scadenza calcolata
--- 31/12/2026 invece del 05/01/2027). Le cauzioni venivano sollecitate e
--- restituite prima del dovuto.
+-- Il calcolo in `sync-booking-cauzione` non escludeva i FESTIVI: Natale,
+-- Ferragosto, Pasqua e gli altri venivano contati come giorni lavorativi.
+-- Risultato: nei periodi di festa la scadenza cadeva fino a 4 giorni prima del
+-- dovuto e le cauzioni venivano sollecitate e restituite troppo presto.
+-- Il numero di giorni (14) era invece corretto e voluto: vedi commit 219f636c.
 --
 -- Questa migrazione: crea la funzione di calcolo e RETTIFICA le cauzioni
 -- ancora APERTE (Attiva, In scadenza, Incassata). Restano intatte quelle
@@ -42,7 +40,7 @@ $$;
 COMMENT ON FUNCTION public.dr7_festivo_it(DATE) IS
   'true se la data e'' un festivo nazionale italiano. Stesso elenco di netlify/functions/utils/giorniLavorativi.ts e src/data/italianHolidays.ts: aggiornando un anno, aggiornarli tutti.';
 
-CREATE OR REPLACE FUNCTION public.dr7_scadenza_lavorativi(data_restituzione DATE, giorni INT DEFAULT 15)
+CREATE OR REPLACE FUNCTION public.dr7_scadenza_lavorativi(data_restituzione DATE, giorni INT DEFAULT 14)
 RETURNS DATE
 LANGUAGE plpgsql IMMUTABLE
 AS $$
@@ -71,7 +69,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.dr7_scadenza_lavorativi(DATE, INT) IS
-  'Scadenza a N giorni lavorativi (lun-ven, festivi esclusi) dal giorno dopo la restituzione. Default 15, come da regola direzione 2026-08-10.';
+  'Scadenza a N giorni lavorativi (lun-ven, festivi esclusi) dal giorno dopo la restituzione. Default 14 (valore storico voluto, commit 219f636c, confermato dalla direzione il 12/08). Il difetto corretto era l'esclusione dei festivi, non il numero di giorni.';
 
 
 -- ── ANTEPRIMA (eseguire PRIMA dell'UPDATE) ──────────────────────────────────

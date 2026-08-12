@@ -175,17 +175,17 @@ export const handler: Handler = async (event) => {
 
         // 2026-08-10 BUG CAUZIONI (direzione): la scadenza risultava sempre
         // ANTICIPATA. Il calcolo precedente aveva due difetti:
-        //   1. contava 14 giorni lavorativi invece di 15;
-        //   2. non escludeva i FESTIVI — Natale, Ferragosto, Pasqua e gli
-        //      altri venivano contati come giorni lavorativi, quindi nei
-        //      periodi di festa la scadenza cadeva anche 2-3 giorni prima.
+        //   non escludeva i FESTIVI — Natale, Ferragosto, Pasqua e gli altri
+        //   venivano contati come giorni lavorativi, quindi nei periodi di
+        //   festa la scadenza cadeva fino a 4 giorni prima del dovuto.
         // In piu' usava toISOString(), che in Europe/Rome puo' retrocedere di
         // un giorno rispetto alla data locale.
-        // Regola corretta: 15 giorni lavorativi (lun-ven, festivi esclusi), a
+        // Regola corretta: 14 giorni lavorativi (lun-ven, FESTIVI ESCLUSI), a
         // partire dal primo lavorativo DOPO la restituzione — se l'auto torna
-        // venerdi', il giorno 1 e' il lunedi'.
-        const scadenzaDate = scadenzaGiorniLavorativi(returnDate, 15)
-        console.log(`📅 Calculated scadenza: ${scadenzaDate} (15 giorni lavorativi, festivi esclusi, dopo ${returnDate})`)
+        // venerdi', il giorno 1 e' il lunedi'. Il 14 e' voluto (commit
+        // 219f636c), confermato dalla direzione il 12/08.
+        const scadenzaDate = scadenzaGiorniLavorativi(returnDate, 14)
+        console.log(`📅 Calculated scadenza: ${scadenzaDate} (14 giorni lavorativi, festivi esclusi, dopo ${returnDate})`)
 
         const cauzioneData: Record<string, any> = {
             cliente_id: customerId,
