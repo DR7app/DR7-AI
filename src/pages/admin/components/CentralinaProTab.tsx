@@ -1347,15 +1347,15 @@ export const BUSINESSES: { id: BusinessId; label: string; row: string }[] = [
 // ricompariva sul Mare. Km & Sforo idem: una barca non fa chilometri.
 // Diverso da `sezioni_off`, che resta la scelta REVERSIBILE dell'operatore.
 const SECTIONS_HIDDEN_BY_BUSINESS: Partial<Record<BusinessId, SectionId[]>> = {
-  // 2026-08-13: aggiunta 'p9' (Fiscale). savePersisted scrive sulla riga del
-  // business CORRENTE, ma le funzioni fattura leggono solo la riga `main`:
-  // configurare le aliquote stando su Mare/Aria/Soggiorni le salvava su una
-  // riga che nessuno legge, in silenzio. Il regime fiscale e' uno solo per
-  // l'azienda, quindi si configura da Noleggio Terra e vale ovunque.
-  mare: ['p2', 'p3', 'p9'],       // Assicurazioni, Km & Sforo, Fiscale
-  aria: ['p2', 'p3', 'p9'],
-  soggiorni: ['p2', 'p3', 'p9'],
-  lavaggio: ['p9'],
+  // 2026-08-13: Fiscale (p9) resta VISIBILE su ogni business — la centralina
+  // dev'essere uniforme (roadmap #16). Il problema non era l'interfaccia ma la
+  // lettura: le funzioni fattura leggevano solo la riga `main`, quindi le
+  // aliquote impostate su Mare/Aria/Soggiorni non venivano mai applicate.
+  // Corretto lato server: la fattura legge la riga del business della
+  // prenotazione, con fallback su `main` (netlify/functions/utils/businessConfig.ts).
+  mare: ['p2', 'p3'],       // Assicurazioni, Km & Sforo
+  aria: ['p2', 'p3'],
+  soggiorni: ['p2', 'p3'],
 }
 function sectionsForBusiness(id: BusinessId): { id: SectionId; title: string }[] {
   const hidden = new Set(SECTIONS_HIDDEN_BY_BUSINESS[id] || [])

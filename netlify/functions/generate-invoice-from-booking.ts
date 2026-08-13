@@ -7,6 +7,7 @@ import { renderTemplate } from './utils/messageTemplates'
 import { requireAuth } from './require-auth'
 import { computeRentalBillingDays } from './utils/computeRentalBillingDays'
 import { hasApprovedOverride } from './utils/verifyOverride'
+import { loadBusinessConfig } from './utils/businessConfig'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -30,44 +31,52 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
  * noleggio l'aliquota generale/di categoria, per danni e penali 0), cosi' una
  * configurazione incompleta non cambia il comportamento storico.
  */
-async function loadVoiceVatRate(voiceKey: string, fallback: number): Promise<number> {
+async function loadVoiceVatRate(voiceKey: string, fallback: number, serviceType?: string | null): Promise<number> {
     try {
-        const { data } = await supabase
-            .from('centralina_pro_config')
-            .select('config')
-            .eq('id', 'main')
-            .maybeSingle()
-        const cfg = (data?.config ?? null) as Record<string, unknown> | null
-        const fiscal = cfg?.fiscal as Record<string, unknown> | undefined
-        const list = fiscal?.voice_vat_rates
-        if (!Array.isArray(list)) return fallback
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const row = (list as any[]).find(r => r?.key === voiceKey)
-        const rate = row?.rate
-        // 0 e' un valore VALIDO qui (a differenza dell'aliquota generale, dove
-        // uno 0 salvato per errore faceva emettere fatture a IVA 0).
-        if (typeof rate === 'number' && rate >= 0 && rate <= 100) return rate
+        // La centralina e' una per business e mostra le stesse sezioni per
+        // tutti: si legge la riga del business della prenotazione e si ricade
+        // su `main` se quel business non ha impostato la voce.
+        const { business, main } = await loadBusinessConfig(supabase, serviceType)
+        const pick = (cfg: Record<string, unknown> | null): number | null => {
+            const fiscal = cfg?.fiscal as Record<string, unknown> | undefined
+            const list = fiscal?.voice_vat_rates
+            if (!Array.isArray(list)) return null
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const row = (list as any[]).find(r => r?.key === voiceKey)
+            const rate = row?.rate
+            // 0 e' un valore VALIDO qui (a differenza dell'aliquota generale,
+            // dove uno 0 salvato per errore faceva emettere fatture a IVA 0).
+            return (typeof rate === 'number' && rate >= 0 && rate <= 100) ? rate : null
+        }
+        const fromBusiness = pick(business)
+        if (fromBusiness !== null) return fromBusiness
+        const fromMain = pick(main)
+        if (fromMain !== null) return fromMain
         return fallback
     } catch {
         return fallback
     }
 }
 
-async function loadVatRate(categoryId?: string | null): Promise<number> {
+async function loadVatRate(categoryId?: string | null, serviceType?: string | null): Promise<number> {
     try {
-        const { data } = await supabase
-            .from('centralina_pro_config')
-            .select('config')
-            .eq('id', 'main')
-            .maybeSingle()
-        const cfg = (data?.config ?? null) as Record<string, unknown> | null
+        // Aliquota generale e per-categoria dal business della prenotazione,
+        // con fallback su `main`: una categoria di barche vive su
+        // business_mare, non su main, quindi cercarla solo li' non la trovava
+        // mai e si ricadeva sempre sull'aliquota generale.
+        const { business, main } = await loadBusinessConfig(supabase, serviceType)
+        const cfg = (business ?? main) as Record<string, unknown> | null
+        const mainCfg = main as Record<string, unknown> | null
         const fiscal = cfg?.fiscal as Record<string, unknown> | undefined
         const rate = fiscal?.vat_rate
         // 2026-07-20: 0 NON e' un'aliquota valida per noleggio/servizi (solo
         // danni/penali sono IVA 0, gestiti a parte). Un vat_rate 0 salvato per
         // errore/glitch faceva emettere fatture noleggio a IVA 0. Trattiamo 0
         // (o non-numero) come "non impostato" → default 22.
-        const general = (typeof rate === 'number' && rate > 0 && rate <= 100) ? rate : 22
+        const mainRate = (mainCfg?.fiscal as Record<string, unknown> | undefined)?.vat_rate
+        const general = (typeof rate === 'number' && rate > 0 && rate <= 100) ? rate
+            : (typeof mainRate === 'number' && mainRate > 0 && mainRate <= 100) ? mainRate
+            : 22
         // 2026-07-24 (roadmap 33): aliquota IVA PER CATEGORIA se impostata in
         // Centralina (categories[].vat_rate). Vuoto/0 → usa l'IVA generale.
         if (categoryId) {
@@ -224,7 +233,7 @@ export const handler: Handler = async (event) => {
         // Aliquota IVA dinamica da Centralina Pro: per-categoria del veicolo se
         // impostata (Categorie & Fascia > IVA per categoria), altrimenti generale.
         const bookingCategory = await resolveBookingCategory(booking)
-        const dynamicVatRate = await loadVatRate(bookingCategory)
+        const dynamicVatRate = await loadVatRate(bookingCategory, booking.service_type)
 
         // Guard: never generate fattura for unpaid bookings.
         // 2026-08-09 (roadmap #43, "avviso sempre, blocco mai"): superabile con
@@ -800,8 +809,8 @@ export const handler: Handler = async (event) => {
             const vatDivisor = 1 + dynamicVatRate / 100
             // roadmap #33: aliquota configurabile per tipologia. Default 0,
             // che e' il comportamento storico di danni e penali.
-            const vatPenali = includeIVA ? await loadVoiceVatRate('penali', 0) : 0
-            const vatDanni = includeIVA ? await loadVoiceVatRate('danni', 0) : 0
+            const vatPenali = includeIVA ? await loadVoiceVatRate('penali', 0, booking.service_type) : 0
+            const vatDanni = includeIVA ? await loadVoiceVatRate('danni', 0, booking.service_type) : 0
 
             // 2026-07-20: SOLO danni e penali sono IVA 0 (fuori campo). Quindi
             // NIENTE divisione per 1.22 e vat_rate 0: l'importo tipizzato e' gia'

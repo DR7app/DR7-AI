@@ -4,6 +4,7 @@ import { generateFatturaXML, generateInvoiceFilename } from './xml-utils'
 import { uploadInvoiceToAruba } from './aruba-utils'
 import { generateInvoicePDF } from './invoice-pdf-utils'
 import { renderTemplate } from './utils/messageTemplates'
+import { loadBusinessConfig } from './utils/businessConfig'
 
 /**
  * 2026-08-12 (roadmap #33): aliquota per tipologia di voce, da Centralina Pro
@@ -14,16 +15,27 @@ import { renderTemplate } from './utils/messageTemplates'
  */
 async function loadVoiceVatRate(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    sb: any, voiceKey: string, fallback = 0
+    sb: any, voiceKey: string, fallback = 0, serviceType?: string | null
 ): Promise<number> {
     try {
-        const { data } = await sb.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
-        const list = data?.config?.fiscal?.voice_vat_rates
-        if (!Array.isArray(list)) return fallback
+        // Riga del business della prenotazione, fallback su `main`: la
+        // centralina e' una per business e l'operatore puo' impostare l'IVA
+        // stando su Mare o Aria. Leggendo solo `main` quelle impostazioni
+        // venivano ignorate in silenzio.
+        const { business, main } = await loadBusinessConfig(sb, serviceType)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const row = (list as any[]).find(r => r?.key === voiceKey)
-        const rate = row?.rate
-        if (typeof rate === 'number' && rate >= 0 && rate <= 100) return rate
+        const pick = (cfg: any): number | null => {
+            const list = cfg?.fiscal?.voice_vat_rates
+            if (!Array.isArray(list)) return null
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const row = (list as any[]).find(r => r?.key === voiceKey)
+            const rate = row?.rate
+            return (typeof rate === 'number' && rate >= 0 && rate <= 100) ? rate : null
+        }
+        const fromBusiness = pick(business)
+        if (fromBusiness !== null) return fromBusiness
+        const fromMain = pick(main)
+        if (fromMain !== null) return fromMain
         return fallback
     } catch {
         return fallback
@@ -248,7 +260,7 @@ export const handler: Handler = async (event) => {
         const isDanni = type === 'danni'
         const typeLabel = isDanni ? 'Danno' : 'Penale'
         // Aliquota configurabile per tipologia (roadmap #33). Default 0.
-        const vatVoce = await loadVoiceVatRate(supabase, isDanni ? 'danni' : 'penali', 0)
+        const vatVoce = await loadVoiceVatRate(supabase, isDanni ? 'danni' : 'penali', 0, booking?.service_type)
 
         const items = cartItems.map(item => {
             const description = rawDescriptions
