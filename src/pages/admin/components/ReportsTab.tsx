@@ -577,7 +577,8 @@ export default function ReportsTab() {
         // Applica gli override manuali PRIMA dei totali: correzioni, rimozioni e
         // aggiunte a mano entrano nel calcolo (KPI, summary, tabella).
         const ov = await loadReportOverrides('noleggio')
-        const periodKey = `${customFrom}|${customTo}`
+        // Chiave MENSILE, non la plage esatta: vedi handleSaveRowEdit.
+        const periodKey = String(customFrom || '').slice(0, 7) || 'all'
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const baseVehicles = (data.vehicles || []) as any[]
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -600,7 +601,9 @@ export default function ReportsTab() {
         // tipo, rimuovi o aggiungi un tipo. I totali (ricavo, conteggio) si
         // ricalcolano sulle righe corrette. Chiave = `${periodKey}|${type}`.
         const ov = await loadReportOverrides('lavaggio')
-        const periodKey = `${customFrom}|${customTo}`
+        // Stessa chiave mensile usata in handleSaveRowEdit: vedi il commento
+        // esteso piu' avanti sul perche' la plage esatta non funzionava.
+        const periodKey = String(customFrom || '').slice(0, 7) || 'all'
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const baseTypes = ((data.byType || []) as any[])
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -623,7 +626,19 @@ export default function ReportsTab() {
   }
 
   // ── Modifiche manuali al report (nuova funzione) ──────────────────────────
-  const periodKey = `${customFrom}|${customTo}`
+  //
+  // 2026-08-13 (roadmap #38, "non permette di modificare le voci esistenti"):
+  // la chiave della correzione era `${customFrom}|${customTo}|${id}`, cioe' la
+  // PLAGE ESATTA di date. I preset pero' sono relativi a oggi: "ultimi 30
+  // giorni" produce un intervallo diverso ogni giorno. Una correzione salvata
+  // oggi non veniva piu' ritrovata domani, ne' cambiando filtro — sembrava che
+  // la modifica non funzionasse, mentre era salvata sotto una chiave
+  // irraggiungibile.
+  //
+  // Ora la chiave e' il MESE della data di inizio: la direzione ragiona per
+  // mese ("il report di agosto"), e una correzione fatta guardando agosto
+  // resta visibile con qualunque preset che parta da agosto.
+  const periodKey = String(customFrom || '').slice(0, 7) || 'all'
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function handleSaveRowEdit(row: any, changes: Record<string, number>, note: string) {
     try {
