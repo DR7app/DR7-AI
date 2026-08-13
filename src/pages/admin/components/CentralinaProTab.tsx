@@ -17,6 +17,8 @@ import ClientStatusConfigSection from './ClientStatusConfigSection'
 import AutistiConfigSection from './AutistiConfigSection'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
+import AlarmInventoryModal from '../../../components/admin/AlarmInventoryModal'
+import { useVehicleAlarm } from '../../../contexts/VehicleAlarmContext'
 
 type FleetVehicle = {
   id: string
@@ -47,7 +49,7 @@ type VehicleRevenueTarget = {
   tiers: VehicleRevenueTier[]
 }
 
-type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti'
+type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti' | 'allarmi'
 
 // Days of the week for opening-hours configs (lavaggio, future noleggio).
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
@@ -84,6 +86,7 @@ export const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'p10', title: 'DR7 Club' },
   { id: 'p11', title: 'Automazioni' },
   { id: 'p12', title: 'Orari' },
+  { id: 'allarmi', title: 'Allarmi' },
   { id: 'catalogo', title: 'Catalogo' },
   { id: 'status-clienti', title: 'Status Clienti' },
   { id: 'autisti', title: 'Autisti' },
@@ -1670,6 +1673,9 @@ export default function CentralinaProTab() {
   // Business attivo (sub-tab). Terra='main' (invariato). Cambiare business salva
   // il corrente e carica/semina l'altro. Vedi switchBusiness.
   const [businessId, setBusinessId] = useState<BusinessId>('terra')
+  // Allarmi: l'audio si abilita con un gesto dell'utente, quindi il pulsante
+  // vive qui dentro insieme all'elenco.
+  const { alarmState, enableAudio } = useVehicleAlarm()
   const [switchingBusiness, setSwitchingBusiness] = useState(false)
 
   // Applica uno snapshot remoto agli state hook (usato al mount e al cambio
@@ -2107,6 +2113,17 @@ export default function CentralinaProTab() {
                 fiscal={fiscal}
                 setFiscal={setFiscal}
                 businessId={businessId}
+              />
+            )}
+            {section === 'allarmi' && (
+              // Gli allarmi non stanno nel JSON della centralina: vivono in
+              // `system_alarms` e si salvano riga per riga. Qui e' lo stesso
+              // pannello della vecchia modale, montato come sezione — non una
+              // seconda copia, cosi' le due superfici non possono divergere.
+              <AlarmInventoryModal
+                embedded
+                audioEnabled={alarmState.audioEnabled}
+                onEnableAudio={enableAudio}
               />
             )}
             {section === 'p10' && (

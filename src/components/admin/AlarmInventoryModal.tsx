@@ -32,10 +32,17 @@ interface AlarmRow {
 }
 
 interface Props {
-    isOpen: boolean
-    onClose: () => void
+    /** Ignorato quando `embedded`: la sezione e' sempre visibile. */
+    isOpen?: boolean
+    onClose?: () => void
     audioEnabled: boolean
     onEnableAudio: () => void
+    /**
+     * Reso come SEZIONE di pagina (Centralina Pro > Allarmi) invece che come
+     * modale: niente overlay, niente pulsante di chiusura. Il contenuto e la
+     * logica sono gli stessi, cosi' le due superfici non divergono.
+     */
+    embedded?: boolean
 }
 
 const UNIT_LABEL: Record<ThresholdUnit, string> = {
@@ -45,7 +52,7 @@ const UNIT_LABEL: Record<ThresholdUnit, string> = {
     days: 'giorni',
 }
 
-export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onEnableAudio }: Props) {
+export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onEnableAudio, embedded = false }: Props) {
     const [alarms, setAlarms] = useState<AlarmRow[]>([])
     const [loading, setLoading] = useState(false)
     const [savingId, setSavingId] = useState<string | null>(null)
@@ -53,7 +60,7 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
 
     // Load on open
     useEffect(() => {
-        if (!isOpen) return
+        if (!isOpen && !embedded) return
         setLoading(true)
         ;(async () => {
             const { data, error } = await supabase
@@ -67,9 +74,9 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
             }
             setLoading(false)
         })()
-    }, [isOpen])
+    }, [isOpen, embedded])
 
-    if (!isOpen) return null
+    if (!isOpen && !embedded) return null
 
     const groups: Array<{ id: 'booking' | 'fleet'; title: string; subtitle: string }> = [
         { id: 'booking', title: 'Prenotazioni', subtitle: 'Eventi legati al ciclo di vita di un noleggio o lavaggio.' },
@@ -132,10 +139,8 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
         setAlarms(prev => prev.map(a => (a.id === row.id ? { ...a, is_enabled: next } : a)))
     }
 
-    return (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center px-3 py-6">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative w-full max-w-3xl max-h-[88vh] overflow-y-auto bg-theme-bg-primary border border-theme-border rounded-2xl shadow-2xl">
+    const corpo = (
+        <>
                 {/* Header */}
                 <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-5 py-4 bg-theme-bg-primary border-b border-theme-border">
                     <div className="flex items-center gap-3">
@@ -149,15 +154,17 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                             <p className="text-xs text-theme-text-muted">{alarms.length} allarmi · controllo ogni 60 secondi</p>
                         </div>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="p-2 rounded-lg text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-tertiary transition-colors"
-                        aria-label="Chiudi"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
+                    {!embedded && (
+                        <button
+                            onClick={onClose}
+                            className="p-2 rounded-lg text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-tertiary transition-colors"
+                            aria-label="Chiudi"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    )}
                 </div>
 
                 {/* Audio status */}
@@ -182,6 +189,13 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                         </div>
                     )}
                 </div>
+
+                {embedded && (
+                    <div className="px-5 py-2 text-[11px] text-amber-500 border-b border-theme-border">
+                        Gli allarmi sono UNICI per tutta l&apos;azienda: non cambiano da un business
+                        all&apos;altro. Quello che modifichi qui vale ovunque.
+                    </div>
+                )}
 
                 {/* Add disabled hint */}
                 <div className="px-5 py-2 text-[11px] text-theme-text-muted border-b border-theme-border">
@@ -300,6 +314,22 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                     Il polling di <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">VehicleAlarmContext</code> rileva la nuova
                     configurazione entro 60 secondi senza ricaricare.
                 </div>
+        </>
+    )
+
+    if (embedded) {
+        return (
+            <div className="bg-theme-bg-primary border border-theme-border rounded-2xl overflow-hidden">
+                {corpo}
+            </div>
+        )
+    }
+
+    return (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center px-3 py-6">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative w-full max-w-3xl max-h-[88vh] overflow-y-auto bg-theme-bg-primary border border-theme-border rounded-2xl shadow-2xl">
+                {corpo}
             </div>
         </div>
     )
