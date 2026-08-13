@@ -295,6 +295,15 @@ const VEHICLE_EDIT_FIELDS: FieldDef[] = [
   { key: 'daSaldareRevenue', label: 'Da saldare €' },
   { key: 'anticipatedRevenue', label: 'Anticipato €' },
 ]
+// Config riga CLIENTE dentro il veicolo (Report Noleggio): gli importi della
+// singola prenotazione. Giorni e date non si toccano da qui — si correggono
+// sulla prenotazione, che e' gia' modificabile.
+const BOOKING_EDIT_FIELDS: FieldDef[] = [
+  { key: 'total_price', label: 'Totale €' },
+  { key: 'penalty_amount', label: 'Penali €' },
+  { key: 'danni_amount', label: 'Danni €' },
+  { key: 'da_saldare', label: 'Da saldare €' },
+]
 // Config lavaggi (Report Lavaggi): ricavo + quantita' per tipo servizio
 const WASH_EDIT_FIELDS: FieldDef[] = [
   { key: 'revenue', label: 'Ricavo €' },
@@ -349,7 +358,7 @@ function ReportRowModal({ mode, row, fields, identityFields, addTemplate, onClos
     }
   }
 
-  const title = row?.label || row?.type
+  const title = row?.label || row?.type || row?.customer_name
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="bg-theme-bg-secondary border border-theme-border rounded-xl w-full max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -504,6 +513,10 @@ export default function ReportsTab() {
   const [editReport, setEditReport] = useState(false)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editRow, setEditRow] = useState<any | null>(null)
+  // Riga cliente (prenotazione) in corso di correzione — separata da editRow,
+  // che e' la riga del veicolo.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [editBooking, setEditBooking] = useState<any | null>(null)
   const [showAddRow, setShowAddRow] = useState(false)
   const [washData, setWashData] = useState<WashReportData | null>(null)
   const [cauzioniData, setCauzioniData] = useState<CauzioniReportData | null>(null)
@@ -583,6 +596,58 @@ export default function ReportsTab() {
         const baseVehicles = (data.vehicles || []) as any[]
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let adjusted = applyOverrides(baseVehicles, ov, (v: any) => `${periodKey}|${v.vehicleId}`)
+        // Correzioni PER CLIENTE (riga di prenotazione dentro il veicolo).
+        //
+        // Si applica il DELTA, non il ricalcolo: i totali del veicolo arrivano
+        // dal backend con formule loro (il noleggio e' prorata di quanto
+        // INCASSATO sui giorni del mese, non del `total_price` mostrato in
+        // riga). Risommare le righe darebbe numeri diversi da oggi anche senza
+        // nessuna correzione. Sommando invece la sola differenza introdotta
+        // dalla modifica, un report senza correzioni resta identico a prima e
+        // una correzione si propaga al veicolo, alla categoria e ai KPI.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const quotaMese = (b: any): number => {
+          const tot = Number(b?.total_price) || 0
+          const gg = Number(b?.billable_days) || 0
+          if (gg <= 0) return tot
+          return (tot / gg) * Math.min(Number(b?.days_in_month) || 0, gg)
+        }
+        adjusted = adjusted.map((v) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const base = Array.isArray((v as any).bookings) ? (v as any).bookings as any[] : []
+          if (base.length === 0) return v
+          let dRental = 0, dPen = 0, dDan = 0, dSaldo = 0
+          const bookings = base.map((b) => {
+            const bKey = `${periodKey}|b|${b.booking_id}`
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const copy: any = { ...b }
+            let touched = false
+            for (const f of BOOKING_EDIT_FIELDS) {
+              const e = ov.edits.get(`${bKey}::${f.key}`)
+              if (e != null) { copy[f.key] = e; touched = true }
+            }
+            if (!touched) return b
+            dRental += quotaMese(copy) - quotaMese(b)
+            dPen += (Number(copy.penalty_amount) || 0) - (Number(b.penalty_amount) || 0)
+            dDan += (Number(copy.danni_amount) || 0) - (Number(b.danni_amount) || 0)
+            dSaldo += (Number(copy.da_saldare) || 0) - (Number(b.da_saldare) || 0)
+            copy._overrideNote = ov.notesByRow.get(bKey) || null
+            copy._edited = true
+            return copy
+          })
+          // Una correzione fatta a mano sul veicolo vince su quella per
+          // cliente: se la direzione ha scritto il totale del veicolo, non
+          // glielo si sposta sotto i piedi.
+          const fissato = (campo: string) => ov.edits.has(`${periodKey}|${v.vehicleId}::${campo}`)
+          return {
+            ...v,
+            bookings,
+            rentalRevenue: fissato('rentalRevenue') ? v.rentalRevenue : (Number(v.rentalRevenue) || 0) + dRental,
+            penaltyRevenue: fissato('penaltyRevenue') ? v.penaltyRevenue : (Number(v.penaltyRevenue) || 0) + dPen,
+            danniRevenue: fissato('danniRevenue') ? v.danniRevenue : (Number(v.danniRevenue) || 0) + dDan,
+            daSaldareRevenue: fissato('daSaldareRevenue') ? v.daSaldareRevenue : (Number(v.daSaldareRevenue) || 0) + dSaldo,
+          }
+        })
         // Ricalcola totalRevenue = noleggio + penali + danni dopo eventuali edit
         // (a meno che totalRevenue sia stato sovrascritto direttamente).
         adjusted = adjusted.map((v) => {
@@ -594,8 +659,23 @@ export default function ReportsTab() {
         // Le righe aggiunte a mano valgono solo per il periodo in cui sono state create.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         adjusted = adjusted.filter((v: any) => !v._isManual || v.period === periodKey)
+        // I totali in cima sono somme delle righe: vanno risommati sulle righe
+        // CORRETTE. Prima restavano quelli del backend, quindi una correzione si
+        // vedeva nella tabella e nel totale di categoria ma non nelle card KPI,
+        // che continuavano a mostrare il valore originale.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const somma = (campo: string) => Math.round(adjusted.reduce((t: number, v: any) => t + (Number(v[campo]) || 0), 0) * 100) / 100
         setOverrides(ov)
-        setVehicleData({ ...data, vehicles: adjusted })
+        setVehicleData({
+          ...data,
+          vehicles: adjusted,
+          totalRentalRevenue: somma('rentalRevenue'),
+          totalPenaltyRevenue: somma('penaltyRevenue'),
+          totalDanniRevenue: somma('danniRevenue'),
+          totalDaSaldare: somma('daSaldareRevenue'),
+          totalRevenue: somma('totalRevenue'),
+          totalAnticipatedRevenue: somma('anticipatedRevenue'),
+        })
       } else if (activeReport === 'washes') {
         // Override manuali anche sul report Lavaggi: correggi ricavo/quantita' per
         // tipo, rimuovi o aggiungi un tipo. I totali (ricavo, conteggio) si
@@ -671,6 +751,28 @@ export default function ReportsTab() {
   async function handleRestoreRow(row: any) {
     try { await deleteOverrideByRow('noleggio', `${periodKey}|${row.vehicleId}`); await fetchReport(); toast.success('Voce ripristinata') }
     catch (e) { toast.error('Errore: ' + (e as Error).message) }
+  }
+  // Correzione della singola riga CLIENTE dentro un veicolo. Chiave distinta
+  // da quella del veicolo (`|b|`) cosi' le due non si sovrascrivono a vicenda.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function handleSaveBookingEdit(row: any, changes: Record<string, number>, note: string) {
+    try {
+      const key = `${periodKey}|b|${row.booking_id}`
+      for (const [field, value] of Object.entries(changes)) {
+        await saveEditOverride('noleggio', key, field, value, note || null)
+      }
+      setEditBooking(null)
+      await fetchReport()
+      toast.success('Riga cliente aggiornata')
+    } catch (e) { toast.error('Errore: ' + (e as Error).message) }
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function handleRestoreBooking(row: any) {
+    try {
+      await deleteOverrideByRow('noleggio', `${periodKey}|b|${row.booking_id}`)
+      await fetchReport()
+      toast.success('Valori originali ripristinati')
+    } catch (e) { toast.error('Errore: ' + (e as Error).message) }
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function handleAddManualRow(row: any, note: string) {
@@ -1037,6 +1139,21 @@ export default function ReportsTab() {
                   {/* Header: customer + payment badge */}
                   <div className="flex justify-between items-center mb-1.5">
                     <span className="font-medium text-theme-text-primary truncate">{b.customer_name}</span>
+                    {editReport && (
+                      <button
+                        onClick={() => setEditBooking(b)}
+                        title="Correggi gli importi di questa riga"
+                        className="text-amber-400 hover:text-amber-300 text-[11px] leading-none shrink-0"
+                      >✎</button>
+                    )}
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    {(b as any)._edited && (
+                      <button
+                        onClick={() => handleRestoreBooking(b)}
+                        title={`Corretta a mano${(b as any)._overrideNote ? ` — ${(b as any)._overrideNote}` : ''}. Clicca per ripristinare i valori originali.`}
+                        className="px-1 rounded bg-amber-500/15 text-amber-400 text-[10px] font-bold shrink-0"
+                      >corretta</button>
+                    )}
                     <span className={`shrink-0 ml-2 px-2 py-0.5 rounded-full font-semibold ${badge.color}`}>{badge.label}</span>
                   </div>
 
@@ -1257,7 +1374,26 @@ export default function ReportsTab() {
                     const daSaldare = b.da_saldare || 0
                     return (
                       <tr key={b.booking_id} className={`border-t border-theme-border/30 ${daSaldare > 0 ? 'bg-red-500/5' : ''}`}>
-                        <td className="py-1 px-2 text-theme-text-primary font-medium">{b.customer_name}</td>
+                        <td className="py-1 px-2 text-theme-text-primary font-medium">
+                          <span className="inline-flex items-center gap-1.5">
+                            {b.customer_name}
+                            {editReport && (
+                              <button
+                                onClick={() => setEditBooking(b)}
+                                title="Correggi gli importi di questa riga"
+                                className="text-amber-400 hover:text-amber-300 text-[11px] leading-none"
+                              >✎</button>
+                            )}
+                            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                            {(b as any)._edited && (
+                              <button
+                                onClick={() => handleRestoreBooking(b)}
+                                title={`Corretta a mano${(b as any)._overrideNote ? ` — ${(b as any)._overrideNote}` : ''}. Clicca per ripristinare i valori originali.`}
+                                className="px-1 rounded bg-amber-500/15 text-amber-400 text-[10px] font-bold"
+                              >corretta</button>
+                            )}
+                          </span>
+                        </td>
                         <td className="py-1 px-2 text-theme-text-muted">{formatDateIT(b.start_at)}</td>
                         <td className="py-1 px-2 text-theme-text-muted">{formatDateIT(b.end_at)}</td>
                         <td className="text-center py-1 px-2 text-theme-text-primary">{b.billable_days}g</td>
@@ -1653,6 +1789,17 @@ export default function ReportsTab() {
               identityFields={[]}
               onClose={() => setEditRow(null)}
               onSaveEdit={(changes, note) => handleSaveRowEdit(editRow, changes, note)}
+              onSaveAdd={() => {}}
+            />
+          )}
+          {editBooking && (
+            <ReportRowModal
+              mode="edit"
+              row={editBooking}
+              fields={BOOKING_EDIT_FIELDS}
+              identityFields={[]}
+              onClose={() => setEditBooking(null)}
+              onSaveEdit={(changes, note) => handleSaveBookingEdit(editBooking, changes, note)}
               onSaveAdd={() => {}}
             />
           )}
