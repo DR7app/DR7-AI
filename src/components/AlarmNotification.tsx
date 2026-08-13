@@ -2,15 +2,24 @@ import { useState } from 'react'
 import { useVehicleAlarm } from '../contexts/VehicleAlarmContext'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import { authFetch } from '../utils/authFetch'
 
 export default function AlarmNotification() {
     const { alarmState, stopAlarm, snoozeAlarm, markReturned } = useVehicleAlarm()
     const navigate = useNavigate()
-    const [busy, setBusy] = useState<'returned' | 'snooze' | 'postpone' | null>(null)
+    const [busy, setBusy] = useState<'returned' | 'snooze' | 'postpone' | 'message' | null>(null)
+    // Il messaggio parte una volta sola: l'allarme resta aperto dopo l'invio
+    // (l'operatore puo' ancora segnare il rientro), e senza questo un secondo
+    // click manderebbe al cliente lo stesso avviso due volte.
+    const [messageSent, setMessageSent] = useState(false)
 
     if (!alarmState.activeAlarm) return null
 
     const { bookingId, vehicleName, returnTime, customerName, type } = alarmState.activeAlarm
+    // Impostato in Centralina Pro > Allarmi. Senza template niente pulsante:
+    // meglio nessun bottone che uno che manda un messaggio vuoto.
+    const messageKey = alarmState.activeAlarm.messageKey || null
+    const alarmId = alarmState.activeAlarm.alarmId || ''
     const isReturn = type === 'return'
     const isFleet = type === 'fleet_maintenance_km' || type === 'fleet_maintenance_date'
     // 2026-05-20: includi sempre il tipo di manutenzione/scadenza nel
@@ -46,6 +55,30 @@ export default function AlarmNotification() {
         setBusy(null)
         if (res.ok) toast.success('Prenotazione marcata come rientrata')
         else toast.error('Errore: ' + (res.error || 'operazione fallita'))
+    }
+
+    // Avvisa il cliente con il template scelto dalla direzione. Il testo vive
+    // in Messaggi di Sistema Pro: qui si spedisce solo la chiave.
+    const handleSendMessage = async () => {
+        setBusy('message')
+        try {
+            const res = await authFetch('/.netlify/functions/alarm-send-message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ alarmId, entityId: bookingId, templateKey: messageKey }),
+            })
+            const out = await res.json().catch(() => ({}))
+            if (out?.sent) {
+                setMessageSent(true)
+                toast.success('Messaggio inviato al cliente')
+            } else {
+                toast.error(out?.message || 'Messaggio non inviato')
+            }
+        } catch (e) {
+            toast.error('Errore invio: ' + (e as Error).message)
+        } finally {
+            setBusy(null)
+        }
     }
 
     const handleSnooze = async () => {
@@ -173,6 +206,19 @@ export default function AlarmNotification() {
                                             Segna come rientrato
                                         </>
                                     )}
+                                </button>
+                            )}
+                            {!isFleet && messageKey && (
+                                <button
+                                    onClick={handleSendMessage}
+                                    disabled={busy !== null || messageSent}
+                                    className="w-full px-4 py-2.5 bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-300 text-white font-semibold rounded-xl transition-colors text-sm flex items-center justify-center gap-2"
+                                    title="Invia al cliente il messaggio collegato a questo allarme (Centralina Pro > Allarmi)"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.9 9.9 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                    </svg>
+                                    {busy === 'message' ? 'Invio...' : messageSent ? 'Messaggio inviato' : 'Avvisa il cliente'}
                                 </button>
                             )}
                             <button

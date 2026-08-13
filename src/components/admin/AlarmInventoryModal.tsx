@@ -29,6 +29,8 @@ interface AlarmRow {
     threshold_unit: ThresholdUnit
     is_enabled: boolean
     sort_order: number
+    /** Template di Messaggi di Sistema Pro da proporre all'operatore. */
+    message_key: string | null
 }
 
 interface Props {
@@ -57,6 +59,11 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
     const [loading, setLoading] = useState(false)
     const [savingId, setSavingId] = useState<string | null>(null)
     const [editing, setEditing] = useState<Record<string, Partial<AlarmRow>>>({})
+    // Elenco dei messaggi disponibili. Si legge da system_messages, la stessa
+    // tabella di Messaggi di Sistema Pro: nessun elenco parallelo da tenere
+    // allineato a mano. Solo i template accesi e non vuoti — proporre un
+    // template spento significherebbe offrire un pulsante che non manda nulla.
+    const [templates, setTemplates] = useState<{ key: string; label: string }[]>([])
 
     // Load on open
     useEffect(() => {
@@ -73,6 +80,17 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                 setAlarms((data || []) as AlarmRow[])
             }
             setLoading(false)
+        })()
+        ;(async () => {
+            const { data } = await supabase
+                .from('system_messages')
+                .select('message_key, label, is_enabled, message_body')
+                .order('label', { ascending: true })
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const rows = ((data || []) as any[])
+                .filter(t => t.is_enabled !== false && String(t.message_body || '').trim())
+                .filter(t => !String(t.message_key || '').startsWith('pro_wrapper_'))
+            setTemplates(rows.map(t => ({ key: String(t.message_key), label: String(t.label || t.message_key) })))
         })()
     }, [isOpen, embedded])
 
@@ -279,6 +297,32 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                                                             rows={2}
                                                             className="w-full px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-secondary"
                                                         />
+
+                                                        {/* Messaggio al cliente — solo per gli allarmi che HANNO un
+                                                            cliente. Sulle scadenze di flotta non c'e' nessuno da
+                                                            avvisare: il bollo non si comunica al cliente. */}
+                                                        {row.category === 'booking' && (
+                                                            <>
+                                                                <span className="text-theme-text-muted">Messaggio al cliente</span>
+                                                                <div>
+                                                                    <select
+                                                                        value={String(valueOf(row, 'message_key') || '')}
+                                                                        onChange={e => setField(row.id, 'message_key', e.target.value || null)}
+                                                                        className="w-full px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary"
+                                                                    >
+                                                                        <option value="">— nessuno, non mostrare il pulsante —</option>
+                                                                        {templates.map(t => (
+                                                                            <option key={t.key} value={t.key}>{t.label}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                    <p className="mt-1 text-[10px] text-theme-text-muted">
+                                                                        Quando l&apos;allarme suona, l&apos;operatore vede il pulsante
+                                                                        &quot;Avvisa il cliente&quot; e parte questo messaggio. Il testo si
+                                                                        scrive in Messaggi di Sistema Pro.
+                                                                    </p>
+                                                                </div>
+                                                            </>
+                                                        )}
                                                     </div>
 
                                                     {dirty && (

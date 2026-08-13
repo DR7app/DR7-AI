@@ -18,6 +18,10 @@ interface AlarmBooking {
     dueValue?: number | string
     remaining?: number
     urgent?: boolean
+    /** id della riga system_alarms che ha fatto suonare l'allarme. */
+    alarmId?: string
+    /** Template Pro da inviare al cliente, scelto in Centralina Pro > Allarmi. */
+    messageKey?: string | null
 }
 
 interface AlarmConfigRow {
@@ -25,6 +29,8 @@ interface AlarmConfigRow {
     is_enabled: boolean
     threshold_value: number
     threshold_unit: 'minutes_before' | 'minutes_after' | 'km' | 'days'
+    /** Messaggio Pro collegato. NULL = l'allarme non propone nessun invio. */
+    message_key?: string | null
 }
 
 interface AlarmState {
@@ -84,7 +90,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     const getAlarmCfg = (id: string, defaultValue: number, defaultUnit: AlarmConfigRow['threshold_unit']): AlarmConfigRow => {
         const fromDb = alarmConfigRef.current.get(id)
         if (fromDb) return fromDb
-        return { id, is_enabled: true, threshold_value: defaultValue, threshold_unit: defaultUnit }
+        return { id, is_enabled: true, threshold_value: defaultValue, threshold_unit: defaultUnit, message_key: null }
     }
     const triggeredAlarmsRef = useRef<Set<string>>((() => {
         try {
@@ -191,7 +197,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         ;(async () => {
             const { data } = await supabase
                 .from('system_alarms')
-                .select('id, is_enabled, threshold_value, threshold_unit')
+                .select('id, is_enabled, threshold_value, threshold_unit, message_key')
             if (cancelled) return
             apply(data as AlarmConfigRow[] | null)
         })()
@@ -200,7 +206,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             .on('postgres_changes', { event: '*', schema: 'public', table: 'system_alarms' }, async () => {
                 const { data } = await supabase
                     .from('system_alarms')
-                    .select('id, is_enabled, threshold_value, threshold_unit')
+                    .select('id, is_enabled, threshold_value, threshold_unit, message_key')
                 if (!cancelled) apply(data as AlarmConfigRow[] | null)
             })
             .subscribe()
@@ -556,7 +562,9 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                             vehicleName: booking.service_name || 'Lavaggio Auto',
                             returnTime: booking.appointment_time,
                             customerName: booking.customer_name || 'Unknown',
-                            type: 'car_wash'
+                            type: 'car_wash',
+                            alarmId: 'car_wash',
+                            messageKey: cfgCarWash.message_key || null
                         })
                         return
                     }
@@ -597,7 +605,9 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                             vehicleName: booking.vehicle_name || 'Unknown Vehicle',
                             returnTime: returnTime.toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false }),
                             customerName: booking.customer_name || 'Unknown Customer',
-                            type: 'return'
+                            type: 'return',
+                            alarmId: 'return_before',
+                            messageKey: cfgReturnBefore.message_key || null
                         })
                         return // Trigger one at a time
                     }
@@ -640,7 +650,9 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                         vehicleName: booking.vehicle_name || 'Unknown Vehicle',
                         returnTime: returnTime.toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false }),
                         customerName: booking.customer_name || 'Unknown Customer',
-                        type: 'return'
+                        type: 'return',
+                        alarmId: 'return_after',
+                        messageKey: cfgReturnAfter.message_key || null
                     })
                     return // Trigger one at a time
                 }
@@ -690,7 +702,9 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                         returnTime: pickupTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
                         customerName: booking.customer_name || 'Unknown Customer',
                         type: 'deposit',
-                        deposit: deposit
+                        deposit: deposit,
+                        alarmId: 'deposit',
+                        messageKey: cfgDeposit.message_key || null
                     })
                     return // Trigger one at a time
                 }
@@ -730,7 +744,9 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                         returnTime: pickupTime.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
                         customerName: booking.customer_name || 'Unknown',
                         type: 'unpaid_pickup',
-                        deposit: booking.price_total / 100
+                        deposit: booking.price_total / 100,
+                        alarmId: 'unpaid_pickup',
+                        messageKey: cfgUnpaidPickup.message_key || null
                     })
                     return
                 }
@@ -1058,6 +1074,8 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
                 type: 'cauzione_scadenza',
                 deposit: Number(c.importo || 0),
                 urgent: overdue,
+                alarmId: 'cauzione_scadenza_rimborso',
+                messageKey: cfg.message_key || null,
             })
         } catch (error) {
             console.error('Error checking cauzione scadenza alarms:', error)
