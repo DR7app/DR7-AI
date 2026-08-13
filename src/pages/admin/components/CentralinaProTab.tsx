@@ -520,6 +520,38 @@ type VoiceVatRate = {
   rate: number | ''
 }
 
+// Le etichette di default cambiano da business a business, le CHIAVI no.
+// Sul Mare "Noleggio" e' una barca, sull'Aria un elicottero: il nome mostrato
+// deve dirlo, ma la riga deve restare la stessa tipologia di voce in fattura,
+// altrimenti le fatture di quel business smetterebbero di trovarla.
+// Vale solo finche' il business non ha una sua lista salvata: appena la
+// direzione modifica qualcosa, comanda quella.
+const VOICE_LABELS_BY_BUSINESS: Partial<Record<BusinessId, Record<string, string>>> = {
+  mare: {
+    noleggio: 'Noleggio barca',
+    estensione: 'Estensione noleggio barca',
+    servizi: 'Servizi di bordo ed extra',
+    danni: 'Danni all\u2019imbarcazione',
+  },
+  aria: {
+    noleggio: 'Volo / noleggio elicottero',
+    estensione: 'Estensione volo',
+    servizi: 'Servizi a bordo ed extra',
+    danni: 'Danni al velivolo',
+  },
+  soggiorni: {
+    noleggio: 'Soggiorno',
+    estensione: 'Prolungamento soggiorno',
+    servizi: 'Servizi della struttura ed extra',
+    danni: 'Danni alla struttura',
+  },
+  lavaggio: {
+    noleggio: 'Auto di cortesia',
+    estensione: 'Prolungamento auto di cortesia',
+    servizi: 'Extra Care e servizi aggiuntivi',
+  },
+}
+
 const DEFAULT_VOICE_VAT_RATES: VoiceVatRate[] = [
   { key: 'noleggio',   label: 'Noleggio',                 rate: 22 },
   { key: 'servizi',    label: 'Servizi ed extra',         rate: 22 },
@@ -530,6 +562,13 @@ const DEFAULT_VOICE_VAT_RATES: VoiceVatRate[] = [
   { key: 'danni',      label: 'Danni',                    rate: 0  },
   { key: 'cauzione',   label: 'Cauzione',                 rate: 0  },
 ]
+
+/** Default della lista con le etichette del business selezionato. */
+function defaultVoiceRatesFor(businessId: BusinessId): VoiceVatRate[] {
+  const overrides = VOICE_LABELS_BY_BUSINESS[businessId]
+  if (!overrides) return DEFAULT_VOICE_VAT_RATES
+  return DEFAULT_VOICE_VAT_RATES.map(v => overrides[v.key] ? { ...v, label: overrides[v.key] } : v)
+}
 
 type FiscalConfig = {
   /** Aliquota generale: vale per le tipologie senza voce dedicata. */
@@ -578,7 +617,11 @@ const DEFAULT_PAYMENT_METHODS: FiscalPaymentMethod[] = [
 
 const INITIAL_FISCAL: FiscalConfig = {
   vat_rate: 22,
-  voice_vat_rates: DEFAULT_VOICE_VAT_RATES,
+  // Lasciato indefinito di proposito: e' la sezione a proporre la lista con
+  // le etichette del business aperto (defaultVoiceRatesFor). Seminandolo qui
+  // con i nomi di Terra, ogni business nuovo sarebbe partito con "Noleggio"
+  // anche sul Mare, senza modo di distinguerlo da una scelta della direzione.
+  voice_vat_rates: undefined,
   payment_methods: DEFAULT_PAYMENT_METHODS,
 }
 
@@ -2063,6 +2106,7 @@ export default function CentralinaProTab() {
               <FiscaleSection
                 fiscal={fiscal}
                 setFiscal={setFiscal}
+                businessId={businessId}
               />
             )}
             {section === 'p10' && (
@@ -5920,9 +5964,11 @@ function FeeListEditor({
 function FiscaleSection({
   fiscal,
   setFiscal,
+  businessId,
 }: {
   fiscal: FiscalConfig
   setFiscal: (next: FiscalConfig) => void
+  businessId: BusinessId
 }) {
   // Self-heal: if a stored config has no payment_methods array, seed it.
   const methods = Array.isArray(fiscal.payment_methods) && fiscal.payment_methods.length > 0
@@ -5955,7 +6001,7 @@ function FiscaleSection({
   // alla riapertura della sezione. Una volta toccata, la lista e' dell'admin.
   const voiceRates = Array.isArray(fiscal.voice_vat_rates)
     ? fiscal.voice_vat_rates
-    : DEFAULT_VOICE_VAT_RATES
+    : defaultVoiceRatesFor(businessId)
 
   // `key` NON e' modificabile: e' la chiave con cui generate-invoice-from-booking
   // e generate-penalty-invoice cercano l'aliquota. Rinominarla scollegherebbe la
@@ -6022,15 +6068,13 @@ function FiscaleSection({
             Aliquota IVA per tipologia di voce
           </h3>
           <p className="text-[13px] text-theme-text-secondary">
-            Ogni tipologia di riga in fattura ha la sua aliquota. Prima lo <strong>0%</strong> di
-            danni e penali era fisso nel codice e non si poteva cambiare: adesso si imposta qui,
-            come tutte le altre. Lo 0 e&apos; un valore valido.
+            Ogni tipologia di riga in fattura ha la sua aliquota. Il nome si puo&apos; cambiare e
+            la riga si puo&apos; togliere. Lo <strong>0</strong> e&apos; un valore valido.
           </p>
         </div>
         <div className="rounded-xl overflow-hidden border border-theme-border bg-theme-bg-primary">
           <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-theme-bg-tertiary text-[11px] font-medium uppercase tracking-wide text-theme-text-muted">
-            <div className="col-span-3" title="Codice interno con cui le fatture cercano l'aliquota. Non modificabile: cambiarlo scollegherebbe la riga dalle fatture.">Codice (key)</div>
-            <div className="col-span-6">Etichetta visibile</div>
+            <div className="col-span-9">Tipologia di voce</div>
             <div className="col-span-2 text-right">Aliquota</div>
             <div className="col-span-1"></div>
           </div>
@@ -6039,12 +6083,11 @@ function FiscaleSection({
               key={v.key || i}
               className={`grid grid-cols-12 gap-2 px-4 py-2 items-center ${i < voiceRates.length - 1 ? 'border-b border-theme-border' : ''}`}
             >
-              <span className="col-span-3 text-[12px] font-mono text-theme-text-muted truncate" title={`Le fatture cercano questa tipologia con la chiave "${v.key}".`}>{v.key}</span>
               <input
                 type="text"
                 value={v.label}
                 onChange={(e) => patchVoiceRate(i, { label: e.target.value })}
-                className="col-span-6 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary"
+                className="col-span-9 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary"
               />
               <span className="col-span-2 relative">
                 <MoneyInput
@@ -6066,10 +6109,9 @@ function FiscaleSection({
           ))}
         </div>
         <p className="text-[12px] text-theme-text-muted">
-          L&apos;etichetta e&apos; solo il nome mostrato: puoi cambiarla liberamente. Il
-          <strong> codice</strong> a sinistra e&apos; quello con cui le fatture cercano
-          l&apos;aliquota, per questo non si modifica. Se rimuovi una riga, quella tipologia
-          torna a usare l&apos;<strong>aliquota generale</strong> impostata qui sopra.
+          Il nome e&apos; solo l&apos;etichetta mostrata: cambiarlo non sposta la riga, che resta
+          collegata alla stessa tipologia di voce in fattura. Se invece <strong>rimuovi</strong> una
+          riga, quella tipologia torna a usare l&apos;<strong>aliquota generale</strong> qui sopra.
         </p>
       </section>
 
