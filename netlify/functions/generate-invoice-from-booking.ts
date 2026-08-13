@@ -31,13 +31,17 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
  * noleggio l'aliquota generale/di categoria, per danni e penali 0), cosi' una
  * configurazione incompleta non cambia il comportamento storico.
  */
-async function loadVoiceVatRate(voiceKey: string, fallback: number, serviceType?: string | null): Promise<number> {
+async function loadVoiceVatResolver(serviceType?: string | null): Promise<(voiceKey: string, fallback: number) => number> {
     try {
         // La centralina e' una per business e mostra le stesse sezioni per
         // tutti: si legge la riga del business della prenotazione e si ricade
         // su `main` se quel business non ha impostato la voce.
+        //
+        // Si legge UNA volta sola e si restituisce un risolutore: prima ogni
+        // tipologia faceva la sua query, e ora che le tipologie lette sono
+        // sei invece di due sarebbero sei round-trip per fattura.
         const { business, main } = await loadBusinessConfig(supabase, serviceType)
-        const pick = (cfg: Record<string, unknown> | null): number | null => {
+        const pick = (cfg: Record<string, unknown> | null, voiceKey: string): number | null => {
             const fiscal = cfg?.fiscal as Record<string, unknown> | undefined
             const list = fiscal?.voice_vat_rates
             if (!Array.isArray(list)) return null
@@ -48,13 +52,18 @@ async function loadVoiceVatRate(voiceKey: string, fallback: number, serviceType?
             // dove uno 0 salvato per errore faceva emettere fatture a IVA 0).
             return (typeof rate === 'number' && rate >= 0 && rate <= 100) ? rate : null
         }
-        const fromBusiness = pick(business)
-        if (fromBusiness !== null) return fromBusiness
-        const fromMain = pick(main)
-        if (fromMain !== null) return fromMain
-        return fallback
+        // Riga cancellata dalla Centralina = si ricade sul fallback del
+        // chiamante (l'aliquota generale/di categoria, o 0 per danni e penali).
+        return (voiceKey: string, fallback: number) => {
+            const fromBusiness = pick(business, voiceKey)
+            if (fromBusiness !== null) return fromBusiness
+            const fromMain = pick(main, voiceKey)
+            if (fromMain !== null) return fromMain
+            return fallback
+        }
     } catch {
-        return fallback
+        // Config illeggibile: ogni voce usa il fallback del chiamante.
+        return (_voiceKey: string, fallback: number) => fallback
     }
 }
 
@@ -234,6 +243,10 @@ export const handler: Handler = async (event) => {
         // impostata (Categorie & Fascia > IVA per categoria), altrimenti generale.
         const bookingCategory = await resolveBookingCategory(booking)
         const dynamicVatRate = await loadVatRate(bookingCategory, booking.service_type)
+        // roadmap #33: aliquota per TIPOLOGIA di voce (Centralina Pro > Fiscale).
+        // Ogni tipologia ricade sull'aliquota generale/di categoria se non e'
+        // configurata, quindi chi non tocca nulla fattura esattamente come prima.
+        const voiceVat = await loadVoiceVatResolver(booking.service_type)
 
         // Guard: never generate fattura for unpaid bookings.
         // 2026-08-09 (roadmap #43, "avviso sempre, blocco mai"): superabile con
@@ -665,8 +678,9 @@ export const handler: Handler = async (event) => {
             // prenotazione FIGLIA collegata (parent_booking_id). Se la somma lorda
             // delle voci coincide con extensionAmount (tolleranza 1 cent) usiamo
             // le righe dettagliate; altrimenti fallback alla riga unica generica.
-            const vatRate = includeIVA ? dynamicVatRate : 0
-            const vatDivisor = 1 + dynamicVatRate / 100
+            const rateEstensione = voiceVat('estensione', dynamicVatRate)
+            const vatRate = includeIVA ? rateEstensione : 0
+            const vatDivisor = 1 + rateEstensione / 100
             const fmtDay = (iso: string) => { try { return new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' }) } catch { return '' } }
 
             const detailLines: { description: string; gross: number }[] = []
@@ -732,8 +746,9 @@ export const handler: Handler = async (event) => {
             const totalServicePrice = (booking.price_total || 0) / 100
 
             // Always extract Net Price (the rate comes from Centralina Pro)
-            const netPrice = totalServicePrice / (1 + dynamicVatRate / 100)
-            const vatRate = includeIVA ? dynamicVatRate : 0
+            const rateServizio = voiceVat(booking.service_type === 'car_wash' ? 'lavaggio' : 'meccanica', dynamicVatRate)
+            const netPrice = totalServicePrice / (1 + rateServizio / 100)
+            const vatRate = includeIVA ? rateServizio : 0
 
             items.push({
                 description: `${serviceName} - Data: ${new Date(booking.appointment_date || booking.pickup_date).toLocaleDateString('it-IT')}`,
@@ -764,11 +779,16 @@ export const handler: Handler = async (event) => {
             // Note: km_overage_fee is the per-km RATE (e.g. €1.80/km) for the contract,
             // NOT an actual charged penalty. Do not include it as a fattura line item.
 
-            // Calculate Net Prices for components based on IVA inclusion
-            const vatRate = includeIVA ? dynamicVatRate : 0
+            // Calculate Net Prices for components based on IVA inclusion.
+            // Il veicolo usa la tipologia "noleggio", l'assicurazione "servizi":
+            // sono due righe di fattura diverse e possono avere aliquote diverse.
+            const rateNoleggio = voiceVat('noleggio', dynamicVatRate)
+            const rateServizi = voiceVat('servizi', dynamicVatRate)
+            const vatRate = includeIVA ? rateNoleggio : 0
             // Always divide by (1 + IVA%) because prices are Gross (IVA Included).
             // Aliquota IVA letta da Centralina Pro > Fiscale.
-            const vatDivisor = 1 + dynamicVatRate / 100
+            const vatDivisor = 1 + rateNoleggio / 100
+            const vatDivisorServizi = 1 + rateServizi / 100
 
             const insurancePriceGross = insuranceTotal
 
@@ -795,26 +815,32 @@ export const handler: Handler = async (event) => {
                 const insuranceName = bookingDetails.insurance.replace(/_/g, ' ')
                 items.push({
                     description: `Assicurazione ${insuranceName} - ${rentalDays} giorni`,
-                    unit_price: insurancePriceGross / vatDivisor,
+                    unit_price: insurancePriceGross / vatDivisorServizi,
                     quantity: 1,
-                    vat_rate: vatRate,
-                    total: (insurancePriceGross / vatDivisor)
+                    vat_rate: includeIVA ? rateServizi : 0,
+                    total: (insurancePriceGross / vatDivisorServizi)
                 })
             }
         }
 
         // Include pending penalties and danni as line items (for "Segna Pagato Tutto")
         if (includePenalties) {
-            const vatRate = includeIVA ? dynamicVatRate : 0
-            const vatDivisor = 1 + dynamicVatRate / 100
+            // Le estensioni dentro questo blocco seguono la tipologia "estensione".
+            const rateEstPending = voiceVat('estensione', dynamicVatRate)
+            const vatRate = includeIVA ? rateEstPending : 0
+            const vatDivisor = 1 + rateEstPending / 100
             // roadmap #33: aliquota configurabile per tipologia. Default 0,
             // che e' il comportamento storico di danni e penali.
-            const vatPenali = includeIVA ? await loadVoiceVatRate('penali', 0, booking.service_type) : 0
-            const vatDanni = includeIVA ? await loadVoiceVatRate('danni', 0, booking.service_type) : 0
+            const vatPenali = includeIVA ? voiceVat('penali', 0) : 0
+            const vatDanni = includeIVA ? voiceVat('danni', 0) : 0
 
-            // 2026-07-20: SOLO danni e penali sono IVA 0 (fuori campo). Quindi
-            // NIENTE divisione per 1.22 e vat_rate 0: l'importo tipizzato e' gia'
-            // l'importo pieno da fatturare. (Noleggio/estensioni restano IVA 22.)
+            // 2026-07-20: con aliquota 0 l'importo tipizzato e' gia' quello da
+            // fatturare, quindi niente divisione.
+            // 2026-08-13: se la direzione porta la tipologia sopra lo 0, l'importo
+            // resta LORDO (gli euro digitati in gestionale sono sempre IVA inclusa):
+            // va scorporato, altrimenti mettere Danni al 22% gonfierebbe la
+            // fattura del 22% invece di scomporla.
+            const netDa = (gross: number, rate: number) => rate > 0 ? gross / (1 + rate / 100) : gross
             // Only include PENDING items (not already-paid ones that have their own fattura)
             const penalties = bookingDetails.penalties || []
             penalties.forEach((p: any) => {
@@ -823,10 +849,10 @@ export const handler: Handler = async (event) => {
                     if (gross > 0) {
                         items.push({
                             description: `Penale: ${p.label || 'Penale'}`,
-                            unit_price: gross,
+                            unit_price: netDa(gross, vatPenali),
                             quantity: 1,
                             vat_rate: vatPenali,
-                            total: gross
+                            total: netDa(gross, vatPenali)
                         })
                     }
                 }
@@ -839,10 +865,10 @@ export const handler: Handler = async (event) => {
                     if (gross > 0) {
                         items.push({
                             description: `Danno: ${d.label || 'Danno'}`,
-                            unit_price: gross,
+                            unit_price: netDa(gross, vatDanni),
                             quantity: 1,
                             vat_rate: vatDanni,
-                            total: gross
+                            total: netDa(gross, vatDanni)
                         })
                     }
                 }
@@ -867,8 +893,9 @@ export const handler: Handler = async (event) => {
         // Include extensions as line items in the same fattura (all extensions, already marked paid)
         if (includeExtensions) {
             const extensions = bookingDetails.extension_history || []
-            const vatRate = includeIVA ? dynamicVatRate : 0
-            const vatDivisor = 1 + dynamicVatRate / 100
+            const rateEstensioni = voiceVat('estensione', dynamicVatRate)
+            const vatRate = includeIVA ? rateEstensioni : 0
+            const vatDivisor = 1 + rateEstensioni / 100
             extensions.forEach((ext: any) => {
                 const extTotal = ext.additional_amount || 0
                 if (extTotal > 0) {

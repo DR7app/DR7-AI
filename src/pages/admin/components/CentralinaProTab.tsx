@@ -5950,6 +5950,27 @@ function FiscaleSection({
     setFiscal({ ...fiscal, payment_methods: methods.filter((_, i) => i !== index) })
   }
 
+  // Aliquote per tipologia di voce. Stessa regola dei metodi: nessun
+  // auto-merge dei default, altrimenti una riga cancellata ricomparirebbe
+  // alla riapertura della sezione. Una volta toccata, la lista e' dell'admin.
+  const voiceRates = Array.isArray(fiscal.voice_vat_rates)
+    ? fiscal.voice_vat_rates
+    : DEFAULT_VOICE_VAT_RATES
+
+  // `key` NON e' modificabile: e' la chiave con cui generate-invoice-from-booking
+  // e generate-penalty-invoice cercano l'aliquota. Rinominarla scollegherebbe la
+  // riga dalle fatture, che tornerebbero in silenzio all'aliquota generale.
+  // L'etichetta invece e' libera. Indice come identita' della riga, come sopra.
+  function patchVoiceRate(index: number, patch: Partial<VoiceVatRate>) {
+    setFiscal({
+      ...fiscal,
+      voice_vat_rates: voiceRates.map((v, i) => i === index ? { ...v, ...patch } : v),
+    })
+  }
+  function removeVoiceRate(index: number) {
+    setFiscal({ ...fiscal, voice_vat_rates: voiceRates.filter((_, i) => i !== index) })
+  }
+
   // 2026-05-21: auto-merge RIMOSSO. Prima rifiusava ogni metodo cancellato
   // dall'admin perche' ad ogni open della sezione faceva merge dei
   // DEFAULT_PAYMENT_METHODS mancanti → "cancello Bancomat, salvo, riapro,
@@ -6006,27 +6027,50 @@ function FiscaleSection({
             come tutte le altre. Lo 0 e&apos; un valore valido.
           </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {(fiscal.voice_vat_rates || DEFAULT_VOICE_VAT_RATES).map((v, i) => (
-            <label key={v.key} className="flex items-center justify-between gap-3 rounded-lg border border-theme-border bg-theme-bg-primary/40 px-3 py-2">
-              <span className="text-[13px] text-theme-text-primary">{v.label}</span>
-              <span className="relative w-28 shrink-0">
+        <div className="rounded-xl overflow-hidden border border-theme-border bg-theme-bg-primary">
+          <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-theme-bg-tertiary text-[11px] font-medium uppercase tracking-wide text-theme-text-muted">
+            <div className="col-span-3" title="Codice interno con cui le fatture cercano l'aliquota. Non modificabile: cambiarlo scollegherebbe la riga dalle fatture.">Codice (key)</div>
+            <div className="col-span-6">Etichetta visibile</div>
+            <div className="col-span-2 text-right">Aliquota</div>
+            <div className="col-span-1"></div>
+          </div>
+          {voiceRates.map((v, i) => (
+            <div
+              key={v.key || i}
+              className={`grid grid-cols-12 gap-2 px-4 py-2 items-center ${i < voiceRates.length - 1 ? 'border-b border-theme-border' : ''}`}
+            >
+              <span className="col-span-3 text-[12px] font-mono text-theme-text-muted truncate" title={`Le fatture cercano questa tipologia con la chiave "${v.key}".`}>{v.key}</span>
+              <input
+                type="text"
+                value={v.label}
+                onChange={(e) => patchVoiceRate(i, { label: e.target.value })}
+                className="col-span-6 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px] text-theme-text-primary"
+              />
+              <span className="col-span-2 relative">
                 <MoneyInput
                   min={0}
                   max={100}
                   value={v.rate}
-                  onChange={(__v: string) => {
-                    const list = [...(fiscal.voice_vat_rates || DEFAULT_VOICE_VAT_RATES)]
-                    list[i] = { ...list[i], rate: __v === '' ? '' : Number(__v) }
-                    setFiscal({ ...fiscal, voice_vat_rates: list })
-                  }}
-                  className="w-full bg-theme-bg-secondary border border-theme-border rounded-lg pl-3 pr-8 py-1.5 text-[13px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
+                  onChange={(__v: string) => patchVoiceRate(i, { rate: __v === '' ? '' : Number(__v) })}
+                  className="w-full bg-theme-bg-primary border border-theme-border rounded-md pl-2 pr-7 py-1.5 text-[13px] text-right tabular-nums text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-[#007aff]/40"
                 />
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-theme-text-muted pointer-events-none">%</span>
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-theme-text-muted pointer-events-none">%</span>
               </span>
-            </label>
+              <button
+                type="button"
+                onClick={() => removeVoiceRate(i)}
+                className="col-span-1 text-red-500 hover:bg-red-500/10 rounded-md py-1.5 text-sm"
+                title="Rimuovi la riga: questa tipologia tornera' a usare l'aliquota generale qui sopra"
+              >×</button>
+            </div>
           ))}
         </div>
+        <p className="text-[12px] text-theme-text-muted">
+          L&apos;etichetta e&apos; solo il nome mostrato: puoi cambiarla liberamente. Il
+          <strong> codice</strong> a sinistra e&apos; quello con cui le fatture cercano
+          l&apos;aliquota, per questo non si modifica. Se rimuovi una riga, quella tipologia
+          torna a usare l&apos;<strong>aliquota generale</strong> impostata qui sopra.
+        </p>
       </section>
 
       {/* Metodi di pagamento + Fattura toggle */}
