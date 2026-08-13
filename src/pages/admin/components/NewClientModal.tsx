@@ -57,6 +57,15 @@ interface ClientFormData {
   patente_rilascio: string
   patente_scadenza: string
 
+  // Patente nautica (Noleggio Mare)
+  nautica_numero: string
+  nautica_categoria: string
+  nautica_limite: string
+  nautica_abilitazione: string
+  nautica_ente: string
+  nautica_rilascio: string
+  nautica_scadenza: string
+
   // Azienda
   denominazione: string
   partita_iva: string
@@ -126,6 +135,13 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     patente_ente: '',
     patente_rilascio: '',
     patente_scadenza: '',
+    nautica_numero: '',
+    nautica_categoria: '',
+    nautica_limite: '',
+    nautica_abilitazione: '',
+    nautica_ente: '',
+    nautica_rilascio: '',
+    nautica_scadenza: '',
     denominazione: '',
     partita_iva: '',
     codice_destinatario: '',
@@ -221,6 +237,15 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           patente_rilascio: metadata.patente?.rilascio || initialData.data_rilascio_patente || '',
           patente_scadenza: metadata.patente?.scadenza || initialData.scadenza_patente || '',
 
+          // Patente nautica
+          nautica_numero: metadata.patente_nautica?.numero || initialData.numero_patente_nautica || '',
+          nautica_categoria: metadata.patente_nautica?.categoria || initialData.categoria_patente_nautica || '',
+          nautica_limite: metadata.patente_nautica?.limite || initialData.limite_patente_nautica || '',
+          nautica_abilitazione: metadata.patente_nautica?.abilitazione || initialData.abilitazione_patente_nautica || '',
+          nautica_ente: metadata.patente_nautica?.ente || initialData.emessa_da_nautica || '',
+          nautica_rilascio: metadata.patente_nautica?.rilascio || initialData.data_rilascio_patente_nautica || '',
+          nautica_scadenza: metadata.patente_nautica?.scadenza || initialData.scadenza_patente_nautica || '',
+
           // Azienda
           denominazione: initialData.ragione_sociale || initialData.denominazione || '',
           partita_iva: initialData.partita_iva || '',
@@ -286,6 +311,13 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           patente_ente: '',
           patente_rilascio: '',
           patente_scadenza: '',
+          nautica_numero: '',
+          nautica_categoria: '',
+          nautica_limite: '',
+          nautica_abilitazione: '',
+          nautica_ente: '',
+          nautica_rilascio: '',
+          nautica_scadenza: '',
           denominazione: '',
           partita_iva: '',
           codice_destinatario: '',
@@ -334,12 +366,18 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
   // Optional document uploads
   const [showDocumentSection, setShowDocumentSection] = useState(false)
+  // Pannello patente nautica: chiuso di default (serve solo al Noleggio
+  // Mare) ma si apre da solo se il cliente ne ha gia' una, altrimenti un
+  // dato gia' salvato resterebbe invisibile in modifica.
+  const [showNautica, setShowNautica] = useState(false)
   const [driversLicenseFront, setDriversLicenseFront] = useState<File | null>(null)
   const [driversLicenseBack, setDriversLicenseBack] = useState<File | null>(null)
   const [identityFront, setIdentityFront] = useState<File | null>(null)
   const [identityBack, setIdentityBack] = useState<File | null>(null)
   const [codiceFiscaleFront, setCodiceFiscaleFront] = useState<File | null>(null)
   const [codiceFiscaleBack, setCodiceFiscaleBack] = useState<File | null>(null)
+  const [patenteNauticaFront, setPatenteNauticaFront] = useState<File | null>(null)
+  const [patenteNauticaBack, setPatenteNauticaBack] = useState<File | null>(null)
 
   // Handle scanned files from Scanner tab
   useEffect(() => {
@@ -471,6 +509,18 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         if (formData.patente_scadenza) customerData.scadenza_patente = formData.patente_scadenza
 
         if (formData.patente_ente) customerData.emessa_da = formData.patente_ente
+
+        // Patente nautica — colonne dedicate (migrazione 20260813000000).
+        // Limite e abilitazione restano campi separati perche' decidono
+        // quale unita' il cliente puo' condurre nel Noleggio Mare.
+        if (formData.nautica_numero) customerData.numero_patente_nautica = formData.nautica_numero.toUpperCase()
+        if (formData.nautica_categoria) customerData.categoria_patente_nautica = formData.nautica_categoria.toUpperCase()
+        if (formData.nautica_limite) customerData.limite_patente_nautica = formData.nautica_limite
+        if (formData.nautica_abilitazione) customerData.abilitazione_patente_nautica = formData.nautica_abilitazione
+        if (formData.nautica_ente) customerData.emessa_da_nautica = formData.nautica_ente
+        if (formData.nautica_rilascio) customerData.data_rilascio_patente_nautica = formData.nautica_rilascio
+        if (formData.nautica_scadenza) customerData.scadenza_patente_nautica = formData.nautica_scadenza
+
         if (formData.sesso) customerData.sesso = formData.sesso
 
         // Metadata
@@ -488,6 +538,15 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
             ente: formData.patente_ente,
             rilascio: formData.patente_rilascio,
             scadenza: formData.patente_scadenza
+          },
+          patente_nautica: {
+            numero: formData.nautica_numero,
+            categoria: formData.nautica_categoria,
+            limite: formData.nautica_limite,
+            abilitazione: formData.nautica_abilitazione,
+            ente: formData.nautica_ente,
+            rilascio: formData.nautica_rilascio,
+            scadenza: formData.nautica_scadenza
           }
         }
 
@@ -646,7 +705,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       }
 
       // Upload documents if any were selected
-      const hasAnyFile = driversLicenseFront || driversLicenseBack || identityFront || identityBack || codiceFiscaleFront || codiceFiscaleBack
+      const hasAnyFile = driversLicenseFront || driversLicenseBack || identityFront || identityBack || codiceFiscaleFront || codiceFiscaleBack || patenteNauticaFront || patenteNauticaBack
 
       if (createdClientId && hasAnyFile) {
         logger.log('Uploading documents for client:', createdClientId)
@@ -710,6 +769,12 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           // Upload Codice Fiscale
           if (codiceFiscaleFront) await uploadFile(codiceFiscaleFront, 'codice-fiscale', 'codice_fiscale', '_front')
           if (codiceFiscaleBack) await uploadFile(codiceFiscaleBack, 'codice-fiscale', 'codice_fiscale', '_back')
+
+          // Patente nautica — stesso bucket della patente di guida: e' un
+          // documento di abilitazione alla guida, le policy storage sono le
+          // stesse. Il document_type la tiene distinta.
+          if (patenteNauticaFront) await uploadFile(patenteNauticaFront, 'driver-licenses', 'patente_nautica', '_front')
+          if (patenteNauticaBack) await uploadFile(patenteNauticaBack, 'driver-licenses', 'patente_nautica', '_back')
         }
       }
 
@@ -797,6 +862,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     setIdentityBack(null)
     setCodiceFiscaleFront(null)
     setCodiceFiscaleBack(null)
+    setPatenteNauticaFront(null)
+    setPatenteNauticaBack(null)
     onClose()
   }
 
@@ -817,6 +884,10 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       patente_numero: 'N. patente', patente_tipo: 'Tipo patente',
       patente_rilascio: 'Rilascio patente', patente_scadenza: 'Scadenza patente',
       patente_ente: 'Ente patente',
+      nautica_numero: 'N. patente nautica', nautica_categoria: 'Categoria nautica',
+      nautica_limite: 'Limite dalla costa', nautica_abilitazione: 'Abilitazione nautica',
+      nautica_rilascio: 'Rilascio patente nautica', nautica_scadenza: 'Scadenza patente nautica',
+      nautica_ente: 'Ente patente nautica',
     }
     const filled: string[] = []
     const pushIf = (key: keyof typeof FIELD_LABELS, value: string | undefined) => {
@@ -828,6 +899,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     pushIf('codice_postale', data.codice_postale); pushIf('citta_residenza', data.citta_residenza); pushIf('provincia_residenza', data.provincia_residenza)
     pushIf('patente_numero', data.patente_numero); pushIf('patente_tipo', data.patente_tipo)
     pushIf('patente_rilascio', data.patente_rilascio); pushIf('patente_scadenza', data.patente_scadenza); pushIf('patente_ente', data.patente_ente)
+    pushIf('nautica_numero', data.nautica_numero); pushIf('nautica_categoria', data.nautica_categoria)
+    pushIf('nautica_limite', data.nautica_limite); pushIf('nautica_abilitazione', data.nautica_abilitazione)
+    pushIf('nautica_rilascio', data.nautica_rilascio); pushIf('nautica_scadenza', data.nautica_scadenza); pushIf('nautica_ente', data.nautica_ente)
     setFormData(prev => ({
       ...prev,
       ...(data.nome && { nome: data.nome }),
@@ -847,6 +921,13 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       ...(data.patente_rilascio && { patente_rilascio: data.patente_rilascio }),
       ...(data.patente_scadenza && { patente_scadenza: data.patente_scadenza }),
       ...(data.patente_ente && { patente_ente: data.patente_ente }),
+      ...(data.nautica_numero && { nautica_numero: data.nautica_numero }),
+      ...(data.nautica_categoria && { nautica_categoria: data.nautica_categoria }),
+      ...(data.nautica_limite && { nautica_limite: data.nautica_limite }),
+      ...(data.nautica_abilitazione && { nautica_abilitazione: data.nautica_abilitazione }),
+      ...(data.nautica_rilascio && { nautica_rilascio: data.nautica_rilascio }),
+      ...(data.nautica_scadenza && { nautica_scadenza: data.nautica_scadenza }),
+      ...(data.nautica_ente && { nautica_ente: data.nautica_ente }),
     }))
     setLastExtracted(filled.length > 0 ? filled : ['Nessun dato leggibile estratto'])
     try { scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' }) } catch { /* ignore */ }
@@ -861,6 +942,8 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     { file: identityBack, label: 'Carta Identità Retro' },
     { file: codiceFiscaleFront, label: 'Codice Fiscale Fronte' },
     { file: codiceFiscaleBack, label: 'Codice Fiscale Retro' },
+    { file: patenteNauticaFront, label: 'Patente Nautica Fronte' },
+    { file: patenteNauticaBack, label: 'Patente Nautica Retro' },
   ]
 
   // Live preview/score for the right-hand sidebar. NON persiste — solo
@@ -1467,6 +1550,93 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     </div>
                   </div>
 
+                  {/* Patente nautica — Noleggio Mare */}
+                  {(() => {
+                    const hasNautica = !!(formData.nautica_numero || formData.nautica_categoria || formData.nautica_scadenza || formData.nautica_limite || formData.nautica_abilitazione)
+                    const aperto = showNautica || hasNautica
+                    return (
+                      <div className="mt-2 rounded-lg border border-theme-border bg-theme-bg-tertiary/40">
+                        <button type="button" onClick={() => setShowNautica(!aperto)}
+                          className="w-full inline-flex items-center justify-between gap-2 px-3 py-2 text-xs font-medium text-theme-text-secondary">
+                          <span className="flex items-center gap-2">
+                            <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 17l3-9h12l3 9M5 21h14M12 8V3" /></svg>
+                            Patente nautica
+                            {hasNautica && <span className="px-1.5 py-0.5 rounded bg-dr7-gold/15 text-dr7-gold text-[10px] font-bold">COMPILATA</span>}
+                          </span>
+                          <svg className={`w-4 h-4 transition-transform ${aperto ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                        </button>
+
+                        {aperto && (
+                          <div className="px-3 pb-3 space-y-3">
+                            <div>
+                              <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Patente nautica n.</label>
+                              <input type="text" value={formData.nautica_numero} onChange={(e) => setFormData({ ...formData, nautica_numero: e.target.value.toUpperCase() })}
+                                className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none uppercase font-mono" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Categoria</label>
+                                <select value={formData.nautica_categoria} onChange={(e) => setFormData({ ...formData, nautica_categoria: e.target.value })}
+                                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold outline-none">
+                                  <option value="">Seleziona…</option>
+                                  <option value="A">A — Unità da diporto</option>
+                                  <option value="B">B — Navi da diporto (oltre 24 m)</option>
+                                  <option value="C">C — Direzione nautica</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Limite dalla costa</label>
+                                <select value={formData.nautica_limite} onChange={(e) => setFormData({ ...formData, nautica_limite: e.target.value })}
+                                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold outline-none">
+                                  <option value="">Seleziona…</option>
+                                  <option value="entro 12 miglia">Entro 12 miglia</option>
+                                  <option value="senza limiti">Senza limiti</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Abilitazione</label>
+                                <select value={formData.nautica_abilitazione} onChange={(e) => setFormData({ ...formData, nautica_abilitazione: e.target.value })}
+                                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold outline-none">
+                                  <option value="">Seleziona…</option>
+                                  <option value="Motore">Motore</option>
+                                  <option value="Vela e motore">Vela e motore</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Emessa da</label>
+                                <input type="text" value={formData.nautica_ente} onChange={(e) => setFormData({ ...formData, nautica_ente: e.target.value })} placeholder="Motorizzazione Civile di…"
+                                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Data rilascio</label>
+                                <EuropeanDateInput
+                                  value={formData.nautica_rilascio || ''}
+                                  onChange={(__v: string) => setFormData({ ...formData, nautica_rilascio: __v })}
+                                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Scadenza</label>
+                                <EuropeanDateInput
+                                  value={formData.nautica_scadenza || ''}
+                                  onChange={(__v: string) => setFormData({ ...formData, nautica_scadenza: __v })}
+                                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
+                                />
+                              </div>
+                            </div>
+                            {formData.nautica_scadenza && formData.nautica_scadenza < new Date().toISOString().slice(0, 10) && (
+                              <p className="text-[11px] font-semibold text-red-500">Patente nautica scaduta il {formData.nautica_scadenza.split('-').reverse().join('/')}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
+
                   {/* Toggle uploads */}
                   <button type="button" onClick={() => setShowDocumentSection(!showDocumentSection)}
                     className="w-full inline-flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-theme-bg-tertiary hover:bg-theme-bg-hover text-xs font-medium text-theme-text-secondary mt-2">
@@ -1491,8 +1661,12 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         <DocFileInput value={codiceFiscaleFront} onChange={setCodiceFiscaleFront} placeholder="Codice Fiscale Fronte" />
                         <DocFileInput value={codiceFiscaleBack} onChange={setCodiceFiscaleBack} placeholder="Codice Fiscale Retro" />
                       </DocUploadGroup>
+                      <DocUploadGroup label="Patente nautica">
+                        <DocFileInput value={patenteNauticaFront} onChange={setPatenteNauticaFront} placeholder="Patente Nautica Fronte" />
+                        <DocFileInput value={patenteNauticaBack} onChange={setPatenteNauticaBack} placeholder="Patente Nautica Retro" />
+                      </DocUploadGroup>
 
-                      {(driversLicenseFront || driversLicenseBack || identityFront || identityBack || codiceFiscaleFront || codiceFiscaleBack) && (
+                      {(driversLicenseFront || driversLicenseBack || identityFront || identityBack || codiceFiscaleFront || codiceFiscaleBack || patenteNauticaFront || patenteNauticaBack) && (
                         <div className="pt-2">
                           {/* Manual fallback. The hero CompilaButton (always
                               mounted) handles autoTrigger; this one stays as a

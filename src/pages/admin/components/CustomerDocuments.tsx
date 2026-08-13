@@ -36,6 +36,13 @@ interface CustomerDetails {
   emessa_da?: string
   data_rilascio_patente?: string
   scadenza_patente?: string
+  numero_patente_nautica?: string
+  categoria_patente_nautica?: string
+  limite_patente_nautica?: string
+  abilitazione_patente_nautica?: string
+  emessa_da_nautica?: string
+  data_rilascio_patente_nautica?: string
+  scadenza_patente_nautica?: string
   // Azienda
   denominazione?: string
   partita_iva?: string
@@ -97,7 +104,9 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
     codice_fiscale_front: null,
     codice_fiscale_back: null,
     libretto_front: null,
-    libretto_back: null
+    libretto_back: null,
+    patente_nautica_front: null,
+    patente_nautica_back: null
   })
   const [previewUrls, setPreviewUrls] = useState<{ [key: string]: string | null }>({})
 
@@ -202,7 +211,7 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
       const filePath = `${customerId}/${fileName}`
 
       // Select correct bucket based on document type
-      const bucket = documentType.startsWith('drivers_license') ? DRIVERS_LICENSE_BUCKET
+      const bucket = documentType.startsWith('drivers_license') || documentType.startsWith('patente_nautica') ? DRIVERS_LICENSE_BUCKET
         : documentType.startsWith('codice_fiscale') ? CODICE_FISCALE_BUCKET
         : IDENTITY_DOCS_BUCKET // identity_document* + libretto*
 
@@ -513,6 +522,29 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
                     {customerDetails.codice_postale && <div><span className="text-theme-text-muted">CAP:</span> <span className="text-theme-text-primary">{customerDetails.codice_postale}</span></div>}
                     <div><span className="text-theme-text-muted">Nazione:</span> <span className="text-theme-text-primary">{customerDetails.nazione}</span></div>
 
+                    {/* Patente Nautica */}
+                    {customerDetails.numero_patente_nautica && (
+                      <div className="mt-4 pt-4 border-t border-theme-border">
+                        <div className="text-dr7-gold font-semibold mb-2">Patente Nautica</div>
+                        <div><span className="text-theme-text-muted">Numero:</span> <span className="text-theme-text-primary">{customerDetails.numero_patente_nautica}</span></div>
+                        {customerDetails.categoria_patente_nautica && <div><span className="text-theme-text-muted">Categoria:</span> <span className="text-theme-text-primary">{customerDetails.categoria_patente_nautica}</span></div>}
+                        {customerDetails.limite_patente_nautica && <div><span className="text-theme-text-muted">Limite dalla costa:</span> <span className="text-theme-text-primary">{customerDetails.limite_patente_nautica}</span></div>}
+                        {customerDetails.abilitazione_patente_nautica && <div><span className="text-theme-text-muted">Abilitazione:</span> <span className="text-theme-text-primary">{customerDetails.abilitazione_patente_nautica}</span></div>}
+                        {customerDetails.emessa_da_nautica && <div><span className="text-theme-text-muted">Emessa da:</span> <span className="text-theme-text-primary">{customerDetails.emessa_da_nautica}</span></div>}
+                        {customerDetails.data_rilascio_patente_nautica && <div><span className="text-theme-text-muted">Rilascio:</span> <span className="text-theme-text-primary">{new Date(customerDetails.data_rilascio_patente_nautica).toLocaleDateString('it-IT')}</span></div>}
+                        {customerDetails.scadenza_patente_nautica && (() => {
+                          const isExpired = new Date(customerDetails.scadenza_patente_nautica) < new Date()
+                          return (
+                            <div className="flex items-center gap-2">
+                              <span className="text-theme-text-muted">Scadenza:</span>
+                              <span className={isExpired ? 'text-red-400 font-bold' : 'text-theme-text-primary'}>{new Date(customerDetails.scadenza_patente_nautica).toLocaleDateString('it-IT')}</span>
+                              {isExpired && <span className="px-1.5 py-0.5 bg-red-500/20 border border-red-500/40 rounded text-[10px] font-bold text-red-400">SCADUTA</span>}
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    )}
+
                     {/* Driving License Info */}
                     {customerDetails.tipo_patente && (
                       <div className="mt-4 pt-4 border-t border-theme-border">
@@ -639,6 +671,18 @@ export default function CustomerDocuments({ customerId, customerName, onClose }:
             'codice_fiscale_back',
             'Codice Fiscale (Retro)',
             'Carica il retro della tessera codice fiscale'
+          )}
+
+          {/* Patente Nautica */}
+          {renderDocumentSection(
+            'patente_nautica_front',
+            'Patente Nautica (Fronte)',
+            'Carica il fronte della patente nautica'
+          )}
+          {renderDocumentSection(
+            'patente_nautica_back',
+            'Patente Nautica (Retro)',
+            'Carica il retro della patente nautica'
           )}
 
           {/* Libretto Fronte */}

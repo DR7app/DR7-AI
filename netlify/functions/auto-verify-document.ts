@@ -31,6 +31,8 @@ interface Extracted {
   documento_scadenza?: string
   patente_numero?: string
   patente_scadenza?: string
+  nautica_numero?: string
+  nautica_scadenza?: string
   document_type?: string
   confidence?: 'high' | 'medium' | 'low'
   notes?: string
@@ -42,6 +44,7 @@ interface Profile {
   codice_fiscale?: string | null
   data_nascita?: string | null
   numero_patente?: string | null
+  numero_patente_nautica?: string | null
 }
 
 const norm = (s: string | null | undefined) =>
@@ -79,14 +82,23 @@ function compare(extracted: Extracted, profile: Profile, docType: string) {
     else mismatches.push(`data nascita: ${extracted.data_nascita} ≠ ${profile.data_nascita}`)
   }
 
-  // Patente number (only front carries it)
+  // Patente number (only front carries it). `patente_nautica_*` cade in
+  // questo startsWith ma non porta patente_numero: l'estrazione mette il
+  // suo numero in nautica_numero, quindi il confronto sotto non scatta a
+  // vuoto.
   if (docType.startsWith('patente') && extracted.patente_numero && profile.numero_patente) {
     if (extracted.patente_numero.toUpperCase() === profile.numero_patente.toUpperCase()) matches.push('patente_numero')
     else mismatches.push(`patente: ${extracted.patente_numero} ≠ ${profile.numero_patente}`)
   }
 
+  // Patente nautica
+  if (extracted.nautica_numero && profile.numero_patente_nautica) {
+    if (extracted.nautica_numero.toUpperCase() === profile.numero_patente_nautica.toUpperCase()) matches.push('nautica_numero')
+    else mismatches.push(`patente nautica: ${extracted.nautica_numero} ≠ ${profile.numero_patente_nautica}`)
+  }
+
   // Expiry checks
-  const expiry = extracted.documento_scadenza || extracted.patente_scadenza
+  const expiry = extracted.documento_scadenza || extracted.patente_scadenza || extracted.nautica_scadenza
   const expired = expiry && expiry < today
   if (expired) mismatches.push(`documento scaduto il ${expiry}`)
 
@@ -135,7 +147,7 @@ export const handler: Handler = async (event) => {
     //    admin-uploaded docs where user_id is actually the row PK)
     let { data: profile, error: profByUserIdErr } = await supabase
       .from('customers_extended')
-      .select('nome, cognome, codice_fiscale, data_nascita, numero_patente')
+      .select('nome, cognome, codice_fiscale, data_nascita, numero_patente, numero_patente_nautica')
       .eq('user_id', doc.user_id)
       .maybeSingle()
     if (profByUserIdErr) console.log(`[auto-verify] profile by user_id err:`, profByUserIdErr.message)
@@ -143,7 +155,7 @@ export const handler: Handler = async (event) => {
     if (!profile) {
       const fb = await supabase
         .from('customers_extended')
-        .select('nome, cognome, codice_fiscale, data_nascita, numero_patente')
+        .select('nome, cognome, codice_fiscale, data_nascita, numero_patente, numero_patente_nautica')
         .eq('id', doc.user_id)
         .maybeSingle()
       if (fb.error) console.log(`[auto-verify] profile by id err:`, fb.error.message)

@@ -54,6 +54,14 @@ interface Customer {
   data_rilascio_patente?: string
   scadenza_patente?: string
   numero_patente?: string
+  // Patente nautica (Noleggio Mare)
+  numero_patente_nautica?: string
+  categoria_patente_nautica?: string
+  limite_patente_nautica?: string
+  abilitazione_patente_nautica?: string
+  emessa_da_nautica?: string
+  data_rilascio_patente_nautica?: string
+  scadenza_patente_nautica?: string
   // Azienda fields
   ragione_sociale?: string
   denominazione?: string
@@ -86,6 +94,15 @@ interface Customer {
     patente?: {
       numero?: string
       tipo?: string
+      ente?: string
+      rilascio?: string
+      scadenza?: string
+    }
+    patente_nautica?: {
+      numero?: string
+      categoria?: string
+      limite?: string
+      abilitazione?: string
       ente?: string
       rilascio?: string
       scadenza?: string
@@ -315,7 +332,9 @@ export default function CustomersTab() {
         'Codice Fiscale', 'Partita IVA', 'Indirizzo', 'CAP', 'Città',
         'Provincia', 'Nazione', 'Data Nascita', 'Luogo Nascita',
         'Ragione Sociale', 'Denominazione', 'Numero Patente',
-        'Tipo Patente', 'Scadenza Patente', 'Note', 'Status',
+        'Tipo Patente', 'Scadenza Patente',
+        'Patente Nautica', 'Categoria Nautica', 'Limite Nautica', 'Abilitazione Nautica', 'Scadenza Nautica',
+        'Note', 'Status',
         'Membership', 'Creato il'
       ]
 
@@ -359,6 +378,11 @@ export default function CustomersTab() {
           c.numero_patente || c.metadata?.patente?.numero || '',
           c.tipo_patente || c.metadata?.patente?.tipo || '',
           c.scadenza_patente || c.metadata?.patente?.scadenza || '',
+          c.numero_patente_nautica || c.metadata?.patente_nautica?.numero || '',
+          c.categoria_patente_nautica || c.metadata?.patente_nautica?.categoria || '',
+          c.limite_patente_nautica || c.metadata?.patente_nautica?.limite || '',
+          c.abilitazione_patente_nautica || c.metadata?.patente_nautica?.abilitazione || '',
+          c.scadenza_patente_nautica || c.metadata?.patente_nautica?.scadenza || '',
           c.note || c.notes || '', c.status || '', c.membership_tier || '',
           c.created_at ? new Date(c.created_at).toLocaleDateString('it-IT') : ''
         ].map(escapeCSV)
@@ -457,6 +481,11 @@ export default function CustomersTab() {
         'ragione_sociale': 'ragione_sociale', 'denominazione': 'denominazione',
         'numero_patente': 'numero_patente', 'tipo_patente': 'tipo_patente',
         'scadenza_patente': 'scadenza_patente', 'note': 'note',
+        'patente_nautica': 'numero_patente_nautica', 'numero_patente_nautica': 'numero_patente_nautica',
+        'categoria_nautica': 'categoria_patente_nautica', 'categoria_patente_nautica': 'categoria_patente_nautica',
+        'limite_nautica': 'limite_patente_nautica', 'limite_patente_nautica': 'limite_patente_nautica',
+        'abilitazione_nautica': 'abilitazione_patente_nautica', 'abilitazione_patente_nautica': 'abilitazione_patente_nautica',
+        'scadenza_nautica': 'scadenza_patente_nautica', 'scadenza_patente_nautica': 'scadenza_patente_nautica',
       }
 
       let imported = 0
@@ -926,6 +955,9 @@ export default function CustomersTab() {
       'indirizzo', 'citta_residenza', 'codice_postale',
       'numero_patente', 'tipo_patente', 'scadenza_patente',
       'emessa_da', 'data_rilascio_patente',
+      'numero_patente_nautica', 'categoria_patente_nautica',
+      'limite_patente_nautica', 'abilitazione_patente_nautica',
+      'emessa_da_nautica', 'data_rilascio_patente_nautica', 'scadenza_patente_nautica',
       'partita_iva', 'ragione_sociale', 'denominazione',
       'pec', 'nazione', 'provincia_nascita', 'provincia_residenza',
       'sesso', 'notes', 'numero_civico', 'tipo_cliente',
@@ -1108,6 +1140,16 @@ export default function CustomersTab() {
             scadenza_patente: metadata.patente?.scadenza || raw.scadenza_patente || raw.data_scadenza_patente,
             data_scadenza_patente: metadata.patente?.scadenza || raw.data_scadenza_patente || raw.scadenza_patente,
 
+            // Patente nautica — colonne dedicate, con fallback su metadata
+            // per i clienti salvati prima della migrazione 20260813000000.
+            numero_patente_nautica: raw.numero_patente_nautica || metadata.patente_nautica?.numero,
+            categoria_patente_nautica: raw.categoria_patente_nautica || metadata.patente_nautica?.categoria,
+            limite_patente_nautica: raw.limite_patente_nautica || metadata.patente_nautica?.limite,
+            abilitazione_patente_nautica: raw.abilitazione_patente_nautica || metadata.patente_nautica?.abilitazione,
+            emessa_da_nautica: raw.emessa_da_nautica || metadata.patente_nautica?.ente,
+            data_rilascio_patente_nautica: raw.data_rilascio_patente_nautica || metadata.patente_nautica?.rilascio,
+            scadenza_patente_nautica: raw.scadenza_patente_nautica || metadata.patente_nautica?.scadenza,
+
             // Company fields
             ragione_sociale: raw.ragione_sociale,
             partita_iva: raw.partita_iva,
@@ -1137,6 +1179,15 @@ export default function CustomersTab() {
                 ente: metadata.patente?.ente || raw.emessa_da || raw.rilasciata_da || '',
                 rilascio: metadata.patente?.rilascio || raw.data_rilascio_patente || raw.data_rilascio || '',
                 scadenza: metadata.patente?.scadenza || raw.scadenza_patente || raw.data_scadenza_patente || ''
+              },
+              patente_nautica: {
+                numero: raw.numero_patente_nautica || metadata.patente_nautica?.numero || '',
+                categoria: raw.categoria_patente_nautica || metadata.patente_nautica?.categoria || '',
+                limite: raw.limite_patente_nautica || metadata.patente_nautica?.limite || '',
+                abilitazione: raw.abilitazione_patente_nautica || metadata.patente_nautica?.abilitazione || '',
+                ente: raw.emessa_da_nautica || metadata.patente_nautica?.ente || '',
+                rilascio: raw.data_rilascio_patente_nautica || metadata.patente_nautica?.rilascio || '',
+                scadenza: raw.scadenza_patente_nautica || metadata.patente_nautica?.scadenza || ''
               }
             }
           }
@@ -1867,6 +1918,28 @@ export default function CustomersTab() {
                       <span className="text-sm text-theme-text-muted">Data Rilascio:</span>
                       <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.data_rilascio_patente || viewingCustomerDetails.metadata?.patente?.rilascio || '-'}</p>
                     </div>
+                    {(viewingCustomerDetails.numero_patente_nautica || viewingCustomerDetails.metadata?.patente_nautica?.numero) && (
+                      <>
+                        <div>
+                          <span className="text-sm text-theme-text-muted">Patente Nautica:</span>
+                          <p className="text-sm text-theme-text-primary font-medium font-mono">{viewingCustomerDetails.numero_patente_nautica || viewingCustomerDetails.metadata?.patente_nautica?.numero}</p>
+                        </div>
+                        <div>
+                          <span className="text-sm text-theme-text-muted">Abilitazione Nautica:</span>
+                          <p className="text-sm text-theme-text-primary font-medium">
+                            {[
+                              viewingCustomerDetails.categoria_patente_nautica || viewingCustomerDetails.metadata?.patente_nautica?.categoria,
+                              viewingCustomerDetails.limite_patente_nautica || viewingCustomerDetails.metadata?.patente_nautica?.limite,
+                              viewingCustomerDetails.abilitazione_patente_nautica || viewingCustomerDetails.metadata?.patente_nautica?.abilitazione,
+                            ].filter(Boolean).join(' — ') || '-'}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-sm text-theme-text-muted">Scadenza Nautica:</span>
+                          <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.scadenza_patente_nautica || viewingCustomerDetails.metadata?.patente_nautica?.scadenza || '-'}</p>
+                        </div>
+                      </>
+                    )}
                     <div>
                       <span className="text-sm text-theme-text-muted">Data Scadenza:</span>
                       <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.scadenza_patente || viewingCustomerDetails.metadata?.patente?.scadenza || '-'}</p>

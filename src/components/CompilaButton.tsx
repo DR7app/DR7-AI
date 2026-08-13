@@ -42,6 +42,14 @@ export interface ExtractedData {
   patente_rilascio?: string
   patente_scadenza?: string
   patente_ente?: string
+  // Patente nautica (Noleggio Mare)
+  nautica_numero?: string
+  nautica_categoria?: string
+  nautica_limite?: string
+  nautica_abilitazione?: string
+  nautica_rilascio?: string
+  nautica_scadenza?: string
+  nautica_ente?: string
   // Meta
   document_type?: string
   confidence?: string
@@ -182,6 +190,13 @@ const FIELD_LABELS: Record<string, string> = {
   patente_rilascio: 'Rilascio patente',
   patente_scadenza: 'Scadenza patente',
   patente_ente: 'Ente patente',
+  nautica_numero: 'N. patente nautica',
+  nautica_categoria: 'Categoria nautica',
+  nautica_limite: 'Limite dalla costa',
+  nautica_abilitazione: 'Abilitazione nautica',
+  nautica_rilascio: 'Rilascio patente nautica',
+  nautica_scadenza: 'Scadenza patente nautica',
+  nautica_ente: 'Ente patente nautica',
 }
 
 export default function CompilaButton({
@@ -325,6 +340,9 @@ export default function CompilaButton({
       }
       if (merged.patente_scadenza && merged.patente_scadenza < today) {
         notes.push('Patente SCADUTA')
+      }
+      if (merged.nautica_scadenza && merged.nautica_scadenza < today) {
+        notes.push('Patente nautica SCADUTA')
       }
 
       // Validate codice fiscale length

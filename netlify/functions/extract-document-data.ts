@@ -34,8 +34,18 @@ interface ExtractedPersonData {
     patente_scadenza?: string; // YYYY-MM-DD
     patente_ente?: string;
 
+    // Patente nautica (serve al Noleggio Mare: limite e abilitazione
+    // decidono quale unita' il cliente puo' condurre)
+    nautica_numero?: string;
+    nautica_categoria?: string; // A, B, C
+    nautica_limite?: string; // 'entro 12 miglia' | 'senza limiti'
+    nautica_abilitazione?: string; // 'Motore' | 'Vela e motore'
+    nautica_rilascio?: string; // YYYY-MM-DD
+    nautica_scadenza?: string; // YYYY-MM-DD
+    nautica_ente?: string;
+
     // Extraction metadata
-    document_type?: 'carta_identita' | 'patente' | 'passaporto' | 'tessera_sanitaria' | 'unknown';
+    document_type?: 'carta_identita' | 'patente' | 'patente_nautica' | 'passaporto' | 'tessera_sanitaria' | 'unknown';
     confidence?: 'high' | 'medium' | 'low';
     raw_text?: string;
     notes?: string;
@@ -55,7 +65,8 @@ QUANDO VEDI PIU' DOCUMENTI:
 1. Esamina CIASCUN documento separatamente.
 2. Compila TUTTI i campi pertinenti nello STESSO JSON di output:
    - Campi della carta identità → documento_* (documento_numero, scadenza, ecc.)
-   - Campi della patente → patente_* (patente_numero, scadenza, ecc.)
+   - Campi della patente DI GUIDA → patente_* (patente_numero, scadenza, ecc.)
+   - Campi della patente NAUTICA → nautica_* (nautica_numero, ecc.)
    - codice_fiscale → estrai dalla tessera sanitaria/CF se presente,
      altrimenti dalla carta identità (la CIE riporta il CF sul retro)
 3. nome, cognome, data_nascita, sesso → usa il valore consistente tra
@@ -190,6 +201,50 @@ Per PATENTE:
   "document_type": "patente"
 }
 
+=== PATENTE NAUTICA ===
+
+E' un documento DIVERSO dalla patente di guida. Non confonderli:
+i suoi dati vanno nei campi nautica_*, MAI nei campi patente_*.
+
+Come riconoscerla — riporta almeno una di queste diciture:
+- "PATENTE NAUTICA" / "PATENTE DI ABILITAZIONE ALLA CONDUZIONE"
+- "unità da diporto" / "navi da diporto"
+- "entro 12 miglia dalla costa" oppure "senza alcun limite dalla costa"
+- rilasciata da "Motorizzazione Civile", "Ufficio Circondariale Marittimo"
+  o "Capitaneria di Porto" (la patente di guida e' rilasciata da MIT-UCO/MCTC)
+
+CATEGORIA (nautica_categoria) — una sola lettera:
+- A = unità da diporto (a motore e/o a vela) — e' la piu' comune
+- B = navi da diporto (oltre 24 metri)
+- C = direzione nautica per persone con disabilità
+
+LIMITE DALLA COSTA (nautica_limite) — copia UNA di queste due stringhe:
+- "entro 12 miglia"   se leggi "entro 12 miglia dalla costa"
+- "senza limiti"      se leggi "senza alcun limite dalla costa"
+Se il documento non lo dice esplicitamente, OMETTI il campo. Non indovinare:
+e' il dato che decide quale imbarcazione il cliente puo' prendere.
+
+ABILITAZIONE (nautica_abilitazione) — copia UNA di queste due stringhe:
+- "Vela e motore"   se abilita sia a vela sia a motore
+- "Motore"          se abilita solo a motore
+Se non e' indicato, OMETTI il campo.
+
+Per PATENTE NAUTICA:
+{
+  "nome": "Nome del titolare",
+  "cognome": "Cognome del titolare",
+  "data_nascita": "YYYY-MM-DD",
+  "luogo_nascita": "Comune di nascita se presente",
+  "nautica_numero": "numero della patente nautica, trascritto esattamente",
+  "nautica_categoria": "A, B oppure C",
+  "nautica_limite": "entro 12 miglia OPPURE senza limiti",
+  "nautica_abilitazione": "Motore OPPURE Vela e motore",
+  "nautica_rilascio": "data di rilascio, YYYY-MM-DD",
+  "nautica_scadenza": "data di scadenza/validità, YYYY-MM-DD",
+  "nautica_ente": "ente di rilascio (es: Motorizzazione Civile di Cagliari)",
+  "document_type": "patente_nautica"
+}
+
 === REGOLE RIGIDE ===
 
 1. Se non riesci a leggere un campo chiaramente, OMETTILO dal JSON
@@ -198,6 +253,7 @@ Per PATENTE:
 4. La data è SEMPRE nel formato YYYY-MM-DD
 5. Il codice fiscale è SEMPRE 16 caratteri
 6. patente_rilascio: prendila SEMPRE dal RETRO (colonna 10 della categoria B, o la più antica delle categorie possedute), MAI dal campo 4a del FRONTE. Il 4a su patenti rinnovate è la data di rinnovo, non il conseguimento reale.
+7. I dati della patente NAUTICA vanno SOLO nei campi nautica_*. Non scriverli mai in patente_* e viceversa: sono due documenti distinti e un cliente può averli entrambi nella stessa immagine.
 
 Rispondi SOLO con JSON valido.`;
 
