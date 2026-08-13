@@ -1347,9 +1347,15 @@ export const BUSINESSES: { id: BusinessId; label: string; row: string }[] = [
 // ricompariva sul Mare. Km & Sforo idem: una barca non fa chilometri.
 // Diverso da `sezioni_off`, che resta la scelta REVERSIBILE dell'operatore.
 const SECTIONS_HIDDEN_BY_BUSINESS: Partial<Record<BusinessId, SectionId[]>> = {
-  mare: ['p2', 'p3'],       // Assicurazioni, Km & Sforo
-  aria: ['p2', 'p3'],       // idem per i velivoli
-  soggiorni: ['p2', 'p3'],  // idem per le strutture
+  // 2026-08-13: aggiunta 'p9' (Fiscale). savePersisted scrive sulla riga del
+  // business CORRENTE, ma le funzioni fattura leggono solo la riga `main`:
+  // configurare le aliquote stando su Mare/Aria/Soggiorni le salvava su una
+  // riga che nessuno legge, in silenzio. Il regime fiscale e' uno solo per
+  // l'azienda, quindi si configura da Noleggio Terra e vale ovunque.
+  mare: ['p2', 'p3', 'p9'],       // Assicurazioni, Km & Sforo, Fiscale
+  aria: ['p2', 'p3', 'p9'],
+  soggiorni: ['p2', 'p3', 'p9'],
+  lavaggio: ['p9'],
 }
 function sectionsForBusiness(id: BusinessId): { id: SectionId; title: string }[] {
   const hidden = new Set(SECTIONS_HIDDEN_BY_BUSINESS[id] || [])
