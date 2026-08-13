@@ -7,9 +7,9 @@
 // Fuori scope per una barca (richiesta direzione): Km & Sforo (una barca non fa
 // chilometri) e Assicurazioni/Kasko (non si vendono sul noleggio mare).
 export const MARE_FORM_SECTIONS: { id: string; title: string; hint: string }[] = [
-  { id: 'luoghi', title: 'Luoghi & Consegna', hint: 'Luogo di ritiro/riconsegna e consegna a domicilio con relativo costo' },
+  { id: 'luoghi', title: 'Luoghi & Consegna', hint: 'Luogo e indirizzo di ritiro/riconsegna (con ricerca automatica) e relativi costi' },
   { id: 'conduzione', title: 'Conduzione (skipper)', hint: 'Barca con o senza skipper' },
-  { id: 'patente', title: 'Patente Nautica', hint: 'Tipo, numero, ente di rilascio e scadenza' },
+  { id: 'patente', title: 'Patente Nautica', hint: 'Patente dello skipper (solo con skipper); senza skipper si legge dall\'anagrafica cliente' },
   { id: 'passeggeri', title: 'Passeggeri', hint: 'Nome e telefono di chi sale a bordo — NON crea lead/clienti' },
   { id: 'secondo', title: 'Secondo Conduttore', hint: 'Dati e patente del secondo conduttore' },
   { id: 'garante', title: 'Garante / Fideiussore', hint: 'Fino a 3 garanti solidali' },

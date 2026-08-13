@@ -24,6 +24,7 @@ import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import AddressAutocomplete from './AddressAutocomplete'
 import TimeSelect from './TimeSelect'
 import { mareFormSectionsOff } from './mareFormSections'
 import {
@@ -78,6 +79,15 @@ const CAUZIONE_STATI = [
 ]
 const PATENTE_NAUTICA_TIPI = ['Entro 12 miglia', 'Oltre 12 miglia', 'Senza limiti dalla costa']
 const LUOGHI = ['Sede DR7 — Viale Marconi 229, Cagliari', 'Porto / Marina (indica indirizzo)', 'Consegna a domicilio (indica indirizzo)']
+/** true per le voci che chiedono un indirizzo scritto (porto, domicilio). */
+const richiedeIndirizzo = (luogo: string) => /indica indirizzo/i.test(luogo)
+/** Toglie il suggerimento "(indica indirizzo)" quando il luogo finisce in pickup_location. */
+const luogoPulito = (luogo: string) => luogo.replace(/\s*\(indica indirizzo\)/i, '').trim()
+/** "Porto / Marina — Via X, Cagliari" se serve un indirizzo ed e' stato scritto. */
+const componiLuogo = (luogo: string, indirizzo: string) => {
+    const ind = (indirizzo || '').trim()
+    return richiedeIndirizzo(luogo) && ind ? `${luogoPulito(luogo)} — ${ind}` : luogo
+}
 const isNexiPbl = (method: string) => /nexi/i.test(method)
 // Unità servizio come in Centralina Pro > Servizi.
 const UNIT_LABEL: Record<string, string> = {
@@ -200,6 +210,31 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
   /* ── Stato form ── */
   const todayYmd = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
   const [customerId, setCustomerId] = useState('')
+  // Patente nautica del cliente presa dall'anagrafica: serve solo a mostrare
+  // "senza skipper", dove conduce lui e la patente non si ridigita qui.
+  const [clienteNautica, setClienteNautica] = useState<{ numero: string; categoria: string; limite: string; abilitazione: string; scadenza: string } | null>(null)
+  useEffect(() => {
+    let annullato = false
+    if (!customerId) { setClienteNautica(null); return }
+    ;(async () => {
+      const { data } = await supabase
+        .from('customers_extended')
+        .select('numero_patente_nautica, categoria_patente_nautica, limite_patente_nautica, abilitazione_patente_nautica, scadenza_patente_nautica')
+        .eq('id', customerId)
+        .maybeSingle()
+      if (annullato) return
+      const r = data as Record<string, string | null> | null
+      // Senza numero non c'e' patente da mostrare: il resto sarebbe rumore.
+      setClienteNautica(r?.numero_patente_nautica ? {
+        numero: r.numero_patente_nautica || '',
+        categoria: r.categoria_patente_nautica || '',
+        limite: r.limite_patente_nautica || '',
+        abilitazione: r.abilitazione_patente_nautica || '',
+        scadenza: (r.scadenza_patente_nautica || '').slice(0, 10),
+      } : null)
+    })()
+    return () => { annullato = true }
+  }, [customerId])
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerEmail, setCustomerEmail] = useState('')
@@ -213,6 +248,9 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
   const [luogoRitiro, setLuogoRitiro] = useState(LUOGHI[0])
   const [luogoRiconsegna, setLuogoRiconsegna] = useState(LUOGHI[0])
   const [indirizzoConsegna, setIndirizzoConsegna] = useState('')
+  // Indirizzo di riconsegna separato: la barca non torna sempre dove e'
+  // partita. Vuoto = stesso indirizzo del ritiro (riconsegna automatica).
+  const [indirizzoRiconsegna, setIndirizzoRiconsegna] = useState('')
   const [costoConsegna, setCostoConsegna] = useState('')
   const [costoRitiro, setCostoRitiro] = useState('')
 
@@ -279,6 +317,7 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
     setLuogoRitiro(String(d.luogo_ritiro || LUOGHI[0]))
     setLuogoRiconsegna(String(d.luogo_riconsegna || LUOGHI[0]))
     setIndirizzoConsegna(String(d.indirizzo_consegna || ''))
+    setIndirizzoRiconsegna(String(d.indirizzo_riconsegna || ''))
     setCostoConsegna(d.costo_consegna ? centsToEur(Number(d.costo_consegna)) : '')
     setCostoRitiro(d.costo_ritiro ? centsToEur(Number(d.costo_ritiro)) : '')
     setPatente({
@@ -375,12 +414,20 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
       d.luogo_ritiro = luogoRitiro
       d.luogo_riconsegna = luogoRiconsegna
       d.indirizzo_consegna = indirizzoConsegna.trim() || null
+      // Vuoto = si riconsegna dove si e' ritirato.
+      d.indirizzo_riconsegna = indirizzoRiconsegna.trim() || indirizzoConsegna.trim() || null
       d.costo_consegna = eurToCents(costoConsegna)
       d.costo_ritiro = eurToCents(costoRitiro)
     }
-    if (on('patente')) {
+    // La patente nautica in prenotazione e' quella dello SKIPPER: si compila
+    // solo "con skipper". Senza skipper conduce il cliente e la sua patente e'
+    // gia' in anagrafica (customers_extended.*_patente_nautica), quindi il
+    // blocco sparisce dal form e il dato non va duplicato qui.
+    if (on('patente') && conSkipper) {
       const hasPat = Object.values(patente).some(v => String(v).trim())
       if (hasPat) d.patente_nautica = patente; else delete d.patente_nautica
+    } else {
+      delete d.patente_nautica
     }
     if (on('passeggeri')) {
       // Passeggeri = testo libero (nome + telefono per i messaggi). NON crea
@@ -416,8 +463,11 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
       vehicle_name: assetName,
       pickup_date: toRomeIso(pickupDate, pickupTime),
       dropoff_date: toRomeIso(dropoffDate, dropoffTime),
-      pickup_location: on('luoghi') ? luogoRitiro : null,
-      dropoff_location: on('luoghi') ? luogoRiconsegna : null,
+      // Se il luogo chiede un indirizzo, lo si porta dentro pickup/dropoff_location:
+      // altrimenti in elenco e in calendario si leggerebbe solo "Porto / Marina
+      // (indica indirizzo)", che non dice dove.
+      pickup_location: on('luoghi') ? componiLuogo(luogoRitiro, indirizzoConsegna) : null,
+      dropoff_location: on('luoghi') ? componiLuogo(luogoRiconsegna, indirizzoRiconsegna || indirizzoConsegna) : null,
       price_total: eurToCents(priceFinal),
       amount_paid: eurToCents(amountPaid),
       status: 'confirmed',
@@ -693,9 +743,25 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
                     </select>
                   </Field>
                   <div className="sm:col-span-2">
-                    <Field label="Indirizzo (porto / domicilio)">
-                      <input className={INPUT_CLS} placeholder="Via, numero, città" value={indirizzoConsegna} onChange={e => setIndirizzoConsegna(e.target.value)} />
+                    <Field label={`Indirizzo ritiro${richiedeIndirizzo(luogoRitiro) ? '' : ' (facoltativo)'}`}>
+                      <AddressAutocomplete
+                        className={INPUT_CLS}
+                        placeholder="Inizia a scrivere: porto, marina, via…"
+                        value={indirizzoConsegna}
+                        onChange={setIndirizzoConsegna}
+                      />
                     </Field>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Field label="Indirizzo riconsegna">
+                      <AddressAutocomplete
+                        className={INPUT_CLS}
+                        placeholder={indirizzoConsegna ? `Stesso del ritiro — ${indirizzoConsegna}` : 'Stesso indirizzo del ritiro'}
+                        value={indirizzoRiconsegna}
+                        onChange={setIndirizzoRiconsegna}
+                      />
+                    </Field>
+                    <p className="mt-1 text-[11px] text-theme-text-muted">Lascialo vuoto se la barca torna dove è stata ritirata.</p>
                   </div>
                   <Field label="Costo consegna (€)">
                     <input className={INPUT_CLS} inputMode="decimal" placeholder="0,00" value={costoConsegna} onChange={e => setCostoConsegna(e.target.value)} />
@@ -717,9 +783,33 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
               </Section>
             )}
 
-            {/* ── Patente nautica ── */}
-            {on('patente') && (
+            {/* ── Patente nautica (solo con skipper) ── */}
+            {on('patente') && !conSkipper && (
               <Section title="Patente Nautica">
+                <p className="text-[11px] text-theme-text-muted">
+                  Senza skipper conduce il cliente: la sua patente nautica è già in anagrafica, si gestisce dalla scheda cliente.
+                </p>
+                {clienteNautica && (
+                  <div className="mt-2 text-xs text-theme-text-secondary">
+                    <span className="font-semibold text-theme-text-primary font-mono">{clienteNautica.numero || '—'}</span>
+                    {[clienteNautica.categoria, clienteNautica.limite, clienteNautica.abilitazione].filter(Boolean).length > 0 && (
+                      <span> · {[clienteNautica.categoria, clienteNautica.limite, clienteNautica.abilitazione].filter(Boolean).join(' · ')}</span>
+                    )}
+                    {clienteNautica.scadenza && (
+                      <span className={clienteNautica.scadenza < todayYmd ? 'ml-2 text-red-400 font-semibold' : 'ml-2'}>
+                        scade il {clienteNautica.scadenza.split('-').reverse().join('/')}
+                        {clienteNautica.scadenza < todayYmd && ' — SCADUTA'}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {customerId && !clienteNautica && (
+                  <p className="mt-2 text-[11px] text-theme-text-muted">Nessuna patente nautica in anagrafica per questo cliente.</p>
+                )}
+              </Section>
+            )}
+            {on('patente') && conSkipper && (
+              <Section title="Patente Nautica dello Skipper">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="Tipo">
                     <select className={INPUT_CLS} value={patente.tipo} onChange={e => setPatente({ ...patente, tipo: e.target.value })}>
