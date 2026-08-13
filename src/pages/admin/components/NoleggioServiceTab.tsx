@@ -19,6 +19,7 @@ import {
   INPUT_CLS, rentalDaysBetween, addDaysYmd, romeOffsetMinutes,
   eur, eurToCents, centsToEur,
 } from './noleggioFormBits'
+import { useSingleFlight } from '../../../hooks/useSingleFlight'
 
 // Stati pagamento standard DR7 (come Noleggio auto / Car Wash): la label è
 // quella mostrata, il value è il payment_status salvato sul booking.
@@ -396,6 +397,13 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     ) - romeOffsetMin * 60_000
     return new Date(utcMs).toISOString()
   }
+
+  // Doppio click = due prenotazioni: `disabled={saving}` e' uno stato React,
+  // si aggiorna al rendere successivo e il secondo click entra comunque in
+  // saveBooking. L'INSERT va dritto a Supabase, quindi nemmeno il dedupe
+  // globale su fetch (sendDedupe) lo intercetta. useSingleFlight alza un lock
+  // con useRef, che e' sincrono.
+  const [saveOnce, savingOnce] = useSingleFlight(saveBooking)
 
   async function saveBooking() {
     if (!form.customer_name.trim()) { setFormError('Il nome cliente è obbligatorio.'); return }
@@ -864,7 +872,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
               </div>
               <div className="flex gap-2">
                 <button onClick={() => setShowForm(false)} disabled={saving} className={BTN_GHOST}>Annulla</button>
-                <button onClick={saveBooking} disabled={saving} className={BTN_PRIMARY}>{saving ? 'Salvataggio…' : (form.id ? 'Salva' : 'Crea')}</button>
+                <button onClick={() => saveOnce()} disabled={saving || savingOnce} className={BTN_PRIMARY}>{saving || savingOnce ? 'Salvataggio…' : (form.id ? 'Salva' : 'Crea')}</button>
               </div>
             </div>
           </div>
@@ -1301,6 +1309,13 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     return new Date(utcMs).toISOString()
   }
 
+  // Doppio click = due prenotazioni: `disabled={saving}` e' uno stato React,
+  // si aggiorna al rendere successivo e il secondo click entra comunque in
+  // saveBooking. L'INSERT va dritto a Supabase, quindi nemmeno il dedupe
+  // globale su fetch (sendDedupe) lo intercetta. useSingleFlight alza un lock
+  // con useRef, che e' sincrono.
+  const [saveOnce, savingOnce] = useSingleFlight(saveBooking)
+
   async function saveBooking() {
     if (!form.customer_name.trim()) { setError('Il nome cliente è obbligatorio.'); return }
     const pickupIso = toIso(form.pickup_date, form.pickup_time)
@@ -1504,7 +1519,7 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
               </div>
               <div className="flex gap-2">
                 <button onClick={() => setShowForm(false)} disabled={saving} className={BTN_GHOST}>Annulla</button>
-                <button onClick={saveBooking} disabled={saving} className={BTN_PRIMARY}>{saving ? 'Salvataggio…' : (form.id ? 'Salva' : 'Crea')}</button>
+                <button onClick={() => saveOnce()} disabled={saving || savingOnce} className={BTN_PRIMARY}>{saving || savingOnce ? 'Salvataggio…' : (form.id ? 'Salva' : 'Crea')}</button>
               </div>
             </div>
           </div>

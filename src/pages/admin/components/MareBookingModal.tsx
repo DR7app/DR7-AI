@@ -25,6 +25,7 @@ import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import AddressAutocomplete from './AddressAutocomplete'
+import { useSingleFlight } from '../../../hooks/useSingleFlight'
 import TimeSelect from './TimeSelect'
 import { mareFormSectionsOff } from './mareFormSections'
 import {
@@ -274,6 +275,12 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
 
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
+  // Doppio click = due prenotazioni. `disabled={saving}` non basta: lo stato
+  // React si aggiorna al rendere successivo, il secondo click entra in save()
+  // con la closure vecchia e fa un secondo INSERT. L'insert va dritto a
+  // Supabase, quindi nemmeno il dedupe globale su fetch (sendDedupe) lo copre.
+  // useSingleFlight alza un lock con useRef, che e' sincrono.
+  const [saveOnce, savingOnce] = useSingleFlight(save)
   const [formError, setFormError] = useState('')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const origDetails = useRef<Record<string, any>>({})
@@ -1035,9 +1042,9 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
           </div>
 
           <div className="sticky bottom-0 bg-theme-bg-secondary border-t border-theme-border px-5 py-4 flex items-center justify-end gap-2 rounded-b-xl">
-            <button onClick={onClose} disabled={saving} className="px-3 py-1.5 rounded-lg border border-theme-border text-theme-text-secondary text-sm hover:bg-theme-bg-hover">Annulla</button>
-            <button onClick={save} disabled={saving} className="px-4 py-2 rounded-full bg-dr7-gold text-white text-sm font-semibold hover:bg-[#0A8FA3] transition-colors disabled:opacity-50">
-              {saving ? 'Salvataggio…' : (isEdit ? 'Salva' : 'Crea prenotazione')}
+            <button onClick={onClose} disabled={saving || savingOnce} className="px-3 py-1.5 rounded-lg border border-theme-border text-theme-text-secondary text-sm hover:bg-theme-bg-hover">Annulla</button>
+            <button onClick={() => saveOnce()} disabled={saving || savingOnce} className="px-4 py-2 rounded-full bg-dr7-gold text-white text-sm font-semibold hover:bg-[#0A8FA3] transition-colors disabled:opacity-50">
+              {saving || savingOnce ? 'Salvataggio…' : (isEdit ? 'Salva' : 'Crea prenotazione')}
             </button>
           </div>
         </div>
