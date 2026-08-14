@@ -184,28 +184,47 @@ export function useBookingRowActions(onChanged: () => void) {
             }).eq('id', b.id)
 
             const phone = String(b.customer_phone || '').replace(/\D/g, '')
-            if (phone) {
-                const amount = ((b.price_total || 0) / 100).toFixed(2)
-                await fetch('/.netlify/functions/send-whatsapp-notification', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        customPhone: phone,
-                        templateKey: 'payment_link_customer',
-                        booking: b,
-                        templateVars: {
-                            nome: String(b.customer_name || 'Cliente').split(' ')[0],
-                            amount, total: amount, importo: amount, totale: amount,
-                            link: data.paymentUrl, payment_link: data.paymentUrl,
-                            booking_id: ref, booking_ref: ref, expiry: '1 ora',
-                        },
-                    }),
-                }).catch(() => { /* il link resta comunque salvato */ })
+            if (!phone) {
+                toast('Link generato, ma il cliente non ha un numero di telefono in scheda.', { id, icon: '⚠️' })
+                onChanged()
+                return
             }
-            toast.success(phone ? 'Link inviato al cliente' : 'Link generato (nessun telefono in scheda)', { id })
-            // NB: l'esito dell'invio WhatsApp non e' verificabile qui — la
-            // chiamata e' fire-and-forget di proposito, perche' il link resta
-            // comunque salvato sulla prenotazione e riapribile.
+            const amount = ((b.price_total || 0) / 100).toFixed(2)
+            const waRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    customPhone: phone,
+                    templateKey: 'payment_link_customer',
+                    booking: b,
+                    templateVars: {
+                        nome: String(b.customer_name || 'Cliente').split(' ')[0],
+                        amount, total: amount, importo: amount, totale: amount,
+                        link: data.paymentUrl, payment_link: data.paymentUrl,
+                        booking_id: ref, booking_ref: ref, expiry: '1 ora',
+                    },
+                }),
+            })
+            // L'esito VA letto. La funzione risponde 200 anche quando non
+            // spedisce: template assente, spento, vuoto, oppure limitato a un
+            // altro tipo di servizio (un template "Solo Noleggio" scarta una
+            // prenotazione Mare). Dirlo "inviato" senza guardare era il motivo
+            // per cui il link non arrivava e nessuno capiva perche'.
+            const waOut = await waRes.json().catch(() => ({}))
+            if (!waRes.ok || waOut?.skipped) {
+                const perche = waOut?.reason === 'service_type_mismatch'
+                    ? 'il messaggio "Invio link pagamento" e\' limitato a un altro tipo di servizio: in Messaggi di Sistema Pro mettilo su "Tutti" oppure sul business giusto.'
+                    : waOut?.reason === 'pro_template_unavailable'
+                        ? 'manca il messaggio "Invio link pagamento" in Messaggi di Sistema Pro (assente, spento o senza testo).'
+                        : waOut?.reason === 'invalid_phone'
+                            ? `il numero "${b.customer_phone}" non e' utilizzabile.`
+                            : (waOut?.message || 'motivo sconosciuto')
+                toast.error(`Link generato ma NON inviato: ${perche}`, { id, duration: 12000 })
+                console.error('[linkPagamento] invio non riuscito:', waOut)
+                onChanged()
+                return
+            }
+            toast.success('Link inviato al cliente', { id })
             logAdminAction('send_payment_link', 'booking', b.id, { business: b.service_type })
             onChanged()
         } catch (e) {
