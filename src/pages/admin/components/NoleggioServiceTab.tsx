@@ -39,7 +39,21 @@ const isNexiPbl = (method: string) => /nexi/i.test(method)
 // Meccanica ha le sue tab dedicate per prenotazioni, calendario e catalogo
 // (CarWashBookingsTab & co.), che restano quelle. Riusare PreventiviView
 // evita un secondo schermo preventivi da mantenere in parallelo.
-export type NoleggioServiceType = 'boat_rental' | 'heli_rental' | 'stay_rental' | 'car_wash'
+export type NoleggioServiceType = 'boat_rental' | 'heli_rental' | 'stay_rental' | 'car_wash' | 'car_rental'
+
+/**
+ * Il Noleggio Terra non ha un `noleggio_catalog`: i suoi mezzi sono la FLOTTA
+ * (`vehicles`). Le partenze Tour lo agganciano con `vehicle_id` invece di
+ * `catalog_id` (migration 20260814200000). Duplicare la flotta in un secondo
+ * catalogo avrebbe significato tenerne due allineati a mano.
+ */
+export function tourUsaFlotta(serviceType: NoleggioServiceType): boolean {
+  return serviceType === 'car_rental'
+}
+/** Colonna della partenza che punta al mezzo, per business. */
+export function tourColonnaMezzo(serviceType: NoleggioServiceType): 'vehicle_id' | 'catalog_id' {
+  return tourUsaFlotta(serviceType) ? 'vehicle_id' : 'catalog_id'
+}
 export type NoleggioView = 'bookings' | 'calendar' | 'catalog' | 'preventivi' | 'tours'
 
 export interface NoleggioServiceLabels {
@@ -1788,6 +1802,31 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
+      // Terra legge la flotta, gli altri business il loro catalogo. Le righe
+      // della flotta vengono normalizzate nella forma CatalogRow, cosi' tutto
+      // il resto della vista (tendina, prezzo di default, posti) non cambia.
+      if (tourUsaFlotta(serviceType)) {
+        const { data, error: e } = await supabase
+          .from('vehicles')
+          .select('id, display_name, daily_rate, status')
+          .order('display_name', { ascending: true })
+        if (cancelled) return
+        if (e) { setError(e.message); return }
+        const list = (data || []).map(v => ({
+          id: v.id,
+          service_type: serviceType,
+          name: v.display_name,
+          description: null,
+          price_per_day: Math.round(Number(v.daily_rate || 0) * 100), // il catalogo tiene i centesimi
+          capacity: null,
+          image_url: null,
+          is_active: v.status !== 'retired',
+          sort_order: 0,
+        })) as unknown as CatalogRow[]
+        setAssets(list)
+        setAssetId(prev => prev || list[0]?.id || '')
+        return
+      }
       const { data, error: e } = await supabase
         .from('noleggio_catalog')
         .select('id, service_type, name, description, price_per_day, capacity, image_url, is_active, sort_order, tour_durations')
@@ -1809,7 +1848,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     setLoading(true); setError('')
     const { data, error: e } = await supabase
       .from('noleggio_tour_departures')
-      .select('*').eq('catalog_id', id)
+      .select('*').eq(tourColonnaMezzo(serviceType), id)
       .order('departure_date', { ascending: true }).order('departure_time', { ascending: true })
     if (e) setError(tourTableHint(e.message))
     else {
@@ -2100,7 +2139,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
     }
 
     const { data, error: e } = await supabase.from('noleggio_tour_departures').insert({
-      catalog_id: assetId,
+      [tourColonnaMezzo(serviceType)]: assetId,
       departure_date: form.departure_date,
       departure_time: form.departure_time || '10:00',
       total_seats: total,
