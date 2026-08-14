@@ -640,6 +640,36 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
       }
     }
 
+    // Avviso allo STAFF alla creazione, come sul Noleggio Terra
+    // (rental_new_admin). Solo alla creazione: una modifica non deve svegliare
+    // il gruppo. `notifyAdmin: true` e' obbligatorio — il numero arriva da
+    // Centralina Pro e non esiste piu' nessun fallback silenzioso.
+    if (!booking) {
+      try {
+        const totalStr = (eurToCents(priceFinal) / 100).toFixed(2)
+        await fetch('/.netlify/functions/send-whatsapp-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            notifyAdmin: true,
+            templateKey: 'boat_new_admin',
+            booking: { service_type: 'boat_rental' },
+            templateVars: {
+              cliente: customerName.trim(), customer_name: customerName.trim(),
+              telefono: customerPhone.trim(), customer_phone: customerPhone.trim(),
+              mezzo: assetName, vehicle_name: assetName, service_name: assetName,
+              data_ritiro: pickupDate, data_riconsegna: dropoffDate,
+              orario: pickupTime, ora: pickupTime,
+              total: totalStr, totale: totalStr, importo: totalStr,
+            },
+            skipHeader: true,
+          }),
+        })
+      } catch (waErr) {
+        console.warn('[MareBookingModal] avviso staff non inviato (non blocca il salvataggio):', waErr)
+      }
+    }
+
     onSaved()
   }
 

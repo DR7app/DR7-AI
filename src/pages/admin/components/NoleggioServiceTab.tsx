@@ -662,6 +662,32 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     if (!window.confirm(`Eliminare la prenotazione di ${b.customer_name || 'questo cliente'}?`)) return
     const err = await removeBooking(b.id)
     if (err) { toast.error('Eliminazione non riuscita: ' + err); return }
+
+    // Avviso di annullamento al cliente, come sul Noleggio Terra
+    // (booking_cancelled_whatsapp). Chiavi dedicate per business, cosi' la
+    // direzione puo' scrivere tre testi diversi. Best-effort: la prenotazione
+    // e' gia' annullata, un problema di WhatsApp non deve farlo sembrare un
+    // errore all'operatore.
+    const phone = String(b.customer_phone || '').replace(/\D/g, '')
+    if (phone) {
+      const chiave = serviceType === 'boat_rental' ? 'boat_cancelled'
+        : serviceType === 'heli_rental' ? 'heli_cancelled' : 'stay_cancelled'
+      fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customPhone: phone,
+          templateKey: chiave,
+          booking: { ...b, service_type: serviceType },
+          templateVars: {
+            nome: String(b.customer_name || 'Cliente').split(' ')[0],
+            customer_name: b.customer_name || '',
+            mezzo: b.vehicle_name || '', vehicle_name: b.vehicle_name || '',
+          },
+        }),
+      }).catch(() => { /* la cancellazione resta valida */ })
+    }
+
     toast.success('Prenotazione eliminata')
     reload()
   }
