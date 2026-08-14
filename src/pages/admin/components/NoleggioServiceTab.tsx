@@ -24,6 +24,7 @@ import DanniPenaliModal from './DanniPenaliModal'
 import { useBookingRowActions, prontoLabel } from './useBookingRowActions'
 import ExtendBookingModal from './ExtendBookingModal'
 import CalendarTab from './CalendarTab'
+import ReservationsTab from './ReservationsTab'
 
 // Stati pagamento standard DR7 (come Noleggio auto / Car Wash): la label è
 // quella mostrata, il value è il payment_status salvato sul booking.
@@ -143,6 +144,23 @@ function fmtDate(s: string | null): string {
 }
 
 export default function NoleggioServiceTab({ serviceType, view, labels }: NoleggioServiceTabProps) {
+  // 2026-08-14 (roadmap #11) — Le prenotazioni del Noleggio MARE usano ora la
+  // stessa tab del Noleggio Terra, non piu' una lista e un form scritti a
+  // parte.
+  //
+  // Perche': in una sola giornata il form del Mare ha perso il prezzo al
+  // salvataggio, salvato prenotazioni a 0,00 euro, messo 'confirmed' senza
+  // pagamento ne' conferma, creato doppioni al doppio click e interpretato lo
+  // "sconto" al contrario. Nessuno di questi difetti esisteva su Terra: erano
+  // due implementazioni della stessa cosa, e la seconda non aveva ricevuto le
+  // correzioni della prima. Un solo codice, un solo comportamento.
+  //
+  // Aria e Soggiorni restano per ora sul percorso precedente: hanno i Tour a
+  // posti, che il form di Terra non gestisce. Si spostano quando il Mare e'
+  // verificato sul campo.
+  if (view === 'bookings' && serviceType === 'boat_rental') {
+    return <ReservationsTab serviceType={serviceType} />
+  }
   if (view === 'bookings') return <BookingsView serviceType={serviceType} labels={labels} />
   if (view === 'calendar') return <CalendarView serviceType={serviceType} labels={labels} />
   if (view === 'catalog') return <CatalogView serviceType={serviceType} labels={labels} />
