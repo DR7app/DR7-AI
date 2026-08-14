@@ -1,0 +1,1136 @@
+=========================================================
+NOLEGGIO TERRA
+## PRENOTAZIONI
+* Creare una nuova prenotazione
+* Inviare un'allerta meteo
+* Inviare un test meteo
+* Cercare per codice prenotazione
+* Cercare per nome cliente
+* Cercare per email
+* Cercare per numero di telefono
+* Cercare per targa
+* Cercare per veicolo
+* Impostare un periodo personalizzato Da / A
+* Filtrare per Oggi
+* Filtrare per Ieri
+* Filtrare per Settimana
+* Filtrare per Mese
+* Filtrare per Trimestre
+* Filtrare per Anno
+## GESTIONE PRENOTAZIONE
+* Gestire una prenotazione
+* Modificare una prenotazione
+* Estendere una prenotazione
+* Cancellare una prenotazione
+* Visualizzare il contratto
+* Inviare il contratto
+* Generare la fattura
+* Segnalare Auto pronta
+* Gestire danni
+* Gestire penali
+## PREVENTIVI
+* Creare un nuovo preventivo
+* Cercare un preventivo
+* Modificare un preventivo
+* Visualizzare un preventivo
+* Inviare un preventivo
+* Accettare un preventivo
+* Rifiutare un preventivo
+* Cambiare un preventivo
+* Esportare i preventivi
+* Applicare filtri ai preventivi
+## RICHIESTE NO CAUZIONE
+* Visualizzare le richieste No Cauzione
+* Accettare una richiesta No Cauzione
+* Rifiutare una richiesta No Cauzione
+## USCITE STRAORDINARIE
+* Visualizzare il calendario giornaliero
+* Aggiungere una nuova uscita straordinaria
+* Inviare un'allerta meteo
+* Inviare un test meteo
+* Modificare un'uscita straordinaria
+* Gestire un'uscita straordinaria
+* Segnalare Auto pronta
+## CALENDARIO
+* Visualizzare le prenotazioni gia' attive
+* Modificare le prenotazioni esistenti
+* Verificare tutti i veicoli disponibili
+* Visualizzare la giornata corrente
+* Navigare al mese precedente
+* Navigare al mese successivo
+* Impostare un periodo personalizzato Da / A
+* Filtrare per Oggi
+* Filtrare per Ieri
+* Filtrare per Settimana
+* Filtrare per Mese
+* Filtrare per Trimestre
+* Filtrare per Anno
+* Nascondere il fatturato
+* Mostrare il fatturato
+* Cercare un veicolo
+* Cercare un cliente
+=========================================================
+CONTRATTI
+## GESTIONE TEMPLATE CONTRATTO
+* Caricare una nuova versione del contratto
+* Aprire la versione attuale del contratto
+* Leggere i campi PDF non accettati dal generatore
+## GESTIONE CONTRATTI
+* Visualizzare i contratti
+* Visualizzare il PDF originale
+* Inviare il contratto tramite email
+* Inviare il contratto per la firma tramite WhatsApp
+* Rigenerare il contratto
+* Modificare il contratto
+* Eliminare il contratto
+* Eliminare la prenotazione collegata
+=========================================================
+DANNI E PENALI
+## PENALI
+* Visualizzare le penali
+* Modificare le penali
+* Eliminare le penali
+## DANNI
+* Visualizzare i danni
+* Modificare i danni
+* Eliminare i danni
+## FILTRI
+* Impostare un periodo personalizzato Da / A
+* Filtrare per Oggi
+* Filtrare per Ieri
+* Filtrare per Settimana
+* Filtrare per Mese
+* Filtrare per Trimestre
+* Filtrare per Anno
+=========================================================
+MULTE
+## STORICO PEC
+* Visualizzare lo storico PEC
+* Aggiornare lo storico PEC
+## CARICA E INVIA PEC
+* Caricare il documento
+* Analizzare il documento
+* Individuare il conducente
+* Inviare la PEC alla Polizia o all'ente competente per la gestione della multa
+=========================================================
+CARGOS
+## CARGOS
+* Visualizzare tutte le prenotazioni
+* Visualizzare le prenotazioni per data
+* Visualizzare le prenotazioni per intervallo
+* Scaricare i file
+* Gestire le impostazioni
+* Visitare il portale Cargos
+* Visualizzare tutti i contratti pronti per l'invio
+* Validare i contratti
+* Selezionare piu' contratti contemporaneamente
+* Inviare piu' contratti contemporaneamente a Cargos
+=========================================================
+VEICOLI
+## PARCO AUTO
+* Visualizzare l'intero parco auto
+* Visualizzare la scheda del veicolo
+* Accedere alla panoramica del veicolo
+* Accedere al cruscotto del veicolo
+## CRUSCOTTO
+* Modificare la targa
+* Modificare il numero di telaio
+* Modificare il chilometraggio
+* Modificare i cavalli
+* Modificare l'anno
+* Modificare il dato di accelerazione 0-100 km/h
+## MANUTENZIONE E CHILOMETRI
+* Visualizzare i chilometri attuali
+* Inserire il tagliando
+* Modificare il tagliando
+* Inserire l'intervallo di tagliando
+* Modificare l'intervallo di tagliando
+## GOMME
+* Inserire le specifiche delle gomme anteriori
+* Inserire le specifiche delle gomme posteriori
+* Modificare le specifiche delle gomme anteriori
+* Modificare le specifiche delle gomme posteriori
+* Inserire gli intervalli relativi alle gomme
+* Modificare gli intervalli relativi alle gomme
+* Visualizzare lo stato delle gomme
+## PASTIGLIE FRENI
+* Inserire i dati delle pastiglie anteriori
+* Inserire i dati delle pastiglie posteriori
+* Modificare i dati delle pastiglie anteriori
+* Modificare i dati delle pastiglie posteriori
+* Inserire gli intervalli relativi alle pastiglie
+* Modificare gli intervalli relativi alle pastiglie
+* Visualizzare lo stato delle pastiglie
+## SCADENZE E DATE
+* Inserire tutte le scadenze del veicolo
+* Modificare tutte le scadenze del veicolo
+* Inserire i dati dell'assicurazione
+* Modificare i dati dell'assicurazione
+* Inserire le scadenze amministrative
+* Modificare le scadenze amministrative
+* Inserire qualsiasi altra scadenza relativa al veicolo
+## STORICO VEICOLO
+* Inserire le attivita' effettuate sul veicolo
+* Inserire le manutenzioni effettuate
+* Inserire i lavori effettuati
+* Visualizzare lo storico completo del veicolo
+## CATALOGO VEICOLI
+* Inserire le foto delle auto
+=========================================================
+MAGAZZINO
+## GESTIONE MATERIALI
+* Visualizzare i materiali presenti
+* Inserire un nuovo materiale
+* Inserire la quantita' disponibile
+* Aggiornare la quantita' disponibile
+* Inserire la quantita' utilizzata
+* Aggiungere merce
+* Togliere merce
+* Gestire il materiale utilizzato per la manutenzione delle auto
+* Aggiungere materiale al carrello
+* Aggiungere materiale a un ordine
+## CARRELLO
+* Aprire il carrello
+* Visualizzare il carrello
+* Rimuovere articoli dal carrello
+* Generare un ordine
+* Inviare un ordine ai fornitori configurati
+## FORNITORI MAGAZZINO
+* Aggiungere un nuovo fornitore
+* Modificare un fornitore esistente
+* Eliminare un fornitore
+* Visualizzare lo storico ordini
+* Visualizzare il dettaglio di ogni ordine
+=========================================================
+GPS
+## GPS
+* Funzione attualmente in stand-by
+=========================================================
+FLOTTA
+## FLOTTA
+* Funzione attualmente in stand-by
+=========================================================
+NOLEGGIO MARE
+## PRENOTAZIONI
+* Creare una nuova prenotazione
+* Inviare un'allerta meteo
+* Inviare un test meteo
+* Cercare per codice prenotazione
+* Cercare per nome cliente
+* Cercare per email
+* Cercare per numero di telefono
+* Cercare per targa
+* Cercare per veicolo
+* Impostare un periodo personalizzato Da / A
+* Filtrare per Oggi
+* Filtrare per Ieri
+* Filtrare per Settimana
+* Filtrare per Mese
+* Filtrare per Trimestre
+* Filtrare per Anno
+## GESTIONE PRENOTAZIONE
+* Gestire una prenotazione
+* Modificare una prenotazione
+* Estendere una prenotazione
+* Cancellare una prenotazione
+* Visualizzare il contratto
+* Inviare il contratto
+* Generare la fattura
+* Segnalare Mezzo pronto
+* Gestire danni
+* Gestire penali
+## PREVENTIVI
+* Creare un nuovo preventivo
+* Cercare un preventivo
+* Modificare un preventivo
+* Visualizzare un preventivo
+* Inviare un preventivo
+* Accettare un preventivo
+* Rifiutare un preventivo
+* Cambiare un preventivo
+* Esportare i preventivi
+* Applicare filtri ai preventivi
+## RICHIESTE NO CAUZIONE
+* Visualizzare le richieste No Cauzione
+* Accettare una richiesta No Cauzione
+* Rifiutare una richiesta No Cauzione
+## USCITE STRAORDINARIE
+* Visualizzare il calendario giornaliero
+* Aggiungere una nuova uscita straordinaria
+* Inviare un'allerta meteo
+* Inviare un test meteo
+* Modificare un'uscita straordinaria
+* Gestire un'uscita straordinaria
+* Segnalare Mezzo pronto
+## CALENDARIO
+* Visualizzare le prenotazioni gia' attive
+* Modificare le prenotazioni esistenti
+* Verificare tutti i mezzi disponibili
+* Visualizzare la giornata corrente
+* Navigare al mese precedente
+* Navigare al mese successivo
+* Impostare un periodo personalizzato Da / A
+* Filtrare per Oggi
+* Filtrare per Ieri
+* Filtrare per Settimana
+* Filtrare per Mese
+* Filtrare per Trimestre
+* Filtrare per Anno
+* Nascondere il fatturato
+* Mostrare il fatturato
+* Cercare un mezzo
+* Cercare un cliente
+=========================================================
+NOLEGGIO ARIA
+## PRENOTAZIONI
+* Creare una nuova prenotazione
+* Inviare un'allerta meteo
+* Inviare un test meteo
+* Cercare per codice prenotazione
+* Cercare per nome cliente
+* Cercare per email
+* Cercare per numero di telefono
+* Cercare per targa o identificativo
+* Cercare per velivolo
+* Impostare un periodo personalizzato Da / A
+* Filtrare per Oggi
+* Filtrare per Ieri
+* Filtrare per Settimana
+* Filtrare per Mese
+* Filtrare per Trimestre
+* Filtrare per Anno
+## GESTIONE PRENOTAZIONE
+* Gestire una prenotazione
+* Modificare una prenotazione
+* Estendere una prenotazione
+* Cancellare una prenotazione
+* Visualizzare il contratto
+* Inviare il contratto
+* Generare la fattura
+* Segnalare Velivolo pronto
+* Gestire danni
+* Gestire penali
+## PREVENTIVI
+* Creare un nuovo preventivo
+* Cercare un preventivo
+* Modificare un preventivo
+* Visualizzare un preventivo
+* Inviare un preventivo
+* Accettare un preventivo
+* Rifiutare un preventivo
+* Cambiare un preventivo
+* Esportare i preventivi
+* Applicare filtri ai preventivi
+## RICHIESTE NO CAUZIONE
+* Visualizzare le richieste No Cauzione
+* Accettare una richiesta No Cauzione
+* Rifiutare una richiesta No Cauzione
+## USCITE STRAORDINARIE
+* Visualizzare il calendario giornaliero
+* Aggiungere una nuova uscita straordinaria
+* Inviare un'allerta meteo
+* Inviare un test meteo
+* Modificare un'uscita straordinaria
+* Gestire un'uscita straordinaria
+* Segnalare Velivolo pronto
+## CALENDARIO
+* Visualizzare le prenotazioni gia' attive
+* Modificare le prenotazioni esistenti
+* Verificare tutti i velivoli disponibili
+* Visualizzare la giornata corrente
+* Navigare al mese precedente
+* Navigare al mese successivo
+* Impostare un periodo personalizzato Da / A
+* Filtrare per Oggi
+* Filtrare per Ieri
+* Filtrare per Settimana
+* Filtrare per Mese
+* Filtrare per Trimestre
+* Filtrare per Anno
+* Nascondere il fatturato
+* Mostrare il fatturato
+* Cercare un velivolo
+* Cercare un cliente
+=========================================================
+SOGGIORNI E OSPITALITA
+## PRENOTAZIONI
+* Creare una nuova prenotazione
+* Inviare un'allerta meteo
+* Inviare un test meteo
+* Cercare per codice prenotazione
+* Cercare per nome cliente
+* Cercare per email
+* Cercare per numero di telefono
+* Cercare per struttura o servizio
+* Impostare un periodo personalizzato Da / A
+* Filtrare per Oggi
+* Filtrare per Ieri
+* Filtrare per Settimana
+* Filtrare per Mese
+* Filtrare per Trimestre
+* Filtrare per Anno
+## GESTIONE PRENOTAZIONE
+* Gestire una prenotazione
+* Modificare una prenotazione
+* Estendere una prenotazione
+* Cancellare una prenotazione
+* Visualizzare il contratto
+* Inviare il contratto
+* Generare la fattura
+* Segnalare Struttura pronta
+* Gestire danni
+* Gestire penali
+## PREVENTIVI
+* Creare un nuovo preventivo
+* Cercare un preventivo
+* Modificare un preventivo
+* Visualizzare un preventivo
+* Inviare un preventivo
+* Accettare un preventivo
+* Rifiutare un preventivo
+* Cambiare un preventivo
+* Esportare i preventivi
+* Applicare filtri ai preventivi
+## RICHIESTE NO CAUZIONE
+* Visualizzare le richieste No Cauzione
+* Accettare una richiesta No Cauzione
+* Rifiutare una richiesta No Cauzione
+## USCITE O SERVIZI STRAORDINARI
+* Visualizzare il calendario giornaliero
+* Aggiungere un nuovo servizio straordinario
+* Inviare un'allerta meteo
+* Inviare un test meteo
+* Modificare un servizio straordinario
+* Gestire un servizio straordinario
+* Segnalare Struttura pronta
+## CALENDARIO
+* Visualizzare le prenotazioni gia' attive
+* Modificare le prenotazioni esistenti
+* Verificare tutte le strutture o disponibilita'
+* Visualizzare la giornata corrente
+* Navigare al mese precedente
+* Navigare al mese successivo
+* Impostare un periodo personalizzato Da / A
+* Filtrare per Oggi
+* Filtrare per Ieri
+* Filtrare per Settimana
+* Filtrare per Mese
+* Filtrare per Trimestre
+* Filtrare per Anno
+* Nascondere il fatturato
+* Mostrare il fatturato
+* Cercare una struttura o un servizio
+* Cercare un cliente
+=========================================================
+LAVAGGIO E MECCANICA
+## PRENOTAZIONI
+* Creare una nuova prenotazione
+* Modificare una prenotazione esistente
+* Generare la fattura
+* Inviare la fattura
+* Segnalare Auto pronta
+* Reinviare il link di pagamento
+* Eliminare la prenotazione
+## CALENDARIO
+* Visualizzare tutte le prenotazioni esistenti
+* Modificare le prenotazioni esistenti
+* Visualizzare il calendario
+* Aggiungere una nuova prenotazione
+* Mostrare il fatturato
+* Nascondere il fatturato
+* Navigare al mese precedente
+* Navigare al mese successivo
+* Impostare un periodo personalizzato Da / A
+* Filtrare per Oggi
+* Filtrare per Ieri
+* Filtrare per Settimana
+* Filtrare per Mese
+* Filtrare per Trimestre
+* Filtrare per Anno
+## CATALOGO LAVAGGIO
+* Inserire un nuovo servizio di lavaggio
+* Modificare un servizio di lavaggio
+* Inserire una descrizione
+* Modificare una descrizione
+* Salvare una nuova descrizione
+* Inserire una foto
+* Modificare una foto
+* Salvare una foto
+* Cambiare i prezzi
+* Cambiare le durate
+* Modificare le durate
+* Salvare le modifiche
+## EXTRA
+* Aggiungere un extra
+* Modificare un extra
+* Eliminare un extra
+## SEZIONI
+* Aggiungere una sezione
+* Modificare una sezione
+* Eliminare una sezione
+## AUTO DI CORTESIA
+* Visualizzare tutte le auto di cortesia
+* Aggiungere un'auto di cortesia
+* Modificare un'auto di cortesia
+* Eliminare un'auto di cortesia
+* Modificare i servizi relativi a ogni singola auto di cortesia
+=========================================================
+CLIENTI
+## GESTIONE CLIENTI
+* Impostare un periodo personalizzato Da / A
+* Filtrare per Oggi
+* Filtrare per Ieri
+* Filtrare per Settimana
+* Filtrare per Mese
+* Filtrare per Trimestre
+* Filtrare per Anno
+* Rimuovere i duplicati
+* Esportare tutti i clienti
+* Importare un link con lead gia' salvate
+* Inviare un link di autoregistrazione al cliente
+* Creare un nuovo cliente
+## TIPOLOGIA CLIENTE
+* Creare una persona fisica
+* Creare un'azienda
+* Creare una Pubblica Amministrazione
+## CREAZIONE E ANAGRAFICA
+* Inserire documenti tramite file
+* Inserire documenti tramite foto
+* Compilare manualmente i dati
+* Calcolare il codice fiscale
+* Calcolare i dati anagrafici partendo dal codice fiscale
+* Compilare automaticamente i campi tramite foto dei documenti
+* Caricare i file dei documenti
+* Visualizzare il riepilogo cliente
+* Salvare il cliente
+* Aprire la scheda cliente
+## LEAD CLIENTI
+* Visualizzare la scheda del cliente
+* Copiare il contatto
+* Inviare un messaggio tramite WhatsApp
+* Chiamare il cliente
+* Verificare i documenti
+* Visualizzare la carta utilizzata per i pagamenti
+## DETTAGLI COMPLETI
+* Visualizzare l'anteprima completa della scheda cliente
+* Visualizzare i dati necessari per il noleggio
+* Visualizzare la carta utilizzata per i pagamenti
+## DOCUMENTI CLIENTE
+* Caricare nuovi documenti
+* Visualizzare i documenti gia' caricati
+* Visualizzare i documenti caricati durante la creazione del cliente
+## MODIFICA CLIENTE
+* Modificare tutta la scheda cliente gia' compilata
+* Salvare le modifiche
+## AUTISTA
+* Trasformare una lead cliente anche in autista
+* Aggiungere lo status di autista
+## STATUS CLIENTE
+* Impostare il cliente in Blacklist
+* Rimuovere il cliente dalla Blacklist
+* Impostare il cliente come Member
+* Rimuovere lo status Member
+* Impostare il cliente come Elite
+* Rimuovere lo status Elite
+## CREDIT WALLET
+* Visualizzare tutti i Credit Wallet
+* Caricare crediti nel wallet
+* Addebitare crediti dal wallet
+* Visualizzare i dettagli di tutte le spese
+* Visualizzare tutti i movimenti in entrata
+* Visualizzare tutti i movimenti in uscita
+* Visualizzare il dettaglio completo del conto cliente
+## ISCRITTI AL SITO
+* Visualizzare gli iscritti al sito
+=========================================================
+MARKETING
+## COMPLEANNI
+* Visualizzare tutti i compleanni
+* Visualizzare chi ha gia' ricevuto il messaggio di compleanno
+* Visualizzare chi deve ancora ricevere il messaggio di compleanno
+* Inviare il messaggio di compleanno
+* Reinviare il messaggio di compleanno
+## RECENSIONI
+* Visualizzare i clienti che hanno effettuato un noleggio
+* Visualizzare i clienti che hanno effettuato un lavaggio
+* Inviare una richiesta recensione
+* Reinviare una richiesta recensione
+* Inviare il buono sconto per la recensione effettuata
+* Bloccare un cliente
+* Sbloccare un cliente
+* Approvare un cliente per la richiesta recensione
+* Escludere un cliente dalla richiesta recensione
+* Inviare alla valutazione della Direzione i clienti che hanno avuto danni
+* Inviare alla valutazione della Direzione i clienti che hanno avuto penali
+* Inviare alla valutazione della Direzione i clienti che hanno avuto contenziosi
+## MESSAGGI DI SISTEMA PRO
+* Creare un nuovo messaggio di sistema
+* Modificare un messaggio di sistema esistente
+* Eliminare un messaggio di sistema
+* Visualizzare tutti i messaggi di sistema
+* Visualizzare tutti i messaggi gia' inviati
+* Inviare un messaggio manualmente
+* Accendere un messaggio generico gia' creato
+* Spegnere un messaggio generico gia' creato
+## AUTOMAZIONI MESSAGGI
+* Impostare un messaggio come automatico
+* Impostare un messaggio come manuale
+* Impostare Cron ON
+* Impostare Cron OFF
+## CONFIGURAZIONE MESSAGGI
+* Attivare Header
+* Disattivare Header
+* Attivare Footer
+* Disattivare Footer
+* Attivare invio tramite email
+* Disattivare invio tramite email
+## CAMPAGNE MARKETING
+* Creare una nuova campagna marketing
+* Programmare una campagna marketing
+* Visualizzare il calendario delle campagne marketing
+* Aggiungere un file multimediale
+* Aggiungere un video
+* Programmare l'invio
+* Inviare immediatamente
+## DESTINATARI CAMPAGNE
+* Inviare a 50 clienti
+* Inviare a 100 clienti
+* Inviare a 250 clienti
+* Inviare a 500 clienti
+* Inviare a tutti i clienti
+* Includere solo determinate sezioni o categorie di clienti
+* Escludere determinate sezioni o categorie di clienti
+## SOCIAL LINKS
+* Aggiungere un link social
+* Modificare un link social
+* Eliminare un link social
+## REFERRAL
+* Visualizzare la panoramica della campagna Referral Code
+* Visualizzare i partecipanti alla campagna Referral Code
+## CODICI SCONTO
+* Generare un nuovo codice sconto
+* Modificare un codice sconto
+* Attivare un codice sconto
+* Disattivare un codice sconto
+* Inviare un codice sconto
+* Creare un QR Code
+* Copiare il codice sconto
+## FILTRI CODICI
+* Visualizzare tutti i codici
+* Visualizzare i codici attivi
+* Visualizzare i codici disattivati
+* Visualizzare i codici scaduti
+## STATISTICHE CODICI
+* Visualizzare i codici attivi
+* Visualizzare i codici utilizzati
+* Visualizzare il fatturato generato
+* Visualizzare il valore degli sconti
+* Visualizzare il tasso di conversione
+* Visualizzare il ROI
+=========================================================
+REPORT
+## NOTA GENERALE
+* La sezione Report e' esclusivamente consultabile
+* Non e' possibile modificare i dati
+* E' possibile visualizzare maggiori dettagli
+* E' possibile modificare l'intervallo temporale di analisi
+## REPORT NOLEGGIO
+* Visualizzare il report veicoli
+* Visualizzare il report cauzioni
+* Filtrare per Oggi
+* Filtrare per 7 giorni
+* Filtrare per 30 giorni
+* Filtrare per Mese
+* Filtrare per Anno
+* Impostare un periodo personalizzato Da / A
+* Aggiornare il report
+* Visualizzare i veicoli attivi
+* Visualizzare il dettaglio di ogni veicolo
+* Visualizzare ogni micropagamento
+* Visualizzare tutti i pagamenti effettuati
+* Visualizzare i dettagli dei pagamenti
+## REPORT LAVAGGIO
+* Visualizzare il report dei servizi di lavaggio
+* Visualizzare il report dei veicoli
+* Visualizzare il report dei pagamenti
+* Filtrare per Oggi
+* Filtrare per 7 giorni
+* Filtrare per 30 giorni
+* Filtrare per Mese
+* Filtrare per Anno
+* Impostare un periodo personalizzato Da / A
+* Aggiornare il report
+* Visualizzare i servizi attivi
+* Visualizzare il dettaglio di ogni servizio
+* Visualizzare ogni micropagamento
+* Visualizzare tutti i pagamenti effettuati
+* Visualizzare i dettagli dei pagamenti
+## REPORT CLIENTI
+* Generare un report delle spese dei clienti
+* Visualizzare quanto ha speso ogni cliente
+* Visualizzare per cosa ha speso ogni cliente
+* Classificare i clienti
+* Ordinare i clienti
+* Visualizzare i clienti in righe
+* Visualizzare lo storico acquisti
+* Visualizzare il fatturato per cliente
+## REPORT AUTISTI
+* Visualizzare tutte le attivita' degli autisti
+* Visualizzare le corse effettuate
+* Visualizzare quando sono state effettuate le corse
+* Visualizzare quante corse ha effettuato ogni autista
+* Visualizzare date e orari delle corse
+## REPORT PENALI E DANNI
+* Visualizzare tutte le penali assegnate ai clienti
+* Visualizzare tutti i danni assegnati ai clienti
+* Visualizzare le penali pagate
+* Visualizzare le penali non pagate
+* Visualizzare i danni pagati
+* Visualizzare i danni non pagati
+* Visualizzare tutti i dettagli relativi a danni e penali
+## REPORT PREVENTIVI
+* Visualizzare il report generale dei preventivi
+* Visualizzare tutti i preventivi inviati
+* Visualizzare tutti i preventivi accettati
+* Visualizzare tutti i preventivi rifiutati
+* Visualizzare la conversione dei preventivi
+* Categorizzare i preventivi
+* Analizzare i dati dei preventivi
+## RENDIMENTO SITO
+* Visualizzare il report del rendimento del sito web
+* Visualizzare le statistiche del sito web
+* Visualizzare i dettagli del rendimento del sito
+## RENDIMENTO GOOGLE MY BUSINESS
+* Visualizzare il report del rendimento Google My Business
+* Visualizzare tutte le statistiche collegate a Google My Business
+* Visualizzare i dettagli del rendimento Google My Business
+=========================================================
+DASHBOARD
+## DASHBOARD
+* Visualizzare tutti i report uniti in un'unica dashboard
+* Visualizzare tutti i dettagli dell'azienda
+* Visualizzare i dati di ogni microsezione
+* Visualizzare i KPI aziendali
+* Visualizzare il report complessivo aziendale
+* Accedere al dettaglio di ogni singolo report
+* Visualizzare l'andamento generale dell'azienda
+=========================================================
+AMMINISTRAZIONE
+## ATTESA DI PAGAMENTO
+* Visualizzare i pagamenti in attesa
+* Impostare un periodo personalizzato Da / A
+* Applicare filtri per periodo
+* Applicare filtri per categoria
+* Visualizzare tutte le categorie
+* Visualizzare chi deve pagare
+* Visualizzare quanto deve pagare
+* Segnare un pagamento come pagato
+* Inserire l'importo pagato
+* Inviare il link di pagamento
+* Inviare un link di pagamento parziale
+* Addebitare una carta tokenizzata
+* Inviare un sollecito
+* Registrare un pagamento parziale
+* Parzializzare un pagamento
+* Modificare l'importo del pagamento
+* Eliminare il pagamento
+## CAUZIONI AMMINISTRATIVE
+* Visualizzare tutte le cauzioni
+* Visualizzare le cauzioni da restituire
+* Aggiungere una nuova cauzione
+* Modificare una cauzione
+* Segnare una cauzione come Da incassare
+* Segnare una cauzione come Incassata
+* Inserire una cauzione in cassa
+* Segnare una cauzione come Restituita
+* Restituire una cauzione prima dell'incasso
+* Inviare un link per incassare la cauzione
+* Inviare un link per preautorizzare la cauzione
+* Incassare una cauzione
+* Visualizzare lo storico delle cauzioni
+* Filtrare le cauzioni
+* Visualizzare il micro-report riepilogativo delle cauzioni
+## SCADENZE AMMINISTRATIVE
+* Visualizzare tutte le scadenze
+* Impostare una nuova scadenza
+* Aggiungere una nuova scadenza
+* Modificare una scadenza
+* Eliminare una scadenza
+## FATTURE
+* Visualizzare tutte le fatture
+* Visualizzare le fatture inviate
+* Visualizzare le fatture ricevute
+* Scaricare una fattura
+* Visualizzare una fattura in PDF
+* Copiare una fattura
+* Inoltrare una fattura
+* Inviare una fattura
+* Modificare una fattura
+* Creare una nota di credito
+* Scaricare il PDF
+* Verificare lo stato SDI
+* Reinviare una fattura a SDI
+* Segnare una fattura come Non pagata
+* Eliminare una fattura
+## REPORT OPERATORI
+* Generare un report totale degli operatori
+* Visualizzare il report di ogni singolo operatore
+* Filtrare per 7 giorni
+* Filtrare per 30 giorni
+* Filtrare per mese corrente
+* Impostare un periodo personalizzato Da / A
+* Effettuare la rilevazione degli orari giornalieri
+* Visualizzare gli orari giornalieri
+* Caricare le buste paga di ogni operatore
+* Visualizzare le buste paga di ogni operatore
+* Verificare i contratti di ogni operatore
+* Visualizzare i contratti di ogni operatore
+* Creare i contratti di ogni operatore
+## GESTIONE PERMESSI OPERATORI
+* Visualizzare i permessi di ogni operatore
+* Assegnare permessi a un operatore
+* Rimuovere permessi a un operatore
+* Assegnare uno status operatore maggiore
+* Assegnare uno status operatore minore
+* Modificare lo status di un operatore
+* Modificare il livello di autorizzazione
+* Visualizzare l'Audit Log completo
+* Visualizzare tutte le attivita' effettuate nel gestionale
+* Visualizzare le attivita' giornaliere di ogni operatore
+* Visualizzare lo storico completo delle attivita'
+## GESTIONE RIFIUTI
+* Aggiungere un calendario
+* Creare delle giornate
+* Aggiungere un ritiro
+* Impostare una giornata fissa di ritiro
+* Impostare un orario fisso di ritiro
+* Modificare una giornata
+* Modificare un ritiro
+* Eliminare una giornata
+* Eliminare un ritiro
+## TICKET
+* Aprire un nuovo ticket
+* Selezionare i destinatari
+* Selezionare il reparto
+* Scrivere l'oggetto
+* Inserire una priorita'
+* Inserire il numero di telefono
+* Caricare dei file
+* Inviare il ticket
+* Annullare il ticket
+* Inviare il messaggio del ticket tramite WhatsApp
+* Visualizzare i destinatari
+* Gestire i destinatari
+* Visualizzare i ticket inviati
+* Ricontrollare i ticket inviati
+## FORNITORI AMMINISTRAZIONE
+* Aggiungere un nuovo fornitore
+* Modificare un fornitore esistente
+* Eliminare un fornitore
+* Caricare le bolle
+* Caricare una bolla senza fattura
+* Caricare documenti su ogni fattura ricevuta
+* Eseguire un controllo incrociato delle fatture
+* Richiedere accesso TP per approvazione fatture
+* Richiedere accesso TP per approvazione pagamento
+* Aggiornare le fatture
+* Filtrare le fatture
+## NEXI
+* Visualizzare tutti i pagamenti effettuati
+* Visualizzare tutte le carte tokenizzate
+* Effettuare un nuovo pagamento
+* Preautorizzare un nuovo pagamento
+* Eliminare una carta tokenizzata
+* Addebitare una carta gia' tokenizzata
+## CANALI DI NOTIFICA OTP
+* Verificare i canali di notifica OTP
+* Modificare i canali di notifica della Direzione
+* Configurare i destinatari delle notifiche OTP
+## REGOLE OTP
+* Aggiungere una nuova regola OTP
+* Modificare una regola OTP esistente
+* Attivare una regola OTP
+* Disattivare una regola OTP
+* Eliminare una regola OTP
+* Eliminare il blocco OTP da una regola
+* Segnalare nuove uscite OTP
+* Segnalare nuove regole OTP
+* Inviare un'anteprima OTP
+* Effettuare un test OTP
+## VERIFICA DOCUMENTI
+* Visualizzare i documenti ricevuti
+* Visualizzare i documenti gia' caricati
+* Visualizzare i documenti caricati dai clienti tramite sito
+* Scaricare i documenti
+* Inserire i documenti nella scheda cliente
+* Verificare i documenti
+* Far verificare i documenti dal sito
+* Accettare i documenti
+* Rifiutare i documenti
+=========================================================
+CENTRALINA PRO
+## CATEGORIE
+* Visualizzare tutte le categorie
+* Aggiungere una nuova categoria
+* Modificare una categoria
+* Eliminare una categoria
+## FASCE
+* Aggiungere una nuova fascia
+* Modificare una fascia
+* Rimuovere una fascia
+* Impostare regole per le fasce
+## ASSICURAZIONI
+* Visualizzare le assicurazioni
+* Aggiungere una nuova assicurazione
+* Modificare un'assicurazione
+* Attivare un'assicurazione
+* Disattivare un'assicurazione
+* Accendere un'assicurazione
+* Spegnere un'assicurazione
+* Eliminare un'assicurazione
+## CHILOMETRAGGI
+* Creare un nuovo chilometraggio
+* Modificare un chilometraggio
+* Eliminare un chilometraggio
+## SFORO CHILOMETRICO
+* Creare un nuovo sforo
+* Modificare uno sforo
+* Eliminare uno sforo
+* Impostare le tariffe di sforo
+* Modificare le tariffe di sforo
+* Aumentare le tariffe
+* Diminuire le tariffe
+## CHILOMETRI ILLIMITATI
+* Attivare le funzionalita' dei chilometri illimitati
+* Disattivare le funzionalita' dei chilometri illimitati
+## PACCHETTI CHILOMETRICI
+* Creare un pacchetto chilometrico
+* Modificare un pacchetto chilometrico
+* Eliminare un pacchetto chilometrico
+* Impostare le tariffe dei pacchetti
+* Modificare le tariffe dei pacchetti
+* Impostare le percentuali di sconto
+* Modificare le percentuali di sconto
+* Lasciare invariate le percentuali di sconto
+* Salvare le percentuali di sconto
+* Applicare il pacchetto a una singola fascia
+* Applicare il pacchetto a tutte le fasce
+## SERVIZI CHILOMETRAGGIO
+* Attivare servizi relativi al chilometraggio
+* Disattivare servizi relativi al chilometraggio
+## CONFIGURAZIONE CAUZIONI
+* Aggiungere una nuova cauzione
+* Modificare una cauzione
+* Attivare una cauzione
+* Disattivare una cauzione
+* Accendere una cauzione
+* Spegnere una cauzione
+* Eliminare una cauzione
+* Configurare le modalita' di versamento
+* Configurare le cauzioni per fascia
+* Configurare le cauzioni per categoria di auto
+## SERVIZI EXTRA
+* Aggiungere un nuovo servizio
+* Modificare un servizio
+* Eliminare un servizio
+* Attivare un servizio
+* Disattivare un servizio
+* Accendere un servizio
+* Spegnere un servizio
+## PREZZO DINAMICO
+* Creare un nuovo prezzo dinamico
+* Modificare un prezzo dinamico
+* Cancellare un prezzo dinamico
+* Eliminare un prezzo dinamico
+* Impostare il prezzo base
+* Impostare il prezzo minimo
+* Impostare il prezzo massimo
+## COEFFICIENTI DINAMICI
+* Creare un nuovo coefficiente dinamico
+* Nominare un coefficiente dinamico
+* Modificare un coefficiente dinamico esistente
+* Eliminare un coefficiente dinamico
+* Aggiungere un coefficiente dinamico
+* Togliere un coefficiente dinamico
+* Attivare un coefficiente dinamico
+* Disattivare un coefficiente dinamico
+* Accendere un coefficiente dinamico
+* Spegnere un coefficiente dinamico
+* Configurare le impostazioni del coefficiente dinamico
+## CONFIGURAZIONE PREVENTIVI
+* Selezionare la maggiorazione del preventivo
+* Impostare la scadenza predefinita
+* Configurare l'invio del preventivo
+* Attivare le richieste preventivo per l'Admin provenienti dal sito
+* Disattivare le richieste preventivo per l'Admin provenienti dal sito
+## CATALOGO DANNI
+* Impostare un catalogo danni per ogni categoria di auto
+* Aggiungere un nuovo danno
+* Modificare un danno esistente
+* Eliminare un danno esistente
+* Cambiare il nome del danno
+* Cambiare l'importo del danno
+## CATALOGO PENALI
+* Impostare un catalogo penali per ogni categoria di auto
+* Aggiungere una nuova penale
+* Modificare una penale esistente
+* Eliminare una penale esistente
+* Cambiare il nome della penale
+* Cambiare l'importo della penale
+## CONFIGURAZIONE FISCALE IVA
+* Selezionare l'aliquota IVA
+* Modificare l'aliquota IVA
+## FATTURAZIONE
+* Selezionare quali operazioni devono generare fattura
+* Selezionare quali operazioni non devono generare fattura
+* Attivare la fattura su un determinato metodo di pagamento
+* Disattivare la fattura su un determinato metodo di pagamento
+* Annullare la fatturazione su un determinato metodo di pagamento
+## METODI DI PAGAMENTO
+* Aggiungere un metodo di pagamento
+* Modificare un metodo di pagamento
+* Eliminare un metodo di pagamento
+* Attivare un metodo di pagamento
+* Disattivare un metodo di pagamento
+* Selezionare i metodi di pagamento accettati
+* Selezionare i metodi di pagamento non accettati
+* Selezionare quali metodi di pagamento generano fattura
+## DR7 CLUB TIER CASHBACK
+* Visualizzare i Tier Cashback
+* Aggiungere un nuovo Tier Cashback
+* Modificare un Tier Cashback esistente
+* Eliminare un Tier Cashback
+* Attivare un Tier Cashback
+* Disattivare un Tier Cashback
+* Accendere un Tier Cashback
+* Spegnere un Tier Cashback
+* Preimpostare il cashback per ogni fascia DR7 Club
+* Configurare il cashback in base alla spesa del cliente
+* Modificare la percentuale di cashback
+* Configurare le soglie di spesa
+## AUTOMAZIONI BUFFER
+* Inserire un buffer post noleggio
+* Inserire un buffer tra veicoli diversi
+* Inserire un buffer pre-pickup dei veicoli in lavaggio
+* Modificare un buffer
+* Eliminare un buffer
+* Attivare un buffer
+* Disattivare un buffer
+## REGOLE DI CANCELLAZIONE
+* Aggiungere una regola di cancellazione
+* Modificare una regola di cancellazione esistente
+* Eliminare una regola di cancellazione
+* Attivare una regola di cancellazione
+* Disattivare una regola di cancellazione
+* Accendere una regola di cancellazione
+* Spegnere una regola di cancellazione
+## RITARDI
+* Inserire una Grace Period per il ritardo di riconsegna
+* Modificare la Grace Period
+* Eliminare la Grace Period
+* Attivare la Grace Period
+* Disattivare la Grace Period
+## BLOCCHI PRENOTAZIONI LAVAGGIO
+* Bloccare le prenotazioni dal giorno al giorno
+* Bloccare le prenotazioni per orario
+* Bloccare le prenotazioni per sezione
+* Bloccare le prenotazioni per singoli giorni
+* Bloccare le prenotazioni per periodi di tempo
+* Modificare un blocco
+* Eliminare un blocco
+* Attivare un blocco
+* Disattivare un blocco
+## INCLUSIONE NEI COEFFICIENTI DINAMICI
+* Includere un servizio nei coefficienti dinamici
+* Escludere un servizio dai coefficienti dinamici
+* Selezionare quali servizi sono soggetti a sconti
+* Selezionare quali servizi sono soggetti ad aumenti
+* Selezionare quali servizi devono essere pagati a prezzo pieno
+* Attivare l'inclusione nei coefficienti dinamici
+* Disattivare l'inclusione nei coefficienti dinamici
+## ORARI NOLEGGIO
+* Configurare gli orari di noleggio
+* Aggiungere una nuova finestra oraria
+* Modificare una finestra oraria esistente
+* Eliminare una finestra oraria
+* Attivare una finestra oraria
+* Disattivare una finestra oraria
+* Accendere una finestra oraria
+* Spegnere una finestra oraria
+* Chiudere una finestra oraria
+* Selezionare i giorni di apertura
+* Selezionare i giorni di chiusura
+* Configurare autonomamente i giorni aperti
+* Configurare autonomamente i giorni chiusi
+## ORARI LAVAGGIO
+* Configurare gli orari di lavaggio
+* Aggiungere una nuova finestra oraria
+* Modificare una finestra oraria esistente
+* Eliminare una finestra oraria
+* Attivare una finestra oraria
+* Disattivare una finestra oraria
+* Accendere una finestra oraria
+* Spegnere una finestra oraria
+* Chiudere una finestra oraria
+* Selezionare i giorni di apertura
+* Selezionare i giorni di chiusura
+* Configurare autonomamente i giorni aperti
+* Configurare autonomamente i giorni chiusi
+* Bloccare determinate fasce orarie
+* Bloccare determinati periodi di tempo
+* Bloccare giorni specifici
+=========================================================
+DR7 TRUST
+## DOCUMENTI
+* Inviare nuovi documenti
+* Visualizzare i documenti gia' firmati
+* Visualizzare i documenti gia' inviati
+* Eliminare documenti gia' firmati
+* Cercare una persona per nome
+## CONSENSO MARKETING
+* Visualizzare chi ha consentito al marketing
+* Visualizzare chi non ha consentito al marketing
+* Cercare per nome le persone che hanno consentito
+* Cercare per nome le persone che non hanno consentito
+=========================================================
+ALLARMI
+## ATTIVA ALLARMI
+* Attivare gli allarmi
+* Disattivare gli allarmi
+## IMPOSTAZIONI ALLARMI
+* Gestire gli allarmi
+* Scegliere quando deve suonare un allarme
+* Scegliere quanto tempo prima deve suonare
+* Scegliere per quale evento deve suonare
+* Creare un nuovo allarme
+* Modificare un allarme esistente
+* Eliminare un allarme
+* Accendere un allarme
+* Spegnere un allarme
+* Attivare un allarme
+* Disattivare un allarme
+=========================================================
+I MIEI ORARI
+## I MIEI ORARI
+* Inserire l'orario di entrata
+* Inserire l'orario di uscita
+* Aggiungere una pausa
+* Eliminare una pausa
+* Modificare una pausa
+* Inserire note operative
+* Verificare il totale delle ore a fine giornata
+* Modificare gli orari gia' esistenti
+* Modificare gli orari gia' inseriti
+* Salvare gli orari
+* Chiudere e salvare gli orari
+* Chiudere la pagina
+=========================================================
+PASSWORD
+## PASSWORD
+* Cambiare la password del profilo Admin
+=========================================================
+ESCI
+## ESCI
+* Uscire dal profilo Admin
+* Terminare la sessione
+* Effettuare nuovamente l'accesso

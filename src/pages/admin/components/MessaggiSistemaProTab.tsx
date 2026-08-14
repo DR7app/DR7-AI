@@ -385,295 +385,1025 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; area: 
   },
 
   // ═══════════════════════════════════════════════════════════════════════
-  // 2026-08-14 (roadmap #44) — Azioni del gestionale, una voce per ogni
-  // azione che CAMBIA uno stato. Raggruppate per sezione, cosi' si trovano
-  // dove la direzione le cerca invece che in un elenco unico.
+  // 2026-08-14 (roadmap #44) — Azioni del file trigger della direzione,
+  // raggruppate con le SUE sezioni e sottosezioni: si cercano dove la
+  // direzione le ha scritte, non in un elenco unico da scorrere.
   //
   // Nessun `service`: sono azioni trasversali e il filtro per servizio le
-  // nasconderebbe senza che si capisca perche'. La selezione si restringe
-  // con i chip per area sopra l'elenco e con la ricerca.
-  //
-  // Tutte marcate "da collegare": vedi PENDING_EVENTS in proTemplateRouting.
+  // nasconderebbe senza che si capisca perche'. Si restringe con i chip per
+  // area sopra l'elenco e con la ricerca.
   // ═══════════════════════════════════════════════════════════════════════
   {
-    label: 'Noleggio Terra — Azioni gestionale',
+    label: 'Noleggio Terra — Prenotazioni',
     color: 'blue',
     area: 'terra',
     keys: [
-      'terra_invia_test_meteo', 'terra_gestire_prenotazione', 'terra_gestire_danni',
-      'terra_gestire_penali', 'terra_crea_nuovo_preventivo', 'terra_modifica_preventivo',
-      'terra_invia_preventivo', 'terra_accettare_preventivo', 'terra_rifiutare_preventivo',
-      'terra_cambiare_preventivo', 'terra_esportare_preventivi', 'terra_aggiungi_nuova_uscita_straordinaria',
-      'terra_modifica_uscita_straordinaria', 'terra_gestire_uscita_straordinaria', 'terra_modifica_prenotazioni_esistenti_dal_calendar',
+      'terra_invia_test_meteo',
     ],
   },
   {
-    label: 'Noleggio Mare — Azioni gestionale',
-    color: 'cyan',
-    area: 'mare',
+    label: 'Noleggio Terra — Gestione Prenotazione',
+    color: 'blue',
+    area: 'terra',
     keys: [
-      'mare_invia_test_meteo', 'mare_gestire_prenotazione', 'mare_estendere_prenotazione',
-      'mare_invia_contratto', 'mare_gestire_danni', 'mare_gestire_penali',
-      'mare_crea_nuovo_preventivo', 'mare_modifica_preventivo', 'mare_invia_preventivo',
-      'mare_accettare_preventivo', 'mare_rifiutare_preventivo', 'mare_cambiare_preventivo',
-      'mare_esportare_preventivi', 'mare_accettare_richiesta_no_cauzione', 'mare_rifiutare_richiesta_no_cauzione',
-      'mare_aggiungi_nuova_uscita_straordinaria', 'mare_modifica_uscita_straordinaria', 'mare_gestire_uscita_straordinaria',
-      'mare_modifica_prenotazioni_esistenti_dal_calendar',
+      'terra_gestire_prenotazione', 'terra_gestire_danni', 'terra_gestire_penali',
     ],
   },
   {
-    label: 'Noleggio Aria — Azioni gestionale',
-    color: 'teal',
-    area: 'aria',
+    label: 'Noleggio Terra — Preventivi',
+    color: 'blue',
+    area: 'terra',
     keys: [
-      'aria_invia_allerta_meteo', 'aria_invia_test_meteo', 'aria_gestire_prenotazione',
-      'aria_estendere_prenotazione', 'aria_invia_contratto', 'aria_gestire_danni',
-      'aria_gestire_penali', 'aria_crea_nuovo_preventivo', 'aria_modifica_preventivo',
-      'aria_invia_preventivo', 'aria_accettare_preventivo', 'aria_rifiutare_preventivo',
-      'aria_cambiare_preventivo', 'aria_esportare_preventivi', 'aria_accettare_richiesta_no_cauzione',
-      'aria_rifiutare_richiesta_no_cauzione', 'aria_aggiungi_nuova_uscita_straordinaria', 'aria_modifica_uscita_straordinaria',
-      'aria_gestire_uscita_straordinaria', 'aria_modifica_prenotazioni_esistenti_dal_calendar',
+      'terra_crea_preventivo', 'terra_modifica_preventivo', 'terra_invia_preventivo',
+      'terra_accettare_preventivo', 'terra_rifiutare_preventivo', 'terra_cambiare_preventivo',
+      'terra_esportare_preventivi',
     ],
   },
   {
-    label: 'Soggiorni — Azioni gestionale',
-    color: 'emerald',
-    area: 'soggiorni',
+    label: 'Noleggio Terra — Uscite Straordinarie',
+    color: 'blue',
+    area: 'terra',
     keys: [
-      'soggiorni_invia_allerta_meteo', 'soggiorni_invia_test_meteo', 'soggiorni_gestire_prenotazione',
-      'soggiorni_estendere_prenotazione', 'soggiorni_invia_contratto', 'soggiorni_gestire_danni',
-      'soggiorni_gestire_penali', 'soggiorni_crea_nuovo_preventivo', 'soggiorni_modifica_preventivo',
-      'soggiorni_invia_preventivo', 'soggiorni_accettare_preventivo', 'soggiorni_rifiutare_preventivo',
-      'soggiorni_cambiare_preventivo', 'soggiorni_esportare_preventivi', 'soggiorni_accettare_richiesta_no_cauzione',
-      'soggiorni_rifiutare_richiesta_no_cauzione', 'soggiorni_aggiungi_nuova_uscita_straordinaria', 'soggiorni_modifica_uscita_straordinaria',
-      'soggiorni_gestire_uscita_straordinaria', 'soggiorni_modifica_prenotazioni_esistenti_dal_calendar',
+      'terra_aggiungi_uscita_straordinaria', 'terra_invia_test_meteo_2', 'terra_modifica_uscita_straordinaria',
+      'terra_gestire_uscita_straordinaria',
     ],
   },
   {
-    label: 'Contratti — Azioni gestionale',
+    label: 'Noleggio Terra — Calendario',
+    color: 'blue',
+    area: 'terra',
+    keys: [
+      'terra_modifica_prenotazioni_esistenti', 'terra_verificare_tutti_veicoli_disponibili', 'terra_nascondere_fatturato',
+      'terra_mostrare_fatturato',
+    ],
+  },
+  {
+    label: 'Contratti — Gestione Template Contratto',
+    color: 'blue',
+    area: 'terra',
+    keys: [
+      'contratti_carica_versione_contratto',
+    ],
+  },
+  {
+    label: 'Contratti — Gestione Contratti',
+    color: 'blue',
+    area: 'terra',
+    keys: [
+      'contratti_rigenera_contratto', 'contratti_modifica_contratto', 'contratti_elimina_contratto',
+      'contratti_elimina_prenotazione_collegata',
+    ],
+  },
+  {
+    label: 'Danni E Penali — Penali',
+    color: 'blue',
+    area: 'terra',
+    keys: [
+      'danni_modifica_penali', 'danni_elimina_penali',
+    ],
+  },
+  {
+    label: 'Danni E Penali — Danni',
+    color: 'blue',
+    area: 'terra',
+    keys: [
+      'danni_modifica_danni', 'danni_elimina_danni',
+    ],
+  },
+  {
+    label: 'Multe — Storico Pec',
     color: 'violet',
-    area: 'terra',
-    keys: [
-      'contratti_carica_nuova_versione_contratto', 'contratti_rigenera_contratto', 'contratti_modifica_contratto',
-      'contratti_elimina_contratto', 'contratti_elimina_prenotazione_collegata',
-    ],
-  },
-  {
-    label: 'Danni e Penali — Azioni gestionale',
-    color: 'rose',
-    area: 'terra',
-    keys: [
-      'danni_modifica_penali', 'danni_elimina_penali', 'danni_modifica_danni',
-      'danni_elimina_danni',
-    ],
-  },
-  {
-    label: 'Multe — Azioni gestionale',
-    color: 'orange',
     area: 'amministrazione',
     keys: [
-      'multe_aggiornare_storico_pec', 'multe_carica_documento_multa', 'multe_analizzare_documento',
+      'multe_aggiornare_storico_pec',
     ],
   },
   {
-    label: 'Cargos — Azioni gestionale',
-    color: 'amber',
+    label: 'Multe — Carica E Invia Pec',
+    color: 'violet',
     area: 'amministrazione',
     keys: [
-      'cargos_scarica_file', 'cargos_gestire_impostazioni_cargos', 'cargos_validare_contratti',
-      'cargos_invia_piu_contratti_cargos',
+      'multe_carica_documento', 'multe_analizzare_documento',
     ],
   },
   {
-    label: 'Veicoli — Azioni gestionale',
+    label: 'Cargos — Cargos',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'cargos_scarica_file', 'cargos_gestire_impostazioni', 'cargos_validare_contratti',
+      'cargos_invia_piu_contratti_contemporaneamente_cargos',
+    ],
+  },
+  {
+    label: 'Veicoli — Cruscotto',
     color: 'orange',
     area: 'veicoli',
     keys: [
       'veicoli_modifica_targa', 'veicoli_modifica_numero_telaio', 'veicoli_modifica_chilometraggio',
-      'veicoli_modifica_cavalli', 'veicoli_modifica_l_anno', 'veicoli_modifica_dato_accelerazione',
+      'veicoli_modifica_cavalli', 'veicoli_modifica_l_anno', 'veicoli_modifica_dato_accelerazione_0_100_km_h',
+    ],
+  },
+  {
+    label: 'Veicoli — Manutenzione E Chilometri',
+    color: 'orange',
+    area: 'veicoli',
+    keys: [
       'veicoli_inserisci_tagliando', 'veicoli_modifica_tagliando', 'veicoli_inserisci_l_intervallo_tagliando',
-      'veicoli_modifica_l_intervallo_tagliando', 'veicoli_inserisci_specifiche_gomme_anteriori', 'veicoli_inserisci_specifiche_gomme_posteriori',
-      'veicoli_modifica_specifiche_gomme_anteriori', 'veicoli_modifica_specifiche_gomme_posteriori', 'veicoli_inserisci_gli_intervalli_gomme',
-      'veicoli_modifica_gli_intervalli_gomme', 'veicoli_inserisci_dati_pastiglie_anteriori', 'veicoli_inserisci_dati_pastiglie_posteriori',
-      'veicoli_modifica_dati_pastiglie_anteriori', 'veicoli_modifica_dati_pastiglie_posteriori', 'veicoli_inserisci_gli_intervalli_pastiglie',
-      'veicoli_modifica_gli_intervalli_pastiglie', 'veicoli_inserisci_scadenze_amministrative', 'veicoli_modifica_scadenze_amministrative',
-      'veicoli_inserisci_attivita_sul_veicolo', 'veicoli_inserisci_manutenzione_effettuata', 'veicoli_inserisci_lavoro_effettuato',
+      'veicoli_modifica_l_intervallo_tagliando',
+    ],
+  },
+  {
+    label: 'Veicoli — Gomme',
+    color: 'orange',
+    area: 'veicoli',
+    keys: [
+      'veicoli_inserisci_specifiche_gomme_anteriori', 'veicoli_inserisci_specifiche_gomme_posteriori', 'veicoli_modifica_specifiche_gomme_anteriori',
+      'veicoli_modifica_specifiche_gomme_posteriori', 'veicoli_inserisci_intervalli_relativi_gomme', 'veicoli_modifica_intervalli_relativi_gomme',
+    ],
+  },
+  {
+    label: 'Veicoli — Pastiglie Freni',
+    color: 'orange',
+    area: 'veicoli',
+    keys: [
+      'veicoli_inserisci_dati_pastiglie_anteriori', 'veicoli_inserisci_dati_pastiglie_posteriori', 'veicoli_modifica_dati_pastiglie_anteriori',
+      'veicoli_modifica_dati_pastiglie_posteriori', 'veicoli_inserisci_intervalli_relativi_pastiglie', 'veicoli_modifica_intervalli_relativi_pastiglie',
+    ],
+  },
+  {
+    label: 'Veicoli — Scadenze E Date',
+    color: 'orange',
+    area: 'veicoli',
+    keys: [
+      'veicoli_inserisci_scadenze_amministrative', 'veicoli_modifica_scadenze_amministrative', 'veicoli_inserisci_qualsiasi_altra_scadenza_relativa_ve',
+    ],
+  },
+  {
+    label: 'Veicoli — Storico Veicolo',
+    color: 'orange',
+    area: 'veicoli',
+    keys: [
+      'veicoli_inserisci_attivita_effettuate_sul_veicolo', 'veicoli_inserisci_manutenzioni_effettuate', 'veicoli_inserisci_lavori_effettuati',
+    ],
+  },
+  {
+    label: 'Veicoli — Catalogo Veicoli',
+    color: 'orange',
+    area: 'veicoli',
+    keys: [
       'veicoli_inserisci_foto_auto',
     ],
   },
   {
-    label: 'Magazzino — Azioni gestionale',
+    label: 'Magazzino — Gestione Materiali',
     color: 'violet',
     area: 'amministrazione',
     keys: [
-      'magazzino_inserisci_nuovo_materiale', 'magazzino_inserisci_quantita_disponibile', 'magazzino_aggiornare_quantita_disponibile',
+      'magazzino_inserisci_materiale', 'magazzino_inserisci_quantita_disponibile', 'magazzino_aggiornare_quantita_disponibile',
       'magazzino_inserisci_quantita_utilizzata', 'magazzino_aggiungi_merce', 'magazzino_togliere_merce',
-      'magazzino_aggiungi_materiale_carrello', 'magazzino_rimuovi_articoli_dal_carrello', 'magazzino_genera_ordine',
-      'magazzino_aggiungi_fornitore_magazzino', 'magazzino_modifica_fornitore_magazzino', 'magazzino_elimina_fornitore_magazzino',
+      'magazzino_gestire_materiale_utilizzato_manutenzione_auto', 'magazzino_aggiungi_materiale_carrello', 'magazzino_aggiungi_materiale_ordine',
     ],
   },
   {
-    label: 'Lavaggio e Meccanica — Azioni gestionale',
+    label: 'Magazzino — Carrello',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'magazzino_rimuovi_articoli_dal_carrello', 'magazzino_genera_ordine',
+    ],
+  },
+  {
+    label: 'Magazzino — Fornitori Magazzino',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'magazzino_aggiungi_fornitore', 'magazzino_modifica_fornitore', 'magazzino_elimina_fornitore',
+    ],
+  },
+  {
+    label: 'Noleggio Mare — Prenotazioni',
+    color: 'cyan',
+    area: 'mare',
+    keys: [
+      'mare_invia_test_meteo',
+    ],
+  },
+  {
+    label: 'Noleggio Mare — Gestione Prenotazione',
+    color: 'cyan',
+    area: 'mare',
+    keys: [
+      'mare_gestire_prenotazione', 'mare_estendere_prenotazione', 'mare_invia_contratto',
+      'mare_gestire_danni', 'mare_gestire_penali',
+    ],
+  },
+  {
+    label: 'Noleggio Mare — Preventivi',
+    color: 'cyan',
+    area: 'mare',
+    keys: [
+      'mare_crea_preventivo', 'mare_modifica_preventivo', 'mare_invia_preventivo',
+      'mare_accettare_preventivo', 'mare_rifiutare_preventivo', 'mare_cambiare_preventivo',
+      'mare_esportare_preventivi',
+    ],
+  },
+  {
+    label: 'Noleggio Mare — Richieste No Cauzione',
+    color: 'cyan',
+    area: 'mare',
+    keys: [
+      'mare_accettare_richiesta_no_cauzione', 'mare_rifiutare_richiesta_no_cauzione',
+    ],
+  },
+  {
+    label: 'Noleggio Mare — Uscite Straordinarie',
+    color: 'cyan',
+    area: 'mare',
+    keys: [
+      'mare_aggiungi_uscita_straordinaria', 'mare_invia_test_meteo_2', 'mare_modifica_uscita_straordinaria',
+      'mare_gestire_uscita_straordinaria',
+    ],
+  },
+  {
+    label: 'Noleggio Mare — Calendario',
+    color: 'cyan',
+    area: 'mare',
+    keys: [
+      'mare_modifica_prenotazioni_esistenti', 'mare_verificare_tutti_mezzi_disponibili', 'mare_nascondere_fatturato',
+      'mare_mostrare_fatturato',
+    ],
+  },
+  {
+    label: 'Noleggio Aria — Prenotazioni',
+    color: 'teal',
+    area: 'aria',
+    keys: [
+      'aria_invia_allerta_meteo', 'aria_invia_test_meteo',
+    ],
+  },
+  {
+    label: 'Noleggio Aria — Gestione Prenotazione',
+    color: 'teal',
+    area: 'aria',
+    keys: [
+      'aria_gestire_prenotazione', 'aria_estendere_prenotazione', 'aria_invia_contratto',
+      'aria_gestire_danni', 'aria_gestire_penali',
+    ],
+  },
+  {
+    label: 'Noleggio Aria — Preventivi',
+    color: 'teal',
+    area: 'aria',
+    keys: [
+      'aria_crea_preventivo', 'aria_modifica_preventivo', 'aria_invia_preventivo',
+      'aria_accettare_preventivo', 'aria_rifiutare_preventivo', 'aria_cambiare_preventivo',
+      'aria_esportare_preventivi',
+    ],
+  },
+  {
+    label: 'Noleggio Aria — Richieste No Cauzione',
+    color: 'teal',
+    area: 'aria',
+    keys: [
+      'aria_accettare_richiesta_no_cauzione', 'aria_rifiutare_richiesta_no_cauzione',
+    ],
+  },
+  {
+    label: 'Noleggio Aria — Uscite Straordinarie',
+    color: 'teal',
+    area: 'aria',
+    keys: [
+      'aria_aggiungi_uscita_straordinaria', 'aria_invia_allerta_meteo_2', 'aria_invia_test_meteo_2',
+      'aria_modifica_uscita_straordinaria', 'aria_gestire_uscita_straordinaria',
+    ],
+  },
+  {
+    label: 'Noleggio Aria — Calendario',
+    color: 'teal',
+    area: 'aria',
+    keys: [
+      'aria_modifica_prenotazioni_esistenti', 'aria_verificare_tutti_velivoli_disponibili', 'aria_nascondere_fatturato',
+      'aria_mostrare_fatturato',
+    ],
+  },
+  {
+    label: 'Soggiorni e Ospitalita — Prenotazioni',
+    color: 'emerald',
+    area: 'soggiorni',
+    keys: [
+      'soggiorni_invia_allerta_meteo', 'soggiorni_invia_test_meteo',
+    ],
+  },
+  {
+    label: 'Soggiorni e Ospitalita — Gestione Prenotazione',
+    color: 'emerald',
+    area: 'soggiorni',
+    keys: [
+      'soggiorni_gestire_prenotazione', 'soggiorni_estendere_prenotazione', 'soggiorni_invia_contratto',
+      'soggiorni_gestire_danni', 'soggiorni_gestire_penali',
+    ],
+  },
+  {
+    label: 'Soggiorni e Ospitalita — Preventivi',
+    color: 'emerald',
+    area: 'soggiorni',
+    keys: [
+      'soggiorni_crea_preventivo', 'soggiorni_modifica_preventivo', 'soggiorni_invia_preventivo',
+      'soggiorni_accettare_preventivo', 'soggiorni_rifiutare_preventivo', 'soggiorni_cambiare_preventivo',
+      'soggiorni_esportare_preventivi',
+    ],
+  },
+  {
+    label: 'Soggiorni e Ospitalita — Richieste No Cauzione',
+    color: 'emerald',
+    area: 'soggiorni',
+    keys: [
+      'soggiorni_accettare_richiesta_no_cauzione', 'soggiorni_rifiutare_richiesta_no_cauzione',
+    ],
+  },
+  {
+    label: 'Soggiorni e Ospitalita — Uscite O Servizi Straordinari',
+    color: 'emerald',
+    area: 'soggiorni',
+    keys: [
+      'soggiorni_aggiungi_servizio_straordinario', 'soggiorni_invia_allerta_meteo_2', 'soggiorni_invia_test_meteo_2',
+      'soggiorni_modifica_servizio_straordinario', 'soggiorni_gestire_servizio_straordinario',
+    ],
+  },
+  {
+    label: 'Soggiorni e Ospitalita — Calendario',
+    color: 'emerald',
+    area: 'soggiorni',
+    keys: [
+      'soggiorni_modifica_prenotazioni_esistenti', 'soggiorni_verificare_tutte_strutture_o_disponibilita', 'soggiorni_nascondere_fatturato',
+      'soggiorni_mostrare_fatturato',
+    ],
+  },
+  {
+    label: 'Lavaggio E Meccanica — Prenotazioni',
     color: 'amber',
     area: 'lavaggio',
     keys: [
-      'lavaggio_invia_fattura_lavaggio', 'lavaggio_elimina_prenotazione_lavaggio', 'lavaggio_inserisci_nuovo_servizio_lavaggio',
-      'lavaggio_modifica_servizio_lavaggio', 'lavaggio_inserisci_descrizione', 'lavaggio_modifica_descrizione',
-      'lavaggio_inserisci_foto', 'lavaggio_modifica_foto', 'lavaggio_cambiare_prezzi',
-      'lavaggio_cambiare_durate', 'lavaggio_modifica_durate', 'lavaggio_aggiungi_extra',
-      'lavaggio_modifica_extra', 'lavaggio_elimina_extra', 'lavaggio_aggiungi_sezione',
-      'lavaggio_modifica_sezione', 'lavaggio_elimina_sezione', 'lavaggio_aggiungi_auto_cortesia',
-      'lavaggio_modifica_auto_cortesia', 'lavaggio_elimina_auto_cortesia', 'lavaggio_modifica_servizi_auto_cortesia',
+      'lavaggio_invia_fattura', 'lavaggio_elimina_prenotazione',
     ],
   },
   {
-    label: 'Clienti — Azioni gestionale',
+    label: 'Lavaggio E Meccanica — Calendario',
+    color: 'amber',
+    area: 'lavaggio',
+    keys: [
+      'lavaggio_modifica_prenotazioni_esistenti', 'lavaggio_aggiungi_prenotazione', 'lavaggio_mostrare_fatturato',
+      'lavaggio_nascondere_fatturato',
+    ],
+  },
+  {
+    label: 'Lavaggio E Meccanica — Catalogo Lavaggio',
+    color: 'amber',
+    area: 'lavaggio',
+    keys: [
+      'lavaggio_inserisci_servizio_lavaggio', 'lavaggio_modifica_servizio_lavaggio', 'lavaggio_inserisci_descrizione',
+      'lavaggio_modifica_descrizione', 'lavaggio_salvare_descrizione', 'lavaggio_inserisci_foto',
+      'lavaggio_modifica_foto', 'lavaggio_salvare_foto', 'lavaggio_cambiare_prezzi',
+      'lavaggio_cambiare_durate', 'lavaggio_modifica_durate', 'lavaggio_salvare_modifiche',
+    ],
+  },
+  {
+    label: 'Lavaggio E Meccanica — Extra',
+    color: 'amber',
+    area: 'lavaggio',
+    keys: [
+      'lavaggio_aggiungi_extra', 'lavaggio_modifica_extra', 'lavaggio_elimina_extra',
+    ],
+  },
+  {
+    label: 'Lavaggio E Meccanica — Sezioni',
+    color: 'amber',
+    area: 'lavaggio',
+    keys: [
+      'lavaggio_aggiungi_sezione', 'lavaggio_modifica_sezione', 'lavaggio_elimina_sezione',
+    ],
+  },
+  {
+    label: 'Lavaggio E Meccanica — Auto Di Cortesia',
+    color: 'amber',
+    area: 'lavaggio',
+    keys: [
+      'lavaggio_aggiungi_auto_cortesia', 'lavaggio_modifica_auto_cortesia', 'lavaggio_elimina_auto_cortesia',
+      'lavaggio_modifica_servizi_relativi_singola_auto_cortesi',
+    ],
+  },
+  {
+    label: 'Clienti — Gestione Clienti',
     color: 'pink',
     area: 'clienti',
     keys: [
-      'clienti_rimuovi_duplicati', 'clienti_esportare_tutti_clienti', 'clienti_importare_lead_link',
-      'clienti_invia_link_autoregistrazione', 'clienti_crea_nuovo_cliente', 'clienti_crea_persona_fisica',
-      'clienti_crea_azienda', 'clienti_crea_pubblica_amministrazione', 'clienti_inserisci_documenti_tramite_file',
-      'clienti_inserisci_documenti_tramite_foto', 'clienti_calcolare_codice_fiscale', 'clienti_carica_file_documenti',
-      'clienti_salvare_cliente', 'clienti_copiare_contatto', 'clienti_invia_messaggio_whatsapp_cliente',
-      'clienti_chiamare_cliente', 'clienti_modifica_scheda_cliente', 'clienti_salvare_modifiche_cliente',
-      'clienti_trasformare_lead_autista', 'clienti_aggiungi_status_autista', 'clienti_rimuovi_cliente_dalla_blacklist',
-      'clienti_rimuovi_status_member', 'clienti_rimuovi_status_elite', 'clienti_addebitare_crediti_dal_wallet',
+      'clienti_rimuovi_duplicati', 'clienti_esportare_tutti_clienti', 'clienti_importare_link_con_lead_salvate',
+      'clienti_invia_link_autoregistrazione_cliente', 'clienti_crea_cliente',
     ],
   },
   {
-    label: 'Marketing — Azioni gestionale',
+    label: 'Clienti — Tipologia Cliente',
+    color: 'pink',
+    area: 'clienti',
+    keys: [
+      'clienti_crea_persona_fisica', 'clienti_crea_azienda', 'clienti_crea_pubblica_amministrazione',
+    ],
+  },
+  {
+    label: 'Clienti — Creazione E Anagrafica',
+    color: 'pink',
+    area: 'clienti',
+    keys: [
+      'clienti_inserisci_documenti_tramite_file', 'clienti_inserisci_documenti_tramite_foto', 'clienti_compilare_manualmente_dati',
+      'clienti_calcolare_codice_fiscale', 'clienti_calcolare_dati_anagrafici_partendo_dal_codice_', 'clienti_compilare_automaticamente_campi_tramite_foto_d',
+      'clienti_carica_file_documenti', 'clienti_salvare_cliente',
+    ],
+  },
+  {
+    label: 'Clienti — Lead Clienti',
+    color: 'pink',
+    area: 'clienti',
+    keys: [
+      'clienti_copiare_contatto', 'clienti_invia_messaggio_tramite_whatsapp', 'clienti_chiamare_cliente',
+    ],
+  },
+  {
+    label: 'Clienti — Modifica Cliente',
+    color: 'pink',
+    area: 'clienti',
+    keys: [
+      'clienti_modifica_tutta_scheda_cliente_compilata', 'clienti_salvare_modifiche',
+    ],
+  },
+  {
+    label: 'Clienti — Autista',
+    color: 'pink',
+    area: 'clienti',
+    keys: [
+      'clienti_trasformare_lead_cliente_anche_autista', 'clienti_aggiungi_status_autista',
+    ],
+  },
+  {
+    label: 'Clienti — Status Cliente',
+    color: 'pink',
+    area: 'clienti',
+    keys: [
+      'clienti_rimuovi_cliente_dalla_blacklist', 'clienti_rimuovi_status_member', 'clienti_rimuovi_status_elite',
+    ],
+  },
+  {
+    label: 'Clienti — Credit Wallet',
+    color: 'pink',
+    area: 'clienti',
+    keys: [
+      'clienti_addebitare_crediti_dal_wallet',
+    ],
+  },
+  {
+    label: 'Marketing — Compleanni',
     color: 'rose',
     area: 'marketing',
     keys: [
-      'marketing_reinvia_messaggio_compleanno', 'marketing_reinvia_richiesta_recensione', 'marketing_bloccare_cliente_recensioni',
-      'marketing_sbloccare_cliente_recensioni', 'marketing_approvare_cliente_richiesta_recensione', 'marketing_escludere_cliente_dalla_richiesta_recensione',
-      'marketing_invia_alla_direzione_clienti_con_danni', 'marketing_invia_alla_direzione_clienti_con_penali', 'marketing_invia_alla_direzione_clienti_con_contenziosi',
-      'marketing_crea_nuovo_messaggio_sistema', 'marketing_modifica_messaggio_sistema', 'marketing_elimina_messaggio_sistema',
-      'marketing_invia_messaggio_manualmente', 'marketing_accendere_messaggio', 'marketing_spegnere_messaggio',
+      'marketing_reinvia_messaggio_compleanno',
+    ],
+  },
+  {
+    label: 'Marketing — Recensioni',
+    color: 'rose',
+    area: 'marketing',
+    keys: [
+      'marketing_reinvia_richiesta_recensione', 'marketing_bloccare_cliente', 'marketing_sbloccare_cliente',
+      'marketing_approvare_cliente_richiesta_recensione', 'marketing_escludere_cliente_dalla_richiesta_recensione', 'marketing_invia_alla_valutazione_direzione_clienti_hanno',
+      'marketing_invia_alla_valutazione_direzione_clienti_hanno_2', 'marketing_invia_alla_valutazione_direzione_clienti_hanno_3',
+    ],
+  },
+  {
+    label: 'Marketing — Messaggi Di Sistema Pro',
+    color: 'rose',
+    area: 'marketing',
+    keys: [
+      'marketing_crea_messaggio_sistema', 'marketing_modifica_messaggio_sistema', 'marketing_elimina_messaggio_sistema',
+      'marketing_invia_messaggio_manualmente', 'marketing_on_messaggio_generico_creato', 'marketing_off_messaggio_generico_creato',
+    ],
+  },
+  {
+    label: 'Marketing — Automazioni Messaggi',
+    color: 'rose',
+    area: 'marketing',
+    keys: [
       'marketing_imposta_messaggio_come_automatico', 'marketing_imposta_messaggio_come_manuale', 'marketing_imposta_cron_on',
-      'marketing_imposta_cron_off', 'marketing_attiva_header', 'marketing_disattiva_header',
-      'marketing_attiva_footer', 'marketing_disattiva_footer', 'marketing_attiva_invio_tramite_email',
-      'marketing_disattiva_invio_tramite_email', 'marketing_crea_nuova_campagna_marketing', 'marketing_programmare_campagna_marketing',
-      'marketing_aggiungi_file_multimediale', 'marketing_aggiungi_video', 'marketing_programmare_l_invio',
-      'marketing_invia_immediatamente', 'marketing_invia_50_clienti', 'marketing_invia_100_clienti',
-      'marketing_invia_250_clienti', 'marketing_invia_500_clienti', 'marketing_invia_tutti_clienti',
+      'marketing_imposta_cron_off',
+    ],
+  },
+  {
+    label: 'Marketing — Configurazione Messaggi',
+    color: 'rose',
+    area: 'marketing',
+    keys: [
+      'marketing_attiva_header', 'marketing_disattiva_header', 'marketing_attiva_footer',
+      'marketing_disattiva_footer', 'marketing_attiva_invio_tramite_email', 'marketing_disattiva_invio_tramite_email',
+    ],
+  },
+  {
+    label: 'Marketing — Campagne Marketing',
+    color: 'rose',
+    area: 'marketing',
+    keys: [
+      'marketing_crea_campagna_marketing', 'marketing_programmare_campagna_marketing', 'marketing_aggiungi_file_multimediale',
+      'marketing_aggiungi_video', 'marketing_programmare_l_invio', 'marketing_invia_immediatamente',
+    ],
+  },
+  {
+    label: 'Marketing — Destinatari Campagne',
+    color: 'rose',
+    area: 'marketing',
+    keys: [
+      'marketing_invia_50_clienti', 'marketing_invia_100_clienti', 'marketing_invia_250_clienti',
+      'marketing_invia_500_clienti', 'marketing_invia_tutti_clienti', 'marketing_includere_solo_determinate_sezioni_o_categorie',
+      'marketing_escludere_determinate_sezioni_o_categorie_clie',
+    ],
+  },
+  {
+    label: 'Marketing — Social Links',
+    color: 'rose',
+    area: 'marketing',
+    keys: [
       'marketing_aggiungi_link_social', 'marketing_modifica_link_social', 'marketing_elimina_link_social',
-      'marketing_genera_nuovo_codice_sconto', 'marketing_modifica_codice_sconto', 'marketing_attiva_codice_sconto',
+    ],
+  },
+  {
+    label: 'Marketing — Codici Sconto',
+    color: 'rose',
+    area: 'marketing',
+    keys: [
+      'marketing_genera_codice_sconto', 'marketing_modifica_codice_sconto', 'marketing_attiva_codice_sconto',
       'marketing_disattiva_codice_sconto', 'marketing_crea_qr_code', 'marketing_copiare_codice_sconto',
     ],
   },
   {
-    label: 'Amministrazione — Azioni gestionale',
-    color: 'emerald',
+    label: 'Report — Report Noleggio',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'report_aggiornare_report',
+    ],
+  },
+  {
+    label: 'Report — Report Lavaggio',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'report_aggiornare_report_2',
+    ],
+  },
+  {
+    label: 'Report — Report Clienti',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'report_genera_report_spese_clienti', 'report_classificare_clienti', 'report_ordinare_clienti',
+    ],
+  },
+  {
+    label: 'Report — Report Preventivi',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'report_categorizzare_preventivi', 'report_analizzare_dati_preventivi',
+    ],
+  },
+  {
+    label: 'Amministrazione — Attesa Di Pagamento',
+    color: 'violet',
     area: 'amministrazione',
     keys: [
       'amm_segnare_pagamento_come_pagato', 'amm_inserisci_l_importo_pagato', 'amm_invia_link_pagamento_parziale',
       'amm_addebitare_carta_tokenizzata', 'amm_registrare_pagamento_parziale', 'amm_parzializzare_pagamento',
-      'amm_modifica_l_importo_pagamento', 'amm_elimina_pagamento', 'amm_modifica_cauzione',
-      'amm_segnare_cauzione_incassare', 'amm_segnare_cauzione_incassata', 'amm_inserisci_cauzione_cassa',
-      'amm_restituire_cauzione_prima_dell_incasso', 'amm_invia_link_preautorizzare_cauzione', 'amm_incassare_cauzione',
-      'amm_imposta_nuova_scadenza', 'amm_aggiungi_scadenza', 'amm_modifica_scadenza',
-      'amm_elimina_scadenza', 'amm_scarica_fattura', 'amm_copiare_fattura',
-      'amm_inoltrare_fattura', 'amm_modifica_fattura', 'amm_segnare_fattura_come_non_pagata',
-      'amm_elimina_fattura', 'amm_effettuare_rilevazione_degli_orari', 'amm_carica_buste_paga',
-      'amm_crea_contratti_operatore', 'amm_assegnare_permessi_operatore', 'amm_rimuovi_permessi_operatore',
-      'amm_modifica_status_operatore', 'amm_modifica_livello_autorizzazione', 'amm_aggiungi_calendario_rifiuti',
-      'amm_crea_giornata_ritiro', 'amm_aggiungi_ritiro', 'amm_imposta_giornata_fissa_ritiro',
-      'amm_imposta_orario_fisso_ritiro', 'amm_modifica_giornata_ritiro', 'amm_modifica_ritiro',
-      'amm_elimina_giornata', 'amm_elimina_ritiro', 'amm_aprire_nuovo_ticket',
-      'amm_invia_ticket', 'amm_annullare_ticket', 'amm_gestire_destinatari_ticket',
-      'amm_aggiungi_fornitore', 'amm_modifica_fornitore', 'amm_elimina_fornitore',
-      'amm_carica_bolle', 'amm_carica_bolla_senza_fattura', 'amm_carica_documenti_fattura_ricevuta',
-      'amm_eseguire_controllo_incrociato_fatture', 'amm_richiedere_accesso_tp_approvazione_fatture', 'amm_richiedere_accesso_tp_approvazione_pagamento',
-      'amm_aggiornare_fatture_fornitore', 'amm_effettuare_nuovo_pagamento_nexi', 'amm_preautorizzare_pagamento_nexi',
-      'amm_elimina_carta_tokenizzata', 'amm_addebitare_carta_tokenizzata_nexi', 'amm_modifica_canali_notifica_otp',
-      'amm_configurare_destinatari_otp', 'amm_aggiungi_regola_otp', 'amm_modifica_regola_otp',
-      'amm_attiva_regola_otp', 'amm_disattiva_regola_otp', 'amm_elimina_regola_otp',
-      'amm_elimina_blocco_otp_regola', 'amm_invia_anteprima_otp', 'amm_effettuare_test_otp',
-      'amm_scarica_documenti_cliente', 'amm_inserisci_documenti_nella_scheda_cliente', 'amm_accettare_documenti',
-      'amm_rifiutare_documenti',
+      'amm_modifica_l_importo_pagamento', 'amm_elimina_pagamento',
     ],
   },
   {
-    label: 'Centralina Pro — Azioni gestionale',
+    label: 'Amministrazione — Cauzioni Amministrative',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'amm_modifica_cauzione', 'amm_segnare_cauzione_come_incassare', 'amm_segnare_cauzione_come_incassata',
+      'amm_inserisci_cauzione_cassa', 'amm_restituire_cauzione_prima_dell_incasso', 'amm_invia_link_preautorizzare_cauzione',
+      'amm_incassare_cauzione',
+    ],
+  },
+  {
+    label: 'Amministrazione — Scadenze Amministrative',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'amm_imposta_scadenza', 'amm_aggiungi_scadenza', 'amm_modifica_scadenza',
+      'amm_elimina_scadenza',
+    ],
+  },
+  {
+    label: 'Amministrazione — Fatture',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'amm_scarica_fattura', 'amm_copiare_fattura', 'amm_inoltrare_fattura',
+      'amm_modifica_fattura', 'amm_scarica_pdf', 'amm_verificare_stato_sdi',
+      'amm_segnare_fattura_come_non_pagata', 'amm_elimina_fattura',
+    ],
+  },
+  {
+    label: 'Amministrazione — Report Operatori',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'amm_genera_report_totale_operatori', 'amm_effettuare_rilevazione_orari_giornalieri', 'amm_carica_buste_paga_operatore',
+      'amm_verificare_contratti_operatore', 'amm_crea_contratti_operatore',
+    ],
+  },
+  {
+    label: 'Amministrazione — Gestione Permessi Operatori',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'amm_assegnare_permessi_operatore', 'amm_rimuovi_permessi_operatore', 'amm_assegnare_uno_status_operatore_maggiore',
+      'amm_assegnare_uno_status_operatore_minore', 'amm_modifica_status_operatore', 'amm_modifica_livello_autorizzazione',
+    ],
+  },
+  {
+    label: 'Amministrazione — Gestione Rifiuti',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'amm_aggiungi_calendario', 'amm_crea_giornate', 'amm_aggiungi_ritiro',
+      'amm_imposta_giornata_fissa_ritiro', 'amm_imposta_orario_fisso_ritiro', 'amm_modifica_giornata',
+      'amm_modifica_ritiro', 'amm_elimina_giornata', 'amm_elimina_ritiro',
+    ],
+  },
+  {
+    label: 'Amministrazione — Ticket',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'amm_seleziona_destinatari', 'amm_seleziona_reparto', 'amm_scrivere_l_oggetto',
+      'amm_inserisci_priorita', 'amm_inserisci_numero_telefono', 'amm_carica_file',
+      'amm_invia_ticket', 'amm_annullare_ticket', 'amm_invia_messaggio_ticket_tramite_whatsapp',
+      'amm_gestire_destinatari',
+    ],
+  },
+  {
+    label: 'Amministrazione — Fornitori Amministrazione',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'amm_aggiungi_fornitore', 'amm_modifica_fornitore', 'amm_elimina_fornitore',
+      'amm_carica_bolle', 'amm_carica_bolla_senza_fattura', 'amm_carica_documenti_fattura_ricevuta',
+      'amm_eseguire_controllo_incrociato_fatture', 'amm_richiedere_accesso_tp_approvazione_fatture', 'amm_richiedere_accesso_tp_approvazione_pagamento',
+      'amm_aggiornare_fatture',
+    ],
+  },
+  {
+    label: 'Amministrazione — Nexi',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'amm_effettuare_pagamento', 'amm_preautorizzare_pagamento', 'amm_elimina_carta_tokenizzata',
+      'amm_addebitare_carta_tokenizzata_2',
+    ],
+  },
+  {
+    label: 'Amministrazione — Canali Di Notifica Otp',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'amm_verificare_canali_notifica_otp', 'amm_modifica_canali_notifica_direzione', 'amm_config_destinatari_notifiche_otp',
+    ],
+  },
+  {
+    label: 'Amministrazione — Regole Otp',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'amm_aggiungi_regola_otp', 'amm_modifica_regola_otp', 'amm_attiva_regola_otp',
+      'amm_disattiva_regola_otp', 'amm_elimina_regola_otp', 'amm_elimina_blocco_otp_regola',
+      'amm_segnalare_nuove_uscite_otp', 'amm_segnalare_nuove_regole_otp', 'amm_invia_anteprima_otp',
+      'amm_effettuare_test_otp',
+    ],
+  },
+  {
+    label: 'Amministrazione — Verifica Documenti',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'amm_scarica_documenti', 'amm_inserisci_documenti_nella_scheda_cliente', 'amm_verificare_documenti',
+      'amm_far_verificare_documenti_dal_sito', 'amm_accettare_documenti', 'amm_rifiutare_documenti',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Categorie',
     color: 'violet',
     area: 'amministrazione',
     keys: [
       'centralina_aggiungi_categoria', 'centralina_modifica_categoria', 'centralina_elimina_categoria',
-      'centralina_aggiungi_fascia', 'centralina_modifica_fascia', 'centralina_rimuovi_fascia',
-      'centralina_imposta_regole_fasce', 'centralina_aggiungi_assicurazione', 'centralina_modifica_assicurazione',
-      'centralina_attiva_assicurazione', 'centralina_disattiva_assicurazione', 'centralina_elimina_assicurazione',
-      'centralina_crea_chilometraggio', 'centralina_modifica_chilometraggio', 'centralina_elimina_chilometraggio',
-      'centralina_crea_uno_sforo', 'centralina_modifica_uno_sforo', 'centralina_elimina_uno_sforo',
-      'centralina_imposta_tariffe_sforo', 'centralina_modifica_tariffe_sforo', 'centralina_attiva_chilometri_illimitati',
-      'centralina_disattiva_chilometri_illimitati', 'centralina_crea_pacchetto_chilometrico', 'centralina_modifica_pacchetto_chilometrico',
-      'centralina_elimina_pacchetto_chilometrico', 'centralina_imposta_percentuali_sconto', 'centralina_modifica_percentuali_sconto',
-      'centralina_applicare_pacchetto_fascia', 'centralina_applicare_pacchetto_tutte_fasce', 'centralina_aggiungi_cauzione',
-      'centralina_modifica_cauzione_centralina', 'centralina_attiva_cauzione', 'centralina_disattiva_cauzione',
-      'centralina_elimina_cauzione', 'centralina_configurare_modalita_versamento', 'centralina_aggiungi_servizio_extra',
-      'centralina_modifica_servizio_extra', 'centralina_elimina_servizio_extra', 'centralina_attiva_servizio_extra',
-      'centralina_disattiva_servizio_extra', 'centralina_crea_prezzo_dinamico', 'centralina_modifica_prezzo_dinamico',
-      'centralina_elimina_prezzo_dinamico', 'centralina_imposta_prezzo_base', 'centralina_imposta_prezzo_minimo',
-      'centralina_imposta_prezzo_massimo', 'centralina_crea_coefficiente_dinamico', 'centralina_modifica_coefficiente_dinamico',
-      'centralina_elimina_coefficiente_dinamico', 'centralina_attiva_coefficiente_dinamico', 'centralina_disattiva_coefficiente_dinamico',
-      'centralina_seleziona_maggiorazione_preventivo', 'centralina_imposta_scadenza_predefinita_preventivo', 'centralina_attiva_richieste_preventivo_dal_sito',
-      'centralina_disattiva_richieste_preventivo_dal_sito', 'centralina_aggiungi_danno_catalogo', 'centralina_modifica_danno_catalogo',
-      'centralina_elimina_danno_catalogo', 'centralina_aggiungi_penale_catalogo', 'centralina_modifica_penale_catalogo',
-      'centralina_elimina_penale_catalogo', 'centralina_seleziona_l_aliquota_iva', 'centralina_modifica_l_aliquota_iva',
-      'centralina_attiva_fattura_metodo_pagamento', 'centralina_disattiva_fattura_metodo_pagamento', 'centralina_aggiungi_metodo_pagamento',
-      'centralina_modifica_metodo_pagamento', 'centralina_elimina_metodo_pagamento', 'centralina_attiva_metodo_pagamento',
-      'centralina_disattiva_metodo_pagamento', 'centralina_aggiungi_tier_cashback', 'centralina_modifica_tier_cashback',
-      'centralina_elimina_tier_cashback', 'centralina_attiva_tier_cashback', 'centralina_disattiva_tier_cashback',
-      'centralina_modifica_percentuale_cashback', 'centralina_configurare_soglie_spesa', 'centralina_inserisci_buffer_post_noleggio',
-      'centralina_inserisci_buffer_tra_veicoli', 'centralina_inserisci_buffer_pre_pickup', 'centralina_modifica_buffer',
-      'centralina_elimina_buffer', 'centralina_attiva_buffer', 'centralina_disattiva_buffer',
-      'centralina_aggiungi_regola_cancellazione', 'centralina_modifica_regola_cancellazione', 'centralina_elimina_regola_cancellazione',
-      'centralina_attiva_regola_cancellazione', 'centralina_disattiva_regola_cancellazione', 'centralina_inserisci_grace_period',
-      'centralina_modifica_grace_period', 'centralina_elimina_grace_period', 'centralina_attiva_grace_period',
-      'centralina_disattiva_grace_period', 'centralina_bloccare_prenotazioni_lavaggio_giorni', 'centralina_bloccare_prenotazioni_lavaggio_orario',
-      'centralina_bloccare_prenotazioni_lavaggio_sezione', 'centralina_modifica_blocco_lavaggio', 'centralina_elimina_blocco_lavaggio',
-      'centralina_includere_servizio_nei_coefficienti_dinamici', 'centralina_escludere_servizio_dai_coefficienti_dinamici', 'centralina_configurare_gli_orari_noleggio',
-      'centralina_aggiungi_finestra_oraria_noleggio', 'centralina_modifica_finestra_oraria_noleggio', 'centralina_elimina_finestra_oraria_noleggio',
-      'centralina_chiudere_finestra_oraria_noleggio', 'centralina_configurare_gli_orari_lavaggio', 'centralina_aggiungi_finestra_oraria_lavaggio',
-      'centralina_modifica_finestra_oraria_lavaggio', 'centralina_elimina_finestra_oraria_lavaggio', 'centralina_chiudere_finestra_oraria_lavaggio',
-      'centralina_seleziona_giorni_apertura', 'centralina_seleziona_giorni_chiusura',
     ],
   },
   {
-    label: 'DR7 Trust — Azioni gestionale',
-    color: 'teal',
+    label: 'Centralina Pro — Fasce',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_aggiungi_fascia', 'centralina_modifica_fascia', 'centralina_rimuovi_fascia',
+      'centralina_imposta_regole_fasce',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Assicurazioni',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_aggiungi_assicurazione', 'centralina_modifica_assicurazione', 'centralina_attiva_assicurazione',
+      'centralina_disattiva_assicurazione', 'centralina_on_assicurazione', 'centralina_off_assicurazione',
+      'centralina_elimina_assicurazione',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Chilometraggi',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_crea_chilometraggio', 'centralina_modifica_chilometraggio', 'centralina_elimina_chilometraggio',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Sforo Chilometrico',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_crea_sforo', 'centralina_modifica_uno_sforo', 'centralina_elimina_uno_sforo',
+      'centralina_imposta_tariffe_sforo', 'centralina_modifica_tariffe_sforo', 'centralina_aumentare_tariffe',
+      'centralina_diminuire_tariffe',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Chilometri Illimitati',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_attiva_funzionalita_chilometri_illimitati', 'centralina_disattiva_funzionalita_chilometri_illimitati',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Pacchetti Chilometrici',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_crea_pacchetto_chilometrico', 'centralina_modifica_pacchetto_chilometrico', 'centralina_elimina_pacchetto_chilometrico',
+      'centralina_imposta_tariffe_pacchetti', 'centralina_modifica_tariffe_pacchetti', 'centralina_imposta_percentuali_sconto',
+      'centralina_modifica_percentuali_sconto', 'centralina_lasciare_invariate_percentuali_sconto', 'centralina_salvare_percentuali_sconto',
+      'centralina_applicare_pacchetto_singola_fascia', 'centralina_applicare_pacchetto_tutte_fasce',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Servizi Chilometraggio',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_attiva_servizi_relativi_chilometraggio', 'centralina_disattiva_servizi_relativi_chilometraggio',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Configurazione Cauzioni',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_aggiungi_cauzione', 'centralina_modifica_cauzione', 'centralina_attiva_cauzione',
+      'centralina_disattiva_cauzione', 'centralina_on_cauzione', 'centralina_off_cauzione',
+      'centralina_elimina_cauzione', 'centralina_config_modalita_versamento', 'centralina_config_cauzioni_fascia',
+      'centralina_config_cauzioni_categoria_auto',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Servizi Extra',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_aggiungi_servizio', 'centralina_modifica_servizio', 'centralina_elimina_servizio',
+      'centralina_attiva_servizio', 'centralina_disattiva_servizio', 'centralina_on_servizio',
+      'centralina_off_servizio',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Prezzo Dinamico',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_crea_prezzo_dinamico', 'centralina_modifica_prezzo_dinamico', 'centralina_cancellare_prezzo_dinamico',
+      'centralina_elimina_prezzo_dinamico', 'centralina_imposta_prezzo_base', 'centralina_imposta_prezzo_minimo',
+      'centralina_imposta_prezzo_massimo',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Coefficienti Dinamici',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_crea_coefficiente_dinamico', 'centralina_nominare_coefficiente_dinamico', 'centralina_modifica_coefficiente_dinamico',
+      'centralina_elimina_coefficiente_dinamico', 'centralina_aggiungi_coefficiente_dinamico', 'centralina_togliere_coefficiente_dinamico',
+      'centralina_attiva_coefficiente_dinamico', 'centralina_disattiva_coefficiente_dinamico', 'centralina_on_coefficiente_dinamico',
+      'centralina_off_coefficiente_dinamico', 'centralina_config_impostazioni_coefficiente_dinamico',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Configurazione Preventivi',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_seleziona_maggiorazione_preventivo', 'centralina_imposta_scadenza_predefinita', 'centralina_config_l_invio_preventivo',
+      'centralina_attiva_richieste_preventivo_l_admin_provenient', 'centralina_disattiva_richieste_preventivo_l_admin_proveni',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Catalogo Danni',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_imposta_catalogo_danni_categoria_auto', 'centralina_aggiungi_danno', 'centralina_modifica_danno',
+      'centralina_elimina_danno', 'centralina_cambiare_nome_danno', 'centralina_cambiare_l_importo_danno',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Catalogo Penali',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_imposta_catalogo_penali_categoria_auto', 'centralina_aggiungi_penale', 'centralina_modifica_penale',
+      'centralina_elimina_penale', 'centralina_cambiare_nome_penale', 'centralina_cambiare_l_importo_penale',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Configurazione Fiscale Iva',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_seleziona_l_aliquota_iva', 'centralina_modifica_l_aliquota_iva',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Fatturazione',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_seleziona_quali_operazioni_devono_genera_fattu', 'centralina_seleziona_quali_operazioni_non_devono_genera_f', 'centralina_attiva_fattura_determinato_metodo_pagamento',
+      'centralina_disattiva_fattura_determinato_metodo_pagamento', 'centralina_annullare_fatturazione_determinato_metodo_paga',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Metodi Di Pagamento',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_aggiungi_metodo_pagamento', 'centralina_modifica_metodo_pagamento', 'centralina_elimina_metodo_pagamento',
+      'centralina_attiva_metodo_pagamento', 'centralina_disattiva_metodo_pagamento', 'centralina_seleziona_metodi_pagamento_accettati',
+      'centralina_seleziona_metodi_pagamento_non_accettati', 'centralina_seleziona_quali_metodi_pagamento_generano_fatt',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Dr7 Club Tier Cashback',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_aggiungi_tier_cashback', 'centralina_modifica_tier_cashback', 'centralina_elimina_tier_cashback',
+      'centralina_attiva_tier_cashback', 'centralina_disattiva_tier_cashback', 'centralina_on_tier_cashback',
+      'centralina_off_tier_cashback', 'centralina_preimposta_cashback_fascia_dr7_club', 'centralina_config_cashback_base_alla_spesa_cliente',
+      'centralina_modifica_percentuale_cashback', 'centralina_config_soglie_spesa',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Automazioni Buffer',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_inserisci_buffer_post_noleggio', 'centralina_inserisci_buffer_tra_veicoli_diversi', 'centralina_inserisci_buffer_pre_pickup_veicoli_lavaggio',
+      'centralina_modifica_buffer', 'centralina_elimina_buffer', 'centralina_attiva_buffer',
+      'centralina_disattiva_buffer',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Regole Di Cancellazione',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_aggiungi_regola_cancellazione', 'centralina_modifica_regola_cancellazione', 'centralina_elimina_regola_cancellazione',
+      'centralina_attiva_regola_cancellazione', 'centralina_disattiva_regola_cancellazione', 'centralina_on_regola_cancellazione',
+      'centralina_off_regola_cancellazione',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Ritardi',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_inserisci_grace_period_ritardo_riconsegna', 'centralina_modifica_grace_period', 'centralina_elimina_grace_period',
+      'centralina_attiva_grace_period', 'centralina_disattiva_grace_period',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Blocchi Prenotazioni Lavaggio',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_bloccare_prenotazioni_dal_giorno_giorno', 'centralina_bloccare_prenotazioni_orario', 'centralina_bloccare_prenotazioni_sezione',
+      'centralina_bloccare_prenotazioni_singoli_giorni', 'centralina_bloccare_prenotazioni_periodi_tempo', 'centralina_modifica_blocco',
+      'centralina_elimina_blocco', 'centralina_attiva_blocco', 'centralina_disattiva_blocco',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Inclusione Nei Coefficienti Dinamici',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_includere_servizio_nei_coefficienti_dinamici', 'centralina_escludere_servizio_dai_coefficienti_dinamici', 'centralina_seleziona_quali_servizi_sono_soggetti_sconti',
+      'centralina_seleziona_quali_servizi_sono_soggetti_ad_aumen', 'centralina_seleziona_quali_servizi_devono_essere_pagati_p', 'centralina_attiva_l_inclusione_nei_coefficienti_dinamici',
+      'centralina_disattiva_l_inclusione_nei_coefficienti_dinami',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Orari Noleggio',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_config_orari_noleggio', 'centralina_aggiungi_finestra_oraria', 'centralina_modifica_finestra_oraria',
+      'centralina_elimina_finestra_oraria', 'centralina_attiva_finestra_oraria', 'centralina_disattiva_finestra_oraria',
+      'centralina_on_finestra_oraria', 'centralina_off_finestra_oraria', 'centralina_chiudere_finestra_oraria',
+      'centralina_seleziona_giorni_apertura', 'centralina_seleziona_giorni_chiusura', 'centralina_config_autonomamente_giorni_aperti',
+      'centralina_config_autonomamente_giorni_chiusi',
+    ],
+  },
+  {
+    label: 'Centralina Pro — Orari Lavaggio',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'centralina_config_orari_lavaggio', 'centralina_aggiungi_finestra_oraria_2', 'centralina_modifica_finestra_oraria_2',
+      'centralina_elimina_finestra_oraria_2', 'centralina_attiva_finestra_oraria_2', 'centralina_disattiva_finestra_oraria_2',
+      'centralina_on_finestra_oraria_2', 'centralina_off_finestra_oraria_2', 'centralina_chiudere_finestra_oraria_2',
+      'centralina_seleziona_giorni_apertura_2', 'centralina_seleziona_giorni_chiusura_2', 'centralina_config_autonomamente_giorni_aperti_2',
+      'centralina_config_autonomamente_giorni_chiusi_2', 'centralina_bloccare_determinate_fasce_orarie', 'centralina_bloccare_determinati_periodi_tempo',
+      'centralina_bloccare_giorni_specifici',
+    ],
+  },
+  {
+    label: 'DR7 Trust — Documenti',
+    color: 'pink',
     area: 'clienti',
     keys: [
-      'trust_invia_nuovi_documenti_firmare', 'trust_elimina_documenti_firmati',
+      'trust_invia_nuovi_documenti', 'trust_elimina_documenti_firmati',
     ],
   },
   {
-    label: 'Allarmi — Azioni gestionale',
-    color: 'rose',
+    label: 'Allarmi — Attiva Allarmi',
+    color: 'orange',
     area: 'veicoli',
     keys: [
-      'allarmi_attiva_gli_allarmi', 'allarmi_disattiva_gli_allarmi', 'allarmi_crea_nuovo_allarme',
-      'allarmi_modifica_allarme', 'allarmi_elimina_allarme', 'allarmi_accendere_allarme',
-      'allarmi_spegnere_allarme',
+      'allarmi_attiva_allarmi', 'allarmi_disattiva_allarmi',
     ],
   },
   {
-    label: 'I Miei Orari — Azioni gestionale',
-    color: 'amber',
+    label: 'Allarmi — Impostazioni Allarmi',
+    color: 'orange',
+    area: 'veicoli',
+    keys: [
+      'allarmi_gestire_allarmi', 'allarmi_scegliere_quando_deve_suonare_allarme', 'allarmi_scegliere_quanto_tempo_prima_deve_suonare',
+      'allarmi_scegliere_quale_evento_deve_suonare', 'allarmi_crea_allarme', 'allarmi_modifica_allarme',
+      'allarmi_elimina_allarme', 'allarmi_on_allarme', 'allarmi_off_allarme',
+      'allarmi_attiva_allarme', 'allarmi_disattiva_allarme',
+    ],
+  },
+  {
+    label: 'I Miei Orari — I Miei Orari',
+    color: 'violet',
     area: 'amministrazione',
     keys: [
       'orari_inserisci_l_orario_entrata', 'orari_inserisci_l_orario_uscita', 'orari_aggiungi_pausa',
       'orari_elimina_pausa', 'orari_modifica_pausa', 'orari_inserisci_note_operative',
-      'orari_modifica_gli_orari', 'orari_salvare_gli_orari',
+      'orari_modifica_orari_esistenti', 'orari_modifica_orari_inseriti', 'orari_salvare_orari',
+      'orari_chiudere_salvare_orari',
     ],
   },
   {
-    label: 'Account — Azioni gestionale',
-    color: 'pink',
+    label: 'Account — Password',
+    color: 'violet',
     area: 'amministrazione',
     keys: [
-      'account_cambiare_password_profilo_admin', 'account_uscire_dal_profilo_admin',
+      'account_cambiare_password_profilo_admin',
+    ],
+  },
+  {
+    label: 'Account — Esci',
+    color: 'violet',
+    area: 'amministrazione',
+    keys: [
+      'account_uscire_dal_profilo_admin', 'account_terminare_sessione', 'account_effettuare_nuovamente_l_accesso',
     ],
   },
 ]
