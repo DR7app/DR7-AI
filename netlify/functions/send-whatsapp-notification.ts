@@ -47,6 +47,34 @@ async function sendEmailViaResend(to: string, subject: string, html: string): Pr
  * Sends WhatsApp notification using Green API
  * Used for admin panel notifications
  */
+
+/**
+ * Messaggi TRANSAZIONALI: il filtro "Tipo servizio" non si applica.
+ *
+ * Un link di pagamento e' un link di pagamento, un contratto e' un contratto:
+ * non cambiano da un business all'altro, e l'operatore che li manda ha gia'
+ * deciso. Il filtro target_service_type esiste per impedire che un messaggio
+ * automatico pensato per il Noleggio Terra parta su un lavaggio — ha senso sul
+ * marketing e sulle conferme, non su un documento che il cliente STA
+ * aspettando.
+ *
+ * Il difetto era proprio questo: i template nati per Terra erano su 'rental',
+ * quindi il link di pagamento di una prenotazione Mare veniva scartato in
+ * silenzio. E l'opzione "Mare" nemmeno esisteva nel menu, quindi non c'era modo
+ * di correggerlo dall'interfaccia.
+ */
+const CHIAVI_TRANSAZIONALI = new Set([
+  'payment_link_customer', 'pro_richiesta_pagamento',
+  'sollecito_pagamento',
+  'signature_request_link', 'document_signature_link', 'signature_otp_whatsapp',
+  'invoice_pdf_whatsapp', 'penalty_invoice_pdf_whatsapp',
+  'deposit_request_customer', 'deposit_return_iban',
+  'referral_otp_whatsapp',
+]);
+function saltaFiltroServizio(chiave?: string | null, risolta?: string | null): boolean {
+  return CHIAVI_TRANSAZIONALI.has(String(chiave || '')) || CHIAVI_TRANSAZIONALI.has(String(risolta || ''));
+}
+
 const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return {
@@ -199,7 +227,8 @@ const handler: Handler = async (event) => {
       // impostare "Solo Noleggio" su un template non impediva l'invio per
       // bookings lavaggio/meccanica. Adesso lo controlliamo qui per
       // qualunque path d'invio basato su template_key.
-      if (tpl && tpl.target_service_type && tpl.target_service_type !== 'all') {
+      if (tpl && tpl.target_service_type && tpl.target_service_type !== 'all'
+          && !saltaFiltroServizio(templateKey, resolvedKey)) {
         const tplSvc = String(tpl.target_service_type).toLowerCase();
         const bookingSvc = String(booking?.service_type || 'rental').toLowerCase();
         // 'rental' è il default per i booking senza service_type esplicito.
