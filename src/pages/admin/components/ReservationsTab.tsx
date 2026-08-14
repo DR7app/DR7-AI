@@ -7963,6 +7963,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         <ReservationsDashboardHeader
           bookings={bookings}
           viewMode={viewMode}
+          serviceType={serviceType}
           onNewBooking={() => { resetForm(); setEditingId(null); newSession('booking_create'); setShowForm(true) }}
           onNewUscita={() => { setEditUscitaGroupId(null); setShowUscita(true) }}
           onAllertaMeteo={() => handleAllertaMeteo(false)}
@@ -11598,6 +11599,7 @@ function ReservationsDashboardHeader({
   onAllertaMeteo,
   onAllertaMeteoTest,
   viewMode = 'bookings',
+  serviceType = 'rental',
 }: {
   bookings: Booking[]
   onNewBooking: () => void
@@ -11605,6 +11607,7 @@ function ReservationsDashboardHeader({
   onAllertaMeteo: () => void
   onAllertaMeteoTest: () => void
   viewMode?: 'bookings' | 'uscite'
+  serviceType?: string
 }) {
   const isUscite = viewMode === 'uscite'
   // Default al mese corrente in Europe/Rome.
@@ -11632,7 +11635,10 @@ function ReservationsDashboardHeader({
     ;(async () => {
       try {
         const yyyymm = `${selMonth.year}-${String(selMonth.month).padStart(2, '0')}`
-        const res = await authFetch(`/.netlify/functions/monthly-report?type=vehicles&month=${yyyymm}`)
+        // Il business va passato: senza, la dashboard del Mare chiedeva il
+        // report di Terra e mostrava il fatturato delle auto.
+        const bizParam = serviceType && serviceType !== 'rental' ? `&business=${encodeURIComponent(serviceType)}` : ''
+        const res = await authFetch(`/.netlify/functions/monthly-report?type=vehicles&month=${yyyymm}${bizParam}`)
         if (!res.ok) {
           if (!cancelled) { setCanonicalFatturato(null); setCanonicalBookings(null) }
           return
@@ -11647,7 +11653,7 @@ function ReservationsDashboardHeader({
       }
     })()
     return () => { cancelled = true }
-  }, [selMonth.year, selMonth.month, isUscite])
+  }, [selMonth.year, selMonth.month, isUscite, serviceType])
 
   // Contatori delle Uscite Straordinarie, calcolati sulle sole righe gia'
   // filtrate per business dal caricamento: nessun numero di un altro business

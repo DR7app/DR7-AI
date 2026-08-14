@@ -81,7 +81,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'lavaggio-uscite' | 'lavaggio-preventivi' | 'immondizia' | 'ticket' | 'terra-catalog' | 'magazzino-generale' | 'interruttori' | 'acconti'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'lavaggio-uscite' | 'lavaggio-preventivi' | 'report-mare' | 'report-aria' | 'report-stay' | 'immondizia' | 'ticket' | 'terra-catalog' | 'magazzino-generale' | 'interruttori' | 'acconti'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -362,7 +362,10 @@ export default function AdminDashboard() {
       { tab: 'codice-sconto', label: 'Codice Sconto' },
     ] },
     { name: 'Report', tabs: [
-      { tab: 'report-noleggio', label: 'Noleggio' },
+      { tab: 'report-noleggio', label: 'Noleggio Terra' },
+      { tab: 'report-mare', label: 'Noleggio Mare' },
+      { tab: 'report-aria', label: 'Noleggio Aria' },
+      { tab: 'report-stay', label: 'Soggiorni & Ospitalità' },
       { tab: 'report-lavaggio', label: 'Lavaggio' },
       { tab: 'report-clienti', label: 'Clienti' },
       { tab: 'report-autisti', label: 'Autisti' },
@@ -515,7 +518,10 @@ export default function AdminDashboard() {
     'referral': 'Referral',
     'codice-sconto': 'Codice Sconto',
     'nexi': 'Nexi',
-    'report-noleggio': 'Report Noleggio',
+    'report-noleggio': 'Report Noleggio Terra',
+    'report-mare': 'Report Noleggio Mare',
+    'report-aria': 'Report Noleggio Aria',
+    'report-stay': 'Report Soggiorni & Ospitalità',
     'report-lavaggio': 'Report Lavaggio',
     'report-clienti': 'Report Clienti',
     'report-autisti': 'Report Autisti',
@@ -1127,7 +1133,10 @@ export default function AdminDashboard() {
           {activeTab === 'nexi' && (isTabRestricted('nexi') ? <PlaceholderTab title="Accesso non autorizzato" /> : <NexiTab />)}
           {activeTab === 'scadenze' && <ScadenzeTab />}
           {activeTab === 'reports' && (isTabRestricted('reports') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportsTab />)}
-          {activeTab === 'report-noleggio' && (isTabRestricted('report-noleggio') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportsTab />)}
+          {activeTab === 'report-noleggio' && (isTabRestricted('report-noleggio') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportsTab business="rental" businessLabel="Noleggio Terra" />)}
+          {activeTab === 'report-mare' && (isTabRestricted('report-mare') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportsTab business="boat_rental" businessLabel="Noleggio Mare" />)}
+          {activeTab === 'report-aria' && (isTabRestricted('report-aria') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportsTab business="heli_rental" businessLabel="Noleggio Aria" />)}
+          {activeTab === 'report-stay' && (isTabRestricted('report-stay') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportsTab business="stay_rental" businessLabel="Soggiorni & Ospitalità" />)}
           {activeTab === 'referral' && <ReferralProgramTab />}
           {/* Placeholder tabs for new features */}
           {activeTab === 'gestione-danni' && <GestioneDanniTab />}

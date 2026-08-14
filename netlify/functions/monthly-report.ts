@@ -237,9 +237,16 @@ export const handler: Handler = async (event) => {
   }
   const periodLabel = fromParam && toParam ? `${monthStartISO}_${monthEndISO}` : month!
 
+  // 2026-08-14 (richiesta direzione): ogni business ha i SUOI numeri.
+  // Senza questo parametro il report era uno solo e sommava Terra, Mare, Aria
+  // e Soggiorni nello stesso fatturato — e la dashboard del Mare mostrava gli
+  // incassi di Terra. Assente = Noleggio Terra, che ora ESCLUDE gli altri
+  // business invece di assorbirli.
+  const business = normalizzaBusiness(params.business)
+
   try {
     if (reportType === 'vehicles') {
-      return await generateVehicleReport(year, monthNum, daysInMonth, monthStart, monthEnd, monthStartISO, monthEndISO, periodLabel, debug)
+      return await generateVehicleReport(year, monthNum, daysInMonth, monthStart, monthEnd, monthStartISO, monthEndISO, periodLabel, debug, business)
     } else if (reportType === 'washes') {
       return await generateWashReport(monthStartISO, monthEndISO, periodLabel, daysInMonth)
     } else if (reportType === 'cauzioni') {
@@ -262,6 +269,38 @@ export const handler: Handler = async (event) => {
   }
 }
 
+/**
+ * Business di un report. 'rental' = Noleggio Terra (default storico).
+ * Gli altri sono i service_type delle prenotazioni di quel business.
+ */
+const BUSINESS_DEDICATI = ['boat_rental', 'heli_rental', 'stay_rental'] as const
+type ReportBusiness = 'rental' | typeof BUSINESS_DEDICATI[number]
+
+function normalizzaBusiness(v: string | undefined | null): ReportBusiness {
+  const s = String(v || '').trim().toLowerCase()
+  if ((BUSINESS_DEDICATI as readonly string[]).includes(s)) return s as ReportBusiness
+  return 'rental'
+}
+
+/**
+ * La prenotazione appartiene al business del report?
+ *
+ * Terra assorbe le righe storiche senza service_type, ma NON gli altri
+ * business: prima li assorbiva e il Report Noleggio contava barche ed
+ * elicotteri come se fossero auto.
+ *
+ * Le uscite straordinarie sono escluse ovunque: sono movimenti interni, gia'
+ * fuori da fatture e flussi cliente per costruzione. Contarle nel fatturato
+ * gonfiava il Report Noleggio con soldi che nessuno ha mai incassato.
+ */
+function appartieneAlBusiness(serviceType: string | null | undefined, business: ReportBusiness): boolean {
+  const st = String(serviceType || '').trim().toLowerCase()
+  if (st === 'car_wash' || st === 'mechanical_service' || st === 'mechanical') return false
+  if (st === 'uscita_straordinaria') return false
+  if (business === 'rental') return !(BUSINESS_DEDICATI as readonly string[]).includes(st)
+  return st === business
+}
+
 async function generateVehicleReport(
   year: number,
   monthNum: number,
@@ -271,15 +310,40 @@ async function generateVehicleReport(
   monthStartISO: string,
   monthEndISO: string,
   month: string,
-  debug: boolean
+  debug: boolean,
+  business: ReportBusiness = 'rental'
 ) {
-  // Fetch ALL vehicles (including retired — they may have historical bookings)
-  const { data: vehicles, error: vehiclesError } = await supabase
-    .from('vehicles')
-    .select('id, display_name, plate, status, daily_rate, category, metadata')
-    .order('display_name')
-
-  if (vehiclesError) throw vehiclesError
+  // Fonte dei mezzi: Terra ha la flotta (`vehicles`), Mare/Aria/Soggiorni il
+  // loro catalogo. Il catalogo viene normalizzato nella STESSA forma della
+  // flotta, cosi' tutto il resto del report (match per targa/id/nome, righe
+  // per mezzo, totali) resta identico e non va duplicato.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let vehicles: any[] | null = null
+  if (business === 'rental') {
+    // Fetch ALL vehicles (including retired — they may have historical bookings)
+    const { data, error: vehiclesError } = await supabase
+      .from('vehicles')
+      .select('id, display_name, plate, status, daily_rate, category, metadata')
+      .order('display_name')
+    if (vehiclesError) throw vehiclesError
+    vehicles = data
+  } else {
+    const { data, error: catalogError } = await supabase
+      .from('noleggio_catalog')
+      .select('id, name, price_per_day, is_active')
+      .eq('service_type', business)
+      .order('name')
+    if (catalogError) throw catalogError
+    vehicles = (data || []).map(c => ({
+      id: c.id,
+      display_name: c.name,
+      plate: null,                       // barche/elicotteri/alloggi non hanno targa
+      status: c.is_active ? 'active' : 'retired',
+      daily_rate: (c.price_per_day || 0) / 100,  // il catalogo tiene i centesimi
+      category: business,
+      metadata: null,
+    }))
+  }
 
   // Fetch ALL bookings that overlap with this month — we filter in JS for full control
   // Only fetch bookings with statuses that represent actual rentals (exclude admin@dr7.app)
@@ -398,9 +462,9 @@ async function generateVehicleReport(
     // Must have pickup_date and dropoff_date (car wash uses appointment_date instead)
     if (!b.pickup_date || !b.dropoff_date) return false
 
-    // Exclude any service-type bookings
-    const st = (b.service_type || '').trim().toLowerCase()
-    if (st === 'car_wash' || st === 'mechanical_service' || st === 'mechanical') return false
+    // Solo le prenotazioni del business di questo report (lavaggi, meccanica
+    // e uscite straordinarie sono escluse sempre).
+    if (!appartieneAlBusiness(b.service_type, business)) return false
 
     // Exclude internal/automatic bookings
     const details = b.booking_details || {}

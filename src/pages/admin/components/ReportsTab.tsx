@@ -393,7 +393,16 @@ function ReportRowModal({ mode, row, fields, identityFields, addTemplate, onClos
   )
 }
 
-export default function ReportsTab() {
+/**
+ * 2026-08-14 (richiesta direzione): un Report per business, non piu' uno solo
+ * che sommava tutto. `business` filtra le prenotazioni lato endpoint e separa
+ * lo scope degli override manuali (le correzioni del Mare non devono finire
+ * su Terra). Omesso = Noleggio Terra, comportamento storico.
+ */
+export default function ReportsTab({ business = 'rental', businessLabel = 'Noleggio Terra' }: { business?: string; businessLabel?: string } = {}) {
+  // Scope degli override: uno per business, altrimenti una correzione a mano
+  // sul Mare riapparirebbe dentro i numeri di Terra (stessa chiave periodo|id).
+  const overrideScope = business === 'rental' ? 'noleggio' : `noleggio_${business}`
   const now = new Date()
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
@@ -582,14 +591,15 @@ export default function ReportsTab() {
     try {
       // Backend supporta sia month=YYYY-MM (legacy) che from+to=YYYY-MM-DD.
       // Custom range / preset 7gg / 30gg / anno / oggi → mandiamo from+to.
-      const url = `/.netlify/functions/monthly-report?type=${activeReport}&from=${customFrom}&to=${customTo}`
+      const bizParam = business && business !== 'rental' ? `&business=${encodeURIComponent(business)}` : ''
+      const url = `/.netlify/functions/monthly-report?type=${activeReport}&from=${customFrom}&to=${customTo}${bizParam}`
       const res = await fetch(url)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Errore nel caricamento')
       if (activeReport === 'vehicles') {
         // Applica gli override manuali PRIMA dei totali: correzioni, rimozioni e
         // aggiunte a mano entrano nel calcolo (KPI, summary, tabella).
-        const ov = await loadReportOverrides('noleggio')
+        const ov = await loadReportOverrides(overrideScope)
         // Chiave MENSILE, non la plage esatta: vedi handleSaveRowEdit.
         const periodKey = String(customFrom || '').slice(0, 7) || 'all'
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -725,11 +735,11 @@ export default function ReportsTab() {
       if (row._isManual && row._manualId) {
         // riga manuale: aggiorna direttamente il value_json via delete+add
         await deleteOverrideById(row._manualId)
-        await saveAddOverride('noleggio', { ...row, ...changes, note }, note || null)
+        await saveAddOverride(overrideScope, { ...row, ...changes, note }, note || null)
       } else {
         const key = `${periodKey}|${row.vehicleId}`
         for (const [field, value] of Object.entries(changes)) {
-          await saveEditOverride('noleggio', key, field, value, note || null)
+          await saveEditOverride(overrideScope, key, field, value, note || null)
         }
       }
       setEditRow(null)
@@ -742,14 +752,14 @@ export default function ReportsTab() {
     if (!confirm(`Rimuovere "${row.label}" dal report? (puoi ripristinarla)`)) return
     try {
       if (row._isManual && row._manualId) await deleteOverrideById(row._manualId)
-      else await saveRemoveOverride('noleggio', `${periodKey}|${row.vehicleId}`, null)
+      else await saveRemoveOverride(overrideScope, `${periodKey}|${row.vehicleId}`, null)
       await fetchReport()
       toast.success('Voce rimossa dal report')
     } catch (e) { toast.error('Errore: ' + (e as Error).message) }
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function handleRestoreRow(row: any) {
-    try { await deleteOverrideByRow('noleggio', `${periodKey}|${row.vehicleId}`); await fetchReport(); toast.success('Voce ripristinata') }
+    try { await deleteOverrideByRow(overrideScope, `${periodKey}|${row.vehicleId}`); await fetchReport(); toast.success('Voce ripristinata') }
     catch (e) { toast.error('Errore: ' + (e as Error).message) }
   }
   // Correzione della singola riga CLIENTE dentro un veicolo. Chiave distinta
@@ -759,7 +769,7 @@ export default function ReportsTab() {
     try {
       const key = `${periodKey}|b|${row.booking_id}`
       for (const [field, value] of Object.entries(changes)) {
-        await saveEditOverride('noleggio', key, field, value, note || null)
+        await saveEditOverride(overrideScope, key, field, value, note || null)
       }
       setEditBooking(null)
       await fetchReport()
@@ -769,7 +779,7 @@ export default function ReportsTab() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function handleRestoreBooking(row: any) {
     try {
-      await deleteOverrideByRow('noleggio', `${periodKey}|b|${row.booking_id}`)
+      await deleteOverrideByRow(overrideScope, `${periodKey}|b|${row.booking_id}`)
       await fetchReport()
       toast.success('Valori originali ripristinati')
     } catch (e) { toast.error('Errore: ' + (e as Error).message) }
@@ -777,7 +787,7 @@ export default function ReportsTab() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function handleAddManualRow(row: any, note: string) {
     try {
-      await saveAddOverride('noleggio', { ...row, period: periodKey, vehicleId: `manual_${Date.now()}` }, note || null)
+      await saveAddOverride(overrideScope, { ...row, period: periodKey, vehicleId: `manual_${Date.now()}` }, note || null)
       setShowAddRow(false)
       await fetchReport()
       toast.success('Voce aggiunta al report')
@@ -1471,7 +1481,7 @@ export default function ReportsTab() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h2 className="text-2xl font-bold text-theme-text-primary">Report Mensili</h2>
+        <h2 className="text-2xl font-bold text-theme-text-primary">Report Mensili — {businessLabel}</h2>
       </div>
 
       {/* Controls */}
