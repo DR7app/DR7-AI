@@ -5,8 +5,8 @@
 // 2026-08-03 (richiesta direzione 17/07): la tab e' di TUTTI gli operatori
 // (UNIVERSAL_TABS in useAdminRole, niente permesso da spuntare nell'invito).
 // Di conseguenza la vista e' scopata: l'operatore vede e cancella SOLO i propri
-// acconti della giornata, direzione/superadmin/developer vedono tutto con il
-// riepilogo per operatore. L'identita' arriva da useAdminRole (match su
+// acconti della giornata, la sola direzione vede tutto con il riepilogo per
+// operatore (dal 14/08 nemmeno superadmin e developer). L'identita' arriva da useAdminRole (match su
 // admins.user_id, come il resto del gestionale) invece che dalla mail.
 //
 // 2026-08-14 (richiesta direzione): due aggiunte.
@@ -50,7 +50,7 @@ function itDate(iso: string): string {
 }
 
 export default function AccontiTab() {
-  const { role, adminId, adminName, adminEmail, hasRole, loading: roleLoading } = useAdminRole()
+  const { adminId, adminName, adminEmail, hasRole, loading: roleLoading } = useAdminRole()
   const [data, setData] = useState<string>(todayRome())
   const [rows, setRows] = useState<Acconto[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,15 +61,20 @@ export default function AccontiTab() {
   const [causale, setCausale] = useState('')
   const [note, setNote] = useState('')
 
-  // Direzione/superadmin/developer: riepilogo di TUTTI. Operatore: i suoi.
-  const canSeeAll = role === 'superadmin' || hasRole('direzione') || hasRole('developer')
+  // 2026-08-14 (richiesta direzione): SOLO la direzione (Valerio e Ilenia, via
+  // ROLE_FAILSAFE) vede gli acconti di tutti. Ogni altro operatore — superadmin
+  // e developer compresi — vede ESCLUSIVAMENTE i propri: gli incassi personali
+  // non sono un dato di gestione condiviso. Era `role === 'superadmin' ||
+  // hasRole('direzione') || hasRole('developer')`, che apriva la cassa di tutti
+  // a chiunque avesse un ruolo tecnico.
+  const canSeeAll = hasRole('direzione')
   const me = useMemo(
     () => ({ id: adminId, nome: adminName || (adminEmail || '').split('@')[0] || '' }),
     [adminId, adminName, adminEmail]
   )
 
-  // Solo direzione/superadmin/developer vede la tendina "Operatore": l'operatore
-  // semplice continua a registrare esclusivamente per se stesso.
+  // Solo la direzione vede la tendina "Operatore": ogni altro operatore
+  // continua a registrare esclusivamente per se stesso.
   const [operatori, setOperatori] = useState<AdminOption[]>([])
   const [operatoreId, setOperatoreId] = useState<string>('')
 
