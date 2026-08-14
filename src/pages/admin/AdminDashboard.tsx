@@ -77,7 +77,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'immondizia' | 'ticket' | 'terra-catalog' | 'magazzino-generale' | 'interruttori' | 'acconti'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'immondizia' | 'ticket' | 'terra-catalog' | 'magazzino-generale' | 'interruttori' | 'acconti'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -290,6 +290,7 @@ export default function AdminDashboard() {
       { tab: 'mare-calendar', label: 'Calendario' },
       { tab: 'mare-tours', label: 'Tour' },
       { tab: 'mare-preventivi', label: 'Preventivi' },
+      { tab: 'mare-contratti', label: 'Contratti' },
     ] },
     { name: 'Noleggio Aria', tabs: [
       { tab: 'aria-bookings', label: 'Prenotazioni' },
@@ -297,12 +298,14 @@ export default function AdminDashboard() {
       { tab: 'aria-tours', label: 'Tour' },
       { tab: 'aria-preventivi', label: 'Preventivi' },
       { tab: 'aria-movimenti', label: 'Movimenti' },
+      { tab: 'aria-contratti', label: 'Contratti' },
     ] },
     { name: 'Soggiorni & Ospitalità', tabs: [
       { tab: 'stay-bookings', label: 'Prenotazioni' },
       { tab: 'stay-calendar', label: 'Calendario' },
       { tab: 'stay-tours', label: 'Tour' },
       { tab: 'stay-preventivi', label: 'Preventivi' },
+      { tab: 'stay-contratti', label: 'Contratti' },
     ] },
     { name: 'Lavaggio & Meccanica', tabs: [
       { tab: 'carwash', label: 'Prenotazioni' },
@@ -433,6 +436,9 @@ export default function AdminDashboard() {
     'mare-catalog': 'Catalogo Noleggio Mare',
     'mare-tours': 'Tour & Posti Noleggio Mare',
     'mare-preventivi': 'Preventivi Noleggio Mare',
+    'mare-contratti': 'Contratti Noleggio Mare',
+    'aria-contratti': 'Contratti Noleggio Aria',
+    'stay-contratti': 'Contratti Soggiorni & Ospitalità',
     'aria-bookings': 'Prenotazioni Noleggio Aria',
     'aria-calendar': 'Calendario Noleggio Aria',
     'aria-catalog': 'Catalogo Noleggio Aria',
@@ -1041,6 +1047,11 @@ export default function AdminDashboard() {
           {activeTab === 'mare-catalog' && <NoleggioServiceTab serviceType="boat_rental" view="catalog" labels={{ title: 'Noleggio Mare', asset: 'Barca', assetPlural: 'Barche' }} />}
           {activeTab === 'mare-tours' && <NoleggioServiceTab serviceType="boat_rental" view="tours" labels={{ title: 'Noleggio Mare', asset: 'Barca', assetPlural: 'Barche' }} />}
           {activeTab === 'mare-preventivi' && <NoleggioServiceTab serviceType="boat_rental" view="preventivi" labels={{ title: 'Noleggio Mare', asset: 'Barca', assetPlural: 'Barche' }} />}
+          {/* Contratti per business: stessa tab del Noleggio Terra, ognuno col
+              proprio modello PDF (contract_mare.pdf, contract_aria.pdf, ...). */}
+          {activeTab === 'mare-contratti' && <ContrattoTab serviceType="boat_rental" />}
+          {activeTab === 'aria-contratti' && <ContrattoTab serviceType="heli_rental" />}
+          {activeTab === 'stay-contratti' && <ContrattoTab serviceType="stay_rental" />}
           {activeTab === 'aria-bookings' && <NoleggioServiceTab serviceType="heli_rental" view="bookings" labels={{ title: 'Noleggio Aria', asset: 'Elicottero', assetPlural: 'Elicotteri' }} />}
           {activeTab === 'aria-calendar' && <NoleggioServiceTab serviceType="heli_rental" view="calendar" labels={{ title: 'Noleggio Aria', asset: 'Elicottero', assetPlural: 'Elicotteri' }} />}
           {activeTab === 'aria-catalog' && <NoleggioServiceTab serviceType="heli_rental" view="catalog" labels={{ title: 'Noleggio Aria', asset: 'Elicottero', assetPlural: 'Elicotteri' }} />}

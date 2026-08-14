@@ -25,9 +25,29 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
  * Nessuna categoria, nessun modello impostato o categoria non trovata ->
  * 'master_contract.pdf', il comportamento storico.
  */
+/**
+ * Modello del BUSINESS, per convenzione sul nome del file nel bucket
+ * `templates`. E' lo stesso meccanismo del Noleggio Terra, che usa
+ * `master_contract.pdf`: ogni business ha il suo file e lo si carica dalla
+ * sua tab Contratti.
+ *
+ * Un contratto di noleggio barca non e' un contratto di noleggio auto: se il
+ * file del business non esiste si ricade sul master, ma il posto per metterlo
+ * c'e' e non serve toccare il codice.
+ */
+function modelloDelBusiness(serviceType?: string | null): string {
+    switch (String(serviceType || '').toLowerCase()) {
+        case 'boat_rental': return 'contract_mare.pdf'
+        case 'heli_rental': return 'contract_aria.pdf'
+        case 'stay_rental': return 'contract_soggiorni.pdf'
+        default: return 'master_contract.pdf'
+    }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function resolveTemplateName(booking: any): Promise<string> {
     const MASTER = 'master_contract.pdf'
+    void MASTER
     try {
         const categoria = String(
             booking?.booking_details?.vehicle?.category
@@ -41,7 +61,9 @@ async function resolveTemplateName(booking: any): Promise<string> {
             const { data: v } = await supabase.from('vehicles').select('category').eq('id', booking.vehicle_id).maybeSingle()
             cat = String(v?.category || '').trim()
         }
-        if (!cat) return MASTER
+        // Mare, Aria e Soggiorni non hanno categorie sulle prenotazioni: si
+        // passa direttamente al modello del business.
+        if (!cat) return modelloDelBusiness(booking?.service_type)
 
         const { business, main } = await loadBusinessConfig(supabase, booking?.service_type)
         const cerca = (cfg: Record<string, unknown> | null): string | null => {
@@ -52,10 +74,12 @@ async function resolveTemplateName(booking: any): Promise<string> {
             const nome = String(row?.contract_template || '').trim()
             return nome || null
         }
-        return cerca(business) || cerca(main) || MASTER
+        const perCategoria = cerca(business) || cerca(main)
+        if (perCategoria) return perCategoria
+        return modelloDelBusiness(booking?.service_type)
     } catch (e) {
-        console.warn('[generate-contract] resolveTemplateName fallito, uso il master:', (e as Error).message)
-        return MASTER
+        console.warn('[generate-contract] resolveTemplateName fallito, uso il modello del business:', (e as Error).message)
+        return modelloDelBusiness(booking?.service_type)
     }
 }
 

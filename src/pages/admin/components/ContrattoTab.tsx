@@ -138,7 +138,27 @@ function buildContractSigners(c: any, sigRows: any[]): SignerStatus[] {
   return out.sort((a, b) => rank(a.role) - rank(b.role))
 }
 
-export default function ContrattoTab() {
+/**
+ * Nome del file modello nel bucket `templates`, per business.
+ * Deve restare allineato a `modelloDelBusiness` in generate-contract.ts:
+ * la funzione cerca questi nomi esatti.
+ */
+function fileModello(serviceType?: string): string {
+  switch (String(serviceType || '').toLowerCase()) {
+    case 'boat_rental': return 'contract_mare.pdf'
+    case 'heli_rental': return 'contract_aria.pdf'
+    case 'stay_rental': return 'contract_soggiorni.pdf'
+    default: return 'master_contract.pdf'
+  }
+}
+
+/**
+ * 2026-08-14 — `serviceType` rende questa tab utilizzabile da Mare, Aria e
+ * Soggiorni: ognuno carica il PROPRIO modello di contratto, esattamente come
+ * fa il Noleggio Terra col master. Omesso = Terra, comportamento invariato.
+ */
+export default function ContrattoTab({ serviceType }: { serviceType?: string } = {}) {
+  const NOME_MODELLO = fileModello(serviceType)
   const [contracts, setContracts] = useState<Contract[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -160,7 +180,7 @@ export default function ContrattoTab() {
     try {
       const { data, error } = await supabase.storage.from('templates').list('', { limit: 100 })
       if (error) throw error
-      const f = (data || []).find(x => x.name === 'master_contract.pdf')
+      const f = (data || []).find(x => x.name === NOME_MODELLO)
       setTmplInfo(f ? {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         size: (f.metadata as any)?.size || 0,
@@ -197,7 +217,7 @@ export default function ContrattoTab() {
     try {
       const { error } = await supabase.storage
         .from('templates')
-        .upload('master_contract.pdf', file, {
+        .upload(NOME_MODELLO, file, {
           contentType: 'application/pdf',
           upsert: true,
           cacheControl: '0',
@@ -711,7 +731,7 @@ export default function ContrattoTab() {
               Modello base usato da tutti i contratti generati. Carica un nuovo PDF per aggiornarlo: la nuova versione e\' attiva immediatamente, senza redeploy.
             </p>
             <div className="text-[11px] text-theme-text-muted mt-2 flex flex-wrap gap-x-4 gap-y-1">
-              <span>Bucket: <span className="font-mono text-theme-text-secondary">templates/master_contract.pdf</span></span>
+              <span>Bucket: <span className="font-mono text-theme-text-secondary">templates/{NOME_MODELLO}</span></span>
               {tmplLoading ? (
                 <span>Caricamento info...</span>
               ) : tmplInfo ? (
@@ -746,7 +766,7 @@ export default function ContrattoTab() {
             </label>
             {tmplInfo && (
               <a
-                href={`${supabase.storage.from('templates').getPublicUrl('master_contract.pdf').data.publicUrl}?t=${Date.now()}`}
+                href={`${supabase.storage.from('templates').getPublicUrl(NOME_MODELLO).data.publicUrl}?t=${Date.now()}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[11px] text-theme-text-secondary hover:text-theme-text-primary underline"
