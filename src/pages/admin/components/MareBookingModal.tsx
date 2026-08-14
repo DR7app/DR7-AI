@@ -275,6 +275,12 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
   // più da solo (stessa convenzione del resto del gestionale). È uno state e
   // non una ref perché la nota sotto al campo dipende da questo valore.
   const [priceEdited, setPriceEdited] = useState(false)
+  // "Conferma prenotazione" — stessa regola del Noleggio Terra. Una
+  // prenotazione NON pagata non e' confermata finche' l'operatore non lo
+  // dichiara: prima il Mare salvava status:'confirmed' comunque, quindi una
+  // barca risultava confermata con pagamento in sospeso e nessuna decisione
+  // presa da nessuno.
+  const [conferma, setConferma] = useState(false)
   // Il flag serve DENTRO un altro useEffect che gira nello stesso commit:
   // `setPriceEdited(true)` non aggiorna la variabile in quel giro, l'effetto
   // del calcolo automatico legge ancora `false` e sovrascrive il prezzo.
@@ -331,6 +337,9 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
     setPayStatus(b.payment_status || 'pending')
     setPayMethod(b.payment_method || '')
     setConSkipper(d.con_skipper !== false)
+    // Gia' confermata a mano, o comunque non piu' in attesa: la spunta parte
+    // alzata cosi' salvando di nuovo non si declassa.
+    setConferma(d.manually_confirmed === true || (b.status === 'confirmed' && b.payment_status !== 'paid'))
     setLuogoRitiro(String(d.luogo_ritiro || LUOGHI[0]))
     setLuogoRiconsegna(String(d.luogo_riconsegna || LUOGHI[0]))
     setIndirizzoConsegna(String(d.indirizzo_consegna || ''))
@@ -446,6 +455,7 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
     d.rental_days = rentalDays
     d.customer_email = customerEmail.trim() || null
     if (on('conduzione')) d.con_skipper = conSkipper
+    d.manually_confirmed = conferma
     if (on('luoghi')) {
       d.luogo_ritiro = luogoRitiro
       d.luogo_riconsegna = luogoRiconsegna
@@ -509,7 +519,20 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
       dropoff_location: on('luoghi') ? componiLuogo(luogoRiconsegna, indirizzoRiconsegna || indirizzoConsegna) : null,
       price_total: eurToCents(priceFinal),
       amount_paid: eurToCents(amountPaid),
-      status: 'confirmed',
+      // Stessa regola del Noleggio Terra: una prenotazione nuova con link di
+      // pagamento Nexi e non ancora pagata resta 'pending' — cosi' il cron
+      // cancel-unpaid-nexi-bookings puo' recuperarla se il link non viene
+      // pagato. La spunta "Conferma" la promuove, senza mai declassare una
+      // prenotazione gia' attiva o completata.
+      status: (() => {
+        const attuale = String(booking?.status || '')
+        if (['active', 'completed', 'completata'].includes(attuale)) return attuale
+        const nonPagata = payStatus !== 'paid'
+        const base = (!booking && isNexiPbl(payMethod) && nonPagata) ? 'pending'
+          : nonPagata ? (attuale || 'pending')
+          : 'confirmed'
+        return (conferma && base === 'pending') ? 'confirmed' : (base || 'confirmed')
+      })(),
       payment_status: payStatus,
       payment_method: payMethod || null,
       booking_details: d,
@@ -1056,7 +1079,21 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
                 )}
                 <div className="flex justify-between items-center gap-3 pt-2">
                   <span className="text-theme-text-muted text-xs">Sconto — prezzo finale desiderato (€)</span>
-                  <input className={`${INPUT_CLS} max-w-[120px] text-right`} inputMode="decimal" placeholder={centsToEur(lordoCents)} value={sconto} onChange={e => setSconto(e.target.value)} />
+                  <input className={`${INPUT_CLS} max-w-[120px] text-right`} inputMode="decimal" placeholder={centsToEur(lordoCents)} value={sconto} onChange={e => {
+                    const v = e.target.value
+                    setSconto(v)
+                    // Scrivere qui il prezzo concordato E' una decisione sul
+                    // prezzo: deve arrivare al Prezzo Finale, che e' il campo
+                    // che finisce davvero su price_total. Prima i due campi non
+                    // si parlavano: il Riepilogo mostrava 1.000 e la riga in
+                    // elenco restava a 0,00 perche' salvava il Prezzo Finale.
+                    // Vale anche in MODIFICA — il blocco sul ricalcolo serve a
+                    // impedire che il listino sovrascriva un importo deciso a
+                    // mano, non a ignorare un importo deciso a mano adesso.
+                    const c = eurToCents(v)
+                    bloccaPrezzo()
+                    setPriceFinal(v.trim() === '' ? centsToEur(lordoCents) : (c > 0 ? v : priceFinal))
+                  }} />
                 </div>
                 <p className="text-[11px] text-theme-text-muted">
                   Scrivi qui quanto deve pagare il cliente in tutto, non lo sconto da togliere. Lascia vuoto per il prezzo di listino.
@@ -1083,13 +1120,32 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
             {/* ── Pagamento ── */}
             <Section title="Pagamento">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="Prezzo Finale (€)">
+                <Field label="Prezzo Finale (€) — è questo che viene salvato">
                   <input className={INPUT_CLS} inputMode="decimal" placeholder={centsToEur(computedCents)} value={priceFinal} onChange={e => { bloccaPrezzo(); setPriceFinal(e.target.value) }} />
                   {!priceEdited && <p className="mt-1 text-[11px] text-theme-text-muted">Calcolato in automatico — scrivilo a mano per bloccarlo.</p>}
+                  {eurToCents(priceFinal) !== computedCents && (
+                    <p className="mt-1 text-[11px] text-amber-500">
+                      Diverso dal totale calcolato ({eur(computedCents)}). Vale questo importo.
+                    </p>
+                  )}
                 </Field>
                 <Field label="Importo Pagato (€)">
                   <input className={INPUT_CLS} inputMode="decimal" placeholder="0,00" value={amountPaid} onChange={e => setAmountPaid(e.target.value)} />
                 </Field>
+                <div className="sm:col-span-2">
+                  {payStatus !== 'paid' && (
+                    <label className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 cursor-pointer">
+                      <input type="checkbox" className="mt-0.5 w-4 h-4 accent-amber-500" checked={conferma} onChange={e => setConferma(e.target.checked)} />
+                      <span className="text-[12px] text-theme-text-primary">
+                        <strong>Conferma prenotazione</strong> anche se non ancora pagata.
+                        <span className="block text-[11px] text-theme-text-muted mt-0.5">
+                          Senza la spunta resta <em>in attesa</em>: non e&apos; confermata e, con link di pagamento
+                          Nexi, viene annullata da sola se il cliente non paga.
+                        </span>
+                      </span>
+                    </label>
+                  )}
+                </div>
                 <Field label="Stato Pagamento">
                   <select className={INPUT_CLS} value={payStatus} onChange={e => {
                     const st = e.target.value
