@@ -1457,7 +1457,10 @@ function listActiveFilters(t: Record<string, any>): string[] {
   // Tipo servizio
   const svc = (t.target_service_type || 'all').toLowerCase()
   if (svc !== 'all') {
-    const map: Record<string, string> = { rental: 'Noleggio', car_wash: 'Lavaggio', mechanical: 'Meccanica' }
+    const map: Record<string, string> = {
+      rental: 'Noleggio Terra', boat_rental: 'Noleggio Mare', heli_rental: 'Noleggio Aria',
+      stay_rental: 'Soggiorni', prime_wash: 'Prime Wash', car_wash: 'Lavaggio', mechanical: 'Meccanica',
+    }
     out.push(`Tipo servizio: solo ${map[svc] || svc}`)
   }
 
@@ -4322,7 +4325,14 @@ export default function MessaggiSistemaProTab() {
                                             <select value={newTargetServiceType} onChange={e => setNewTargetServiceType(e.target.value)}
                                                 className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm">
                                                 <option value="all">Tutti i servizi</option>
-                                                <option value="rental">Noleggio</option>
+                                                <option value="rental">Noleggio Terra</option>
+                                                {/* 2026-08-14: Mare, Aria e Soggiorni mancavano. Non erano
+                                                    selezionabili, quindi un messaggio nato per il Noleggio
+                                                    Terra restava su "rental" e SCARTAVA in silenzio ogni
+                                                    prenotazione barca, volo o soggiorno. */}
+                                                <option value="boat_rental">Noleggio Mare</option>
+                                                <option value="heli_rental">Noleggio Aria</option>
+                                                <option value="stay_rental">Soggiorni & Ospitalità</option>
                                                 <option value="prime_wash">Prime Wash (Lavaggio + Meccanica)</option>
                                                 <option value="car_wash">Solo Lavaggio</option>
                                                 <option value="mechanical">Solo Meccanica</option>
@@ -5544,7 +5554,10 @@ export default function MessaggiSistemaProTab() {
                                                                         className="w-full px-2 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
                                                                     >
                                                                         <option value="all">Tutti i servizi</option>
-                                                                        <option value="rental">Solo Noleggio</option>
+                                                                        <option value="rental">Solo Noleggio Terra</option>
+                                                                        <option value="boat_rental">Solo Noleggio Mare</option>
+                                                                        <option value="heli_rental">Solo Noleggio Aria</option>
+                                                                        <option value="stay_rental">Solo Soggiorni & Ospitalità</option>
                                                                         <option value="prime_wash">Solo Prime Wash (Lavaggio + Meccanica)</option>
                                                                         <option value="car_wash">Solo Lavaggio</option>
                                                                         <option value="mechanical">Solo Meccanica</option>
