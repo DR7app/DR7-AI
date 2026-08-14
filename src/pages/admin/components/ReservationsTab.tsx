@@ -9298,6 +9298,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             })()}
 
             {/* Kasko & Deposit */}
+            {/* 2026-08-14 (roadmap #11): Assicurazione, Km, Sforo e Cauzione
+                sono concetti del Noleggio Terra. Una barca non fa chilometri e
+                non si assicura come un'auto — e' anche il motivo per cui
+                Centralina Pro nasconde quelle sezioni su Mare, Aria e Soggiorni.
+                Mostrarle qui sarebbe stato peggio che ometterle: campi da
+                compilare che non finiscono da nessuna parte. */}
+            {!isAltroBusiness && (
             <div className="md:col-span-2  p-4 rounded-lg border border-theme-border">
               <h4 className="text-theme-text-primary font-semibold mb-3">Opzioni Noleggio & Cauzione</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -9694,6 +9701,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 )}
               </div>
             </div>
+            )}
 
             {/* Home Delivery / Pickup — UI rimossa per allinearsi a
                 PreventiviTab: l'unica entry point e' selezionare
