@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { PDFDocument, rgb, StandardFonts, PDFName, PDFArray, PDFDict, PDFString, PDFHexString } from 'pdf-lib'
 import { requireAuth } from './require-auth'
 import { computeRentalBillingDays } from './utils/computeRentalBillingDays'
+import { loadBusinessConfig } from './utils/businessConfig'
 import { createHash } from 'crypto'
 import QRCode from 'qrcode'
 
@@ -12,6 +13,52 @@ const supabaseKeyType = process.env.SUPABASE_SERVICE_ROLE_KEY ? 'service_role' :
 console.log('[generate-contract] supabase keyType:', supabaseKeyType)
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+/**
+ * Nome del modello PDF da usare per questa prenotazione.
+ *
+ * Si legge la categoria del mezzo e si cerca il suo `contract_template` in
+ * Centralina Pro > Categorie & Fascia, sulla riga del business della
+ * prenotazione (Mare, Aria, Soggiorni hanno le proprie categorie) con
+ * fallback su `main`.
+ *
+ * Nessuna categoria, nessun modello impostato o categoria non trovata ->
+ * 'master_contract.pdf', il comportamento storico.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function resolveTemplateName(booking: any): Promise<string> {
+    const MASTER = 'master_contract.pdf'
+    try {
+        const categoria = String(
+            booking?.booking_details?.vehicle?.category
+            || booking?.booking_details?.vehicle_category
+            || booking?.category
+            || ''
+        ).trim()
+
+        let cat = categoria
+        if (!cat && booking?.vehicle_id) {
+            const { data: v } = await supabase.from('vehicles').select('category').eq('id', booking.vehicle_id).maybeSingle()
+            cat = String(v?.category || '').trim()
+        }
+        if (!cat) return MASTER
+
+        const { business, main } = await loadBusinessConfig(supabase, booking?.service_type)
+        const cerca = (cfg: Record<string, unknown> | null): string | null => {
+            const list = cfg?.categories
+            if (!Array.isArray(list)) return null
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const row = (list as any[]).find(c => String(c?.id || '').toLowerCase() === cat.toLowerCase())
+            const nome = String(row?.contract_template || '').trim()
+            return nome || null
+        }
+        return cerca(business) || cerca(main) || MASTER
+    } catch (e) {
+        console.warn('[generate-contract] resolveTemplateName fallito, uso il master:', (e as Error).message)
+        return MASTER
+    }
+}
+
 
 /**
  * Helper: popola i campi AcroForm "Azienda" del contratto.
@@ -827,16 +874,36 @@ export const handler: Handler = async (event) => {
             console.log('[generate-contract] ⚠️  NO SECOND DRIVER CUSTOMER DATA FOUND')
         }
 
-        // 4. Fetch Template from Supabase Storage
-        // Based on user URL: .../public/templates/master_contract.pdf -> Bucket: 'templates', File: 'master_contract.pdf'
-        // IMPORTANT: Add timestamp to bust cache and ensure we always get the latest template version
-        console.log(`[generate-contract] Fetching template from storage: bucket 'templates', file 'master_contract.pdf'`)
+        // 4. Fetch Template from Supabase Storage — UNO PER CATEGORIA.
+        //
+        // 2026-08-14: prima il modello era uno solo, `master_contract.pdf`.
+        // Un contratto di noleggio auto, uno di una barca e uno di un
+        // soggiorno hanno clausole diverse: la direzione deve poter caricare
+        // il proprio modello per ogni categoria senza passare dallo sviluppo.
+        //
+        // Il modello si imposta in Centralina Pro > Categorie & Fascia, campo
+        // "Modello contratto": e' il NOME del file nel bucket `templates`.
+        // Vuoto o file assente -> `master_contract.pdf`, cosi' chi non
+        // configura niente continua a funzionare esattamente come prima.
+        const nomeModello = await resolveTemplateName(booking)
+        console.log(`[generate-contract] Modello contratto: ${nomeModello}`)
 
         // Use timestamp-based cache busting by appending it to the file path
-        const templatePath = `master_contract.pdf?t=${Date.now()}`
-        const { data: templateData, error: templateError } = await supabase.storage
+        let templatePath = `${nomeModello}?t=${Date.now()}`
+        let { data: templateData, error: templateError } = await supabase.storage
             .from('templates')
             .download(templatePath)
+
+        // Modello di categoria mancante: si ricade sul master invece di
+        // fallire. Meglio un contratto generico che nessun contratto, ma il
+        // log lo dice a voce alta cosi' l'errore di configurazione si vede.
+        if ((templateError || !templateData) && nomeModello !== 'master_contract.pdf') {
+            console.warn(`[generate-contract] Modello "${nomeModello}" non trovato nel bucket templates: uso master_contract.pdf`)
+            templatePath = `master_contract.pdf?t=${Date.now()}`
+            const retry = await supabase.storage.from('templates').download(templatePath)
+            templateData = retry.data
+            templateError = retry.error
+        }
 
         if (templateError || !templateData) {
             console.error(`[generate-contract] Template fetch failed:`, templateError)

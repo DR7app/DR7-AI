@@ -63,7 +63,17 @@ interface TimeWindow { start: string; end: string }
 interface DayHours { is_open: boolean; windows: TimeWindow[] }
 type WeekHours = Record<DayKey, DayHours>
 
-type Category = { id: string; label: string; vat_rate?: number | '' }
+type Category = {
+  id: string
+  label: string
+  vat_rate?: number | ''
+  /**
+   * Nome del file PDF nel bucket `templates` da usare come contratto per
+   * questa categoria. Vuoto = master_contract.pdf. Un contratto di noleggio
+   * auto, uno di una barca e uno di un soggiorno hanno clausole diverse.
+   */
+  contract_template?: string
+}
 type Fascia = {
   id: string
   label: string
@@ -2190,6 +2200,8 @@ function CategorieFasciaSection({
 }) {
   const setCatVat = (id: string, v: number | '') =>
     setCategories(categories.map(c => c.id === id ? { ...c, vat_rate: v } : c))
+  const setCatTemplate = (id: string, v: string) =>
+    setCategories(categories.map(c => c.id === id ? { ...c, contract_template: v } : c))
 
   return (
     <div className="space-y-6">
@@ -2230,6 +2242,36 @@ function CategorieFasciaSection({
           </div>
         )}
       </div>
+      {/* Modello di contratto per categoria (2026-08-14). Il PDF si carica nel
+          bucket `templates` di Supabase; qui si dice quale usare. */}
+      <div className="bg-theme-bg-secondary rounded-2xl border border-theme-border p-5">
+        <div className="text-[15px] font-semibold text-theme-text-primary">Modello di contratto per categoria</div>
+        <p className="text-[13px] text-theme-text-muted mt-0.5 mb-4">
+          Nome del file PDF nel bucket <code className="bg-theme-bg-tertiary px-1 rounded">templates</code> da usare
+          come contratto per questa categoria. Vuoto = <code className="bg-theme-bg-tertiary px-1 rounded">master_contract.pdf</code>,
+          come oggi. I campi compilabili del PDF devono avere gli stessi nomi del modello master.
+        </p>
+        {categories.length === 0 ? (
+          <p className="text-[13px] text-theme-text-muted">Aggiungi prima una categoria qui sopra.</p>
+        ) : (
+          <div className="space-y-2">
+            {categories.map(c => (
+              <div key={c.id} className="flex items-center gap-3">
+                <span className="flex-1 text-sm text-theme-text-primary truncate">{c.label || <em className="text-theme-text-muted">(senza nome)</em>}</span>
+                <input
+                  type="text"
+                  value={c.contract_template || ''}
+                  onChange={e => setCatTemplate(c.id, e.target.value)}
+                  placeholder="master_contract.pdf"
+                  title="Nome del file PDF nel bucket templates. Vuoto = modello master."
+                  className="w-72 px-2 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary font-mono"
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <FasciaList items={fasce} onChange={setFasce} />
     </div>
   )
