@@ -73,6 +73,7 @@ import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
 import UscitaStraordinariaModal from './UscitaStraordinariaModal'
+import { USCITA_SERVICE_TYPE, uscitaBelongsTo } from '../../../utils/uscitaStraordinaria'
 import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import PenaltyModal from './PenaltyModal'
@@ -2476,6 +2477,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       // sue prenotazioni; su Terra resta il filtro storico.
       const filteredBookings = (allBookings || []).filter(b => {
         if (b.status === 'deleted') return false
+        // 2026-08-14: le Uscite Straordinarie esistono su OGNI business e
+        // condividono lo stesso service_type; il business sta su vehicle_type /
+        // booking_details.uscita.business (assente = Terra). Va valutato PRIMA
+        // del filtro per business, che confronta service_type e le scarterebbe
+        // tutte su Mare/Aria/Soggiorni.
+        if (viewMode === 'uscite') {
+          return b.service_type === USCITA_SERVICE_TYPE && uscitaBelongsTo(b, serviceType)
+        }
         if (isAltroBusiness) return b.service_type === serviceType
         return (
           b.service_type !== 'car_wash' &&
@@ -2485,9 +2494,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           b.service_type !== 'heli_rental' &&
           b.service_type !== 'boat_rental' &&
           b.service_type !== 'stay_rental' &&
-          (viewMode === 'uscite'
-            ? b.service_type === 'uscita_straordinaria'
-            : b.service_type !== 'uscita_straordinaria')
+          // Le uscite hanno la loro vista (gestita sopra): qui restano fuori.
+          b.service_type !== USCITA_SERVICE_TYPE
         )
       }).map(b => ({
         ...b,
@@ -8159,6 +8167,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           editGroupId={editUscitaGroupId}
           onClose={() => { setShowUscita(false); setEditUscitaGroupId(null) }}
           vehicles={vehicles}
+          serviceType={serviceType}
           onSaved={() => loadData()}
         />
 

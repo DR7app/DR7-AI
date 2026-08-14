@@ -17,6 +17,10 @@ import {
   uscitaStatoToBookingStatus,
   emptyVehicleCard,
   cardFromUscitaBooking,
+  USCITA_VEHICLE_TYPE,
+  USCITA_ASSET_LABELS,
+  isUscitaBusiness,
+  type UscitaBusiness,
   type UscitaStato,
   type UscitaVehicleCard,
   type UscitaServizioExtra,
@@ -40,6 +44,10 @@ interface Props {
   open: boolean
   onClose: () => void
   vehicles: VehicleLite[]
+  /** Business dell'uscita: Terra (default), Mare, Aria o Soggiorni. Decide il
+   *  marcatore scritto sulla riga, le etichette del mezzo e a quali
+   *  prenotazioni ci si puo' collegare. */
+  serviceType?: string
   onSaved?: () => void
   /** Se valorizzato, la modale apre in MODIFICA su questa uscita (group_id). */
   editGroupId?: string | null
@@ -75,7 +83,7 @@ interface BookingHit {
 }
 
 // "Collega a Booking": ricerca per cliente / veicolo / targa, come altrove.
-function BookingLinkPicker({ value, onChange }: { value: string | null; onChange: (id: string | null) => void }) {
+function BookingLinkPicker({ value, onChange, business }: { value: string | null; onChange: (id: string | null) => void; business: UscitaBusiness }) {
   const [q, setQ] = useState('')
   const [results, setResults] = useState<BookingHit[]>([])
   const [open, setOpen] = useState(false)
@@ -94,18 +102,23 @@ function BookingLinkPicker({ value, onChange }: { value: string | null; onChange
       // i noleggi auto (service_type 'rental' / 'car_rental' / NULL storico) ed
       // escludiamo uscite, lavaggi/meccanica e i noleggi non-auto (aria/mare/
       // soggiorni), così l'operatore vede solo le prenotazioni auto vere.
-      const { data } = await supabase
+      // 2026-08-14: su Mare/Aria/Soggiorni ci si collega alle prenotazioni DI
+      // QUEL business (service_type dedicato); su Terra resta il filtro auto.
+      let q = supabase
         .from('bookings')
         .select('id, customer_name, vehicle_name, vehicle_plate, pickup_date')
         .not('status', 'in', '(cancelled,annullata)')
-        .or('service_type.is.null,service_type.eq.rental,service_type.eq.car_rental')
+      q = business === 'rental'
+        ? q.or('service_type.is.null,service_type.eq.rental,service_type.eq.car_rental')
+        : q.eq('service_type', business)
+      const { data } = await q
         .or(`customer_name.ilike.%${safe}%,vehicle_name.ilike.%${safe}%,vehicle_plate.ilike.%${safe}%`)
         .order('pickup_date', { ascending: false })
         .limit(10)
       if (!cancel) { setResults(data || []); setOpen(true) }
     }, 250)
     return () => { cancel = true; clearTimeout(t) }
-  }, [q, selected])
+  }, [q, selected, business])
 
   // Edit mode: se arriva un value (linked_booking_id gia' salvato) ma non
   // abbiamo i dati, carica il booking per mostrare cliente/veicolo (non l'id).
@@ -161,7 +174,10 @@ function BookingLinkPicker({ value, onChange }: { value: string | null; onChange
   )
 }
 
-export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSaved, editGroupId }: Props) {
+export default function UscitaStraordinariaModal({ open, onClose, vehicles, serviceType, onSaved, editGroupId }: Props) {
+  // Business dell'uscita. Sconosciuto / assente = Terra, come le righe storiche.
+  const business: UscitaBusiness = isUscitaBusiness(serviceType) ? serviceType : 'rental'
+  const assetLabels = USCITA_ASSET_LABELS[business]
   // Edit mode: id delle prenotazioni originali del gruppo (per rilevare le card rimosse).
   const [origBookingIds, setOrigBookingIds] = useState<string[]>([])
   const [title, setTitle] = useState('')
@@ -349,7 +365,7 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
     // Validate cards
     const valid = cards.filter(c => c.vehicle_id && c.pickup_date)
     if (valid.length === 0) {
-      toast.error('Aggiungi almeno un veicolo con data di ritiro.')
+      toast.error(`Aggiungi almeno un ${assetLabels.asset.toLowerCase()} con data di ritiro.`)
       return
     }
 
@@ -376,7 +392,11 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
         const label = (title.trim() || c.motivazioni[0] || 'Uscita Straordinaria')
         return {
           service_type: USCITA_SERVICE_TYPE,
-          vehicle_type: 'car',
+          // 2026-08-14: il business viaggia qui (colonna vera, filtrabile) e in
+          // booking_details.uscita.business. `service_type` resta uguale per
+          // tutti, cosi' fatture/report/flussi cliente continuano a escludere
+          // le uscite ovunque senza modifiche.
+          vehicle_type: USCITA_VEHICLE_TYPE[business],
           // 2026-06-03: bookings ha CHECK constraint
           // (booking_source IN ('website','admin','api')). Senza questo
           // valore l'insert tornava 400 silenzioso (PostgREST non
@@ -404,6 +424,7 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
             amountPaid: payStatus === 'paid' ? priceCents : 0,
             uscita: {
               group_id: groupId,
+              business,
               title: title.trim(),
               stato,
               autista_ids: c.autista_ids,
@@ -669,7 +690,7 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
       const notifyMsg = notified > 0 ? ` · ${notified} autista notificat${notified > 1 ? 'i' : 'o'}` : ''
       const clientMsg = clientiNotificati > 0 ? ` · ${clientiNotificati} cliente${clientiNotificati > 1 ? 'i' : ''} avvisat${clientiNotificati > 1 ? 'i' : 'o'}` : ''
       const noPhoneMsg = noPhone > 0 ? ` (${noPhone} senza telefono)` : ''
-      toast.success(`Uscita Straordinaria salvata (${rows.length} veicolo${rows.length > 1 ? 'i' : ''})${notifyMsg}${clientMsg}${noPhoneMsg}.`)
+      toast.success(`Uscita Straordinaria salvata (${rows.length} ${rows.length > 1 ? assetLabels.assetPlural.toLowerCase() : assetLabels.asset.toLowerCase()})${notifyMsg}${clientMsg}${noPhoneMsg}.`)
       if (templateMissing) {
         toast.error('Template "Notifica Autista — Uscita Straordinaria" mancante o disattivato in Messaggi di Sistema Pro: nessuna notifica autista inviata. Configuralo (e attivalo) per abilitare l\'invio.', { duration: 11000 })
       }
@@ -689,7 +710,7 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
     }
   }
 
-  const vehicleOptions = [{ value: '', label: '— Seleziona veicolo —' }, ...vehicles.map(v => ({ value: v.id, label: `${v.display_name}${v.plate ? ` (${v.plate})` : ''}` }))]
+  const vehicleOptions = [{ value: '', label: `— Seleziona ${assetLabels.asset.toLowerCase()} —` }, ...vehicles.map(v => ({ value: v.id, label: `${v.display_name}${v.plate ? ` (${v.plate})` : ''}` }))]
   // luogoOptions per le tendine Partenza/Destinazione: sorgente unica = Centralina Pro.
   // Includiamo il placeholder vuoto in cima per "non selezionato".
   const luogoOptions = [{ value: '', label: '—' }, ...luogoOptionsFromPro]
@@ -734,19 +755,19 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
 
           {/* Vehicle cards */}
           {cards.map((card, idx) => {
-            const driveOptions = [{ value: '', label: '— Stesso veicolo —' }, ...vehicles.map(v => ({ value: v.id, label: `${v.display_name}${v.plate ? ` (${v.plate})` : ''}` }))]
+            const driveOptions = [{ value: '', label: `— Stesso ${assetLabels.asset.toLowerCase()} —` }, ...vehicles.map(v => ({ value: v.id, label: `${v.display_name}${v.plate ? ` (${v.plate})` : ''}` }))]
             return (
               <div key={card.localId} className="rounded-xl border border-theme-border bg-theme-bg-secondary/40 p-4 space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-theme-text-primary">Veicolo / Tratta #{idx + 1}</span>
+                  <span className="text-sm font-bold text-theme-text-primary">{assetLabels.asset} / Tratta #{idx + 1}</span>
                   {cards.length > 1 && (
                     <button type="button" onClick={() => removeCard(card.localId)} className="text-xs text-red-400 hover:text-red-300">Rimuovi</button>
                   )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Select label="Veicolo" value={card.vehicle_id} onChange={e => patchCard(card.localId, { vehicle_id: e.target.value, plate: vehicles.find(v => v.id === e.target.value)?.plate || '' })} options={vehicleOptions} />
-                  <Input label="Targa" value={card.plate} onChange={e => patchCard(card.localId, { plate: e.target.value })} placeholder="auto da veicolo" />
+                  <Select label={assetLabels.asset} value={card.vehicle_id} onChange={e => patchCard(card.localId, { vehicle_id: e.target.value, plate: vehicles.find(v => v.id === e.target.value)?.plate || '' })} options={vehicleOptions} />
+                  <Input label={assetLabels.identifier} value={card.plate} onChange={e => patchCard(card.localId, { plate: e.target.value })} placeholder={`auto da ${assetLabels.asset.toLowerCase()}`} />
                 </div>
 
                 {/* Autisti for this card + vehicle to drive */}
@@ -859,7 +880,7 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
                 {/* Linked booking — ricerca per cliente / veicolo / targa */}
                 <div>
                   <label className="block text-sm font-medium text-theme-text-primary mb-2">Collega a Booking (opzionale)</label>
-                  <BookingLinkPicker value={card.linked_booking_id} onChange={id => patchCard(card.localId, { linked_booking_id: id })} />
+                  <BookingLinkPicker value={card.linked_booking_id} onChange={id => patchCard(card.localId, { linked_booking_id: id })} business={business} />
                   <p className="mt-1 text-[11px] text-theme-text-muted">Se l'auto esce per servire questa prenotazione, non viene segnalato conflitto.</p>
                 </div>
 
@@ -935,7 +956,7 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, onSa
           })}
 
           <button type="button" onClick={addCard} className="w-full rounded-xl border border-dashed border-theme-border py-3 text-sm font-medium text-theme-text-secondary hover:text-theme-text-primary hover:border-dr7-gold">
-            + Aggiungi veicolo / tratta
+            + Aggiungi {assetLabels.asset.toLowerCase()} / tratta
           </button>
         </div>
 

@@ -16,6 +16,56 @@
 
 export const USCITA_SERVICE_TYPE = 'uscita_straordinaria' as const
 
+/**
+ * 2026-08-14 (richiesta direzione): le Uscite Straordinarie esistono per OGNI
+ * business, non solo Terra. `service_type` resta 'uscita_straordinaria' per
+ * tutti — cosi' l'esclusione da fatture, report e flussi cliente continua a
+ * valere ovunque senza toccare una riga — e il business viaggia su due campi:
+ *  - `vehicle_type` (colonna vera, filtrabile lato query)
+ *  - `booking_details.uscita.business` (ridondante, ma sopravvive a un
+ *    vehicle_type sporco e rende leggibile la riga a occhio nudo)
+ * Le righe storiche non hanno ne' l'uno ne' l'altro: assente = Terra.
+ */
+export const USCITA_BUSINESSES = ['rental', 'boat_rental', 'heli_rental', 'stay_rental'] as const
+export type UscitaBusiness = typeof USCITA_BUSINESSES[number]
+
+/** `vehicle_type` scritto sulla riga bookings per ogni business. */
+export const USCITA_VEHICLE_TYPE: Record<UscitaBusiness, string> = {
+  rental: 'car',
+  boat_rental: 'boat',
+  heli_rental: 'helicopter',
+  stay_rental: 'stay',
+}
+
+/** Etichette del mezzo, per non chiamare "veicolo" una barca o un alloggio. */
+export const USCITA_ASSET_LABELS: Record<UscitaBusiness, { asset: string; assetPlural: string; identifier: string }> = {
+  rental: { asset: 'Veicolo', assetPlural: 'Veicoli', identifier: 'Targa' },
+  boat_rental: { asset: 'Barca', assetPlural: 'Barche', identifier: 'Matricola' },
+  heli_rental: { asset: 'Elicottero', assetPlural: 'Elicotteri', identifier: 'Marche' },
+  stay_rental: { asset: 'Alloggio', assetPlural: 'Alloggi', identifier: 'Unita' },
+}
+
+export function isUscitaBusiness(v: string | null | undefined): v is UscitaBusiness {
+  return !!v && (USCITA_BUSINESSES as readonly string[]).includes(v)
+}
+
+/** Business di una riga uscita. Assente / non riconosciuto = Terra. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function uscitaBusinessOf(booking: any): UscitaBusiness {
+  const fromDetails = booking?.booking_details?.uscita?.business
+  if (isUscitaBusiness(fromDetails)) return fromDetails
+  const vt = booking?.vehicle_type
+  const match = (Object.keys(USCITA_VEHICLE_TYPE) as UscitaBusiness[]).find(b => USCITA_VEHICLE_TYPE[b] === vt)
+  return match || 'rental'
+}
+
+/** L'uscita appartiene al business indicato? (Terra assorbe le righe storiche.) */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function uscitaBelongsTo(booking: any, serviceType: string | null | undefined): boolean {
+  const business = isUscitaBusiness(serviceType) ? serviceType : 'rental'
+  return uscitaBusinessOf(booking) === business
+}
+
 /** Predefined autisti (seeded into `customers` tagged metadata.role='autista'). */
 export const DEFAULT_AUTISTI = [
   'Salvatore Pintori',

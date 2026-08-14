@@ -5,6 +5,10 @@ import { useNavigate } from 'react-router-dom'
 import { useVehicleAlarm } from '../../contexts/VehicleAlarmContext'
 import { useTheme, PALETTES, type Palette } from '../../contexts/ThemeContext'
 import RentalTabs from './components/RentalTabs'
+// Uscite Straordinarie di Mare/Aria/Soggiorni: stesso componente del Noleggio
+// Terra in viewMode='uscite', parametrizzato per business. Nessun peso in piu'
+// sul bundle: RentalTabs lo importa gia' in modo eager.
+import ReservationsTab from './components/ReservationsTab'
 import ImmondiziaTab from './components/ImmondiziaTab'
 import TicketTab from './components/TicketTab'
 import MovimentiAereiTab from './components/MovimentiAereiTab'
@@ -77,7 +81,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'immondizia' | 'ticket' | 'terra-catalog' | 'magazzino-generale' | 'interruttori' | 'acconti'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'immondizia' | 'ticket' | 'terra-catalog' | 'magazzino-generale' | 'interruttori' | 'acconti'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -292,6 +296,10 @@ export default function AdminDashboard() {
     { name: 'Noleggio Mare', tabs: [
       { tab: 'mare-bookings', label: 'Prenotazioni' },
       { tab: 'mare-preventivi', label: 'Preventivi' },
+      // Come su Terra (dove le uscite viaggiano col permesso 'reservations'),
+      // il diritto segue le Prenotazioni del business: chi gestisce il Mare
+      // gestisce le sue uscite, senza un permesso nuovo da spuntare.
+      { tab: 'mare-uscite', label: 'Uscite Straordinarie', permKey: 'mare-bookings' },
       { tab: 'mare-calendar', label: 'Calendario' },
       { tab: 'mare-contratti', label: 'Contratti' },
       { tab: 'gestione-danni', label: 'Danni & Penali' },
@@ -304,6 +312,7 @@ export default function AdminDashboard() {
     { name: 'Noleggio Aria', tabs: [
       { tab: 'aria-bookings', label: 'Prenotazioni' },
       { tab: 'aria-preventivi', label: 'Preventivi' },
+      { tab: 'aria-uscite', label: 'Uscite Straordinarie', permKey: 'aria-bookings' },
       { tab: 'aria-calendar', label: 'Calendario' },
       { tab: 'aria-contratti', label: 'Contratti' },
       { tab: 'gestione-danni', label: 'Danni & Penali' },
@@ -317,6 +326,7 @@ export default function AdminDashboard() {
     { name: 'Soggiorni & Ospitalità', tabs: [
       { tab: 'stay-bookings', label: 'Prenotazioni' },
       { tab: 'stay-preventivi', label: 'Preventivi' },
+      { tab: 'stay-uscite', label: 'Uscite Straordinarie', permKey: 'stay-bookings' },
       { tab: 'stay-calendar', label: 'Calendario' },
       { tab: 'stay-contratti', label: 'Contratti' },
       { tab: 'gestione-danni', label: 'Danni & Penali' },
@@ -456,6 +466,9 @@ export default function AdminDashboard() {
     'mare-tours': 'Tour & Posti Noleggio Mare',
     'mare-preventivi': 'Preventivi Noleggio Mare',
     'mare-contratti': 'Contratti Noleggio Mare',
+    'mare-uscite': 'Uscite Straordinarie Noleggio Mare',
+    'aria-uscite': 'Uscite Straordinarie Noleggio Aria',
+    'stay-uscite': 'Uscite Straordinarie Soggiorni & Ospitalità',
     'aria-contratti': 'Contratti Noleggio Aria',
     'stay-contratti': 'Contratti Soggiorni & Ospitalità',
     'aria-bookings': 'Prenotazioni Noleggio Aria',
@@ -1068,6 +1081,11 @@ export default function AdminDashboard() {
           {activeTab === 'mare-preventivi' && <NoleggioServiceTab serviceType="boat_rental" view="preventivi" labels={{ title: 'Noleggio Mare', asset: 'Barca', assetPlural: 'Barche' }} />}
           {/* Contratti per business: stessa tab del Noleggio Terra, ognuno col
               proprio modello PDF (contract_mare.pdf, contract_aria.pdf, ...). */}
+          {/* Uscite Straordinarie per business: stesso componente del Noleggio
+              Terra, filtrato sulle uscite di quel business. */}
+          {activeTab === 'mare-uscite' && <ReservationsTab viewMode="uscite" serviceType="boat_rental" />}
+          {activeTab === 'aria-uscite' && <ReservationsTab viewMode="uscite" serviceType="heli_rental" />}
+          {activeTab === 'stay-uscite' && <ReservationsTab viewMode="uscite" serviceType="stay_rental" />}
           {activeTab === 'mare-contratti' && <ContrattoTab serviceType="boat_rental" />}
           {activeTab === 'aria-contratti' && <ContrattoTab serviceType="heli_rental" />}
           {activeTab === 'stay-contratti' && <ContrattoTab serviceType="stay_rental" />}
