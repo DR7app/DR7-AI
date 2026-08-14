@@ -557,11 +557,27 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
       booking_details: d,
     }
 
+    // Si rilegge price_total DALLA RIGA SALVATA e lo si confronta con quello
+    // inviato. Finora un salvataggio che non scriveva davvero (riga filtrata,
+    // colonna rifiutata, aggiornamento a vuoto) finiva con "Prenotazione
+    // aggiornata" e un totale rimasto a 0: nessun errore, nessun indizio, e
+    // l'operatore che riapre e risalva all'infinito. Meglio un messaggio
+    // brutto e vero che una conferma falsa.
     const { data: savedRow, error } = booking
-      ? await supabase.from('bookings').update(payload).eq('id', booking.id).select('id').single()
-      : await supabase.from('bookings').insert({ ...payload, created_at: new Date().toISOString() }).select('id').single()
+      ? await supabase.from('bookings').update(payload).eq('id', booking.id).select('id, price_total').single()
+      : await supabase.from('bookings').insert({ ...payload, created_at: new Date().toISOString() }).select('id, price_total').single()
     setSaving(false)
     if (error) { setFormError(error.message); return }
+    if (!savedRow) {
+      setFormError('Il salvataggio non ha restituito nessuna riga: la prenotazione NON e\' stata aggiornata. Riprova, e se si ripete segnalalo.')
+      return
+    }
+    const scritto = Number((savedRow as { price_total?: number }).price_total ?? -1)
+    if (scritto !== totaleDaSalvare) {
+      console.error('[MareBookingModal] price_total inviato', totaleDaSalvare, 'ma in database', scritto, 'payload:', payload)
+      setFormError(`Il totale non e' stato salvato: inviato ${(totaleDaSalvare / 100).toFixed(2)} €, in database ${(scritto / 100).toFixed(2)} €. La prenotazione NON e' corretta.`)
+      return
+    }
     const savedId = (savedRow as { id: string } | null)?.id || booking?.id || null
     toast.success(booking ? 'Prenotazione aggiornata' : 'Prenotazione creata')
 
