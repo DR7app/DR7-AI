@@ -378,8 +378,15 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
   }, [serviceDefs, servizi, rentalDays])
   const serviziCents = serviceLines.reduce((sum, l) => sum + l.cents, 0)
   const consegnaCents = eurToCents(costoConsegna) + eurToCents(costoRitiro)
+  // "Sconto" in DR7 e' il PREZZO FINALE DESIDERATO, non l'importo da
+  // sottrarre: e' cosi' nei Preventivi (PreventiviTab: `desiredFinal`) e
+  // l'operatore lo usa con quel significato. Qui invece veniva sottratto:
+  // scrivendo 11 su un noleggio da 0 il totale faceva max(0, 0-11) = 0, e la
+  // prenotazione veniva salvata a 0,00 €. Due sensi opposti per la stessa
+  // parola nella stessa piattaforma.
   const scontoCents = eurToCents(sconto)
-  const computedCents = Math.max(0, baseCents + serviziCents + consegnaCents - scontoCents)
+  const lordoCents = baseCents + serviziCents + consegnaCents
+  const computedCents = scontoCents > 0 ? scontoCents : lordoCents
 
   // Il totale si autocompila finche' l'admin non lo tocca a mano.
   //
@@ -476,8 +483,11 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
     if (on('servizi')) {
       if (serviceLines.length) d.servizi = serviceLines; else delete d.servizi
     }
+    // `sconto` = prezzo finale concordato (come nei Preventivi), `listino` =
+    // quanto sarebbe costato a tariffa piena. Salvando entrambi lo scarto
+    // resta ricostruibile senza doverlo ricalcolare.
     d.sconto = scontoCents
-    d.listino = baseCents
+    d.listino = lordoCents
     d.note = note.trim() || null
     d.amountPaid = eurToCents(amountPaid)
 
@@ -1045,13 +1055,28 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
                   </div>
                 )}
                 <div className="flex justify-between items-center gap-3 pt-2">
-                  <span className="text-theme-text-muted text-xs">Sconto (€)</span>
-                  <input className={`${INPUT_CLS} max-w-[120px] text-right`} inputMode="decimal" placeholder="0,00" value={sconto} onChange={e => setSconto(e.target.value)} />
+                  <span className="text-theme-text-muted text-xs">Sconto — prezzo finale desiderato (€)</span>
+                  <input className={`${INPUT_CLS} max-w-[120px] text-right`} inputMode="decimal" placeholder={centsToEur(lordoCents)} value={sconto} onChange={e => setSconto(e.target.value)} />
                 </div>
+                <p className="text-[11px] text-theme-text-muted">
+                  Scrivi qui quanto deve pagare il cliente in tutto, non lo sconto da togliere. Lascia vuoto per il prezzo di listino.
+                </p>
+                {scontoCents > 0 && scontoCents !== lordoCents && (
+                  <div className="flex justify-between text-emerald-500 text-xs">
+                    <span>{scontoCents < lordoCents ? 'Sconto applicato' : 'Maggiorazione'}</span>
+                    <span className="tabular-nums">{eur(Math.abs(lordoCents - scontoCents))}</span>
+                  </div>
+                )}
                 <div className="flex justify-between border-t border-theme-border pt-2 mt-2 text-theme-text-primary font-semibold">
                   <span>Totale calcolato</span>
                   <span className="tabular-nums">{eur(computedCents)}</span>
                 </div>
+                {asset && asset.price_per_day <= 0 && (
+                  <p className="mt-2 text-[11px] text-amber-500 font-semibold">
+                    &laquo;{asset.name}&raquo; non ha un prezzo al giorno nel catalogo: il noleggio conta 0. Impostalo in
+                    Catalogo, oppure scrivi qui sopra il prezzo finale.
+                  </p>
+                )}
               </div>
             </Section>
 
