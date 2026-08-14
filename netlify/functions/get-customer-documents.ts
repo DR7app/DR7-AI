@@ -36,11 +36,21 @@ export const handler: Handler = async (event) => {
         const licenseUrls: any[] = []
         const idUrls: any[] = []
         const codiceFiscaleUrls: any[] = []
+        const nauticaUrls: any[] = []
         const processedFileNames = new Set<string>()
 
+        // La patente NAUTICA sta nel bucket `driver-licenses` (stesse policy
+        // della patente di guida) ma non e' la stessa cosa: senza questo
+        // controllo finiva elencata sotto "Patente di Guida", dove nessuno la
+        // cerca. Si riconosce dal nome del file, che l'upload scrive sempre
+        // come `patente_nautica_front_*` / `_back_*`.
+        const isNautica = (fileName: string, documentType?: string | null) =>
+            /^patente_nautica/i.test(String(fileName || '')) || /^patente_nautica/i.test(String(documentType || ''))
+
         // Helper to add to correct list
-        const addToList = (bucket: string, fileObj: any) => {
-            if (bucket === 'driver-licenses') licenseUrls.push(fileObj)
+        const addToList = (bucket: string, fileObj: any, documentType?: string | null) => {
+            if (isNautica(fileObj?.fileName, documentType)) nauticaUrls.push(fileObj)
+            else if (bucket === 'driver-licenses') licenseUrls.push(fileObj)
             else if (bucket === 'codice-fiscale') codiceFiscaleUrls.push(fileObj)
             else if (bucket === 'driver-ids' || bucket === 'carta-identita' || bucket === 'customer-documents') idUrls.push(fileObj)
         }
@@ -62,7 +72,7 @@ export const handler: Handler = async (event) => {
                         fileName: fileName,
                         status: doc.status,
                         source: 'db'
-                    })
+                    }, doc.document_type)
                     processedFileNames.add(fileName)
                 }
             }
@@ -105,7 +115,8 @@ export const handler: Handler = async (event) => {
                 documents: {
                     licenses: licenseUrls,
                     ids: idUrls,
-                    codiceFiscale: codiceFiscaleUrls
+                    codiceFiscale: codiceFiscaleUrls,
+                    nautica: nauticaUrls
                 }
             })
         }

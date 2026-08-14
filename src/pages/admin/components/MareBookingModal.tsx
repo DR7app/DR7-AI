@@ -447,6 +447,14 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
     if (!customerName.trim()) { setFormError('Il nome cliente è obbligatorio.'); return }
     if (!assetName) { setFormError('Scegli la barca dal catalogo.'); return }
     if (rentalDays <= 0) { setFormError('La data/ora di riconsegna deve essere successiva al ritiro.'); return }
+    // Una prenotazione a 0,00 euro quasi sempre e' una dimenticanza (barca
+    // senza prezzo a catalogo, campo lasciato vuoto). Non si blocca — puo'
+    // essere un omaggio — ma si chiede conferma, invece di scoprirlo dopo
+    // guardando l'elenco.
+    if ((eurToCents(priceFinal) || computedCents) <= 0
+        && !window.confirm('Il totale di questa prenotazione e\' 0,00 €. Salvare comunque?')) {
+      return
+    }
     setSaving(true); setFormError('')
 
     // Preserva le chiavi già presenti (es. tour_departure_id) e riscrive le nostre.
@@ -501,6 +509,8 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
     d.note = note.trim() || null
     d.amountPaid = eurToCents(amountPaid)
 
+    const totaleDaSalvare = eurToCents(priceFinal) || computedCents
+
     const payload = {
       service_type: 'boat_rental',
       user_id: customerId || null,
@@ -517,7 +527,16 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
       // (indica indirizzo)", che non dice dove.
       pickup_location: on('luoghi') ? componiLuogo(luogoRitiro, indirizzoConsegna) : null,
       dropoff_location: on('luoghi') ? componiLuogo(luogoRiconsegna, indirizzoRiconsegna || indirizzoConsegna) : null,
-      price_total: eurToCents(priceFinal),
+      // RETE DI SICUREZZA sul totale.
+      //
+      // Il campo Prezzo Finale e' cio' che finisce su price_total. Se resta a
+      // zero mentre il riepilogo calcola un importo, si salva una prenotazione
+      // da 0,00 euro: e' successo davvero, ed e' il tipo di errore che non da'
+      // nessun segnale — la riga in elenco dice 0,00 e nessuno sa perche'.
+      // Qui il totale calcolato fa da rete quando il campo e' vuoto o a zero.
+      // Il caso opposto — importo scritto a mano diverso dal calcolo — resta
+      // valido e vince, perche' e' una decisione dell'operatore.
+      price_total: totaleDaSalvare,
       amount_paid: eurToCents(amountPaid),
       // Stessa regola del Noleggio Terra: una prenotazione nuova con link di
       // pagamento Nexi e non ancora pagata resta 'pending' — cosi' il cron
@@ -559,7 +578,7 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
         mezzo: assetName,
         dal: pickupDate,
         al: dropoffDate,
-        totale: (eurToCents(priceFinal) / 100).toFixed(2),
+        totale: (totaleDaSalvare / 100).toFixed(2),
         stato_pagamento: payStatus,
         metodo_pagamento: payMethod || null,
       })
@@ -572,7 +591,7 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
     //    Solo alla CREAZIONE, come negli altri business.
     if (!booking && savedId && payStatus === 'pending' && isNexiPbl(payMethod)) {
       try {
-        const amountEuros = eurToCents(priceFinal) / 100
+        const amountEuros = totaleDaSalvare / 100
         const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -635,7 +654,7 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
     //    prezzo zero (uscita in omaggio).
     const isPaidNow = ['paid', 'completed', 'succeeded'].includes(payStatus)
     const wasPaid = ['paid', 'completed', 'succeeded'].includes(String(booking?.payment_status || ''))
-    if (savedId && isPaidNow && !wasPaid && eurToCents(priceFinal) > 0) {
+    if (savedId && isPaidNow && !wasPaid && totaleDaSalvare > 0) {
       try {
         const invRes = await authFetch('/.netlify/functions/generate-invoice-from-booking', {
           method: 'POST',
@@ -667,7 +686,7 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
     if (customerPhone.trim()) {
       try {
         const firstName = (customerName.trim().split(' ')[0]) || 'Cliente'
-        const totalStr = (eurToCents(priceFinal) / 100).toFixed(2)
+        const totalStr = (totaleDaSalvare / 100).toFixed(2)
         await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -698,7 +717,7 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
     // Centralina Pro e non esiste piu' nessun fallback silenzioso.
     if (!booking) {
       try {
-        const totalStr = (eurToCents(priceFinal) / 100).toFixed(2)
+        const totalStr = (totaleDaSalvare / 100).toFixed(2)
         await fetch('/.netlify/functions/send-whatsapp-notification', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
