@@ -275,6 +275,13 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
   // più da solo (stessa convenzione del resto del gestionale). È uno state e
   // non una ref perché la nota sotto al campo dipende da questo valore.
   const [priceEdited, setPriceEdited] = useState(false)
+  // Il flag serve DENTRO un altro useEffect che gira nello stesso commit:
+  // `setPriceEdited(true)` non aggiorna la variabile in quel giro, l'effetto
+  // del calcolo automatico legge ancora `false` e sovrascrive il prezzo.
+  // Il ref cambia subito, quindi il guardiano funziona a prescindere
+  // dall'ordine con cui React esegue gli effetti.
+  const priceEditedRef = useRef(false)
+  const bloccaPrezzo = () => { priceEditedRef.current = true; setPriceEdited(true) }
 
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
@@ -304,7 +311,7 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
       setDropoffDate(datePreset.dropoff)
     }
     if (!booking) return
-    setPriceEdited(true) // in modifica NON si sovrascrive il prezzo salvato
+    bloccaPrezzo() // in modifica NON si sovrascrive il prezzo salvato
     const b = booking
     const d = (b.booking_details || {}) as Record<string, unknown>
     origDetails.current = { ...d }
@@ -374,11 +381,23 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
   const scontoCents = eurToCents(sconto)
   const computedCents = Math.max(0, baseCents + serviziCents + consegnaCents - scontoCents)
 
-  // Il totale si autocompila finché l'admin non lo tocca a mano.
+  // Il totale si autocompila finche' l'admin non lo tocca a mano.
+  //
+  // 2026-08-14 BUG: aprendo una prenotazione in MODIFICA il prezzo tornava a
+  // 0,00 e non si riusciva piu' a mandare il link di pagamento. Al montaggio
+  // girano due effetti nello stesso commit: quello di precompilazione (che
+  // scrive il prezzo salvato e alza il flag) e questo. Il secondo leggeva
+  // ancora `priceEdited = false` — lo stato non e' aggiornato dentro lo stesso
+  // giro — e sovrascriveva il prezzo con il calcolo, che in quel momento vale
+  // 0 perche' il catalogo barche non e' ancora arrivato.
+  //
+  // Ora il guardiano e' un ref (cambia subito) e in modifica non si ricalcola
+  // mai: su una prenotazione esistente comanda l'importo concordato, non il
+  // listino di oggi.
   useEffect(() => {
-    if (priceEdited) return
+    if (booking || priceEditedRef.current) return
     setPriceFinal(centsToEur(computedCents))
-  }, [computedCents, priceEdited])
+  }, [computedCents, priceEdited, booking])
 
   /* ── Disponibilità: la barca è già impegnata in quel periodo? ── */
   const [conflict, setConflict] = useState('')
@@ -1040,14 +1059,24 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
             <Section title="Pagamento">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Prezzo Finale (€)">
-                  <input className={INPUT_CLS} inputMode="decimal" placeholder={centsToEur(computedCents)} value={priceFinal} onChange={e => { setPriceEdited(true); setPriceFinal(e.target.value) }} />
+                  <input className={INPUT_CLS} inputMode="decimal" placeholder={centsToEur(computedCents)} value={priceFinal} onChange={e => { bloccaPrezzo(); setPriceFinal(e.target.value) }} />
                   {!priceEdited && <p className="mt-1 text-[11px] text-theme-text-muted">Calcolato in automatico — scrivilo a mano per bloccarlo.</p>}
                 </Field>
                 <Field label="Importo Pagato (€)">
                   <input className={INPUT_CLS} inputMode="decimal" placeholder="0,00" value={amountPaid} onChange={e => setAmountPaid(e.target.value)} />
                 </Field>
                 <Field label="Stato Pagamento">
-                  <select className={INPUT_CLS} value={payStatus} onChange={e => setPayStatus(e.target.value)}>
+                  <select className={INPUT_CLS} value={payStatus} onChange={e => {
+                    const st = e.target.value
+                    setPayStatus(st)
+                    // Passando a Pagato con l'importo ancora vuoto si salvava
+                    // "Pagato" con incassato 0: la prenotazione risultava saldata
+                    // e la cassa non tornava. Si propone il totale, che resta
+                    // modificabile (un acconto si scrive a mano).
+                    // NON si tocca mai se l'operatore ha gia' scritto qualcosa,
+                    // ne' quando cambia il TOTALE: l'importo pagato e' indipendente.
+                    if (st === 'paid' && !amountPaid.trim()) setAmountPaid(priceFinal)
+                  }}>
                     {PAY_STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                   </select>
                 </Field>
@@ -1058,7 +1087,9 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
                     // Nexi Pay by Link = pagamento in sospeso -> Da Saldare.
                     // Qualsiasi altro metodo scelto = incassato -> Pagato.
                     if (!m) return
-                    setPayStatus(isNexiPbl(m) ? 'pending' : 'paid')
+                    const st = isNexiPbl(m) ? 'pending' : 'paid'
+                    setPayStatus(st)
+                    if (st === 'paid' && !amountPaid.trim()) setAmountPaid(priceFinal)
                   }}>
                     <option value="">— seleziona —</option>
                     {paymentMethods.filter(m => m.is_enabled !== false).map(m => <option key={m.key || m.label} value={m.label}>{m.label}</option>)}

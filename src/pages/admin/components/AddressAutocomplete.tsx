@@ -73,8 +73,22 @@ export default function AddressAutocomplete({
     setStatus('loading')
     setIsOpen(true)
     try {
+      // 2026-08-14: ancoraggio geografico sulla SARDEGNA.
+      //
+      // Senza, la ricerca era inutilizzabile sui luoghi con un nome comune.
+      // "Marina Piccola" esiste ad Ardea, Sorrento, Capri, Arenzano, Bari...
+      // e Nominatim restituiva quelle: la Marina Piccola di Cagliari — che e'
+      // il porto da cui partono le barche — non entrava nemmeno nei primi 5
+      // risultati. L'operatore concludeva che "non la trova".
+      //
+      // `viewbox` senza `bounded=1` e' una PREFERENZA, non un filtro: i
+      // risultati sardi salgono in cima, ma un indirizzo a Milano o a Roma
+      // si trova ancora (serve per le consegne fuori isola).
+      // Riquadro: tutta la Sardegna, non solo Cagliari, cosi' Olbia, Sassari
+      // e Alghero funzionano allo stesso modo.
+      const VIEWBOX_SARDEGNA = '8.10,41.30,9.90,38.80'
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=jsonv2&addressdetails=1&limit=5&countrycodes=it`,
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=jsonv2&addressdetails=1&limit=5&countrycodes=it&viewbox=${VIEWBOX_SARDEGNA}`,
         { headers: { 'Accept-Language': 'it' } }
       )
       if (!res.ok) {
@@ -197,7 +211,7 @@ export default function AddressAutocomplete({
       {isOpen && suggestions.length === 0 && status !== 'idle' && (
         <div className="absolute z-50 left-0 right-0 mt-1 bg-theme-bg-primary border border-theme-border rounded-lg shadow-2xl px-4 py-3 text-sm">
           {status === 'loading' && <span className="text-theme-text-muted">Ricerca indirizzo…</span>}
-          {status === 'empty' && <span className="text-theme-text-muted">Nessun indirizzo trovato. Prova con la sola città (es. "Cagliari") o digita il costo a mano.</span>}
+          {status === 'empty' && <span className="text-theme-text-muted">Nessun indirizzo trovato. Controlla l&apos;ortografia (la ricerca non corregge i refusi), oppure prova con la sola città — es. &quot;Cagliari&quot;.</span>}
           {status === 'error' && <span className="text-amber-400">Ricerca indirizzi non disponibile (servizio mappe bloccato o limitato). Inserisci città e costo manualmente.</span>}
         </div>
       )}
