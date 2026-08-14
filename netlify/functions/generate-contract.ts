@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { PDFDocument, rgb, StandardFonts, PDFName, PDFArray, PDFDict, PDFString, PDFHexString } from 'pdf-lib'
 import { requireAuth } from './require-auth'
 import { computeRentalBillingDays } from './utils/computeRentalBillingDays'
-import { loadBusinessConfig } from './utils/businessConfig'
+import { loadBusinessConfig, businessRowForServiceType } from './utils/businessConfig'
 import { createHash } from 'crypto'
 import QRCode from 'qrcode'
 
@@ -918,9 +918,24 @@ export const handler: Handler = async (event) => {
             .from('templates')
             .download(templatePath)
 
-        // Modello di categoria mancante: si ricade sul master invece di
-        // fallire. Meglio un contratto generico che nessun contratto, ma il
-        // log lo dice a voce alta cosi' l'errore di configurazione si vede.
+        // 2026-08-14: il fallback sul master vale SOLO dentro il Noleggio
+        // Terra (modello di categoria mancante -> master auto, che resta un
+        // contratto auto). Per Mare, Aria e Soggiorni ricadere sul master
+        // significherebbe far firmare al cliente un contratto di NOLEGGIO AUTO
+        // — targa, km, kasko, codice della strada. Meglio nessun contratto che
+        // il contratto sbagliato: si fallisce con un messaggio che dice
+        // esattamente quale file caricare.
+        const businessNonTerra = modelloDelBusiness(booking.service_type) !== 'master_contract.pdf'
+        if ((templateError || !templateData) && businessNonTerra) {
+            const atteso = modelloDelBusiness(booking.service_type)
+            console.error(`[generate-contract] Modello "${nomeModello}" assente per service_type=${booking.service_type}: NIENTE fallback sul contratto auto.`)
+            return {
+                statusCode: 400,
+                body: JSON.stringify({
+                    error: `Modello di contratto mancante per questo business. Carica "${atteso}" dalla tab Contratti prima di generare il contratto. Nessun fallback sul contratto auto.`
+                })
+            }
+        }
         if ((templateError || !templateData) && nomeModello !== 'master_contract.pdf') {
             console.warn(`[generate-contract] Modello "${nomeModello}" non trovato nel bucket templates: uso master_contract.pdf`)
             templatePath = `master_contract.pdf?t=${Date.now()}`
@@ -987,10 +1002,15 @@ export const handler: Handler = async (event) => {
         // riutilizzare la stessa fetch invece di chiamare Supabase due volte.
         let cpCfg: { config?: Record<string, unknown> } | null = null
         try {
+            // 2026-08-14: si legge la riga Centralina del BUSINESS della
+            // prenotazione (business_mare / business_aria / business_soggiorni),
+            // non piu' sempre `main`. Leggendo `main` una prenotazione Mare
+            // ereditava le clausole contratto scritte per le auto.
+            const rowId = businessRowForServiceType(booking.service_type)
             const { data } = await supabase
                 .from('centralina_pro_config')
                 .select('config')
-                .eq('id', 'main')
+                .eq('id', rowId)
                 .maybeSingle()
             cpCfg = data as { config?: Record<string, unknown> } | null
             const cfg = (cpCfg?.config || {}) as {
@@ -1023,11 +1043,20 @@ export const handler: Handler = async (event) => {
 
         let insuranceResponsibilityText = ''
 
+        // 2026-08-14: i testi hardcoded qui sotto (KASKO, franchigie, targa,
+        // codice della strada, neopatentati) sono clausole di NOLEGGIO AUTO.
+        // Su Mare, Aria e Soggiorni non devono comparire: se la direzione non
+        // ha scritto un testo dedicato, il campo resta VUOTO invece di
+        // stampare le penali dell'auto dentro il contratto della barca.
+        const soloTerra = modelloDelBusiness(booking.service_type) === 'master_contract.pdf'
+
         // Priorita': testo custom da Centralina Pro per QUESTA categoria.
         // Se direzione ha riempito centralina_pro_config.contract_clauses[<cat>].insurance_text
         // vince sempre sul testo hardcoded di fallback (cosi' "Hypercar e' Hypercar").
         if (proInsuranceText) {
             insuranceResponsibilityText = proInsuranceText
+        } else if (!soloTerra) {
+            insuranceResponsibilityText = ''
         } else if (isSupercarLegacy) {
             insuranceResponsibilityText = `RESPONSABILITÀ PENALE DEI CLIENTI - SUPERCAR:
 
@@ -1083,6 +1112,8 @@ Il locatario è pienamente responsabile del veicolo durante il periodo di nolegg
         // per QUESTA categoria, sovrascrive il default hardcoded.
         if (proPenaltyText) {
             additionalTermsText = proPenaltyText
+        } else if (!soloTerra) {
+            additionalTermsText = ''
         } else if (isSupercarLegacy) {
             additionalTermsText = `PENALI - SUPERCAR:
 

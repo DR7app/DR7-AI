@@ -260,26 +260,45 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
 
   useEffect(() => {
     loadContracts()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serviceType])
 
   async function loadContracts() {
     setLoading(true)
     try {
       const { data, error } = await supabase
         .from('contracts')
-        .select('*, bookings:booking_id(customer_name, customer_email, customer_phone, booking_details)')
+        .select('*, bookings:booking_id(customer_name, customer_email, customer_phone, booking_details, service_type)')
         .order('updated_at', { ascending: false })
 
       if (error) throw error
+
+      // 2026-08-14: la tab e' condivisa fra Terra/Mare/Aria/Soggiorni. Senza
+      // questo filtro OGNI business vedeva TUTTI i contratti, quindi i
+      // contratti auto comparivano dentro Mare e Aria. Si filtra sul
+      // service_type della prenotazione collegata (il contratto non ha una
+      // colonna propria). Terra = tutto cio' che non e' un altro business,
+      // cosi' i contratti legacy senza booking restano dove sono sempre stati.
+      const ALTRI_BUSINESS = ['boat_rental', 'heli_rental', 'stay_rental']
+      const businessCorrente = String(serviceType || '').toLowerCase()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows = (data || []).filter((c: any) => {
+        const st = String(
+          c?.bookings?.service_type || c?.bookings?.booking_details?.service_type || ''
+        ).trim().toLowerCase()
+        return businessCorrente
+          ? st === businessCorrente
+          : !ALTRI_BUSINESS.includes(st)
+      })
 
       // Stato firma: matchiamo per BOOKING_ID (oltre che per contract_id).
       // Con righe contratto duplicate per una prenotazione, le firme possono
       // puntare a una riga diversa o solo al booking → matchando solo per
       // contract_id risultavano "non firmate" anche se qualcuno aveva firmato.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const contractIds = (data || []).map((c: any) => c.id).filter(Boolean)
+      const contractIds = rows.map((c: any) => c.id).filter(Boolean)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const bookingIds = (data || []).map((c: any) => c.booking_id).filter(Boolean)
+      const bookingIds = rows.map((c: any) => c.booking_id).filter(Boolean)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sigById = new Map<string, any>()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -306,7 +325,7 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
 
       // Resolve customer_name from booking if contract's customer_name is empty
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const resolved = (data || []).map((c: any) => {
+      const resolved = rows.map((c: any) => {
         const b = c.bookings
         if (!c.customer_name && b) {
           c.customer_name = b.customer_name || b.booking_details?.customer?.fullName || ''
