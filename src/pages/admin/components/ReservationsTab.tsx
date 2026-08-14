@@ -73,7 +73,7 @@ import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
 import UscitaStraordinariaModal from './UscitaStraordinariaModal'
-import { USCITA_SERVICE_TYPE, uscitaBelongsTo } from '../../../utils/uscitaStraordinaria'
+import { USCITA_SERVICE_TYPE, uscitaBelongsTo, uscitaUsaFlottaAuto } from '../../../utils/uscitaStraordinaria'
 import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import PenaltyModal from './PenaltyModal'
@@ -538,8 +538,12 @@ const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
  * piu' usato: ogni differenza sta dentro un `if (serviceType !== 'rental')`.
  */
 export default function ReservationsTab({ initialData, onDataConsumed, viewMode = 'bookings', serviceType = 'rental' }: { initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string; fromPreventivo?: Record<string, any> } | null; onDataConsumed?: () => void; viewMode?: 'bookings' | 'uscite'; serviceType?: string }) {
-  // true quando la tab sta servendo Mare / Aria / Soggiorni.
-  const isAltroBusiness = serviceType !== 'rental'
+  // true quando la tab sta servendo Mare / Aria / Soggiorni: quei business
+  // hanno un catalogo proprio (`noleggio_catalog`) al posto della flotta.
+  // Lavaggio & Meccanica NON e' qui dentro di proposito: lavora sulle stesse
+  // auto del Noleggio Terra, quindi legge `vehicles` come Terra. Resta pero'
+  // un business distinto per le uscite, separato da `vehicle_type`.
+  const isAltroBusiness = !uscitaUsaFlottaAuto(serviceType)
   const { canViewFinancials } = useAdminRole()
   const paymentMethods = usePaymentMethods()
   const [reservations, setReservations] = useState<Reservation[]>([])

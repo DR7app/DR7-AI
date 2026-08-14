@@ -26,15 +26,21 @@ export const USCITA_SERVICE_TYPE = 'uscita_straordinaria' as const
  *    vehicle_type sporco e rende leggibile la riga a occhio nudo)
  * Le righe storiche non hanno ne' l'uno ne' l'altro: assente = Terra.
  */
-export const USCITA_BUSINESSES = ['rental', 'boat_rental', 'heli_rental', 'stay_rental'] as const
+export const USCITA_BUSINESSES = ['rental', 'boat_rental', 'heli_rental', 'stay_rental', 'car_wash'] as const
 export type UscitaBusiness = typeof USCITA_BUSINESSES[number]
 
-/** `vehicle_type` scritto sulla riga bookings per ogni business. */
+/** `vehicle_type` scritto sulla riga bookings per ogni business.
+ *
+ * Lavaggio & Meccanica lavora sulle STESSE auto del Noleggio Terra, quindi
+ * serve un `vehicle_type` proprio ('carwash', non 'car'): senza, un'uscita del
+ * lavaggio finirebbe nell'elenco di Terra e viceversa, perche' il business si
+ * riconosce proprio da questo campo. */
 export const USCITA_VEHICLE_TYPE: Record<UscitaBusiness, string> = {
   rental: 'car',
   boat_rental: 'boat',
   heli_rental: 'helicopter',
   stay_rental: 'stay',
+  car_wash: 'carwash',
 }
 
 /** Etichette del mezzo, per non chiamare "veicolo" una barca o un alloggio. */
@@ -43,6 +49,13 @@ export const USCITA_ASSET_LABELS: Record<UscitaBusiness, { asset: string; assetP
   boat_rental: { asset: 'Barca', assetPlural: 'Barche', identifier: 'Matricola' },
   heli_rental: { asset: 'Elicottero', assetPlural: 'Elicotteri', identifier: 'Marche' },
   stay_rental: { asset: 'Alloggio', assetPlural: 'Alloggi', identifier: 'Unita' },
+  car_wash: { asset: 'Veicolo', assetPlural: 'Veicoli', identifier: 'Targa' },
+}
+
+/** Business che lavorano sulla flotta auto (`vehicles`) invece che su un
+ *  catalogo dedicato (`noleggio_catalog`). */
+export function uscitaUsaFlottaAuto(serviceType: string | null | undefined): boolean {
+  return serviceType === 'rental' || serviceType === 'car_wash' || !serviceType
 }
 
 export function isUscitaBusiness(v: string | null | undefined): v is UscitaBusiness {
