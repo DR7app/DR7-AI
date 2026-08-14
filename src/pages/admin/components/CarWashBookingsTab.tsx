@@ -3271,7 +3271,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               </svg>
             </div>
             <div className="min-w-0">
-              <h2 className="text-xl lg:text-2xl font-bold text-theme-text-primary leading-tight">Prenotazioni Prime Wash</h2>
+              <h2 className="text-xl lg:text-2xl font-bold text-theme-text-primary leading-tight">Prenotazioni Lavaggio</h2>
               <p className="text-xs lg:text-sm text-theme-text-muted mt-0.5">Lavaggio · Meccanica · Detailing · Storico e calendario</p>
             </div>
           </div>

@@ -449,7 +449,7 @@ export default function AdminDashboard() {
     'acconti': 'Acconti Giornalieri',
     'verifica-documenti': 'Verifica Documenti',
     'fornitori': 'Fornitori',
-    'carwash': 'Prenotazioni Prime Wash',
+    'carwash': 'Prenotazioni Lavaggio',
     'carwash-calendar': 'Calendario Prime Wash',
     'carwash-catalog': 'Catalogo Prime Wash',
     'vehicles': 'Veicoli',
