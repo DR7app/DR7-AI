@@ -6096,7 +6096,15 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         guest_name: customerInfo?.full_name || 'N/A', // Required for guest bookings
         guest_email: customerInfo?.email || null,
         guest_phone: customerInfo?.phone || null,
-        vehicle_type: 'car',
+        // 2026-08-14 (roadmap #11): su un business dedicato la prenotazione
+        // DEVE nascere col suo service_type, altrimenti finisce nell'elenco
+        // del Noleggio Terra e sparisce da quello del Mare. Su Terra si
+        // continua a NON scrivere il campo (resta NULL), com'e' sempre stato:
+        // il filtro dell'elenco e' per esclusione, non per uguaglianza.
+        ...(isAltroBusiness ? { service_type: serviceType } : {}),
+        vehicle_type: isAltroBusiness
+          ? (serviceType === 'boat_rental' ? 'boat' : serviceType === 'heli_rental' ? 'helicopter' : 'stay')
+          : 'car',
         vehicle_id: formData.vehicle_id, // CRITICAL: Store vehicle_id for availability filtering
         vehicle_name: vehicle?.display_name || 'N/A',
         vehicle_plate: vehicle?.plate || null,
