@@ -362,10 +362,12 @@ export default function AdminDashboard() {
       { tab: 'codice-sconto', label: 'Codice Sconto' },
     ] },
     { name: 'Report', tabs: [
-      { tab: 'report-noleggio', label: 'Noleggio Terra' },
-      { tab: 'report-mare', label: 'Noleggio Mare' },
-      { tab: 'report-aria', label: 'Noleggio Aria' },
-      { tab: 'report-stay', label: 'Soggiorni & Ospitalità' },
+      // Un business per voce, nome corto: la sezione Report elenca i business
+      // prima dei report trasversali (Clienti, Autisti, ...).
+      { tab: 'report-noleggio', label: 'Terra' },
+      { tab: 'report-mare', label: 'Mare' },
+      { tab: 'report-aria', label: 'Aria' },
+      { tab: 'report-stay', label: 'Soggiorni' },
       { tab: 'report-lavaggio', label: 'Lavaggio' },
       { tab: 'report-clienti', label: 'Clienti' },
       { tab: 'report-autisti', label: 'Autisti' },
