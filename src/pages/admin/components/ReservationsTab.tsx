@@ -11622,6 +11622,13 @@ function ReservationsDashboardHeader({
   const [canonicalBookings, setCanonicalBookings] = useState<number | null>(null)
   useEffect(() => {
     let cancelled = false
+    // 2026-08-14: NIENTE fatturato sulle Uscite Straordinarie. monthly-report
+    // e' l'endpoint del Noleggio Terra: sulla tab Uscite del Mare mostrava i
+    // 49.352 € e le 48 auto di Terra, cioe' il fatturato di un ALTRO business.
+    // E comunque un'uscita straordinaria e' un movimento interno, escluso per
+    // definizione da fatture e report: un fatturato qui non esiste, nemmeno
+    // quello giusto.
+    if (isUscite) { setCanonicalFatturato(null); setCanonicalBookings(null); return }
     ;(async () => {
       try {
         const yyyymm = `${selMonth.year}-${String(selMonth.month).padStart(2, '0')}`
@@ -11640,7 +11647,29 @@ function ReservationsDashboardHeader({
       }
     })()
     return () => { cancelled = true }
-  }, [selMonth.year, selMonth.month])
+  }, [selMonth.year, selMonth.month, isUscite])
+
+  // Contatori delle Uscite Straordinarie, calcolati sulle sole righe gia'
+  // filtrate per business dal caricamento: nessun numero di un altro business
+  // puo' entrare qui.
+  const uscitaStats = useMemo(() => {
+    if (!isUscite) return { totali: 0, inCorso: 0, programmate: 0, completate: 0 }
+    const inizioMese = new Date(selMonth.year, selMonth.month - 1, 1).getTime()
+    const fineMese = new Date(selMonth.year, selMonth.month, 1).getTime()
+    const nelMese = bookings.filter(b => {
+      const raw = b.pickup_date || b.created_at
+      if (!raw) return false
+      const t = new Date(raw).getTime()
+      return t >= inizioMese && t < fineMese
+    })
+    const conta = (s: string) => nelMese.filter(b => b.status === s).length
+    return {
+      totali: nelMese.length,
+      inCorso: conta('active'),
+      programmate: conta('pending'),
+      completate: conta('completed') + nelMese.filter(b => b.status === 'completata').length,
+    }
+  }, [bookings, isUscite, selMonth.year, selMonth.month])
 
   const stats = useMemo(() => {
     const now = Date.now()
@@ -11859,7 +11888,59 @@ function ReservationsDashboardHeader({
         </div>
       </div>
 
-      {/* KPI cards */}
+      {/* KPI cards — sulle Uscite Straordinarie si contano le uscite, non si
+          mostra un fatturato: sono movimenti interni, esclusi da fatture e
+          report, e l'endpoint del fatturato e' quello del Noleggio Terra. */}
+      {isUscite ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <KpiCard
+            label={`Uscite ${selMonthLabel}`}
+            value={uscitaStats.totali.toLocaleString('it-IT')}
+            icon={(
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <rect x="3" y="4" width="18" height="18" rx="2" />
+                <path strokeLinecap="round" d="M3 10h18M8 2v4M16 2v4" />
+              </svg>
+            )}
+            accent="cyan"
+            hint="uscite registrate nel mese"
+          />
+          <KpiCard
+            label="In Corso"
+            value={uscitaStats.inCorso.toLocaleString('it-IT')}
+            icon={(
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <circle cx="12" cy="12" r="9" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 2" />
+              </svg>
+            )}
+            accent="blue"
+            hint="fuori in questo momento"
+          />
+          <KpiCard
+            label="Programmate"
+            value={uscitaStats.programmate.toLocaleString('it-IT')}
+            icon={(
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3M3 11h18M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
+              </svg>
+            )}
+            accent="amber"
+            hint="non ancora partite"
+          />
+          <KpiCard
+            label="Completate"
+            value={uscitaStats.completate.toLocaleString('it-IT')}
+            icon={(
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+            accent="cyan"
+            hint="rientrate nel mese"
+          />
+        </div>
+      ) : (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
           label={`Prenotazioni ${selMonthLabel}`}
@@ -11908,8 +11989,12 @@ function ReservationsDashboardHeader({
           }
         />
       </div>
+      )}
 
-      {/* Time series — tre grafici allineati al picker di mese */}
+      {/* Time series — tre grafici allineati al picker di mese. Fatturato,
+          Nuove Prenotazioni e Auto Fuori sono grandezze del noleggio: sulle
+          Uscite Straordinarie non hanno senso e mostravano i dati di Terra. */}
+      {!isUscite && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <TimeSeriesChart
           title={`Fatturato ${selMonthLabel}`}
@@ -11948,6 +12033,7 @@ function ReservationsDashboardHeader({
           totalLabel={`${timeSeries.monthlyUniqueVehicles} auto distinte`}
         />
       </div>
+      )}
     </div>
   )
 }
