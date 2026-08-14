@@ -1561,9 +1561,12 @@ export const PENDING_EVENTS: ReadonlySet<string> = new Set([
   // stay_new_customer da NoleggioServiceTab.saveBooking. In piu'
   // send-whatsapp-notification ora deriva le chiavi per boat/heli/stay dal
   // service_type invece di schiacciare tutto su 'rental'.
-  'boat_new_admin', 'boat_cancelled', 'boat_da_saldare_customer', 'boat_pronto',
-  'heli_new_admin', 'heli_cancelled', 'heli_da_saldare_customer', 'heli_pronto',
-  'stay_new_admin', 'stay_cancelled', 'stay_da_saldare_customer', 'stay_pronto',
+  // 2026-08-14 COLLEGATI (rimossi da questa lista): boat_pronto, heli_pronto e
+  // stay_pronto partono dal menu Gestisci di Mare/Aria/Soggiorni, azione
+  // "Mezzo/Velivolo/Struttura Pronto" (useBookingRowActions.segnalaPronto).
+  'boat_new_admin', 'boat_cancelled', 'boat_da_saldare_customer',
+  'heli_new_admin', 'heli_cancelled', 'heli_da_saldare_customer',
+  'stay_new_admin', 'stay_cancelled', 'stay_da_saldare_customer',
   'fattura_generata_customer', 'fattura_inviata_customer', 'nota_credito_emessa_customer',
   'fattura_sdi_accettata_admin', 'fattura_sdi_rifiutata_admin',
   'multa_conducente_identificato_admin', 'multa_pec_inviata_admin', 'multa_notifica_cliente',

@@ -20,6 +20,9 @@ import {
   eur, eurToCents, centsToEur,
 } from './noleggioFormBits'
 import { useSingleFlight } from '../../../hooks/useSingleFlight'
+import GestisciMenu, { type GestisciSection } from './GestisciMenu'
+import DanniPenaliModal from './DanniPenaliModal'
+import { useBookingRowActions, prontoLabel } from './useBookingRowActions'
 
 // Stati pagamento standard DR7 (come Noleggio auto / Car Wash): la label è
 // quella mostrata, il value è il payment_status salvato sul booking.
@@ -49,6 +52,12 @@ interface BookingRow {
   id: string
   customer_name: string | null
   customer_phone: string | null
+  // 2026-08-14 (roadmap #11): campi che servono al menu Gestisci, gli stessi
+  // che usa il Noleggio Terra. La query fa select('*'), c'erano gia': mancava
+  // solo la dichiarazione.
+  customer_email?: string | null
+  service_type?: string | null
+  contract_url?: string | null
   vehicle_name: string | null
   vehicle_plate: string | null
   status: string | null
@@ -60,7 +69,17 @@ interface BookingRow {
   amount_paid: number | null
   user_id: string | null
   created_at: string | null
-  booking_details: { passengers?: { name: string; seat?: string; phone?: string }[]; seat_count?: number; seats?: string; note?: string | null; con_skipper?: boolean } | null
+  booking_details: {
+    passengers?: { name: string; seat?: string; phone?: string }[]
+    seat_count?: number
+    seats?: string
+    note?: string | null
+    con_skipper?: boolean
+    pronto_sent_at?: string | null
+    nexi_payment_link?: string | null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [k: string]: any
+  } | null
 }
 
 interface TourDurationOpt {
@@ -630,6 +649,13 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
     setShowForm(false); toast.success('Prenotazione eliminata'); reload()
   }
 
+  // Stesse azioni del Noleggio Terra, dalla stessa implementazione: vedi
+  // useBookingRowActions. Ricopiarle qui avrebbe creato la seconda versione
+  // che diverge alla prima correzione — il difetto che il punto #11 chiede
+  // di togliere.
+  const azioni = useBookingRowActions(reload)
+  const [danniPenaliFor, setDanniPenaliFor] = useState<BookingRow | null>(null)
+
   async function deleteBookingRow(b: BookingRow) {
     if (!window.confirm(`Eliminare la prenotazione di ${b.customer_name || 'questo cliente'}?`)) return
     const err = await removeBooking(b.id)
@@ -680,15 +706,91 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                   <td className="px-3 py-2">{(() => { const st = payStato(b.payment_status, b.status); return <span className={`inline-block px-2 py-0.5 rounded-full text-xs border ${st.cls}`}>{st.label}</span> })()}</td>
                   <td className="px-3 py-2 text-right text-theme-text-primary tabular-nums">{eur(b.price_total)}</td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">
-                    <button onClick={() => setDetailBooking(b)} className="text-cyan-400 hover:underline mr-3">Dettagli</button>
-                    <button onClick={() => openEdit(b)} className="text-theme-text-secondary hover:underline mr-3">Modifica</button>
-                    <button onClick={() => deleteBookingRow(b)} className="text-red-400 hover:underline">Elimina</button>
+                    {(() => {
+                      const annullata = String(b.status || '').toLowerCase() === 'cancelled'
+                      const pagata = ['paid', 'completed', 'succeeded'].includes(String(b.payment_status || '').toLowerCase())
+                      const haContratto = !!b.contract_url
+                      const prontoFatto = !!b.booking_details?.pronto_sent_at
+                      const sections: GestisciSection[] = [
+                        {
+                          title: 'Gestione',
+                          actions: [
+                            { label: 'Dettagli', onClick: () => setDetailBooking(b) },
+                            { label: 'Modifica', onClick: () => openEdit(b), visible: !annullata },
+                            { label: 'Elimina', onClick: () => deleteBookingRow(b) },
+                          ],
+                        },
+                        {
+                          title: 'Documenti',
+                          actions: [
+                            {
+                              label: haContratto ? 'Visualizza Contratto' : 'Genera Contratto',
+                              onClick: () => { if (b.contract_url) window.open(b.contract_url, '_blank'); else azioni.generaContratto(b) },
+                              disabled: azioni.busy === `contract:${b.id}`,
+                              visible: !annullata,
+                            },
+                            {
+                              label: 'Invia Contratto',
+                              onClick: () => azioni.inviaContratto(b),
+                              disabled: azioni.busy === `send-contract:${b.id}`,
+                              visible: !annullata && haContratto,
+                            },
+                            {
+                              label: azioni.busy === `invoice:${b.id}` ? 'Generazione...' : 'Genera Fattura',
+                              onClick: () => azioni.generaFattura(b),
+                              disabled: azioni.busy === `invoice:${b.id}`,
+                              visible: !annullata,
+                            },
+                          ],
+                        },
+                        {
+                          title: 'Pagamenti',
+                          actions: [
+                            {
+                              label: b.booking_details?.nexi_payment_link ? 'Rinvia Link Pagamento' : 'Genera Link Pagamento',
+                              onClick: () => azioni.linkPagamento(b),
+                              disabled: azioni.busy === `paylink:${b.id}`,
+                              visible: !annullata && !pagata && azioni.isNexiPayByLink(b.payment_method),
+                            },
+                          ],
+                        },
+                        {
+                          title: 'Altro',
+                          actions: [
+                            {
+                              label: prontoFatto ? `✓ ${prontoLabel(serviceType)} inviato` : prontoLabel(serviceType),
+                              onClick: () => azioni.segnalaPronto(b),
+                              disabled: prontoFatto || azioni.busy === `pronto:${b.id}`,
+                              visible: !annullata,
+                            },
+                            { label: 'Danni & Penali', onClick: () => setDanniPenaliFor(b) },
+                          ],
+                        },
+                      ]
+                      return <GestisciMenu sections={sections} size="sm" />
+                    })()}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {danniPenaliFor && (
+        <DanniPenaliModal
+          isOpen
+          booking={{
+            id: danniPenaliFor.id,
+            customer_name: danniPenaliFor.customer_name || '',
+            customer_email: danniPenaliFor.customer_email || undefined,
+            customer_phone: danniPenaliFor.customer_phone || undefined,
+            vehicle_name: danniPenaliFor.vehicle_name || undefined,
+            booking_details: danniPenaliFor.booking_details,
+          }}
+          onClose={() => setDanniPenaliFor(null)}
+          onSuccess={() => { setDanniPenaliFor(null); reload() }}
+        />
       )}
 
       {/* Mare: modale completa allineata al Noleggio Terra */}
