@@ -23,6 +23,7 @@ import { useSingleFlight } from '../../../hooks/useSingleFlight'
 import GestisciMenu, { type GestisciSection } from './GestisciMenu'
 import DanniPenaliModal from './DanniPenaliModal'
 import { useBookingRowActions, prontoLabel } from './useBookingRowActions'
+import ExtendBookingModal from './ExtendBookingModal'
 
 // Stati pagamento standard DR7 (come Noleggio auto / Car Wash): la label è
 // quella mostrata, il value è il payment_status salvato sul booking.
@@ -655,6 +656,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
   // di togliere.
   const azioni = useBookingRowActions(reload)
   const [danniPenaliFor, setDanniPenaliFor] = useState<BookingRow | null>(null)
+  const [extendFor, setExtendFor] = useState<BookingRow | null>(null)
 
   async function deleteBookingRow(b: BookingRow) {
     if (!window.confirm(`Eliminare la prenotazione di ${b.customer_name || 'questo cliente'}?`)) return
@@ -717,6 +719,7 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                           actions: [
                             { label: 'Dettagli', onClick: () => setDetailBooking(b) },
                             { label: 'Modifica', onClick: () => openEdit(b), visible: !annullata },
+                            { label: 'Estendi', onClick: () => setExtendFor(b), visible: !annullata },
                             { label: 'Elimina', onClick: () => deleteBookingRow(b) },
                           ],
                         },
@@ -775,6 +778,16 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
             </tbody>
           </table>
         </div>
+      )}
+
+      {extendFor && (
+        <ExtendBookingModal
+          booking={extendFor}
+          serviceType={serviceType}
+          assetLabel={labels.asset}
+          onClose={() => setExtendFor(null)}
+          onSaved={() => { setExtendFor(null); reload() }}
+        />
       )}
 
       {danniPenaliFor && (
