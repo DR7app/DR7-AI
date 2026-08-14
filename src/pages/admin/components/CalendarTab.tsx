@@ -74,7 +74,17 @@ interface Booking {
 // detect collaboratori (nessun accesso a `reservations`).
 import { useAdminRole as useAdminRoleInternal } from '../../../hooks/useAdminRole'
 
-export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleId: string, date: Date) => void }) {
+/**
+ * 2026-08-14 (roadmap #11) — `serviceType` rende questo calendario utilizzabile
+ * anche da Mare, Aria e Soggiorni, invece di averne uno diverso per business.
+ * La direzione chiede lo STESSO format del Noleggio Terra: l'unico modo perche'
+ * resti tale nel tempo e' che sia lo stesso componente, non una copia.
+ *
+ * OMESSO = Noleggio Terra, comportamento identico a prima. Terra e' il business
+ * piu' usato e non deve cambiare di un pixel: tutte le differenze qui sotto
+ * sono dentro un `if (serviceType)`.
+ */
+export default function CalendarTab({ onNewBooking, serviceType }: { onNewBooking?: (vehicleId: string, date: Date) => void; serviceType?: string }) {
   const { hasPermission: _calHasPerm, permissions: _calPerms } = useAdminRoleInternal()
   // Collaboratore = vede solo "Riservato" sulle barre, niente click per
   // aprire i dettagli, niente tooltip con nome/dettagli cliente.
@@ -133,7 +143,10 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, () => loadData())
       .subscribe()
     return () => { subscription.unsubscribe() }
-  }, [])
+    // serviceType nelle dipendenze: cambiando business (Mare -> Aria) il
+    // calendario deve ricaricare mezzi e prenotazioni, non tenere i precedenti.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serviceType])
 
   useEffect(() => {
     let cancelled = false
@@ -165,10 +178,28 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
   async function loadData() {
     setLoading(true)
     try {
-      const { data: vehiclesData } = await supabase
-        .from('vehicles')
-        .select('id, display_name, plate, status, category, metadata')
-        .or('status.neq.retired,display_name.eq.Test')
+      // Le righe del calendario sono i mezzi. Terra li prende dalla flotta
+      // (`vehicles`); Mare, Aria e Soggiorni dal catalogo `noleggio_catalog`,
+      // che e' dove vivono barche, elicotteri e strutture. Si normalizzano
+      // nella stessa forma cosi' tutto il resto del calendario non cambia.
+      let vehiclesData: Vehicle[] | null = null
+      if (serviceType) {
+        const { data: cat } = await supabase
+          .from('noleggio_catalog')
+          .select('id, name, is_active')
+          .eq('service_type', serviceType)
+          .order('sort_order', { ascending: true })
+          .order('name', { ascending: true })
+        vehiclesData = ((cat || []) as { id: string; name: string; is_active?: boolean }[])
+          .filter(c => c.is_active !== false)
+          .map(c => ({ id: c.id, display_name: c.name, plate: null, status: 'active', category: null }))
+      } else {
+        const { data } = await supabase
+          .from('vehicles')
+          .select('id, display_name, plate, status, category, metadata')
+          .or('status.neq.retired,display_name.eq.Test')
+        vehiclesData = data as Vehicle[] | null
+      }
 
       // Fetch ALL bookings via Netlify function (bypasses RLS)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -204,10 +235,13 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
       }
 
       if (allBookings) {
-        // Filter out irrelevant service types
-        const validBookings = allBookings.filter(b =>
-          !['car_wash', 'mechanical_service', 'mechanical'].includes(b.service_type || '')
-        )
+        // Su un business dedicato si mostrano SOLO le sue prenotazioni;
+        // su Terra resta il filtro storico (tutto tranne lavaggio e meccanica).
+        const validBookings = serviceType
+          ? allBookings.filter(b => b.service_type === serviceType)
+          : allBookings.filter(b =>
+              !['car_wash', 'mechanical_service', 'mechanical'].includes(b.service_type || '')
+            )
 
         // Enrich bookings missing customer_name from customers_extended
         const needsEnrichment = validBookings.filter(b =>
@@ -390,6 +424,16 @@ export default function CalendarTab({ onNewBooking }: { onNewBooking?: (vehicleI
         if (idMatch) {
           bookingToVehicleId.set(b.id, idMatch.id)
           return
+        }
+      }
+      // Mare, Aria e Soggiorni salvano il mezzo per NOME (vehicle_name), non
+      // per id ne' per targa: senza questo aggancio le barre non comparirebbero
+      // su nessuna riga e il calendario sembrerebbe vuoto.
+      if (serviceType) {
+        const nome = String(b.vehicle_name || '').trim().toLowerCase()
+        if (nome) {
+          const nameMatch = vehicles.find(v => v.display_name.trim().toLowerCase() === nome)
+          if (nameMatch) { bookingToVehicleId.set(b.id, nameMatch.id); return }
         }
       }
       // Fallback: plate match (per booking legacy senza vehicle_id)

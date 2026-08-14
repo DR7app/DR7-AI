@@ -7,7 +7,6 @@
 // Catalogo: tabella `noleggio_catalog`. Preventivi: tabella `noleggio_preventivi`.
 import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from 'react'
 import { supabase } from '../../../supabaseClient'
-import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
 import { authFetch } from '../../../utils/authFetch'
 import toast from 'react-hot-toast'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
@@ -24,6 +23,7 @@ import GestisciMenu, { type GestisciSection } from './GestisciMenu'
 import DanniPenaliModal from './DanniPenaliModal'
 import { useBookingRowActions, prontoLabel } from './useBookingRowActions'
 import ExtendBookingModal from './ExtendBookingModal'
+import CalendarTab from './CalendarTab'
 
 // Stati pagamento standard DR7 (come Noleggio auto / Car Wash): la label è
 // quella mostrata, il value è il payment_status salvato sul booking.
@@ -1094,56 +1094,13 @@ async function cancelBookingViaFunction(bookingId: string): Promise<string | nul
   }
 }
 
-const CAL_CELL_W = 45 // larghezza colonna giorno
-const CAL_ROW_H = 56  // altezza riga asset
-const CAL_LEFT_W = 220 // larghezza colonna sinistra (asset)
-const CAL_HEADER_H = 42
-const BAR_H = 32      // altezza barra prenotazione (h-8)
-const BAR_GAP = 6     // spazio sopra/fra le corsie
+// 2026-08-14 (roadmap #11): rimossi le costanti di layout e gli helper della
+// griglia scritta apposta per Mare/Aria/Soggiorni (CAL_CELL_W, CAL_ROW_H,
+// barStyle, romeYmd, romeDayOfMonth...). Il calendario ora e' CalendarTab,
+// lo stesso del Noleggio Terra: tenere qui i resti avrebbe invitato a
+// riscrivere la seconda versione alla prima modifica.
 
 interface CalAsset { id: string; name: string; image_url: string | null; is_active?: boolean; capacity?: number | null; price_per_day?: number | null }
-
-// Colore barra in base al PAGAMENTO (come richiesto):
-//   Pagato = VERDE · Parziale/in attesa = GIALLO · Da Saldare = ROSSO · Annullata = grigio.
-// 2026-08-12 (roadmap #11): stessa semantica dei colori del Noleggio Terra.
-// Prima questo calendario colorava per stato di PAGAMENTO (verde = pagato)
-// mentre Terra colora per stato della PRENOTAZIONE (oro = confermata, giallo =
-// in attesa, rosso = da saldare). Lo stesso colore voleva dire due cose
-// diverse: un operatore che passava da un calendario all'altro leggeva il
-// verde come "confermato" quando significava "pagato". Ora coincidono.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function barStyle(status: string | null, paymentStatus: string | null, details?: any): { bar: string } {
-  const s = (status || '').toLowerCase()
-  if (s === 'cancelled' || s === 'annullata') return { bar: 'bg-zinc-500/60 border-zinc-400/40' }
-  const ps = (paymentStatus || '').toLowerCase()
-  const pending = ps === 'pending' || ps === 'unpaid' || ps === 'partial'
-  const manual = details?.manually_confirmed === true
-  // Da saldare CONFERMATA a mano: rosso, come su Terra.
-  if (pending && manual) return { bar: 'bg-red-600/80 border-red-500/50' }
-  // In attesa di pagamento: giallo.
-  if (pending) return { bar: 'bg-yellow-500/80 border-yellow-400/50' }
-  // Confermata: oro DR7, come su Terra.
-  return { bar: 'bg-dr7-gold/80 border-dr7-gold/50' }
-}
-
-// Badge STATO pagamento per la lista (stesso schema colori del car rental).
-function payStato(paymentStatus: string | null, status: string | null): { label: string; cls: string } {
-  const s = (status || '').toLowerCase()
-  if (s === 'cancelled' || s === 'annullata') return { label: 'Annullata', cls: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/40' }
-  const ps = (paymentStatus || '').toLowerCase()
-  if (['paid', 'succeeded', 'completed'].includes(ps)) return { label: 'Pagato', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' }
-  if (ps === 'partial') return { label: 'Parziale', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/40' }
-  return { label: 'Da Saldare', cls: 'bg-red-500/15 text-red-300 border-red-500/40' }
-}
-
-// yyyy-mm-dd in fuso Europe/Rome a partire da un timestamp ISO (UTC).
-function romeYmd(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }) // en-CA → YYYY-MM-DD
-}
-// giorno del mese (1..31) in fuso Europe/Rome.
-function romeDayOfMonth(iso: string): number {
-  return parseInt(new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }).slice(8, 10), 10)
-}
 
 type CalBookingForm = {
   id: string | null
@@ -1156,11 +1113,20 @@ type CalBookingForm = {
   price_eur: string
   status: string
 }
-const CAL_STATUSES = ['pending', 'confirmed', 'active', 'completed', 'cancelled']
 const EMPTY_CAL_FORM: CalBookingForm = {
   id: null, customer_name: '', customer_phone: '',
   pickup_date: '', pickup_time: '10:00', dropoff_date: '', dropoff_time: '10:00',
   price_eur: '', status: 'confirmed',
+}
+
+// Badge STATO pagamento per la lista (stesso schema colori del car rental).
+function payStato(paymentStatus: string | null, status: string | null): { label: string; cls: string } {
+  const s = (status || '').toLowerCase()
+  if (s === 'cancelled' || s === 'annullata') return { label: 'Annullata', cls: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/40' }
+  const ps = (paymentStatus || '').toLowerCase()
+  if (['paid', 'succeeded', 'completed'].includes(ps)) return { label: 'Pagato', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' }
+  if (ps === 'partial') return { label: 'Parziale', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/40' }
+  return { label: 'Da Saldare', cls: 'bg-red-500/15 text-red-300 border-red-500/40' }
 }
 
 // Sezione calendario sola-lettura: prossime partenze tour con seat map colorata
@@ -1242,486 +1208,34 @@ function TourCalendarSection({ serviceType, year, month }: { serviceType: Nolegg
   )
 }
 
+/**
+ * Calendario di Mare, Aria e Soggiorni — 2026-08-14 (roadmap #11).
+ *
+ * Prima ce n'era uno scritto apposta, con una griglia sua, un form suo e le
+ * sue regole. La direzione chiede lo STESSO format del Noleggio Terra, e
+ * l'unico modo perche' resti tale nel tempo e' usare lo STESSO componente:
+ * due implementazioni divergono alla prima correzione — ed e' esattamente
+ * quello che era successo (barre diverse, azioni diverse, doppio click non
+ * protetto, eliminazione che la RLS bloccava in silenzio).
+ *
+ * CalendarTab riceve `serviceType` e legge i mezzi dal catalogo del business
+ * invece che dalla flotta. Il resto — righe, barre, corsie, tooltip, festivi,
+ * dettagli al click, realtime — e' lo stesso codice che gira su Terra.
+ *
+ * Resta qui sotto la sezione Tour: e' propria di Mare e Aria (partenze a
+ * posti) e su Terra non esiste, quindi non ha un equivalente da condividere.
+ */
 function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceType; labels: NoleggioServiceLabels }) {
-  const { bookings, loading: bookingsLoading, reload } = useBookings(serviceType)
-  // Mare = noleggio a periodo (ritiro → riconsegna) come il Noleggio Terra.
-  const isPeriodo = serviceType === 'boat_rental'
-  const [assets, setAssets] = useState<CalAsset[]>([])
-  const [assetsLoading, setAssetsLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [monthOffset, setMonthOffset] = useState(0)
-
-  // Modal create/edit
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState<CalBookingForm>(EMPTY_CAL_FORM)
-  const [formAsset, setFormAsset] = useState<string>('') // vehicle_name pre-compilato
-  const [saving, setSaving] = useState(false)
-  // Mare: apre la modale completa (stessa della tab Prenotazioni).
-  const [showMare, setShowMare] = useState(false)
-  const [mareBooking, setMareBooking] = useState<BookingRow | null>(null)
-  const [marePreset, setMarePreset] = useState<{ asset: string; pickup: string; dropoff: string } | null>(null)
-  const calRentalDays = useMemo(
-    () => rentalDaysBetween(form.pickup_date, form.pickup_time, form.dropoff_date, form.dropoff_time),
-    [form.pickup_date, form.pickup_time, form.dropoff_date, form.dropoff_time],
-  )
-
-  const loadAssets = useCallback(async () => {
-    setAssetsLoading(true); setError('')
-    const { data, error: e } = await supabase
-      .from('noleggio_catalog')
-      // capacity + price_per_day servono alla modale completa del Mare
-      .select('id, name, image_url, is_active, capacity, price_per_day')
-      .eq('service_type', serviceType)
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true })
-      .order('name', { ascending: true })
-    if (e) setError(missingTableHint(e.message))
-    else setAssets((data || []) as CalAsset[])
-    setAssetsLoading(false)
-  }, [serviceType])
-  useEffect(() => { loadAssets() }, [loadAssets])
-
-  // Mese visualizzato
-  const base = useMemo(() => { const b = new Date(); b.setDate(1); b.setMonth(b.getMonth() + monthOffset); return b }, [monthOffset])
-  const year = base.getFullYear(), month = base.getMonth()
-  const monthLabel = base.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
-  const daysInMonth = useMemo(() => new Date(year, month + 1, 0).getDate(), [year, month])
-  const daysArray = useMemo(() => Array.from({ length: daysInMonth }, (_, i) => i + 1), [daysInMonth])
-  const monthYmdPrefix = `${year}-${String(month + 1).padStart(2, '0')}`
-
-  // Larghezza cella DINAMICA come il Calendario Noleggio Terra (CalendarTab):
-  // le celle riempiono la larghezza visibile invece di restare fisse a 45px.
-  // Solo dimensione/design — nessuna logica di prenotazione toccata.
-  const gridRef = useRef<HTMLDivElement>(null)
-  const [containerW, setContainerW] = useState(0)
-  useEffect(() => {
-    const el = gridRef.current
-    if (!el) return
-    const update = () => setContainerW(el.clientWidth)
-    update()
-    const raf = requestAnimationFrame(update)
-    const t = setTimeout(update, 150)
-    const ro = new ResizeObserver(update)
-    ro.observe(el)
-    window.addEventListener('resize', update)
-    return () => { cancelAnimationFrame(raf); clearTimeout(t); ro.disconnect(); window.removeEventListener('resize', update) }
-  }, [assetsLoading, bookingsLoading])
-  const isNarrow = containerW > 0 && containerW < 640
-  const cellW = useMemo(() => {
-    if (!containerW) return CAL_CELL_W
-    if (isNarrow) return 46
-    const avail = containerW - CAL_LEFT_W
-    if (avail <= 0 || daysInMonth <= 0) return CAL_CELL_W
-    return Math.max(CAL_CELL_W, Math.floor(avail / daysInMonth))
-  }, [containerW, daysInMonth, isNarrow])
-
-  // Match barre → riga asset per nome (case-insensitive trim). Le prenotazioni
-  // senza asset corrispondente finiscono in "Altro / Non assegnato".
-  const { rowsByAsset, unassigned } = useMemo(() => {
-    const norm = (s: string | null | undefined) => (s || '').trim().toLowerCase()
-    const map = new Map<string, BookingRow[]>() // assetId → bookings
-    assets.forEach(a => map.set(a.id, []))
-    const nameToId = new Map<string, string>()
-    assets.forEach(a => nameToId.set(norm(a.name), a.id))
-    const orphans: BookingRow[] = []
-    bookings.forEach(b => {
-      const id = nameToId.get(norm(b.vehicle_name))
-      if (id) map.get(id)!.push(b)
-      else orphans.push(b)
-    })
-    return { rowsByAsset: map, unassigned: orphans }
-  }, [assets, bookings])
-
-  // Barre visibili nel mese per una lista di prenotazioni: clamp ai giorni del
-  // mese, posiziona left/width in px sulla griglia giorni.
-  // 2026-08-10 (roadmap #11): allineato al motore del Noleggio Terra
-  // (utils/calendarLogic.computeLanes). Prima ogni barra veniva disegnata
-  // centrata verticalmente e SENZA corsia: due prenotazioni sovrapposte sullo
-  // stesso mezzo finivano esattamente una sopra l'altra e la seconda spariva
-  // dalla vista. Ora, come su Terra, si impilano su corsie diverse.
-  const barsFor = useCallback((rows: BookingRow[]) => {
-    const spans: { booking: BookingRow; startDay: number; endDay: number }[] = []
-    rows.forEach(b => {
-      if (!b.pickup_date) return
-      const pYmd = romeYmd(b.pickup_date)
-      const dYmd = b.dropoff_date ? romeYmd(b.dropoff_date) : pYmd
-      // overlap col mese visualizzato
-      if (dYmd < `${monthYmdPrefix}-01` || pYmd > `${monthYmdPrefix}-${String(daysInMonth).padStart(2, '0')}`) return
-      const startDay = pYmd.startsWith(monthYmdPrefix) ? romeDayOfMonth(b.pickup_date) : 1
-      const endDay = dYmd.startsWith(monthYmdPrefix) ? romeDayOfMonth(b.dropoff_date || b.pickup_date) : daysInMonth
-      spans.push({ booking: b, startDay, endDay })
-    })
-    // Stesso ordinamento deterministico di computeLanes: inizio crescente, a
-    // parita' di inizio la piu' lunga per prima.
-    spans.sort((a, b) => (a.startDay - b.startDay) || ((b.endDay - b.startDay) - (a.endDay - a.startDay)))
-    const laneEnds: number[] = [] // ultimo giorno occupato per corsia
-    const out: { booking: BookingRow; left: number; width: number; lane: number }[] = []
-    spans.forEach(sp => {
-      let lane = laneEnds.findIndex(end => end < sp.startDay)
-      if (lane === -1) { lane = laneEnds.length; laneEnds.push(sp.endDay) }
-      else laneEnds[lane] = sp.endDay
-      out.push({
-        booking: sp.booking,
-        left: (sp.startDay - 1) * cellW,
-        width: Math.max(cellW, (sp.endDay - sp.startDay + 1) * cellW),
-        lane,
-      })
-    })
-    return out
-  }, [monthYmdPrefix, daysInMonth, cellW])
-
-  const today = new Date()
-  const isTodayDay = (day: number) =>
-    today.getDate() === day && today.getMonth() === month && today.getFullYear() === year
-
-  // --- Modal handlers ---
-  function openCreate(assetName: string, day: number) {
-    const ymd = `${monthYmdPrefix}-${String(day).padStart(2, '0')}`
-    const next = new Date(year, month, day + 1)
-    const nextYmd = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`
-    if (isPeriodo) {
-      // Mare: stessa modale completa della tab Prenotazioni, con barca e
-      // periodo già impostati dalla cella cliccata sulla timeline.
-      setMareBooking(null)
-      setMarePreset({ asset: assetName, pickup: ymd, dropoff: nextYmd })
-      setShowMare(true)
-      return
-    }
-    setForm({ ...EMPTY_CAL_FORM, pickup_date: ymd, dropoff_date: nextYmd })
-    setFormAsset(assetName)
-    setShowForm(true)
-  }
-  function openEdit(b: BookingRow, assetName: string) {
-    if (isPeriodo) { setMareBooking(b); setMarePreset(null); setShowMare(true); return }
-    const pk = b.pickup_date ? new Date(b.pickup_date) : null
-    const dr = b.dropoff_date ? new Date(b.dropoff_date) : null
-    const ymd = (d: Date | null) => d ? d.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' }) : ''
-    const hm = (d: Date | null) => d ? d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Rome' }) : '10:00'
-    setForm({
-      id: b.id,
-      customer_name: b.customer_name || '',
-      customer_phone: b.customer_phone || '',
-      pickup_date: ymd(pk), pickup_time: hm(pk),
-      dropoff_date: ymd(dr), dropoff_time: hm(dr),
-      price_eur: centsToEur(b.price_total || 0),
-      status: (b.status || 'confirmed'),
-    })
-    setFormAsset(assetName)
-    setShowForm(true)
-  }
-
-  // Combina data + ora (interpretate come Europe/Rome) in un ISO UTC.
-  function toIso(date: string, time: string): string | null {
-    if (!date) return null
-    // I valori sono digitati come ora locale Rome; salviamo UTC. Costruiamo
-    // la stringa con l'offset Rome corrente per quella data.
-    const naive = new Date(`${date}T${time || '00:00'}:00`)
-    if (Number.isNaN(naive.getTime())) return null
-    // Calcola offset Rome (minuti) per la data scelta e converte in UTC.
-    const romeOffsetMin = romeOffsetMinutes(date)
-    const utcMs = Date.UTC(
-      Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)),
-      Number((time || '00:00').slice(0, 2)), Number((time || '00:00').slice(3, 5)),
-    ) - romeOffsetMin * 60_000
-    return new Date(utcMs).toISOString()
-  }
-
-  // Doppio click = due prenotazioni: `disabled={saving}` e' uno stato React,
-  // si aggiorna al rendere successivo e il secondo click entra comunque in
-  // saveBooking. L'INSERT va dritto a Supabase, quindi nemmeno il dedupe
-  // globale su fetch (sendDedupe) lo intercetta. useSingleFlight alza un lock
-  // con useRef, che e' sincrono.
-  const [saveOnce, savingOnce] = useSingleFlight(saveBooking)
-
-  async function saveBooking() {
-    if (!form.customer_name.trim()) { setError('Il nome cliente è obbligatorio.'); return }
-    const pickupIso = toIso(form.pickup_date, form.pickup_time)
-    const dropoffIso = toIso(form.dropoff_date, form.dropoff_time)
-    setSaving(true); setError('')
-    const payload = {
-      service_type: serviceType,
-      customer_name: form.customer_name.trim(),
-      customer_phone: form.customer_phone.trim() || null,
-      guest_name: form.customer_name.trim(), guest_phone: form.customer_phone.trim() || null,
-      vehicle_name: formAsset,
-      pickup_date: pickupIso,
-      dropoff_date: dropoffIso,
-      price_total: eurToCents(form.price_eur),
-      status: form.status,
-    }
-    const { error: e } = form.id
-      ? await supabase.from('bookings').update(payload).eq('id', form.id)
-      : await supabase.from('bookings').insert({ ...payload, created_at: new Date().toISOString() })
-    setSaving(false)
-    if (e) { setError(e.message); return }
-    setShowForm(false); reload()
-  }
-  async function deleteBooking() {
-    if (!form.id) return
-    if (!window.confirm('Annullare questa prenotazione?')) return
-    setSaving(true); setError('')
-    const err = await cancelBookingViaFunction(form.id)
-    setSaving(false)
-    if (err) { setError(err); return }
-    setShowForm(false); reload()
-  }
-
-  const loading = assetsLoading || bookingsLoading
-  const gridW = daysArray.length * cellW
-
+  const oggi = new Date()
   return (
     <div className="space-y-4">
-      <Header title={`${labels.title} — Calendario`} action={
-        <div className="flex items-center gap-2">
-          <button onClick={() => setMonthOffset(o => o - 1)} className={BTN_GHOST}>‹</button>
-          <span className="text-sm text-theme-text-primary min-w-[160px] text-center capitalize">{monthLabel}</span>
-          <button onClick={() => setMonthOffset(o => o + 1)} className={BTN_GHOST}>›</button>
-        </div>
-      } />
-
-      {/* Tour & Posti: prossime partenze con la mappa posti (verde pagato /
-          giallo in attesa / rosso non pagato), sola lettura. */}
-      {/* 2026-08-10 (roadmap #11/#12): il calendario del NOLEGGIO deve essere
-          uguale a quello del Noleggio Terra, che non ha una sezione tour.
-          Per il Mare i tour hanno la loro sotto-tab dedicata. Resta sull'Aria,
-          dove il tour a posti e' il flusso principale. */}
-      {serviceType !== 'boat_rental' && (
-        <TourCalendarSection serviceType={serviceType} year={year} month={month} />
-      )}
-
-      {error && <ErrorBox msg={error} />}
-      {loading && <div className="text-theme-text-muted text-sm">Caricamento…</div>}
-
-      {!loading && assets.length === 0 && !error && (
-        <EmptyBox msg={`Nessun ${labels.asset.toLowerCase()} nel catalogo. Aggiungi prima gli asset nella tab Catalogo.`} />
-      )}
-
-      {assets.length > 0 && (
-        <div ref={gridRef} className="border border-theme-border rounded-lg overflow-auto bg-theme-bg-primary">
-          <div style={{ minWidth: CAL_LEFT_W + gridW }}>
-            {/* Header giorni */}
-            <div className="flex sticky top-0 z-30 bg-theme-bg-primary border-b border-theme-border" style={{ height: CAL_HEADER_H }}>
-              <div
-                className="sticky left-0 z-40 shrink-0 bg-theme-bg-primary border-r border-theme-border flex items-center px-3 text-xs font-semibold uppercase tracking-wider text-theme-text-muted"
-                style={{ width: CAL_LEFT_W }}
-              >
-                {labels.asset}
-              </div>
-              <div className="flex">
-                {daysArray.map(day => {
-                  const d = new Date(year, month, day)
-                  // 2026-08-10 (roadmap #11): domeniche e festivi evidenziati
-                  // come sul Noleggio Terra. Qui mancavano del tutto: una
-                  // consegna programmata a Ferragosto sembrava un giorno
-                  // qualsiasi.
-                  const hol = getHolidayForDate(d)
-                  const isRed = !!hol || isSunday(d)
-                  return (
-                    <div
-                      key={day}
-                      title={hol ? hol.label : undefined}
-                      className={`flex flex-col items-center justify-center border-r border-theme-border/60 shrink-0 ${isTodayDay(day) ? 'bg-dr7-gold/30' : isRed ? 'bg-red-500/10' : ''}`}
-                      style={{ width: cellW }}
-                    >
-                      <span className={`text-[10px] ${isRed ? 'text-red-500 font-semibold' : 'text-theme-text-primary'}`}>{day}</span>
-                      <span className={`text-[8px] uppercase ${isRed ? 'text-red-400' : 'text-theme-text-muted'}`}>{d.toLocaleDateString('it-IT', { weekday: 'short' })}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* Righe asset */}
-            {assets.map(asset => (
-              <CalRow
-                key={asset.id}
-                asset={asset}
-                bars={barsFor(rowsByAsset.get(asset.id) || [])}
-                daysArray={daysArray}
-                cellW={cellW}
-                year={year} month={month}
-                isTodayDay={isTodayDay}
-                onCellClick={(day) => openCreate(asset.name, day)}
-                onBarClick={(b) => openEdit(b, asset.name)}
-              />
-            ))}
-
-            {/* Riga prenotazioni non assegnate (solo se presenti) */}
-            {unassigned.length > 0 && (
-              <CalRow
-                asset={{ id: '__unassigned__', name: 'Altro / Non assegnato', image_url: null }}
-                bars={barsFor(unassigned)}
-                daysArray={daysArray}
-                cellW={cellW}
-                year={year} month={month}
-                isTodayDay={isTodayDay}
-                onCellClick={() => { /* niente create su riga non assegnata */ }}
-                onBarClick={(b) => openEdit(b, b.vehicle_name || '')}
-                disableCreate
-              />
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Mare: modale completa (stessa della tab Prenotazioni) */}
-      {showMare && (
-        <MareBookingModal
-          assets={assets.map(a => ({ id: a.id, name: a.name, capacity: a.capacity ?? null, price_per_day: a.price_per_day || 0, is_active: a.is_active !== false }))}
-          booking={mareBooking as unknown as MareBookingRow | null}
-          assetPreset={marePreset?.asset}
-          datePreset={marePreset ? { pickup: marePreset.pickup, dropoff: marePreset.dropoff } : undefined}
-          onClose={() => setShowMare(false)}
-          onSaved={() => { setShowMare(false); reload() }}
-        />
-      )}
-
-      {/* Modal create/edit */}
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !saving && setShowForm(false)}>
-          <div className="bg-theme-bg-secondary border border-theme-border rounded-xl w-full max-w-lg p-5 space-y-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-theme-text-primary">{form.id ? 'Modifica prenotazione' : 'Nuova prenotazione'}</h3>
-              <span className="text-sm text-theme-text-secondary">{formAsset || '—'}</span>
-            </div>
-            {error && <ErrorBox msg={error} />}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="sm:col-span-2">
-                <label className="text-xs text-theme-text-muted">Cliente</label>
-                <input className={INPUT_CLS} placeholder="Nome cliente" value={form.customer_name} onChange={e => setForm({ ...form, customer_name: e.target.value })} />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="text-xs text-theme-text-muted">Telefono</label>
-                <input className={INPUT_CLS} placeholder="Telefono (opzionale)" value={form.customer_phone} onChange={e => setForm({ ...form, customer_phone: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs text-theme-text-muted">{isPeriodo ? 'Data ritiro' : 'Ritiro'}</label>
-                <EuropeanDateInput className={INPUT_CLS} value={form.pickup_date} onChange={(__v: string) => setForm(f => ({
-                  ...f,
-                  pickup_date: __v,
-                  dropoff_date: isPeriodo && (!f.dropoff_date || f.dropoff_date <= __v) ? addDaysYmd(__v, 1) : f.dropoff_date,
-                }))} />
-              </div>
-              <TimeSelect label="Ora ritiro" value={form.pickup_time} dateStr={form.pickup_date} kind="pickup" serviceType={serviceType}
-                onChange={v => setForm(f => ({ ...f, pickup_time: v }))} />
-              <div>
-                <label className="text-xs text-theme-text-muted">{isPeriodo ? 'Data riconsegna' : 'Riconsegna'}</label>
-                <EuropeanDateInput className={INPUT_CLS} value={form.dropoff_date} min={isPeriodo ? form.pickup_date : undefined} onChange={(__v: string) => setForm({ ...form, dropoff_date: __v })} />
-              </div>
-              <TimeSelect label="Ora riconsegna" value={form.dropoff_time} dateStr={form.dropoff_date} kind="return" serviceType={serviceType}
-                onChange={v => setForm(f => ({ ...f, dropoff_time: v }))} />
-              {isPeriodo && (
-                <div className="sm:col-span-2 -mt-1">
-                  {calRentalDays > 0
-                    ? <p className="text-xs text-theme-text-secondary">Durata: <strong className="text-theme-text-primary">{calRentalDays} giorn{calRentalDays === 1 ? 'o' : 'i'}</strong></p>
-                    : <p className="text-xs text-amber-400">La riconsegna deve essere successiva al ritiro.</p>}
-                </div>
-              )}
-              <div>
-                <label className="text-xs text-theme-text-muted">Totale (€)</label>
-                <input className={INPUT_CLS} inputMode="decimal" placeholder="0,00" value={form.price_eur} onChange={e => setForm({ ...form, price_eur: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs text-theme-text-muted">Stato</label>
-                <select className={INPUT_CLS} value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
-                  {CAL_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="flex items-center justify-between gap-2 pt-1">
-              <div>
-                {form.id && (
-                  <button onClick={deleteBooking} disabled={saving} className="px-3 py-1.5 rounded-lg border border-red-500/40 text-red-400 text-sm hover:bg-red-500/10 disabled:opacity-50">Elimina</button>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => setShowForm(false)} disabled={saving} className={BTN_GHOST}>Annulla</button>
-                <button onClick={() => saveOnce()} disabled={saving || savingOnce} className={BTN_PRIMARY}>{saving || savingOnce ? 'Salvataggio…' : (form.id ? 'Salva' : 'Crea')}</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <Header title={`${labels.title} — Calendario`} />
+      <CalendarTab serviceType={serviceType} />
+      <TourCalendarSection serviceType={serviceType} year={oggi.getFullYear()} month={oggi.getMonth()} />
     </div>
   )
 }
 
-function CalRow({
-  asset, bars, daysArray, cellW, year, month, isTodayDay, onCellClick, onBarClick, disableCreate,
-}: {
-  asset: CalAsset
-  bars: { booking: BookingRow; left: number; width: number; lane: number }[]
-  daysArray: number[]
-  cellW: number
-  year: number
-  month: number
-  isTodayDay: (day: number) => boolean
-  onCellClick: (day: number) => void
-  onBarClick: (b: BookingRow) => void
-  disableCreate?: boolean
-}) {
-  // La riga cresce con le corsie: con una sola prenotazione resta alta come
-  // prima, con sovrapposizioni si allunga invece di nascondere le barre.
-  const laneCount = bars.reduce((max, b) => Math.max(max, b.lane + 1), 1)
-  const rowHeight = Math.max(CAL_ROW_H, laneCount * (BAR_H + BAR_GAP) + BAR_GAP)
-  return (
-    <div className="flex border-b border-theme-border group relative" style={{ height: rowHeight }}>
-      {/* Colonna sinistra asset */}
-      <div
-        className="sticky left-0 z-20 shrink-0 bg-theme-bg-primary group-hover:bg-theme-bg-secondary border-r border-theme-border flex items-center gap-2 px-3"
-        style={{ width: CAL_LEFT_W }}
-      >
-        <div className="w-10 h-7 shrink-0 rounded bg-theme-bg-tertiary border border-theme-border overflow-hidden flex items-center justify-center">
-          {asset.image_url ? (
-            <img src={asset.image_url} alt={asset.name} className="w-full h-full object-cover" loading="lazy" />
-          ) : (
-            <div className="w-full h-full bg-theme-bg-tertiary" />
-          )}
-        </div>
-        <span className="text-sm text-theme-text-primary truncate" title={asset.name}>{asset.name}</span>
-      </div>
-
-      {/* Griglia giorni + barre */}
-      <div className="relative shrink-0" style={{ width: daysArray.length * cellW }}>
-        {/* celle sfondo + click create */}
-        <div className="flex h-full">
-          {daysArray.map(day => (
-            <div
-              key={day}
-              className={`h-full shrink-0 border-r border-theme-border/50 ${isTodayDay(day) ? 'bg-dr7-gold/15' : (getHolidayForDate(new Date(year, month, day)) || isSunday(new Date(year, month, day))) ? 'bg-red-500/[0.06]' : ''} ${disableCreate ? '' : 'hover:bg-theme-text-primary/5 cursor-pointer'}`}
-              style={{ width: cellW }}
-              onClick={disableCreate ? undefined : () => onCellClick(day)}
-              title={disableCreate ? undefined : `Nuova prenotazione: ${day}/${month + 1}/${year}`}
-            />
-          ))}
-        </div>
-        {/* barre */}
-        <div className="absolute inset-0 pointer-events-none">
-          {bars.map(({ booking, left, width, lane }) => {
-            const st = barStyle(booking.status, booking.payment_status, booking.booking_details)
-            return (
-              <div
-                key={booking.id}
-                className={`absolute h-8 rounded border shadow-sm pointer-events-auto cursor-pointer overflow-hidden flex items-center px-2 hover:brightness-110 transition ${st.bar}`}
-                style={{
-                  left, width,
-                  // Nessuna sovrapposizione: barra centrata come prima, cosi'
-                  // il caso normale non cambia aspetto. Con piu' corsie si
-                  // impila dall'alto.
-                  top: laneCount === 1 ? (rowHeight - BAR_H) / 2 : BAR_GAP + lane * (BAR_H + BAR_GAP),
-                }}
-                onClick={(e) => { e.stopPropagation(); onBarClick(booking) }}
-                title={booking.customer_name || ''}
-              >
-                <span className="text-[10px] font-semibold text-white truncate">{booking.customer_name || '—'}</span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    </div>
-  )
-}
 
 /* ------------------------------- CATALOGO ------------------------------- */
 
