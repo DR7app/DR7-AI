@@ -4,20 +4,22 @@
 import { INPUT_CLS, buildTimeOptions, isOutOfHours, officeHoursLabel } from './noleggioFormBits'
 
 // Select dell'ora: stessa griglia e stesso avviso fuori-orario ovunque.
-export default function TimeSelect({ label, value, dateStr, kind, onChange }: {
+export default function TimeSelect({ label, value, dateStr, kind, onChange, serviceType }: {
   label: string
   value: string
   dateStr: string
   kind: 'pickup' | 'return'
   onChange: (v: string) => void
+  /** Da quale business leggere gli orari. Omesso = Noleggio Terra. */
+  serviceType?: string | null
 }) {
-  const flagged = isOutOfHours(dateStr, value, kind)
-  const hours = officeHoursLabel(dateStr, kind)
+  const flagged = isOutOfHours(dateStr, value, kind, serviceType)
+  const hours = officeHoursLabel(dateStr, kind, serviceType)
   return (
     <div>
       <label className="text-xs text-theme-text-muted">{label}</label>
       <select className={INPUT_CLS} value={value} onChange={e => onChange(e.target.value)}>
-        {buildTimeOptions(dateStr, kind, value).map(o => (
+        {buildTimeOptions(dateStr, kind, value, serviceType).map(o => (
           <option key={o.value} value={o.value} style={o.style}>{o.label}</option>
         ))}
       </select>

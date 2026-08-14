@@ -22,6 +22,7 @@
 
 import { supabase } from '../supabaseClient'
 import { getHolidayForDate } from '../data/italianHolidays'
+import { businessRowForServiceType } from './businessConfigClient'
 
 export type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 
@@ -52,24 +53,36 @@ const DEFAULT_CONFIG: NoleggioHoursConfig = {
     },
 }
 
-let CONFIG: NoleggioHoursConfig = DEFAULT_CONFIG
+// Orari PER BUSINESS (roadmap #16). La sezione "Orari" di Centralina Pro e'
+// visibile su ogni business e salva nella riga di quel business, ma qui si
+// leggeva sempre `main`: gli orari impostati sul Mare o sull'Aria venivano
+// salvati e mai applicati, e la griglia degli slot restava quella di Terra.
+//
+// Si caricano tutte le righe in una query sola all'avvio del modulo. I getter
+// restano SINCRONI (li usano i render) e accettano un `serviceType`
+// facoltativo: chi non lo passa continua a leggere Terra, come prima.
+const CONFIGS = new Map<string, NoleggioHoursConfig>()
+
+function configFor(serviceType?: string | null): NoleggioHoursConfig {
+    const row = businessRowForServiceType(serviceType)
+    // Business senza orari propri: eredita quelli dell'azienda.
+    return CONFIGS.get(row) ?? CONFIGS.get('main') ?? DEFAULT_CONFIG
+}
 
 ;(async () => {
     try {
         const { data } = await supabase
             .from('centralina_pro_config')
-            .select('config')
-            .eq('id', 'main')
-            .maybeSingle()
-        const cfg = (data?.config ?? null) as Record<string, unknown> | null
-        const nh = cfg?.noleggio_hours as Partial<NoleggioHoursConfig> | undefined
-        if (nh && (nh.hours_pickup || nh.hours_return)) {
+            .select('id, config')
+        for (const riga of (data || []) as { id: string; config: Record<string, unknown> }[]) {
+            const nh = riga.config?.noleggio_hours as Partial<NoleggioHoursConfig> | undefined
+            if (!nh || !(nh.hours_pickup || nh.hours_return)) continue
             const slot = typeof nh.slot_minutes === 'number' && nh.slot_minutes > 0 ? nh.slot_minutes : DEFAULT_CONFIG.slot_minutes
-            CONFIG = {
+            CONFIGS.set(riga.id, {
                 slot_minutes: slot,
                 hours_pickup: { ...DEFAULT_CONFIG.hours_pickup, ...(nh.hours_pickup || {}) } as WeekHours,
                 hours_return: { ...DEFAULT_CONFIG.hours_return, ...(nh.hours_return || {}) } as WeekHours,
-            }
+            })
         }
     } catch {
         // keep DEFAULT_CONFIG
@@ -92,8 +105,8 @@ function minutesToTime(min: number): string {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
-export function getSlotMinutes(): number {
-    return CONFIG.slot_minutes || DEFAULT_CONFIG.slot_minutes
+export function getSlotMinutes(serviceType?: string | null): number {
+    return configFor(serviceType).slot_minutes || DEFAULT_CONFIG.slot_minutes
 }
 
 // 2026-05-30: festività nazionali italiane sono CHIUSE come la domenica.
@@ -101,14 +114,14 @@ export function getSlotMinutes(): number {
 // customer-side il wizard mostra zero slot.
 const HOLIDAY_CLOSED: DayHours = { is_open: false, windows: [] }
 
-export function getPickupDayHours(date: Date): DayHours {
+export function getPickupDayHours(date: Date, serviceType?: string | null): DayHours {
     if (getHolidayForDate(date)) return HOLIDAY_CLOSED
-    return CONFIG.hours_pickup[dayKeyFromDate(date)] ?? DEFAULT_CONFIG.hours_pickup[dayKeyFromDate(date)]
+    return configFor(serviceType).hours_pickup[dayKeyFromDate(date)] ?? DEFAULT_CONFIG.hours_pickup[dayKeyFromDate(date)]
 }
 
-export function getReturnDayHours(date: Date): DayHours {
+export function getReturnDayHours(date: Date, serviceType?: string | null): DayHours {
     if (getHolidayForDate(date)) return HOLIDAY_CLOSED
-    return CONFIG.hours_return[dayKeyFromDate(date)] ?? DEFAULT_CONFIG.hours_return[dayKeyFromDate(date)]
+    return configFor(serviceType).hours_return[dayKeyFromDate(date)] ?? DEFAULT_CONFIG.hours_return[dayKeyFromDate(date)]
 }
 
 function generateSlots(day: DayHours, step: number): string[] {
@@ -131,6 +144,7 @@ function generateSlots(day: DayHours, step: number): string[] {
 export function getOfficeMinuteRangesForDate(
     dateStr: string | Date,
     kind: 'pickup' | 'return' = 'pickup',
+    serviceType?: string | null,
 ): [number, number][] {
     let date: Date
     if (typeof dateStr === 'string') {
@@ -140,7 +154,7 @@ export function getOfficeMinuteRangesForDate(
         date = dateStr
     }
     if (isNaN(date.getTime())) return []
-    const day = kind === 'return' ? getReturnDayHours(date) : getPickupDayHours(date)
+    const day = kind === 'return' ? getReturnDayHours(date, serviceType) : getPickupDayHours(date, serviceType)
     if (!day.is_open) return []
     return day.windows.map((w) => [timeToMinutes(w.start), timeToMinutes(w.end)])
 }
@@ -150,21 +164,22 @@ export function isWithinOfficeHoursForDate(
     dateStr: string | Date,
     time: string,
     kind: 'pickup' | 'return' = 'pickup',
+    serviceType?: string | null,
 ): boolean {
-    const ranges = getOfficeMinuteRangesForDate(dateStr, kind)
+    const ranges = getOfficeMinuteRangesForDate(dateStr, kind, serviceType)
     if (ranges.length === 0) return false
     const m = timeToMinutes(time)
     return ranges.some(([a, b]) => m >= a && m <= b)
 }
 
 /** All bookable pickup slot times for the date. [] if closed. */
-export function getPickupTimesForDate(date: Date): string[] {
-    return generateSlots(getPickupDayHours(date), getSlotMinutes())
+export function getPickupTimesForDate(date: Date, serviceType?: string | null): string[] {
+    return generateSlots(getPickupDayHours(date, serviceType), getSlotMinutes(serviceType))
 }
 
 /** All bookable return slot times for the date. [] if closed. */
-export function getReturnTimesForDate(date: Date): string[] {
-    return generateSlots(getReturnDayHours(date), getSlotMinutes())
+export function getReturnTimesForDate(date: Date, serviceType?: string | null): string[] {
+    return generateSlots(getReturnDayHours(date, serviceType), getSlotMinutes(serviceType))
 }
 
 /** Pretty "10:30-12:30 / 16:30-18:30" for the configured day. */

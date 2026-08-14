@@ -216,7 +216,9 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
   }, [serviceType])
 
   // Metodi di pagamento da Centralina Pro (niente hardcoded).
-  const paymentMethods = usePaymentMethods()
+  // Riga di Centralina del business corrente (Mare / Aria / Soggiorni), con
+  // fallback su `main`. Prima leggeva sempre Terra (roadmap #16).
+  const paymentMethods = usePaymentMethods(serviceType)
 
   // Modal create/edit (stessa logica del Calendario, accessibile dalla lista)
   const [showForm, setShowForm] = useState(false)
@@ -789,13 +791,13 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                   dropoff_date: isPeriodo && (!f.dropoff_date || f.dropoff_date <= __v) ? addDaysYmd(__v, 1) : f.dropoff_date,
                 }))} />
               </div>
-              <TimeSelect label="Ora ritiro" value={form.pickup_time} dateStr={form.pickup_date} kind="pickup"
+              <TimeSelect label="Ora ritiro" value={form.pickup_time} dateStr={form.pickup_date} kind="pickup" serviceType={serviceType}
                 onChange={v => setForm(f => ({ ...f, pickup_time: v }))} />
               <div>
                 <label className="text-xs text-theme-text-muted">{isPeriodo ? 'Data riconsegna' : 'Riconsegna'}</label>
                 <EuropeanDateInput className={INPUT_CLS} value={form.dropoff_date} min={isPeriodo ? form.pickup_date : undefined} onChange={(__v: string) => setForm({ ...form, dropoff_date: __v })} />
               </div>
-              <TimeSelect label="Ora riconsegna" value={form.dropoff_time} dateStr={form.dropoff_date} kind="return"
+              <TimeSelect label="Ora riconsegna" value={form.dropoff_time} dateStr={form.dropoff_date} kind="return" serviceType={serviceType}
                 onChange={v => setForm(f => ({ ...f, dropoff_time: v }))} />
 
               {/* Durata + disponibilità (solo noleggio a periodo) */}
@@ -1485,13 +1487,13 @@ function CalendarView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
                   dropoff_date: isPeriodo && (!f.dropoff_date || f.dropoff_date <= __v) ? addDaysYmd(__v, 1) : f.dropoff_date,
                 }))} />
               </div>
-              <TimeSelect label="Ora ritiro" value={form.pickup_time} dateStr={form.pickup_date} kind="pickup"
+              <TimeSelect label="Ora ritiro" value={form.pickup_time} dateStr={form.pickup_date} kind="pickup" serviceType={serviceType}
                 onChange={v => setForm(f => ({ ...f, pickup_time: v }))} />
               <div>
                 <label className="text-xs text-theme-text-muted">{isPeriodo ? 'Data riconsegna' : 'Riconsegna'}</label>
                 <EuropeanDateInput className={INPUT_CLS} value={form.dropoff_date} min={isPeriodo ? form.pickup_date : undefined} onChange={(__v: string) => setForm({ ...form, dropoff_date: __v })} />
               </div>
-              <TimeSelect label="Ora riconsegna" value={form.dropoff_time} dateStr={form.dropoff_date} kind="return"
+              <TimeSelect label="Ora riconsegna" value={form.dropoff_time} dateStr={form.dropoff_date} kind="return" serviceType={serviceType}
                 onChange={v => setForm(f => ({ ...f, dropoff_time: v }))} />
               {isPeriodo && (
                 <div className="sm:col-span-2 -mt-1">
@@ -2084,7 +2086,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
   const [tourPayStatus, setTourPayStatus] = useState('pending') // Da Saldare
   const [tourPayMethod, setTourPayMethod] = useState('')
   const [tourConfirm, setTourConfirm] = useState(false) // Conferma Prenotazione
-  const tourPaymentMethods = usePaymentMethods()
+  const tourPaymentMethods = usePaymentMethods(serviceType)
   const [booking, setBooking] = useState(false)
   const [manageMode, setManageMode] = useState<Set<string>>(new Set()) // partenze in modalità "gestisci posti"
 

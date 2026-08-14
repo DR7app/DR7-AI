@@ -1727,7 +1727,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // auto_invoice=false in Centralina Pro > Fiscale. Source of truth =
     // centralina_pro_config.fiscale.payment_methods (admin-managed).
     const pm = booking.payment_method || ''
-    if (!(await paymentMethodAutoInvoice(pm))) {
+    // Lavaggio e meccanica leggono la riga `business_lavaggio`, non piu'
+    // quella di Terra (roadmap #16). Costante e non booking.service_type:
+    // entrambi i servizi mappano sulla stessa riga, e il tipo non e' esposto
+    // su CarWashBooking.
+    if (!(await paymentMethodAutoInvoice(pm, 'car_wash'))) {
       toast.error(`Fattura non prevista per pagamenti con "${pm}" (impostazione Centralina > Fiscale).`)
       return
     }

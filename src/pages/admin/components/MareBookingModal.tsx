@@ -133,7 +133,10 @@ interface Props {
 }
 
 export default function MareBookingModal({ assets, booking, assetPreset, datePreset, onClose, onSaved }: Props) {
-  const paymentMethods = usePaymentMethods()
+  // Metodi di pagamento del business Mare (riga `business_mare`), con
+  // fallback su `main`: prima si leggeva sempre Terra, quindi i metodi
+  // configurati sul Mare venivano salvati e mai mostrati (roadmap #16).
+  const paymentMethods = usePaymentMethods('boat_rental')
   const isEdit = !!booking
 
   /* ── Sezioni attive (Interruttori ON/OFF) ── */
@@ -713,11 +716,11 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
                     setDropoffDate(prev => (!prev || prev <= v) ? addDaysYmd(v, 1) : prev)
                   }} />
                 </Field>
-                <TimeSelect label="Ora ritiro" value={pickupTime} dateStr={pickupDate} kind="pickup" onChange={setPickupTime} />
+                <TimeSelect label="Ora ritiro" value={pickupTime} dateStr={pickupDate} kind="pickup" onChange={setPickupTime} serviceType="boat_rental" />
                 <Field label="Data riconsegna">
                   <EuropeanDateInput className={INPUT_CLS} value={dropoffDate} min={pickupDate} onChange={(v: string) => setDropoffDate(v)} />
                 </Field>
-                <TimeSelect label="Ora riconsegna" value={dropoffTime} dateStr={dropoffDate} kind="return" onChange={setDropoffTime} />
+                <TimeSelect label="Ora riconsegna" value={dropoffTime} dateStr={dropoffDate} kind="return" onChange={setDropoffTime} serviceType="boat_rental" />
               </div>
               <div className="mt-3 space-y-2">
                 {rentalDays > 0

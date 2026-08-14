@@ -22,26 +22,28 @@ export const TIME_SLOTS: string[] = Array.from({ length: 96 }, (_, i) =>
 const FLAGGED_TIME_STYLE: CSSProperties = { color: 'white', backgroundColor: '#dc2626', fontWeight: 600 }
 const NORMAL_TIME_STYLE: CSSProperties = { color: 'black', backgroundColor: 'white' }
 
-export function isOutOfHours(dateStr: string, time: string, kind: 'pickup' | 'return'): boolean {
+// `serviceType` sceglie la riga di Centralina da cui leggere gli orari:
+// Mare/Aria/Soggiorni hanno i loro. Omesso = Noleggio Terra (roadmap #16).
+export function isOutOfHours(dateStr: string, time: string, kind: 'pickup' | 'return', serviceType?: string | null): boolean {
   if (!dateStr || !time) return false
-  return !isWithinOfficeHoursForDate(dateStr, time, kind)
+  return !isWithinOfficeHoursForDate(dateStr, time, kind, serviceType)
 }
 
 // Opzioni per la select dell'ora. Se l'orario già salvato non cade sulla
 // griglia dei 15' (prenotazioni vecchie, import) viene aggiunto in testa: così
 // aprendo "Modifica" l'orario esistente non viene perso.
-export function buildTimeOptions(dateStr: string, kind: 'pickup' | 'return', current?: string) {
+export function buildTimeOptions(dateStr: string, kind: 'pickup' | 'return', current?: string, serviceType?: string | null) {
   const slots = current && !TIME_SLOTS.includes(current) ? [current, ...TIME_SLOTS] : TIME_SLOTS
   return slots.map(v => {
-    const flagged = isOutOfHours(dateStr, v, kind)
+    const flagged = isOutOfHours(dateStr, v, kind, serviceType)
     return { value: v, label: flagged ? `🔴 ${v}  FUORI ORARIO` : v, style: flagged ? FLAGGED_TIME_STYLE : NORMAL_TIME_STYLE }
   })
 }
 
 // "10:30–12:30 / 16:30–18:30", oppure null se quel giorno la sede è chiusa.
-export function officeHoursLabel(dateStr: string, kind: 'pickup' | 'return'): string | null {
+export function officeHoursLabel(dateStr: string, kind: 'pickup' | 'return', serviceType?: string | null): string | null {
   if (!dateStr) return null
-  const ranges = getOfficeMinuteRangesForDate(dateStr, kind)
+  const ranges = getOfficeMinuteRangesForDate(dateStr, kind, serviceType)
   if (ranges.length === 0) return null
   const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
   return ranges.map(([a, b]) => `${fmt(a)}–${fmt(b)}`).join(' / ')

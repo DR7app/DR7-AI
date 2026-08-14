@@ -16,7 +16,7 @@
  * "Bonifico bancario", "DR7 Wallet (credito)" etc.
  */
 import { useEffect, useState } from 'react'
-import { supabase } from '../supabaseClient'
+import { businessRowForServiceType, loadBusinessList } from '../utils/businessConfigClient'
 
 export interface PaymentMethod {
     key: string
@@ -33,27 +33,25 @@ export interface PaymentMethod {
 // i metodi dalla UI. Niente fallback "magico" che riempiva la lista con
 // 27 voci nascondendo il fatto che il config non era stato configurato.
 
-// Module-level cache so multiple components mounting in the same render don't
-// re-fetch. Refresh on save in Centralina Pro is handled by realtime; for
-// simplicity we just bust on next page reload here.
-let CACHED: PaymentMethod[] | null = null
-let PENDING: Promise<PaymentMethod[]> | null = null
+// Cache PER BUSINESS. Prima era una variabile sola: il primo componente
+// montato decideva la lista per tutti, quindi aprendo prima il Noleggio Terra
+// e poi il Mare, il Mare si teneva i metodi di Terra fino al reload.
+const CACHE = new Map<string, PaymentMethod[]>()
+const INFLIGHT = new Map<string, Promise<PaymentMethod[]>>()
 
-async function fetchOnce(): Promise<PaymentMethod[]> {
-    if (CACHED) return CACHED
-    if (PENDING) return PENDING
-    PENDING = (async () => {
+async function fetchOnce(serviceType?: string | null): Promise<PaymentMethod[]> {
+    const row = businessRowForServiceType(serviceType)
+    const cached = CACHE.get(row)
+    if (cached) return cached
+    const pending = INFLIGHT.get(row)
+    if (pending) return pending
+    const p = (async () => {
         try {
-            const { data } = await supabase
-                .from('centralina_pro_config')
-                .select('config')
-                .eq('id', 'main')
-                .maybeSingle()
-            const cfg = (data?.config || {}) as Record<string, unknown>
-            const fiscal = (cfg.fiscal || {}) as Record<string, unknown>
-            const list = fiscal.payment_methods
-            if (Array.isArray(list) && list.length > 0) {
-                CACHED = list
+            // Riga del business, con fallback su `main` se quel business non ha
+            // una sua lista: chi non configura eredita i metodi dell'azienda.
+            const list = await loadBusinessList<Record<string, unknown>>(serviceType, 'fiscal', 'payment_methods')
+            if (list.length > 0) {
+                const out = list
                     .filter((m): m is Record<string, unknown> => !!m && typeof m === 'object')
                     .map(m => ({
                         key: String(m.key || ''),
@@ -65,31 +63,40 @@ async function fetchOnce(): Promise<PaymentMethod[]> {
                     // mostrano solo i metodi attivi. I metodi disattivati
                     // restano nel config per archivio storico.
                     .filter(m => m.key && m.label && m.is_enabled !== false)
-                return CACHED
+                CACHE.set(row, out)
+                return out
             }
         } catch (e) {
             console.warn('[usePaymentMethods] config lookup failed', e)
         }
         // 2026-05-21: lista vuota se il config non e' configurato. L'admin
         // configura i metodi da Centralina Pro > Fiscale.
-        CACHED = []
-        return CACHED
+        CACHE.set(row, [])
+        return []
     })()
-    return PENDING
+    INFLIGHT.set(row, p)
+    return p
 }
 
-export function usePaymentMethods(): PaymentMethod[] {
-    const [methods, setMethods] = useState<PaymentMethod[]>(CACHED || [])
+/**
+ * @param serviceType service_type della prenotazione in corso
+ *   ('boat_rental', 'heli_rental', 'stay_rental', 'car_wash', 'mechanical').
+ *   Omesso = Noleggio Terra (riga `main`), il comportamento di prima.
+ */
+export function usePaymentMethods(serviceType?: string | null): PaymentMethod[] {
+    const [methods, setMethods] = useState<PaymentMethod[]>(
+        () => CACHE.get(businessRowForServiceType(serviceType)) || []
+    )
     useEffect(() => {
         let cancelled = false
-        fetchOnce().then(list => { if (!cancelled) setMethods(list) })
+        fetchOnce(serviceType).then(list => { if (!cancelled) setMethods(list) })
         return () => { cancelled = true }
-    }, [])
+    }, [serviceType])
     return methods
 }
 
 /** Reset cache. Call after saving the list in Centralina Pro. */
 export function invalidatePaymentMethodsCache(): void {
-    CACHED = null
-    PENDING = null
+    CACHE.clear()
+    INFLIGHT.clear()
 }

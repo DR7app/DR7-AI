@@ -16,25 +16,22 @@
  * Cached in-memory for the session; re-read with `reloadAutoInvoiceConfig`
  * after editing Centralina Fiscale.
  */
-import { supabase } from '../supabaseClient'
+import { businessRowForServiceType, loadBusinessList } from './businessConfigClient'
 
 type Method = { key: string; label: string; auto_invoice: boolean }
 
-let cache: Method[] | null = null
-let inflight: Promise<Method[]> | null = null
+// Cache per business: la spunta "Fattura" puo' essere diversa fra Terra e
+// Mare, e una cache unica avrebbe applicato ovunque quella caricata per prima.
+const cache = new Map<string, Method[]>()
+const inflight = new Map<string, Promise<Method[]>>()
 
-async function fetchMethods(): Promise<Method[]> {
-    const { data } = await supabase
-        .from('centralina_pro_config')
-        .select('config')
-        .eq('id', 'main')
-        .maybeSingle()
+async function fetchMethods(serviceType?: string | null): Promise<Method[]> {
     // 2026-08 FIX: la config si salva sotto `fiscal` (senza 'e') — vedi
     // CentralinaProTab. Prima si leggeva `fiscale` (chiave inesistente) → lista
     // vuota → auto_invoice sempre true (il toggle non aveva alcun effetto lato
     // client). Il server (generate-invoice-from-booking) leggeva gia' `fiscal`.
-    const fiscal = (data?.config as { fiscal?: { payment_methods?: unknown } } | null)?.fiscal
-    const list = Array.isArray(fiscal?.payment_methods) ? fiscal.payment_methods : []
+    // 2026-08-14 (roadmap #16): si legge la riga del business, non piu' `main`.
+    const list = await loadBusinessList<Method>(serviceType, 'fiscal', 'payment_methods')
     return list
         .filter((m): m is Method =>
             typeof m === 'object' && m !== null &&
@@ -44,21 +41,29 @@ async function fetchMethods(): Promise<Method[]> {
         )
 }
 
-async function getMethods(): Promise<Method[]> {
-    if (cache) return cache
-    if (!inflight) inflight = fetchMethods().then(m => { cache = m; inflight = null; return m })
-    return inflight
+async function getMethods(serviceType?: string | null): Promise<Method[]> {
+    const row = businessRowForServiceType(serviceType)
+    const hit = cache.get(row)
+    if (hit) return hit
+    const pending = inflight.get(row)
+    if (pending) return pending
+    const p = fetchMethods(serviceType).then(m => { cache.set(row, m); inflight.delete(row); return m })
+    inflight.set(row, p)
+    return p
 }
 
 /**
  * Returns true if a payment method should auto-generate a fattura.
  * Unknown methods default to true (safest — don't hide invoices silently).
  */
-export async function paymentMethodAutoInvoice(method: string | null | undefined): Promise<boolean> {
+export async function paymentMethodAutoInvoice(
+    method: string | null | undefined,
+    serviceType?: string | null,
+): Promise<boolean> {
     if (!method) return true
     const needle = method.trim().toLowerCase()
     if (!needle) return true
-    const methods = await getMethods()
+    const methods = await getMethods(serviceType)
     for (const m of methods) {
         if (m.key.toLowerCase() === needle || m.label.toLowerCase() === needle) {
             return m.auto_invoice
@@ -72,6 +77,6 @@ export async function paymentMethodAutoInvoice(method: string | null | undefined
  * change takes effect immediately without page reload.
  */
 export function reloadAutoInvoiceConfig(): void {
-    cache = null
-    inflight = null
+    cache.clear()
+    inflight.clear()
 }

@@ -129,19 +129,22 @@ async function resolveBookingCategory(booking: any): Promise<string | null> {
  *   - the booking's payment_method is empty / not found in the list
  * so legacy bookings and unknown labels still get a fattura.
  */
-async function shouldAutoInvoice(paymentMethodRaw: string | null | undefined): Promise<boolean> {
+async function shouldAutoInvoice(paymentMethodRaw: string | null | undefined, serviceType?: string | null): Promise<boolean> {
     const label = (paymentMethodRaw || '').trim().toLowerCase()
     if (!label) return true
     try {
-        const { data } = await supabase
-            .from('centralina_pro_config')
-            .select('config')
-            .eq('id', 'main')
-            .maybeSingle()
-        const cfg = (data?.config ?? null) as Record<string, unknown> | null
-        const fiscal = cfg?.fiscal as Record<string, unknown> | undefined
-        const list = fiscal?.payment_methods
-        if (!Array.isArray(list) || list.length === 0) return true
+        // 2026-08-14 (roadmap #16): riga del business della prenotazione, con
+        // fallback su `main`. Prima leggeva sempre `main`, quindi la spunta
+        // "Fattura" messa sul Mare o sul Lavaggio non aveva alcun effetto: la
+        // decisione veniva presa con le regole del Noleggio Terra.
+        const { business, main } = await loadBusinessConfig(supabase, serviceType)
+        const listaDi = (cfg: Record<string, unknown> | null): unknown[] | null => {
+            const fiscal = cfg?.fiscal as Record<string, unknown> | undefined
+            const l = fiscal?.payment_methods
+            return Array.isArray(l) && l.length > 0 ? l : null
+        }
+        const list = listaDi(business) ?? listaDi(main)
+        if (!list) return true
         const match = list.find((m: any) => {
             if (!m || typeof m !== 'object') return false
             const ml = String(m.label || '').trim().toLowerCase()
@@ -298,7 +301,7 @@ export const handler: Handler = async (event) => {
         // Centralina Pro → Fiscale → Metodi di pagamento: rispetta la spunta
         // "Fattura". Se la direzione ha disattivato l'auto-fattura per questo
         // metodo (es. Contanti, Bonifico privato), salta la generazione.
-        if (!(await shouldAutoInvoice(booking.payment_method))) {
+        if (!(await shouldAutoInvoice(booking.payment_method, booking.service_type))) {
             console.log(`[Invoice] Skipping — Centralina Pro disattiva auto-fattura per metodo "${booking.payment_method}"`)
             return {
                 statusCode: 200,
