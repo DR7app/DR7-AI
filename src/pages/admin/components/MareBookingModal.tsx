@@ -606,6 +606,12 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
     //    prenotazione restava da saldare e nessuno mandava il link al cliente.
     //    Solo alla CREAZIONE, come negli altri business.
     if (!booking && savedId && payStatus === 'pending' && isNexiPbl(payMethod)) {
+      // Nexi rifiuta un link di pagamento da 0 euro. Senza questo controllo la
+      // chiamata partiva, falliva, e restava un toast in mezzo agli altri: il
+      // cliente non riceveva niente e nessuno sapeva perche'.
+      if (totaleDaSalvare <= 0) {
+        toast.error('Link di pagamento NON inviato: il totale e\' 0,00 €. Correggi l\'importo e usa Gestisci > Rinvia Link Pagamento.', { duration: 9000 })
+      } else {
       try {
         const amountEuros = totaleDaSalvare / 100
         const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
@@ -636,7 +642,7 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
             const firstName = customerName.trim().split(' ')[0] || 'Cliente'
             const amountStr = amountEuros.toFixed(2)
             const ref = savedId.substring(0, 8).toUpperCase()
-            await fetch('/.netlify/functions/send-whatsapp-notification', {
+            const waRes = await fetch('/.netlify/functions/send-whatsapp-notification', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -652,14 +658,31 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
                 skipHeader: true,
               }),
             })
+            // L'invio puo' rispondere 200 e non spedire niente (template
+            // spento, vuoto o non mappato): dirlo "inviato" era una conferma
+            // falsa, e il cliente restava senza link senza che nessuno lo
+            // sapesse.
+            const waOut = await waRes.json().catch(() => ({}))
+            if (!waRes.ok || waOut?.skipped) {
+              toast.error(
+                waOut?.reason === 'pro_template_unavailable'
+                  ? 'Link generato, ma il messaggio NON e\' partito: manca il template "Invio link pagamento" in Messaggi di Sistema Pro.'
+                  : `Link generato, ma il messaggio NON e' partito${waOut?.reason ? ` (${waOut.reason})` : ''}.`,
+                { duration: 9000 },
+              )
+            } else {
+              toast.success('Link di pagamento inviato al cliente')
+            }
+          } else {
+            toast('Link generato, ma il cliente non ha un numero di telefono in scheda.', { icon: '⚠️' })
           }
-          toast.success('Link di pagamento inviato al cliente')
         } else {
-          toast.error('Prenotazione salvata, ma link di pagamento non generato: ' + (linkData.error || ''))
+          toast.error('Prenotazione salvata, ma link di pagamento non generato: ' + (linkData.error || ''), { duration: 9000 })
         }
       } catch (le) {
         toast.error('Errore Pay by Link: ' + (le as Error).message)
       }
+      } /* fine ramo "totale > 0" */
     }
 
     // 2) FATTURA sul passaggio a "Pagato" — su Terra e Lavaggio parte

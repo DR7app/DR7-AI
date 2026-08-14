@@ -146,6 +146,12 @@ export function useBookingRowActions(onChanged: () => void) {
     }), [conLock, onChanged])
 
     const linkPagamento = useCallback((b: BookingLike) => conLock(`paylink:${b.id}`, async () => {
+        // Nexi rifiuta un link da 0 euro. Meglio dirlo subito che lasciare
+        // partire una chiamata destinata a fallire.
+        if (!(Number(b.price_total) > 0)) {
+            toast.error('Il totale della prenotazione e\' 0,00 €: correggi l\'importo prima di generare il link.')
+            return
+        }
         const id = toast.loading('Generazione link di pagamento...')
         try {
             const ref = b.id.substring(0, 8).toUpperCase()
@@ -197,6 +203,9 @@ export function useBookingRowActions(onChanged: () => void) {
                 }).catch(() => { /* il link resta comunque salvato */ })
             }
             toast.success(phone ? 'Link inviato al cliente' : 'Link generato (nessun telefono in scheda)', { id })
+            // NB: l'esito dell'invio WhatsApp non e' verificabile qui — la
+            // chiamata e' fire-and-forget di proposito, perche' il link resta
+            // comunque salvato sulla prenotazione e riapribile.
             logAdminAction('send_payment_link', 'booking', b.id, { business: b.service_type })
             onChanged()
         } catch (e) {
