@@ -101,7 +101,31 @@ const handler: Handler = async (event) => {
       }),
     };
   }
-  let targetPhone = resolvedPhone;
+  // 2026-08-14: il numero non veniva ripulito MAI e finiva cosi' com'e' dentro
+  // `chatId`. Un numero salvato con il '+', con spazi, con parentesi, oppure
+  // incollato da iPhone/Android — che antepone un LEFT-TO-RIGHT OVERRIDE
+  // U+202D invisibile — produce un chatId che WhatsApp non riconosce. Green
+  // API risponde comunque con un idMessage, quindi il gestionale annunciava
+  // "messaggio inviato" e il cliente non riceveva niente: nessun errore,
+  // nessun log, nessun modo di accorgersene.
+  let targetPhone = resolvedPhone.replace(/\D/g, '');
+  // Prefisso internazionale scritto come 00: 0039340... -> 39340...
+  if (targetPhone.startsWith('00')) targetPhone = targetPhone.substring(2);
+  // Numero italiano senza prefisso (10 cifre): si antepone 39. NON si tocca
+  // un numero estero (es. francese 336..., 11 cifre), che e' gia' completo.
+  if (!targetPhone.startsWith('39') && targetPhone.length === 10) targetPhone = '39' + targetPhone;
+  if (targetPhone.length < 8) {
+    console.error('[send-whatsapp] numero inutilizzabile dopo la pulizia:', JSON.stringify(resolvedPhone), '->', targetPhone);
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        success: false,
+        skipped: true,
+        reason: 'invalid_phone',
+        message: `Numero non valido: "${resolvedPhone}"`,
+      }),
+    };
+  }
   // Track the resolved Pro key so we can look up the email toggle after WhatsApp send.
   let usedTemplateKey: string | null = null;
 
