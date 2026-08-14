@@ -1151,6 +1151,14 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         <DocFileInput value={codiceFiscaleFront} onChange={setCodiceFiscaleFront} placeholder="Codice Fiscale Fronte" />
                         <DocFileInput value={codiceFiscaleBack} onChange={setCodiceFiscaleBack} placeholder="Codice Fiscale Retro" />
                       </DocUploadGroup>
+                      {/* 2026-08-14: mancava qui. La patente nautica era solo
+                          nella sezione Documenti in fondo al form, quindi chi
+                          usava l'auto-compilazione dall'alto — che e' il flusso
+                          normale — non aveva dove caricarla. */}
+                      <DocUploadGroup label="Patente nautica">
+                        <DocFileInput value={patenteNauticaFront} onChange={setPatenteNauticaFront} placeholder="Patente Nautica Fronte" />
+                        <DocFileInput value={patenteNauticaBack} onChange={setPatenteNauticaBack} placeholder="Patente Nautica Retro" />
+                      </DocUploadGroup>
                     </div>
                     {/* Real CompilaButton — always mounted (since this whole hero
                         block lives in step 1 / Identificazione Rapida which is

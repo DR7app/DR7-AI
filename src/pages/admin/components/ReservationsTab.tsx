@@ -522,7 +522,23 @@ const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default function ReservationsTab({ initialData, onDataConsumed, viewMode = 'bookings' }: { initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string; fromPreventivo?: Record<string, any> } | null; onDataConsumed?: () => void; viewMode?: 'bookings' | 'uscite' }) {
+/**
+ * 2026-08-14 (roadmap #11) — `serviceType` rende questa tab utilizzabile anche
+ * da Mare, Aria e Soggiorni.
+ *
+ * La direzione chiede che le prenotazioni degli altri business funzionino
+ * ESATTAMENTE come quelle del Noleggio Terra. Averne una copia (MareBookingModal)
+ * ha prodotto, una dopo l'altra: prezzo che non arrivava a price_total, stato
+ * sempre 'confirmed' anche senza pagamento ne' conferma, doppio salvataggio,
+ * sconto con significato opposto. Ogni rustina ne scopriva un'altra, perche' il
+ * problema non erano i singoli campi ma il fatto che fossero due codici diversi.
+ *
+ * OMESSO = Noleggio Terra, comportamento identico a prima. Terra e' il business
+ * piu' usato: ogni differenza sta dentro un `if (serviceType !== 'rental')`.
+ */
+export default function ReservationsTab({ initialData, onDataConsumed, viewMode = 'bookings', serviceType = 'rental' }: { initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string; fromPreventivo?: Record<string, any> } | null; onDataConsumed?: () => void; viewMode?: 'bookings' | 'uscite'; serviceType?: string }) {
+  // true quando la tab sta servendo Mare / Aria / Soggiorni.
+  const isAltroBusiness = serviceType !== 'rental'
   const { canViewFinancials } = useAdminRole()
   const paymentMethods = usePaymentMethods()
   const [reservations, setReservations] = useState<Reservation[]>([])
@@ -2456,19 +2472,24 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       // 2026-07-11: le Uscite Straordinarie vivono in un subtab dedicato di
       // Noleggio. In viewMode='uscite' mostriamo SOLO le uscite; in 'bookings'
       // (default) le escludiamo cosi' non si mescolano con le prenotazioni.
-      const filteredBookings = (allBookings || []).filter(b =>
-        b.status !== 'deleted' &&
-        b.service_type !== 'car_wash' &&
-        b.service_type !== 'mechanical_service' &&
-        b.service_type !== 'mechanical' &&
-        // NON sono noleggio auto: i Tour Aria/Mare/Soggiorni hanno le loro tab dedicate.
-        b.service_type !== 'heli_rental' &&
-        b.service_type !== 'boat_rental' &&
-        b.service_type !== 'stay_rental' &&
-        (viewMode === 'uscite'
-          ? b.service_type === 'uscita_straordinaria'
-          : b.service_type !== 'uscita_straordinaria')
-      ).map(b => ({
+      // Su un business dedicato (Mare / Aria / Soggiorni) si mostrano SOLO le
+      // sue prenotazioni; su Terra resta il filtro storico.
+      const filteredBookings = (allBookings || []).filter(b => {
+        if (b.status === 'deleted') return false
+        if (isAltroBusiness) return b.service_type === serviceType
+        return (
+          b.service_type !== 'car_wash' &&
+          b.service_type !== 'mechanical_service' &&
+          b.service_type !== 'mechanical' &&
+          // NON sono noleggio auto: i Tour Aria/Mare/Soggiorni hanno le loro tab dedicate.
+          b.service_type !== 'heli_rental' &&
+          b.service_type !== 'boat_rental' &&
+          b.service_type !== 'stay_rental' &&
+          (viewMode === 'uscite'
+            ? b.service_type === 'uscita_straordinaria'
+            : b.service_type !== 'uscita_straordinaria')
+        )
+      }).map(b => ({
         ...b,
         contracts: contractsMap.get(b.id) || null
       }))
@@ -2676,11 +2697,41 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         return Object.keys(updates).length > 0 ? { ...b, ...updates } : b
       }))
 
-      const { data: vehiclesData, error: vehiclesError } = await supabase
-        .from('vehicles')
-        .select('*')
-        .or('status.neq.retired,display_name.eq.Test')
-        .order('display_name')
+      // I mezzi selezionabili. Terra li prende dalla flotta (`vehicles`);
+      // Mare, Aria e Soggiorni dal catalogo del business, normalizzati nella
+      // stessa forma cosi' tutto il form a valle non cambia. `daily_rate` in
+      // CENTESIMI come sulla flotta: noleggio_catalog salva gia' cosi'.
+      let vehiclesData: Vehicle[] | null = null
+      let vehiclesError: { message: string } | null = null
+      if (isAltroBusiness) {
+        const { data, error } = await supabase
+          .from('noleggio_catalog')
+          .select('id, name, price_per_day, is_active')
+          .eq('service_type', serviceType)
+          .order('sort_order', { ascending: true })
+          .order('name', { ascending: true })
+        vehiclesError = error
+        vehiclesData = ((data || []) as { id: string; name: string; price_per_day: number | null; is_active?: boolean }[])
+          .filter(c => c.is_active !== false)
+          .map(c => ({
+            id: c.id,
+            display_name: c.name,
+            plate: null,
+            status: 'available' as const,
+            daily_rate: Number(c.price_per_day) || 0,
+            metadata: null,
+            created_at: '',
+            updated_at: '',
+          }))
+      } else {
+        const res = await supabase
+          .from('vehicles')
+          .select('*')
+          .or('status.neq.retired,display_name.eq.Test')
+          .order('display_name')
+        vehiclesData = res.data as Vehicle[] | null
+        vehiclesError = res.error
+      }
 
       if (vehiclesError) {
         console.error('Failed to load vehicles:', vehiclesError)
