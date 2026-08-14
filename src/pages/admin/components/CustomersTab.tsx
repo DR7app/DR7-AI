@@ -163,8 +163,9 @@ export default function CustomersTab() {
   const [documentsUrls, setDocumentsUrls] = useState<{
     licenses: Array<{ url: string; fileName: string }>;
     ids: Array<{ url: string; fileName: string }>;
-    codiceFiscale: Array<{ url: string; fileName: string }>
-  }>({ licenses: [], ids: [], codiceFiscale: [] })
+    codiceFiscale: Array<{ url: string; fileName: string }>;
+    nautica: Array<{ url: string; fileName: string }>
+  }>({ licenses: [], ids: [], codiceFiscale: [], nautica: [] })
   const [loadingDocuments, setLoadingDocuments] = useState(false)
   const [uploadingLicense, setUploadingLicense] = useState(false)
   const [uploadingId, setUploadingId] = useState(false)
@@ -1211,7 +1212,7 @@ export default function CustomersTab() {
 
   async function fetchCustomerDocuments(userId: string) {
     setLoadingDocuments(true)
-    setDocumentsUrls({ licenses: [], ids: [], codiceFiscale: [] })
+    setDocumentsUrls({ licenses: [], ids: [], codiceFiscale: [], nautica: [] })
 
     try {
       logger.log('[CustomersTab] Fetching documents via Netlify function for:', userId)
@@ -1229,7 +1230,10 @@ export default function CustomersTab() {
 
       if (result.success && result.documents) {
         logger.log('[CustomersTab] Documents loaded:', result.documents)
-        setDocumentsUrls(result.documents)
+        // `nautica` con default: la function lo restituisce, ma se in
+        // produzione gira ancora la versione precedente il campo manca e
+        // `.length` su undefined farebbe schiantare la modale.
+        setDocumentsUrls({ nautica: [], ...result.documents })
       } else {
         console.error('[CustomersTab] Failed to load documents:', result.error)
       }
@@ -2528,6 +2532,35 @@ export default function CustomersTab() {
                           </div>
                         )}
                       </div>
+
+                      {/* Patente Nautica — 2026-08-14. Sta nello stesso bucket
+                          della patente di guida ma e' un altro documento: senza
+                          un blocco suo finiva elencata sotto "Patente di Guida",
+                          dove nessuno la cerca. */}
+                      {documentsUrls.nautica.length > 0 && (
+                        <div className="border border-theme-border rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-sm font-medium text-theme-text-secondary">
+                              ⚓ Patente Nautica ({documentsUrls.nautica.length}/2)
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {documentsUrls.nautica.map((doc, index) => (
+                              <div key={index} className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-theme-text-muted">
+                                    {index === 0 ? 'Fronte' : index === 1 ? 'Retro' : `Documento ${index + 1}`}
+                                  </span>
+                                  <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300">
+                                    Apri
+                                  </a>
+                                </div>
+                                <p className="text-[11px] text-theme-text-muted truncate">{doc.fileName}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
