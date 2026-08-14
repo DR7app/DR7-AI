@@ -22,6 +22,7 @@ import { getAllowedTimeRangesForDate, generateAllDayLavaggioSlots, isInLavaggioH
 import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
 import { isCartaPunti, isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
+import GestisciMenu, { type GestisciSection } from './GestisciMenu'
 import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
@@ -5286,36 +5287,60 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        <div className="flex gap-2">
-                          <button onClick={() => openEditBooking(booking)} className="px-3 py-1.5 bg-dr7-gold/20 hover:bg-dr7-gold/40 text-dr7-gold rounded-full text-xs font-medium transition-colors min-h-[44px]">Modifica</button>
-                          <button onClick={() => handleGenerateInvoice(booking)} disabled={generatingInvoice} className={`px-3 py-1.5 ${generatingInvoice ? 'bg-theme-bg-hover text-theme-text-secondary' : 'bg-dr7-gold/20 hover:bg-dr7-gold/40 text-dr7-gold'} rounded-full text-xs font-medium transition-colors min-h-[44px]`}>
-                            {generatingInvoice ? '...' : 'Fattura'}
-                          </button>
-                          {booking.customer_name !== 'Lavaggio Rientro' && (() => {
-                            const sent = isAutoProntaSent(booking)
-                            const sending = autoProntaSending.has(booking.id)
-                            return (
-                              <button
-                                onClick={() => handleAutoPronta(booking)}
-                                disabled={sent || sending}
-                                title={sent ? 'WhatsApp AUTO PRONTA già inviato' : 'Notifica al cliente che l\'auto è pronta'}
-                                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors min-h-[44px] ${
-                                  sent
-                                    ? 'bg-theme-bg-hover text-theme-text-muted cursor-not-allowed opacity-60'
-                                    : sending
-                                      ? 'bg-emerald-500/15 text-emerald-500 cursor-wait'
-                                      : 'bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-500'
-                                }`}
-                              >
-                                {sent ? 'Già inviata' : sending ? '...' : 'Auto Pronta'}
-                              </button>
-                            )
-                          })()}
-                          {booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
-                            <button onClick={() => handleResendPaymentLink(booking)} className="px-3 py-1.5 bg-dr7-gold/20 hover:bg-dr7-gold/40 text-dr7-gold rounded-full text-xs font-medium transition-colors min-h-[44px]">Rinvia Link</button>
-                          )}
-                          <button onClick={() => handleDeleteBooking(booking.id, booking.customer_name)} className="px-3 py-1.5 bg-red-500/15 hover:bg-red-500/25 text-red-400 rounded-full text-xs font-medium transition-colors min-h-[44px]">×</button>
-                        </div>
+                        {(() => {
+                          // 2026-08-14 (roadmap #11): stesso menu Gestisci del
+                          // Noleggio Terra, dallo stesso componente. Le azioni
+                          // erano gia' tutte qui, ma come grappolo di pastiglie
+                          // colorate — cioe' esattamente il cluster che
+                          // GestisciMenu era nato per sostituire.
+                          // Niente "Estendi": un lavaggio non si estende, e
+                          // niente "Contratto": generate-contract salta
+                          // car_wash e mechanical di proposito.
+                          const sent = isAutoProntaSent(booking)
+                          const sending = autoProntaSending.has(booking.id)
+                          const pagata = ['paid', 'completed', 'succeeded'].includes(String(booking.payment_status || ''))
+                          const sections: GestisciSection[] = [
+                            {
+                              title: 'Gestione',
+                              actions: [
+                                { label: 'Modifica', onClick: () => openEditBooking(booking) },
+                                { label: 'Elimina', onClick: () => handleDeleteBooking(booking.id, booking.customer_name) },
+                              ],
+                            },
+                            {
+                              title: 'Documenti',
+                              actions: [
+                                {
+                                  label: generatingInvoice ? 'Generazione...' : 'Genera Fattura',
+                                  onClick: () => handleGenerateInvoice(booking),
+                                  disabled: generatingInvoice,
+                                },
+                              ],
+                            },
+                            {
+                              title: 'Pagamenti',
+                              actions: [
+                                {
+                                  label: 'Rinvia Link Pagamento',
+                                  onClick: () => handleResendPaymentLink(booking),
+                                  visible: !pagata,
+                                },
+                              ],
+                            },
+                            {
+                              title: 'Altro',
+                              actions: [
+                                {
+                                  label: sent ? '✓ Auto Pronta inviata' : sending ? 'Invio...' : 'Auto Pronta',
+                                  onClick: () => handleAutoPronta(booking),
+                                  disabled: sent || sending,
+                                  visible: booking.customer_name !== 'Lavaggio Rientro',
+                                },
+                              ],
+                            },
+                          ]
+                          return <GestisciMenu sections={sections} size="sm" />
+                        })()}
                       </td>
                     </tr>
                   ))}
@@ -5438,54 +5463,50 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       </div>
                     )}
 
-                    {/* Action buttons */}
-                    <div className="px-4 pb-4 flex gap-2 flex-wrap">
-                      <button
-                        onClick={() => openEditBooking(booking)}
-                        className="flex-1 py-2.5 rounded-xl bg-dr7-gold/10 hover:bg-dr7-gold/20 text-dr7-gold text-xs font-semibold transition-all active:scale-[0.98]"
-                      >
-                        Modifica
-                      </button>
-                      <button
-                        onClick={() => handleGenerateInvoice(booking)}
-                        disabled={generatingInvoice}
-                        className="flex-1 py-2.5 rounded-xl bg-dr7-gold/10 hover:bg-dr7-gold/20 text-dr7-gold text-xs font-semibold transition-all active:scale-[0.98]"
-                      >
-                        {generatingInvoice ? '...' : 'Fattura'}
-                      </button>
-                      {!isRientro && (() => {
+                    {/* Azioni — stesso menu Gestisci del desktop e di Terra */}
+                    <div className="px-4 pb-4 flex justify-end">
+                      {(() => {
                         const sent = isAutoProntaSent(booking)
                         const sending = autoProntaSending.has(booking.id)
-                        return (
-                          <button
-                            onClick={() => handleAutoPronta(booking)}
-                            disabled={sent || sending}
-                            className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-[0.98] ${
-                              sent
-                                ? 'bg-theme-bg-hover text-theme-text-muted cursor-not-allowed opacity-60'
-                                : sending
-                                  ? 'bg-emerald-500/10 text-emerald-500 cursor-wait'
-                                  : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500'
-                            }`}
-                          >
-                            {sent ? 'Già inviata' : sending ? '...' : 'Auto Pronta'}
-                          </button>
-                        )
+                        const pagata = ['paid', 'completed', 'succeeded'].includes(String(booking.payment_status || ''))
+                        const sections: GestisciSection[] = [
+                          {
+                            title: 'Gestione',
+                            actions: [
+                              { label: 'Modifica', onClick: () => openEditBooking(booking) },
+                              { label: 'Elimina', onClick: () => handleDeleteBooking(booking.id, booking.customer_name) },
+                            ],
+                          },
+                          {
+                            title: 'Documenti',
+                            actions: [
+                              {
+                                label: generatingInvoice ? 'Generazione...' : 'Genera Fattura',
+                                onClick: () => handleGenerateInvoice(booking),
+                                disabled: generatingInvoice,
+                              },
+                            ],
+                          },
+                          {
+                            title: 'Pagamenti',
+                            actions: [
+                              { label: 'Rinvia Link Pagamento', onClick: () => handleResendPaymentLink(booking), visible: !pagata },
+                            ],
+                          },
+                          {
+                            title: 'Altro',
+                            actions: [
+                              {
+                                label: sent ? '✓ Auto Pronta inviata' : sending ? 'Invio...' : 'Auto Pronta',
+                                onClick: () => handleAutoPronta(booking),
+                                disabled: sent || sending,
+                                visible: !isRientro,
+                              },
+                            ],
+                          },
+                        ]
+                        return <GestisciMenu sections={sections} size="md" />
                       })()}
-                      {booking.payment_status !== 'paid' && booking.payment_status !== 'completed' && booking.payment_status !== 'succeeded' && (
-                        <button
-                          onClick={() => handleResendPaymentLink(booking)}
-                          className="flex-1 py-2.5 rounded-xl bg-dr7-gold/10 hover:bg-dr7-gold/20 text-dr7-gold text-xs font-semibold transition-all active:scale-[0.98]"
-                        >
-                          Rinvia Link
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleDeleteBooking(booking.id, booking.customer_name)}
-                        className="py-2.5 px-4 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-semibold transition-all active:scale-[0.98]"
-                      >
-                        ×
-                      </button>
                     </div>
                   </div>
                 )
