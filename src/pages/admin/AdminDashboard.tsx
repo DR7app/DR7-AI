@@ -81,7 +81,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'lavaggio-uscite' | 'immondizia' | 'ticket' | 'terra-catalog' | 'magazzino-generale' | 'interruttori' | 'acconti'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'lavaggio-uscite' | 'lavaggio-preventivi' | 'immondizia' | 'ticket' | 'terra-catalog' | 'magazzino-generale' | 'interruttori' | 'acconti'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -341,6 +341,7 @@ export default function AdminDashboard() {
     // menu; Magazzino e Uscite Straordinarie completano la sezione.
     { name: 'Lavaggio & Meccanica', tabs: [
       { tab: 'carwash', label: 'Prenotazioni' },
+      { tab: 'lavaggio-preventivi', label: 'Preventivi', permKey: 'carwash' },
       // Le uscite del lavaggio viaggiano col permesso delle sue Prenotazioni,
       // come su Terra e sugli altri business.
       { tab: 'lavaggio-uscite', label: 'Uscite Straordinarie', permKey: 'carwash' },
@@ -478,6 +479,7 @@ export default function AdminDashboard() {
     'aria-uscite': 'Uscite Straordinarie Noleggio Aria',
     'stay-uscite': 'Uscite Straordinarie Soggiorni & Ospitalità',
     'lavaggio-uscite': 'Uscite Straordinarie Lavaggio & Meccanica',
+    'lavaggio-preventivi': 'Preventivi Lavaggio & Meccanica',
     'aria-contratti': 'Contratti Noleggio Aria',
     'stay-contratti': 'Contratti Soggiorni & Ospitalità',
     'aria-bookings': 'Prenotazioni Noleggio Aria',
@@ -1096,6 +1098,7 @@ export default function AdminDashboard() {
           {activeTab === 'aria-uscite' && <ReservationsTab viewMode="uscite" serviceType="heli_rental" />}
           {activeTab === 'stay-uscite' && <ReservationsTab viewMode="uscite" serviceType="stay_rental" />}
           {activeTab === 'lavaggio-uscite' && <ReservationsTab viewMode="uscite" serviceType="car_wash" />}
+          {activeTab === 'lavaggio-preventivi' && <NoleggioServiceTab serviceType="car_wash" view="preventivi" labels={{ title: 'Lavaggio & Meccanica', asset: 'Lavaggio', assetPlural: 'Lavaggi' }} />}
           {activeTab === 'mare-contratti' && <ContrattoTab serviceType="boat_rental" />}
           {activeTab === 'aria-contratti' && <ContrattoTab serviceType="heli_rental" />}
           {activeTab === 'stay-contratti' && <ContrattoTab serviceType="stay_rental" />}

@@ -35,7 +35,11 @@ const PAY_STATUS_OPTIONS = [
 ]
 const isNexiPbl = (method: string) => /nexi/i.test(method)
 
-export type NoleggioServiceType = 'boat_rental' | 'heli_rental' | 'stay_rental'
+// 2026-08-14: 'car_wash' entra qui SOLO per la vista Preventivi — Lavaggio &
+// Meccanica ha le sue tab dedicate per prenotazioni, calendario e catalogo
+// (CarWashBookingsTab & co.), che restano quelle. Riusare PreventiviView
+// evita un secondo schermo preventivi da mantenere in parallelo.
+export type NoleggioServiceType = 'boat_rental' | 'heli_rental' | 'stay_rental' | 'car_wash'
 export type NoleggioView = 'bookings' | 'calendar' | 'catalog' | 'preventivi' | 'tours'
 
 export interface NoleggioServiceLabels {
@@ -1518,6 +1522,25 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
     if (p.status === 'convertito') { toast('Preventivo già convertito'); return }
     if (!window.confirm(`Convertire il preventivo di ${p.customer_name || 'questo cliente'} in prenotazione (Da Saldare)?`)) return
     const toIso = (d: string | null, t: string) => d ? new Date(`${d.substring(0, 10)}T${t}:00`).toISOString() : null
+    // Il lavaggio e' un APPUNTAMENTO, non un noleggio a cavallo di due date:
+    // CarWashBookingsTab elenca e filtra per `appointment_date`. Senza questi
+    // campi la prenotazione nasce invisibile nella sua stessa tab.
+    const isLavaggio = serviceType === 'car_wash'
+    const inizio = toIso(p.start_date, isLavaggio ? '09:00' : '10:00')
+    const campiLavaggio = isLavaggio
+      ? {
+          appointment_date: inizio,
+          appointment_time: '09:00',
+          pickup_date: inizio,
+          dropoff_date: inizio,
+          pickup_location: 'DR7 - Car Wash',
+          dropoff_location: 'DR7 - Car Wash',
+          service_name: p.asset_name || 'Lavaggio',
+        }
+      : {
+          pickup_date: inizio,
+          dropoff_date: toIso(p.end_date || p.start_date, '18:00'),
+        }
     const payload = {
       service_type: serviceType,
       customer_name: p.customer_name || 'Cliente',
@@ -1525,8 +1548,7 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
       guest_name: p.customer_name || 'Cliente',
       guest_phone: p.customer_phone || null,
       vehicle_name: p.asset_name || labels.asset,
-      pickup_date: toIso(p.start_date, '10:00'),
-      dropoff_date: toIso(p.end_date || p.start_date, '18:00'),
+      ...campiLavaggio,
       price_total: p.amount || 0,
       status: 'confirmed',
       payment_status: 'pending', // Da Saldare, come una nuova prenotazione
