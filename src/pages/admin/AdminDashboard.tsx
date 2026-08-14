@@ -272,7 +272,7 @@ export default function AdminDashboard() {
   const [rentalSubView, setRentalSubView] = useState<'bookings' | 'preventivi' | 'uscite'>('bookings')
   const SECTIONS: { name: string; tabs: SubTab[] }[] = [
     { name: 'Noleggio Terra', tabs: [
-      { tab: 'reservations', label: 'Noleggio', titleLabel: 'Prenotazioni', subView: 'bookings' },
+      { tab: 'reservations', label: 'Prenotazioni', subView: 'bookings' },
       { tab: 'reservations', label: 'Preventivi', subView: 'preventivi', permKey: 'reservations-preventivi' },
       { tab: 'reservations', label: 'Uscite Straordinarie', subView: 'uscite' },
       { tab: 'calendar', label: 'Calendario' },
@@ -291,6 +291,11 @@ export default function AdminDashboard() {
       { tab: 'mare-tours', label: 'Tour' },
       { tab: 'mare-preventivi', label: 'Preventivi' },
       { tab: 'mare-contratti', label: 'Contratti' },
+      { tab: 'gestione-danni', label: 'Danni & Penali' },
+      { tab: 'gestione-multe', label: 'Multe' },
+      { tab: 'mare-catalog', label: 'Barche' },
+      { tab: 'magazzino', label: 'Magazzino' },
+      { tab: 'gps-keyless', label: 'GPS Flotta' },
     ] },
     { name: 'Noleggio Aria', tabs: [
       { tab: 'aria-bookings', label: 'Prenotazioni' },
@@ -299,6 +304,11 @@ export default function AdminDashboard() {
       { tab: 'aria-preventivi', label: 'Preventivi' },
       { tab: 'aria-movimenti', label: 'Movimenti' },
       { tab: 'aria-contratti', label: 'Contratti' },
+      { tab: 'gestione-danni', label: 'Danni & Penali' },
+      { tab: 'gestione-multe', label: 'Multe' },
+      { tab: 'aria-catalog', label: 'Elicotteri' },
+      { tab: 'magazzino', label: 'Magazzino' },
+      { tab: 'gps-keyless', label: 'GPS Flotta' },
     ] },
     { name: 'Soggiorni & Ospitalità', tabs: [
       { tab: 'stay-bookings', label: 'Prenotazioni' },
@@ -306,6 +316,10 @@ export default function AdminDashboard() {
       { tab: 'stay-tours', label: 'Tour' },
       { tab: 'stay-preventivi', label: 'Preventivi' },
       { tab: 'stay-contratti', label: 'Contratti' },
+      { tab: 'gestione-danni', label: 'Danni & Penali' },
+      { tab: 'gestione-multe', label: 'Multe' },
+      { tab: 'stay-catalog', label: 'Alloggi' },
+      { tab: 'magazzino', label: 'Magazzino' },
     ] },
     { name: 'Lavaggio & Meccanica', tabs: [
       { tab: 'carwash', label: 'Prenotazioni' },
