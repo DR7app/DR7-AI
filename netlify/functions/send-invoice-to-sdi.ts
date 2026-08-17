@@ -146,11 +146,28 @@ export const handler: Handler = async (event) => {
 
                 if (customerData) {
                     // Build fresh address
-                    const street = customerData.indirizzo || customerData.sede_legale || ''
-                    const num = customerData.numero_civico || ''
-                    const zip = customerData.codice_postale || customerData.cap || ''
-                    const city = customerData.citta_residenza || customerData.citta || ''
-                    const prov = (customerData.provincia_residenza || customerData.provincia || '').toUpperCase().trim()
+                    // 2026-08-17: qui l'ordine era `indirizzo || sede_legale`, cioe'
+                    // l'esatto contrario della regola applicata in
+                    // generate-invoice-from-booking dal 20/06. Su un record azienda
+                    // `indirizzo` e i campi *_residenza sono della PERSONA FISICA
+                    // (rappresentante o vecchio merge): il reinvio manuale "Invia
+                    // SDI" riscriveva quindi l'indirizzo dell'azienda con quello
+                    // personale, annullando la correzione appena fatta in anagrafica.
+                    // Azienda -> SEMPRE sede legale (o operativa), e nient'altro.
+                    const isBusiness = customerData.tipo_cliente === 'azienda'
+                    const sedeAzienda = isBusiness
+                        ? (customerData.sede_legale || customerData.sede_operativa || '')
+                        : ''
+                    // Rete di sicurezza per i record azienda storici senza sede
+                    // legale: meglio l'unico indirizzo presente che nessuna fattura.
+                    const usaAnagrafica = !isBusiness || !sedeAzienda
+                    const street = isBusiness
+                        ? (sedeAzienda || customerData.indirizzo || '')
+                        : (customerData.indirizzo || customerData.sede_legale || '')
+                    const num = usaAnagrafica ? (customerData.numero_civico || '') : ''
+                    const zip = usaAnagrafica ? (customerData.codice_postale || customerData.cap || '') : ''
+                    const city = usaAnagrafica ? (customerData.citta_residenza || customerData.citta || '') : ''
+                    const prov = usaAnagrafica ? (customerData.provincia_residenza || customerData.provincia || '').toUpperCase().trim() : ''
 
                     const addressParts: string[] = []
                     if (street) addressParts.push(num ? `${street} ${num}` : street)
@@ -163,7 +180,10 @@ export const handler: Handler = async (event) => {
                     }
                     const freshAddress = addressParts.join(', ')
 
-                    const freshName = customerData.tipo_cliente === 'azienda'
+                    // Anche la PA si intesta con la denominazione dell'ente, non
+                    // col nome di una persona fisica (stessa regola gia' scritta
+                    // in generate-invoice-from-booking).
+                    const freshName = (customerData.tipo_cliente === 'azienda' || customerData.tipo_cliente === 'pubblica_amministrazione')
                         ? (customerData.ragione_sociale || customerData.denominazione || invoice.customer_name)
                         : `${customerData.nome || ''} ${customerData.cognome || ''}`.trim() || invoice.customer_name
                     const freshTaxCode = (customerData.codice_fiscale || '').toUpperCase().trim()
