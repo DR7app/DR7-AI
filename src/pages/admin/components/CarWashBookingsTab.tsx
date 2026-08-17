@@ -1517,8 +1517,19 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const custPhone = booking.customer_phone || booking.booking_details?.customer?.phone
     const custName = booking.customer_name || 'Cliente'
     const custEmail = booking.customer_email || booking.booking_details?.customer?.email || ''
-    const totalEur = ((booking.price_total || 0) / 100).toFixed(2)
+    // 2026-08-17 (segnalazione direzione): si rimanda il RESIDUO, non il totale.
+    // Su un lavaggio gia' pagato in parte (acconto, o un primo Pay by Link
+    // saldato) il link ripartiva per l'intero importo e il cliente rischiava di
+    // pagare due volte la stessa parte.
+    const accontoCents = Math.max(0, Number(booking.booking_details?.amountPaid) || 0)
+    const residuoCents = Math.max(0, (booking.price_total || 0) - accontoCents)
+    const totalEur = (residuoCents / 100).toFixed(2)
     const serviceNames = booking.service_name || 'Lavaggio'
+
+    if (residuoCents <= 0) {
+      toast.error('Nessun importo residuo da incassare: link non inviato.')
+      return
+    }
 
     const toastId = toast.loading('Generazione nuovo link di pagamento...')
 
@@ -1529,11 +1540,13 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           bookingId: booking.id,
-          amount: (booking.price_total || 0) / 100,
+          amount: residuoCents / 100,
           customerEmail: custEmail,
           customerName: custName,
           description: `Lavaggio DR7 - ${serviceNames}`,
-          expirationHours: 1
+          expirationHours: 1,
+          // Vedi sopra: saldo di un acconto -> il callback somma, non sovrascrive.
+          ...(accontoCents > 0 ? { paymentPurpose: 'booking_topup' } : {}),
         })
       })
       const linkData = await linkRes.json()
@@ -2078,11 +2091,19 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       })
     }
 
+    // 2026-08-17 (segnalazione direzione): l'acconto gia' incassato serve in
+    // tre punti (riga prenotazione, link di pagamento, messaggio al cliente),
+    // quindi si calcola UNA volta sola. `|| '0'` evita il NaN quando il campo
+    // e' vuoto — prima finiva NaN dentro booking_details.amountPaid.
+    const accontoCents = Math.max(0, Math.round(parseFloat(formData.amount_paid || '0') * 100)) || 0
+    // Quanto resta davvero da incassare, in EUR (totalPrice e' in EUR).
+    const daIncassare = Math.max(0, totalPrice - accontoCents / 100)
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const bookingDetails: any = {
       notes: formData.notes,
       forceBooked: forceBooking,
-      amountPaid: Math.round(parseFloat(formData.amount_paid) * 100),
+      amountPaid: accontoCents,
       adminOverride: forceBooking,
       createdBy: 'admin_panel',
       cartItems: cartItems,
@@ -2391,20 +2412,32 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // sa che il posto e' bloccato e ha comunque il link a portata di mano
     // se vuole pagare prima di arrivare. La regola precedente (2026-05-27,
     // link saltato con Conferma ON) e' stata revocata su richiesta utente.
+    // 2026-08-17 (segnalazione direzione): il link chiedeva sempre il TOTALE.
+    // Aggiungendo un servizio a un lavaggio gia' pagato (anche pagato in parte
+    // con lo stesso Pay by Link) il cliente si vedeva richiedere di nuovo tutto,
+    // acconto compreso. Ora si chiede solo il RESIDUO; se non resta niente da
+    // incassare non parte nessun link.
     const isNexiPending = formData.payment_status === 'pending'
       && isNexiPayByLink(formData.payment_method)
-    if (isNexiPending && data) {
+    if (isNexiPending && data && daIncassare <= 0) {
+      toast('Nessun importo residuo: link di pagamento non inviato.', { icon: 'i' })
+    } else if (isNexiPending && data) {
       try {
         const linkRes = await authFetch('/.netlify/functions/nexi-pay-by-link', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             bookingId: data.id,
-            amount: totalPrice,
+            amount: daIncassare,
             customerEmail: customerEmail || '',
             customerName: customerName || 'Cliente',
             description: `Lavaggio DR7 - ${serviceNames}`,
-            expirationHours: 1
+            expirationHours: 1,
+            // Con un acconto gia' incassato il link e' un SALDO: il callback
+            // deve SOMMARE l'importo all'acconto invece di sovrascriverlo, e
+            // segnare "pagato" solo se copre il totale (stessa regola del
+            // Noleggio). Senza questo flag l'acconto spariva dalla riga.
+            ...(accontoCents > 0 ? { paymentPurpose: 'booking_topup' } : {}),
           })
         })
         const linkData = await linkRes.json()
@@ -2477,7 +2510,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // Send WhatsApp notification
     try {
       const paymentStatus = isNexiPending ? 'unpaid' : (formData.payment_status || 'unpaid')
-      const amountPaid = paymentStatus === 'paid' ? totalPrice * 100 : 0
+      // 2026-08-17: l'acconto incassato non arrivava mai al messaggio — un
+      // lavaggio pagato a meta' veniva annunciato come "pagato 0".
+      const amountPaid = paymentStatus === 'paid' ? totalPrice * 100 : accontoCents
 
       // Send admin notification (detailed internal format)
       await fetch('/.netlify/functions/send-whatsapp-notification', {

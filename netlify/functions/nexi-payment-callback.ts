@@ -905,7 +905,17 @@ const handler: Handler = async (event) => {
                 // contratto viene ricondotto (firma originale ristampata sulle nuove
                 // condizioni, inviato via WhatsApp gia' firmato) e NON si chiede una
                 // nuova firma. Il link di firma parte solo se non c'era firma.
-                try {
+                // 2026-08-17: il contratto esiste per i NOLEGGI. Lavaggio,
+                // meccanica e uscite straordinarie non ne hanno uno: senza
+                // questo filtro, il saldo di un lavaggio modificato generava un
+                // contratto di noleggio (e un link di firma) per un servizio che
+                // non si firma. Necessario da quando anche il Prime Wash manda
+                // link di saldo con paymentPurpose 'booking_topup'.
+                const stTopup = String(booking.service_type || '').toLowerCase();
+                const senzaContratto = ['car_wash', 'mechanical', 'mechanical_service', 'uscita_straordinaria'].includes(stTopup);
+                if (senzaContratto) {
+                    console.log(`[nexi-payment-callback] Topup su "${stTopup}" — servizio senza contratto, niente da rigenerare`);
+                } else try {
                     const contractRes = await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/generate-contract`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
