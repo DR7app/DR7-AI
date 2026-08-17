@@ -5111,10 +5111,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             }
           }
         } else if (newCustomerData.tipo_cliente === 'azienda') {
+          // 2026-08-17: si chiedeva anche `citta`, ma nel form azienda quel
+          // campo NON esiste (c'e' solo nella sezione PA): la validazione non
+          // poteva mai essere soddisfatta e ogni nuovo cliente azienda restava
+          // bloccato su "citta" mancante. L'indirizzo digitato qui e' la SEDE
+          // LEGALE, un'unica stringa: e' l'unico dato di indirizzo che serve.
           if (!newCustomerData.denominazione) missing.push('denominazione')
           if (!newCustomerData.partita_iva) missing.push('partita_iva')
-          if (!newCustomerData.indirizzo) missing.push('indirizzo')
-          if (!newCustomerData.citta) missing.push('citta')
+          if (!newCustomerData.indirizzo) missing.push('sede_legale')
         }
 
         // Common — WhatsApp è il canale primario, quindi richiediamo SOLO
@@ -5361,10 +5365,18 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               _isNew: !uuidRegex.test(targetCustomerId)
             }
 
-            // Mark ALL required fields as missing since this is a new customer
-            // Patente not required for azienda
-            missing = ['nome', 'cognome', 'codice_fiscale', 'data_nascita', 'luogo_nascita', 'indirizzo', 'citta_residenza']
-            if (tempCustData.tipo_cliente !== 'azienda') missing.push('patente')
+            // Mark ALL required fields as missing since this is a new customer.
+            // 2026-08-17: la lista era quella della PERSONA FISICA per tutti —
+            // a un'azienda venivano chiesti nome, cognome, data e luogo di
+            // nascita e l'indirizzo di residenza, dati che un'azienda non ha.
+            // Ogni tipo chiede ora i propri.
+            if (tempCustData.tipo_cliente === 'azienda') {
+              missing = ['denominazione', 'partita_iva', 'sede_legale']
+            } else if (tempCustData.tipo_cliente === 'pubblica_amministrazione') {
+              missing = ['denominazione', 'codice_univoco', 'codice_fiscale', 'citta']
+            } else {
+              missing = ['nome', 'cognome', 'codice_fiscale', 'data_nascita', 'luogo_nascita', 'indirizzo', 'citta_residenza', 'patente']
+            }
             // Email opzionale: WhatsApp è il canale primario di consegna
             // (contratto, fattura, notifiche). Richiediamo solo telefono.
             if (!tempCustData.telefono) missing.push('telefono')
@@ -5903,7 +5915,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               nazione: newCustomerData.nazione,
               email: newCustomerData.email || null,
               telefono: newCustomerData.telefono || null,
-              indirizzo: newCustomerData.indirizzo || null,
+              // 2026-08-17: per l'azienda l'indirizzo digitato e' la SEDE
+              // LEGALE e va scritto li'. Scriverlo in `indirizzo` (campo della
+              // persona fisica) e' esattamente cio' che rompeva la fattura:
+              // il generatore cerca sede_legale e non trovava nulla.
+              ...(newCustomerData.tipo_cliente === 'azienda'
+                ? { sede_legale: newCustomerData.indirizzo || null }
+                : { indirizzo: newCustomerData.indirizzo || null }),
               source: 'admin',
               created_at: new Date().toISOString()
             }
@@ -8350,7 +8368,18 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       <Input label="Telefono *" type="tel" required value={newCustomerData.telefono} onChange={(e) => setNewCustomerData({ ...newCustomerData, telefono: e.target.value })} />
                       <Input label="Email *" type="email" required value={newCustomerData.email} onChange={(e) => setNewCustomerData({ ...newCustomerData, email: e.target.value })} />
                       <div className="md:col-span-2">
-                        <Input label="Indirizzo *" required value={newCustomerData.indirizzo} onChange={(e) => setNewCustomerData({ ...newCustomerData, indirizzo: e.target.value })} />
+                        {/* 2026-08-17: per un'azienda questo campo E' la sede
+                            legale (una sola stringa: via, CAP, comune, prov.).
+                            Chiamarlo "Indirizzo" faceva salvare l'indirizzo
+                            aziendale in un campo della persona fisica, e la
+                            fattura poi non lo trovava. */}
+                        <Input
+                          label={newCustomerData.tipo_cliente === 'azienda' ? 'Sede Legale *' : 'Indirizzo *'}
+                          required
+                          placeholder={newCustomerData.tipo_cliente === 'azienda' ? 'Via Roma 12, 09100 Cagliari (CA)' : undefined}
+                          value={newCustomerData.indirizzo}
+                          onChange={(e) => setNewCustomerData({ ...newCustomerData, indirizzo: e.target.value })}
+                        />
                       </div>
                     </div>
                   </div>

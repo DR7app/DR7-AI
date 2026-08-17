@@ -33,6 +33,22 @@ export function isNexiPayByLink(paymentMethod: string | null | undefined): boole
   return n.includes('nexi') && (n.includes('pay by link') || n.includes('paybylink') || n.includes('link'))
 }
 
+/**
+ * Pagamenti che NON producono mai una fattura: Credit Wallet, credito, gift
+ * card. L'IVA e' gia' stata assolta al momento della ricarica del wallet, per
+ * cui l'utilizzo non si fattura una seconda volta.
+ *
+ * 2026-08-17: stessa lista di varianti gia' usata lato server in
+ * generate-invoice-from-booking.ts, portata qui perche' anche la UI deve
+ * saperlo — chiedeva i dati di fatturazione (CF, indirizzo, citta', CAP) su
+ * prenotazioni che una fattura non l'avranno mai.
+ */
+export function isWalletOrGift(paymentMethod: string | null | undefined): boolean {
+  const n = normalize(paymentMethod)
+  if (!n) return false
+  return n === 'credit' || n.includes('wallet') || n.includes('gift')
+}
+
 export function isCartaPunti(paymentMethod: string | null | undefined): boolean {
   const n = normalize(paymentMethod)
   if (!n) return false

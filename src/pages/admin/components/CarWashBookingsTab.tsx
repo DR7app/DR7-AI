@@ -21,7 +21,7 @@ import { authFetch } from '../../../utils/authFetch'
 import { getAllowedTimeRangesForDate, generateAllDayLavaggioSlots, isInLavaggioHours, getSlotBlock } from '../../../utils/lavaggioHours'
 import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
-import { isCartaPunti, isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
+import { isCartaPunti, isNexiPayByLink, isWalletOrGift } from '../../../utils/paymentMethodMatchers'
 import GestisciMenu, { type GestisciSection } from './GestisciMenu'
 import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
@@ -1993,7 +1993,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // ogni booking di cliente azienda mostrava "Indirizzo/Citta/CAP missing"
     // anche se sede_legale era compilata.
     // Non bloccante: solo warning se mancano davvero dati.
-    try {
+    // 2026-08-17 (segnalazione direzione): il controllo serve SOLO se una
+    // fattura verra' emessa. Con Credit Wallet / gift card la fattura non
+    // esiste per definizione (l'IVA e' gia' stata assolta alla ricarica, vedi
+    // il guard in generate-invoice-from-booking), quindi chiedere CF, indirizzo,
+    // citta' e CAP era un avviso senza alcun seguito possibile.
+    if (isWalletOrGift(formData.payment_method)) {
+      logger.log('[CarWash] Pagamento wallet/gift: nessuna fattura prevista, salto il controllo dati fatturazione')
+    } else try {
       const custResp = await authFetch(`/.netlify/functions/get-customer?id=${formData.customer_id}`)
       if (custResp.ok) {
         const { customer: custData } = await custResp.json()
