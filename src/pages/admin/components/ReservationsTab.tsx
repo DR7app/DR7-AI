@@ -2867,11 +2867,27 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     // Validate customer data completeness
     const missing: string[] = []
 
-    // Common fields
-    if (!customer.indirizzo) missing.push('indirizzo')
-    if (!customer.citta_residenza && !customer.citta) missing.push('citta_residenza')
-    if (!customer.provincia_residenza) missing.push('provincia_residenza')
-    if (!customer.codice_postale) missing.push('codice_postale')
+    // Indirizzo — dipende dal TIPO di cliente.
+    // 2026-08-17 (bug direzione): questi quattro campi erano richiesti a
+    // chiunque, azienda compresa. Ma il form cliente (NewClientModal) per
+    // un'azienda chiede la SEDE LEGALE e NON chiede mai indirizzo/citta/CAP
+    // di residenza: quelli sono i campi della PERSONA FISICA. Risultato: su
+    // ogni azienda regolarmente registrata la fattura si fermava chiedendo
+    // "indirizzo" — un dato che per l'azienda non esiste e non deve esistere
+    // (vedi la regola: la fattura azienda usa SEMPRE la sede legale).
+    const tipoCliente = customer.tipo_cliente || 'persona_fisica'
+    if (tipoCliente === 'azienda') {
+      if (!customer.sede_legale && !customer.sede_operativa) missing.push('sede_legale')
+    } else if (tipoCliente === 'pubblica_amministrazione') {
+      // La PA salva l'indirizzo come citta dell'ente (NewClientModal), senza
+      // CAP ne' provincia: chiederli bloccherebbe allo stesso modo.
+      if (!customer.indirizzo && !customer.citta) missing.push('indirizzo')
+    } else {
+      if (!customer.indirizzo) missing.push('indirizzo')
+      if (!customer.citta_residenza && !customer.citta) missing.push('citta_residenza')
+      if (!customer.provincia_residenza) missing.push('provincia_residenza')
+      if (!customer.codice_postale) missing.push('codice_postale')
+    }
 
     // Persona Fisica specific
     if (customer.tipo_cliente === 'persona_fisica' || !customer.tipo_cliente) {
@@ -2966,9 +2982,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       } // end !forInvoice (campi richiesti solo per il CONTRATTO/noleggio)
     }
 
-    // Azienda: per la FATTURA serve la PARTITA IVA (non il codice fiscale).
+    // Azienda: per la FATTURA serve la PARTITA IVA, punto.
+    // 2026-08-17: prima bastava un codice fiscale qualsiasi. Ma il CF su un
+    // record azienda e' quello del RAPPRESENTANTE (lo chiede NewClientModal
+    // come cf_rappresentante), non dell'azienda: accettarlo lasciava passare
+    // aziende senza P.IVA, e l'XML per SDI identifica il cessionario azienda
+    // con IdFiscaleIVA. Niente P.IVA = fattura azienda non emettibile.
     if (customer.tipo_cliente === 'azienda') {
-      if (!customer.partita_iva && !customer.codice_fiscale) missing.push('partita_iva')
+      if (!customer.partita_iva) missing.push('partita_iva')
     }
 
     return missing

@@ -306,8 +306,14 @@ function generateInvoiceHTML(invoice: any): string {
                     ${invoice.customer_address ? `<p>${invoice.customer_address}</p>` : ''}
                     ${invoice.customer_phone ? `<p>Tel: ${invoice.customer_phone}</p>` : ''}
                     ${invoice.customer_email ? `<p>Email: ${invoice.customer_email}</p>` : ''}
-                    ${invoice.customer_tax_code ? `<p>C.F. ${invoice.customer_tax_code}</p>` : ''}
-                    ${invoice.customer_vat ? `<p>P.IVA ${invoice.customer_vat}</p>` : ''}
+                    <!-- 2026-08-17: azienda -> SOLO P.IVA. Il codice fiscale su
+                         un record azienda e' quello del RAPPRESENTANTE e non va
+                         in fattura; stampandoli entrambi la fattura intestava
+                         l'azienda col CF di una persona fisica. Stessa regola
+                         gia' applicata nel PDF jsPDF (invoice-pdf-utils.ts). -->
+                    ${invoice.customer_vat
+                        ? `<p>P.IVA ${invoice.customer_vat}</p>`
+                        : (invoice.customer_tax_code ? `<p>C.F. ${invoice.customer_tax_code}</p>` : '')}
                 </div>
             </div>
         </div>

@@ -355,7 +355,9 @@ export const handler: Handler = async (event) => {
         } else if (isWalletPayment) {
             console.log('[Penalty Invoice] Pagamento DR7 Wallet — skip SDI (IVA gia\' pagata in fase di ricarica)')
             await supabase.from('fatture').update({ sdi_status: 'skipped_wallet' }).eq('id', invoice.id)
-        } else if (paymentStatus === 'paid' && invoice.customer_tax_code) {
+        // 2026-08-17: P.IVA da sola identifica il cliente azienda; prima il
+        // gate guardava solo il CF e le penali alle aziende non partivano.
+        } else if (paymentStatus === 'paid' && (invoice.customer_tax_code || invoice.customer_vat)) {
             try {
                 const xmlContent = generateFatturaXML(invoice as any)
                 const filename = generateInvoiceFilename(invoice as any)

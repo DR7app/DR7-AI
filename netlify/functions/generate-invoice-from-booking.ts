@@ -511,14 +511,24 @@ export const handler: Handler = async (event) => {
             // persona<->azienda): la fattura prendeva l'indirizzo PERSONALE invece
             // di quello AZIENDALE. Persona/PA mantengono i campi anagrafici.
             const isBusiness = customerData.tipo_cliente === 'azienda'
+            const sedeAzienda = isBusiness
+                ? (customerData.sede_legale || customerData.sede_operativa || '')
+                : ''
+            // 2026-08-17: rete di sicurezza per i record azienda STORICI, creati
+            // prima che la sede legale fosse obbligatoria nel form cliente. Con
+            // la sede legale presente non cambia nulla (vince sempre lei, come
+            // dal 20/06); senza, invece di rifiutare la fattura si ripiega sui
+            // campi anagrafici. Meglio una fattura con l'unico indirizzo che il
+            // record possiede che nessuna fattura.
+            const usaAnagrafica = !isBusiness || !sedeAzienda
             // Check various potential address fields
             const street = isBusiness
-                ? (customerData.sede_legale || customerData.sede_operativa || '')
+                ? (sedeAzienda || customerData.indirizzo || customerData.address || customerData.street || '')
                 : (customerData.indirizzo || customerData.sede_legale || customerData.address || customerData.street || '')
-            const num = isBusiness ? '' : (customerData.numero_civico || customerData.streetNumber || '')
-            const zip = isBusiness ? '' : (customerData.codice_postale || customerData.cap || customerData.zipCode || customerData.zip || '')
-            const city = isBusiness ? '' : (customerData.citta_residenza || customerData.citta || customerData.city || '')
-            const prov = isBusiness ? '' : (customerData.provincia_residenza || customerData.provincia || customerData.province || '').toUpperCase().trim()
+            const num = usaAnagrafica ? (customerData.numero_civico || customerData.streetNumber || '') : ''
+            const zip = usaAnagrafica ? (customerData.codice_postale || customerData.cap || customerData.zipCode || customerData.zip || '') : ''
+            const city = usaAnagrafica ? (customerData.citta_residenza || customerData.citta || customerData.city || '') : ''
+            const prov = usaAnagrafica ? (customerData.provincia_residenza || customerData.provincia || customerData.province || '').toUpperCase().trim() : ''
 
             if (street) {
                 let streetAddress = street
@@ -996,10 +1006,15 @@ export const handler: Handler = async (event) => {
             throw insertError
         }
 
-        // Auto-send to SDI via Aruba if customer has tax code (skip for test vehicles)
+        // Auto-send to SDI via Aruba if the customer can be identified at all
+        // (skip for test vehicles).
+        // 2026-08-17: il gate guardava SOLO il codice fiscale. Un'azienda con
+        // la sola P.IVA — cioe' il caso normale — restava in 'draft' e non
+        // partiva mai verso SDI, in silenzio. L'XML sa gia' identificare il
+        // cessionario con IdFiscaleIVA quando la P.IVA c'e'.
         if (isTestVehicle) {
             console.log('[Invoice] Test vehicle — skipping SDI, will send PDF via WhatsApp only')
-        } else if (invoice.customer_tax_code) {
+        } else if (invoice.customer_tax_code || invoice.customer_vat) {
             try {
                 const xmlContent = generateFatturaXML(invoice as any)
                 const filename = generateInvoiceFilename(invoice as any)
@@ -1331,7 +1346,8 @@ async function handleWalletPurchaseFattura(
         const walletPdfUrl = await sendWalletFatturaPdfAndWhatsApp(invoice as any, customerData)
 
         // 7. Attempt SDI send (best-effort — fattura stays as draft if it fails)
-        if (invoice.customer_tax_code) {
+        // 2026-08-17: come sopra — P.IVA da sola basta a identificare il cliente.
+        if (invoice.customer_tax_code || invoice.customer_vat) {
             try {
                 const xmlContent = generateFatturaXML(invoice as any)
                 const filename = generateInvoiceFilename(invoice as any)
