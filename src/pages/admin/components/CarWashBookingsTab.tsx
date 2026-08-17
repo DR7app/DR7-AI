@@ -5848,19 +5848,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             Rimanente: EUR {(((editingBooking.price_total || 0) - (editingBooking.booking_details?.amountPaid || 0)) / 100).toFixed(2)}
                           </p>
                         </div>
-                        <div>
-                          <label className="block text-xs font-medium text-theme-text-secondary mb-1">Metodo già pagato</label>
-                          <select
-                            value={editingBooking.booking_details?.paidMethod || ''}
-                            onChange={(e) => setEditingBooking({ ...editingBooking, booking_details: { ...(editingBooking.booking_details || {}), paidMethod: e.target.value } })}
-                            className="w-full appearance-none px-3 py-2 pr-8 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-sm focus:border-dr7-gold focus:outline-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2012%2012%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M6%208L1%203h10z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:12px] bg-[right_12px_center] bg-no-repeat"
-                          >
-                            <option value="">-- Seleziona --</option>
-                            {paymentMethods.map(pm => (
-                              <option key={pm.key} value={pm.label}>{pm.label}</option>
-                            ))}
-                          </select>
-                        </div>
+                        {/* 2026-08-17: rimosso "Metodo gia' pagato". In modifica
+                            interessa QUANTO e' gia' stato incassato, non con
+                            quale mezzo: il dato non veniva letto da nessuna
+                            parte (ne' report, ne' fattura, ne' messaggi) ed era
+                            solo un campo in piu' da compilare. */}
                         <div>
                           <label className="block text-xs font-medium text-theme-text-secondary mb-1">Metodo per il resto</label>
                           <select
@@ -6230,6 +6222,48 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         } catch (invoiceError) {
                           console.error('[Auto-Gen] ⚠️ Failed to generate fattura:', invoiceError)
                         }
+                      }
+
+                      // ── Modifica: link di pagamento per quello che resta ──
+                      // 2026-08-17 (segnalazione direzione): alzando il prezzo
+                      // di un lavaggio in modifica NON partiva alcun link — il
+                      // link esisteva solo alla CREAZIONE. Il cliente doveva la
+                      // differenza e non riceveva niente.
+                      // Gia' incassato = importo digitato in "Importo gia'
+                      // pagato"; se assente, il totale ORIGINALE quando la
+                      // prenotazione risultava gia' pagata (altrimenti si
+                      // richiederebbe di nuovo tutto). Stessa regola del
+                      // Noleggio. Il link parte solo con metodo Pay by Link:
+                      // su contanti o bonifico il cliente non deve ricevere
+                      // nessun link.
+                      try {
+                        const originale = bookings.find(b => b.id === editingBooking.id)
+                        const origStato = (originale?.payment_status || '').toLowerCase()
+                        const origEraPagato = ['paid', 'completed', 'succeeded'].includes(origStato)
+                        const digitatoCents = Number(updatedDetails.amountPaid) || 0
+                        const origBdPaidCents = Number(originale?.booking_details?.amountPaid) || 0
+                        const origTotalCents = originale?.price_total || 0
+                        const giaIncassatoCents = digitatoCents > 0
+                          ? digitatoCents
+                          : (origBdPaidCents > 0 ? origBdPaidCents : (origEraPagato ? origTotalCents : 0))
+                        const dovutoCents = updatedPrice - giaIncassatoCents
+
+                        if (dovutoCents > 0 && isNexiPayByLink(editingBooking.payment_method)) {
+                          logger.log('[Prime Wash][EditDiffLink] dovuto €' + (dovutoCents / 100).toFixed(2), { updatedPrice, giaIncassatoCents })
+                          // Riuso di handleResendPaymentLink: calcola il residuo
+                          // da price_total - amountPaid, marca il link come
+                          // saldo (booking_topup) e manda il WhatsApp col
+                          // template corretto. Gli passiamo i valori aggiornati.
+                          await handleResendPaymentLink({
+                            ...editingBooking,
+                            price_total: updatedPrice,
+                            booking_details: { ...updatedDetails, amountPaid: giaIncassatoCents },
+                          })
+                        } else if (dovutoCents > 0 && editingBooking.payment_method) {
+                          toast(`Restano EUR ${(dovutoCents / 100).toFixed(2)} da incassare (metodo: ${editingBooking.payment_method}). Nessun link inviato.`, { duration: 6000, icon: 'i' })
+                        }
+                      } catch (linkErr) {
+                        console.error('[Prime Wash] Link differenza fallito:', linkErr)
                       }
 
                       // DR7 Privilege — fire on paid (edit-modal path). Gated
