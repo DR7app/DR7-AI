@@ -1031,7 +1031,17 @@ export const handler: Handler = async (event) => {
                 console.log('[Invoice] Auto-sent to SDI via Aruba:', arubaResult.id)
             } catch (sdiError: any) {
                 console.error('[Invoice] Auto-SDI failed (invoice still saved as draft):', sdiError.message)
-                // Invoice is saved, SDI send failed — user can retry via "Invia SDI" button
+                // Invoice is saved, SDI send failed — user can retry via "Invia SDI" button.
+                // 2026-08-17: il motivo finisce anche sulla riga. Prima restava
+                // solo nei log delle function e la fattura sembrava una bozza
+                // qualunque; ora si legge perche' non e' partita (tipico:
+                // indirizzo cliente non interpretabile).
+                // sdi_status resta 'draft' di proposito: 'error' farebbe
+                // assegnare un NUOVO numero al reinvio (send-invoice-to-sdi),
+                // e questa fattura non e' mai uscita.
+                await supabase.from('fatture').update({
+                    sdi_response: { auto_send_error: String(sdiError?.message || sdiError), at: new Date().toISOString() }
+                }).eq('id', invoice.id)
             }
         } else {
             console.log('[Invoice] No tax code — saved as draft. Ready for manual Aruba upload.')
@@ -1362,6 +1372,10 @@ async function handleWalletPurchaseFattura(
                 console.log('[Wallet Fattura] Sent to SDI:', arubaResult.id)
             } catch (sdiErr: any) {
                 console.error('[Wallet Fattura] SDI send failed (fattura saved as draft):', sdiErr?.message)
+                // 2026-08-17: motivo leggibile sulla riga, come sopra.
+                await supabase.from('fatture').update({
+                    sdi_response: { auto_send_error: String(sdiErr?.message || sdiErr), at: new Date().toISOString() }
+                }).eq('id', invoice.id)
             }
         } else {
             console.log('[Wallet Fattura] No customer tax code — skipping SDI')

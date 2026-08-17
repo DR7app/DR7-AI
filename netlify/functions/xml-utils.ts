@@ -39,57 +39,63 @@ interface AddressParts {
 }
 
 /**
- * Parse address string into components
- * Expected format: "Via Roma 123, 09100 Cagliari (CA)"
+ * Parse address string into components.
+ * Formato tipico: "Via Roma 123, 09100 Cagliari (CA)" — ma si accetta anche
+ * senza virgole ("Via Roma 123 09100 Cagliari CA").
+ *
+ * 2026-08-17 — NIENTE PIU' VALORI DI COMODO. Prima, quando la stringa non era
+ * interpretabile, questa funzione riempiva i buchi con "09100 Cagliari (CA)" e
+ * si limitava a un console.warn: la fattura partiva verso SDI intestata a un
+ * indirizzo INVENTATO, e nessuno se ne accorgeva. Una sede legale scritta a
+ * mano senza virgola bastava a innescarlo.
+ *
+ * Ora: se CAP, comune, provincia o via non si ricavano, si solleva un errore
+ * parlante. Chi chiama gestisce gia' l'eccezione lasciando la fattura salvata
+ * in bozza (numero incluso, quindi niente numerazione bruciata): si corregge
+ * l'anagrafica del cliente e si rimanda con "Invia SDI".
  */
 function parseAddress(address: string): AddressParts {
-  const parts = address.split(',').map(p => p.trim())
+  const raw = (address || '').replace(/\s+/g, ' ').trim()
+  const incompleto = (cosa: string) => new Error(
+    `Indirizzo cliente incompleto per la fattura elettronica: ${cosa} non ricavabile da "${raw || '(vuoto)'}". ` +
+    'Correggi l\'anagrafica del cliente (per le aziende: la sede legale, nel formato "Via Roma 12, 09100 Cagliari (CA)") e reinvia.'
+  )
 
-  let street = ''
-  let cap = '09100'
-  let comune = 'Cagliari'
-  let provincia = 'CA'
+  if (!raw) throw new Error(
+    'Indirizzo cliente mancante: impossibile generare la fattura elettronica. ' +
+    'Compila l\'anagrafica del cliente (per le aziende: la sede legale) e reinvia.'
+  )
 
-  if (parts.length >= 2) {
-    street = parts[0]
-    const cityPart = parts[1]
+  // CAP: primo gruppo di 5 cifre. Fa anche da separatore fra via e comune.
+  const capMatch = raw.match(/\b(\d{5})\b/)
+  if (!capMatch || capMatch.index === undefined) throw incompleto('il CAP')
+  const cap = capMatch[1]
 
-    const capMatch = cityPart.match(/\b(\d{5})\b/)
-    if (capMatch) cap = capMatch[1]
+  const street = raw.slice(0, capMatch.index).replace(/[,;\s]+$/, '').trim()
+  if (!street) throw incompleto('la via')
 
-    const provinciaMatch = cityPart.match(/\(([A-Za-z]{2})\)/)
-    if (provinciaMatch) provincia = provinciaMatch[1].toUpperCase()
+  let rest = raw.slice(capMatch.index + cap.length).replace(/^[,;\s]+/, '').trim()
 
-    const parsedComune = cityPart
-      .replace(cap, '')
-      .replace(`(${provincia})`, '')
-      .trim()
-    if (parsedComune) comune = parsedComune
+  // Provincia: fra parentesi "(CA)" oppure due lettere isolate in coda.
+  // E' l'UNICO campo facoltativo dello schema FatturaPA fra questi quattro:
+  // se non c'e', il tag si omette (vedi il template piu' sotto). Non si
+  // inventa una sigla, e non si blocca la fattura per colpa sua.
+  let provincia = ''
+  const provParen = rest.match(/\(\s*([A-Za-z]{2})\s*\)/)
+  if (provParen) {
+    provincia = provParen[1].toUpperCase()
+    rest = rest.replace(provParen[0], ' ')
   } else {
-    street = address || 'N/A'
+    const provCoda = rest.match(/[\s,]([A-Za-z]{2})\s*$/)
+    if (provCoda && provCoda.index !== undefined) {
+      provincia = provCoda[1].toUpperCase()
+      rest = rest.slice(0, provCoda.index).trim()
+    }
   }
+  if (provincia && !/^[A-Z]{2}$/.test(provincia)) provincia = ''
 
-  // SDI validation: CAP must be exactly 5 digits
-  if (!/^\d{5}$/.test(cap)) {
-    console.warn(`[XML] Invalid CAP "${cap}", defaulting to 09100`)
-    cap = '09100'
-  }
-
-  // SDI validation: Provincia must be exactly 2 uppercase letters
-  if (!/^[A-Z]{2}$/.test(provincia)) {
-    console.warn(`[XML] Invalid Provincia "${provincia}", defaulting to CA`)
-    provincia = 'CA'
-  }
-
-  // SDI validation: Street must not be empty
-  if (!street || street.trim() === '') {
-    street = 'N/A'
-  }
-
-  // SDI validation: Comune must not be empty
-  if (!comune || comune.trim() === '') {
-    comune = 'Cagliari'
-  }
+  const comune = rest.replace(/[,;]/g, ' ').replace(/\s+/g, ' ').trim()
+  if (!comune) throw incompleto('il comune')
 
   return { street, cap, comune, provincia }
 }
@@ -315,8 +321,8 @@ export function generateFatturaXML(invoice: InvoiceData): string {
       <Sede>
         <Indirizzo>${escapeXml(customerAddress.street)}</Indirizzo>
         <CAP>${customerAddress.cap}</CAP>
-        <Comune>${escapeXml(customerAddress.comune)}</Comune>
-        <Provincia>${customerAddress.provincia}</Provincia>
+        <Comune>${escapeXml(customerAddress.comune)}</Comune>${customerAddress.provincia ? `
+        <Provincia>${customerAddress.provincia}</Provincia>` : ''}
         <Nazione>IT</Nazione>
       </Sede>
     </CessionarioCommittente>

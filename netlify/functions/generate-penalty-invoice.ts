@@ -374,6 +374,10 @@ export const handler: Handler = async (event) => {
                 console.log('[Penalty Invoice] Auto-sent to SDI via Aruba:', arubaResult.id)
             } catch (sdiError: any) {
                 console.error('[Penalty Invoice] Auto-SDI failed (invoice still saved as draft):', sdiError.message)
+                // 2026-08-17: motivo leggibile sulla riga invece che solo nei log.
+                await supabase.from('fatture').update({
+                    sdi_response: { auto_send_error: String(sdiError?.message || sdiError), at: new Date().toISOString() }
+                }).eq('id', invoice.id)
             }
         }
 
