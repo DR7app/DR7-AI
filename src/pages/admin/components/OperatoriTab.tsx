@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { formatAdminLog, formatEntityLabel } from '../../../utils/formatAdminLog'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import { authFetch } from '../../../utils/authFetch'
 import OperatoriReportDashboardV2 from './OperatoriReportDashboardV2'
 import PayrollPeriodoView from './PayrollPeriodoView'
 import InviteOperatoreModal, { PERMISSION_SECTIONS } from './InviteOperatoreModal'
@@ -509,6 +510,51 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
   // — same allowlist as the OTP self-approval.
   const [inviteOpen, setInviteOpen] = useState(false)
   const canEditOperators = hasRole('direzione') || hasRole('developer')
+  // 2026-08-18 (richiesta direzione): eliminazione DEFINITIVA di un operatore.
+  // La function delete-operator-hard esisteva gia' (protetta: solo direzione o
+  // developer, self-delete vietato) ma nessun bottone la chiamava. Qui si
+  // aggiunge il comando, con la stessa doppia sicurezza chiesta dal server:
+  // ruolo + conferma esplicita digitata a mano.
+  const [deletingOperator, setDeletingOperator] = useState(false)
+  async function handleDeleteOperator(a: Admin) {
+    const nome = a.nome || a.email || 'questo operatore'
+    const mail = (a.email || '').trim()
+    if (!mail) { toast.error('Operatore senza email: eliminazione non possibile da qui.'); return }
+    if (!confirm(
+      `ELIMINARE DEFINITIVAMENTE ${nome} (${mail})?\n\n` +
+      'Vengono cancellati per sempre: accesso e permessi, anagrafica operatore, ' +
+      'contratti, STORICO ORARI (timesheet) e account di login.\n\n' +
+      'Gli acconti registrati e il log delle azioni restano, intestati al nome.\n\n' +
+      'Operazione IRREVERSIBILE.'
+    )) return
+    // Seconda conferma digitata: evita l'eliminazione per click di troppo.
+    const typed = prompt(`Per confermare, scrivi l'email dell'operatore:\n${mail}`)
+    if ((typed || '').trim().toLowerCase() !== mail.toLowerCase()) {
+      if (typed !== null) toast.error('Email non corrispondente: eliminazione annullata.')
+      return
+    }
+    setDeletingOperator(true)
+    try {
+      const res = await authFetch('/.netlify/functions/delete-operator-hard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: mail, confirm: 'DELETE_FOREVER' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(`Eliminazione fallita: ${data?.error || res.status}${data?.details ? ' — ' + JSON.stringify(data.details) : ''}`, { duration: 10000 })
+        return
+      }
+      toast.success(`${nome} eliminato definitivamente.`)
+      logAdminAction('delete_operatore', 'operatore', mail, { nome, deleted: data?.deleted })
+      setSelectedAdmin(null)
+      loadAdmins()
+    } catch (e) {
+      toast.error('Eliminazione fallita: ' + (e instanceof Error ? e.message : 'errore sconosciuto'))
+    } finally {
+      setDeletingOperator(false)
+    }
+  }
 
   // Save a single field on the selected admin row + update local state.
   const updateFieldLockRef = useRef(false)
@@ -766,6 +812,31 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
                 <ProfileField label="Foto profilo" value="Iniziali" />
                 <ProfileField label="ID interno" value={selected.id.slice(0, 8)} />
               </div>
+
+              {/* Zona pericolosa — eliminazione definitiva. Solo direzione o
+                  developer, come impone anche il server. Non si puo' eliminare
+                  se stessi (il server rifiuta comunque). */}
+              {canEditOperators && selected.email?.toLowerCase() !== (adminEmail || '').toLowerCase() && (
+                <div className="mt-6 border-t border-rose-500/30 pt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-500/30 bg-rose-500/5 px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-semibold text-rose-500">Elimina definitivamente</div>
+                      <div className="text-[11px] text-theme-text-muted mt-0.5">
+                        Cancella per sempre accesso, permessi, anagrafica, contratti, storico orari e account di login.
+                        Acconti e log delle azioni restano, intestati al nome. Irreversibile.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteOperator(selected)}
+                      disabled={deletingOperator}
+                      className="shrink-0 px-4 py-2 rounded-lg bg-rose-600 text-white text-[12px] font-semibold hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {deletingOperator ? 'Eliminazione…' : 'Elimina operatore'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Permessi & Ruoli — editabile solo dalla direzione */}
               {canEditOperators && (() => {
