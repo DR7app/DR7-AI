@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
+import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
+import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import NuovaCauzioneModal from './NuovaCauzioneModal'
 import CassaCauzioneModal from './CassaCauzioneModal'
 import toast from 'react-hot-toast'
@@ -39,6 +41,13 @@ interface Cauzione {
 }
 
 export default function CauzioniTab() {
+    // 2026-08-18 (richiesta direzione): sbloccare una pre-autorizzazione libera
+    // una garanzia in denaro, quindi passa dall'OTP direzionale come le altre
+    // azioni sensibili. Il codice e' configurabile dalla tab OTP
+    // ('cauzione_sblocca_preauth'): se la direzione lo disattiva, l'azione parte
+    // diretta — nessun blocco duro, mai.
+    const override = useLimitationOverride()
+    const pendingSbloccoRef = useRef<Cauzione | null>(null)
     const [cauzioni, setCauzioni] = useState<Cauzione[]>([])
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
@@ -801,16 +810,29 @@ export default function CauzioniTab() {
     // una pre-autorizzazione si poteva fare solo dalla tab Nexi, cercando
     // l'operazione a mano. Ora c'e' il bottone "SBLOCCA" sulla riga della
     // cauzione.
-    const handleMarkSbloccataPreauth = async (cauzione: Cauzione) => {
+    const handleMarkSbloccataPreauth = async (cauzione: Cauzione, opts?: { skipConfirm?: boolean }) => {
         // Sbloccare libera i fondi sulla carta del cliente: la garanzia sparisce
         // e non si "ri-blocca" — serve una nuova pre-autorizzazione. Quindi si
         // conferma prima.
         const importoFmt = Number(cauzione.importo || 0).toFixed(2)
-        if (!confirm(
+        if (!opts?.skipConfirm && !confirm(
             `Sbloccare la pre-autorizzazione di EUR ${importoFmt} di ${cauzione.cliente_nome || 'questo cliente'}?\n\n` +
             'I fondi tornano subito disponibili sulla carta e la garanzia non c\'e\' piu\'. ' +
             'Per riaverla serve una NUOVA pre-autorizzazione.'
         )) return
+
+        // OTP direzionale. Se il codice e' disattivato in Gestione OTP,
+        // requestOverride approva da solo e si prosegue al prossimo giro.
+        if (!override.hasOverride('cauzione_sblocca_preauth')) {
+            pendingSbloccoRef.current = cauzione
+            override.requestOverride(
+                'cauzione_sblocca_preauth',
+                `Sblocco della pre-autorizzazione di EUR ${importoFmt} intestata a ${cauzione.cliente_nome || 'cliente'}: i fondi tornano disponibili sulla carta e la garanzia decade.`,
+                `cauzione_sblocco_${cauzione.id}`,
+            )
+            return
+        }
+
         try {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const nexiTransactionId = (cauzione as any).nexi_transaction_id
@@ -852,6 +874,17 @@ export default function CauzioniTab() {
             toast.error(`Errore: ${_errMsg}`)
         }
     }
+
+    // Ripresa dopo l'approvazione OTP: si riparte da dove si era interrotto,
+    // senza richiedere di nuovo la conferma gia' data.
+    useEffect(() => {
+        const pending = pendingSbloccoRef.current
+        if (pending && override.overrideCodes.has('cauzione_sblocca_preauth')) {
+            pendingSbloccoRef.current = null
+            handleMarkSbloccataPreauth(pending, { skipConfirm: true })
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [override.overrideCodes])
 
     // Capture full preauth amount
     // @ts-ignore
@@ -1637,6 +1670,24 @@ export default function CauzioniTab() {
                     onSuccess={() => { setCassaCauzione(null); fetchCauzioni() }}
                 />
             )}
+
+            {/* OTP direzionale (sblocco pre-autorizzazione). Stesso modale e
+                stessa function del resto del gestionale — nessun popup inventato. */}
+            <LimitationOverrideModal
+                isOpen={override.limitationState.isOpen}
+                limitationCode={override.limitationState.limitationCode}
+                limitationMessage={override.limitationState.limitationMessage}
+                actionContext={override.limitationState.actionContext}
+                draftSessionId={override.draftSessionId}
+                flowType={override.flowType}
+                onClose={override.closeLimitation}
+                onCancel={() => {
+                    // Annullo: niente sblocco, e il gate si ri-arma al prossimo click.
+                    pendingSbloccoRef.current = null
+                    override.cancelLimitation()
+                }}
+                onOverrideApproved={override.handleOverrideApproved}
+            />
         </div>
     )
 }
