@@ -35,11 +35,16 @@ export default function AdminRoute({ children }: AdminRouteProps) {
 
       const { data: admin } = await supabase
         .from('admins')
-        .select('role')
+        .select('role, archived_at')
         .eq('user_id', session.user.id)
         .single()
 
-      setAuthorized(!!admin)
+      // 2026-08-18 (richiesta direzione): un operatore ARCHIVIATO non entra.
+      // Prima bastava esistere in `admins` — il campo "Stato" della scheda non
+      // era controllato da nessuna parte, quindi un operatore messo
+      // "Inattivo" continuava tranquillamente a lavorare nel gestionale.
+      // Archiviare conserva riga e storico, ma chiude la porta.
+      setAuthorized(!!admin && !admin.archived_at)
     } catch (error) {
       console.error('Auth check error:', error)
       setAuthorized(false)

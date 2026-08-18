@@ -3,7 +3,6 @@ import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { formatAdminLog, formatEntityLabel } from '../../../utils/formatAdminLog'
 import { logAdminAction } from '../../../utils/logAdminAction'
-import { authFetch } from '../../../utils/authFetch'
 import OperatoriReportDashboardV2 from './OperatoriReportDashboardV2'
 import PayrollPeriodoView from './PayrollPeriodoView'
 import InviteOperatoreModal, { PERMISSION_SECTIONS } from './InviteOperatoreModal'
@@ -44,6 +43,8 @@ interface Admin {
   responsabile?: string | null
   contatto_interno?: string | null
   permissions?: string[] | null
+  /** Valorizzata = operatore archiviato: niente accesso, storico conservato. */
+  archived_at?: string | null
 }
 
 // Role tags mirror useAdminRole.AdminRoleTag. Direzione can grant these
@@ -242,7 +243,7 @@ function previousMonthRange(): { from: string; to: string } {
 
 const AGG_HARD_LIMIT = 5000  // cap aggregation fetch to avoid OOM
 
-type OperatoriView = 'dashboard' | 'rilevazione' | 'payroll' | 'audit' | 'contratti'
+type OperatoriView = 'dashboard' | 'rilevazione' | 'payroll' | 'audit' | 'contratti' | 'storico'
 
 function OperatoriViewSwitch({ view, setView, canSeePayroll }: { view: OperatoriView; setView: (v: OperatoriView) => void; canSeePayroll: boolean }) {
   const LABELS: Record<OperatoriView, string> = {
@@ -251,12 +252,13 @@ function OperatoriViewSwitch({ view, setView, canSeePayroll }: { view: Operatori
     payroll: 'Buste Paga',
     contratti: 'Contratti',
     audit: 'Gestione & Permessi',
+    storico: 'Storico',
   }
   // 2026-06-05: "Buste Paga" visibile SOLO ai ruoli autorizzati alle paghe
   // (direzione / developer / stipendio-editor). I lavaggisti (car wash) e gli
   // altri operatori NON devono vedere la propria busta paga — mostrava importi
   // con default sbagliati.
-  const VIEWS = (['dashboard', 'rilevazione', 'payroll', 'contratti', 'audit'] as const)
+  const VIEWS = (['dashboard', 'rilevazione', 'payroll', 'contratti', 'audit', 'storico'] as const)
     .filter(v => v !== 'payroll' || canSeePayroll)
   return (
     <div className="flex justify-end">
@@ -321,11 +323,17 @@ export default function OperatoriTab() {
       </div>
     )
   }
-  return <AuditLogView onSwitchView={() => setView('dashboard')} />
+  if (effectiveView === 'storico') {
+    // Stessa schermata di "Gestione & Permessi", ma sugli ARCHIVIATI: cosi' lo
+    // storico di un ex operatore (profilo, log, statistiche) resta consultabile
+    // esattamente come prima, senza duplicare una riga di codice.
+    return <AuditLogView key="storico" onSwitchView={() => setView('dashboard')} archived />
+  }
+  return <AuditLogView key="attivi" onSwitchView={() => setView('dashboard')} />
 }
 
-function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
-  const { hasRole, adminEmail } = useAdminRole()
+function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => void; archived?: boolean }) {
+  const { hasRole, adminEmail, adminId } = useAdminRole()
   // 2026-05-27: chi puo' flippare il toggle OTP per-operatore e'
   // ora un RUOLO (role:otp-admin) — non piu' una lista hardcoded di
   // email. Failsafe pre-grants v/i/s/ophe; altri membri direzione
@@ -461,11 +469,14 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
     const myEmail = (user?.email || '').toLowerCase()
     const isDirection = hasRoleRef.current('direzione') || hasRoleRef.current('developer')
 
-    const { data } = await supabase.from('admins').select('id, email, nome, role, sede, reparto, tipo_rapporto, stato, responsabile, contatto_interno, permissions')
+    const { data } = await supabase.from('admins').select('id, email, nome, role, sede, reparto, tipo_rapporto, stato, responsabile, contatto_interno, permissions, archived_at')
     if (data) {
+      // La vista "Storico" mostra SOLO gli archiviati; quella normale solo gli
+      // attivi. Un ex operatore non deve piu' comparire fra chi lavora.
+      const byArchive = data.filter(a => archived ? !!a.archived_at : !a.archived_at)
       const filtered = isDirection
-        ? data
-        : data.filter(a => (a.email || '').toLowerCase() === myEmail)
+        ? byArchive
+        : byArchive.filter(a => (a.email || '').toLowerCase() === myEmail)
       filtered.sort((a, b) => {
         const ai = rosterOrder.indexOf(a.nome || '')
         const bi = rosterOrder.indexOf(b.nome || '')
@@ -515,47 +526,39 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
   // developer, self-delete vietato) ma nessun bottone la chiamava. Qui si
   // aggiunge il comando, con la stessa doppia sicurezza chiesta dal server:
   // ruolo + conferma esplicita digitata a mano.
-  const [deletingOperator, setDeletingOperator] = useState(false)
-  async function handleDeleteOperator(a: Admin) {
+  // Archiviazione: si toglie l'ACCESSO e basta. La riga resta, con orari,
+  // contratti, acconti e log: l'ex operatore si ritrova nella sotto-tab
+  // "Storico" e non entra piu' nel gestionale (AdminRoute + useAdminRole
+  // controllano archived_at, e gli helper RLS ignorano gli archiviati).
+  const [archivingOperator, setArchivingOperator] = useState(false)
+  async function handleArchiveOperator(a: Admin, archivia: boolean) {
     const nome = a.nome || a.email || 'questo operatore'
-    const mail = (a.email || '').trim()
-    if (!mail) { toast.error('Operatore senza email: eliminazione non possibile da qui.'); return }
-    if (!confirm(
-      `ELIMINARE DEFINITIVAMENTE ${nome} (${mail})?\n\n` +
-      'Vengono cancellati per sempre: accesso e permessi, anagrafica operatore, ' +
-      'contratti, STORICO ORARI (timesheet) e account di login.\n\n' +
-      'Gli acconti registrati e il log delle azioni restano, intestati al nome.\n\n' +
-      'Operazione IRREVERSIBILE.'
+    if (archivia && !confirm(
+      `Archiviare ${nome}?\n\n` +
+      'Perde subito l\'accesso al gestionale. NON si cancella nulla: orari, ' +
+      'contratti, acconti e log restano e si consultano dalla sotto-tab Storico.\n\n' +
+      'Reversibile: da Storico puoi ripristinare l\'accesso quando vuoi.'
     )) return
-    // Seconda conferma digitata: evita l'eliminazione per click di troppo.
-    const typed = prompt(`Per confermare, scrivi l'email dell'operatore:\n${mail}`)
-    if ((typed || '').trim().toLowerCase() !== mail.toLowerCase()) {
-      if (typed !== null) toast.error('Email non corrispondente: eliminazione annullata.')
-      return
-    }
-    setDeletingOperator(true)
+    if (!archivia && !confirm(`Ripristinare l'accesso di ${nome} al gestionale?`)) return
+    setArchivingOperator(true)
     try {
-      const res = await authFetch('/.netlify/functions/delete-operator-hard', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: mail, confirm: 'DELETE_FOREVER' }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        toast.error(`Eliminazione fallita: ${data?.error || res.status}${data?.details ? ' — ' + JSON.stringify(data.details) : ''}`, { duration: 10000 })
-        return
-      }
-      toast.success(`${nome} eliminato definitivamente.`)
-      logAdminAction('delete_operatore', 'operatore', mail, { nome, deleted: data?.deleted })
+      const { error } = await supabase
+        .from('admins')
+        .update(archivia
+          ? { archived_at: new Date().toISOString(), archived_by: adminId || null }
+          : { archived_at: null, archived_by: null })
+        .eq('id', a.id)
+      if (error) throw error
+      toast.success(archivia ? `${nome} archiviato: accesso revocato.` : `Accesso ripristinato per ${nome}.`)
+      logAdminAction(archivia ? 'archive_operatore' : 'restore_operatore', 'operatore', a.email || a.id, { nome })
       setSelectedAdmin(null)
       loadAdmins()
     } catch (e) {
-      toast.error('Eliminazione fallita: ' + (e instanceof Error ? e.message : 'errore sconosciuto'))
+      toast.error((archivia ? 'Archiviazione' : 'Ripristino') + ' fallito: ' + (e instanceof Error ? e.message : 'errore sconosciuto'))
     } finally {
-      setDeletingOperator(false)
+      setArchivingOperator(false)
     }
   }
-
   // Save a single field on the selected admin row + update local state.
   const updateFieldLockRef = useRef(false)
   async function updateOperatorField(adminId: string, field: keyof Admin, value: string) {
@@ -817,24 +820,39 @@ function AuditLogView({ onSwitchView }: { onSwitchView: () => void }) {
                   developer, come impone anche il server. Non si puo' eliminare
                   se stessi (il server rifiuta comunque). */}
               {canEditOperators && selected.email?.toLowerCase() !== (adminEmail || '').toLowerCase() && (
-                <div className="mt-6 border-t border-rose-500/30 pt-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-500/30 bg-rose-500/5 px-4 py-3">
+                <div className="mt-6 border-t border-theme-border pt-4 space-y-3">
+                  {/* Azione NORMALE per chi lascia: archivia. Toglie l'accesso,
+                      non cancella niente, e si puo' tornare indietro. */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
                     <div className="min-w-0">
-                      <div className="text-[13px] font-semibold text-rose-500">Elimina definitivamente</div>
+                      <div className="text-[13px] font-semibold text-amber-500">
+                        {selected.archived_at ? 'Operatore archiviato' : 'Archivia (togli l\'accesso)'}
+                      </div>
                       <div className="text-[11px] text-theme-text-muted mt-0.5">
-                        Cancella per sempre accesso, permessi, anagrafica, contratti, storico orari e account di login.
-                        Acconti e log delle azioni restano, intestati al nome. Irreversibile.
+                        {selected.archived_at
+                          ? `Archiviato il ${new Date(selected.archived_at).toLocaleDateString('it-IT')} — nessun accesso al gestionale. Storico, orari, contratti e acconti conservati.`
+                          : 'Perde subito l\'accesso al gestionale. Non cancella nulla: finisce nella sotto-tab Storico con tutto il suo storico. Reversibile.'}
                       </div>
                     </div>
                     <button
                       type="button"
-                      onClick={() => handleDeleteOperator(selected)}
-                      disabled={deletingOperator}
-                      className="shrink-0 px-4 py-2 rounded-lg bg-rose-600 text-white text-[12px] font-semibold hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => handleArchiveOperator(selected, !selected.archived_at)}
+                      disabled={archivingOperator}
+                      className={`shrink-0 px-4 py-2 rounded-lg text-white text-[12px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed ${selected.archived_at ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-600 hover:bg-amber-700'}`}
                     >
-                      {deletingOperator ? 'Eliminazione…' : 'Elimina operatore'}
+                      {archivingOperator
+                        ? 'Attendere…'
+                        : (selected.archived_at ? 'Ripristina accesso' : 'Archivia operatore')}
                     </button>
                   </div>
+
+                  {/* 2026-08-18: il bottone "Elimina definitivamente" e' stato
+                      TOLTO dalla scheda. La direzione vuole archiviare, non
+                      distruggere: un click di troppo su un pulsante rosso
+                      avrebbe cancellato per sempre lo storico orari, cioe' dati
+                      di paga. La function delete-operator-hard resta lato
+                      server per i casi eccezionali (GDPR), ma non e' piu'
+                      raggiungibile da qui. */}
                 </div>
               )}
 

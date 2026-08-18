@@ -79,12 +79,20 @@ export function useAdminRole(): AdminRole {
 
         const { data, error } = await supabase
           .from('admins')
-          .select('id, role, can_view_financials, nome, permissions')
+          .select('id, role, can_view_financials, nome, permissions, archived_at')
           .eq('user_id', user.id)
           .single()
 
         if (error) {
           console.error('Error loading admin role:', error)
+          setRole('admin')
+          setCanViewFinancials(false)
+          setPermissions([])
+        } else if (data && (data as { archived_at?: string | null }).archived_at) {
+          // Operatore archiviato: nessun ruolo, nessun permesso. AdminRoute lo
+          // rimanda al login; questo e' il secondo strato, per i punti che
+          // leggono i permessi senza passare dal route guard.
+          console.warn('[useAdminRole] Operatore archiviato: accesso negato')
           setRole('admin')
           setCanViewFinancials(false)
           setPermissions([])

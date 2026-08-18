@@ -11,6 +11,7 @@ import ReservationsTab from './components/ReservationsTab'
 import ImmondiziaTab from './components/ImmondiziaTab'
 import TicketTab from './components/TicketTab'
 import MovimentiAereiTab from './components/MovimentiAereiTab'
+import { useVehicleAlarm } from '../../contexts/VehicleAlarmContext'
 import { useBirthdayCount } from './components/BirthdaysTab'
 import { useFatturaScartataCount } from './components/FatturaTab'
 import PlaceholderTab from './components/PlaceholderTab'
@@ -145,8 +146,9 @@ export default function AdminDashboard() {
   const [initialCarWashData, setInitialCarWashData] = useState<{ appointmentDate?: string, appointmentTime?: string } | null>(null)
 
   const navigate = useNavigate()
-  // 2026-08-18: la sidebar non tocca piu' gli allarmi (comando spostato in
-  // Centralina Pro > Allarmi), quindi qui non serve piu' il contesto allarmi.
+  // 2026-08-18: gli allarmi non stanno piu' in fondo alla sidebar ma nel menu
+  // utente in alto a destra, accanto alle altre azioni personali.
+  const { alarmState, enableAudio } = useVehicleAlarm()
   const birthdayCount = useBirthdayCount()
   const scartataCount = useFatturaScartataCount()
   const { role: adminRole, hasPermission, adminName, adminEmail, adminAvatar, permissions, loading: roleLoading } = useAdminRole()
@@ -900,6 +902,34 @@ export default function AdminDashboard() {
                           </svg>
                           I miei orari
                         </button>
+                        <div className="border-t border-theme-border my-1" />
+                      </>
+                    )}
+                    {/* 2026-08-18: "Attiva Allarmi" spostato qui dalla sidebar.
+                        L'audio del browser richiede un click dell'utente, quindi
+                        serve un comando raggiungibile ovunque, non solo dentro
+                        Centralina Pro > Allarmi. Nascosto ai collaboratori e a
+                        chi ha `hide:allarmi`, come prima. */}
+                    {!isCollaboratore && !isHidden('allarmi') && (
+                      <>
+                        {!alarmState.audioEnabled ? (
+                          <button
+                            onClick={() => { setUserMenuOpen(false); enableAudio() }}
+                            className="w-full text-left px-3 py-3 hover:bg-theme-bg-tertiary text-theme-text-primary flex items-center gap-2 min-h-[44px]"
+                          >
+                            <svg className="w-4 h-4 text-theme-text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                            </svg>
+                            Attiva Allarmi
+                          </button>
+                        ) : (
+                          <div className="w-full text-left px-3 py-3 text-green-500 flex items-center gap-2 min-h-[44px]">
+                            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                            </svg>
+                            Allarmi attivi
+                          </div>
+                        )}
                         <div className="border-t border-theme-border my-1" />
                       </>
                     )}
