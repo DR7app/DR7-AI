@@ -77,11 +77,23 @@ export function useAdminRole(): AdminRole {
         }
         setAdminEmail(user.email || null)
 
-        const { data, error } = await supabase
+        // 2026-08-18 INCIDENTE: vedi AdminRoute. Se `archived_at` non esiste
+        // ancora (migrazione non eseguita) la query fallisce e l'operatore
+        // resta senza ruolo e senza permessi. Si ripiega sulla select storica.
+        let { data, error } = await supabase
           .from('admins')
           .select('id, role, can_view_financials, nome, permissions, archived_at')
           .eq('user_id', user.id)
           .single()
+        if (error) {
+          const retry = await supabase
+            .from('admins')
+            .select('id, role, can_view_financials, nome, permissions')
+            .eq('user_id', user.id)
+            .single()
+          data = retry.data as typeof data
+          error = retry.error
+        }
 
         if (error) {
           console.error('Error loading admin role:', error)

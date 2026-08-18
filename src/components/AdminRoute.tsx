@@ -33,11 +33,27 @@ export default function AdminRoute({ children }: AdminRouteProps) {
         return
       }
 
-      const { data: admin } = await supabase
+      // 2026-08-18 INCIDENTE: leggere `archived_at` prima che la migrazione
+      // fosse eseguita faceva fallire l'INTERA query (colonna inesistente) →
+      // admin = null → tutti fuori dal gestionale, direzione compresa.
+      // Ora la colonna nuova e' un DI PIU', non una condizione per entrare:
+      // se non c'e' ancora, si rilegge senza e si entra come prima.
+      let admin: { role?: string; archived_at?: string | null } | null = null
+      const { data: withArchive, error: archErr } = await supabase
         .from('admins')
         .select('role, archived_at')
         .eq('user_id', session.user.id)
         .single()
+      if (archErr) {
+        const { data: legacy } = await supabase
+          .from('admins')
+          .select('role')
+          .eq('user_id', session.user.id)
+          .single()
+        admin = legacy
+      } else {
+        admin = withArchive
+      }
 
       // 2026-08-18 (richiesta direzione): un operatore ARCHIVIATO non entra.
       // Prima bastava esistere in `admins` — il campo "Stato" della scheda non
