@@ -284,12 +284,17 @@ function OperatoriViewSwitch({ view, setView, canSeePayroll, canManageOperators 
 // 2026-05-20: V1 (OperatoriReportDashboard) rimossa. Resta solo V2.
 
 export default function OperatoriTab() {
-  const { hasRole } = useAdminRole()
+  const { hasRole, role: myRole } = useAdminRole()
   // Solo i ruoli abilitati alle paghe possono vedere le Buste Paga; i lavaggisti
   // (car wash) e gli altri operatori no (mostrava paghe con default errati).
   const canSeePayroll = hasRole('direzione') || hasRole('developer') || hasRole('stipendio-editor')
   // Amministrazione: unica a gestire permessi, ruoli e archivio operatori.
-  const canManageOperators = hasRole('direzione') || hasRole('developer')
+  // 2026-08-18: incluso anche `role === 'superadmin'`. In database
+  // dr7_is_direzione() considera GIA' il superadmin come direzione, l'interfaccia
+  // no: un superadmin senza tag `direzione` non vedeva ne' l'editor dei permessi
+  // ne' l'archivio — su un dispositivo funzionava e sull'altro no, a seconda del
+  // conto usato. Ora frontend e database dicono la stessa cosa.
+  const canManageOperators = hasRole('direzione') || hasRole('developer') || myRole === 'superadmin'
   const [view, setView] = useState<OperatoriView>('dashboard')
   // Se un non autorizzato è su payroll (es. stato vecchio o link diretto),
   // riportalo alla dashboard: niente busta paga per i non abilitati.
@@ -343,7 +348,7 @@ export default function OperatoriTab() {
 }
 
 function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => void; archived?: boolean }) {
-  const { hasRole, adminEmail, adminId } = useAdminRole()
+  const { hasRole, adminEmail, adminId, role: myRole } = useAdminRole()
   // 2026-05-27: chi puo' flippare il toggle OTP per-operatore e'
   // ora un RUOLO (role:otp-admin) — non piu' una lista hardcoded di
   // email. Failsafe pre-grants v/i/s/ophe; altri membri direzione
@@ -355,6 +360,8 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
   // every role-hook re-render would thrash useEffect downstream).
   const hasRoleRef = useRef(hasRole)
   useEffect(() => { hasRoleRef.current = hasRole }, [hasRole])
+  const myRoleRef = useRef(myRole)
+  useEffect(() => { myRoleRef.current = myRole }, [myRole])
 
   const [admins, setAdmins] = useState<Admin[]>([])
   const [selectedAdmin, setSelectedAdmin] = useState<string | null>(null)
@@ -477,7 +484,9 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
     // ilenia) e developer (ophe — manutentore) vedono i report di tutti.
     const { data: { user } } = await supabase.auth.getUser()
     const myEmail = (user?.email || '').toLowerCase()
-    const isDirection = hasRoleRef.current('direzione') || hasRoleRef.current('developer')
+    // Stesso allineamento: un superadmin vede l'elenco completo degli operatori,
+    // non solo se stesso (altrimenti la scheda da modificare non si apre nemmeno).
+    const isDirection = hasRoleRef.current('direzione') || hasRoleRef.current('developer') || myRoleRef.current === 'superadmin'
 
     const { data } = await supabase.from('admins').select('id, email, nome, role, sede, reparto, tipo_rapporto, stato, responsabile, contatto_interno, permissions, archived_at')
     if (data) {
@@ -530,7 +539,8 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
   // Only direzione (Valerio + Ilenia by email) can edit operator HR fields
   // — same allowlist as the OTP self-approval.
   const [inviteOpen, setInviteOpen] = useState(false)
-  const canEditOperators = hasRole('direzione') || hasRole('developer')
+  // Vedi nota sopra: il superadmin e' direzione anche per il database.
+  const canEditOperators = hasRole('direzione') || hasRole('developer') || myRole === 'superadmin'
   // 2026-08-18 (richiesta direzione): eliminazione DEFINITIVA di un operatore.
   // La function delete-operator-hard esisteva gia' (protetta: solo direzione o
   // developer, self-delete vietato) ma nessun bottone la chiamava. Qui si
