@@ -989,7 +989,13 @@ const handler: Handler = async (event) => {
                                     customPhone: custPhone,
                                     booking: {
                                         ...fullBooking,
-                                        service_type: 'car_rental',
+                                        // 2026-08-18: era 'car_rental' fisso. Da quando
+                                        // anche il Prime Wash manda link di saldo, un
+                                        // lavaggio saldato faceva partire al cliente la
+                                        // conferma di NOLEGGIO. Si usa il service_type
+                                        // reale, cosi' ogni servizio prende il suo
+                                        // template ('car_rental' solo come ripiego).
+                                        service_type: fullBooking.service_type || 'car_rental',
                                         payment_status: 'paid',
                                         isEdit: false,
                                     }
