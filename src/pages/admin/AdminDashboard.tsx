@@ -652,27 +652,10 @@ export default function AdminDashboard() {
 
         {/* Bottom actions */}
         <div className="px-3 py-3 border-t border-white/10 space-y-2">
-          {/* User card — avatar + name + role badge */}
-          {(adminName || adminEmail) && (() => {
-            const display = adminName || adminEmail || 'Utente'
-            const parts = display.trim().split(/\s+/).filter(Boolean)
-            const init = parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : display.slice(0, 2).toUpperCase()
-            return (
-              <div className="flex items-center gap-2.5 px-2 py-2 rounded-xl bg-theme-bg-tertiary/40 ring-1 ring-theme-border">
-                {adminAvatar ? (
-                  <img src={adminAvatar} alt={display} className="w-8 h-8 rounded-full object-cover ring-1 ring-cyan-500/40 shrink-0"/>
-                ) : (
-                  <div className="grid w-8 h-8 place-items-center rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40 shrink-0">{init}</div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11.5px] font-semibold text-theme-text-primary truncate">{display}</p>
-                  <span className="inline-block mt-0.5 text-[8.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/30">
-                    {adminRole === 'superadmin' ? 'Super Admin' : 'Admin'}
-                  </span>
-                </div>
-              </div>
-            )
-          })()}
+          {/* 2026-08-18 (richiesta direzione): rimossa la scheda utente in
+              fondo alla sidebar — nome, ruolo, "I miei orari", "Cambia
+              Password" ed "Esci" sono gia' nel menu in alto a destra, identici.
+              Resta solo la riga Allarmi, che in alto NON esiste. */}
           {/* Alarm row: bell button (Attiva Allarmi) + gear opens the inventory.
               The gear is always visible so admins can review what alarms exist
               even after audio is enabled. Nascosto per collaboratori
@@ -700,38 +683,6 @@ export default function AdminDashboard() {
             )}
           </div>
           )}
-          {!isCollaboratore && !isHidden('miei-orari') && (
-            <div className="flex items-center gap-2 mb-1">
-              <button
-                onClick={() => { setSidebarOpen(false); setShowMyOrari(true); }}
-                title="I miei orari — inserisci/modifica i tuoi orari di oggi"
-                className="flex-1 flex items-center justify-center gap-1.5 px-2 min-h-[36px] rounded-lg text-[10px] text-theme-text-secondary hover:text-amber-400 hover:bg-theme-bg-hover transition-colors"
-              >
-                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="9" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 2" />
-                </svg>
-                I miei orari
-              </button>
-            </div>
-          )}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => { setShowPasswordModal(true); setPasswordMsg(null); setNewPassword(''); setConfirmPassword(''); setPasswordVisible(false); }}
-              className="flex-1 flex items-center justify-center gap-1.5 px-2 min-h-[36px] rounded-lg text-[10px] text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
-            >
-              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-              Cambia Password
-            </button>
-            <button
-              onClick={handleSignOut}
-              className="flex items-center justify-center px-3 min-h-[36px] rounded-lg text-[10px] text-theme-text-muted hover:text-red-400 hover:bg-theme-bg-hover transition-colors"
-            >
-              Esci
-            </button>
-          </div>
         </div>
       </aside>
 
