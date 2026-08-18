@@ -301,10 +301,27 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
             //    invisibili nel report. Allineiamo anche `attivo` con admins.stato
             //    cosi' chi e' Sospeso/Inattivo non riappare se gia' esisteva.
             try {
-                const { data: adminsRaw } = await supabase
-                    .from('admins')
-                    .select('id, email, nome, stato')
-                const adminsList = (adminsRaw || []) as Array<{ id: string; email: string | null; nome: string | null; stato: string | null }>
+                // 2026-08-18: si legge ANCHE archived_at. Senza, questo backfill
+                // RIATTIVAVA gli archiviati a ogni apertura del Report: guardava
+                // solo `stato` (che archiviando non cambia), vedeva "Attivo" e
+                // rimetteva attivo=true su operatori_persone. Risultato: un
+                // operatore archiviato riappariva da solo fra chi lavora.
+                // La select tollera l'assenza della colonna (migrazione manuale):
+                // se fallisce si rilegge senza e ci si comporta come prima.
+                type AdminLite = { id: string; email: string | null; nome: string | null; stato: string | null; archived_at?: string | null }
+                let adminsRaw: AdminLite[] = []
+                {
+                    const withArch = await supabase
+                        .from('admins')
+                        .select('id, email, nome, stato, archived_at')
+                    if (withArch.error) {
+                        const legacy = await supabase.from('admins').select('id, email, nome, stato')
+                        adminsRaw = (legacy.data || []) as AdminLite[]
+                    } else {
+                        adminsRaw = (withArch.data || []) as AdminLite[]
+                    }
+                }
+                const adminsList = adminsRaw
                 const { data: existingOps } = await supabase
                     .from('operatori_persone')
                     .select('id, email, attivo')
@@ -317,7 +334,8 @@ export default function OperatoriReportDashboardV2({ onSwitchView }: OperatoriRe
                 const deactivates: string[] = []
                 for (const a of adminsList) {
                     if (!a.email) continue
-                    const shouldBeActive = !a.stato || a.stato.toLowerCase() === 'attivo'
+                    // Archiviato = fuori, punto: nessun ripescaggio, nessun insert.
+                    const shouldBeActive = !a.archived_at && (!a.stato || a.stato.toLowerCase() === 'attivo')
                     const existing = existingByEmail.get(a.email.toLowerCase())
                     if (!existing) {
                         // Manca del tutto → backfill (solo se admin è Attivo)

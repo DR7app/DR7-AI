@@ -245,7 +245,7 @@ const AGG_HARD_LIMIT = 5000  // cap aggregation fetch to avoid OOM
 
 type OperatoriView = 'dashboard' | 'rilevazione' | 'payroll' | 'audit' | 'contratti' | 'storico'
 
-function OperatoriViewSwitch({ view, setView, canSeePayroll }: { view: OperatoriView; setView: (v: OperatoriView) => void; canSeePayroll: boolean }) {
+function OperatoriViewSwitch({ view, setView, canSeePayroll, canManageOperators }: { view: OperatoriView; setView: (v: OperatoriView) => void; canSeePayroll: boolean; canManageOperators: boolean }) {
   const LABELS: Record<OperatoriView, string> = {
     dashboard: 'Report Orari',
     rilevazione: 'Rilevazione Orari',
@@ -258,8 +258,12 @@ function OperatoriViewSwitch({ view, setView, canSeePayroll }: { view: Operatori
   // (direzione / developer / stipendio-editor). I lavaggisti (car wash) e gli
   // altri operatori NON devono vedere la propria busta paga — mostrava importi
   // con default sbagliati.
+  // 2026-08-18 (richiesta direzione): "Gestione & Permessi" e "Storico" sono
+  // roba di amministrazione — permessi, ruoli, archiviazione, ex operatori. Un
+  // operatore non deve nemmeno vederle nella barra.
   const VIEWS = (['dashboard', 'rilevazione', 'payroll', 'contratti', 'audit', 'storico'] as const)
     .filter(v => v !== 'payroll' || canSeePayroll)
+    .filter(v => (v !== 'audit' && v !== 'storico') || canManageOperators)
   return (
     <div className="flex justify-end">
       <div className="inline-flex rounded-full border border-theme-border bg-theme-bg-secondary p-0.5 text-xs">
@@ -284,15 +288,21 @@ export default function OperatoriTab() {
   // Solo i ruoli abilitati alle paghe possono vedere le Buste Paga; i lavaggisti
   // (car wash) e gli altri operatori no (mostrava paghe con default errati).
   const canSeePayroll = hasRole('direzione') || hasRole('developer') || hasRole('stipendio-editor')
+  // Amministrazione: unica a gestire permessi, ruoli e archivio operatori.
+  const canManageOperators = hasRole('direzione') || hasRole('developer')
   const [view, setView] = useState<OperatoriView>('dashboard')
   // Se un non autorizzato è su payroll (es. stato vecchio o link diretto),
   // riportalo alla dashboard: niente busta paga per i non abilitati.
-  const effectiveView: OperatoriView = view === 'payroll' && !canSeePayroll ? 'dashboard' : view
+  const effectiveView: OperatoriView =
+    (view === 'payroll' && !canSeePayroll) ||
+    ((view === 'audit' || view === 'storico') && !canManageOperators)
+      ? 'dashboard'
+      : view
 
   if (effectiveView === 'dashboard') {
     return (
       <div className="space-y-3">
-        <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} />
+        <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} canManageOperators={canManageOperators} />
         <OperatoriReportDashboardV2 onSwitchView={setView} />
       </div>
     )
@@ -300,7 +310,7 @@ export default function OperatoriTab() {
   if (effectiveView === 'rilevazione') {
     return (
       <div className="space-y-3">
-        <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} />
+        <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} canManageOperators={canManageOperators} />
         <Suspense fallback={<div className="p-6 text-center text-theme-text-muted">Caricamento Rilevazione Orari...</div>}>
           <RilevazioneOrariTab />
         </Suspense>
@@ -310,7 +320,7 @@ export default function OperatoriTab() {
   if (effectiveView === 'payroll' && canSeePayroll) {
     return (
       <div className="space-y-3">
-        <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} />
+        <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} canManageOperators={canManageOperators} />
         <PayrollPeriodoView />
       </div>
     )
@@ -318,7 +328,7 @@ export default function OperatoriTab() {
   if (effectiveView === 'contratti') {
     return (
       <div className="space-y-3">
-        <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} />
+        <OperatoriViewSwitch view={effectiveView} setView={setView} canSeePayroll={canSeePayroll} canManageOperators={canManageOperators} />
         <ContrattiOperatoreView />
       </div>
     )
