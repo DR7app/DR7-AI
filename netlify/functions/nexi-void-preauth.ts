@@ -173,7 +173,14 @@ const handler: Handler = async (event) => {
                 headers: {
                     'Content-Type': 'application/json',
                     'X-Api-Key': NEXI_API_KEY,
-                    'Correlation-Id': corr
+                    'Correlation-Id': corr,
+                    // 2026-08-18 — CAUSA REALE del fallimento (log: PS0074
+                    // "Missing Idempotency header"). Nexi ESIGE l'header
+                    // Idempotency-Key su cancels e refunds: senza, rifiuta con
+                    // 400 a prescindere da chiave e operationId. La cattura
+                    // (nexi-capture-preauth) lo mandava gia'; lo sblocco no, ed
+                    // e' per questo che non ha mai funzionato.
+                    'Idempotency-Key': corr
                 },
                 body: JSON.stringify(cancelPayload)
             });
@@ -227,7 +234,9 @@ const handler: Handler = async (event) => {
                 headers: {
                     'Content-Type': 'application/json',
                     'X-Api-Key': NEXI_API_KEY,
-                    'Correlation-Id': refundCorrelationId
+                    'Correlation-Id': refundCorrelationId,
+                    // Stesso obbligo di Idempotency-Key anche sul rimborso.
+                    'Idempotency-Key': refundCorrelationId
                 },
                 body: JSON.stringify(refundPayload)
             });

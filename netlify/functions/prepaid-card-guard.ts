@@ -188,18 +188,33 @@ export async function logCardAttempt(params: {
  */
 export async function voidNexiTransaction(operationId: string): Promise<boolean> {
     try {
+        // 2026-08-18: stesso difetto trovato in nexi-void-preauth — Nexi rifiuta
+        // cancels/refunds senza header Idempotency-Key (PS0074 "Missing
+        // Idempotency header"). Qui l'esito veniva solo loggato, quindi il
+        // rimborso automatico delle carte prepagate falliva in silenzio.
+        // Il Correlation-Id era `Date.now()`: si usa un UUID come nel resto.
+        const corr = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = Math.random() * 16 | 0
+            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
+        })
         const res = await fetch(`${NEXI_BASE_URL}/operations/${operationId}/cancels`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Api-Key': NEXI_API_KEY,
-                'Correlation-Id': `${Date.now()}`
+                'Correlation-Id': corr,
+                'Idempotency-Key': corr
             },
             body: JSON.stringify({
                 description: 'Carta prepagata non accettata — rimborso automatico'
             })
         })
-        console.log(`[prepaid-card-guard] Void result: ${res.status}`)
+        if (!res.ok) {
+            // Prima si perdeva il motivo: restava solo lo status nel log.
+            console.error(`[prepaid-card-guard] Void FAILED ${res.status}:`, (await res.text()).substring(0, 300))
+        } else {
+            console.log(`[prepaid-card-guard] Void result: ${res.status}`)
+        }
         return res.ok
     } catch (e) {
         console.error('[prepaid-card-guard] Void error:', e)
