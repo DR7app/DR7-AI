@@ -549,7 +549,21 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
           : { archived_at: null, archived_by: null })
         .eq('id', a.id)
       if (error) throw error
-      toast.success(archivia ? `${nome} archiviato: accesso revocato.` : `Accesso ripristinato per ${nome}.`)
+
+      // 2026-08-18: l'archiviato deve sparire da TUTTE le viste operative, non
+      // solo da questo elenco. Il Report Operatori e la Rilevazione Orari
+      // leggono `operatori_persone`, non `admins`: senza questo rispecchiamento
+      // un ex operatore continuava a comparire fra chi lavora. Stessa logica
+      // gia' usata per il campo "Stato".
+      if (a.email) {
+        const { error: mirrorErr } = await supabase
+          .from('operatori_persone')
+          .update({ attivo: !archivia })
+          .ilike('email', a.email)
+        if (mirrorErr) console.warn('[OperatoriTab] mirror operatori_persone fallito:', mirrorErr.message)
+      }
+
+      toast.success(archivia ? `${nome} archiviato: accesso revocato, ora e' in Storico.` : `Accesso ripristinato per ${nome}.`)
       logAdminAction(archivia ? 'archive_operatore' : 'restore_operatore', 'operatore', a.email || a.id, { nome })
       setSelectedAdmin(null)
       loadAdmins()
