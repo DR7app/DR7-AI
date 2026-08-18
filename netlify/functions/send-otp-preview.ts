@@ -21,7 +21,40 @@
 
 import type { Handler } from '@netlify/functions'
 import { Resend } from 'resend'
+import { createClient } from '@supabase/supabase-js'
 import { requireAuth } from './require-auth'
+
+// 2026-08-18: stessa catena di limitation-override-otp / send-wallet-otp.
+//   1) centralina_pro_config.config.notifications.otp_recipient (modificabile
+//      dalla tab OTP)
+//   2) process.env.OTP_RECIPIENT
+//   3) fallback hardcoded (recupero)
+// Serve per la prova "dove arrivano davvero gli OTP": senza, l'anteprima
+// finiva sempre nella casella di chi era loggato e non diceva nulla sul
+// destinatario reale.
+const OTP_RECIPIENT_FALLBACK = 'valesaja91@icloud.com'
+function parseRecipients(v: unknown): string[] {
+  if (typeof v !== 'string') return []
+  return v.split(/[,;]+/).map(x => x.trim()).filter(x => x.includes('@'))
+}
+async function getConfiguredOtpRecipient(): Promise<string> {
+  try {
+    const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+    const { data } = await supabase
+      .from('centralina_pro_config')
+      .select('config')
+      .eq('id', 'main')
+      .maybeSingle()
+    const cfg = (data?.config || {}) as Record<string, unknown>
+    const notif = (cfg.notifications || {}) as Record<string, unknown>
+    // La prova va a TUTTI i destinatari configurati, come un OTP vero.
+    const list = parseRecipients(notif.otp_recipient)
+    if (list.length > 0) return list.join(', ')
+  } catch (e) {
+    console.warn('[send-otp-preview] OTP recipient lookup failed, using fallback', e)
+  }
+  return process.env.OTP_RECIPIENT || OTP_RECIPIENT_FALLBACK
+}
 
 const OTP_TTL_MINUTES = 10
 const FAKE_CODE = '123456'
@@ -285,9 +318,13 @@ export const handler: Handler = async (event) => {
     label?: string
     reason?: string
     recipient?: string
+    /** true = manda al destinatario OTP configurato, non a chi e' loggato. */
+    toConfigured?: boolean
   } = {}
   try { body = JSON.parse(event.body || '{}') } catch { /* keep {} */ }
-  const recipient = (body.recipient || authUser?.email || '').trim()
+  const recipient = body.toConfigured
+    ? (await getConfiguredOtpRecipient()).trim()
+    : (body.recipient || authUser?.email || '').trim()
   if (!recipient) {
     return { statusCode: 400, body: JSON.stringify({ error: 'Recipient missing (no authUser.email and no body.recipient)' }) }
   }

@@ -19,7 +19,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-async function getOtpRecipient(): Promise<string> {
+// 2026-08-18: destinatari multipli, separati da virgola in `otp_recipient`
+// (un solo indirizzo continua a funzionare come prima).
+function parseRecipients(v: unknown): string[] {
+  if (typeof v !== 'string') return []
+  return v.split(/[,;]+/).map(x => x.trim()).filter(x => x.includes('@'))
+}
+async function getOtpRecipients(): Promise<string[]> {
   try {
     const { data } = await supabase
       .from('centralina_pro_config')
@@ -28,12 +34,13 @@ async function getOtpRecipient(): Promise<string> {
       .maybeSingle()
     const cfg = (data?.config || {}) as Record<string, unknown>
     const notif = (cfg.notifications || {}) as Record<string, unknown>
-    const v = notif.otp_recipient
-    if (typeof v === 'string' && v.includes('@')) return v
+    const list = parseRecipients(notif.otp_recipient)
+    if (list.length > 0) return list
   } catch (e) {
     console.warn('[send-wallet-otp] OTP recipient lookup failed, using fallback', e)
   }
-  return process.env.OTP_RECIPIENT || OTP_RECIPIENT_FALLBACK
+  const env = parseRecipients(process.env.OTP_RECIPIENT)
+  return env.length > 0 ? env : [OTP_RECIPIENT_FALLBACK]
 }
 
 export const handler: Handler = async (event) => {
@@ -80,7 +87,7 @@ export const handler: Handler = async (event) => {
 
     const { error: emailError } = await resend.emails.send({
       from: 'DR7 <info@dr7.app>',
-      to: await getOtpRecipient(),
+      to: await getOtpRecipients(),
       subject: `Codice Verifica Wallet - ${actionLabel} €${parseFloat(amount).toFixed(2)}`,
       html: `
         <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">

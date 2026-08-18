@@ -879,7 +879,11 @@ function KpiCard(props: {
 // Entrambi: 3-level fallback (DB → env var/hardcoded). Lasciare vuoto
 // per usare il default.
 function OtpRecipientField() {
-    const [email, setEmail] = useState('')
+    // 2026-08-18 (richiesta direzione): i destinatari OTP possono essere piu'
+    // di uno. In DB restano UNA stringa separata da virgole (`otp_recipient`),
+    // cosi' le configurazioni esistenti con un solo indirizzo continuano a
+    // funzionare senza migrazione.
+    const [emails, setEmails] = useState<string[]>([''])
     const [savedEmail, setSavedEmail] = useState('')
     const [adminPhone, setAdminPhone] = useState('')
     const [savedAdminPhone, setSavedAdminPhone] = useState('')
@@ -887,6 +891,11 @@ function OtpRecipientField() {
     const [savedBossPhone, setSavedBossPhone] = useState('')
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
+    // 2026-08-18 (richiesta direzione): prova di recapito. Il campo sotto
+    // decide DOVE arrivano gli OTP, ma finche' non se ne riceve uno non si
+    // sa se l'indirizzo e' giusto — e lasciandolo vuoto si usa un default
+    // del server che dall'interfaccia non era visibile.
+    const [testing, setTesting] = useState(false)
 
     useEffect(() => {
         let cancelled = false
@@ -900,9 +909,10 @@ function OtpRecipientField() {
             const cfg = (data?.config || {}) as Record<string, unknown>
             const notif = (cfg.notifications || {}) as Record<string, unknown>
             const e  = typeof notif.otp_recipient === 'string' ? notif.otp_recipient : ''
+            const eList = e.split(/[,;]+/).map(x => x.trim()).filter(Boolean)
             const ap = typeof notif.admin_whatsapp_phone === 'string' ? notif.admin_whatsapp_phone : ''
             const bp = typeof notif.boss_whatsapp_phone === 'string' ? notif.boss_whatsapp_phone : ''
-            setEmail(e); setSavedEmail(e)
+            setEmails(eList.length > 0 ? eList : ['']); setSavedEmail(e)
             setAdminPhone(ap); setSavedAdminPhone(ap)
             setBossPhone(bp); setSavedBossPhone(bp)
             setLoading(false)
@@ -911,11 +921,16 @@ function OtpRecipientField() {
     }, [])
 
     const cleanPhone = (s: string) => s.trim().replace(/[\s+-]/g, '')
-    const dirtyEmail = email.trim() !== savedEmail
+    // Stringa canonica da salvare: indirizzi non vuoti, senza duplicati.
+    const emailsJoined = Array.from(new Set(emails.map(x => x.trim()).filter(Boolean))).join(', ')
+    const dirtyEmail = emailsJoined !== savedEmail
     const dirtyAdminPhone = cleanPhone(adminPhone) !== savedAdminPhone
     const dirtyBossPhone = cleanPhone(bossPhone) !== savedBossPhone
     const dirty = dirtyEmail || dirtyAdminPhone || dirtyBossPhone
-    const isValidEmail = !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+    // Ogni riga compilata deve essere un indirizzo valido; le righe vuote si
+    // ignorano (servono solo come slot da riempire).
+    const emailErrors = emails.map(x => (!x.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x.trim())) ? '' : 'Formato email non valido.')
+    const isValidEmail = emailErrors.every(e => !e)
     const isValidPhone = (p: string) => !p || /^\d{9,15}$/.test(cleanPhone(p))
     const validAdminPhone = isValidPhone(adminPhone)
     const validBossPhone = isValidPhone(bossPhone)
@@ -934,7 +949,7 @@ function OtpRecipientField() {
             const notif = (cfg.notifications || {}) as Record<string, unknown>
             const nextNotif = {
                 ...notif,
-                otp_recipient: email.trim(),
+                otp_recipient: emailsJoined,
                 admin_whatsapp_phone: cleanPhone(adminPhone),
                 boss_whatsapp_phone: cleanPhone(bossPhone),
             }
@@ -943,7 +958,7 @@ function OtpRecipientField() {
                 .from('centralina_pro_config')
                 .upsert({ id: 'main', config: nextCfg }, { onConflict: 'id' })
             if (error) throw error
-            setSavedEmail(email.trim())
+            setSavedEmail(emailsJoined)
             setSavedAdminPhone(cleanPhone(adminPhone))
             setSavedBossPhone(cleanPhone(bossPhone))
             toast.success('Canali di notifica salvati')
@@ -952,6 +967,32 @@ function OtpRecipientField() {
             toast.error(`Errore salvataggio: ${msg}`)
         } finally {
             setSaving(false)
+        }
+    }
+
+    // Manda un OTP FITTIZIO (codice 123456, nessuna scrittura a DB) al
+    // destinatario configurato lato server: stessa catena usata dagli OTP veri.
+    // Il toast riporta l'indirizzo esatto, quindi si vede subito se e' quello
+    // giusto e, a campo vuoto, qual e' il default in uso.
+    const handleTest = async () => {
+        if (testing) return
+        setTesting(true)
+        try {
+            const res = await authFetch('/.netlify/functions/send-otp-preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ toConfigured: true }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) {
+                toast.error(`Prova fallita: ${data?.error || res.status}`)
+            } else {
+                toast.success(`OTP di prova inviato a ${data.recipient}`, { duration: 8000 })
+            }
+        } catch (e) {
+            toast.error('Prova fallita: ' + (e instanceof Error ? e.message : 'errore sconosciuto'))
+        } finally {
+            setTesting(false)
         }
     }
 
@@ -972,19 +1013,51 @@ function OtpRecipientField() {
 
             <div>
                 <label className="block text-[12px] font-medium text-theme-text-secondary mb-1">Email di ricezione OTP</label>
-                <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder={loading ? 'Caricamento…' : 'es. direzione@dr7.app'}
-                    disabled={loading}
-                    className={`w-full bg-theme-bg-primary border rounded-md px-3 py-2 text-[13px] ${!isValidEmail && email ? 'border-red-500' : 'border-theme-border'}`}
-                />
-                {!isValidEmail && email && (
-                    <p className="text-[11px] text-red-500 mt-1">Formato email non valido.</p>
-                )}
+                <div className="space-y-2">
+                    {emails.map((val, i) => (
+                        <div key={i}>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="email"
+                                    value={val}
+                                    onChange={e => setEmails(prev => prev.map((x, j) => j === i ? e.target.value : x))}
+                                    placeholder={loading ? 'Caricamento…' : (i === 0 ? 'es. direzione@dr7.app' : 'altro destinatario')}
+                                    disabled={loading}
+                                    className={`flex-1 bg-theme-bg-primary border rounded-md px-3 py-2 text-[13px] ${emailErrors[i] ? 'border-red-500' : 'border-theme-border'}`}
+                                />
+                                {emails.length > 1 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setEmails(prev => prev.filter((_, j) => j !== i))}
+                                        title="Rimuovi questo destinatario"
+                                        className="shrink-0 w-8 h-8 rounded-md border border-theme-border text-theme-text-muted hover:text-red-500 hover:border-red-500/50"
+                                    >
+                                        ×
+                                    </button>
+                                )}
+                            </div>
+                            {emailErrors[i] && (
+                                <p className="text-[11px] text-red-500 mt-1">{emailErrors[i]}</p>
+                            )}
+                        </div>
+                    ))}
+                    <button
+                        type="button"
+                        onClick={() => setEmails(prev => [...prev, ''])}
+                        disabled={loading}
+                        className="text-[12px] font-semibold text-dr7-gold hover:opacity-80 disabled:opacity-40"
+                    >
+                        + Aggiungi email
+                    </button>
+                </div>
                 <p className="text-[11px] text-theme-text-muted mt-1">
                     Codici OTP per autorizzazioni direzionali e prelievi wallet.
+                    Ogni indirizzo elencato riceve una copia dello STESSO codice: basta
+                    che uno solo lo legga per autorizzare. Le modifiche valgono subito,
+                    senza deploy.
+                    Vuoto → si usa il destinatario di default del server: per sapere
+                    qual e', usa "Invia OTP di prova" (manda un codice fittizio e
+                    scrive nel messaggio l'indirizzo esatto a cui e' arrivato).
                 </p>
             </div>
 
@@ -1025,7 +1098,16 @@ function OtpRecipientField() {
                 </p>
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex justify-end items-center gap-2">
+                <button
+                    type="button"
+                    onClick={handleTest}
+                    disabled={testing || loading || dirty}
+                    title={dirty ? 'Salva prima le modifiche, poi manda la prova' : 'Manda un OTP di prova al destinatario configurato'}
+                    className="px-4 py-2 rounded-md border border-theme-border text-theme-text-secondary text-[13px] font-semibold hover:bg-theme-bg-hover disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                    {testing ? 'Invio…' : 'Invia OTP di prova'}
+                </button>
                 <button
                     type="button"
                     onClick={handleSave}

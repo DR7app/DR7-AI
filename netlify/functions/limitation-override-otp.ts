@@ -17,7 +17,14 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 // When a superadmin himself triggers an OTP-required action the bypass
 // below auto-approves without sending any email.
 const OTP_RECIPIENT_FALLBACK = 'valesaja91@icloud.com'
-async function getOtpRecipient(): Promise<string> {
+// 2026-08-18 (richiesta direzione): i destinatari possono essere PIU' DI UNO.
+// In `otp_recipient` restano salvati separati da virgola — un singolo
+// indirizzo continua a funzionare identico, quindi nessuna migrazione.
+function parseRecipients(v: unknown): string[] {
+  if (typeof v !== 'string') return []
+  return v.split(/[,;]+/).map(x => x.trim()).filter(x => x.includes('@'))
+}
+async function getOtpRecipients(): Promise<string[]> {
   try {
     const { data } = await supabase
       .from('centralina_pro_config')
@@ -26,12 +33,13 @@ async function getOtpRecipient(): Promise<string> {
       .maybeSingle()
     const cfg = (data?.config || {}) as Record<string, unknown>
     const notif = (cfg.notifications || {}) as Record<string, unknown>
-    const v = notif.otp_recipient
-    if (typeof v === 'string' && v.includes('@')) return v
+    const list = parseRecipients(notif.otp_recipient)
+    if (list.length > 0) return list
   } catch (e) {
     console.warn('[limitation-override-otp] OTP recipient lookup failed, using fallback', e)
   }
-  return process.env.OTP_RECIPIENT || OTP_RECIPIENT_FALLBACK
+  const env = parseRecipients(process.env.OTP_RECIPIENT)
+  return env.length > 0 ? env : [OTP_RECIPIENT_FALLBACK]
 }
 const OTP_TTL_MINUTES = 10
 const OVERRIDE_TTL_HOURS = 2
@@ -382,7 +390,7 @@ export const handler: Handler = async (event) => {
       const resend = new Resend(apiKey)
       const { error: emailError } = await resend.emails.send({
         from: 'DR7 <info@dr7.app>',
-        to: await getOtpRecipient(),
+        to: await getOtpRecipients(),
         subject: `[Autorizzazione] ${operatorName} chiede: ${operazioneUmana} — OTP ${code}`,
         html: `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; max-width: 640px; margin: 0 auto; padding: 24px; background: #fff;">
@@ -448,7 +456,7 @@ export const handler: Handler = async (event) => {
               ${actionContext ? `<tr><td style="padding: 3px 8px 3px 0; color: #495057;">Contesto azione</td><td style="padding: 3px 0;">${escapeHtml(actionContext)}</td></tr>` : ''}
               <tr><td style="padding: 3px 8px 3px 0; color: #495057;">ID sessione</td><td style="padding: 3px 0;">${escapeHtml(draftSessionId.substring(0, 8))}</td></tr>
               <tr><td style="padding: 3px 8px 3px 0; color: #495057;">Tipo flusso</td><td style="padding: 3px 0;">${escapeHtml(flowTypeLabel)}</td></tr>
-              <tr><td style="padding: 3px 8px 3px 0; color: #495057;">Inviato a</td><td style="padding: 3px 0;">${escapeHtml(await getOtpRecipient())}</td></tr>
+              <tr><td style="padding: 3px 8px 3px 0; color: #495057;">Inviato a</td><td style="padding: 3px 0;">${escapeHtml((await getOtpRecipients()).join(', '))}</td></tr>
             </table>
             <p style="margin: 16px 0 0; font-size: 11px; color: #adb5bd; text-align: center;">
               Dubai Rent 7.0 S.p.A. &middot; Cagliari, Sardegna &middot; <a href="https://www.dr7.app" style="color: #adb5bd; text-decoration: none;">www.dr7.app</a>
