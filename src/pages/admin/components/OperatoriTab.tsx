@@ -546,6 +546,38 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
   // developer, self-delete vietato) ma nessun bottone la chiamava. Qui si
   // aggiunge il comando, con la stessa doppia sicurezza chiesta dal server:
   // ruolo + conferma esplicita digitata a mano.
+  // 2026-08-18 (segnalazione direzione: "Accesso alle Tab non c'e' sotto
+  // Valerio, Ilenia, Salvatore, Ophelie"). Quei conti hanno `permissions = ['*']`
+  // (wildcard, dalla migrazione del 08/05): il pannello mostrava solo un avviso
+  // "per limitarlo rimuovi il wildcard editando la riga in Supabase" — cioe'
+  // mandava la direzione a mettere le mani nel database. Ora il wildcard si
+  // scioglie da qui: diventa l'elenco esplicito di TUTTE le tab (nessun accesso
+  // perso), e da quel momento le spunte funzionano.
+  const [convertingWildcard, setConvertingWildcard] = useState(false)
+  async function handleExpandWildcard(a: Admin) {
+    const nome = a.nome || a.email || 'questo operatore'
+    const tutteLeTab = PERMISSION_SECTIONS.flatMap(sec => sec.tabs.map(t => t.key))
+    const attuali = (Array.isArray(a.permissions) ? a.permissions : []).filter(p => p !== '*')
+    const nuovi = Array.from(new Set([...attuali, ...tutteLeTab]))
+    if (!confirm(
+      `Sciogliere l'accesso completo (*) di ${nome} in permessi espliciti?\n\n` +
+      `Nessun accesso viene perso: tutte le ${tutteLeTab.length} tab restano spuntate. ` +
+      'Da quel momento potrai togliere le spunte che vuoi.'
+    )) return
+    setConvertingWildcard(true)
+    try {
+      const { error } = await supabase.from('admins').update({ permissions: nuovi }).eq('id', a.id)
+      if (error) throw error
+      toast.success(`${nome}: accesso completo convertito in permessi modificabili.`)
+      logAdminAction('admin_permission_changed', 'admin', a.id, { nome, azione: 'wildcard_espanso', tab: tutteLeTab.length })
+      loadAdmins()
+    } catch (e) {
+      toast.error('Conversione fallita: ' + (e instanceof Error ? e.message : 'errore sconosciuto'))
+    } finally {
+      setConvertingWildcard(false)
+    }
+  }
+
   // 2026-08-18 (richiesta direzione): cambiare il ruolo di un operatore
   // (admin <-> superadmin) direttamente dalla scheda. Prima si poteva fare solo
   // in Supabase. Superadmin apre tutto: si chiede conferma.
@@ -1027,13 +1059,33 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
                     Tab dell&apos;admin a cui questo operatore può accedere. Spunta = visibile in sidebar.
                     Stesso catalogo della modale di invito. Salvataggio automatico.
                   </p>
+                  {/* Detto chiaro: su questi ruoli le spunte non limitano nulla,
+                      altrimenti sembra che il pannello non funzioni. */}
+                  {(selected.role === 'superadmin' || isAdminDirezione(selected)) && (
+                    <div className="text-[12px] text-amber-500 bg-amber-500/5 border border-amber-500/20 rounded-md px-3 py-2 mb-3">
+                      Attenzione: {selected.role === 'superadmin' ? 'Superadmin' : 'Amministratore (direzione)'} vede
+                      SEMPRE tutte le tab, qualunque spunta qui sotto. Per limitarlo davvero, prima abbassa il Ruolo
+                      ad Admin (o togli il tag Direzione).
+                    </div>
+                  )}
                   {(() => {
                     const currentPerms = Array.isArray(selected.permissions) ? selected.permissions : []
                     const hasWildcard = currentPerms.includes('*')
                     if (hasWildcard) {
                       return (
-                        <div className="text-[12px] text-amber-500 bg-amber-500/5 border border-amber-500/20 rounded-md px-3 py-2 mb-3">
-                          Questo operatore ha il wildcard <code>*</code> (accesso completo). Per limitarlo, rimuovi prima il wildcard editando la riga in Supabase.
+                        <div className="text-[12px] text-amber-500 bg-amber-500/5 border border-amber-500/20 rounded-md px-3 py-3 mb-3 space-y-2">
+                          <div>
+                            Questo operatore ha l&apos;accesso completo <code>*</code>: vede tutte le tab e per questo
+                            l&apos;elenco delle spunte non compare.
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleExpandWildcard(selected)}
+                            disabled={convertingWildcard}
+                            className="px-3 py-1.5 rounded-md bg-amber-600 text-white text-[12px] font-semibold hover:bg-amber-700 disabled:opacity-50"
+                          >
+                            {convertingWildcard ? 'Conversione…' : 'Rendi modificabile (mantiene tutti gli accessi)'}
+                          </button>
                         </div>
                       )
                     }
