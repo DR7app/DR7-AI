@@ -16,6 +16,15 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 // sulla lettura delle operazioni, quindi nemmeno la ricerca poteva aiutare).
 // Ordine invertito: prima la chiave standard, l'altra solo come ripiego.
 const NEXI_API_KEY = process.env.NEXI_API_KEY || process.env.NEXI_API_KEY_EXPLICIT!;
+// Diagnostica (nessun segreto esposto: solo QUALE variabile e' in uso e se le
+// due differiscono). Serve a distinguere due 401 molto diversi: chiave
+// sbagliata, oppure chiave giusta senza diritto di annullamento su quel
+// terminale — nel secondo caso il codice non c'entra e va risolto con Nexi.
+const NEXI_KEY_SOURCE = process.env.NEXI_API_KEY
+    ? 'NEXI_API_KEY'
+    : (process.env.NEXI_API_KEY_EXPLICIT ? 'NEXI_API_KEY_EXPLICIT' : 'NESSUNA');
+const NEXI_KEY_BOTH_SET = !!process.env.NEXI_API_KEY && !!process.env.NEXI_API_KEY_EXPLICIT;
+const NEXI_KEY_DIFFERENT = NEXI_KEY_BOTH_SET && process.env.NEXI_API_KEY !== process.env.NEXI_API_KEY_EXPLICIT;
 const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1';
 
 const handler: Handler = async (event) => {
@@ -253,12 +262,18 @@ const handler: Handler = async (event) => {
             const diagnostica = candidatiDiagnostica.length > 0
                 ? ` Pre-autorizzazioni trovate su Nexi per questo importo: ${JSON.stringify(candidatiDiagnostica)}.`
                 : ''
+            // Su 401 il problema non e' l'operazione ma l'autenticazione: si dice
+            // subito quale chiave e' stata usata, cosi' non si cerca dove non c'e'.
+            const authHint = response.status === 401
+                ? ` Chiave usata: ${NEXI_KEY_SOURCE}${NEXI_KEY_BOTH_SET ? (NEXI_KEY_DIFFERENT ? ' (le due chiavi Nexi configurate sono DIVERSE)' : ' (le due chiavi configurate sono identiche)') : ' (unica chiave configurata)'}. Un 401 qui significa che questa chiave non e' abilitata ad annullare questa operazione: va verificato con Nexi il terminale/permesso di storno.`
+                : ''
             return {
                 statusCode: response.status,
                 headers,
                 body: JSON.stringify({
-                    error: `Nexi ha rifiutato lo sblocco dell'operazione ${operationId}: ${nexiMsg}.${diagnostica}`,
+                    error: `Nexi ha rifiutato lo sblocco dell'operazione ${operationId}: ${nexiMsg}.${diagnostica}${authHint}`,
                     operationId,
+                    keySource: NEXI_KEY_SOURCE,
                     candidates: candidatiDiagnostica,
                 })
             };
