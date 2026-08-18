@@ -62,8 +62,81 @@ const handler: Handler = async (event) => {
         }
 
         console.log('[nexi-void-preauth] === VOID/REFUND REQUEST ===');
-        console.log('[nexi-void-preauth] operationId:', operationId);
+        console.log('[nexi-void-preauth] operationId (input):', operationId);
         console.log('[nexi-void-preauth] cauzioneId:', cauzioneId);
+
+        // ── Dati della cauzione: servono per riconoscere l'operazione su Nexi ──
+        // (importo + giorno). Senza, non si puo' distinguere la pre-auth giusta.
+        let cauzioneImporto: number | null = null
+        let cauzioneRefDate: string | null = null
+        if (cauzioneId) {
+            const { data: cz } = await supabase
+                .from('cauzioni')
+                // Solo colonne che esistono davvero (create_cauzioni_system.sql):
+                // una colonna inventata farebbe fallire l'INTERA select e ci
+                // lascerebbe senza importo per riconoscere l'operazione.
+                .select('importo, created_at, data_restituzione_veicolo')
+                .eq('id', cauzioneId)
+                .maybeSingle()
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const czAny = cz as any
+            cauzioneImporto = czAny?.importo != null ? Number(czAny.importo) : null
+            cauzioneRefDate = czAny?.created_at || czAny?.data_restituzione_veicolo || null
+        }
+
+        // 2026-08-18 (segnalazione direzione: "failed to refund/void"). L'id
+        // salvato sulla cauzione NON e' sempre un operationId Nexi: al momento
+        // della creazione si salva `operationId || orderId`, e per le pre-auth
+        // nate da link e' spesso l'ORDER id. Chiamare /operations/{orderId}/cancels
+        // fallisce, e subito dopo falliva anche /refunds — da qui l'errore
+        // generico. La cattura (nexi-capture-preauth) risolve gia' l'operazione
+        // vera scandendo le AUTHORIZATION su Nexi: qui si fa lo stesso.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const randomCorrelation = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = Math.random() * 16 | 0
+            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
+        })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let candidatiDiagnostica: any[] = []
+        async function resolveOperationId(): Promise<string | null> {
+            const amountCents = cauzioneImporto != null ? Math.round(cauzioneImporto * 100) : null
+            const fromTime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+            const toTime = new Date().toISOString()
+            const opsUrl = `${NEXI_BASE_URL}/operations?fromTime=${encodeURIComponent(fromTime)}&toTime=${encodeURIComponent(toTime)}&maxRecords=500&operationType=AUTHORIZATION`
+            const opsRes = await fetch(opsUrl, { headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': randomCorrelation() } })
+            if (!opsRes.ok) {
+                console.warn('[nexi-void-preauth] Operations lookup failed:', opsRes.status, (await opsRes.text()).substring(0, 200))
+                return null
+            }
+            const opsData = await opsRes.json()
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const allOps: any[] = opsData.operations || []
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const isAuthorized = (op: any) => String(op.operationResult || '').toUpperCase() === 'AUTHORIZED'
+            const wantedOrder = orderId || operationId
+            // 1) per orderId, con importo coerente quando lo conosciamo
+            const byOrder = allOps.filter(op => op.orderId === wantedOrder && (amountCents == null || !op.operationAmount || Number(op.operationAmount) === amountCents))
+            const authByOrder = byOrder.find(op => isAuthorized(op) && (amountCents == null || Number(op.operationAmount) === amountCents)) || byOrder.find(isAuthorized)
+            if (authByOrder?.operationId) return authByOrder.operationId
+            // 2) ripiego SICURO: stessa cifra e stesso giorno, e SOLO se e' unica.
+            //    Mai indovinare: si rischia di sbloccare la cauzione di un altro.
+            if (amountCents != null) {
+                const sameAmount = allOps.filter(op => isAuthorized(op) && Number(op.operationAmount) === amountCents)
+                const refMs = cauzioneRefDate ? new Date(cauzioneRefDate).getTime() : NaN
+                const sameDay = Number.isFinite(refMs)
+                    ? sameAmount.filter(op => Math.abs(new Date(op.operationTime || 0).getTime() - refMs) <= 3 * 24 * 60 * 60 * 1000)
+                    : sameAmount
+                if (sameDay.length === 1) return sameDay[0].operationId
+                candidatiDiagnostica = sameDay.slice(0, 10).map(op => ({ orderId: op.orderId, amount: op.operationAmount, time: op.operationTime, result: op.operationResult }))
+            }
+            if (candidatiDiagnostica.length === 0) {
+                candidatiDiagnostica = allOps
+                    .filter(op => amountCents == null || Number(op.operationAmount) === amountCents)
+                    .slice(0, 10)
+                    .map(op => ({ orderId: op.orderId, amount: op.operationAmount, time: op.operationTime, result: op.operationResult }))
+            }
+            return null
+        }
 
         // Try /cancels first (for pre-auths not yet captured)
         // If that fails, try /refunds (for already captured or partial)
@@ -76,21 +149,39 @@ const handler: Handler = async (event) => {
             description: `Sblocco cauzione ${cauzioneId}`
         };
 
-        // First attempt: cancel (void pre-auth)
-        console.log('[nexi-void-preauth] Trying /cancels...');
-        let response = await fetch(`${NEXI_BASE_URL}/operations/${operationId}/cancels`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Api-Key': NEXI_API_KEY,
-                'Correlation-Id': correlationId
-            },
-            body: JSON.stringify(cancelPayload)
-        });
+        // First attempt: cancel (void pre-auth) con l'id che abbiamo in casa.
+        const tryCancel = async (opId: string, corr: string) => {
+            console.log('[nexi-void-preauth] Trying /cancels on', opId);
+            const r = await fetch(`${NEXI_BASE_URL}/operations/${opId}/cancels`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Api-Key': NEXI_API_KEY,
+                    'Correlation-Id': corr
+                },
+                body: JSON.stringify(cancelPayload)
+            });
+            const t = await r.text();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            let d: any;
+            try { d = JSON.parse(t); } catch { d = { raw: t }; }
+            return { r, t, d };
+        };
 
-        let responseText = await response.text();
-        let responseData: any;
-        try { responseData = JSON.parse(responseText); } catch { responseData = { raw: responseText }; }
+        let { r: response, t: responseText, d: responseData } = await tryCancel(operationId, correlationId);
+
+        // 2026-08-18: se fallisce, PRIMA di dichiarare l'errore proviamo a
+        // risolvere l'operazione vera su Nexi (l'id salvato e' spesso un
+        // orderId) e ritentiamo l'annullamento con quello.
+        if (!response.ok) {
+            console.log('[nexi-void-preauth] /cancels fallita, provo a risolvere l\'operazione reale su Nexi...');
+            const resolved = await resolveOperationId();
+            if (resolved && resolved !== operationId) {
+                console.log('[nexi-void-preauth] operationId risolto:', resolved, '(era', operationId + ')');
+                operationId = resolved;
+                ({ r: response, t: responseText, d: responseData } = await tryCancel(operationId, randomCorrelation()));
+            }
+        }
 
         // If cancel fails, try refund
         if (!response.ok) {
@@ -144,10 +235,25 @@ const handler: Handler = async (event) => {
                     .eq('id', cauzioneId);
             }
 
+            // 2026-08-18: prima usciva solo "Void/refund failed" e non si capiva
+            // NIENTE. Ora si dice cosa ha risposto Nexi, su quale operazione si e'
+            // provato, e — se non l'abbiamo trovata — quali pre-autorizzazioni
+            // dello stesso importo esistono davvero, con il loro stato.
+            const nexiMsg = responseData.errors?.[0]?.description
+                || responseData.errors?.[0]?.code
+                || (typeof responseData.raw === 'string' ? responseData.raw.substring(0, 200) : '')
+                || `HTTP ${response.status}`
+            const diagnostica = candidatiDiagnostica.length > 0
+                ? ` Pre-autorizzazioni trovate su Nexi per questo importo: ${JSON.stringify(candidatiDiagnostica)}.`
+                : ''
             return {
                 statusCode: response.status,
                 headers,
-                body: JSON.stringify({ error: responseData.errors?.[0]?.description || 'Void/refund failed' })
+                body: JSON.stringify({
+                    error: `Nexi ha rifiutato lo sblocco dell'operazione ${operationId}: ${nexiMsg}.${diagnostica}`,
+                    operationId,
+                    candidates: candidatiDiagnostica,
+                })
             };
         }
 
