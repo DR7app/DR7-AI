@@ -796,8 +796,21 @@ export default function CauzioniTab() {
         }
     }
 
-    // @ts-ignore
+    // 2026-08-18 (richiesta direzione): fino a oggi questa funzione esisteva ma
+    // NESSUN bottone la chiamava (era tenuta viva da un @ts-ignore). Sbloccare
+    // una pre-autorizzazione si poteva fare solo dalla tab Nexi, cercando
+    // l'operazione a mano. Ora c'e' il bottone "SBLOCCA" sulla riga della
+    // cauzione.
     const handleMarkSbloccataPreauth = async (cauzione: Cauzione) => {
+        // Sbloccare libera i fondi sulla carta del cliente: la garanzia sparisce
+        // e non si "ri-blocca" — serve una nuova pre-autorizzazione. Quindi si
+        // conferma prima.
+        const importoFmt = Number(cauzione.importo || 0).toFixed(2)
+        if (!confirm(
+            `Sbloccare la pre-autorizzazione di EUR ${importoFmt} di ${cauzione.cliente_nome || 'questo cliente'}?\n\n` +
+            'I fondi tornano subito disponibili sulla carta e la garanzia non c\'e\' piu\'. ' +
+            'Per riaverla serve una NUOVA pre-autorizzazione.'
+        )) return
         try {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const nexiTransactionId = (cauzione as any).nexi_transaction_id
@@ -1296,6 +1309,19 @@ export default function CauzioniTab() {
                             )}
                             {isIncassata && !isInCassa && (
                                 <button onClick={() => handleCassa(c)} className="px-3 py-1.5 bg-red-600 text-white text-[11px] rounded-full hover:bg-red-700 transition-colors">CASSA</button>
+                            )}
+                            {/* Sblocco pre-autorizzazione: compare solo se la
+                                cauzione e' davvero bloccata su una carta (c'e'
+                                l'operazione Nexi) e non e' gia' stata incassata —
+                                su un incasso non c'e' piu' niente da rilasciare. */}
+                            {!isIncassata && !!c.nexi_transaction_id && (
+                                <button
+                                    onClick={() => handleMarkSbloccataPreauth(c)}
+                                    title="Rilascia la pre-autorizzazione: i fondi tornano disponibili sulla carta del cliente. Non addebita nulla."
+                                    className="px-3 py-1.5 bg-indigo-600 text-white text-[11px] rounded-full hover:bg-indigo-700 transition-colors font-semibold"
+                                >
+                                    SBLOCCA PRE-AUTH
+                                </button>
                             )}
                             <button onClick={() => handleMarkRestituita(c)} className="px-3 py-1.5 bg-green-600 text-white text-[11px] rounded-full hover:bg-green-700 transition-colors">RESTITUITA</button>
                         </>
