@@ -174,6 +174,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const formSubmittedRef = useRef(false)
   const [showForm, setShowForm] = useState(false)
   const [editingBooking, setEditingBooking] = useState<CarWashBooking | null>(null)
+  // 2026-08-18 (segnalazione direzione: "ho cliccato 50 volte e mi ha dato 50
+  // volte Prenotazione aggiornata"). Il bottone Salva della modifica non aveva
+  // alcun blocco: ogni click lanciava l'INTERA catena (update + WhatsApp al
+  // cliente + fattura + link di pagamento) e, non dando alcun segnale mentre
+  // lavorava, invitava a cliccare ancora. Risultato: messaggi e link duplicati.
+  // Lock sincrono su ref (lo stato React arriva troppo tardi per fermare due
+  // click ravvicinati) + bottone disabilitato con etichetta di avanzamento.
+  const [savingEdit, setSavingEdit] = useState(false)
+  const savingEditRef = useRef(false)
   const [editService, setEditService] = useState<CarWashService | null>(null)
   const [editExtras, setEditExtras] = useState<CarWashService[]>([])
   const [editExtraPriceOptions, setEditExtraPriceOptions] = useState<Record<string, { label: string; price: number }>>({})
@@ -5934,6 +5943,10 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               <div className="p-6 border-t border-theme-border flex gap-3">
                 <button
                   onClick={async () => {
+                    if (savingEditRef.current) return
+                    savingEditRef.current = true
+                    setSavingEdit(true)
+                    try {
                     // OTP gate — modificare un lavaggio/meccanica già paid o
                     // confirmed richiede OTP della direzione (Valerio + Ilenia
                     // bypassano server-side). Se è già stato approvato per la
@@ -6333,10 +6346,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       console.error('Failed to update booking:', error)
                       toast.error('Errore durante l\'aggiornamento')
                     }
+                    } finally {
+                      savingEditRef.current = false
+                      setSavingEdit(false)
+                    }
                   }}
-                  className="flex-1 bg-dr7-gold hover:bg-dr7-gold/90 text-white px-6 py-3 rounded-full font-medium transition-colors"
+                  disabled={savingEdit}
+                  className="flex-1 bg-dr7-gold hover:bg-dr7-gold/90 text-white px-6 py-3 rounded-full font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Salva Modifiche
+                  {savingEdit ? 'Salvataggio…' : 'Salva Modifiche'}
                 </button>
                 <button
                   onClick={() => setEditingBooking(null)}
