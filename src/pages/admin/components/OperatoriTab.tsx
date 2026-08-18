@@ -536,6 +536,31 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
   // developer, self-delete vietato) ma nessun bottone la chiamava. Qui si
   // aggiunge il comando, con la stessa doppia sicurezza chiesta dal server:
   // ruolo + conferma esplicita digitata a mano.
+  // 2026-08-18 (richiesta direzione): cambiare il ruolo di un operatore
+  // (admin <-> superadmin) direttamente dalla scheda. Prima si poteva fare solo
+  // in Supabase. Superadmin apre tutto: si chiede conferma.
+  const [savingRole, setSavingRole] = useState(false)
+  async function handleChangeRole(a: Admin, nuovoRuolo: 'admin' | 'superadmin') {
+    if (nuovoRuolo === a.role) return
+    const nome = a.nome || a.email || 'questo operatore'
+    if (nuovoRuolo === 'superadmin' && !confirm(
+      `Rendere ${nome} SUPERADMIN?\n\n` +
+      'Il superadmin vede e fa tutto nel gestionale, indipendentemente dalle tab spuntate qui sotto.'
+    )) return
+    setSavingRole(true)
+    try {
+      const { error } = await supabase.from('admins').update({ role: nuovoRuolo }).eq('id', a.id)
+      if (error) throw error
+      toast.success(`${nome}: ruolo aggiornato a ${nuovoRuolo === 'superadmin' ? 'Superadmin' : 'Admin'}.`)
+      logAdminAction('admin_role_changed', 'admin', a.id, { nome, da: a.role, a: nuovoRuolo })
+      loadAdmins()
+    } catch (e) {
+      toast.error('Cambio ruolo fallito: ' + (e instanceof Error ? e.message : 'errore sconosciuto'))
+    } finally {
+      setSavingRole(false)
+    }
+  }
+
   // Archiviazione: si toglie l'ACCESSO e basta. La riga resta, con orari,
   // contratti, acconti e log: l'ex operatore si ritrova nella sotto-tab
   // "Storico" e non entra piu' nel gestionale (AdminRoute + useAdminRole
@@ -839,6 +864,32 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
                 <ProfileField label="Foto profilo" value="Iniziali" />
                 <ProfileField label="ID interno" value={selected.id.slice(0, 8)} />
               </div>
+
+              {/* Ruolo: admin normale o superadmin. Il superadmin bypassa il
+                  catalogo delle tab qui sotto — quindi va detto a chiare lettere. */}
+              {canEditOperators && (
+                <div className="mt-5 rounded-xl border border-theme-border bg-theme-bg-primary px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-semibold text-theme-text-primary">Ruolo</div>
+                      <div className="text-[11px] text-theme-text-muted mt-0.5">
+                        {selected.role === 'superadmin'
+                          ? 'Superadmin: accesso completo, le spunte "Accesso alle Tab" non lo limitano.'
+                          : 'Admin: vede solo le tab spuntate qui sotto.'}
+                      </div>
+                    </div>
+                    <select
+                      value={selected.role === 'superadmin' ? 'superadmin' : 'admin'}
+                      disabled={savingRole}
+                      onChange={e => handleChangeRole(selected, e.target.value as 'admin' | 'superadmin')}
+                      className="shrink-0 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-[13px] disabled:opacity-50"
+                    >
+                      <option value="admin">Admin</option>
+                      <option value="superadmin">Superadmin</option>
+                    </select>
+                  </div>
+                </div>
+              )}
 
               {/* Zona pericolosa — eliminazione definitiva. Solo direzione o
                   developer, come impone anche il server. Non si puo' eliminare
