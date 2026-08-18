@@ -68,7 +68,7 @@ export const PERMISSION_SECTIONS: { name: string; tabs: { key: string; label: st
     { key: 'centralina-pro', label: 'Centralina Pro (accesso completo)' },
     { key: 'view-cauzioni-readonly', label: 'View Cauzioni readonly (solo Supercar / Hypercar / Exotic Cars, sola lettura)' },
   ]},
-  { name: 'Trustera', tabs: [
+  { name: 'DR7 Trust', tabs: [
     { key: 'trustera', label: 'Trustera' },
   ]},
   { name: 'E.M.T.N.', tabs: [

@@ -212,7 +212,7 @@ function generateAuditHTML(data: any, signedRequest: any, extra?: { customerPhon
         const mc = signedEvent?.metadata?.marketing_consent
         if (mc !== undefined) {
             return `<div class="section">
-                <div class="section-title">Consenso Marketing (Trustera)</div>
+                <div class="section-title">Consenso Marketing (DR7 Trust)</div>
                 <div class="info-grid">
                     <div class="info-item"><label>Consenso</label><span style="color:${mc ? '#16a34a' : '#dc2626'};font-weight:700;">${mc ? 'SI' : 'NO'}</span></div>
                     <div class="info-item"><label>Data</label><span>${signedEvent?.timestamp ? new Date(signedEvent.timestamp).toLocaleString('it-IT', { timeZone: 'Europe/Rome' }) : 'N/A'}</span></div>

@@ -6565,7 +6565,7 @@ function FirmaEditor({ copy, setCopy }: { copy: FirmaCopy; setCopy: (next: Firma
     return (
         <div className="space-y-6">
             <p className="text-[13px] text-theme-text-secondary">
-                Pagina di firma elettronica del contratto (Trustera360 backend). Token segnaposto supportati
+                Pagina di firma elettronica del contratto (backend DR7 Trust). Token segnaposto supportati
                 nei testi: <code className="px-1 bg-theme-bg-tertiary rounded">{`{email}`}</code> <code className="px-1 bg-theme-bg-tertiary rounded">{`{name}`}</code> <code className="px-1 bg-theme-bg-tertiary rounded">{`{num}`}</code> <code className="px-1 bg-theme-bg-tertiary rounded">{`{attempts}`}</code> <code className="px-1 bg-theme-bg-tertiary rounded">{`{date}`}</code> <code className="px-1 bg-theme-bg-tertiary rounded">{`{i}`}</code> <code className="px-1 bg-theme-bg-tertiary rounded">{`{n}`}</code>.
             </p>
 

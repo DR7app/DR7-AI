@@ -422,7 +422,7 @@ function DocumentiSubTab() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-theme-text-primary">Trustera - Firma Documenti</h2>
+        <h2 className="text-2xl font-bold text-theme-text-primary">DR7 Trust - Firma Documenti</h2>
         <button
           onClick={() => { setShowUpload(!showUpload); if (showUpload) resetForm() }}
           className="bg-dr7-gold hover:bg-[#0A8FA3] text-white font-bold py-2 px-4 rounded-full transition-colors"

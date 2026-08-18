@@ -260,9 +260,9 @@ export function formatAdminLog(log: AdminLogEntry): { title: string; meta: strin
 
     // ─── Misc ────────────────────────────────────────────────────────────
     case 'send_trustera_document':
-      return { title: 'Trustera documento inviato', meta: joinParts(d.document, d.signer && `→ ${d.signer}`) }
+      return { title: 'DR7 Trust documento inviato', meta: joinParts(d.document, d.signer && `→ ${d.signer}`) }
     case 'delete_trustera_document':
-      return { title: 'Documento Trustera eliminato', meta: '' }
+      return { title: 'Documento DR7 Trust eliminato', meta: '' }
     case 'cassa_cauzione':
       return { title: 'Cauzione (cassa)', meta: joinParts(cust, d.amount && eur(d.amount), d.type) }
     case 'limitation_override_approved':
