@@ -7,8 +7,15 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// Void operates on pre-auth created with the explicit key
-const NEXI_API_KEY = process.env.NEXI_API_KEY_EXPLICIT || process.env.NEXI_API_KEY!;
+// 2026-08-18 — CAUSA DEL "Nexi ha rifiutato lo sblocco: HTTP 401".
+// Questa era l'UNICA function Nexi a partire da NEXI_API_KEY_EXPLICIT: tutte
+// le altre (creazione pre-auth, cattura, pay-by-link) usano NEXI_API_KEY. Una
+// pre-autorizzazione si annulla con la STESSA chiave/terminale che l'ha
+// autorizzata: con una chiave diversa Nexi risponde 401 anche su un
+// operationId corretto — ed e' esattamente quello che succedeva (401 pure
+// sulla lettura delle operazioni, quindi nemmeno la ricerca poteva aiutare).
+// Ordine invertito: prima la chiave standard, l'altra solo come ripiego.
+const NEXI_API_KEY = process.env.NEXI_API_KEY || process.env.NEXI_API_KEY_EXPLICIT!;
 const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1';
 
 const handler: Handler = async (event) => {
