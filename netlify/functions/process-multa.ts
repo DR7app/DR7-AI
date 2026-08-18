@@ -408,7 +408,7 @@ function generateLetterText(multa: MultaData, driver: DriverData): string {
 
 Oggetto: Comunicazione dati conducente — Verbale n. ${multa.numero_verbale || 'N/D'} del ${multa.data_infrazione || 'N/D'}
 
-Con la presente, la società DUBAI RENT 7.0 SPA (P.IVA 04104640927), in qualità di proprietaria del veicolo targato ${driver.vehicle_plate}, comunica che al momento dell'infrazione contestata con il verbale in oggetto, il veicolo era concesso a noleggio al seguente soggetto:
+Con la presente, la società DR7 S.p.A. (P.IVA 04104640927), in qualità di proprietaria del veicolo targato ${driver.vehicle_plate}, comunica che al momento dell'infrazione contestata con il verbale in oggetto, il veicolo era concesso a noleggio al seguente soggetto:
 
 DATI DEL CONDUCENTE:
 - Cognome: ${driver.cognome.toUpperCase() || 'N/D'}
@@ -432,7 +432,7 @@ Si allegano alla presente:
 
 Distinti saluti,
 
-DUBAI RENT 7.0 SPA
+DR7 S.p.A.
 Rappresentante Legale: Campagnola Ilenia
 Viale Marconi 229, Cagliari (CA)
 Tel: 3472817258

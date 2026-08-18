@@ -269,7 +269,7 @@ CODICE SCONTO: {codice}
 Ti basterà rispondere a questo messaggio per attivare il tuo credito.
 
 Con stima,
-Dubai Rent 7.0 S.p.A.',
+DR7 S.p.A.',
  true, true, 'before_pickup', 'all', 'confirmed'),
 
 -- ═══ Firma Contratto (signature-init) ═══

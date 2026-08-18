@@ -1815,7 +1815,7 @@ const INITIAL_CANCELLAZIONE: CancellazioneCopy = {
     contact_label_it: 'Per assistenza o informazioni:',
     contact_label_en: 'For assistance or information:',
     contact_email: 'info@dr7.app',
-    contact_address: 'Dubai Rent 7.0 S.p.A. - Viale Marconi, 229, 09131 Cagliari CA',
+    contact_address: 'DR7 S.p.A. - Viale Marconi, 229, 09131 Cagliari CA',
     last_updated_it: 'Ultimo aggiornamento: 10 aprile 2026',
     last_updated_en: 'Last updated: April 10, 2026',
     sections: [],  // Hydrated from DB; full default lives on website side.

@@ -2,7 +2,6 @@ import { useState, useEffect, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../../supabaseClient'
 import { useNavigate } from 'react-router-dom'
-import { useVehicleAlarm } from '../../contexts/VehicleAlarmContext'
 import { useTheme, PALETTES, type Palette } from '../../contexts/ThemeContext'
 import RentalTabs from './components/RentalTabs'
 // Uscite Straordinarie di Mare/Aria/Soggiorni: stesso componente del Noleggio
@@ -146,7 +145,8 @@ export default function AdminDashboard() {
   const [initialCarWashData, setInitialCarWashData] = useState<{ appointmentDate?: string, appointmentTime?: string } | null>(null)
 
   const navigate = useNavigate()
-  const { alarmState, enableAudio } = useVehicleAlarm()
+  // 2026-08-18: la sidebar non tocca piu' gli allarmi (comando spostato in
+  // Centralina Pro > Allarmi), quindi qui non serve piu' il contesto allarmi.
   const birthdayCount = useBirthdayCount()
   const scartataCount = useFatturaScartataCount()
   const { role: adminRole, hasPermission, adminName, adminEmail, adminAvatar, permissions, loading: roleLoading } = useAdminRole()
@@ -650,40 +650,12 @@ export default function AdminDashboard() {
           })}
         </nav>
 
-        {/* Bottom actions */}
-        <div className="px-3 py-3 border-t border-white/10 space-y-2">
-          {/* 2026-08-18 (richiesta direzione): rimossa la scheda utente in
-              fondo alla sidebar — nome, ruolo, "I miei orari", "Cambia
-              Password" ed "Esci" sono gia' nel menu in alto a destra, identici.
-              Resta solo la riga Allarmi, che in alto NON esiste. */}
-          {/* Alarm row: bell button (Attiva Allarmi) + gear opens the inventory.
-              The gear is always visible so admins can review what alarms exist
-              even after audio is enabled. Nascosto per collaboratori
-              (heuristic) o quando admin imposta esplicitamente
-              `hide:allarmi` sul row dell'operatore. */}
-          {!isCollaboratore && !isHidden('allarmi') && (
-          <div className="flex items-stretch gap-1">
-            {!alarmState.audioEnabled ? (
-              <button
-                onClick={enableAudio}
-                className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
-              >
-                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-                Attiva Allarmi
-              </button>
-            ) : (
-              <div className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] text-green-400">
-                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-                Allarmi attivi
-              </div>
-            )}
-          </div>
-          )}
-        </div>
+        {/* 2026-08-18 (richiesta direzione): tolto anche il bottone "Attiva
+            Allarmi" dal fondo della sidebar. L'audio degli allarmi si abilita
+            da Centralina Pro > Allarmi, che ha il suo comando (onEnableAudio):
+            qui era solo una scorciatoia in piu' su uno spazio gia' affollato.
+            Con la scheda utente rimossa poco fa, la sidebar resta la sola
+            navigazione. */}
       </aside>
 
       {/* Main Content */}

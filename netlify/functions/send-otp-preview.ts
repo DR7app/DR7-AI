@@ -300,7 +300,7 @@ function renderEmailHtml(p: SamplePayload, code: string, operatorName: string, o
       <tr><td style="padding: 3px 8px 3px 0; color: #495057;">Tipo flusso</td><td style="padding: 3px 0;">${escapeHtml(flowTypeLabel)}</td></tr>
       <tr><td style="padding: 3px 8px 3px 0; color: #495057;">Inviato a</td><td style="padding: 3px 0;">${escapeHtml(recipient)}</td></tr>
     </table>
-    <p style="margin: 16px 0 0; font-size: 11px; color: #adb5bd; text-align: center;">Dubai Rent 7.0 S.p.A. &middot; Cagliari, Sardegna &middot; <a href="https://www.dr7.app" style="color: #adb5bd; text-decoration: none;">www.dr7.app</a></p>
+    <p style="margin: 16px 0 0; font-size: 11px; color: #adb5bd; text-align: center;">DR7 S.p.A. &middot; Cagliari, Sardegna &middot; <a href="https://www.dr7.app" style="color: #adb5bd; text-decoration: none;">www.dr7.app</a></p>
     <p style="margin: 6px 0 0; font-size: 10px; color: #c7ced3; text-align: center;">Questa email e' generata automaticamente dal sistema DR7. Non rispondere a questo messaggio.</p>
   </div>`
 }
