@@ -4733,7 +4733,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       if (override.hasOverride('carwash_slot_occupied')) return
                       if (conflict) {
                         const who = conflict.customer_name || 'altro cliente'
-                        override.requestOverride('carwash_slot_occupied', `Slot ${newTime} occupato da ${who} — sovrapporre richiede autorizzazione direzionale.`)
+                        // Stessa distinzione dell'elenco: dire se l'orario e'
+                        // occupato davvero o se e' il servizio che sfora.
+                        const cStart = (() => { const [h, m] = (conflict.appointment_time || '0:0').split(':').map(Number); return h * 60 + m })()
+                        const nStart = (() => { const [h, m] = newTime.split(':').map(Number); return h * 60 + m })()
+                        const dentro = nStart >= cStart
+                        override.requestOverride('carwash_slot_occupied', dentro
+                          ? `Slot ${newTime} occupato da ${who} — sovrapporre richiede autorizzazione direzionale.`
+                          : `Alle ${newTime} il posto e' libero, ma il servizio scelto (${newDuration}') finirebbe dentro la prenotazione delle ${conflict.appointment_time} di ${who}. Sovrapporre richiede autorizzazione direzionale.`)
                       } else if (closed) {
                         override.requestOverride('carwash_slot_occupied', `Orario ${newTime} FUORI ORARIO lavaggio — inserire richiede autorizzazione direzionale.`)
                       }
@@ -4760,28 +4767,56 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       const slots = allSlots
 
                       const newDuration = getTotalDuration() || 60
-                      const isSlotBusy = (slotTime: string): { busy: boolean; who?: string } => {
+                      // 2026-08-18 (segnalazione direzione: "mi riempie anche
+                      // PRIMA dell'orario prenotato, il calendario invece e'
+                      // giusto"). Prima ogni slot che si sovrapponeva veniva
+                      // marcato "occupato": con un lavaggio alle 11:00 e un
+                      // servizio da 60', anche le 10:15 e le 10:30 diventavano
+                      // rosse "occupato da Mario" — ma quelle ore sono LIBERE,
+                      // e' il servizio nuovo che sfora.
+                      // Ora si distinguono due cose diverse:
+                      //   OCCUPATO   → l'orario cade dentro una prenotazione
+                      //                esistente (come lo mostra il calendario)
+                      //   ACCAVALLA  → l'orario e' libero, ma il servizio
+                      //                scelto finirebbe dentro la prenotazione
+                      //                successiva
+                      // Entrambi restano selezionabili e chiedono l'OTP: cambia
+                      // che l'operatore capisce QUALE dei due problemi ha.
+                      const minuti = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
+                      const durataDi = (b: typeof busyBookingsOnDate[number]) => (
+                        b.duration_minutes
+                        ?? (carWashServices.find(s => s.name === b.service_name)?.durationMinutes)
+                        ?? 60
+                      ) as number
+                      const isSlotBusy = (slotTime: string): { busy: boolean; overflow: boolean; who?: string; fino?: string } => {
+                        const inizio = minuti(slotTime)
                         for (const b of busyBookingsOnDate) {
-                          const bookingTime = b.appointment_time
-                          if (!bookingTime) continue
-                          const existingDuration = b.duration_minutes
-                            ?? (carWashServices.find(s => s.name === b.service_name)?.durationMinutes)
-                            ?? 60
-                          if (checkTimeOverlap(slotTime, newDuration, bookingTime, existingDuration as number)) {
-                            return { busy: true, who: b.customer_name || 'altro cliente' }
+                          if (!b.appointment_time) continue
+                          const bStart = minuti(b.appointment_time)
+                          const bEnd = bStart + durataDi(b)
+                          if (inizio >= bStart && inizio < bEnd) {
+                            return { busy: true, overflow: false, who: b.customer_name || 'altro cliente' }
                           }
                         }
-                        return { busy: false }
+                        for (const b of busyBookingsOnDate) {
+                          if (!b.appointment_time) continue
+                          if (checkTimeOverlap(slotTime, newDuration, b.appointment_time, durataDi(b))) {
+                            return { busy: false, overflow: true, who: b.customer_name || 'altro cliente', fino: b.appointment_time }
+                          }
+                        }
+                        return { busy: false, overflow: false }
                       }
 
                       return slots.map((time) => {
-                        const { busy, who } = isSlotBusy(time)
+                        const { busy, overflow, who, fino } = isSlotBusy(time)
                         const closed = !isInLavaggioHours(dateForSlots, time)
                         const block = getSlotBlock(dateForSlots, time)
                         const [ph, pm] = time.split(':').map(Number)
                         const past = isToday && (ph * 60 + pm) <= currentMinutes
                         const label = busy
                           ? `🔴 ${time} — occupato (${who})`
+                          : overflow
+                          ? `🟠 ${time} — libero, ma il servizio finisce dentro le ${fino} (${who})`
                           : block
                             ? `🔴 ${time} — bloccato${block.note ? ` (${block.note})` : ''}`
                             : closed
