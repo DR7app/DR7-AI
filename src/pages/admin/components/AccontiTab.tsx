@@ -67,7 +67,11 @@ export default function AccontiTab() {
   // non sono un dato di gestione condiviso. Era `role === 'superadmin' ||
   // hasRole('direzione') || hasRole('developer')`, che apriva la cassa di tutti
   // a chiunque avesse un ruolo tecnico.
-  const canSeeAll = hasRole('direzione')
+  // 2026-08-19 (richiesta direzione): oltre alla direzione, vede tutti gli
+  // acconti SOLO chi ha la spunta "Acconti: vede tutti" nella sua scheda
+  // operatore. Il ruolo superadmin NON basta: David e' superadmin e deve
+  // vedere esclusivamente i propri incassi.
+  const canSeeAll = hasRole('direzione') || hasRole('acconti-tutti')
   const me = useMemo(
     () => ({ id: adminId, nome: adminName || (adminEmail || '').split('@')[0] || '' }),
     [adminId, adminName, adminEmail]

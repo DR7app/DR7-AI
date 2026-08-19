@@ -58,6 +58,7 @@ const ROLE_TAG_OPTIONS: { tag: string; label: string; hint: string }[] = [
   { tag: 'role:stipendio-editor',  label: 'Stipendio Editor',   hint: 'Modifica stipendi Lavaggio' },
   { tag: 'role:sito-direzione',    label: 'Sito CMS',           hint: 'Modifica testi senza OTP' },
   { tag: 'role:preventivi-admin',  label: 'Preventivi Admin',   hint: 'Flussi speciali preventivi' },
+  { tag: 'role:acconti-tutti',     label: 'Acconti: vede tutti', hint: 'Senza questa spunta l\'operatore vede SOLO i propri acconti, anche se e\' superadmin' },
 ]
 // 2026-05-27: tag separato dal grid checkbox. Renderizzato come toggle
 // dedicato ON/OFF nella sezione "OTP per Operatore" (sotto). Default

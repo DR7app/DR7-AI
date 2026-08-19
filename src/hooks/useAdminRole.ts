@@ -18,6 +18,11 @@ export type AdminRoleTag =
   | 'stipendio-editor'
   | 'sito-direzione'
   | 'preventivi-admin'
+  // 2026-08-19 (richiesta direzione): chi puo' vedere gli acconti di TUTTI.
+  // Di default nessuno tranne la direzione — nemmeno un superadmin: gli
+  // incassi personali non sono un dato di gestione condiviso. Questo tag e'
+  // la casella che la direzione spunta per fare un'eccezione.
+  | 'acconti-tutti'
 
 const ROLE_FAILSAFE: Record<string, ReadonlySet<AdminRoleTag>> = {
   // 2026-05-27: aggiunto 'otp-admin' a tutti e 4 — direzione (v/i/s) e
