@@ -486,33 +486,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   // senza scroll verticale. 109 slot da 5min (09:00→18:00): cellH = (altezza
   // area - header giorni) / 109, misurata con ResizeObserver. Gli eventi
   // (durata/5 * cellH) e gli offset si scalano di conseguenza.
-  // 2026-08-19 (segnalazione direzione: "prenotazione delle 8:30 invisibile in
-  // calendario"). La griglia era fissa 09:00→18:00 (109 slot da 5'): qualunque
-  // prenotazione fuori da quella finestra — create apposta con l'OTP "fuori
-  // orario" — semplicemente non veniva disegnata. Non era colorata male: non
-  // c'era proprio, e l'operatore non poteva sapere che esisteva.
-  // Ora la griglia parte dalle 09:00 e arriva alle 18:00 come sempre, ma si
-  // ALLARGA da sola quanto basta a contenere la prenotazione piu' mattutina e
-  // quella che finisce piu' tardi del mese visualizzato.
-  const GRID_DEFAULT_START = 9 * 60
-  const GRID_DEFAULT_END = 18 * 60
-  const gridRange = useMemo(() => {
-    let min = GRID_DEFAULT_START
-    let max = GRID_DEFAULT_END
-    for (const b of bookings) {
-      if (!b.appointment_time) continue
-      const [h, m] = String(b.appointment_time).split(':').map(Number)
-      if (!Number.isFinite(h)) continue
-      const start = (h || 0) * 60 + (m || 0)
-      const dur = isRientroBooking(b) ? 15 : getServiceDuration(b.service_name, b.booking_details?.vehicleCategory, b.booking_details)
-      if (start < min) min = Math.floor(start / 5) * 5
-      const end = start + (dur || 60)
-      if (end > max) max = Math.ceil(end / 5) * 5
-    }
-    // Margine di sicurezza: mai sotto 0, mai oltre la mezzanotte.
-    return { start: Math.max(0, min), end: Math.min(24 * 60, max) }
-  }, [bookings])
-  const SLOT_COUNT = Math.max(1, Math.round((gridRange.end - gridRange.start) / 5) + 1)
+  const SLOT_COUNT = 109
   const DAYHDR_H = 34
   const [calGridH, setCalGridH] = useState(0)
   useEffect(() => {
@@ -532,7 +506,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   // piccoli, la giornata intera sta nella pagina.
   const cellH = useMemo(
     () => (calGridH ? Math.max(4, Math.floor((calGridH - DAYHDR_H) / SLOT_COUNT)) : CELL_HEIGHT),
-    [calGridH, SLOT_COUNT],
+    [calGridH],
   )
 
   const dayCellStyle: React.CSSProperties = stretchCols
@@ -977,10 +951,9 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
 
         {/* B. Time Slots Grid */}
         <div className={`${stretchCols ? 'w-full' : 'min-w-max'} relative`}>
-          {/* Slot da 5': 09:00→18:00 di base, estesi quanto serve per non
-              nascondere prenotazioni fuori orario (vedi gridRange). */}
-          {Array.from({ length: SLOT_COUNT }, (_, i) => {
-            const totalMinutes = gridRange.start + i * 5
+          {/* Generate time slots from 09:00 to 18:00 in 5-minute intervals (109 slots) */}
+          {Array.from({ length: 109 }, (_, i) => {
+            const totalMinutes = 9 * 60 + i * 5 // Start at 09:00
             const hours = Math.floor(totalMinutes / 60)
             const minutes = totalMinutes % 60
             const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
