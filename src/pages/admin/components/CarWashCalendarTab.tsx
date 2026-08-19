@@ -970,7 +970,14 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                 <div
                   className={`sticky left-0 w-[70px] z-[30] bg-theme-bg-primary/98 border-r border-theme-border/50 flex items-center justify-center backdrop-blur-sm shadow-[4px_0_6px_-2px_var(--color-theme-shadow)] ${isFullHour ? 'font-bold' : 'font-normal'}`}
                 >
-                  {is15Min ? (
+                  {/* 2026-08-19 (segnalazione direzione: "illeggibile"): le
+                      etichette erano stampate ogni 15 minuti a prescindere
+                      dall'altezza della cella. In vista Mese la griglia si
+                      comprime (109 slot nello schermo) e cellH scende sotto i
+                      6px: 09:15, 09:30 e 09:45 finivano stampate una sopra
+                      l'altra. Ora i quarti d'ora si mostrano solo se c'e'
+                      spazio; altrimenti resta l'ora piena, leggibile. */}
+                  {(isFullHour || (is15Min && cellH >= 7)) ? (
                     <span className={`text-xs ${isFullHour ? 'text-theme-text-primary/95 text-sm' : 'text-theme-text-primary/60'}`}>
                       {timeString}
                     </span>
@@ -1043,21 +1050,26 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                           const leftPct = (laneIndex / laneCount) * 100
                           const widthPct = 100 / laneCount
 
-                          // Color logic: rientro=blue, paid=green, pending pay-by-link=orange, unpaid=red.
-                          // Gradient + soft shadow + hover lift for a polished look (mockup style).
+                          // Color logic: rientro=blue, paid=green, pending pay-by-link=amber, unpaid=red.
+                          // 2026-08-19 (richiesta direzione: "guarda i colori del
+                          // Noleggio Terra"): tinte PIENE come in CalendarTab
+                          // (bg-emerald-600/85, bg-red-600/80...). Prima erano
+                          // gradienti diagonali + un velo nero sopra: i blocchi
+                          // sembravano lucidi e i colori cambiavano dall'alto al
+                          // basso, rendendo il calendario faticoso da leggere.
                           const isPendingLink = !isRientro && isPendingPaymentLink(startEvt.booking)
                           const bgColor = isRientro
-                            ? 'bg-gradient-to-br from-blue-400 to-blue-600 dark:from-blue-700 dark:to-blue-900 border-blue-400/40 dark:border-blue-500/40 shadow-blue-500/20 dark:shadow-blue-900/30'
+                            ? 'bg-blue-600/85 border-blue-400/50'
                             : isPaid
-                              ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 dark:from-emerald-500 dark:to-emerald-700 border-emerald-300/50 dark:border-emerald-300/40 shadow-emerald-500/20 dark:shadow-emerald-900/30'
+                              ? 'bg-emerald-600/85 border-emerald-400/50'
                               : isPendingLink
-                                ? 'bg-gradient-to-br from-amber-400 to-amber-600 dark:from-amber-500 dark:to-amber-700 border-amber-300/50 dark:border-amber-300/40 shadow-amber-500/20 dark:shadow-amber-900/30'
-                                : 'bg-gradient-to-br from-red-500 to-red-700 dark:from-red-700 dark:to-red-900 border-red-400/50 dark:border-red-500/40 shadow-red-500/20 dark:shadow-red-900/30'
+                                ? 'bg-amber-500/85 border-amber-400/50'
+                                : 'bg-red-600/80 border-red-500/60'
 
                           return (
                           <div
                             key={startEvt.booking.id}
-                            className={`absolute ${bgColor} border border-white/10 rounded-lg shadow-[0_4px_12px_-4px_rgba(0,0,0,0.5)] hover:shadow-[0_8px_24px_-6px_rgba(34,211,238,0.45)] hover:-translate-y-0.5 hover:brightness-110 transition-all duration-200 cursor-pointer ${hasClientOverlap ? 'z-[25]' : 'z-20'} overflow-hidden group/booking ring-0 hover:ring-1 hover:ring-cyan-300/40`}
+                            className={`absolute ${bgColor} border rounded-lg hover:ring-1 hover:ring-cyan-300/40 transition-colors duration-150 cursor-pointer ${hasClientOverlap ? 'z-[25]' : 'z-20'} overflow-hidden group/booking`}
                             style={{
                               height: `${(startEvt.duration / 5) * cellH - 2}px`,
                               top: `${topOffset}px`,
@@ -1070,8 +1082,9 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                               setSelectedBooking(startEvt.booking)
                             }}
                           >
-                            {/* Inner glow effect */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                            {/* 2026-08-19: rimosso il velo nero (from-black/20) che
+                                scuriva il fondo di ogni blocco — era lui il
+                                "riflesso" sui verdi e sui rossi. */}
 
                             {/* Content */}
                             <div className="relative px-2 py-1.5 flex flex-col justify-center h-full items-center gap-0.5 text-center">
