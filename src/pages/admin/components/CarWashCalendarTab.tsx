@@ -504,6 +504,21 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   // 2026-06-04: altezza slot per FAR ENTRARE TUTTO nello schermo (no scroll).
   // cellH = (altezza griglia - header) / 109. Min 4px così, anche su schermi
   // piccoli, la giornata intera sta nella pagina.
+  // 2026-08-20 (segnalazione direzione: "non vedo il alto del calendario"):
+  // la griglia e' un contenitore scrollabile con l'intestazione dei giorni in
+  // sticky. Se lo scroll non e' esattamente a zero — basta un rientro nella
+  // tab, un cambio mese o un focus — la prima riga (09:00) finisce SOTTO
+  // l'intestazione e le prenotazioni delle 9 si vedono a meta'. Qui si riporta
+  // la griglia in cima a ogni cambio di vista, mese o giorno mostrato.
+  // Il reset vale anche quando l'altezza delle celle viene ricalcolata: al primo
+  // render calGridH e' 0, si usa l'altezza di default e la griglia e' molto piu'
+  // alta del contenitore (quindi scrollabile); quando il ResizeObserver misura
+  // davvero, le celle si rimpiccioliscono ma lo scroll accumulato resterebbe.
+  useEffect(() => {
+    const el = calGridRef.current
+    if (el) el.scrollTop = 0
+  }, [viewMode, currentDate, loading, calGridH])
+
   const cellH = useMemo(
     () => (calGridH ? Math.max(4, Math.floor((calGridH - DAYHDR_H) / SLOT_COUNT)) : CELL_HEIGHT),
     [calGridH],
