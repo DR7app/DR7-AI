@@ -434,6 +434,10 @@ export default function CargosTab() {
     // l'avviso deve poter arrivare a piu' persone. Salvati in
     // centralina_pro_config.config.cargos; senza numeri non parte nulla.
     const [alertsEnabled, setAlertsEnabled] = useState(false)
+    // 'immediato' = un messaggio a ogni problema. 'giornaliero' = un solo
+    // riepilogo al giorno: il rattrappo gira ogni 30 minuti, quindi in immediato
+    // la stessa prenotazione in errore avviserebbe decine di volte.
+    const [alertFrequency, setAlertFrequency] = useState<'immediato' | 'giornaliero'>('immediato')
     const [alertNumbers, setAlertNumbers] = useState<string[]>([''])
     const [alertsSaving, setAlertsSaving] = useState(false)
     const [alertsOpen, setAlertsOpen] = useState(false)
@@ -446,6 +450,7 @@ export default function CargosTab() {
             const cfg = (data?.config || {}) as Record<string, unknown>
             const cargosCfg = (cfg.cargos || {}) as Record<string, unknown>
             setAlertsEnabled(cargosCfg.alerts_enabled === true)
+            setAlertFrequency(cargosCfg.alert_frequency === 'giornaliero' ? 'giornaliero' : 'immediato')
             const nums = Array.isArray(cargosCfg.alert_numbers) ? (cargosCfg.alert_numbers as unknown[]).map(String) : []
             setAlertNumbers(nums.length > 0 ? nums : [''])
         })()
@@ -464,7 +469,7 @@ export default function CargosTab() {
         try {
             const { data } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
             const cfg = (data?.config || {}) as Record<string, unknown>
-            const next = { ...cfg, cargos: { ...((cfg.cargos as Record<string, unknown>) || {}), alerts_enabled: alertsEnabled, alert_numbers: puliti } }
+            const next = { ...cfg, cargos: { ...((cfg.cargos as Record<string, unknown>) || {}), alerts_enabled: alertsEnabled, alert_numbers: puliti, alert_frequency: alertFrequency } }
             const { error } = await supabase.from('centralina_pro_config').upsert({ id: 'main', config: next }, { onConflict: 'id' })
             if (error) throw error
             setAlertNumbers(puliti.length > 0 ? puliti : [''])
