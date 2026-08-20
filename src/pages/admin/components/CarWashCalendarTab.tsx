@@ -1021,7 +1021,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
               >
                 {/* Time Label Column (Sticky Left) - only show label at 15-min intervals */}
                 <div
-                  className={`sticky left-0 w-[70px] z-[30] bg-theme-bg-primary/98 border-r border-theme-border/50 flex items-center justify-center backdrop-blur-sm shadow-[4px_0_6px_-2px_var(--color-theme-shadow)] ${isFullHour ? 'font-bold' : 'font-normal'}`}
+                  className={`sticky left-0 relative w-[70px] bg-theme-bg-primary/98 border-r border-theme-border/50 flex items-center justify-center backdrop-blur-sm shadow-[4px_0_6px_-2px_var(--color-theme-shadow)] overflow-visible ${isFullHour ? 'font-bold z-[33]' : 'font-normal z-[30]'}`}
                 >
                   {/* 2026-08-19 (segnalazione direzione: "illeggibile"): le
                       etichette erano stampate ogni 15 minuti a prescindere
@@ -1030,8 +1030,17 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                       6px: 09:15, 09:30 e 09:45 finivano stampate una sopra
                       l'altra. Ora i quarti d'ora si mostrano solo se c'e'
                       spazio; altrimenti resta l'ora piena, leggibile. */}
+                  {/* 2026-08-20 (segnalazione direzione: "gli orari sono tagliati"):
+                      una riga della griglia e' alta pochi pixel, il testo dell'ora ne
+                      misura dodici. Il testo sbordava e la riga SUCCESSIVA — che nel
+                      DOM viene dopo, quindi disegna sopra — ne copriva meta'. Ora
+                      l'etichetta esce dalla cella (overflow-visible), e' posizionata
+                      in modo assoluto centrata sulla linea dell'ora e sta su un piano
+                      piu' alto delle righe vicine: si legge sempre per intero. */}
                   {(isFullHour || (is15Min && cellH >= 7)) ? (
-                    <span className={`text-xs ${isFullHour ? 'text-theme-text-primary/95 text-sm' : 'text-theme-text-primary/60'}`}>
+                    <span
+                      className={`absolute left-0 right-0 text-center leading-none whitespace-nowrap pointer-events-none ${isFullHour ? 'text-theme-text-primary/95 text-[13px]' : 'text-theme-text-primary/60 text-[11px]'}`}
+                    >
                       {timeString}
                     </span>
                   ) : null}

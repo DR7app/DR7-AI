@@ -557,7 +557,16 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
   const [convertingWildcard, setConvertingWildcard] = useState(false)
   async function handleExpandWildcard(a: Admin) {
     const nome = a.nome || a.email || 'questo operatore'
-    const tutteLeTab = PERMISSION_SECTIONS.flatMap(sec => sec.tabs.map(t => t.key))
+    // 2026-08-20 INCIDENTE: il catalogo dei permessi contiene anche chiavi che
+    // NON sono tab ma RESTRIZIONI. `view-cauzioni-readonly` chiude Centralina Pro
+    // in sola lettura sulle sole Cauzioni; le chiavi `hide:*` nascondono pezzi di
+    // interfaccia. Espandendo il wildcard le assegnavo insieme alle altre: chi
+    // premeva "Rendi modificabile" si auto-infliggeva la sola lettura — successo
+    // davvero, sulla direzione, poche ore dopo il rilascio.
+    const CHIAVI_RESTRITTIVE = (k: string) => k === 'view-cauzioni-readonly' || k.startsWith('hide:')
+    const tutteLeTab = PERMISSION_SECTIONS
+      .flatMap(sec => sec.tabs.map(t => t.key))
+      .filter(k => !CHIAVI_RESTRITTIVE(k))
     const attuali = (Array.isArray(a.permissions) ? a.permissions : []).filter(p => p !== '*')
     const nuovi = Array.from(new Set([...attuali, ...tutteLeTab]))
     if (!confirm(

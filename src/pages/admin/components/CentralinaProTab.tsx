@@ -49,7 +49,7 @@ type VehicleRevenueTarget = {
   tiers: VehicleRevenueTier[]
 }
 
-type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti' | 'allarmi'
+type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti' | 'allarmi' | 'contratto-modifica'
 
 // Days of the week for opening-hours configs (lavaggio, future noleggio).
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
@@ -88,6 +88,7 @@ export const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'p2', title: 'Assicurazioni' },
   { id: 'p3', title: 'Km & Sforo' },
   { id: 'p4', title: 'Cauzioni' },
+  { id: 'contratto-modifica', title: 'Contratto & Modifiche' },
   { id: 'p5', title: 'Servizi' },
   { id: 'p6', title: 'Prezzo Dinamico' },
   { id: 'p7', title: 'Preventivi' },
@@ -1370,6 +1371,7 @@ type PersistedSnapshot = {
   // Sezioni disattivate per questo business (id sezione). Permette di spegnere
   // cio' che non si applica (es. Mare non ha "Assicurazioni"/"Fascia patente").
   sezioni_off?: string[]
+  contratto_modifica?: Record<string, string>
 }
 
 // Supabase singleton row: centralina_pro_config (id='main', config jsonb).
@@ -1579,6 +1581,84 @@ function mergePrezzoDinamico(saved: Partial<PrezzoDinamicoConfig> | null | undef
   }
 }
 
+// ── Contratto & Modifiche ────────────────────────────────────────────────────
+// 2026-08-20 (richiesta direzione): finora QUALSIASI modifica a una prenotazione
+// gia' firmata riconduceva il contratto (firma originale ristampata sulle nuove
+// condizioni, nessuna nuova firma). Comodo per uno spostamento d'orario, ma
+// sbagliato quando cambia la VETTURA: il cliente si ritroverebbe firmatario di
+// un contratto per un mezzo che non ha mai accettato.
+// Qui si decide voce per voce: RIFIRMA (parte un nuovo link di firma) oppure
+// RICONDOTTO (si rimanda il contratto gia' firmato, aggiornato).
+export const CONTRATTO_VOCI: { key: string; label: string; hint: string }[] = [
+  { key: 'veicolo',    label: 'Cambio veicolo',        hint: 'Targa o modello diversi da quelli firmati' },
+  { key: 'date_orari', label: 'Date e orari',          hint: 'Ritiro o riconsegna spostati' },
+  { key: 'prezzo',     label: 'Prezzo',                hint: 'Totale del noleggio modificato' },
+  { key: 'guidatore',  label: 'Guidatore / conducente', hint: 'Intestatario o secondo guidatore cambiato' },
+  { key: 'luoghi',     label: 'Luoghi ritiro/riconsegna', hint: 'Indirizzo di consegna o rientro diverso' },
+]
+export type ContrattoAzione = 'rifirma' | 'ricondotto'
+export const CONTRATTO_DEFAULT: Record<string, ContrattoAzione> = {
+  veicolo: 'rifirma',      // il default che la direzione ha chiesto esplicitamente
+  date_orari: 'ricondotto',
+  prezzo: 'ricondotto',
+  guidatore: 'rifirma',    // firma una persona diversa: va rifirmato
+  luoghi: 'ricondotto',
+}
+
+function ContrattoModificheSection({ regole, setRegole }: {
+  regole: Record<string, ContrattoAzione>
+  setRegole: (r: Record<string, ContrattoAzione>) => void
+}) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-lg font-semibold text-theme-text-primary">Contratto & Modifiche</h3>
+        <p className="text-sm text-theme-text-muted mt-1">
+          Quando si modifica una prenotazione <strong>gia&apos; firmata</strong>, per ogni voce si decide
+          cosa succede al contratto. <strong>Rifirma</strong>: al cliente arriva un nuovo link e deve
+          firmare di nuovo. <strong>Ricondotto</strong>: il contratto aggiornato gli viene rimandato
+          gia&apos; firmato, senza chiedergli niente.
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-[12px] text-theme-text-secondary">
+        Se una modifica tocca <strong>piu&apos;</strong> voci, basta che UNA sia impostata su Rifirma
+        perche&apos; il contratto vada rifirmato. La regola piu&apos; severa vince.
+      </div>
+
+      <div className="space-y-2">
+        {CONTRATTO_VOCI.map(v => {
+          const val = regole[v.key] || CONTRATTO_DEFAULT[v.key] || 'ricondotto'
+          return (
+            <div key={v.key} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-theme-border bg-theme-bg-primary px-4 py-3">
+              <div className="min-w-0">
+                <div className="text-[13px] font-semibold text-theme-text-primary">{v.label}</div>
+                <div className="text-[11px] text-theme-text-muted mt-0.5">{v.hint}</div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                {(['rifirma', 'ricondotto'] as ContrattoAzione[]).map(opt => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setRegole({ ...regole, [v.key]: opt })}
+                    className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${
+                      val === opt
+                        ? (opt === 'rifirma' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white')
+                        : 'bg-theme-bg-tertiary text-theme-text-secondary hover:text-theme-text-primary'
+                    }`}
+                  >
+                    {opt === 'rifirma' ? 'Rifirma' : 'Ricondotto'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function CentralinaProTab() {
   // Modalita' "View Cauzioni Readonly" per collaboratori esterni che devono
   // SOLO visualizzare le cauzioni di Supercar / Hypercar / Exotic Cars.
@@ -1647,6 +1727,8 @@ export default function CentralinaProTab() {
   const [insurance, setInsurance] = useState<InsuranceCategoryConfig[]>(initialInsurance)
   const [km, setKm] = useState<KmConfig[]>(initialKm)
   const [deposits, setDeposits] = useState<DepositsConfig>(initialDeposits)
+  // Regole "cosa fa una modifica al contratto gia' firmato" — vedi CONTRATTO_VOCI.
+  const [contrattoRegole, setContrattoRegole] = useState<Record<string, ContrattoAzione>>(CONTRATTO_DEFAULT)
   const [servizi, setServizi] = useState<ServiziConfig>(initialServizi)
   const [prezzoDinamico, setPrezzoDinamico] = useState<PrezzoDinamicoConfig>(initialPrezzoDinamico)
   const [preventivi, setPreventivi] = useState<PreventiviConfig>(initialPreventivi)
@@ -1718,11 +1800,12 @@ export default function CentralinaProTab() {
     if (remote.lavaggio_hours !== undefined) { setLavaggioHours(remote.lavaggio_hours); setSavedLavaggioHours(remote.lavaggio_hours) }
     if (remote.noleggio_hours !== undefined) { setNoleggioHours(remote.noleggio_hours); setSavedNoleggioHours(remote.noleggio_hours) }
     { const so = Array.isArray(remote.sezioni_off) ? remote.sezioni_off : []; setSezioniOff(so); setSavedSezioniOff(so) }
+    { const cm = (remote.contratto_modifica && typeof remote.contratto_modifica === 'object') ? remote.contratto_modifica as Record<string, ContrattoAzione> : null; setContrattoRegole({ ...CONTRATTO_DEFAULT, ...(cm || {}) }) }
   }
 
   // Snapshot corrente dagli state hook (per salvataggio + copia al cambio business).
   function buildSnapshot(): PersistedSnapshot {
-    return { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours, sezioni_off: sezioniOff }
+    return { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours, sezioni_off: sezioniOff, contratto_modifica: contrattoRegole }
   }
 
   // Cambio business: salva il corrente sulla sua riga, poi carica il nuovo. Se
@@ -1922,7 +2005,7 @@ export default function CentralinaProTab() {
     setSavedLavaggioHours(lavaggioHours)
     setSavedNoleggioHours(noleggioHours)
     setSavedSezioniOff(sezioniOff)
-    savePersisted({ categories, fasce, insurance, km, deposits: cleanedDeposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours, sezioni_off: sezioniOff }, businessRow(businessId))
+    savePersisted({ categories, fasce, insurance, km, deposits: cleanedDeposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours, sezioni_off: sezioniOff, contratto_modifica: contrattoRegole }, businessRow(businessId))
     // Bust the payment-method cache so every dropdown across admin picks up
     // the new list on next mount, without page reload.
     invalidatePaymentMethodsCache()
@@ -2079,6 +2162,9 @@ export default function CentralinaProTab() {
               <AssicurazioniSection insurance={insurance} setInsurance={setInsurance} fasce={fasce} />
             )}
             {section === 'p3' && <KmSforoSection km={km} setKm={setKm} />}
+            {section === 'contratto-modifica' && (
+              <ContrattoModificheSection regole={contrattoRegole} setRegole={setContrattoRegole} />
+            )}
             {section === 'p4' && (
               isCauzioniViewOnly ? (
                 <div style={{ pointerEvents: 'none', userSelect: 'text' }} aria-readonly="true">
