@@ -1355,6 +1355,26 @@ export default function CargosTab() {
                                         Avvisi attivi
                                     </label>
 
+                                    {/* Frequenza — 2026-08-20. Il rattrappo gira ogni 30 minuti:
+                                        in "immediato" la stessa prenotazione in errore avviserebbe
+                                        decine di volte al giorno. */}
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[11px] text-theme-text-muted shrink-0">Quando avvisare</span>
+                                        <select
+                                            value={alertFrequency}
+                                            onChange={e => setAlertFrequency(e.target.value as 'immediato' | 'giornaliero')}
+                                            className="flex-1 px-2 py-1.5 rounded-md bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs"
+                                        >
+                                            <option value="immediato">Subito, a ogni problema</option>
+                                            <option value="giornaliero">Una volta al giorno (riepilogo)</option>
+                                        </select>
+                                    </div>
+                                    <p className="text-[11px] text-theme-text-muted">
+                                        {alertFrequency === 'giornaliero'
+                                            ? 'Un solo messaggio al giorno con l\'elenco di cio\' che non e\' partito.'
+                                            : 'Un messaggio a ogni errore, anche ripetuto: il rattrappo riprova ogni 30 minuti.'}
+                                    </p>
+
                                     {alertNumbers.map((n, i) => (
                                         <div key={i} className="flex items-center gap-2">
                                             <input

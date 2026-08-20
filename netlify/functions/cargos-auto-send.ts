@@ -174,7 +174,7 @@ function istatOrEmpty(cityName: string | null | undefined): string {
  *
  * Non blocca mai l'invio: se l'avviso fallisce, si logga e si prosegue.
  */
-async function avvisaDirezione(motivo: string, dettagli: string): Promise<void> {
+export async function avvisaDirezione(motivo: string, dettagli: string): Promise<void> {
     try {
         const { data } = await supabase
             .from('centralina_pro_config')
@@ -184,6 +184,12 @@ async function avvisaDirezione(motivo: string, dettagli: string): Promise<void> 
         const cfg = (data?.config || {}) as Record<string, unknown>
         const cargosCfg = (cfg.cargos || {}) as Record<string, unknown>
         if (cargosCfg.alerts_enabled !== true) return
+        // 2026-08-20 (richiesta direzione): frequenza scelta dal gestionale.
+        // 'giornaliero' = niente messaggi a ogni errore; ci pensa il riepilogo
+        // una volta al giorno (cargos-retry-missed). Il cron gira ogni 30
+        // minuti: senza questo, la stessa prenotazione in errore avrebbe
+        // mandato ~48 avvisi al giorno.
+        if ((cargosCfg.alert_frequency || 'immediato') === 'giornaliero') return
         const numeri = Array.isArray(cargosCfg.alert_numbers)
             ? (cargosCfg.alert_numbers as unknown[]).map(n => String(n).replace(/\D/g, '')).filter(n => n.length >= 9)
             : []
@@ -206,7 +212,19 @@ async function avvisaDirezione(motivo: string, dettagli: string): Promise<void> 
     }
 }
 
-export async function sendToCargos(bookingId: string): Promise<{ success: boolean; error?: string }> {
+export async function sendToCargos(
+    bookingId: string,
+    opts?: { silent?: boolean },
+): Promise<{ success: boolean; error?: string }> {
+    // 2026-08-20 (richiesta direzione): il cron di rattrappo gira ogni 30 minuti,
+    // quindi la stessa prenotazione in errore avrebbe mandato ~48 avvisi al
+    // giorno. Il cron chiama con silent:true e manda UN SOLO riepilogo
+    // giornaliero; l'avviso immediato resta solo sull'invio dopo la firma, che
+    // e' l'evento su cui si puo' davvero intervenire subito.
+    const avvisa = async (motivo: string, dettagli: string) => {
+        if (opts?.silent) return
+        await avvisaDirezione(motivo, dettagli)
+    }
     try {
         if (!CARGOS_PASSWORD) {
             return { success: false, error: 'CARGOS_PASSWORD non configurata' }
@@ -322,7 +340,7 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
             else if (!lookupIstatCode(luogo)) missing.push(`luogo di nascita non riconosciuto ("${luogo}")`)
         }
         if (missing.length > 0) {
-            await avvisaDirezione(
+            await avvisa(
                 'dati cliente mancanti',
                 `Cliente: ${booking.customer_name || 'ND'}\nVeicolo: ${booking.vehicle_plate || booking.vehicle_name || 'ND'}\nManca: ${missing.join(', ')}`
             )
@@ -465,7 +483,7 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
         console.log(`[cargos-auto-send] CARGOS Send response: status=${sendRes.status}, body=${sendResText.substring(0, 500)}`)
 
         if (!sendRes.ok) {
-            await avvisaDirezione(
+            await avvisa(
                 'invio rifiutato',
                 `Cliente: ${booking.customer_name || 'ND'}\nVeicolo: ${booking.vehicle_plate || booking.vehicle_name || 'ND'}\nErrore HTTP ${sendRes.status}: ${sendResText.substring(0, 150)}`
             )
@@ -482,7 +500,7 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
         if (rejected.length > 0) {
             const errMsg = rejected.map((r: any) => r.errore?.error_description || r.errore?.error || JSON.stringify(r.errore)).join('; ')
             console.error(`[cargos-auto-send] ❌ Booking ${bookingId} REJECTED by CARGOS: ${errMsg}`)
-            await avvisaDirezione(
+            await avvisa(
                 'record rifiutato',
                 `Cliente: ${booking.customer_name || 'ND'}\nVeicolo: ${booking.vehicle_plate || booking.vehicle_name || 'ND'}\nMotivo: ${errMsg}`
             )

@@ -1,6 +1,6 @@
 import { Handler, schedule } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { sendToCargos } from './cargos-auto-send'
+import { sendToCargos, avvisaDirezione } from './cargos-auto-send'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -9,6 +9,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 const retryHandler: Handler = async () => {
     try {
         console.log('[cargos-retry-missed] Checking for unsent CARGOS bookings...')
+        const falliti: string[] = []
 
         // Find signed contracts where CARGOS was never sent
         const { data: missedBookings, error } = await supabase
@@ -97,14 +98,43 @@ const retryHandler: Handler = async () => {
 
             // Send to CARGOS
             console.log(`[cargos-retry-missed] Sending ${booking.id} (${booking.customer_name}) to CARGOS...`)
-            const result = await sendToCargos(booking.id)
+            // silent: il cron NON avvisa a ogni errore — girando ogni 30 minuti
+            // manderebbe decine di messaggi per lo stesso problema. Gli errori si
+            // raccolgono e diventano UN riepilogo, secondo la frequenza scelta.
+            const result = await sendToCargos(booking.id, { silent: true })
 
             if (result.success) {
                 sent++
                 console.log(`[cargos-retry-missed] ✅ ${booking.customer_name} sent successfully`)
             } else {
                 failed++
+                falliti.push(`• ${booking.customer_name || 'ND'} (${booking.vehicle_plate || booking.vehicle_name || 'ND'}): ${result.error || 'errore'}`)
                 console.warn(`[cargos-retry-missed] ❌ ${booking.customer_name} failed: ${result.error}`)
+            }
+        }
+
+        // ── Riepilogo giornaliero ────────────────────────────────────────────
+        // Un solo messaggio al giorno, non uno ogni mezz'ora. La data dell'ultimo
+        // invio sta in config: finche' e' quella di oggi, non si manda altro.
+        if (falliti.length > 0) {
+            try {
+                const { data: cfgRow } = await supabase
+                    .from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+                const cfg = (cfgRow?.config || {}) as Record<string, unknown>
+                const cargosCfg = { ...((cfg.cargos as Record<string, unknown>) || {}) }
+                const frequenza = String(cargosCfg.alert_frequency || 'immediato')
+                const oggi = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+                if (frequenza === 'giornaliero' && cargosCfg.last_alert_date !== oggi) {
+                    await avvisaDirezione(
+                        `riepilogo giornaliero — ${falliti.length} da sistemare`,
+                        falliti.slice(0, 15).join('\n') + (falliti.length > 15 ? `\n… e altre ${falliti.length - 15}` : ''),
+                    )
+                    cargosCfg.last_alert_date = oggi
+                    await supabase.from('centralina_pro_config')
+                        .upsert({ id: 'main', config: { ...cfg, cargos: cargosCfg } }, { onConflict: 'id' })
+                }
+            } catch (e) {
+                console.error('[cargos-retry-missed] riepilogo non inviato:', e)
             }
         }
 
