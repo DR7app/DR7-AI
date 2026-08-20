@@ -709,14 +709,34 @@ export default function CargosTab() {
                         if (c) customerData = c
                     }
                     // Fallback: by email (from customerId if it's an email, or from customer_email)
+                    // 2026-08-20 (segnalazione direzione: "su Alessio e Fabio dice dati
+                    // mancanti ma non e' vero"). Era `.eq('email', ...)`, cioe' confronto
+                    // SENSIBILE ALLE MAIUSCOLE: "Alessio@Gmail.com" sulla prenotazione non
+                    // trovava "alessio@gmail.com" in anagrafica. Il cliente c'era, la riga
+                    // lo dava per assente e chiedeva dati gia' presenti. Ora ilike.
                     const emailToTry = (!isUuid && custId?.includes('@') ? custId : null) || b.customer_email
                     if (!customerData && emailToTry) {
                         const { data: c } = await supabase
                             .from('customers_extended')
                             .select('*')
-                            .eq('email', emailToTry)
-                            .maybeSingle()
-                        if (c) customerData = c
+                            .ilike('email', emailToTry.trim())
+                            .limit(1)
+                        if (c && c.length > 0) customerData = c[0]
+                    }
+                    // Fallback: by TELEFONO (ultime 9 cifre, per assorbire prefissi e
+                    // spazi scritti in modo diverso). Mancava del tutto: una prenotazione
+                    // senza email restava orfana anche con il cliente in anagrafica.
+                    // NB: nessun ripiego sul NOME. Su una dichiarazione alla Polizia di
+                    // Stato, agganciare l'omonimo sbagliato sarebbe peggio di un dato
+                    // mancante: meglio chiedere che indovinare.
+                    const telToTry = (b.customer_phone || '').replace(/\D/g, '')
+                    if (!customerData && telToTry.length >= 9) {
+                        const { data: c } = await supabase
+                            .from('customers_extended')
+                            .select('*')
+                            .ilike('telefono', `%${telToTry.slice(-9)}%`)
+                            .limit(1)
+                        if (c && c.length > 0) customerData = c[0]
                     }
                     // Resolve plate from vehicles table if missing
                     let resolvedPlate = b.vehicle_plate || b.booking_details?.vehicle_plate || b.booking_details?.vehicle?.plate || ''
