@@ -1240,6 +1240,70 @@ export default function CargosTab() {
                     </div>
 
                     {/* Bookings table */}
+                    {/* 2026-08-20: la configurazione avvisi sta FUORI dal blocco
+                        "ci sono prenotazioni". Era dentro, quindi con la lista vuota
+                        — cioe' proprio quando non e' partito niente e uno vuole
+                        capire perche' — spariva anche il pannello per attivarli. */}
+                        {/* Avvisi WhatsApp alla direzione — 2026-08-20 */}
+                        <div className="px-4 pb-3">
+                            <button
+                                onClick={() => setAlertsOpen(o => !o)}
+                                className="flex items-center gap-2 text-xs font-semibold text-theme-text-secondary hover:text-dr7-gold"
+                            >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                                </svg>
+                                Avvisi WhatsApp direzione
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${alertsEnabled ? 'bg-emerald-500/15 text-emerald-500' : 'bg-zinc-500/15 text-zinc-500'}`}>
+                                    {alertsEnabled ? `ATTIVI · ${alertNumbers.filter(n => n.trim()).length}` : 'DISATTIVI'}
+                                </span>
+                            </button>
+
+                            {alertsOpen && (
+                                <div className="mt-2 rounded-lg border border-theme-border bg-theme-bg-primary p-3 space-y-2 max-w-xl">
+                                    <p className="text-[11px] text-theme-text-muted">
+                                        Un messaggio parte quando una trasmissione a CARGOS <strong>fallisce</strong> o
+                                        quando <strong>mancano i dati del cliente</strong> per farla. Include cliente,
+                                        veicolo e motivo. Senza numeri non parte nulla.
+                                    </p>
+
+                                    <label className="flex items-center gap-2 text-xs text-theme-text-primary">
+                                        <input type="checkbox" checked={alertsEnabled} onChange={e => setAlertsEnabled(e.target.checked)} className="rounded border-theme-border" />
+                                        Avvisi attivi
+                                    </label>
+
+                                    {alertNumbers.map((n, i) => (
+                                        <div key={i} className="flex items-center gap-2">
+                                            <input
+                                                type="tel"
+                                                value={n}
+                                                onChange={e => setAlertNumbers(prev => prev.map((x, j) => j === i ? e.target.value : x))}
+                                                placeholder="es. 393472817258 (senza +)"
+                                                className="flex-1 px-2 py-1.5 rounded-md bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs font-mono"
+                                            />
+                                            {alertNumbers.length > 1 && (
+                                                <button
+                                                    onClick={() => setAlertNumbers(prev => prev.filter((_, j) => j !== i))}
+                                                    className="w-7 h-7 rounded-md border border-theme-border text-theme-text-muted hover:text-red-500"
+                                                    title="Rimuovi numero"
+                                                >×</button>
+                                            )}
+                                        </div>
+                                    ))}
+
+                                    <div className="flex items-center justify-between">
+                                        <button
+                                            onClick={() => setAlertNumbers(prev => [...prev, ''])}
+                                            className="text-[11px] font-semibold text-dr7-gold hover:opacity-80"
+                                        >+ Aggiungi numero</button>
+                                        <Button onClick={salvaAvvisi} disabled={alertsSaving} className="text-xs">
+                                            {alertsSaving ? 'Salvataggio…' : 'Salva avvisi'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                     {bookings.length > 0 && (
                         <div className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
                             <div className="px-4 py-3 border-b border-theme-border flex flex-wrap justify-between items-center gap-2">
@@ -1283,66 +1347,6 @@ export default function CargosTab() {
                                         )}
                                     </Button>
                                 </div>
-                            </div>
-
-                            {/* Avvisi WhatsApp alla direzione — 2026-08-20 */}
-                            <div className="px-4 pb-3">
-                                <button
-                                    onClick={() => setAlertsOpen(o => !o)}
-                                    className="flex items-center gap-2 text-xs font-semibold text-theme-text-secondary hover:text-dr7-gold"
-                                >
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                                    </svg>
-                                    Avvisi WhatsApp direzione
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${alertsEnabled ? 'bg-emerald-500/15 text-emerald-500' : 'bg-zinc-500/15 text-zinc-500'}`}>
-                                        {alertsEnabled ? `ATTIVI · ${alertNumbers.filter(n => n.trim()).length}` : 'DISATTIVI'}
-                                    </span>
-                                </button>
-
-                                {alertsOpen && (
-                                    <div className="mt-2 rounded-lg border border-theme-border bg-theme-bg-primary p-3 space-y-2 max-w-xl">
-                                        <p className="text-[11px] text-theme-text-muted">
-                                            Un messaggio parte quando una trasmissione a CARGOS <strong>fallisce</strong> o
-                                            quando <strong>mancano i dati del cliente</strong> per farla. Include cliente,
-                                            veicolo e motivo. Senza numeri non parte nulla.
-                                        </p>
-
-                                        <label className="flex items-center gap-2 text-xs text-theme-text-primary">
-                                            <input type="checkbox" checked={alertsEnabled} onChange={e => setAlertsEnabled(e.target.checked)} className="rounded border-theme-border" />
-                                            Avvisi attivi
-                                        </label>
-
-                                        {alertNumbers.map((n, i) => (
-                                            <div key={i} className="flex items-center gap-2">
-                                                <input
-                                                    type="tel"
-                                                    value={n}
-                                                    onChange={e => setAlertNumbers(prev => prev.map((x, j) => j === i ? e.target.value : x))}
-                                                    placeholder="es. 393472817258 (senza +)"
-                                                    className="flex-1 px-2 py-1.5 rounded-md bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs font-mono"
-                                                />
-                                                {alertNumbers.length > 1 && (
-                                                    <button
-                                                        onClick={() => setAlertNumbers(prev => prev.filter((_, j) => j !== i))}
-                                                        className="w-7 h-7 rounded-md border border-theme-border text-theme-text-muted hover:text-red-500"
-                                                        title="Rimuovi numero"
-                                                    >×</button>
-                                                )}
-                                            </div>
-                                        ))}
-
-                                        <div className="flex items-center justify-between">
-                                            <button
-                                                onClick={() => setAlertNumbers(prev => [...prev, ''])}
-                                                className="text-[11px] font-semibold text-dr7-gold hover:opacity-80"
-                                            >+ Aggiungi numero</button>
-                                            <Button onClick={salvaAvvisi} disabled={alertsSaving} className="text-xs">
-                                                {alertsSaving ? 'Salvataggio…' : 'Salva avvisi'}
-                                            </Button>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
 
                             {/* Table */}
