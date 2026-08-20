@@ -1118,10 +1118,16 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                                   return name
                                 })()}
                               </span>
-                              <span className="font-bold text-[12px] leading-tight text-white drop-shadow-md">
+                              {/* 2026-08-20: `truncate` anche su ora e servizio. Solo la
+                                  prima riga ce l'aveva: le altre due, centrate e senza
+                                  troncatura, sforavano il blocco e venivano tagliate dai
+                                  DUE lati — "Lavaggio" usciva come "avaggi". Con truncate
+                                  il testo si accorcia in fondo, con i puntini, e resta
+                                  leggibile anche sui blocchi stretti della vista Mese. */}
+                              <span className="font-bold text-[12px] leading-tight truncate max-w-full text-white drop-shadow-md">
                                 {startEvt.booking.appointment_time}
                               </span>
-                              <span className="text-[9px] leading-tight text-white/90 drop-shadow-sm">
+                              <span className="text-[9px] leading-tight truncate max-w-full text-white/90 drop-shadow-sm">
                                 {(() => {
                                   if (isRientro) return 'Rientro'
                                   const svc = startEvt.booking.service_name.toLowerCase()
