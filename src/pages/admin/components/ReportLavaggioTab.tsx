@@ -110,6 +110,13 @@ export default function ReportLavaggioTab() {
   const canEditStipendio = hasRole('stipendio-editor')
   const [spesaMerce, setSpesaMerce] = useState<number>(0)
   const [costsLoading, setCostsLoading] = useState(false)
+  // 2026-08-20 (richiesta direzione): modificabili TUTTE le voci di Costi &
+  // Margine, non solo lo stipendio. Ricavo e Spesa Merce restano calcolati dai
+  // dati reali (prenotazioni e fatture fornitori); quando la direzione scrive un
+  // valore, quello VINCE per il mese scelto e resta segnalato come modificato,
+  // con il calcolato sempre visibile e ripristinabile in un click.
+  const [ricavoOverride, setRicavoOverride] = useState<number | null>(null)
+  const [spesaOverride, setSpesaOverride] = useState<number | null>(null)
   const [stipendio, setStipendio] = useState<number>(0)
   const [stipendioInput, setStipendioInput] = useState<string>('')
   const [stipendioEditing, setStipendioEditing] = useState(false)
@@ -152,6 +159,10 @@ export default function ReportLavaggioTab() {
       const value = Number(stip[selectedMonth] ?? 0) || 0
       setStipendio(value)
       setStipendioInput(value.toFixed(2))
+      const ricOv = (lav.ricavi_mensili || {}) as Record<string, number>
+      const speOv = (lav.spese_merce_mensili || {}) as Record<string, number>
+      setRicavoOverride(ricOv[selectedMonth] != null ? Number(ricOv[selectedMonth]) : null)
+      setSpesaOverride(speOv[selectedMonth] != null ? Number(speOv[selectedMonth]) : null)
     } catch (err) {
       console.error('[ReportLavaggio] loadCosts error:', err)
     } finally {
@@ -167,12 +178,47 @@ export default function ReportLavaggioTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMonth])
 
+  // Salvataggio/azzeramento di un override mensile. `null` rimuove la voce e
+  // fa tornare in vigore il valore calcolato.
+  const [overrideSaving, setOverrideSaving] = useState(false)
+  async function saveOverride(campo: 'ricavi_mensili' | 'spese_merce_mensili', valore: number | null) {
+    setOverrideSaving(true)
+    try {
+      const { data: cfgRow } = await supabase
+        .from('centralina_pro_config')
+        .select('config')
+        .eq('id', 'main')
+        .maybeSingle()
+      const cfg = (cfgRow?.config || {}) as Record<string, unknown>
+      const lav = { ...((cfg.lavaggio as Record<string, unknown>) || {}) }
+      const mappa = { ...((lav[campo] as Record<string, number>) || {}) }
+      if (valore == null) delete mappa[selectedMonth]
+      else mappa[selectedMonth] = valore
+      lav[campo] = mappa
+      const { error } = await supabase
+        .from('centralina_pro_config')
+        .upsert({ id: 'main', config: { ...cfg, lavaggio: lav } }, { onConflict: 'id' })
+      if (error) throw error
+      if (campo === 'ricavi_mensili') setRicavoOverride(valore)
+      else setSpesaOverride(valore)
+      toast.success(valore == null ? 'Valore ripristinato al calcolato' : 'Valore salvato')
+    } catch (e) {
+      toast.error('Salvataggio fallito: ' + (e instanceof Error ? e.message : 'errore'))
+    } finally {
+      setOverrideSaving(false)
+    }
+  }
+
   async function saveStipendio() {
     const parsed = parseFloat(stipendioInput.replace(',', '.'))
     if (!Number.isFinite(parsed) || parsed < 0) {
       toast.error('Importo non valido')
       return
     }
+    await saveStipendioValue(parsed)
+  }
+
+  async function saveStipendioValue(parsed: number) {
     setStipendioSaving(true)
     try {
       const { data: cfgRow } = await supabase
@@ -254,8 +300,13 @@ export default function ReportLavaggioTab() {
   const lavaggiFatt = washData?.billableWashesCount || 0
   const lavaggiInterni = washData?.internalWashesCount || 0
   const lavaggiTot = lavaggiFatt + lavaggiInterni
-  const ricavo = washData?.washRevenue || 0
-  const margineReale = ricavo - spesaMerce - stipendio
+  // Calcolati dai dati reali...
+  const ricavoCalcolato = washData?.washRevenue || 0
+  const spesaCalcolata = spesaMerce
+  // ...e valori EFFETTIVI usati nel margine: l'override della direzione vince.
+  const ricavo = ricavoOverride ?? ricavoCalcolato
+  const spesaEffettiva = spesaOverride ?? spesaCalcolata
+  const margineReale = ricavo - spesaEffettiva - stipendio
   const marginPct = ricavo > 0 ? Math.round((margineReale / ricavo) * 100) : 0
   const avgRevenuePerWash = lavaggiFatt > 0 ? ricavo / lavaggiFatt : 0
 
@@ -363,7 +414,7 @@ export default function ReportLavaggioTab() {
           icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 5.5A8 8 0 0 0 6 9M19 18.5A8 8 0 0 1 6 15M4 10h11M4 14h11"/></svg>}
         />
         <Kpi index={3} label="Spesa Merce" color="rose"
-          value={formatCurrencyShort(spesaMerce)} sub={costsLoading ? 'caricamento…' : 'prodotti / consumabili'}
+          value={formatCurrencyShort(spesaOverride ?? spesaMerce)} sub={costsLoading ? 'caricamento…' : (spesaOverride != null ? 'valore modificato' : 'prodotti / consumabili')}
           icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>}
         />
         <Kpi index={4} label="Stipendio Lav." color="amber"
@@ -525,9 +576,24 @@ export default function ReportLavaggioTab() {
 
             {/* Waterfall */}
             <div className="space-y-1.5">
-              <CostRow label="Ricavo" value={ricavo} tone="positive" sign="+"/>
-              <CostRow label="Spesa Merce" value={-spesaMerce} tone="negative" sign="−"/>
-              <CostRow label="Stipendio" value={-stipendio} tone="negative" sign="−"/>
+              <CostRowEditable
+                label="Ricavo" value={ricavo} tone="positive" sign="+"
+                calcolato={ricavoCalcolato} modificato={ricavoOverride != null}
+                canEdit={canEditStipendio} saving={overrideSaving}
+                onSave={(v) => saveOverride('ricavi_mensili', v)}
+              />
+              <CostRowEditable
+                label="Spesa Merce" value={-spesaEffettiva} tone="negative" sign="−"
+                calcolato={spesaCalcolata} modificato={spesaOverride != null}
+                canEdit={canEditStipendio} saving={overrideSaving}
+                onSave={(v) => saveOverride('spese_merce_mensili', v)}
+              />
+              <CostRowEditable
+                label="Stipendio" value={-stipendio} tone="negative" sign="−"
+                calcolato={stipendio} modificato={false}
+                canEdit={canEditStipendio} saving={stipendioSaving}
+                onSave={async (v) => { setStipendioInput(String(v ?? 0)); await saveStipendioValue(v ?? 0) }}
+              />
               <div className="border-t border-dashed border-zinc-300 dark:border-cyan-500/15"/>
               <CostRow label="Margine" value={margineReale} tone={margineReale >= 0 ? 'positive' : 'negative'} sign={margineReale >= 0 ? '=' : '='} bold/>
             </div>
@@ -769,6 +835,81 @@ function SectionTitle({ children, right }: { children: React.ReactNode; right?: 
       <h3 className="text-[9px] font-bold uppercase tracking-[0.18em] text-zinc-500 dark:text-cyan-300/70 truncate">{children}</h3>
       {right}
       <div className="absolute inset-x-3 bottom-0 h-px bg-gradient-to-r from-transparent via-zinc-200 to-transparent dark:via-cyan-500/10 pointer-events-none"/>
+    </div>
+  )
+}
+
+// 2026-08-20 (richiesta direzione): ogni voce di Costi & Margine si modifica,
+// non solo lo stipendio. Il valore CALCOLATO dai dati reali resta sempre
+// visibile sotto quando c'e' un override, e si ripristina con un click: una
+// cifra scritta a mano non deve poter far sparire il dato vero.
+function CostRowEditable({ label, value, tone, sign, calcolato, modificato, canEdit, saving, onSave }: {
+  label: string; value: number; tone: 'positive' | 'negative'; sign: string
+  calcolato: number; modificato: boolean; canEdit: boolean; saving: boolean
+  onSave: (v: number | null) => void | Promise<void>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [input, setInput] = useState('')
+  const color = tone === 'positive'
+    ? 'text-emerald-700 dark:text-emerald-300'
+    : 'text-rose-700 dark:text-rose-300'
+  if (editing && canEdit) {
+    return (
+      <div className="flex items-center gap-1 text-[11px]">
+        <span className="text-zinc-600 dark:text-zinc-400 shrink-0">{label}</span>
+        <MoneyInput
+          min="0"
+          value={input}
+          onChange={(__v: string) => setInput(__v)}
+          className="flex-1 min-w-0 px-2 py-1 rounded text-[12px] font-bold tabular-nums bg-white text-zinc-900 ring-1 ring-zinc-300 dark:bg-zinc-900 dark:text-cyan-100 dark:ring-cyan-500/30 focus:outline-none"
+          autoFocus
+        />
+        <button
+          onClick={async () => {
+            const parsed = parseFloat((input || '').replace(',', '.'))
+            if (!Number.isFinite(parsed) || parsed < 0) return
+            await onSave(parsed)
+            setEditing(false)
+          }}
+          disabled={saving}
+          className="px-2 py-1 rounded text-[10px] font-bold text-white bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50"
+        >{saving ? '…' : 'OK'}</button>
+        <button onClick={() => setEditing(false)}
+          className="px-2 py-1 rounded text-[10px] font-semibold text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800">✕</button>
+      </div>
+    )
+  }
+  return (
+    <div className="flex items-center justify-between text-[11px] group/row">
+      <span className="text-zinc-600 dark:text-zinc-400 flex items-center gap-1">
+        {label}
+        {modificato && (
+          <span title={`Valore modificato a mano. Calcolato: ${formatCurrency(Math.abs(calcolato))}`}
+            className="text-[8px] font-bold uppercase px-1 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-300">
+            modificato
+          </span>
+        )}
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className={`font-mono tabular-nums ${color} font-semibold`}>
+          {sign} {formatCurrency(Math.abs(value))}
+        </span>
+        {canEdit && (
+          <>
+            <button
+              onClick={() => { setInput(Math.abs(value).toFixed(2)); setEditing(true) }}
+              className="text-[9px] font-mono text-cyan-700 dark:text-cyan-300 hover:underline opacity-0 group-hover/row:opacity-100 transition-opacity"
+            >EDIT</button>
+            {modificato && (
+              <button
+                onClick={() => onSave(null)}
+                title="Torna al valore calcolato dai dati"
+                className="text-[9px] font-mono text-zinc-500 hover:underline opacity-0 group-hover/row:opacity-100 transition-opacity"
+              >RESET</button>
+            )}
+          </>
+        )}
+      </span>
     </div>
   )
 }
