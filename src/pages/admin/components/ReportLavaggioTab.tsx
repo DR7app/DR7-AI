@@ -414,7 +414,7 @@ export default function ReportLavaggioTab() {
           icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 5.5A8 8 0 0 0 6 9M19 18.5A8 8 0 0 1 6 15M4 10h11M4 14h11"/></svg>}
         />
         <Kpi index={3} label="Spesa Merce" color="rose"
-          value={formatCurrencyShort(spesaOverride ?? spesaMerce)} sub={costsLoading ? 'caricamento…' : (spesaOverride != null ? 'valore modificato' : 'prodotti / consumabili')}
+          value={formatCurrencyShort(spesaOverride ?? spesaMerce)} sub={costsLoading ? 'caricamento…' : 'prodotti / consumabili'}
           icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>}
         />
         <Kpi index={4} label="Stipendio Lav." color="amber"
@@ -890,15 +890,14 @@ function CostRowEditable({ label, value, tone, sign, calcolato, modificato, canE
   }
   return (
     <div className="flex items-center justify-between text-[11px] group/row">
-      <span className="text-zinc-600 dark:text-zinc-400 flex items-center gap-1">
-        {label}
-        {modificato && (
-          <span title={`Valore modificato a mano. Calcolato: ${formatCurrency(Math.abs(calcolato))}`}
-            className="text-[8px] font-bold uppercase px-1 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-300">
-            modificato
-          </span>
-        )}
-      </span>
+      {/* 2026-08-20 (richiesta direzione): niente etichetta "modificato". Il
+          valore corretto a mano si mostra e basta. Il valore calcolato resta
+          nel title della riga e il tasto RESET compare solo quando c'e'
+          davvero qualcosa da ripristinare. */}
+      <span
+        className="text-zinc-600 dark:text-zinc-400"
+        title={modificato ? `Calcolato dai dati: ${formatCurrency(Math.abs(calcolato))}` : undefined}
+      >{label}</span>
       <span className="flex items-center gap-1.5">
         <span className={`font-mono tabular-nums ${color} font-semibold`}>
           {sign} {formatCurrency(Math.abs(value))}
