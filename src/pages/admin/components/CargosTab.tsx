@@ -738,6 +738,38 @@ export default function CargosTab() {
                             .limit(1)
                         if (c && c.length > 0) customerData = c[0]
                     }
+                    // Fallback: per NOME. 2026-08-20, richiesto esplicitamente dalla
+                    // direzione dopo che avevo obiettato. L'obiezione resta valida — su
+                    // una dichiarazione alla Polizia di Stato agganciare un omonimo e'
+                    // peggio di un campo vuoto — quindi il nome aggancia SOLO quando e'
+                    // inequivocabile: se i candidati sono piu' di uno, non si sceglie e
+                    // la riga resta "dati mancanti" da sistemare a mano.
+                    if (!customerData && (b.customer_name || '').trim()) {
+                        const nomeCompleto = (b.customer_name || '').trim().replace(/\s+/g, ' ')
+                        const parti = nomeCompleto.split(' ')
+                        // Persona fisica: nome + cognome (in entrambi gli ordini, perche'
+                        // sulle prenotazioni capita di trovarli invertiti).
+                        if (parti.length >= 2) {
+                            const a = parti[0]
+                            const b2 = parti.slice(1).join(' ')
+                            const { data: cand } = await supabase
+                                .from('customers_extended')
+                                .select('*')
+                                .or(`and(nome.ilike.${a},cognome.ilike.${b2}),and(nome.ilike.${b2},cognome.ilike.${a})`)
+                                .limit(2)
+                            if (cand && cand.length === 1) customerData = cand[0]
+                        }
+                        // Azienda: denominazione o ragione sociale identica.
+                        if (!customerData) {
+                            const { data: cand } = await supabase
+                                .from('customers_extended')
+                                .select('*')
+                                .or(`denominazione.ilike.${nomeCompleto},ragione_sociale.ilike.${nomeCompleto}`)
+                                .limit(2)
+                            if (cand && cand.length === 1) customerData = cand[0]
+                        }
+                    }
+
                     // Resolve plate from vehicles table if missing
                     let resolvedPlate = b.vehicle_plate || b.booking_details?.vehicle_plate || b.booking_details?.vehicle?.plate || ''
                     if (!resolvedPlate && (b.vehicle_id || b.booking_details?.vehicle_id || b.vehicle_name)) {
