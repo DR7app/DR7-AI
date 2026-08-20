@@ -484,10 +484,25 @@ export default function CargosTab() {
     // scheda, si apre precompilata con quel che si sa dal booking, cosi' si crea
     // il cliente invece di lasciare il buco.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    function apriSchedaCliente(b: any) {
+    async function apriSchedaCliente(b: any) {
         if (b.customerData?.id) {
             setClienteDaCompletare(b.customerData as Record<string, unknown>)
             return
+        }
+        // 2026-08-20: prima si apriva subito una scheda VUOTA quando la riga non
+        // aveva customerData — ma il cliente in anagrafica spesso c'e', solo che
+        // la prenotazione non e' collegata per user_id. Si cerca per email e poi
+        // per telefono: meglio aprire la scheda ESISTENTE che crearne una seconda
+        // e ritrovarsi due volte lo stesso cliente.
+        const email = (b.customer_email || '').trim()
+        const tel = (b.customer_phone || '').replace(/\D/g, '')
+        if (email) {
+            const { data } = await supabase.from('customers_extended').select('*').ilike('email', email).maybeSingle()
+            if (data) { setClienteDaCompletare(data as Record<string, unknown>); return }
+        }
+        if (tel.length >= 9) {
+            const { data } = await supabase.from('customers_extended').select('*').ilike('telefono', `%${tel.slice(-9)}%`).limit(1)
+            if (data && data.length > 0) { setClienteDaCompletare(data[0] as Record<string, unknown>); return }
         }
         const nome = (b.customer_name || '').trim().split(/\s+/)
         setClienteDaCompletare({

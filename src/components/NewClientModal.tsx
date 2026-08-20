@@ -620,7 +620,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
   return (
     <div className="fixed inset-0 bg-theme-overlay backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-theme-text-primary rounded-lg max-w-2xl w-full my-8 shadow-2xl">
+      {/* 2026-08-20: era `bg-theme-text-primary` — cioe' il colore del TESTO usato
+          come SFONDO. In tema chiaro quel token e' quasi nero: pannello nero con
+          etichette nere sopra, illeggibile. In scuro passava inosservato per caso.
+          Lo sfondo di un pannello e' bg-theme-bg-secondary. */}
+      <div className="bg-theme-bg-secondary rounded-lg max-w-2xl w-full my-8 shadow-2xl">
         {/* Header */}
         <div className="p-6 border-b border-theme-border">
           <div className="flex justify-between items-center">
