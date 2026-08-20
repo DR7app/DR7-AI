@@ -115,6 +115,14 @@ export default function ReportLavaggioTab() {
   // dati reali (prenotazioni e fatture fornitori); quando la direzione scrive un
   // valore, quello VINCE per il mese scelto e resta segnalato come modificato,
   // con il calcolato sempre visibile e ripristinabile in un click.
+  // 2026-08-20 (richiesta direzione): voci di costo LIBERE, aggiunte a mano
+  // (es. "Spese acqua corrente"). Vivono per mese in
+  // centralina_pro_config.lavaggio.voci_extra_mensili e entrano nel Margine.
+  type VoceExtra = { id: string; label: string; importo: number }
+  const [vociExtra, setVociExtra] = useState<VoceExtra[]>([])
+  const [nuovaVoceLabel, setNuovaVoceLabel] = useState('')
+  const [nuovaVoceImporto, setNuovaVoceImporto] = useState('')
+  const [aggiungendoVoce, setAggiungendoVoce] = useState(false)
   const [ricavoOverride, setRicavoOverride] = useState<number | null>(null)
   const [spesaOverride, setSpesaOverride] = useState<number | null>(null)
   const [stipendio, setStipendio] = useState<number>(0)
@@ -163,6 +171,8 @@ export default function ReportLavaggioTab() {
       const speOv = (lav.spese_merce_mensili || {}) as Record<string, number>
       setRicavoOverride(ricOv[selectedMonth] != null ? Number(ricOv[selectedMonth]) : null)
       setSpesaOverride(speOv[selectedMonth] != null ? Number(speOv[selectedMonth]) : null)
+      const extraMap = (lav.voci_extra_mensili || {}) as Record<string, VoceExtra[]>
+      setVociExtra(Array.isArray(extraMap[selectedMonth]) ? extraMap[selectedMonth] : [])
     } catch (err) {
       console.error('[ReportLavaggio] loadCosts error:', err)
     } finally {
@@ -207,6 +217,45 @@ export default function ReportLavaggioTab() {
     } finally {
       setOverrideSaving(false)
     }
+  }
+
+  // Scrive l'elenco completo delle voci del mese (aggiunta, modifica, rimozione
+  // passano tutte di qui: una sola strada verso il database).
+  async function salvaVociExtra(nuovo: VoceExtra[]) {
+    setOverrideSaving(true)
+    try {
+      const { data: cfgRow } = await supabase
+        .from('centralina_pro_config')
+        .select('config')
+        .eq('id', 'main')
+        .maybeSingle()
+      const cfg = (cfgRow?.config || {}) as Record<string, unknown>
+      const lav = { ...((cfg.lavaggio as Record<string, unknown>) || {}) }
+      const mappa = { ...((lav.voci_extra_mensili as Record<string, VoceExtra[]>) || {}) }
+      if (nuovo.length === 0) delete mappa[selectedMonth]
+      else mappa[selectedMonth] = nuovo
+      lav.voci_extra_mensili = mappa
+      const { error } = await supabase
+        .from('centralina_pro_config')
+        .upsert({ id: 'main', config: { ...cfg, lavaggio: lav } }, { onConflict: 'id' })
+      if (error) throw error
+      setVociExtra(nuovo)
+    } catch (e) {
+      toast.error('Salvataggio voce fallito: ' + (e instanceof Error ? e.message : 'errore'))
+    } finally {
+      setOverrideSaving(false)
+    }
+  }
+
+  async function aggiungiVoce() {
+    const label = nuovaVoceLabel.trim()
+    const importo = parseFloat((nuovaVoceImporto || '').replace(',', '.'))
+    if (!label) { toast.error('Dai un nome alla voce'); return }
+    if (!Number.isFinite(importo) || importo < 0) { toast.error('Importo non valido'); return }
+    const id = `v${Date.now().toString(36)}`
+    await salvaVociExtra([...vociExtra, { id, label, importo }])
+    setNuovaVoceLabel(''); setNuovaVoceImporto(''); setAggiungendoVoce(false)
+    toast.success('Voce aggiunta')
   }
 
   async function saveStipendio() {
@@ -306,7 +355,9 @@ export default function ReportLavaggioTab() {
   // ...e valori EFFETTIVI usati nel margine: l'override della direzione vince.
   const ricavo = ricavoOverride ?? ricavoCalcolato
   const spesaEffettiva = spesaOverride ?? spesaCalcolata
-  const margineReale = ricavo - spesaEffettiva - stipendio
+  // Le voci libere sono COSTI: si sottraggono come le altre.
+  const totaleVociExtra = vociExtra.reduce((t, v) => t + (Number(v.importo) || 0), 0)
+  const margineReale = ricavo - spesaEffettiva - stipendio - totaleVociExtra
   const marginPct = ricavo > 0 ? Math.round((margineReale / ricavo) * 100) : 0
   const avgRevenuePerWash = lavaggiFatt > 0 ? ricavo / lavaggiFatt : 0
 
@@ -594,6 +645,58 @@ export default function ReportLavaggioTab() {
                 canEdit={canEditStipendio} saving={stipendioSaving}
                 onSave={async (v) => { setStipendioInput(String(v ?? 0)); await saveStipendioValue(v ?? 0) }}
               />
+              {/* Voci libere: si sommano ai costi e si eliminano con la X. */}
+              {vociExtra.map(v => (
+                <CostRowEditable
+                  key={v.id}
+                  label={v.label} value={-v.importo} tone="negative" sign="−"
+                  calcolato={v.importo} modificato={false}
+                  canEdit={canEditStipendio} saving={overrideSaving}
+                  onSave={(nuovo) => salvaVociExtra(
+                    nuovo == null
+                      ? vociExtra.filter(x => x.id !== v.id)
+                      : vociExtra.map(x => x.id === v.id ? { ...x, importo: nuovo } : x)
+                  )}
+                  onDelete={() => salvaVociExtra(vociExtra.filter(x => x.id !== v.id))}
+                />
+              ))}
+
+              {canEditStipendio && (
+                aggiungendoVoce ? (
+                  <div className="flex items-center gap-1 text-[11px]">
+                    <input
+                      value={nuovaVoceLabel}
+                      onChange={e => setNuovaVoceLabel(e.target.value)}
+                      placeholder="Es. Spese acqua corrente"
+                      autoFocus
+                      className="flex-1 min-w-0 px-2 py-1 rounded text-[11px] bg-white text-zinc-900 ring-1 ring-zinc-300 dark:bg-zinc-900 dark:text-cyan-100 dark:ring-cyan-500/30 focus:outline-none"
+                    />
+                    <MoneyInput
+                      min="0"
+                      value={nuovaVoceImporto}
+                      onChange={(__v: string) => setNuovaVoceImporto(__v)}
+                      className="w-20 shrink-0 px-2 py-1 rounded text-[12px] font-bold tabular-nums bg-white text-zinc-900 ring-1 ring-zinc-300 dark:bg-zinc-900 dark:text-cyan-100 dark:ring-cyan-500/30 focus:outline-none"
+                    />
+                    <button onClick={aggiungiVoce} disabled={overrideSaving}
+                      className="px-2 py-1 rounded text-[10px] font-bold text-white bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50">
+                      {overrideSaving ? '…' : 'OK'}
+                    </button>
+                    <button onClick={() => { setAggiungendoVoce(false); setNuovaVoceLabel(''); setNuovaVoceImporto('') }}
+                      className="px-2 py-1 rounded text-[10px] font-semibold text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800">✕</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setAggiungendoVoce(true)}
+                    className="flex items-center gap-1 text-[10px] font-semibold text-cyan-700 dark:text-cyan-300 hover:underline"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Aggiungi voce
+                  </button>
+                )
+              )}
+
               <div className="border-t border-dashed border-zinc-300 dark:border-cyan-500/15"/>
               <CostRow label="Margine" value={margineReale} tone={margineReale >= 0 ? 'positive' : 'negative'} sign={margineReale >= 0 ? '=' : '='} bold/>
             </div>
@@ -852,10 +955,12 @@ function SectionTitle({ children, right }: { children: React.ReactNode; right?: 
 // non solo lo stipendio. Il valore CALCOLATO dai dati reali resta sempre
 // visibile sotto quando c'e' un override, e si ripristina con un click: una
 // cifra scritta a mano non deve poter far sparire il dato vero.
-function CostRowEditable({ label, value, tone, sign, calcolato, modificato, canEdit, saving, onSave }: {
+function CostRowEditable({ label, value, tone, sign, calcolato, modificato, canEdit, saving, onSave, onDelete }: {
   label: string; value: number; tone: 'positive' | 'negative'; sign: string
   calcolato: number; modificato: boolean; canEdit: boolean; saving: boolean
   onSave: (v: number | null) => void | Promise<void>
+  /** Solo per le voci libere: le voci fisse non si cancellano. */
+  onDelete?: () => void | Promise<void>
 }) {
   const [editing, setEditing] = useState(false)
   const [input, setInput] = useState('')
@@ -917,12 +1022,24 @@ function CostRowEditable({ label, value, tone, sign, calcolato, modificato, canE
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
               </svg>
             </button>
-            {modificato && (
+            {modificato && !onDelete && (
               <button
                 onClick={() => onSave(null)}
                 title="Torna al valore calcolato dai dati"
                 className="text-[9px] font-mono text-zinc-500 hover:underline opacity-0 group-hover/row:opacity-100 transition-opacity"
               >RESET</button>
+            )}
+            {onDelete && (
+              <button
+                onClick={() => { if (confirm(`Eliminare la voce "${label}"?`)) onDelete() }}
+                title={`Elimina "${label}"`}
+                aria-label={`Elimina ${label}`}
+                className="text-rose-600 dark:text-rose-400 hover:text-rose-500 opacity-0 group-hover/row:opacity-100 transition-opacity"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             )}
           </>
         )}
