@@ -603,7 +603,16 @@ export default function ReportLavaggioTab() {
               <div className="flex items-center justify-between">
                 <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-700 dark:text-cyan-200/90">Stipendio Lavaggista</span>
                 {canEditStipendio && !stipendioEditing && (
-                  <button onClick={() => setStipendioEditing(true)} className="text-[9px] font-mono text-cyan-700 dark:text-cyan-300 hover:underline">EDIT</button>
+                  <button
+                    onClick={() => setStipendioEditing(true)}
+                    title="Modifica stipendio lavaggista"
+                    aria-label="Modifica stipendio lavaggista"
+                    className="text-cyan-700 dark:text-cyan-300 hover:text-cyan-500"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </button>
                 )}
               </div>
               {stipendioEditing && canEditStipendio ? (
@@ -896,10 +905,19 @@ function CostRowEditable({ label, value, tone, sign, calcolato, modificato, canE
         </span>
         {canEdit && (
           <>
+            {/* 2026-08-20 (richiesta direzione): la matita, come ovunque nel
+                gestionale — non la scritta EDIT. Stessa icona di
+                CustomerWalletTab / GestioneDanni. */}
             <button
               onClick={() => { setInput(Math.abs(value).toFixed(2)); setEditing(true) }}
-              className="text-[9px] font-mono text-cyan-700 dark:text-cyan-300 hover:underline opacity-0 group-hover/row:opacity-100 transition-opacity"
-            >EDIT</button>
+              title={`Modifica ${label}`}
+              aria-label={`Modifica ${label}`}
+              className="text-cyan-700 dark:text-cyan-300 hover:text-cyan-500 opacity-0 group-hover/row:opacity-100 transition-opacity"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
             {modificato && (
               <button
                 onClick={() => onSave(null)}
