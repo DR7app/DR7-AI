@@ -455,6 +455,9 @@ export default function CargosTab() {
             const { error } = await supabase.from('centralina_pro_config').upsert({ id: 'main', config: next }, { onConflict: 'id' })
             if (error) throw error
             setAlertNumbers(puliti.length > 0 ? puliti : [''])
+            // Salvato = niente altro da fare qui: il pannello si chiude e resta
+            // il badge con lo stato. Prima restava aperto e sembrava in sospeso.
+            setAlertsOpen(false)
             toast.success(alertsEnabled ? `Avvisi attivi su ${puliti.length} numero/i` : 'Avvisi disattivati')
         } catch (e) {
             toast.error('Salvataggio fallito: ' + (e instanceof Error ? e.message : 'errore'))
