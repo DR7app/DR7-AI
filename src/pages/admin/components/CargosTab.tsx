@@ -407,6 +407,39 @@ export default function CargosTab() {
     const [bookings, setBookings] = useState<BookingForCargos[]>([])
     const [loading, setLoading] = useState(false)
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+    const [escludendo, setEscludendo] = useState<string | null>(null)
+
+    // Toglie una riga dall'elenco CARGOS senza toccare la prenotazione.
+    async function escludiRiga(b: { id: string; customer_name?: string | null; vehicle_plate?: string | null; booking_details?: Record<string, unknown> | null }) {
+        const chi = b.customer_name || b.vehicle_plate || 'questa riga'
+        if (!confirm(
+            `Togliere ${chi} dall'elenco CARGOS?\n\n` +
+            'La prenotazione NON viene cancellata: sparisce solo da questa lista e ' +
+            'non verra\' trasmessa alla Polizia di Stato.\n\n' +
+            'Usalo per righe che non devono essere inviate (test, doppioni, prenotazioni gia\' comunicate altrove).'
+        )) return
+        setEscludendo(b.id)
+        try {
+            const { error } = await supabase
+                .from('bookings')
+                .update({
+                    booking_details: {
+                        ...(b.booking_details || {}),
+                        cargos_escluso: true,
+                        cargos_escluso_at: new Date().toISOString(),
+                    },
+                })
+                .eq('id', b.id)
+            if (error) throw error
+            setBookings(prev => prev.filter(x => x.id !== b.id))
+            setSelectedIds(prev => { const n = new Set(prev); n.delete(b.id); return n })
+            toast.success('Riga tolta dall\'elenco CARGOS')
+        } catch (e) {
+            toast.error('Operazione fallita: ' + (e instanceof Error ? e.message : 'errore'))
+        } finally {
+            setEscludendo(null)
+        }
+    }
     const [viewMode, setViewMode] = useState<'all' | 'date' | 'range'>('all')
     // 2026-06-05: ricerca per intervallo di date (data inizio noleggio).
     const [rangeFrom, setRangeFrom] = useState('')
@@ -531,6 +564,11 @@ export default function CargosTab() {
                 // cala mai e, peggio, ri-selezionandole si rischia un invio
                 // DUPLICATO. (cargos_sent viene messo a true solo su invio riuscito.)
                 if (b.booking_details?.cargos_sent === true) return false
+                // 2026-08-20 (richiesta direzione): righe tolte a mano dalla lista.
+                // NON si cancella la prenotazione — sarebbe un noleggio vero che
+                // sparisce dal gestionale: si marca solo "non da trasmettere",
+                // cosi' smette di comparire qui e di falsare il conteggio.
+                if (b.booking_details?.cargos_escluso === true) return false
                 return true
             })
 
@@ -1229,6 +1267,20 @@ export default function CargosTab() {
                                                         )}
                                                     </td>
                                                     <td className="px-3 py-2.5">
+                                                        {/* 2026-08-20: toglie la riga dall'elenco CARGOS. NON cancella
+                                                            la prenotazione: e' un noleggio vero, sparirebbe dal
+                                                            gestionale. Marca solo "non da trasmettere". */}
+                                                        <button
+                                                            onClick={() => escludiRiga(b)}
+                                                            disabled={escludendo === b.id}
+                                                            title="Togli questa riga dall'elenco CARGOS (non cancella la prenotazione)"
+                                                            aria-label="Togli dall'elenco CARGOS"
+                                                            className="float-right ml-2 text-theme-text-muted hover:text-red-500 disabled:opacity-40"
+                                                        >
+                                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                            </svg>
+                                                        </button>
                                                         {b.cargosStatus === 'sent' && (
                                                             <div className="flex items-center gap-2">
                                                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-500/10 border border-green-500/30 rounded text-green-400 text-xs font-bold">
