@@ -624,7 +624,11 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
           come SFONDO. In tema chiaro quel token e' quasi nero: pannello nero con
           etichette nere sopra, illeggibile. In scuro passava inosservato per caso.
           Lo sfondo di un pannello e' bg-theme-bg-secondary. */}
-      <div className="bg-theme-bg-secondary rounded-lg max-w-2xl w-full my-8 shadow-2xl">
+      {/* 2026-08-20: il pannello non aveva altezza massima ne' scorrimento
+          interno: su schermi normali il modulo (lungo) sforava lo schermo e il
+          fondo — bottoni Salva compresi — restava fuori. Ora e' come gli altri
+          modali del gestionale: max-h-[90vh] + overflow-y-auto. */}
+      <div className="bg-theme-bg-secondary rounded-lg max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto shadow-2xl border border-theme-border">
         {/* Header */}
         <div className="p-6 border-b border-theme-border">
           <div className="flex justify-between items-center">
