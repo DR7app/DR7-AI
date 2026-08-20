@@ -208,10 +208,16 @@ function guessVehicleModel(vehicleName: string): string {
     return parts.length > 1 ? parts.slice(1).join(' ') : vehicleName
 }
 
-function lookupIstatCode(cityName: string): string {
-    if (!cityName) return '420092009' // Default Cagliari
+// 2026-08-20: nessun ripiego silenzioso su Cagliari — vedi nota in
+// cargos-auto-send.ts. `null` = comune sconosciuto, da chiedere all'operatore.
+function lookupIstatCode(cityName: string): string | null {
+    if (!cityName) return null
     const upper = cityName.toUpperCase().trim()
-    return ISTAT_CODES[upper] || '420092009' // Fallback Cagliari
+    return ISTAT_CODES[upper] || null
+}
+/** Per il record: sconosciuto = campo VUOTO, mai un codice inventato. */
+function istatOrEmpty(cityName: string | null | undefined): string {
+    return lookupIstatCode(cityName || '') || ''
 }
 
 function getPaymentType(booking: BookingForCargos): string {
@@ -310,31 +316,31 @@ function buildCargosRecord(booking: BookingForCargos): string {
         /* 22 */ surname.toUpperCase(),
         /* 23 */ firstName.toUpperCase(),
         /* 24 */ birthDate.includes('/') ? birthDate : formatDateOnlyCargos(birthDate),
-        /* 25 */ lookupIstatCode(c?.luogo_nascita || rapp.luogo_nascita || bd.customer?.birthPlace || ''),
-        /* 26 */ lookupIstatCode(c?.nazionalita || 'ITALIA'), // Nationality — default Italia
-        /* 27 */ lookupIstatCode(c?.citta || ''),
+        /* 25 */ istatOrEmpty(c?.luogo_nascita || rapp.luogo_nascita || bd.customer?.birthPlace || ''),
+        /* 26 */ istatOrEmpty(c?.nazionalita || 'ITALIA'), // Nationality — default Italia
+        /* 27 */ istatOrEmpty(c?.citta || ''),
         /* 28 */ sanitizeCargos(`${c?.indirizzo || ''} ${c?.citta || ''} ${c?.provincia || ''}`),
         /* 29 */ DOC_TYPE_MAP[c?.documento_tipo || rapp.documento?.tipo || 'CI'] || 'IDENT',
         /* 30 */ c?.documento_numero || c?.numero_documento_rappresentante || rapp.documento?.numero || bd.customer?.documentNumber || c?.numero_patente || c?.patente_numero || bd.customer?.licenseNumber || bd.customer?.driverLicense || '',
-        /* 31 */ lookupIstatCode(rapp.documento?.luogo || c?.citta || ''),
+        /* 31 */ istatOrEmpty(rapp.documento?.luogo || c?.citta || ''),
         /* 32 */ (() => {
             if (c?.tipo_cliente === 'azienda') {
                 return rapp.patente || c?.numero_patente || c?.patente_numero || bd.customer?.licenseNumber || bd.customer?.driverLicense || 'ND000000000'
             }
             return c?.numero_patente || c?.patente_numero || bd.customer?.licenseNumber || bd.customer?.driverLicense || ''
         })(),
-        /* 33 */ lookupIstatCode(c?.patente_rilasciata_da || c?.citta || ''),
+        /* 33 */ istatOrEmpty(c?.patente_rilasciata_da || c?.citta || ''),
         /* 34 */ c?.telefono || booking.customer_phone || '',
         /* 35 */ driver2?.cognome || driver2?.surname || '',
         /* 36 */ driver2?.nome || driver2?.name || '',
         /* 37 */ formatDateOnlyCargos(driver2?.data_nascita || driver2?.birthDate || ''),
-        /* 38 */ lookupIstatCode(driver2?.luogo_nascita || driver2?.birthPlace || ''),
-        /* 39 */ lookupIstatCode(driver2?.nazionalita || ''),
+        /* 38 */ istatOrEmpty(driver2?.luogo_nascita || driver2?.birthPlace || ''),
+        /* 39 */ istatOrEmpty(driver2?.nazionalita || ''),
         /* 40 */ '',  // Driver 2 doc type
         /* 41 */ '',  // Driver 2 doc number
         /* 42 */ '',  // Driver 2 doc issue place
         /* 43 */ driver2?.numero_patente || driver2?.patente_numero || driver2?.licenseNumber || '',
-        /* 44 */ lookupIstatCode(driver2?.luogo_nascita || ''),
+        /* 44 */ istatOrEmpty(driver2?.luogo_nascita || ''),
         /* 45 */ driver2?.telefono || driver2?.phone || '',
     ]
 
@@ -386,8 +392,15 @@ function validateBookingForCargos(booking: BookingForCargos): ValidationIssue[] 
             issues.push({ field: 'Documento', message: 'Numero documento identità mancante', severity: 'error' })
         }
 
-        if (!c?.luogo_nascita) {
-            issues.push({ field: 'Luogo Nascita', message: 'Luogo di nascita mancante — verrà usato Cagliari', severity: 'warning' })
+        // 2026-08-20 (richiesta direzione): era un semplice avviso e la riga
+        // partiva lo stesso con Cagliari al posto del luogo vero. Ma questa e'
+        // una dichiarazione alla Polizia di Stato: un luogo di nascita inventato
+        // e' un'informazione FALSA trasmessa a un'autorita'. Ora blocca.
+        const luogoNascita = c?.luogo_nascita || bd.customer?.birthPlace || ''
+        if (!luogoNascita) {
+            issues.push({ field: 'Luogo Nascita', message: 'Luogo di nascita mancante', severity: 'error' })
+        } else if (lookupIstatCode(luogoNascita) === null) {
+            issues.push({ field: 'Luogo Nascita', message: `Luogo di nascita non riconosciuto ("${luogoNascita}") — codice ISTAT assente`, severity: 'error' })
         }
     }
 

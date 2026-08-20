@@ -141,10 +141,22 @@ function guessVehicleModel(name: string): string {
     return parts.length > 1 ? parts.slice(1).join(' ') : name
 }
 
-function lookupIstatCode(cityName: string): string {
-    if (!cityName) return '420092009'
+// 2026-08-20 (richiesta direzione): NIENTE ripiego silenzioso su Cagliari.
+// Questa e' una dichiarazione alla Polizia di Stato: un luogo di nascita
+// inventato e' un'informazione FALSA trasmessa a un'autorita'. Se il comune
+// non c'e' o non e' in tabella, la riga non parte e si chiede il dato.
+function lookupIstatCode(cityName: string): string | null {
+    if (!cityName) return null
     const upper = cityName.toUpperCase().trim()
-    return ISTAT_CODES[upper] || '420092009'
+    return ISTAT_CODES[upper] || null
+}
+
+/** Codice per il record: se il comune non e' noto si lascia VUOTO.
+ *  Un campo vuoto dice "non lo so"; il vecchio ripiego su Cagliari diceva una
+ *  cosa precisa e sbagliata. Il luogo di NASCITA non passa mai di qui: e'
+ *  bloccante a monte (vedi validazione), perche' e' identita' della persona. */
+function istatOrEmpty(cityName: string | null | undefined): string {
+    return lookupIstatCode(cityName || '') || ''
 }
 
 /**
@@ -304,6 +316,11 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
         if (!surname) missing.push('cognome/denominazione')
         if (!isAzienda && !licenseNumber) missing.push('patente')
         if (!isAzienda && !docNumber) missing.push('documento')
+        if (!isAzienda) {
+            const luogo = c?.luogo_nascita || bd.customer?.birthPlace || ''
+            if (!luogo) missing.push('luogo di nascita')
+            else if (!lookupIstatCode(luogo)) missing.push(`luogo di nascita non riconosciuto ("${luogo}")`)
+        }
         if (missing.length > 0) {
             await avvisaDirezione(
                 'dati cliente mancanti',
@@ -357,26 +374,26 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
                 const bd2 = c?.data_nascita || bd.customer?.birthDate || ''
                 return bd2 ? formatDateOnlyCargos(bd2) : ''
             })(),
-            /* 25 */ lookupIstatCode(c?.luogo_nascita || bd.customer?.birthPlace || ''),
-            /* 26 */ lookupIstatCode(c?.nazionalita || 'ITALIA'),
-            /* 27 */ lookupIstatCode(c?.citta || ''),
+            /* 25 */ istatOrEmpty(c?.luogo_nascita || bd.customer?.birthPlace || ''),
+            /* 26 */ istatOrEmpty(c?.nazionalita || 'ITALIA'),
+            /* 27 */ istatOrEmpty(c?.citta || ''),
             /* 28 */ sanitizeCargos(`${c?.indirizzo || ''} ${c?.citta || ''} ${c?.provincia || ''}`),
             /* 29 */ DOC_TYPE_MAP[c?.documento_tipo || 'CI'] || 'IDENT',
             /* 30 */ docNumber,
-            /* 31 */ lookupIstatCode(c?.citta || ''),
+            /* 31 */ istatOrEmpty(c?.citta || ''),
             /* 32 */ licenseNumber,
-            /* 33 */ lookupIstatCode(c?.patente_rilasciata_da || c?.citta || ''),
+            /* 33 */ istatOrEmpty(c?.patente_rilasciata_da || c?.citta || ''),
             /* 34 */ c?.telefono || booking.customer_phone || '',
             /* 35 */ driver2?.cognome || driver2?.surname || '',
             /* 36 */ driver2?.nome || driver2?.name || '',
             /* 37 */ formatDateOnlyCargos(driver2?.data_nascita || driver2?.birthDate || ''),
-            /* 38 */ lookupIstatCode(driver2?.luogo_nascita || driver2?.birthPlace || ''),
-            /* 39 */ lookupIstatCode(driver2?.nazionalita || ''),
+            /* 38 */ istatOrEmpty(driver2?.luogo_nascita || driver2?.birthPlace || ''),
+            /* 39 */ istatOrEmpty(driver2?.nazionalita || ''),
             /* 40 */ '',
             /* 41 */ '',
             /* 42 */ '',
             /* 43 */ driver2?.numero_patente || driver2?.patente_numero || driver2?.licenseNumber || '',
-            /* 44 */ lookupIstatCode(driver2?.luogo_nascita || ''),
+            /* 44 */ istatOrEmpty(driver2?.luogo_nascita || ''),
             /* 45 */ driver2?.telefono || driver2?.phone || '',
         ]
 
