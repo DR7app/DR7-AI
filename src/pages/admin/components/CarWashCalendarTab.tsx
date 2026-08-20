@@ -924,7 +924,10 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                   key={day}
                   className={`
                     flex flex-col items-center justify-center border-r border-theme-border/30 relative transition-colors
-                    ${(isHol || isSun) ? 'bg-rose-100 dark:bg-red-950/20' : ''}
+                    ${/* Come Terra: festivi e domeniche si segnalano con una tinta
+                        neutra appena percepibile (il pallino rosso resta), non con
+                        una colonna rosa che compete coi blocchi colorati. */''}
+                    ${(isHol || isSun) ? 'bg-theme-text-primary/[0.04]' : ''}
                     ${isToday ? 'bg-gradient-to-b from-[#22d3ee]/45 to-[#22d3ee]/15 border-l-2 border-r-2 border-[#22d3ee] shadow-[inset_0_-3px_0_0_#22d3ee]' : ''}
                   `}
                   style={headerCellStyle}
@@ -1022,12 +1025,18 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                         className={`
                           relative border-r border-theme-border/20 transition-all
                           ${isToday ? 'bg-[#22d3ee]/12 border-l border-r border-[#22d3ee]/40' : ''}
-                          ${/* 2026-05-28: era bg-emerald-50 + dark:bg-green-600/15 ma il dark variant
-                              non si applicava correttamente — la griglia restava color crema
-                              anche in dark mode. Sostituito con opacity-based che funziona
-                              su qualsiasi sfondo (chiaro=verde tenue, scuro=verde tenue su nero). */''}
-                          ${!isToday && !slotBooking && !isRedDay ? 'bg-emerald-500/10 hover:bg-emerald-500/20 cursor-pointer' : ''}
-                          ${!isToday && !slotBooking && isRedDay ? 'bg-rose-500/10 hover:bg-rose-500/20' : ''}
+                          ${/* 2026-08-20 (segnalazione direzione: "non si vede niente"):
+                              ogni cella LIBERA era dipinta di verde (emerald-500/10) e i
+                              giorni rossi di rosa. Ma anche le prenotazioni sono verdi:
+                              verde su verde, nessun contrasto — il calendario sembrava una
+                              macchia unica. Il Noleggio Terra tiene le celle NEUTRE
+                              (bg-theme-text-primary/[0.02] solo su festivi e domeniche) ed
+                              e' per questo che li' i blocchi si leggono subito.
+                              Stessa scelta qui: lo sfondo non compete piu' col contenuto.
+                              Il verde tenue restava anche come segnale "slot cliccabile":
+                              quel ruolo passa all'hover, che si vede solo quando serve. */''}
+                          ${!isToday && !slotBooking && !isRedDay ? 'hover:bg-theme-text-primary/[0.06] cursor-pointer' : ''}
+                          ${!isToday && !slotBooking && isRedDay ? 'bg-theme-text-primary/[0.02] hover:bg-theme-text-primary/[0.06]' : ''}
                           ${slotBooking && !isBookingStart ? 'bg-transparent' : ''}
                         `}
                         style={dayCellStyle}
