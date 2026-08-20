@@ -1137,10 +1137,11 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                               </span>
                             </div>
 
-                            {/* Left accent bar */}
-                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${isRientro ? 'bg-blue-400/60' : isPaid ? 'bg-emerald-300/60' : 'bg-white/40'}`} />
-                            {/* Right accent bar */}
-                            <div className={`absolute right-0 top-0 bottom-0 w-1 ${isRientro ? 'bg-blue-400/60' : isPaid ? 'bg-emerald-300/60' : 'bg-white/40'}`} />
+                            {/* 2026-08-20: tolte le due barrette verticali ai lati del
+                                blocco (4px, verde chiaro / blu / bianco). Non dicevano
+                                nulla che il colore del blocco non dicesse gia', e su
+                                blocchi larghi ~50px in vista Mese mangiavano spazio al
+                                testo facendolo sembrare sfrangiato. Terra non le ha. */}
 
                             {/* Tooltip on hover */}
                             <div className="hidden group-hover/booking:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-theme-bg-primary border border-theme-border text-theme-text-primary text-xs p-3 rounded-lg shadow-2xl w-max z-[100] pointer-events-none min-w-[220px]">
