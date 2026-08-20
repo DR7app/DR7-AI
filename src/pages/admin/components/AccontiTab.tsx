@@ -71,7 +71,15 @@ export default function AccontiTab() {
   // acconti SOLO chi ha la spunta "Acconti: vede tutti" nella sua scheda
   // operatore. Il ruolo superadmin NON basta: David e' superadmin e deve
   // vedere esclusivamente i propri incassi.
-  const canSeeAll = hasRole('direzione') || hasRole('acconti-tutti')
+  // 2026-08-20: NON basta piu' `direzione`. Controllo sul database del 20/08:
+  // Davide, Salvatore e Ophelie hanno tutti il tag `role:direzione`, quindi
+  // vedevano la cassa di tutti — l'opposto della richiesta. Per gli acconti
+  // vale SOLO la spunta "Acconti: vede tutti", piu' il failsafe di Valerio e
+  // Ilenia (che non devono poter restare chiusi fuori dalla propria cassa).
+  // Stessa identica regola della funzione dr7_can_see_all_acconti in database.
+  const ACCONTI_FAILSAFE = ['valerio@dr7.app', 'ilenia@dr7.app']
+  const canSeeAll = hasRole('acconti-tutti')
+    || ACCONTI_FAILSAFE.includes((adminEmail || '').toLowerCase())
   const me = useMemo(
     () => ({ id: adminId, nome: adminName || (adminEmail || '').split('@')[0] || '' }),
     [adminId, adminName, adminEmail]
