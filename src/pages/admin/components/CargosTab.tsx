@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
+import NewClientModal from '../../../components/NewClientModal'
 import Button from './Button'
 import Input from './Input'
 import { logger } from '../../../utils/logger'
@@ -408,6 +409,33 @@ export default function CargosTab() {
     const [loading, setLoading] = useState(false)
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
     const [escludendo, setEscludendo] = useState<string | null>(null)
+    // 2026-08-20 (richiesta direzione): i campi "Mancante" si completano da qui.
+    // Si apre la STESSA scheda cliente di Clienti (NewClientModal), quindi il
+    // dato finisce dove deve — in customers_extended — e non in una copia
+    // locale che poi diverge. Alla chiusura si ricarica l'elenco, cosi' la riga
+    // smette subito di risultare incompleta.
+    const [clienteDaCompletare, setClienteDaCompletare] = useState<Record<string, unknown> | null>(null)
+
+    // Apre la scheda cliente sulla riga. Se il cliente e' gia' in anagrafica si
+    // apre in MODIFICA (id reale); se la prenotazione non e' collegata a nessuna
+    // scheda, si apre precompilata con quel che si sa dal booking, cosi' si crea
+    // il cliente invece di lasciare il buco.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function apriSchedaCliente(b: any) {
+        if (b.customerData?.id) {
+            setClienteDaCompletare(b.customerData as Record<string, unknown>)
+            return
+        }
+        const nome = (b.customer_name || '').trim().split(/\s+/)
+        setClienteDaCompletare({
+            _isNew: true,
+            nome: nome[0] || '',
+            cognome: nome.slice(1).join(' ') || '',
+            email: b.customer_email || '',
+            telefono: b.customer_phone || '',
+            tipo_cliente: 'persona_fisica',
+        })
+    }
 
     // Toglie una riga dall'elenco CARGOS senza toccare la prenotazione.
     async function escludiRiga(b: { id: string; customer_name?: string | null; vehicle_plate?: string | null; booking_details?: Record<string, unknown> | null }) {
@@ -1263,7 +1291,13 @@ export default function CargosTab() {
                                                         {b.customerData?.numero_patente || b.customerData?.patente_numero || b.booking_details?.customer?.licenseNumber || b.booking_details?.customer?.driverLicense || (
                                                             b.customerData?.tipo_cliente === 'azienda'
                                                                 ? <span className="text-theme-text-muted">Azienda</span>
-                                                                : <span className="text-yellow-500">Mancante</span>
+                                                                : (
+                                                                    <button
+                                                                        onClick={() => apriSchedaCliente(b)}
+                                                                        title="Apri la scheda cliente e completa i dati"
+                                                                        className="text-yellow-500 underline decoration-dotted hover:text-yellow-400"
+                                                                    >Mancante</button>
+                                                                )
                                                         )}
                                                     </td>
                                                     <td className="px-3 py-2.5">
@@ -1312,9 +1346,13 @@ export default function CargosTab() {
                                                         )}
                                                         {b.cargosStatus === 'pending' && hasError && (
                                                             <div>
-                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-xs">
-                                                                    Dati incompleti
-                                                                </span>
+                                                                <button
+                                                                    onClick={() => apriSchedaCliente(b)}
+                                                                    title="Apri la scheda cliente e completa i dati mancanti"
+                                                                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-xs hover:bg-red-500/20"
+                                                                >
+                                                                    Dati incompleti — completa
+                                                                </button>
                                                                 <ul className="text-[10px] text-red-400 mt-1 list-disc list-inside">
                                                                     {issues.filter(i => i.severity === 'error').map((i, idx) => (
                                                                         <li key={idx}>{i.message}</li>
@@ -1411,6 +1449,17 @@ export default function CargosTab() {
                     </div>
                 </div>
             )}
-        </div>
+                    {/* Scheda cliente aperta da una riga CARGOS: e' la STESSA di Clienti,
+                quindi quel che scrivi finisce in customers_extended. Alla chiusura
+                si ricarica l'elenco: la riga si aggiorna da sola. */}
+            {clienteDaCompletare && (
+                <NewClientModal
+                    isOpen
+                    initialData={clienteDaCompletare}
+                    onClose={() => { setClienteDaCompletare(null); loadBookings() }}
+                    onClientCreated={() => { setClienteDaCompletare(null); loadBookings() }}
+                />
+            )}
+</div>
     )
 }
