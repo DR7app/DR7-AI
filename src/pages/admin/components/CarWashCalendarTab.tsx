@@ -486,7 +486,31 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   // senza scroll verticale. 109 slot da 5min (09:00→18:00): cellH = (altezza
   // area - header giorni) / 109, misurata con ResizeObserver. Gli eventi
   // (durata/5 * cellH) e gli offset si scalano di conseguenza.
-  const SLOT_COUNT = 109
+  // 2026-08-20: le prenotazioni prima delle 09:00 (create con l'OTP "fuori
+  // orario") non venivano disegnate: la griglia partiva rigida dalle 09:00.
+  // Il tentativo del 19/08 allargava la griglia ma teneva l'altezza TOTALE
+  // fissa: le righe si schiacciavano, le ore si sovrapponevano, annullato.
+  // La differenza sta tutta nel divisore di cellH: qui l'intervallo si allarga
+  // quanto serve, ma l'altezza di cella resta calcolata sui 109 slot standard.
+  // Le righe non cambiano dimensione — densita' INVARIATA — e le ore in piu'
+  // si raggiungono scorrendo la griglia.
+  const GRID_DEFAULT_SLOTS = 109
+  const gridRange = useMemo(() => {
+    let min = 9 * 60
+    let max = 18 * 60
+    for (const b of bookings) {
+      if (!b.appointment_time) continue
+      const [h, m] = String(b.appointment_time).split(':').map(Number)
+      if (!Number.isFinite(h)) continue
+      const start = (h || 0) * 60 + (m || 0)
+      const dur = isRientroBooking(b) ? 15 : getServiceDuration(b.service_name, b.booking_details?.vehicleCategory, b.booking_details)
+      if (start < min) min = Math.floor(start / 5) * 5
+      const end = start + (dur || 60)
+      if (end > max) max = Math.ceil(end / 5) * 5
+    }
+    return { start: Math.max(0, min), end: Math.min(24 * 60, max) }
+  }, [bookings])
+  const SLOT_COUNT = Math.max(1, Math.round((gridRange.end - gridRange.start) / 5) + 1)
   const DAYHDR_H = 34
   const [calGridH, setCalGridH] = useState(0)
   useEffect(() => {
@@ -519,8 +543,10 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
     if (el) el.scrollTop = 0
   }, [viewMode, currentDate, loading, calGridH])
 
+  // Divisore GRID_DEFAULT_SLOTS, NON SLOT_COUNT: con SLOT_COUNT una singola
+  // prenotazione delle 7:00 rimpicciolirebbe tutte le righe del mese.
   const cellH = useMemo(
-    () => (calGridH ? Math.max(4, Math.floor((calGridH - DAYHDR_H) / SLOT_COUNT)) : CELL_HEIGHT),
+    () => (calGridH ? Math.max(4, Math.floor((calGridH - DAYHDR_H) / GRID_DEFAULT_SLOTS)) : CELL_HEIGHT),
     [calGridH],
   )
 
@@ -974,8 +1000,8 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         {/* B. Time Slots Grid */}
         <div className={`${stretchCols ? 'w-full' : 'min-w-max'} relative`}>
           {/* Generate time slots from 09:00 to 18:00 in 5-minute intervals (109 slots) */}
-          {Array.from({ length: 109 }, (_, i) => {
-            const totalMinutes = 9 * 60 + i * 5 // Start at 09:00
+          {Array.from({ length: SLOT_COUNT }, (_, i) => {
+            const totalMinutes = gridRange.start + i * 5
             const hours = Math.floor(totalMinutes / 60)
             const minutes = totalMinutes % 60
             const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
