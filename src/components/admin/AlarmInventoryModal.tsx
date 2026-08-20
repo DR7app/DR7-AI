@@ -14,6 +14,7 @@
  * in TypeScript. Editable list = the 13 existing alarms only.
  */
 import { useEffect, useState } from 'react'
+import { ALARM_SOUNDS, ascoltaAnteprima, type AlarmSoundKey } from '../../utils/alarmSounds'
 import { supabase } from '../../supabaseClient'
 import toast from 'react-hot-toast'
 
@@ -31,6 +32,7 @@ interface AlarmRow {
     sort_order: number
     /** Template di Messaggi di Sistema Pro da proporre all'operatore. */
     message_key: string | null
+    sound_key?: string | null
 }
 
 interface Props {
@@ -297,6 +299,34 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                                                             rows={2}
                                                             className="w-full px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-secondary"
                                                         />
+
+                                                        {/* Suono — 2026-08-20 (richiesta direzione). Prima i 13 allarmi
+                                                            suonavano tutti con lo stesso /alarm.mp3: sentendolo non si
+                                                            capiva quale fosse. Il tasto ascolta serve a scegliere senza
+                                                            dover aspettare che l'allarme suoni davvero. */}
+                                                        <span className="text-theme-text-muted">Suono</span>
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <select
+                                                                    value={String(valueOf(row, 'sound_key') || 'classic')}
+                                                                    onChange={e => setField(row.id, 'sound_key', e.target.value)}
+                                                                    className="flex-1 px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary"
+                                                                >
+                                                                    {ALARM_SOUNDS.map(sn => (
+                                                                        <option key={sn.key} value={sn.key}>{sn.label}</option>
+                                                                    ))}
+                                                                </select>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => ascoltaAnteprima(String(valueOf(row, 'sound_key') || 'classic') as AlarmSoundKey)}
+                                                                    title="Ascolta questo suono"
+                                                                    className="shrink-0 px-2 py-1 rounded border border-theme-border text-theme-text-secondary hover:text-dr7-gold"
+                                                                >▶</button>
+                                                            </div>
+                                                            <p className="mt-1 text-[10px] text-theme-text-muted">
+                                                                {ALARM_SOUNDS.find(sn => sn.key === String(valueOf(row, 'sound_key') || 'classic'))?.hint}
+                                                            </p>
+                                                        </div>
 
                                                         {/* Messaggio al cliente — solo per gli allarmi che HANNO un
                                                             cliente. Sulle scadenze di flotta non c'e' nessuno da

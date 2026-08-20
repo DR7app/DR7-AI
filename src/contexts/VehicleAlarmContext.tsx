@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { supabase } from '../supabaseClient'
 import toast from 'react-hot-toast'
 import type { Session } from '@supabase/supabase-js'
-import { logger } from '../utils/logger'
+import { AlarmSoundPlayer, type AlarmSoundKey } from '../utils/alarmSounds'
 
 interface AlarmBooking {
     bookingId: string
@@ -31,6 +31,8 @@ interface AlarmConfigRow {
     threshold_unit: 'minutes_before' | 'minutes_after' | 'km' | 'days'
     /** Messaggio Pro collegato. NULL = l'allarme non propone nessun invio. */
     message_key?: string | null
+    /** Suono scelto in Centralina Pro > Allarmi. Assente = 'classic'. */
+    sound_key?: AlarmSoundKey | null
 }
 
 interface AlarmState {
@@ -75,6 +77,13 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
     const [alarmsDisabledForUser, setAlarmsDisabledForUser] = useState<boolean | null>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
     const audioContextRef = useRef<AudioContext | null>(null)
+    // 2026-08-20: riproduttore dei suoni per allarme (vedi utils/alarmSounds).
+    // Sostituisce l'unico /alarm.mp3 usato per tutti e 13 gli allarmi.
+    const soundPlayerRef = useRef<AlarmSoundPlayer | null>(null)
+    const getSoundPlayer = () => {
+        if (!soundPlayerRef.current) soundPlayerRef.current = new AlarmSoundPlayer()
+        return soundPlayerRef.current
+    }
 
     // Mirror audioEnabled in a ref so the polling closure (frozen at
     // session-set time) sees the current value when the user toggles it
@@ -197,7 +206,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
         ;(async () => {
             const { data } = await supabase
                 .from('system_alarms')
-                .select('id, is_enabled, threshold_value, threshold_unit, message_key')
+                .select('id, is_enabled, threshold_value, threshold_unit, message_key, sound_key')
             if (cancelled) return
             apply(data as AlarmConfigRow[] | null)
         })()
@@ -267,6 +276,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             audioRef.current.pause()
             audioRef.current.currentTime = 0
         }
+        soundPlayerRef.current?.stop()
         localStorage.setItem('audioAlertsEnabled', 'false')
         setAlarmState(prev => ({ ...prev, audioEnabled: false, isPlaying: false }))
         toast.success('Allarmi audio disattivati. Le notifiche visive restano attive.')
@@ -303,6 +313,7 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             audioRef.current.pause()
             audioRef.current.currentTime = 0
         }
+        soundPlayerRef.current?.stop()
 
         // Clear active alarm
         setAlarmState(prev => ({
@@ -440,32 +451,12 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             // Audio not enabled, visual notification only
         } else {
             try {
-                // Create or reuse audio element
-                if (!audioRef.current) {
-                    logger.log('Creating new Audio element for alarm')
-                    audioRef.current = new Audio('/alarm.mp3')
-                    audioRef.current.loop = true
-                    audioRef.current.volume = 0.8 // Set volume to 80%
-
-                    audioRef.current.addEventListener('error', () => {
-                        // Audio load error — will fall through to visual notification
-                    })
-                }
-
-                // Reset and play
-                audioRef.current.currentTime = 0
-                audioRef.current.play()
-                    .then(() => {
-                        // Alarm playing
-                    })
-                    .catch(() => {
-                        // Try to resume AudioContext if suspended (reuse existing)
-                        if (audioContextRef.current?.state === 'suspended') {
-                            audioContextRef.current.resume().then(() => {
-                                audioRef.current?.play().catch(() => {})
-                            })
-                        }
-                    })
+                // 2026-08-20: il suono lo decide la riga system_alarms dell'allarme
+                // che sta suonando. Assente o sconosciuto = 'classic', cioe' l'mp3
+                // di sempre: chi non tocca la configurazione non sente differenze.
+                const cfgSuono = booking.alarmId ? alarmConfigRef.current.get(booking.alarmId) : undefined
+                const suono = (cfgSuono?.sound_key || 'classic') as AlarmSoundKey
+                getSoundPlayer().play(suono, true, 0.8)
             } catch {
                 // Error setting up alarm audio
             }
