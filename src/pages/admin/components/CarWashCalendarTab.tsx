@@ -886,10 +886,14 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
           grid below. Wraps on small screens, no fixed sidebar. */}
       <div className="relative z-10 hidden md:flex items-center gap-3 px-3 py-0.5 bg-theme-bg-secondary dark:bg-black/20 backdrop-blur-md border-b border-theme-border text-[11px] flex-wrap">
         <span className="text-theme-text-muted uppercase tracking-wider font-semibold">Legenda</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /><span className="text-theme-text-primary">Pagato</span></span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-amber-500" /><span className="text-theme-text-primary">Link Nexi inviato</span></span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-700" /><span className="text-theme-text-primary">Da pagare</span></span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-blue-700" /><span className="text-theme-text-primary">Rientro</span></span>
+        {/* 2026-08-19: le pastiglie della legenda usano ESATTAMENTE le tinte dei
+            blocchi (quelle del Noleggio Terra). Prima erano emerald-500/red-700/
+            blue-700 mentre i blocchi erano di un'altra sfumatura: la legenda
+            diceva un colore e il calendario ne mostrava un altro. */}
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-600/85" /><span className="text-theme-text-primary">Pagato</span></span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-amber-500/85" /><span className="text-theme-text-primary">Link Nexi inviato</span></span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-600/80" /><span className="text-theme-text-primary">Da pagare</span></span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-blue-600/85" /><span className="text-theme-text-primary">Rientro</span></span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm border-2 border-amber-300" /><span className="text-theme-text-primary">Con note</span></span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#22d3ee]" /><span className="text-theme-text-primary">Oggi</span></span>
       </div>
@@ -1244,10 +1248,10 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         <div>
           <h4 className="text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-2">Legenda</h4>
           <ul className="space-y-1.5 text-xs">
-            <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-emerald-500" /><span className="text-theme-text-primary">Pagato</span></li>
-            <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-amber-500" /><span className="text-theme-text-primary">Link Nexi inviato</span></li>
-            <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-red-700" /><span className="text-theme-text-primary">Da pagare</span></li>
-            <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-blue-700" /><span className="text-theme-text-primary">Rientro</span></li>
+            <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-emerald-600/85" /><span className="text-theme-text-primary">Pagato</span></li>
+            <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-amber-500/85" /><span className="text-theme-text-primary">Link Nexi inviato</span></li>
+            <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-red-600/80" /><span className="text-theme-text-primary">Da pagare</span></li>
+            <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-blue-600/85" /><span className="text-theme-text-primary">Rientro</span></li>
             <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm border-2 border-amber-300" /><span className="text-theme-text-primary">Con note</span></li>
             <li className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-[#22d3ee]" /><span className="text-theme-text-primary">Oggi</span></li>
           </ul>
