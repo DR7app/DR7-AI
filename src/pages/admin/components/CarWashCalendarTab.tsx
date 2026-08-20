@@ -1099,8 +1099,19 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                                 scuriva il fondo di ogni blocco — era lui il
                                 "riflesso" sui verdi e sui rossi. */}
 
-                            {/* Content */}
-                            <div className="relative px-2 py-1.5 flex flex-col justify-center h-full items-center gap-0.5 text-center">
+                            {/* Content
+                                2026-08-20 (segnalazione direzione: "il testo non si
+                                vede piu'"): in vista MESE una colonna e' larga ~40px.
+                                Con nome, ora e servizio incolonnati piu' 8px di padding
+                                per lato non restava spazio nemmeno per l'ora: veniva
+                                accorciata a "0…". Qui l'informazione ha una gerarchia —
+                                l'ORA e' quella che serve sempre. In vista Mese si mostra
+                                SOLO l'ora, a tutta larghezza; nome e servizio (che li'
+                                erano comunque illeggibili, "Fe…" / "La…") tornano in
+                                Settimana e Giorno, dove c'e' spazio vero. Il dettaglio
+                                completo resta nel tooltip e nel click. */}
+                            <div className={`relative ${viewMode === 'mese' ? 'px-0.5' : 'px-2'} py-1.5 flex flex-col justify-center h-full items-center gap-0.5 text-center`}>
+                              {viewMode !== 'mese' && (
                               <span className="font-bold text-[11px] leading-tight truncate max-w-full text-white drop-shadow-md">
                                 {(() => {
                                   if (isRientro) {
@@ -1118,15 +1129,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                                   return name
                                 })()}
                               </span>
-                              {/* 2026-08-20: `truncate` anche su ora e servizio. Solo la
-                                  prima riga ce l'aveva: le altre due, centrate e senza
-                                  troncatura, sforavano il blocco e venivano tagliate dai
-                                  DUE lati — "Lavaggio" usciva come "avaggi". Con truncate
-                                  il testo si accorcia in fondo, con i puntini, e resta
-                                  leggibile anche sui blocchi stretti della vista Mese. */}
-                              <span className="font-bold text-[12px] leading-tight truncate max-w-full text-white drop-shadow-md">
+                              )}
+                              {/* L'ora non si tronca MAI: e' il dato che serve sempre. */}
+                              <span className={`font-bold leading-tight text-white drop-shadow-md whitespace-nowrap ${viewMode === 'mese' ? 'text-[10px]' : 'text-[12px]'}`}>
                                 {startEvt.booking.appointment_time}
                               </span>
+                              {viewMode !== 'mese' && (
                               <span className="text-[9px] leading-tight truncate max-w-full text-white/90 drop-shadow-sm">
                                 {(() => {
                                   if (isRientro) return 'Rientro'
@@ -1141,6 +1149,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                                   return 'Lavaggio'
                                 })()}
                               </span>
+                              )}
                             </div>
 
                             {/* 2026-08-20: tolte le due barrette verticali ai lati del
