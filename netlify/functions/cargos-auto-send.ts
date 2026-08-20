@@ -152,6 +152,48 @@ function lookupIstatCode(cityName: string): string {
  * Called from signature-complete after WhatsApp delivery.
  * Returns { success, error? } — never throws.
  */
+/**
+ * 2026-08-20 (richiesta direzione): avviso WhatsApp quando una trasmissione
+ * CARGOS non riesce, o quando mancano i dati del cliente per farla.
+ *
+ * Destinatari e attivazione stanno in centralina_pro_config.config.cargos
+ * (numeri multipli, modificabili dalla tab Cargos). Se non e' configurato
+ * niente, non parte niente: nessun numero hardcoded.
+ *
+ * Non blocca mai l'invio: se l'avviso fallisce, si logga e si prosegue.
+ */
+async function avvisaDirezione(motivo: string, dettagli: string): Promise<void> {
+    try {
+        const { data } = await supabase
+            .from('centralina_pro_config')
+            .select('config')
+            .eq('id', 'main')
+            .maybeSingle()
+        const cfg = (data?.config || {}) as Record<string, unknown>
+        const cargosCfg = (cfg.cargos || {}) as Record<string, unknown>
+        if (cargosCfg.alerts_enabled !== true) return
+        const numeri = Array.isArray(cargosCfg.alert_numbers)
+            ? (cargosCfg.alert_numbers as unknown[]).map(n => String(n).replace(/\D/g, '')).filter(n => n.length >= 9)
+            : []
+        if (numeri.length === 0) return
+
+        const testo = `*CARGOS — ${motivo}*\n\n${dettagli}\n\nControlla la tab Cargos del gestionale.`
+        for (const numero of numeri) {
+            try {
+                await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/send-whatsapp-notification`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ customPhone: numero, customMessage: testo }),
+                })
+            } catch (e) {
+                console.error('[cargos-auto-send] avviso non inviato a', numero, e)
+            }
+        }
+    } catch (e) {
+        console.error('[cargos-auto-send] avvisaDirezione fallito:', e)
+    }
+}
+
 export async function sendToCargos(bookingId: string): Promise<{ success: boolean; error?: string }> {
     try {
         if (!CARGOS_PASSWORD) {
@@ -263,6 +305,10 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
         if (!isAzienda && !licenseNumber) missing.push('patente')
         if (!isAzienda && !docNumber) missing.push('documento')
         if (missing.length > 0) {
+            await avvisaDirezione(
+                'dati cliente mancanti',
+                `Cliente: ${booking.customer_name || 'ND'}\nVeicolo: ${booking.vehicle_plate || booking.vehicle_name || 'ND'}\nManca: ${missing.join(', ')}`
+            )
             return { success: false, error: `Dati mancanti per CARGOS: ${missing.join(', ')}` }
         }
 
@@ -402,6 +448,10 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
         console.log(`[cargos-auto-send] CARGOS Send response: status=${sendRes.status}, body=${sendResText.substring(0, 500)}`)
 
         if (!sendRes.ok) {
+            await avvisaDirezione(
+                'invio rifiutato',
+                `Cliente: ${booking.customer_name || 'ND'}\nVeicolo: ${booking.vehicle_plate || booking.vehicle_name || 'ND'}\nErrore HTTP ${sendRes.status}: ${sendResText.substring(0, 150)}`
+            )
             return { success: false, error: `CARGOS invio fallito (${sendRes.status}): ${sendResText.substring(0, 200)}` }
         }
 
@@ -415,6 +465,10 @@ export async function sendToCargos(bookingId: string): Promise<{ success: boolea
         if (rejected.length > 0) {
             const errMsg = rejected.map((r: any) => r.errore?.error_description || r.errore?.error || JSON.stringify(r.errore)).join('; ')
             console.error(`[cargos-auto-send] ❌ Booking ${bookingId} REJECTED by CARGOS: ${errMsg}`)
+            await avvisaDirezione(
+                'record rifiutato',
+                `Cliente: ${booking.customer_name || 'ND'}\nVeicolo: ${booking.vehicle_plate || booking.vehicle_name || 'ND'}\nMotivo: ${errMsg}`
+            )
             return { success: false, error: `CARGOS ha rifiutato il record: ${errMsg}` }
         }
 
