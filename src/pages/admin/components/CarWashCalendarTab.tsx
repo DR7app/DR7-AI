@@ -541,7 +541,12 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   useEffect(() => {
     const el = calGridRef.current
     if (el) el.scrollTop = 0
-  }, [viewMode, currentDate, loading, calGridH])
+    // 2026-08-20: aggiunto gridRange.start fra le dipendenze. Quando arriva una
+    // prenotazione mattutina la griglia si allunga VERSO L'ALTO: le righe
+    // esistenti scorrono giu' e, se lo scroll resta dov'era, la prima fascia
+    // (08:30) finisce sotto l'intestazione dei giorni. Cambiando l'inizio si
+    // torna in cima, cosi' la riga piu' mattutina e' sempre la prima visibile.
+  }, [viewMode, currentDate, loading, calGridH, gridRange.start])
 
   // Divisore GRID_DEFAULT_SLOTS, NON SLOT_COUNT: con SLOT_COUNT una singola
   // prenotazione delle 7:00 rimpicciolirebbe tutte le righe del mese.
