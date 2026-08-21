@@ -1589,12 +1589,25 @@ function mergePrezzoDinamico(saved: Partial<PrezzoDinamicoConfig> | null | undef
 // un contratto per un mezzo che non ha mai accettato.
 // Qui si decide voce per voce: RIFIRMA (parte un nuovo link di firma) oppure
 // RICONDOTTO (si rimanda il contratto gia' firmato, aggiornato).
+// 2026-08-21 (richiesta direzione): sette voci in piu' — estensione, garanti,
+// assicurazioni, cauzione, servizi extra, km, metodo di pagamento. I default
+// seguono lo stesso principio delle prime cinque: si RIFIRMA quando cambia CHI
+// firma o COSA ha accettato in termini di responsabilita' (veicolo, guidatore,
+// garanti, copertura assicurativa); si RICONDUCE quando cambiano importi,
+// date o condizioni gia' coperte dalla clausola di riconduzione.
 export const CONTRATTO_VOCI: { key: string; label: string; hint: string }[] = [
   { key: 'veicolo',    label: 'Cambio veicolo',        hint: 'Targa o modello diversi da quelli firmati' },
   { key: 'date_orari', label: 'Date e orari',          hint: 'Ritiro o riconsegna spostati' },
   { key: 'prezzo',     label: 'Prezzo',                hint: 'Totale del noleggio modificato' },
   { key: 'guidatore',  label: 'Guidatore / conducente', hint: 'Intestatario o secondo guidatore cambiato' },
   { key: 'luoghi',     label: 'Luoghi ritiro/riconsegna', hint: 'Indirizzo di consegna o rientro diverso' },
+  { key: 'estensione', label: 'Estensione',            hint: 'Noleggio prolungato oltre la data firmata' },
+  { key: 'garanti',    label: 'Garanti',               hint: 'Garante veicolo o fideiussori aggiunti, tolti o cambiati' },
+  { key: 'assicurazioni', label: 'Assicurazioni',      hint: 'Formula, copertura o franchigia diverse da quelle accettate' },
+  { key: 'cauzione',   label: 'Cauzioni',              hint: 'Importo o formula della cauzione modificati' },
+  { key: 'servizi_extra', label: 'Servizi extra',      hint: 'Servizi aggiuntivi aggiunti o rimossi (seggiolino, consegna, accessori...)' },
+  { key: 'km',         label: 'Km',                    hint: 'Km inclusi o tariffa di sforo modificati' },
+  { key: 'metodo_pagamento', label: 'Metodo pagamento', hint: 'Modalita\' di pagamento diversa da quella indicata nel contratto' },
 ]
 export type ContrattoAzione = 'rifirma' | 'ricondotto'
 export const CONTRATTO_DEFAULT: Record<string, ContrattoAzione> = {
@@ -1603,6 +1616,13 @@ export const CONTRATTO_DEFAULT: Record<string, ContrattoAzione> = {
   prezzo: 'ricondotto',
   guidatore: 'rifirma',    // firma una persona diversa: va rifirmato
   luoghi: 'ricondotto',
+  estensione: 'ricondotto', // e' esattamente il caso per cui la clausola esiste
+  garanti: 'rifirma',       // il garante FIRMA: se cambia, la firma vecchia non lo copre
+  assicurazioni: 'rifirma', // cambia la franchigia a carico del cliente
+  cauzione: 'ricondotto',
+  servizi_extra: 'ricondotto',
+  km: 'ricondotto',
+  metodo_pagamento: 'ricondotto',
 }
 
 function ContrattoModificheSection({ regole, setRegole }: {
