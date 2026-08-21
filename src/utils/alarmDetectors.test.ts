@@ -226,6 +226,32 @@ describe('riconsegna', () => {
         expect(DETECTORS.return_overdue(c, contesto({ bookings: [tardi, poco] })).map(h => h.bookingId)).toEqual(['tardi'])
     })
 
+    it('non allarma su una riconsegna vecchia di settimane', () => {
+        // Misurato sui dati veri il 21/08/2026: 43 noleggi avevano la
+        // riconsegna passata e la pratica mai chiusa, 17 di oltre un mese.
+        // Sono pratiche da chiudere, non clienti in ritardo: se tornassero a
+        // suonare, il pannello nascerebbe pieno di rumore.
+        const g = 24 * 60 * MIN
+        const vecchio = noleggio({ id: 'vecchio', dropoff_date: new Date(ORA.getTime() - 30 * g).toISOString() })
+        const ieri = noleggio({ id: 'ieri', dropoff_date: new Date(ORA.getTime() - g).toISOString() })
+        const c = cfg({ threshold_value: 30, threshold_unit: 'minutes_after' })
+        const hits = DETECTORS.return_overdue(c, contesto({ bookings: [vecchio, ieri] }))
+        expect(hits.map(h => h.bookingId)).toEqual(['ieri'])
+    })
+
+    it('lo stesso limite vale per contratto non firmato a ritiro superato', () => {
+        const g = 24 * 60 * MIN
+        const vecchio = noleggio({ id: 'vecchio', pickup_date: new Date(ORA.getTime() - 30 * g).toISOString() })
+        const oggi = noleggio({ id: 'oggi', pickup_date: new Date(ORA.getTime() - 20 * MIN).toISOString() })
+        const firme = new Map([
+            ['vecchio', { signed_at: null }],
+            ['oggi', { signed_at: null }],
+        ])
+        const c = cfg({ threshold_value: 0, threshold_unit: 'minutes_after' })
+        const hits = DETECTORS.contract_unsigned(c, contesto({ bookings: [vecchio, oggi], firme }))
+        expect(hits.map(h => h.bookingId)).toEqual(['oggi'])
+    })
+
     it('il ritardo blocca il cliente successivo sullo stesso veicolo', () => {
         const inRitardo = noleggio({ id: 'ritardo', dropoff_date: new Date(ORA.getTime() - 30 * MIN).toISOString() })
         const successivo = noleggio({

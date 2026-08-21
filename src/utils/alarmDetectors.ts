@@ -146,6 +146,30 @@ function passatoDa(evento: Date | null, now: Date, ms: number): boolean {
     return now.getTime() - evento.getTime() >= ms
 }
 
+/**
+ * Oltre questo limite un fatto non e' piu' un allarme: e' una pulizia da fare.
+ *
+ * 2026-08-21, misurato sui dati veri prima di accendere il motore: 43 noleggi
+ * avevano la riconsegna passata e la pratica ancora aperta — 17 di oltre un
+ * mese, nessuno di oggi. Sono prenotazioni mai chiuse in gestionale, non
+ * clienti in ritardo. Senza questo limite il primo giro avrebbe aperto oltre
+ * 170 allarmi su noleggi finiti da settimane, e il pannello sarebbe nato
+ * inutilizzabile: la regola vera e' che un elenco pieno di rumore non lo
+ * guarda piu' nessuno, e allora non serve a niente nemmeno quando ha ragione.
+ *
+ * Vale SOLO per i fatti legati agli orari di una pratica (ritiro non partito,
+ * riconsegna non rientrata, lavaggio non iniziato). NON vale per i soldi e per
+ * le scadenze — una cauzione da restituire da tre settimane o un'assicurazione
+ * scaduta da un mese sono problemi vivi, e restano allarmi.
+ */
+const GIORNI_RILEVANZA = 7
+
+/** Come `passatoDa`, ma smette di allarmare su fatti troppo vecchi. */
+function passatoDaMaRecente(evento: Date | null, now: Date, ms: number): boolean {
+    if (!passatoDa(evento, now, ms)) return false
+    return now.getTime() - evento!.getTime() <= GIORNI_RILEVANZA * GIORNO
+}
+
 function oraIt(d: Date | null): string {
     if (!d) return '—'
     const c = getRomeDateComponents(d.toISOString())
@@ -190,7 +214,7 @@ const pickup_overdue: Detector = (cfg, ctx) => {
         .filter(b => {
             if (!isNoleggio(b) || !isViva(b)) return false
             if (['active', 'in_corso'].includes(String(b.status || '').toLowerCase())) return false
-            return passatoDa(ritiroAt(b), ctx.now, ms)
+            return passatoDaMaRecente(ritiroAt(b), ctx.now, ms)
         })
         .map(b => ({ bookingId: b.id, vehicleId: b.vehicle_id, entita: etichetta(b, ritiroAt(b)) }))
 }
@@ -349,7 +373,7 @@ const contract_unsigned: Detector = (cfg, ctx) => {
             if (!isNoleggio(b) || !isViva(b)) return false
             const firma = ctx.firme.get(b.id)
             if (!firma || firma.signed_at) return false
-            return dopo ? passatoDa(ritiroAt(b), ctx.now, ms) : entroPrima(ritiroAt(b), ctx.now, ms)
+            return dopo ? passatoDaMaRecente(ritiroAt(b), ctx.now, ms) : entroPrima(ritiroAt(b), ctx.now, ms)
         })
         .map(b => ({ bookingId: b.id, vehicleId: b.vehicle_id, entita: etichetta(b, ritiroAt(b)), dettaglio: 'Contratto inviato ma non ancora firmato' }))
 }
@@ -446,7 +470,7 @@ const payment_open: Detector = (cfg, ctx, arg) => {
             if (totale <= 0) return false
             if (arg === 'parziale' && !(pagato > 0 && pagato < totale)) return false
             if (arg === 'totale' && pagato > 0) return false
-            return dopo ? passatoDa(ritiroAt(b), ctx.now, ms) : entroPrima(ritiroAt(b), ctx.now, ms)
+            return dopo ? passatoDaMaRecente(ritiroAt(b), ctx.now, ms) : entroPrima(ritiroAt(b), ctx.now, ms)
         })
         .map(b => ({
             bookingId: b.id,
@@ -523,7 +547,7 @@ const deposit_uncollected: Detector = (cfg, ctx) => {
             if (importo <= 0) return false
             if (String(b.security_deposit_status || '').toLowerCase() === 'collected') return false
             if (perContratto.has(String(b.id))) return false
-            return dopo ? passatoDa(ritiroAt(b), ctx.now, ms) : entroPrima(ritiroAt(b), ctx.now, ms)
+            return dopo ? passatoDaMaRecente(ritiroAt(b), ctx.now, ms) : entroPrima(ritiroAt(b), ctx.now, ms)
         })
         .map(b => ({
             bookingId: b.id,
@@ -580,7 +604,7 @@ const return_lead: Detector = (cfg, ctx) => {
 const return_overdue: Detector = (cfg, ctx) => {
     const ms = sogliaMs(cfg)
     return ctx.bookings
-        .filter(b => isNoleggio(b) && isViva(b) && passatoDa(riconsegnaAt(b), ctx.now, ms))
+        .filter(b => isNoleggio(b) && isViva(b) && passatoDaMaRecente(riconsegnaAt(b), ctx.now, ms))
         .map(b => ({
             bookingId: b.id,
             vehicleId: b.vehicle_id,
@@ -597,6 +621,7 @@ const return_blocks_next: Detector = (cfg, ctx) => {
         if (!isNoleggio(b) || !isViva(b) || !b.vehicle_id) continue
         const fine = riconsegnaAt(b)
         if (!fine || fine > ctx.now) continue
+        if (ctx.now.getTime() - fine.getTime() > GIORNI_RILEVANZA * GIORNO) continue
         const successivo = (ctx.perVeicolo.get(b.vehicle_id) || []).find(o => {
             if (o.id === b.id || !isNoleggio(o) || !isViva(o)) return false
             const inizio = ritiroAt(o)
@@ -620,7 +645,7 @@ const return_contract_expired: Detector = (cfg, ctx) => {
     return ctx.bookings
         .filter(b => isNoleggio(b)
             && ['active', 'in_corso'].includes(String(b.status || '').toLowerCase())
-            && passatoDa(riconsegnaAt(b), ctx.now, ms))
+            && passatoDaMaRecente(riconsegnaAt(b), ctx.now, ms))
         .map(b => ({ bookingId: b.id, vehicleId: b.vehicle_id, entita: etichetta(b, riconsegnaAt(b)) }))
 }
 
@@ -630,7 +655,7 @@ const return_practice_open: Detector = (cfg, ctx) => {
     return ctx.bookings
         .filter(b => isNoleggio(b)
             && ['confirmed', 'confermata'].includes(String(b.status || '').toLowerCase())
-            && passatoDa(riconsegnaAt(b), ctx.now, ms))
+            && passatoDaMaRecente(riconsegnaAt(b), ctx.now, ms))
         .map(b => ({ bookingId: b.id, vehicleId: b.vehicle_id, entita: etichetta(b, riconsegnaAt(b)), dettaglio: 'Ancora in stato confermata dopo la riconsegna' }))
 }
 
@@ -649,7 +674,7 @@ const wash_late: Detector = (cfg, ctx) => {
         .filter(b => {
             if (!isLavaggio(b) || !isViva(b)) return false
             if (['active', 'in_corso'].includes(String(b.status || '').toLowerCase())) return false
-            return passatoDa(appuntamentoAt(b), ctx.now, ms)
+            return passatoDaMaRecente(appuntamentoAt(b), ctx.now, ms)
         })
         .map(b => ({ bookingId: b.id, vehicleId: b.vehicle_id, entita: etichetta(b, appuntamentoAt(b)) }))
 }
