@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient'
 import toast from 'react-hot-toast'
 import type { Session } from '@supabase/supabase-js'
 import { AlarmSoundPlayer, type AlarmSoundKey } from '../utils/alarmSounds'
+import { giroAllarmi } from '../utils/alarmEngine'
 
 interface AlarmBooking {
     bookingId: string
@@ -1089,6 +1090,14 @@ export function VehicleAlarmProvider({ children }: { children: React.ReactNode }
             isRunning = true
             try {
                 await Promise.all([checkAlarms(), checkFleetMaintenanceAlarms(), checkCauzioneScadenzaAlarms()])
+                // 2026-08-21: il catalogo (19 gruppi) gira accanto ai controlli
+                // storici, non al posto loro. I detector `legacy_*` sono esclusi
+                // dentro il motore, quindi nessun allarme suona due volte.
+                // Le occorrenze finiscono in `alarm_events`: il popup sonoro
+                // resta ai 13 storici, il resto si vede nel pannello Allarmi.
+                // Se la migration non e' ancora passata, giroAllarmi torna null
+                // senza rumore e il gestionale continua come prima.
+                await giroAllarmi()
             } finally {
                 isRunning = false
             }

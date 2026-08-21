@@ -18,6 +18,7 @@ import AutistiConfigSection from './AutistiConfigSection'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
 import AlarmInventoryModal from '../../../components/admin/AlarmInventoryModal'
+import AllarmiApertiPanel from '../../../components/admin/AllarmiApertiPanel'
 import { useVehicleAlarm } from '../../../contexts/VehicleAlarmContext'
 
 type FleetVehicle = {
@@ -49,6 +50,7 @@ type VehicleRevenueTarget = {
   tiers: VehicleRevenueTier[]
 }
 
+type VistaAllarmi = 'aperti' | 'config'
 type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti' | 'allarmi' | 'contratto-modifica'
 
 // Days of the week for opening-hours configs (lavaggio, future noleggio).
@@ -1697,6 +1699,8 @@ export default function CentralinaProTab() {
   ]), [])
 
   const [section, setSection] = useState<SectionId>(isCauzioniViewOnly ? 'p4' : 'categorie-fascia')
+  // Allarmi: lavoro di oggi (aperti) oppure catalogo (configurazione).
+  const [vistaAllarmi, setVistaAllarmi] = useState<VistaAllarmi>('aperti')
 
   // Naviga a una sezione specifica su richiesta (es. dal Catalogo Terra dopo
   // aver aggiunto un veicolo: "vai al Prezzo Dinamico per impostare la tariffa").
@@ -2236,11 +2240,34 @@ export default function CentralinaProTab() {
               // `system_alarms` e si salvano riga per riga. Qui e' lo stesso
               // pannello della vecchia modale, montato come sezione — non una
               // seconda copia, cosi' le due superfici non possono divergere.
-              <AlarmInventoryModal
-                embedded
-                audioEnabled={alarmState.audioEnabled}
-                onEnableAudio={enableAudio}
-              />
+              //
+              // 2026-08-21: due viste. "Aperti" e' il lavoro di oggi (chi
+              // risolve cosa, con la cronologia); "Configurazione" e' il
+              // catalogo. Si apre su Aperti: chi entra qui di solito ha un
+              // allarme che suona, non una soglia da cambiare.
+              <div className="space-y-3">
+                <div className="flex items-center gap-1.5">
+                  {([['aperti', 'Aperti'], ['config', 'Configurazione']] as [VistaAllarmi, string][]).map(([k, lbl]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setVistaAllarmi(k)}
+                      className={`px-3 py-1.5 rounded-full text-[12px] font-semibold transition-colors ${vistaAllarmi === k ? 'bg-dr7-gold text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:text-theme-text-primary'}`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+                {vistaAllarmi === 'aperti' ? (
+                  <AllarmiApertiPanel />
+                ) : (
+                  <AlarmInventoryModal
+                    embedded
+                    audioEnabled={alarmState.audioEnabled}
+                    onEnableAudio={enableAudio}
+                  />
+                )}
+              </div>
             )}
             {section === 'p10' && (
               <DR7ClubSection
