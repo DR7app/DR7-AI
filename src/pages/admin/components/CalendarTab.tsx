@@ -571,6 +571,10 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
     return Math.max(isNarrow ? 56 : MIN_ROW_HEIGHT, Math.floor((gridH - HEADER_ROW_H - 20) / n))
   }, [gridH, visibleRows.length, isNarrow])
 
+  // Altezza MINIMA di una corsia (una barra prenotazione) perche' resti
+  // leggibile: sotto i ~20px il nome cliente e l'orario non si leggono piu'.
+  const laneMinHeight = isNarrow ? 20 : 26
+
   // ── Vista mobile stile Apple Calendar ───────────────────────────────────────
   // Giorno selezionato nella griglia mese; default = oggi se nel mese corrente.
   const [selectedDay, setSelectedDay] = useState<number>(new Date().getDate())
@@ -865,9 +869,21 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
             // 2026-06-04: TUTTI i veicoli nello schermo senza scroll → altezza
             // riga = fitRowHeight (area / numero veicoli). Le barre si scalano
             // dentro la riga (laneH) per non sbordare.
+            // 2026-08-21 — CALENDARIO DI AGOSTO ILLEGGIBILE.
+            // In alta stagione lo stesso mezzo ha noleggi che si danno il
+            // cambio LO STESSO GIORNO: computeLanes li impila per forza
+            // (occupano la stessa colonna giorno), e ad agosto si arrivava a
+            // 6-10 corsie su una riga. L'altezza della riga pero' dipendeva
+            // SOLO dal numero di mezzi (fitRowHeight): laneH restava
+            // inchiodato al minimo di 12px e tutte le corsie oltre la quarta
+            // finivano FUORI dalla riga, disegnate sopra quella sotto.
+            // Risultato: barre da 10px sovrapposte, non si vedeva piu' niente.
+            // Ora la riga cresce con le sue corsie. La griglia ha overflow-auto,
+            // quindi SCROLLA invece di schiacciare — stessa scelta del 20/07.
             const laneCount = Math.max(1, row.laneCount)
-            const rowHeight = fitRowHeight
-            const laneH = Math.max(12, (rowHeight - 6) / laneCount)
+            const ROW_PADDING = 6
+            const rowHeight = Math.max(fitRowHeight, ROW_PADDING + laneCount * laneMinHeight)
+            const laneH = (rowHeight - ROW_PADDING) / laneCount
 
             return (
               <div
