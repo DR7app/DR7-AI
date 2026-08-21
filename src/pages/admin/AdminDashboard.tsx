@@ -39,6 +39,7 @@ const ReviewManagementTab = lazyWithRetry(() => import('./components/ReviewManag
 const FatturaTab = lazyWithRetry(() => import('./components/FatturaTab'))
 const ContrattoTab = lazyWithRetry(() => import('./components/ContrattoTab'))
 const GestioneMulteTab = lazyWithRetry(() => import('./components/GestioneMulteTab'))
+const DailyCalendarModal = lazyWithRetry(() => import('./components/DailyCalendarModal'))
 const CauzioniTab = lazyWithRetry(() => import('./components/CauzioniTab'))
 const NexiTab = lazyWithRetry(() => import('./components/NexiTab'))
 const BirthdaysTab = lazyWithRetry(() => import('./components/BirthdaysTab'))
@@ -132,6 +133,7 @@ export default function AdminDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false)
   const [showMyOrari, setShowMyOrari] = useState(false)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [newPassword, setNewPassword] = useState('')
@@ -725,6 +727,16 @@ export default function AdminDashboard() {
             </h2>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsCalendarModalOpen(true)}
+              title="Calendario Giornaliero"
+              className="flex items-center gap-2 px-3 py-2 rounded-full bg-dr7-gold text-white text-[12px] font-semibold hover:bg-dr7-gold/90 active:scale-95 transition-all"
+            >
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="hidden sm:inline">Calendario Giornaliero</span>
+            </button>
             {!isCollaboratore && !isHidden('miei-orari') && (
               <button
                 onClick={() => setShowMyOrari(true)}
@@ -1126,6 +1138,14 @@ export default function AdminDashboard() {
           </Suspense>
         </main>
       </div>
+
+      {/* Calendario Giornaliero — riagganciato al bottone in alto a destra. */}
+      <Suspense fallback={null}>
+        <DailyCalendarModal
+          isOpen={isCalendarModalOpen}
+          onClose={() => setIsCalendarModalOpen(false)}
+        />
+      </Suspense>
 
       {/* La Gestione Allarmi e' passata dentro Centralina Pro > Allarmi.
           Qui resta solo il pulsante per attivare l'audio: serve un gesto
