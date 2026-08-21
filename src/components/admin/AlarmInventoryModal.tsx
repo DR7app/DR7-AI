@@ -1,24 +1,38 @@
 /**
- * AlarmInventoryModal — Gestione Allarmi.
+ * Gestione Allarmi — catalogo completo.
  *
- * Loads alarm configuration from public.system_alarms and lets admins:
- *   - Toggle each alarm on/off (is_enabled)
- *   - Edit the trigger threshold (10 min, 1000 km, 7 days, etc.)
- *   - Edit label, schedule description, reason
+ * 2026-08-21 (richiesta direzione): da 13 allarmi a 19 gruppi. Ogni riga si
+ * accende e si spegne, e per ognuna si scelgono anticipo, priorita', reparto
+ * responsabile, ripetizione finche' non e' risolto e canali di notifica
+ * (gestionale, push, WhatsApp o email interna).
  *
- * Realtime subscription: VehicleAlarmContext also listens, so saved
- * changes propagate to the next 60-sec polling tick automatically.
+ * Cosa si vede qui e cosa no:
+ *   - qui c'e' la configurazione GENERALE dell'allarme;
+ *   - l'ON/OFF sulla SINGOLA pratica sta sulla pratica (tabella
+ *     alarm_overrides), non in questo elenco: spegnere un allarme per una
+ *     prenotazione non deve spegnerlo per tutte;
+ *   - "Risolto", "Posticipa" e la cronologia di chi ha risolto stanno nel
+ *     pannello degli allarmi aperti (tabella alarm_events).
  *
- * "Add new" is intentionally disabled — adding a row with a fresh id
- * has no effect because the trigger logic for each alarm is hardcoded
- * in TypeScript. Editable list = the 13 existing alarms only.
+ * Una riga senza `detector` NON puo' suonare: la rilevazione e' codice. Invece
+ * di nasconderlo, la riga lo dichiara ("in attesa") — un interruttore che
+ * sembra acceso ma non guarda niente e' peggio di un interruttore mancante.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ALARM_SOUNDS, ascoltaAnteprima, type AlarmSoundKey } from '../../utils/alarmSounds'
+import {
+    ALARM_GROUPS,
+    PRIORITY_LABEL,
+    PRIORITY_STYLE,
+    REPARTI,
+    UNIT_LABEL,
+    type AlarmPriority,
+    type AlarmThresholdUnit,
+} from '../../data/alarmCatalog'
 import { supabase } from '../../supabaseClient'
 import toast from 'react-hot-toast'
 
-type ThresholdUnit = 'minutes_before' | 'minutes_after' | 'km' | 'days'
+interface Destinatario { nome?: string; telefono?: string; email?: string }
 
 interface AlarmRow {
     id: string
@@ -26,48 +40,50 @@ interface AlarmRow {
     schedule: string
     reason: string
     category: 'booking' | 'fleet'
+    group_key: string | null
+    priority: AlarmPriority
+    reparto: string | null
+    detector: string | null
+    stato_rilevamento: 'attivo' | 'in_attesa'
     threshold_value: number
-    threshold_unit: ThresholdUnit
+    threshold_unit: AlarmThresholdUnit
     is_enabled: boolean
+    ripeti_finche_non_risolto: boolean
+    ripeti_ogni_minuti: number
+    notifica_gestionale: boolean
+    notifica_push: boolean
+    notifica_whatsapp_interna: boolean
+    notifica_email_interna: boolean
+    destinatari: Destinatario[] | null
     sort_order: number
-    /** Template di Messaggi di Sistema Pro da proporre all'operatore. */
     message_key: string | null
     sound_key?: string | null
 }
 
 interface Props {
-    /** Ignorato quando `embedded`: la sezione e' sempre visibile. */
     isOpen?: boolean
     onClose?: () => void
     audioEnabled: boolean
     onEnableAudio: () => void
-    /**
-     * Reso come SEZIONE di pagina (Centralina Pro > Allarmi) invece che come
-     * modale: niente overlay, niente pulsante di chiusura. Il contenuto e la
-     * logica sono gli stessi, cosi' le due superfici non divergono.
-     */
+    /** Reso come SEZIONE (Centralina Pro > Allarmi) invece che come modale. */
     embedded?: boolean
 }
 
-const UNIT_LABEL: Record<ThresholdUnit, string> = {
-    minutes_before: 'minuti prima',
-    minutes_after: 'minuti dopo',
-    km: 'km',
-    days: 'giorni',
-}
+type FiltroStato = 'tutti' | 'accesi' | 'spenti' | 'attivi' | 'in_attesa'
 
 export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onEnableAudio, embedded = false }: Props) {
     const [alarms, setAlarms] = useState<AlarmRow[]>([])
     const [loading, setLoading] = useState(false)
     const [savingId, setSavingId] = useState<string | null>(null)
     const [editing, setEditing] = useState<Record<string, Partial<AlarmRow>>>({})
-    // Elenco dei messaggi disponibili. Si legge da system_messages, la stessa
-    // tabella di Messaggi di Sistema Pro: nessun elenco parallelo da tenere
-    // allineato a mano. Solo i template accesi e non vuoti — proporre un
-    // template spento significherebbe offrire un pulsante che non manda nulla.
+    const [aperti, setAperti] = useState<Set<string>>(new Set())
+    const [gruppiAperti, setGruppiAperti] = useState<Set<string>>(new Set())
+    const [ricerca, setRicerca] = useState('')
+    const [filtro, setFiltro] = useState<FiltroStato>('tutti')
+    // Elenco dei messaggi disponibili: stessa tabella di Messaggi di Sistema
+    // Pro, nessun elenco parallelo da tenere allineato a mano.
     const [templates, setTemplates] = useState<{ key: string; label: string }[]>([])
 
-    // Load on open
     useEffect(() => {
         if (!isOpen && !embedded) return
         setLoading(true)
@@ -96,13 +112,6 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
         })()
     }, [isOpen, embedded])
 
-    if (!isOpen && !embedded) return null
-
-    const groups: Array<{ id: 'booking' | 'fleet'; title: string; subtitle: string }> = [
-        { id: 'booking', title: 'Prenotazioni', subtitle: 'Eventi legati al ciclo di vita di un noleggio o lavaggio.' },
-        { id: 'fleet', title: 'Manutenzione Flotta', subtitle: 'Soglie km e date di scadenza per ogni veicolo attivo.' },
-    ]
-
     const setField = (id: string, key: keyof AlarmRow, value: AlarmRow[keyof AlarmRow]) => {
         setEditing(prev => ({ ...prev, [id]: { ...prev[id], [key]: value } }))
     }
@@ -122,13 +131,9 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
         const e = editing[row.id]
         if (!e) return
         setSavingId(row.id)
-        const payload: Record<string, unknown> = {
-            ...e,
-            updated_at: new Date().toISOString(),
-        }
         const { error } = await supabase
             .from('system_alarms')
-            .update(payload)
+            .update({ ...e, updated_at: new Date().toISOString() })
             .eq('id', row.id)
         setSavingId(null)
         if (error) {
@@ -137,11 +142,7 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
         }
         toast.success('Salvato')
         setAlarms(prev => prev.map(a => (a.id === row.id ? { ...a, ...e } as AlarmRow : a)))
-        setEditing(prev => {
-            const next = { ...prev }
-            delete next[row.id]
-            return next
-        })
+        setEditing(prev => { const n = { ...prev }; delete n[row.id]; return n })
     }
 
     const toggleEnabled = async (row: AlarmRow) => {
@@ -152,17 +153,98 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
             .update({ is_enabled: next, updated_at: new Date().toISOString() })
             .eq('id', row.id)
         setSavingId(null)
-        if (error) {
-            toast.error('Toggle fallito: ' + error.message)
-            return
-        }
+        if (error) { toast.error('Toggle fallito: ' + error.message); return }
         setAlarms(prev => prev.map(a => (a.id === row.id ? { ...a, is_enabled: next } : a)))
     }
 
+    /** Accendi/spegni tutto un gruppo in un colpo solo. */
+    const toggleGruppo = async (groupKey: string, next: boolean) => {
+        const ids = alarms
+            .filter(a => (a.group_key ?? a.category) === groupKey)
+            .map(a => a.id)
+        if (ids.length === 0) return
+        setSavingId(groupKey)
+        const { error } = await supabase
+            .from('system_alarms')
+            .update({ is_enabled: next, updated_at: new Date().toISOString() })
+            .in('id', ids)
+        setSavingId(null)
+        if (error) { toast.error('Aggiornamento gruppo fallito: ' + error.message); return }
+        setAlarms(prev => prev.map(a => (ids.includes(a.id) ? { ...a, is_enabled: next } : a)))
+        toast.success(next ? `${ids.length} allarmi accesi` : `${ids.length} allarmi spenti`)
+    }
+
+    const filtrati = useMemo(() => {
+        const q = ricerca.trim().toLowerCase()
+        return alarms.filter(a => {
+            if (q && !(`${a.label} ${a.id} ${a.reparto || ''}`.toLowerCase().includes(q))) return false
+            if (filtro === 'accesi' && !a.is_enabled) return false
+            if (filtro === 'spenti' && a.is_enabled) return false
+            if (filtro === 'attivi' && a.stato_rilevamento !== 'attivo') return false
+            if (filtro === 'in_attesa' && a.stato_rilevamento !== 'in_attesa') return false
+            return true
+        })
+    }, [alarms, ricerca, filtro])
+
+    // La migration 20260821 aggiunge group_key & co. Se il deploy del codice
+    // arriva PRIMA che la migration sia stata eseguita, `group_key` non esiste
+    // e raggruppare per catalogo darebbe una schermata VUOTA — cioe' l'intero
+    // pannello allarmi fuori uso. In quel caso si torna ai due gruppi storici
+    // e si mostra cosa manca, invece di lasciare il vuoto.
+    const migrazioneMancante = alarms.length > 0 && alarms.every(a => a.group_key == null)
+
+    const gruppiVisibili = useMemo(() => (
+        migrazioneMancante
+            ? [
+                { key: 'booking', num: 1, title: 'Prenotazioni', hint: 'Eventi legati al ciclo di vita di un noleggio o lavaggio.' },
+                { key: 'fleet', num: 2, title: 'Manutenzione flotta', hint: 'Soglie km e date di scadenza per ogni veicolo attivo.' },
+            ]
+            : ALARM_GROUPS
+    ), [migrazioneMancante])
+
+    const conteggi = useMemo(() => ({
+        totale: alarms.length,
+        accesi: alarms.filter(a => a.is_enabled).length,
+        attivi: alarms.filter(a => a.stato_rilevamento === 'attivo').length,
+    }), [alarms])
+
+    // Con la ricerca aperta si mostrano i gruppi che hanno risultati, gia'
+    // espansi: cercare e poi dover aprire a mano sarebbe una seconda fatica.
+    const cercando = ricerca.trim().length > 0 || filtro !== 'tutti'
+
+    const toggleGruppoAperto = (key: string) => {
+        setGruppiAperti(prev => {
+            const n = new Set(prev)
+            if (n.has(key)) n.delete(key); else n.add(key)
+            return n
+        })
+    }
+
+    const toggleRigaAperta = (id: string) => {
+        setAperti(prev => {
+            const n = new Set(prev)
+            if (n.has(id)) n.delete(id); else n.add(id)
+            return n
+        })
+    }
+
+    const Switch = ({ on, onClick, disabled, small }: { on: boolean; onClick: () => void; disabled?: boolean; small?: boolean }) => (
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            aria-label={on ? 'Disattiva' : 'Attiva'}
+            className={`relative inline-flex items-center rounded-full transition-colors shrink-0 ${small ? 'h-5 w-9' : 'h-6 w-11'} ${on ? 'bg-dr7-gold' : 'bg-theme-bg-secondary border border-theme-border'} ${disabled ? 'opacity-50 cursor-wait' : ''}`}
+        >
+            <span className={`inline-block transform rounded-full bg-white transition-transform ${small ? 'h-3.5 w-3.5' : 'h-4 w-4'} ${on ? (small ? 'translate-x-5' : 'translate-x-6') : 'translate-x-1'}`} />
+        </button>
+    )
+
     const corpo = (
         <>
-                {/* Header */}
-                <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-5 py-4 bg-theme-bg-primary border-b border-theme-border">
+            {/* Intestazione */}
+            <div className="sticky top-0 z-10 px-5 py-4 bg-theme-bg-primary border-b border-theme-border">
+                <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-lg bg-dr7-gold/15 flex items-center justify-center">
                             <svg className="w-5 h-5 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -171,7 +253,9 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                         </div>
                         <div>
                             <h2 className="text-base sm:text-lg font-semibold text-theme-text-primary">Gestione Allarmi</h2>
-                            <p className="text-xs text-theme-text-muted">{alarms.length} allarmi · controllo ogni 60 secondi</p>
+                            <p className="text-xs text-theme-text-muted">
+                                {conteggi.totale} allarmi · {conteggi.accesi} accesi · {conteggi.attivi} con rilevazione attiva · controllo ogni 60 secondi
+                            </p>
                         </div>
                     </div>
                     {!embedded && (
@@ -187,173 +271,380 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                     )}
                 </div>
 
-                {/* Audio status */}
-                <div className="px-5 py-3 border-b border-theme-border">
-                    {audioEnabled ? (
-                        <div className="flex items-center gap-2 text-xs text-green-400">
-                            <span className="w-2 h-2 rounded-full bg-green-400" />
-                            Audio attivato — gli allarmi suoneranno quando le condizioni qui sotto sono soddisfatte.
-                        </div>
-                    ) : (
-                        <div className="flex items-center justify-between gap-3 flex-wrap">
-                            <div className="flex items-center gap-2 text-xs text-amber-400">
-                                <span className="w-2 h-2 rounded-full bg-amber-400" />
-                                Audio non attivato — gli allarmi appariranno solo come notifica visiva.
-                            </div>
-                            <button
-                                onClick={onEnableAudio}
-                                className="px-3 py-1.5 rounded-full text-xs font-semibold bg-dr7-gold text-white hover:opacity-90 transition-opacity"
-                            >
-                                Attiva audio
-                            </button>
-                        </div>
-                    )}
+                {/* Ricerca + filtri */}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <input
+                        type="text"
+                        value={ricerca}
+                        onChange={e => setRicerca(e.target.value)}
+                        placeholder="Cerca un allarme, un reparto..."
+                        className="flex-1 min-w-[200px] px-3 py-1.5 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary placeholder:text-theme-text-muted"
+                    />
+                    {([
+                        ['tutti', 'Tutti'],
+                        ['accesi', 'Accesi'],
+                        ['spenti', 'Spenti'],
+                        ['attivi', 'Rilevazione attiva'],
+                        ['in_attesa', 'In attesa'],
+                    ] as [FiltroStato, string][]).map(([k, lbl]) => (
+                        <button
+                            key={k}
+                            type="button"
+                            onClick={() => setFiltro(k)}
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${filtro === k ? 'bg-dr7-gold text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary hover:text-theme-text-primary'}`}
+                        >
+                            {lbl}
+                        </button>
+                    ))}
                 </div>
+            </div>
 
-                {embedded && (
-                    <div className="px-5 py-2 text-[11px] text-amber-500 border-b border-theme-border">
-                        Gli allarmi sono UNICI per tutta l&apos;azienda: non cambiano da un business
-                        all&apos;altro. Quello che modifichi qui vale ovunque.
+            {/* Stato audio */}
+            <div className="px-5 py-3 border-b border-theme-border">
+                {audioEnabled ? (
+                    <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
+                        <span className="w-2 h-2 rounded-full bg-green-500" />
+                        Audio attivato — gli allarmi suoneranno quando le condizioni sono soddisfatte.
+                    </div>
+                ) : (
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+                            <span className="w-2 h-2 rounded-full bg-amber-500" />
+                            Audio non attivato — gli allarmi appariranno solo come notifica visiva.
+                        </div>
+                        <button
+                            onClick={onEnableAudio}
+                            className="px-3 py-1.5 rounded-full text-xs font-semibold bg-dr7-gold text-white hover:opacity-90 transition-opacity"
+                        >
+                            Attiva audio
+                        </button>
                     </div>
                 )}
+            </div>
 
-                {/* Add disabled hint */}
-                <div className="px-5 py-2 text-[11px] text-theme-text-muted border-b border-theme-border">
-                    Modifica e attiva/disattiva gli allarmi esistenti. Aggiungere un nuovo tipo di allarme richiede
-                    modifica del codice (la logica trigger è in <code className="bg-theme-bg-tertiary px-1 rounded">VehicleAlarmContext.tsx</code>).
+            {migrazioneMancante && (
+                <div className="px-5 py-3 border-b border-theme-border bg-amber-500/10">
+                    <p className="text-[12px] text-amber-700 dark:text-amber-300">
+                        <strong>Catalogo non ancora installato.</strong> Qui sotto ci sono solo i {alarms.length} allarmi
+                        storici, con i comandi di prima. Per avere i 19 gruppi, la priorita&apos;, il reparto, la
+                        ripetizione e i canali di notifica, esegui la migration{' '}
+                        <code className="bg-theme-bg-tertiary px-1 rounded">20260821_alarm_engine.sql</code> in Supabase:
+                        finche&apos; non gira, gli allarmi funzionano come sempre.
+                    </p>
                 </div>
+            )}
 
-                {/* Groups */}
-                <div className="px-5 py-4 space-y-6">
-                    {loading ? (
-                        <p className="text-sm text-theme-text-muted">Caricamento...</p>
-                    ) : alarms.length === 0 ? (
-                        <p className="text-sm text-amber-400">
-                            Nessuna riga in <code>system_alarms</code>. Esegui la migration{' '}
-                            <code className="bg-theme-bg-tertiary px-1 rounded">20260428_system_alarms.sql</code> in Supabase.
-                        </p>
-                    ) : (
-                        groups.map(g => {
-                            const items = alarms.filter(a => a.category === g.id)
-                            if (items.length === 0) return null
-                            return (
-                                <section key={g.id}>
-                                    <h3 className="text-[11px] font-bold uppercase tracking-[0.18em] text-dr7-gold mb-1">{g.title}</h3>
-                                    <p className="text-xs text-theme-text-muted mb-3">{g.subtitle}</p>
-                                    <ul className="space-y-3">
+            <div className="px-5 py-2 text-[11px] text-theme-text-muted border-b border-theme-border space-y-1">
+                <p>
+                    Gli allarmi sono UNICI per tutta l&apos;azienda: non cambiano da un business all&apos;altro.
+                    Quello che modifichi qui vale ovunque.
+                </p>
+                <p>
+                    <strong className="text-theme-text-secondary">Rilevazione attiva</strong> = il gestionale sa gia&apos; riconoscere
+                    la condizione e l&apos;allarme suona. <strong className="text-theme-text-secondary">In attesa</strong> = la voce e&apos;
+                    configurabile ma la rilevazione non e&apos; ancora scritta: resta muta finche&apos; non lo diventa.
+                </p>
+                <p>
+                    Spegnere un allarme su UNA singola pratica si fa dalla pratica, non da qui: qui si decide
+                    per tutte. &quot;Risolto&quot;, &quot;Posticipa&quot; e la cronologia stanno nel pannello degli allarmi aperti.
+                </p>
+            </div>
+
+            {/* Gruppi */}
+            <div className="px-5 py-4 space-y-3">
+                {loading ? (
+                    <p className="text-sm text-theme-text-muted">Caricamento...</p>
+                ) : alarms.length === 0 ? (
+                    <p className="text-sm text-amber-600 dark:text-amber-400">
+                        Nessuna riga in <code>system_alarms</code>. Esegui la migration{' '}
+                        <code className="bg-theme-bg-tertiary px-1 rounded">20260821_alarm_engine.sql</code> in Supabase.
+                    </p>
+                ) : (
+                    gruppiVisibili.map(g => {
+                        const items = filtrati.filter(a => (migrazioneMancante ? a.category : a.group_key) === g.key)
+                        if (items.length === 0) return null
+                        const aperto = cercando || gruppiAperti.has(g.key)
+                        const accesiNelGruppo = items.filter(a => a.is_enabled).length
+                        return (
+                            <section key={g.key} className="rounded-xl border border-theme-border bg-theme-bg-tertiary/30 overflow-hidden">
+                                <div className="flex items-center gap-3 px-4 py-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleGruppoAperto(g.key)}
+                                        className="flex-1 flex items-center gap-3 text-left min-w-0"
+                                    >
+                                        <span className={`text-theme-text-muted transition-transform ${aperto ? 'rotate-90' : ''}`}>›</span>
+                                        <span className="min-w-0">
+                                            <span className="block text-[13px] font-bold text-theme-text-primary truncate">
+                                                {g.num}. {g.title}
+                                            </span>
+                                            <span className="block text-[11px] text-theme-text-muted truncate">{g.hint}</span>
+                                        </span>
+                                    </button>
+                                    <span className="text-[11px] text-theme-text-muted shrink-0 tabular-nums">
+                                        {accesiNelGruppo}/{items.length} accesi
+                                    </span>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleGruppo(g.key, true)}
+                                            disabled={savingId === g.key}
+                                            className="px-2 py-1 rounded text-[11px] font-semibold bg-theme-bg-secondary text-theme-text-secondary hover:text-theme-text-primary"
+                                        >
+                                            Accendi tutti
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleGruppo(g.key, false)}
+                                            disabled={savingId === g.key}
+                                            className="px-2 py-1 rounded text-[11px] font-semibold bg-theme-bg-secondary text-theme-text-secondary hover:text-theme-text-primary"
+                                        >
+                                            Spegni tutti
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {aperto && (
+                                    <ul className="border-t border-theme-border divide-y divide-theme-border/60">
                                         {items.map(row => {
                                             const dirty = isDirty(row)
                                             const saving = savingId === row.id
                                             const enabled = valueOf(row, 'is_enabled')
+                                            const prio = valueOf(row, 'priority') || 'attenzione'
+                                            const stile = PRIORITY_STYLE[prio]
+                                            const espanso = aperti.has(row.id)
+                                            const muto = !migrazioneMancante && row.stato_rilevamento !== 'attivo'
                                             return (
-                                                <li key={row.id} className={`rounded-lg border p-3 ${enabled ? 'border-theme-border bg-theme-bg-tertiary/40' : 'border-theme-border/40 bg-theme-bg-tertiary/10 opacity-70'}`}>
-                                                    <div className="flex items-start justify-between gap-3 mb-2">
-                                                        <div className="flex-1 min-w-0">
-                                                            <input
-                                                                type="text"
-                                                                value={String(valueOf(row, 'label'))}
-                                                                onChange={e => setField(row.id, 'label', e.target.value)}
-                                                                className="w-full bg-transparent text-sm font-semibold text-theme-text-primary border-b border-transparent focus:border-dr7-gold focus:outline-none px-0 py-0.5"
-                                                            />
-                                                            <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">{row.id}</span>
-                                                        </div>
-                                                        {/* Toggle */}
+                                                <li key={row.id} className={`px-4 py-3 ${enabled ? '' : 'opacity-60'}`}>
+                                                    <div className="flex items-start gap-3">
+                                                        <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${stile.dot}`} title={PRIORITY_LABEL[prio]} />
                                                         <button
                                                             type="button"
-                                                            onClick={() => toggleEnabled(row)}
-                                                            disabled={saving}
-                                                            aria-label={enabled ? 'Disattiva' : 'Attiva'}
-                                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${enabled ? 'bg-dr7-gold' : 'bg-theme-bg-secondary border border-theme-border'} ${saving ? 'opacity-50 cursor-wait' : ''}`}
+                                                            onClick={() => toggleRigaAperta(row.id)}
+                                                            className="flex-1 min-w-0 text-left"
                                                         >
-                                                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                                                            <span className="block text-[13px] font-semibold text-theme-text-primary">{valueOf(row, 'label')}</span>
+                                                            <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[10px] text-theme-text-muted">
+                                                                <span className={stile.text}>{PRIORITY_LABEL[prio]}</span>
+                                                                <span>·</span>
+                                                                <span>
+                                                                    {valueOf(row, 'threshold_value')} {UNIT_LABEL[valueOf(row, 'threshold_unit')]}
+                                                                </span>
+                                                                {valueOf(row, 'reparto') && (<><span>·</span><span>{valueOf(row, 'reparto')}</span></>)}
+                                                                {muto && (
+                                                                    <>
+                                                                        <span>·</span>
+                                                                        <span className="px-1.5 py-0.5 rounded-full border border-theme-border text-theme-text-muted">
+                                                                            in attesa di rilevazione
+                                                                        </span>
+                                                                    </>
+                                                                )}
+                                                            </span>
                                                         </button>
+                                                        <Switch on={!!enabled} onClick={() => toggleEnabled(row)} disabled={saving} />
                                                     </div>
 
-                                                    {/* Threshold */}
-                                                    <div className="grid grid-cols-1 sm:grid-cols-[120px_1fr] gap-y-1.5 gap-x-3 text-xs items-center">
-                                                        <span className="text-theme-text-muted">Soglia</span>
-                                                        <div className="flex items-center gap-2">
-                                                            <input
-                                                                type="number"
-                                                                min={0}
-                                                                step={row.threshold_unit === 'km' ? 100 : 1}
-                                                                value={Number(valueOf(row, 'threshold_value'))}
-                                                                onChange={e => setField(row.id, 'threshold_value', Number(e.target.value))}
-                                                                className="w-24 px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm"
-                                                            />
-                                                            <span className="text-theme-text-muted">{UNIT_LABEL[row.threshold_unit]}</span>
-                                                        </div>
+                                                    {espanso && (
+                                                        <div className="mt-3 pl-5 grid grid-cols-1 sm:grid-cols-[130px_1fr] gap-y-2 gap-x-3 text-xs items-center">
+                                                            {!migrazioneMancante && <>
+                                                            {/* Priorita' */}
+                                                            <span className="text-theme-text-muted">Priorita&apos;</span>
+                                                            <div className="flex flex-wrap items-center gap-1">
+                                                                {(['informativo', 'attenzione', 'urgente', 'bloccante'] as AlarmPriority[]).map(p => (
+                                                                    <button
+                                                                        key={p}
+                                                                        type="button"
+                                                                        onClick={() => setField(row.id, 'priority', p)}
+                                                                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors ${prio === p ? `${PRIORITY_STYLE[p].chip} ${PRIORITY_STYLE[p].text}` : 'border-theme-border text-theme-text-muted hover:text-theme-text-primary'}`}
+                                                                    >
+                                                                        {PRIORITY_LABEL[p]}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
 
-                                                        <span className="text-theme-text-muted">Quando suona</span>
-                                                        <input
-                                                            type="text"
-                                                            value={String(valueOf(row, 'schedule'))}
-                                                            onChange={e => setField(row.id, 'schedule', e.target.value)}
-                                                            className="w-full px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary"
-                                                        />
-
-                                                        <span className="text-theme-text-muted">Motivo</span>
-                                                        <textarea
-                                                            value={String(valueOf(row, 'reason'))}
-                                                            onChange={e => setField(row.id, 'reason', e.target.value)}
-                                                            rows={2}
-                                                            className="w-full px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-secondary"
-                                                        />
-
-                                                        {/* Suono — 2026-08-20 (richiesta direzione). Prima i 13 allarmi
-                                                            suonavano tutti con lo stesso /alarm.mp3: sentendolo non si
-                                                            capiva quale fosse. Il tasto ascolta serve a scegliere senza
-                                                            dover aspettare che l'allarme suoni davvero. */}
-                                                        <span className="text-theme-text-muted">Suono</span>
-                                                        <div>
+                                                            {/* Anticipo */}
+                                                            <span className="text-theme-text-muted">Anticipo</span>
                                                             <div className="flex items-center gap-2">
+                                                                <input
+                                                                    type="number"
+                                                                    min={0}
+                                                                    step={valueOf(row, 'threshold_unit') === 'km' ? 100 : 1}
+                                                                    value={Number(valueOf(row, 'threshold_value'))}
+                                                                    onChange={e => setField(row.id, 'threshold_value', Number(e.target.value))}
+                                                                    className="w-24 px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm"
+                                                                />
                                                                 <select
-                                                                    value={String(valueOf(row, 'sound_key') || 'classic')}
-                                                                    onChange={e => setField(row.id, 'sound_key', e.target.value)}
-                                                                    className="flex-1 px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary"
+                                                                    value={String(valueOf(row, 'threshold_unit'))}
+                                                                    onChange={e => setField(row.id, 'threshold_unit', e.target.value as AlarmThresholdUnit)}
+                                                                    className="px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary"
                                                                 >
-                                                                    {ALARM_SOUNDS.map(sn => (
-                                                                        <option key={sn.key} value={sn.key}>{sn.label}</option>
+                                                                    {(Object.keys(UNIT_LABEL) as AlarmThresholdUnit[]).map(u => (
+                                                                        <option key={u} value={u}>{UNIT_LABEL[u]}</option>
                                                                     ))}
                                                                 </select>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => ascoltaAnteprima(String(valueOf(row, 'sound_key') || 'classic') as AlarmSoundKey)}
-                                                                    title="Ascolta questo suono"
-                                                                    className="shrink-0 px-2 py-1 rounded border border-theme-border text-theme-text-secondary hover:text-dr7-gold"
-                                                                >▶</button>
                                                             </div>
-                                                            <p className="mt-1 text-[10px] text-theme-text-muted">
-                                                                {ALARM_SOUNDS.find(sn => sn.key === String(valueOf(row, 'sound_key') || 'classic'))?.hint}
-                                                            </p>
-                                                        </div>
 
-                                                        {/* Messaggio al cliente — solo per gli allarmi che HANNO un
-                                                            cliente. Sulle scadenze di flotta non c'e' nessuno da
-                                                            avvisare: il bollo non si comunica al cliente. */}
-                                                        {row.category === 'booking' && (
-                                                            <>
-                                                                <span className="text-theme-text-muted">Messaggio al cliente</span>
-                                                                <div>
+                                                            {/* Ripetizione */}
+                                                            <span className="text-theme-text-muted">Ripeti se non risolto</span>
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <Switch
+                                                                    small
+                                                                    on={!!valueOf(row, 'ripeti_finche_non_risolto')}
+                                                                    onClick={() => setField(row.id, 'ripeti_finche_non_risolto', !valueOf(row, 'ripeti_finche_non_risolto'))}
+                                                                />
+                                                                {valueOf(row, 'ripeti_finche_non_risolto') && (
+                                                                    <span className="flex items-center gap-2">
+                                                                        <span className="text-theme-text-muted">ogni</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            min={1}
+                                                                            value={Number(valueOf(row, 'ripeti_ogni_minuti') ?? 30)}
+                                                                            onChange={e => setField(row.id, 'ripeti_ogni_minuti', Number(e.target.value))}
+                                                                            className="w-20 px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm"
+                                                                        />
+                                                                        <span className="text-theme-text-muted">minuti</span>
+                                                                    </span>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Responsabile */}
+                                                            <span className="text-theme-text-muted">Responsabile</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <select
+                                                                    value={REPARTI.includes(String(valueOf(row, 'reparto')) as typeof REPARTI[number]) ? String(valueOf(row, 'reparto')) : '__altro__'}
+                                                                    onChange={e => setField(row.id, 'reparto', e.target.value === '__altro__' ? '' : e.target.value)}
+                                                                    className="px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary"
+                                                                >
+                                                                    {REPARTI.map(r => <option key={r} value={r}>{r}</option>)}
+                                                                    <option value="__altro__">Altro...</option>
+                                                                </select>
+                                                                {!REPARTI.includes(String(valueOf(row, 'reparto')) as typeof REPARTI[number]) && (
+                                                                    <input
+                                                                        type="text"
+                                                                        value={String(valueOf(row, 'reparto') || '')}
+                                                                        onChange={e => setField(row.id, 'reparto', e.target.value)}
+                                                                        placeholder="Nome del responsabile"
+                                                                        className="flex-1 px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary"
+                                                                    />
+                                                                )}
+                                                            </div>
+
+                                                            {/* Canali */}
+                                                            <span className="text-theme-text-muted">Notifiche</span>
+                                                            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                                                                {([
+                                                                    ['notifica_gestionale', 'Gestionale'],
+                                                                    ['notifica_push', 'Push'],
+                                                                    ['notifica_whatsapp_interna', 'WhatsApp interna'],
+                                                                    ['notifica_email_interna', 'Email interna'],
+                                                                ] as [keyof AlarmRow, string][]).map(([k, lbl]) => (
+                                                                    <label key={String(k)} className="flex items-center gap-1.5 cursor-pointer">
+                                                                        <Switch
+                                                                            small
+                                                                            on={!!valueOf(row, k)}
+                                                                            onClick={() => setField(row.id, k, !valueOf(row, k))}
+                                                                        />
+                                                                        <span className="text-theme-text-secondary">{lbl}</span>
+                                                                    </label>
+                                                                ))}
+                                                            </div>
+
+                                                            {/* Destinatari interni: servono solo se un canale interno e' acceso */}
+                                                            {(valueOf(row, 'notifica_whatsapp_interna') || valueOf(row, 'notifica_email_interna')) && (
+                                                                <>
+                                                                    <span className="text-theme-text-muted">Destinatari</span>
+                                                                    <div>
+                                                                        <input
+                                                                            type="text"
+                                                                            value={(valueOf(row, 'destinatari') || [])
+                                                                                .map(d => d.telefono || d.email || d.nome || '')
+                                                                                .filter(Boolean).join(', ')}
+                                                                            onChange={e => setField(row.id, 'destinatari', e.target.value
+                                                                                .split(',')
+                                                                                .map(s => s.trim())
+                                                                                .filter(Boolean)
+                                                                                .map(v => (v.includes('@') ? { email: v } : { telefono: v })))}
+                                                                            placeholder="+39333..., ufficio@dr7.app"
+                                                                            className="w-full px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary"
+                                                                        />
+                                                                        <p className="mt-1 text-[10px] text-theme-text-muted">
+                                                                            Numeri e indirizzi separati da virgola. Il numero va su WhatsApp, l&apos;indirizzo via email.
+                                                                        </p>
+                                                                    </div>
+                                                                </>
+                                                            )}
+
+                                                            </>}
+
+                                                            {/* Quando suona / Motivo */}
+                                                            <span className="text-theme-text-muted">Quando suona</span>
+                                                            <input
+                                                                type="text"
+                                                                value={String(valueOf(row, 'schedule'))}
+                                                                onChange={e => setField(row.id, 'schedule', e.target.value)}
+                                                                className="w-full px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary"
+                                                            />
+
+                                                            <span className="text-theme-text-muted">Motivo</span>
+                                                            <textarea
+                                                                value={String(valueOf(row, 'reason'))}
+                                                                onChange={e => setField(row.id, 'reason', e.target.value)}
+                                                                rows={2}
+                                                                className="w-full px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-secondary"
+                                                            />
+
+                                                            {/* Suono */}
+                                                            <span className="text-theme-text-muted">Suono</span>
+                                                            <div>
+                                                                <div className="flex items-center gap-2">
                                                                     <select
-                                                                        value={String(valueOf(row, 'message_key') || '')}
-                                                                        onChange={e => setField(row.id, 'message_key', e.target.value || null)}
-                                                                        className="w-full px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary"
+                                                                        value={String(valueOf(row, 'sound_key') || 'classic')}
+                                                                        onChange={e => setField(row.id, 'sound_key', e.target.value)}
+                                                                        className="flex-1 px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary"
                                                                     >
-                                                                        <option value="">— nessuno, non mostrare il pulsante —</option>
-                                                                        {templates.map(t => (
-                                                                            <option key={t.key} value={t.key}>{t.label}</option>
+                                                                        {ALARM_SOUNDS.map(sn => (
+                                                                            <option key={sn.key} value={sn.key}>{sn.label}</option>
                                                                         ))}
                                                                     </select>
-                                                                    <p className="mt-1 text-[10px] text-theme-text-muted">
-                                                                        Quando l&apos;allarme suona, l&apos;operatore vede il pulsante
-                                                                        &quot;Avvisa il cliente&quot; e parte questo messaggio. Il testo si
-                                                                        scrive in Messaggi di Sistema Pro.
-                                                                    </p>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => ascoltaAnteprima(String(valueOf(row, 'sound_key') || 'classic') as AlarmSoundKey)}
+                                                                        title="Ascolta questo suono"
+                                                                        className="shrink-0 px-2 py-1 rounded border border-theme-border text-theme-text-secondary hover:text-dr7-gold"
+                                                                    >&#9654;</button>
                                                                 </div>
-                                                            </>
-                                                        )}
-                                                    </div>
+                                                            </div>
+
+                                                            {/* Messaggio al cliente — solo dove un cliente esiste. */}
+                                                            {row.category === 'booking' && (
+                                                                <>
+                                                                    <span className="text-theme-text-muted">Messaggio al cliente</span>
+                                                                    <div>
+                                                                        <select
+                                                                            value={String(valueOf(row, 'message_key') || '')}
+                                                                            onChange={e => setField(row.id, 'message_key', e.target.value || null)}
+                                                                            className="w-full px-2 py-1 rounded bg-theme-bg-primary border border-theme-border text-theme-text-primary"
+                                                                        >
+                                                                            <option value="">— nessuno, non mostrare il pulsante —</option>
+                                                                            {templates.map(t => (
+                                                                                <option key={t.key} value={t.key}>{t.label}</option>
+                                                                            ))}
+                                                                        </select>
+                                                                        <p className="mt-1 text-[10px] text-theme-text-muted">
+                                                                            Quando l&apos;allarme suona, l&apos;operatore vede &quot;Avvisa il cliente&quot; e parte
+                                                                            questo messaggio. Il testo si scrive in Messaggi di Sistema Pro.
+                                                                        </p>
+                                                                    </div>
+                                                                </>
+                                                            )}
+
+                                                            <span className="text-theme-text-muted">Identificativo</span>
+                                                            <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">
+                                                                {row.id}
+                                                                {migrazioneMancante ? '' : (row.detector ? ` · rilevazione ${row.detector}` : ' · nessuna rilevazione collegata')}
+                                                            </span>
+                                                        </div>
+                                                    )}
 
                                                     {dirty && (
                                                         <div className="mt-2 flex items-center justify-end gap-2">
@@ -377,19 +668,21 @@ export default function AlarmInventoryModal({ isOpen, onClose, audioEnabled, onE
                                             )
                                         })}
                                     </ul>
-                                </section>
-                            )
-                        })
-                    )}
-                </div>
+                                )}
+                            </section>
+                        )
+                    })
+                )}
+            </div>
 
-                <div className="px-5 py-3 border-t border-theme-border text-[11px] text-theme-text-muted">
-                    Ogni modifica viene salvata in <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">system_alarms</code>.
-                    Il polling di <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">VehicleAlarmContext</code> rileva la nuova
-                    configurazione entro 60 secondi senza ricaricare.
-                </div>
+            <div className="px-5 py-3 border-t border-theme-border text-[11px] text-theme-text-muted">
+                Ogni modifica viene salvata in <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded">system_alarms</code>.
+                Il motore rileva la nuova configurazione entro 60 secondi senza ricaricare la pagina.
+            </div>
         </>
     )
+
+    if (!isOpen && !embedded) return null
 
     if (embedded) {
         return (

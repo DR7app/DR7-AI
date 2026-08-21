@@ -1,0 +1,324 @@
+1|RITIRO / USCITA VEICOLO|ritiro
+Ritiro cliente in arrivo
+Ritiro tra 60 minuti
+Ritiro tra 30 minuti
+Ritiro tra 10 minuti
+Orario di ritiro raggiunto
+Cliente non ancora arrivato
+Veicolo non segnato come pronto
+Veicolo non presente in sede
+Veicolo ancora associato al noleggio precedente
+Veicolo precedente non ancora riconsegnato
+Lavaggio veicolo non completato
+Check pre-consegna non completato
+Foto pre-consegna mancanti
+Video pre-consegna mancante
+Chilometraggio iniziale non registrato
+Livello carburante iniziale non registrato
+Operatore consegna non assegnato
+Consegna fuori sede da organizzare
+Autista per consegna non assegnato
+Indirizzo consegna mancante
+2|CONTRATTO|contratto
+Contratto non generato
+Contratto generato ma non inviato
+Contratto inviato ma non aperto
+Contratto aperto ma non firmato
+Contratto non firmato a 60 minuti dal ritiro
+Contratto non firmato a 30 minuti dal ritiro
+Contratto non firmato a 10 minuti dal ritiro
+ORARIO RITIRO RAGGIUNTO — CONTRATTO NON FIRMATO
+Firma cliente incompleta
+Firma secondo conducente mancante
+Contratto con dati mancanti
+Contratto modificato dopo la firma
+Contratto da rigenerare
+Allegato contrattuale mancante
+Consenso/privacy mancante
+Condizioni specifiche non accettate
+3|DOCUMENTI CLIENTE|documenti
+Carta d'identita' mancante
+Patente mancante
+Fronte documento mancante
+Retro documento mancante
+Documento illeggibile
+Documento scaduto
+Documento in scadenza
+Patente scaduta
+Patente in scadenza
+Patente non compatibile con il veicolo
+Anzianita' patente insufficiente
+Eta' conducente non compatibile
+Secondo conducente senza documenti
+Dati cliente incompleti
+Codice fiscale mancante
+Indirizzo di residenza mancante
+Email mancante
+Numero telefonico mancante
+Verifica documentale non completata
+Cliente/pratica ancora da approvare
+4|PAGAMENTI|pagamenti
+Noleggio non pagato
+Noleggio parzialmente pagato
+Saldo residuo presente
+Pagamento in scadenza
+RITIRO IMMINENTE — PAGAMENTO ANCORA APERTO
+ORARIO RITIRO RAGGIUNTO — PAGAMENTO NON COMPLETO
+Link pagamento non inviato
+Link pagamento inviato ma non pagato
+Link pagamento scaduto
+Pagamento fallito
+Pagamento rifiutato
+Pagamento da verificare
+Bonifico atteso
+Bonifico non verificato
+Bonifico istantaneo da controllare
+Extra non pagati
+Chilometri extra non pagati
+Estensione noleggio non pagata
+Secondo conducente non pagato
+Supplemento under 25 non pagato
+Supplemento patente recente non pagato
+Consegna/ritiro fuori sede non pagati
+Accessori non pagati
+Danno/addebito ancora aperto
+5|CAUZIONE|cauzione
+Cauzione richiesta ma non incassata
+Cauzione da incassare
+Ritiro tra 60 minuti — cauzione mancante
+Ritiro tra 10 minuti — cauzione mancante
+ORARIO RITIRO RAGGIUNTO — CAUZIONE MANCANTE
+Preautorizzazione non effettuata
+Preautorizzazione fallita
+Preautorizzazione rifiutata
+Cauzione inferiore all'importo richiesto
+Garanzia alternativa da verificare
+Formula senza cauzione non ancora autorizzata
+Cauzione da trattenere temporaneamente
+Cauzione da sbloccare
+Cauzione da restituire
+Scadenza restituzione cauzione vicina
+Termine restituzione cauzione raggiunto
+Termine restituzione cauzione superato
+Cauzione restituita ma non confermata
+Storno cauzione da verificare
+Pratica cauzione ancora aperta dopo chiusura noleggio
+6|RICONSEGNA|riconsegna
+Riconsegna prevista tra 60 minuti
+Riconsegna prevista tra 30 minuti
+Riconsegna prevista tra 10 minuti
+Orario riconsegna raggiunto
+Cliente in ritardo di 10 minuti
+Cliente in ritardo di 30 minuti
+Cliente in ritardo di 60 minuti
+RICONSEGNA GRAVEMENTE IN RITARDO
+Cliente non contattato dopo ritardo
+Nuovo cliente attende lo stesso veicolo
+Ritardo che compromette noleggio successivo
+Estensione noleggio non formalizzata
+Estensione non pagata
+Contratto scaduto ma veicolo ancora fuori
+Veicolo riconsegnato ma pratica ancora aperta
+Check-in di rientro non effettuato
+Chilometri finali non inseriti
+Carburante finale non inserito
+Foto rientro mancanti
+Video rientro mancante
+Firma/verbale riconsegna mancante
+Chiavi non riconsegnate
+Accessori non riconsegnati
+7|CONTROLLO DANNI / CHECK-IN|danni
+Controllo carrozzeria non effettuato
+Controllo cerchi non effettuato
+Controllo pneumatici non effettuato
+Controllo vetri non effettuato
+Controllo interni non effettuato
+Controllo sottoscocca non effettuato
+Nuovo danno rilevato
+Danno rilevato ma non fotografato
+Danno rilevato ma non valorizzato
+Danno rilevato ma cliente non notificato
+Danno con pratica ancora aperta
+Preventivo danno mancante
+Addebito danno non effettuato
+Veicolo con danno assegnato a nuovo noleggio
+Danno grave — bloccare disponibilita' veicolo
+8|SINISTRI|sinistri
+Sinistro aperto
+Sinistro senza fotografie
+Sinistro senza dinamica
+Sinistro senza documenti controparte
+CID/CAI mancante
+Denuncia assicurativa non inviata
+Termine denuncia assicurativa in scadenza
+Perizia da prenotare
+Perizia programmata in arrivo
+Perizia non completata
+Preventivo carrozzeria mancante
+Sinistro senza aggiornamenti da X giorni
+Pratica assicurativa ferma
+Rimborso assicurativo atteso
+Veicolo fermo per sinistro da X giorni
+9|LAVAGGI CLIENTI|lavaggi
+Lavaggio in arrivo
+Lavaggio tra 60 minuti
+Lavaggio tra 30 minuti
+Lavaggio tra 10 minuti
+Cliente lavaggio in ritardo
+Lavaggio non pagato
+Acconto lavaggio mancante
+Veicolo lavaggio non ancora arrivato
+Operatore lavaggio non assegnato
+Lavaggio non iniziato entro orario previsto
+Lavaggio in ritardo
+Lavaggio prossimo all'orario di consegna
+Lavaggio non completato
+Controllo qualita' lavaggio mancante
+Foto finali mancanti
+Cliente da avvisare che il veicolo e' pronto
+Veicolo pronto ma cliente non ancora ritirato
+10|LAVAGGIO / PREPARAZIONE FLOTTA|preparazione
+Veicolo rientrato — lavaggio da programmare
+Veicolo sporco con prenotazione imminente
+Veicolo da igienizzare
+Interni da controllare
+Carburante da ripristinare
+AdBlue da ripristinare
+Liquido lavavetri basso
+Veicolo da mettere in carica
+Batteria veicolo bassa
+Preparazione veicolo non completata
+Veicolo non pronto per prossima uscita
+11|MANUTENZIONE|manutenzione
+Tagliando in scadenza per data
+Tagliando in scadenza per chilometraggio
+Tagliando scaduto
+Cambio olio in scadenza
+Cambio olio scaduto
+Livello olio da controllare
+Revisione in scadenza
+Revisione scaduta
+Controllo freni in scadenza
+Pastiglie anteriori da controllare
+Pastiglie posteriori da controllare
+Dischi freno da controllare
+Batteria da controllare
+Batteria da sostituire
+Liquido refrigerante da controllare
+Liquido freni da controllare
+Cinghia/accessori da controllare
+Manutenzione cambio in scadenza
+Manutenzione programmata imminente
+Richiamo ufficiale casa costruttrice da eseguire
+Spia/anomalia veicolo aperta
+Guasto segnalato non risolto
+Appuntamento officina imminente
+Veicolo non rientrato prima dell'appuntamento officina
+12|PNEUMATICI|pneumatici
+Gomma anteriore sinistra da controllare
+Gomma anteriore destra da controllare
+Gomma posteriore sinistra da controllare
+Gomma posteriore destra da controllare
+Battistrada vicino al limite impostato
+Battistrada sotto il limite impostato
+Pressione pneumatico anomala
+Pneumatico danneggiato
+Pneumatico da sostituire
+Cambio gomme programmato
+Cambio gomme non effettuato
+Convergenza da controllare
+Equilibratura da controllare
+Usura anomala pneumatici
+Veicolo con pneumatici non idonei alla prossima uscita
+13|SCADENZE VEICOLO|scadenze
+Assicurazione in scadenza
+Assicurazione scaduta
+Bollo in scadenza
+Bollo scaduto
+Revisione veicolo in scadenza
+Revisione veicolo scaduta
+Leasing/rata in scadenza
+Rata finanziamento in scadenza
+Noleggio lungo termine in scadenza
+Contratto veicolo in scadenza
+Garanzia costruttore in scadenza
+Garanzia aggiuntiva in scadenza
+Soccorso stradale in scadenza
+14|MULTE / PEDAGGI / SPESE POST-NOLEGGIO|multe
+Multa ricevuta da associare al cliente
+Multa associata ma non notificata
+Termine comunicazione conducente in scadenza
+Multa da riaddebitare
+Multa non pagata
+Pedaggio da associare
+Pedaggio da addebitare
+Parcheggio da addebitare
+ZTL da verificare
+Spesa post-noleggio da recuperare
+Pratica post-noleggio ancora aperta
+15|CHILOMETRAGGIO|chilometraggio
+Chilometri inclusi quasi esauriti
+Chilometri inclusi superati
+Sforamento chilometrico
+Addebito chilometri extra da calcolare
+Addebito chilometri extra non effettuato
+Chilometraggio veicolo non aggiornato
+Chilometraggio anomalo rispetto all'ultimo dato
+16|PRENOTAZIONI / CALENDARIO|prenotazioni
+Nuova prenotazione non verificata
+Prenotazione senza veicolo assegnato
+Prenotazione senza operatore assegnato
+Sovrapposizione prenotazioni
+Doppia prenotazione stesso veicolo
+Tempo insufficiente tra due noleggi
+Tempo insufficiente per lavaggio tra due noleggi
+Prenotazione modificata da ricontrollare
+Prenotazione cancellata con attivita' ancora aperte
+Prenotazione senza pagamento
+Prenotazione senza contratto
+Prenotazione senza cauzione
+Prenotazione senza documenti
+Prenotazione imminente con pratica incompleta
+Veicolo segnato indisponibile ma presente in prenotazione
+Veicolo in officina ma presente in prenotazione
+17|FATTURAZIONE / AMMINISTRAZIONE|fatturazione
+Fattura da generare
+Fattura non generata dopo pagamento
+Fattura con dati mancanti
+Codice fiscale mancante in fattura
+Partita IVA mancante
+Codice SDI/PEC mancante quando necessario
+Fattura da correggere
+Nota di credito da generare
+Rimborso cliente da effettuare
+Rimborso cliente in scadenza
+Rimborso non completato
+Pagamento registrato senza fattura
+Fattura emessa senza pagamento associato
+Incasso non riconciliato
+Movimento amministrativo senza pratica associata
+18|LEAD / PREVENTIVI|lead
+Nuova lead non presa in carico
+Lead senza risposta da X minuti
+Preventivo richiesto ma non inviato
+Preventivo inviato senza risposta
+Preventivo in scadenza
+Prezzo bloccato prossimo alla scadenza
+Prezzo bloccato scaduto
+Cliente da ricontattare
+Cliente interessato senza follow-up
+Documenti richiesti ma non ricevuti
+Pagamento richiesto ma non ricevuto
+Lead calda senza attivita' programmata
+Prenotazione iniziata ma non completata
+Cliente ha aperto link ma non completato prenotazione
+19|OFFICINA / CARROZZERIA|officina
+Veicolo da portare in officina
+Veicolo da ritirare dall'officina
+Appuntamento officina tra 24 ore
+Appuntamento officina tra 60 minuti
+Preventivo officina atteso
+Ricambio ordinato
+Ricambio non arrivato entro data prevista
+Riparazione oltre data prevista
+Veicolo fermo
