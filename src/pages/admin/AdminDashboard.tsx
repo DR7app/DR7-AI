@@ -667,7 +667,7 @@ export default function AdminDashboard() {
         {/* Top Bar — segue il tema (light = white bg + dark text,
             dark = black bg + light text). Le classi text-white/border-white
             erano hardcoded per dark; ora usano i token tema-aware. */}
-        <header className="bg-theme-bg-primary border-b border-theme-border px-3 sm:px-8 py-3 sm:py-4 flex flex-wrap justify-between items-center gap-y-2 gap-x-3 sticky top-0 z-30" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
+        <header className="bg-theme-bg-primary border-b border-theme-border px-3 sm:px-8 py-3 sm:py-4 flex flex-wrap justify-between items-center gap-y-2 gap-x-3 sticky top-0 z-[60]" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
           <div className="flex items-center gap-3">
             {!hideSidebar && (
             <button

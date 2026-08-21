@@ -16,6 +16,24 @@ import { getPaletteForCategory } from '../../../utils/categoryPalettes'
 const CELL_WIDTH = 45 // Fixed width for day cells
 const MIN_ROW_HEIGHT = 60
 
+// Oltre questo numero di corsie la riga smette di crescere e le barre si
+// stringono: una riga alta mezzo schermo per un solo mezzo e' peggio del male.
+const MAX_GROW_LANES = 6
+
+/**
+ * Finestra di caricamento delle prenotazioni: solo quelle che TOCCANO il mese
+ * a video (ritiro prima della fine, riconsegna dopo l'inizio). Un giorno di
+ * margine per assorbire il fuso, visto che le date sono timestamptz UTC.
+ */
+function monthWindow(year: number, month0: number): { from: string; to: string } {
+  const start = new Date(Date.UTC(year, month0, 1))
+  start.setUTCDate(start.getUTCDate() - 1)
+  const end = new Date(Date.UTC(year, month0 + 1, 1))
+  end.setUTCDate(end.getUTCDate() + 1)
+  const iso = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, 'Z')
+  return { from: iso(start), to: iso(end) }
+}
+
 // 2026-06-04: stile (colore/etichetta) per la vista mobile "Apple Calendar".
 // Riusa la stessa logica di stato del Gantt (cortesia/uscita/da-saldare/attesa/
 // servizio/confermato) ma restituisce classi per dot + bordo card dell'agenda.
@@ -110,6 +128,9 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
+  // Un caricamento fallito NON deve somigliare a un mese senza prenotazioni:
+  // e' esattamente cosi' che un calendario vuoto e' passato inosservato.
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [searchQuery, setSearchQuery] = useState('')
   // 2026-06-01: filtro periodo Da/A — nasconde i veicoli che non hanno
@@ -132,21 +153,23 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
 
   // --- Data Loading ---
   useEffect(() => {
-    loadData()
+    const win = monthWindow(currentDate.getFullYear(), currentDate.getMonth())
+    loadData(win)
     // Realtime: ascolta sia bookings (creazioni/modifiche/cancellazioni)
     // sia vehicles (cambi status, categoria, foto, prezzo). Cosi' qualunque
     // azione fatta in admin da un altro operatore — o sul sito da un cliente
     // — si riflette nel calendario senza bisogno di ricaricare la pagina.
     const subscription = supabase
       .channel('calendar-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => loadData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => loadData(win))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, () => loadData(win))
       .subscribe()
     return () => { subscription.unsubscribe() }
     // serviceType nelle dipendenze: cambiando business (Mare -> Aria) il
     // calendario deve ricaricare mezzi e prenotazioni, non tenere i precedenti.
+    // Cambiando mese si ricarica: la finestra e' diversa.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serviceType])
+  }, [serviceType, currentDate.getFullYear(), currentDate.getMonth()])
 
   useEffect(() => {
     let cancelled = false
@@ -175,7 +198,7 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
     return () => { cancelled = true; sub.unsubscribe() }
   }, [])
 
-  async function loadData() {
+  async function loadData(win: { from: string; to: string }) {
     setLoading(true)
     try {
       // Le righe del calendario sono i mezzi. Terra li prende dalla flotta
@@ -201,29 +224,54 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
         vehiclesData = data as Vehicle[] | null
       }
 
-      // Fetch ALL bookings via Netlify function (bypasses RLS)
+      // Prenotazioni via Netlify function (gira con service role, bypassa RLS).
+      // Ora SEMPRE con la finestra del mese: la risposta passa da "tutta la
+      // tabella" a poche decine di righe.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let allBookings: any[] | null = null
+      let failure: string | null = null
+
+      const qs = `?from=${encodeURIComponent(win.from)}&to=${encodeURIComponent(win.to)}`
       try {
-        const bookingsResponse = await authFetch('/.netlify/functions/list-bookings')
-        const bookingsResult = await bookingsResponse.json()
-        if (bookingsResponse.ok && bookingsResult.bookings) {
-          allBookings = bookingsResult.bookings
+        const bookingsResponse = await authFetch(`/.netlify/functions/list-bookings${qs}`)
+        if (!bookingsResponse.ok) {
+          failure = `list-bookings ha risposto ${bookingsResponse.status}`
+        } else {
+          const bookingsResult = await bookingsResponse.json()
+          if (Array.isArray(bookingsResult.bookings)) allBookings = bookingsResult.bookings
+          else failure = 'list-bookings ha risposto senza prenotazioni'
         }
       } catch {
-        // Netlify function unavailable
+        failure = 'list-bookings non raggiungibile'
       }
 
-      // Fallback: direct Supabase query
+      // Fallback diretto su Supabase. PAGINATO: senza .range() PostgREST taglia
+      // a 1000 righe e, con l'ordine per pickup_date, sparivano proprio i mesi
+      // recenti. Passa dalla RLS dell'utente, quindi puo' legittimamente
+      // tornare vuoto: in quel caso lo diciamo, non lo nascondiamo.
       if (!allBookings) {
-        const { data } = await supabase
-          .from('bookings')
-          .select('*')
-          .neq('status', 'cancelled')
-          .neq('status', 'annullata')
-          .not('vehicle_plate', 'in', TEST_PLATE_FILTER)
-          .order('pickup_date', { ascending: true })
-        allBookings = data
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rows: any[] = []
+        const PAGE = 1000
+        let fallbackError: string | null = null
+        for (let offset = 0; ; offset += PAGE) {
+          const { data, error } = await supabase
+            .from('bookings')
+            .select('*')
+            .neq('status', 'cancelled')
+            .neq('status', 'annullata')
+            .not('vehicle_plate', 'in', TEST_PLATE_FILTER)
+            .lt('pickup_date', win.to)
+            .or(`dropoff_date.is.null,dropoff_date.gte.${win.from}`)
+            .order('pickup_date', { ascending: true })
+            .range(offset, offset + PAGE - 1)
+          if (error) { fallbackError = error.message; break }
+          if (!data || data.length === 0) break
+          rows.push(...data)
+          if (data.length < PAGE) break
+        }
+        if (fallbackError) failure = `${failure ?? 'list-bookings non disponibile'} - fallback: ${fallbackError}`
+        else allBookings = rows
       }
 
       if (vehiclesData) {
@@ -289,6 +337,11 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
         }
 
         setBookings(validBookings)
+        setLoadError(null)
+      } else {
+        // Nessuna delle due strade ha portato dati: si tiene quello che c'era
+        // e si DICE che il caricamento e' fallito.
+        setLoadError(failure ?? 'Impossibile caricare le prenotazioni')
       }
     } catch (e) {
       console.error("Data load failed", e)
@@ -803,6 +856,11 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
       {/* filtro periodo spostato nella control bar (sopra) per liberare spazio */}
 
       {/* 2. Scrollable Calendar Area */}
+      {loadError && (
+        <div className="mx-3 mb-2 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-[12px] text-red-500">
+          Prenotazioni non caricate ({loadError}). Il mese non e' vuoto: e' il caricamento che non e' riuscito. Ricarica la pagina.
+        </div>
+      )}
       <div className="flex-1 overflow-auto relative flex flex-col w-full" ref={gridRef}>
 
         {isNarrow ? renderMobileCalendar() : (<>
@@ -882,7 +940,7 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
             // quindi SCROLLA invece di schiacciare — stessa scelta del 20/07.
             const laneCount = Math.max(1, row.laneCount)
             const ROW_PADDING = 6
-            const rowHeight = Math.max(fitRowHeight, ROW_PADDING + laneCount * laneMinHeight)
+            const rowHeight = Math.max(fitRowHeight, ROW_PADDING + Math.min(laneCount, MAX_GROW_LANES) * laneMinHeight)
             const laneH = (rowHeight - ROW_PADDING) / laneCount
 
             return (

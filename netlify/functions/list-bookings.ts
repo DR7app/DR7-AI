@@ -29,18 +29,39 @@ export const handler: Handler = async (event) => {
         process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
+    // Finestra opzionale ?from=&to= (ISO). Serve al calendario: caricare TUTTE
+    // le prenotazioni di sempre a ogni apertura fa crescere la risposta senza
+    // limite, e quando supera il tetto della funzione il chiamante riceve un
+    // errore e mostra un calendario vuoto. Con la finestra si leggono solo le
+    // prenotazioni che toccano il mese a video.
+    // Omessi = comportamento storico (tutto), per gli altri chiamanti.
+    const windowFrom = event.queryStringParameters?.from || null;
+    const windowTo = event.queryStringParameters?.to || null;
+
     try {
-        // Fetch ALL non-cancelled bookings, paginated past the 1000-row limit
+        // Fetch non-cancelled bookings, paginated past the 1000-row limit
         const allBookings: any[] = [];
         const PAGE_SIZE = 1000;
         let from = 0;
 
         while (true) {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('bookings')
                 .select('*')
                 .neq('status', 'cancelled')
-                .neq('status', 'annullata')
+                .neq('status', 'annullata');
+
+            if (windowTo) {
+                // Ritiro prima della fine della finestra...
+                query = query.lt('pickup_date', windowTo);
+            }
+            if (windowFrom) {
+                // ...e riconsegna dopo l'inizio: e' il test di sovrapposizione.
+                // dropoff nullo = prenotazione aperta, va sempre tenuta.
+                query = query.or(`dropoff_date.is.null,dropoff_date.gte.${windowFrom}`);
+            }
+
+            const { data, error } = await query
                 .order('pickup_date', { ascending: true })
                 .range(from, from + PAGE_SIZE - 1);
 
@@ -58,13 +79,16 @@ export const handler: Handler = async (event) => {
             }
         }
 
-        console.log(`[list-bookings] Total bookings fetched: ${allBookings.length}`);
+        console.log(`[list-bookings] Total bookings fetched: ${allBookings.length}` +
+            (windowFrom || windowTo ? ` (window ${windowFrom} -> ${windowTo})` : ' (full table)'));
 
         return {
             statusCode: 200,
             headers,
             body: JSON.stringify({
                 success: true,
+                count: allBookings.length,
+                window: windowFrom || windowTo ? { from: windowFrom, to: windowTo } : null,
                 bookings: allBookings
             })
         };
