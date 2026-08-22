@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { authFetch } from '../../../utils/authFetch'
+import { supabase } from '../../../supabaseClient'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import {
   LineChart, Line,
@@ -150,29 +151,43 @@ export default function ReportTrafficTab() {
     ;(async () => {
       setAccessiLoading(true)
       setAccessiErrore(null)
-      // list-site-users pagina TUTTI gli account auth: puo' metterci parecchio.
-      // Senza un limite di tempo il riquadro restava su "Caricamento…" per
-      // sempre, senza dire perche' — che e' peggio di un errore.
-      const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 20000))
+      // 2026-08-22: si chiede al DATABASE solo il periodo che serve, tramite la
+      // funzione dr7_recent_logins (legge auth.users e unisce il nome cliente).
+      // Prima si passava da list-site-users, che pagina TUTTI gli account auth
+      // prima di rispondere: oltre 20 secondi, quindi timeout. Qui il filtro e'
+      // nel database e la risposta e' immediata.
+      const daISO = accDa ? new Date(accDa + 'T00:00:00').toISOString() : null
+      const aISO = accA ? new Date(accA + 'T23:59:59').toISOString() : null
       try {
-        const res = await Promise.race([authFetch('/.netlify/functions/list-site-users'), timeout]) as Response
-        const json = await res.json().catch(() => ({}))
+        const { data, error } = await supabase.rpc('dr7_recent_logins', {
+          p_from: daISO, p_to: aISO, p_limit: 500,
+        })
         if (annullato) return
-        const rows: AccessoRecente[] = Array.isArray(json?.users) ? json.users : (Array.isArray(json) ? json : [])
-        setAccessi(rows.filter(u => !!u.last_sign_in_at))
-      } catch (e) {
-        if (!annullato) setAccessiErrore(e instanceof Error && e.message === 'timeout'
-          ? 'Elenco non caricato: il server ci ha messo troppo. Riprova.'
-          : 'Elenco accessi non disponibile.')
+        if (error) throw error
+        setAccessi((data || []) as AccessoRecente[])
+      } catch {
+        // Ripiego sulla vecchia via finche' la migrazione non e' stata eseguita:
+        // una funzione che non esiste ancora non deve lasciare il riquadro cieco.
+        try {
+          const res = await authFetch('/.netlify/functions/list-site-users')
+          const json = await res.json().catch(() => ({}))
+          if (annullato) return
+          const rows: AccessoRecente[] = Array.isArray(json?.users) ? json.users : []
+          setAccessi(rows.filter(u => !!u.last_sign_in_at))
+        } catch {
+          if (!annullato) setAccessiErrore('Elenco accessi non disponibile.')
+        }
       } finally {
         if (!annullato) setAccessiLoading(false)
       }
     })()
     return () => { annullato = true }
-  }, [])
+  }, [accDa, accA])
 
   // Filtro per periodo, calcolato sul client: l'elenco e' gia' in memoria, non
   // serve richiamare il server a ogni cambio di data.
+  // Il periodo lo filtra gia' il database; qui si tiene il filtro come rete di
+  // sicurezza per il ripiego su list-site-users, che restituisce tutto.
   const accessiFiltrati = useMemo(() => {
     const daMs = accDa ? new Date(accDa + 'T00:00:00').getTime() : -Infinity
     const aMs = accA ? new Date(accA + 'T23:59:59').getTime() : Infinity
