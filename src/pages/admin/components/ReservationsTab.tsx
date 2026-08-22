@@ -8004,11 +8004,19 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       : "Disattivare l'invio automatico?\n\nL'allerta meteo partira' solo quando la invii a mano con il bottone Allerta Meteo.")
     if (!ok) return
     try {
-      const { error } = await supabase
+      // .select() per contare le righe TOCCATE: se i due template non esistono
+      // ancora in system_messages l'update non fallisce, semplicemente non
+      // aggiorna nulla — e l'interruttore mentirebbe.
+      const { data: touched, error } = await supabase
         .from('system_messages')
         .update({ is_automatic: newVal, cron_approved: newVal, updated_at: new Date().toISOString() })
         .in('message_key', ['pro_allerta_meteo', 'pro_allerta_meteo_mare'])
+        .select('message_key')
       if (error) throw error
+      if (!touched || touched.length === 0) {
+        toast.error('Template allerta meteo non ancora presenti in Messaggi di Sistema Pro: riprova tra un\'ora (li crea il cron) oppure aprili una volta da quella tab.')
+        return
+      }
       setMeteoAuto(newVal)
       toast.success(newVal ? 'Allerta meteo automatica ATTIVA' : 'Allerta meteo in modalita\' manuale')
     } catch (e) {
