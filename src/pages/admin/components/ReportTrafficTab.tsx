@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { authFetch } from '../../../utils/authFetch'
 import {
   LineChart, Line,
   PieChart, Pie, Cell,
@@ -121,6 +122,40 @@ function EmptyState({ message }: { message: string }) {
 }
 
 export default function ReportTrafficTab() {
+
+  // 2026-08-22 (richiesta direzione): "Utenti attivi ora" viene da GA4, che
+  // fornisce SOLO conteggi anonimi — nessuna identita', per vincolo GDPR. Chi
+  // sia quella persona, GA4 non lo dira' mai. Quello che invece sappiamo, e da
+  // sempre, e' chi si e' collegato al proprio ACCOUNT: last_sign_in_at, gia'
+  // mostrato in "Iscritti al Sito". Qui lo si porta accanto al dato anonimo,
+  // cosi' la domanda "chi c'e' adesso" ha almeno la risposta che si puo' dare.
+  interface AccessoRecente {
+    id: string
+    email: string
+    nome: string
+    cognome: string
+    last_sign_in_at: string | null
+  }
+  const [accessi, setAccessi] = useState<AccessoRecente[]>([])
+  const [accessiLoading, setAccessiLoading] = useState(true)
+  useEffect(() => {
+    let annullato = false
+    ;(async () => {
+      try {
+        const res = await authFetch('/.netlify/functions/list-site-users')
+        const json = await res.json().catch(() => ({}))
+        if (annullato) return
+        const rows: AccessoRecente[] = Array.isArray(json?.users) ? json.users : (Array.isArray(json) ? json : [])
+        const ordinati = rows
+          .filter(u => !!u.last_sign_in_at)
+          .sort((a, b) => new Date(b.last_sign_in_at as string).getTime() - new Date(a.last_sign_in_at as string).getTime())
+          .slice(0, 15)
+        setAccessi(ordinati)
+      } catch { /* elenco assente: il resto della pagina resta valido */ }
+      finally { if (!annullato) setAccessiLoading(false) }
+    })()
+    return () => { annullato = true }
+  }, [])
   const [range, setRange] = useState<RangeKey>('28d')
   const [data, setData] = useState<ReportPayload | null>(null)
   const [loading, setLoading] = useState(true)
@@ -320,6 +355,64 @@ export default function ReportTrafficTab() {
           )}
         </div>
       )}
+
+      {/* Ultimi accessi al sito — 2026-08-22.
+          GA4 dice QUANTI sono, questo dice CHI: sono i clienti entrati nel
+          proprio account. Un visitatore non registrato resta anonimo — non e'
+          una mancanza del pannello, e' come funziona GA4. */}
+      <div className="bg-theme-bg-secondary border border-theme-border rounded-xl p-4">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-theme-text-secondary">Ultimi accessi al sito</h3>
+          <span className="text-[11px] text-theme-text-muted">clienti entrati nel proprio account</span>
+        </div>
+        {accessiLoading ? (
+          <p className="text-sm text-theme-text-muted">Caricamento…</p>
+        ) : accessi.length === 0 ? (
+          <p className="text-sm text-theme-text-muted">Nessun accesso registrato.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-wider text-theme-text-muted">
+                  <th className="text-left py-2 pr-3">Cliente</th>
+                  <th className="text-left py-2 pr-3">Email</th>
+                  <th className="text-left py-2">Ultimo accesso</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-theme-border">
+                {accessi.map(u => {
+                  const quando = u.last_sign_in_at ? new Date(u.last_sign_in_at) : null
+                  const minutiFa = quando ? Math.round((Date.now() - quando.getTime()) / 60000) : null
+                  // "Adesso" = ultimi 30 minuti, la stessa finestra del blocco GA4
+                  // qui sopra: i due numeri si leggono insieme senza confondersi.
+                  const online = minutiFa !== null && minutiFa <= 30
+                  return (
+                    <tr key={u.id} className="text-theme-text-primary">
+                      <td className="py-2 pr-3">
+                        <span className="inline-flex items-center gap-2">
+                          {online && <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Attivo negli ultimi 30 minuti" />}
+                          {[u.nome, u.cognome].filter(Boolean).join(' ') || '—'}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-3 text-theme-text-secondary">{u.email}</td>
+                      <td className="py-2 text-theme-text-secondary">
+                        {quando
+                          ? `${quando.toLocaleDateString('it-IT')} ${quando.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })}`
+                          : '—'}
+                        {minutiFa !== null && minutiFa <= 120 && (
+                          <span className="ml-2 text-[11px] text-theme-text-muted">
+                            {minutiFa < 1 ? 'ora' : `${minutiFa} min fa`}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       {/* Fetch error */}
       {err && (
