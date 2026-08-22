@@ -1,10 +1,11 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { runWeatherAlert, ensureWeatherTemplates } from './send-weather-alert'
-import { fetchWeather, conditionFor, describeWeather, WIND_GUST_THRESHOLD_KMH } from './weather-source'
+import { fetchWeather, conditionFor, describeWeather, getSavedLocation, locationLabel, WIND_GUST_THRESHOLD_KMH } from './weather-source'
 
 // Cron Allerta Meteo automatica (2026-07-18).
-// Ogni ora legge il meteo REALE di Cagliari (Open-Meteo, gratis, no API key) e
+// Ogni ora legge il meteo REALE della citta' configurata (Open-Meteo, gratis,
+// senza API key; default Cagliari) e
 // guarda le PROSSIME ORE, non solo l'istante presente
 // e, se attivo il toggle "Cron ON" del relativo template in Messaggi di Sistema
 // Pro, invia l'Allerta Meteo ai noleggi attualmente fuori.
@@ -50,7 +51,9 @@ const handler: Handler = async () => {
   // 2026-08-22: la decisione ora si basa sulla PREVISIONE delle prossime ore,
   // non piu' sulle condizioni istantanee. Con `current` l'allerta partiva a
   // cliente gia' sotto la pioggia; con la previsione arriva in anticipo.
-  const reading = await fetchWeather()
+  // Citta' scelta dal gestionale (Olbia, Cagliari, ...), default Cagliari.
+  const location = await getSavedLocation(supabase)
+  const reading = await fetchWeather(location)
   if (!reading) return { statusCode: 200, body: JSON.stringify({ skipped: 'weather_unavailable' }) }
   const weather = reading.forecast
 
@@ -60,6 +63,7 @@ const handler: Handler = async () => {
   const state: WeatherAlertState = (config.weather_alert_state as WeatherAlertState) || {}
 
   const results: Record<string, unknown> = {
+    luogo: locationLabel(location),
     now: reading.now, forecast: reading.forecast, label: describeWeather(weather),
     sogliaVentoKmh: WIND_GUST_THRESHOLD_KMH, romeHour, isDaytime,
   }

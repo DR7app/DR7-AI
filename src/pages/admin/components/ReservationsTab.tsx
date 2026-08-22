@@ -264,9 +264,17 @@ interface MeteoSnapshot {
   precipitationProbability?: number
   atLocal?: string
 }
+interface MeteoCitta {
+  name: string
+  lat: number
+  lon: number
+  admin1?: string
+  label?: string
+}
 interface MeteoLive {
   available: boolean
   luogo?: string
+  location?: MeteoCitta
   label?: string
   labelNow?: string
   now?: MeteoSnapshot
@@ -7963,6 +7971,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   const [meteo, setMeteo] = useState<MeteoLive | null>(null)
   const [meteoLoading, setMeteoLoading] = useState(false)
   const [meteoAuto, setMeteoAuto] = useState<boolean | null>(null)
+  // Selettore citta': Olbia, Cagliari, Alghero... Geocoding gratuito Open-Meteo.
+  const [meteoCittaOpen, setMeteoCittaOpen] = useState(false)
+  const [meteoCittaQuery, setMeteoCittaQuery] = useState('')
+  const [meteoCittaResults, setMeteoCittaResults] = useState<MeteoCitta[]>([])
+  const [meteoCittaBusy, setMeteoCittaBusy] = useState(false)
 
   const loadMeteo = async () => {
     setMeteoLoading(true)
@@ -7996,6 +8009,48 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     loadMeteoAuto()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Ricerca citta' con debounce: si interroga il geocoder solo quando l'utente
+  // smette di digitare, non a ogni tasto.
+  useEffect(() => {
+    const q = meteoCittaQuery.trim()
+    if (!meteoCittaOpen || q.length < 2) { setMeteoCittaResults([]); return }
+    const t = setTimeout(async () => {
+      setMeteoCittaBusy(true)
+      try {
+        const res = await fetch(`/.netlify/functions/weather-now?q=${encodeURIComponent(q)}`)
+        const d = await res.json()
+        setMeteoCittaResults(res.ok ? (d.results || []) : [])
+      } catch {
+        setMeteoCittaResults([])
+      } finally {
+        setMeteoCittaBusy(false)
+      }
+    }, 350)
+    return () => clearTimeout(t)
+  }, [meteoCittaQuery, meteoCittaOpen])
+
+  const handleSelectMeteoCitta = async (loc: MeteoCitta) => {
+    setMeteoCittaBusy(true)
+    try {
+      const res = await authFetch('/.netlify/functions/weather-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ location: { name: loc.name, lat: loc.lat, lon: loc.lon, admin1: loc.admin1 } }),
+      })
+      const d = await res.json()
+      if (!res.ok || !d.success) throw new Error(d.error || 'Salvataggio non riuscito')
+      toast.success(`Allerta meteo impostata su ${loc.label || loc.name}`)
+      setMeteoCittaOpen(false)
+      setMeteoCittaQuery('')
+      setMeteoCittaResults([])
+      await loadMeteo()
+    } catch (e) {
+      toast.error('Errore: ' + (e instanceof Error ? e.message : 'Riprova'))
+    } finally {
+      setMeteoCittaBusy(false)
+    }
+  }
 
   const handleToggleMeteoAuto = async () => {
     const newVal = !meteoAuto
@@ -8117,6 +8172,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           meteoAuto={meteoAuto}
           onMeteoRefresh={loadMeteo}
           onMeteoToggleAuto={handleToggleMeteoAuto}
+          meteoCittaOpen={meteoCittaOpen}
+          onMeteoCittaOpen={setMeteoCittaOpen}
+          meteoCittaQuery={meteoCittaQuery}
+          onMeteoCittaQuery={setMeteoCittaQuery}
+          meteoCittaResults={meteoCittaResults}
+          meteoCittaBusy={meteoCittaBusy}
+          onMeteoCittaSelect={handleSelectMeteoCitta}
         />
 
         {/* Search Bar */}
@@ -11763,6 +11825,13 @@ function ReservationsDashboardHeader({
   meteoAuto,
   onMeteoRefresh,
   onMeteoToggleAuto,
+  meteoCittaOpen,
+  onMeteoCittaOpen,
+  meteoCittaQuery,
+  onMeteoCittaQuery,
+  meteoCittaResults,
+  meteoCittaBusy,
+  onMeteoCittaSelect,
   viewMode = 'bookings',
   serviceType = 'rental',
 }: {
@@ -11776,6 +11845,13 @@ function ReservationsDashboardHeader({
   meteoAuto?: boolean | null
   onMeteoRefresh?: () => void
   onMeteoToggleAuto?: () => void
+  meteoCittaOpen?: boolean
+  onMeteoCittaOpen?: (v: boolean) => void
+  meteoCittaQuery?: string
+  onMeteoCittaQuery?: (v: string) => void
+  meteoCittaResults?: MeteoCitta[]
+  meteoCittaBusy?: boolean
+  onMeteoCittaSelect?: (loc: MeteoCitta) => void
   viewMode?: 'bookings' | 'uscite'
   serviceType?: string
 }) {
@@ -12072,9 +12148,57 @@ function ReservationsDashboardHeader({
             {meteoLoading
               ? 'Meteo...'
               : meteo?.available
-                ? <span className="hidden sm:inline">{meteo.label}</span>
+                ? <span className="hidden sm:inline">{meteo.location?.name || meteo.luogo}: {meteo.label}</span>
                 : <span className="hidden sm:inline">Meteo n/d</span>}
           </button>
+          {/* Selettore citta' (2026-08-22): il meteo non e' piu' fisso su Cagliari.
+              La citta' scelta vale sia per il bottone manuale sia per il cron
+              automatico — e' salvata in centralina_pro_config. */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => onMeteoCittaOpen?.(!meteoCittaOpen)}
+              title="Cambia la citta' su cui si basa l'allerta meteo"
+              className="inline-flex items-center gap-1.5 px-2.5 h-9 rounded-lg border border-theme-border text-xs font-medium text-theme-text-secondary hover:bg-theme-bg-hover transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              {meteo?.location?.name || meteo?.luogo || 'Citta'}
+            </button>
+            {meteoCittaOpen && (
+              <div className="absolute right-0 top-full mt-1 z-50 w-64 rounded-lg border border-theme-border bg-theme-bg-secondary shadow-xl p-2">
+                <input
+                  autoFocus
+                  type="text"
+                  value={meteoCittaQuery || ''}
+                  onChange={e => onMeteoCittaQuery?.(e.target.value)}
+                  placeholder="Olbia, Cagliari, Alghero..."
+                  className="w-full px-2.5 h-8 rounded-md border border-theme-border bg-theme-bg-primary text-xs text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-1 focus:ring-dr7-gold"
+                />
+                <div className="mt-1.5 max-h-56 overflow-y-auto">
+                  {meteoCittaBusy && (
+                    <div className="px-2 py-2 text-xs text-theme-text-muted">Ricerca...</div>
+                  )}
+                  {!meteoCittaBusy && (meteoCittaQuery || '').trim().length >= 2 && (meteoCittaResults || []).length === 0 && (
+                    <div className="px-2 py-2 text-xs text-theme-text-muted">Nessuna citta' trovata</div>
+                  )}
+                  {(meteoCittaResults || []).map(r => (
+                    <button
+                      key={`${r.name}-${r.lat}-${r.lon}`}
+                      type="button"
+                      onClick={() => onMeteoCittaSelect?.(r)}
+                      disabled={meteoCittaBusy}
+                      className="w-full text-left px-2 py-1.5 rounded-md text-xs text-theme-text-primary hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
+                    >
+                      {r.label || r.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
           {/* Un solo interruttore per i due canali (terra + mare), come richiesto. */}
           <button
             type="button"

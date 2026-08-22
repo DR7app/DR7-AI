@@ -5,9 +5,26 @@
 // non guardava affatto il meteo: due comportamenti diversi per la stessa
 // domanda "sta per piovere?".
 
-// Cagliari.
-export const LAT = 39.2238
-export const LON = 9.1217
+// 2026-08-22: la localita' non e' piu' fissa. Si sceglie dal gestionale
+// (Olbia, Cagliari, ...) ed e' persistita in
+// centralina_pro_config.config.weather_location. Cagliari resta il default
+// storico se non e' mai stata scelta una citta'.
+export interface WeatherLocation {
+  name: string
+  lat: number
+  lon: number
+  /** Provincia/regione, per distinguere omonimi. */
+  admin1?: string
+  country?: string
+}
+
+export const DEFAULT_LOCATION: WeatherLocation = {
+  name: 'Cagliari', lat: 39.2238, lon: 9.1217, admin1: 'Sardegna', country: 'IT',
+}
+
+// Retrocompatibilita' con i vecchi import.
+export const LAT = DEFAULT_LOCATION.lat
+export const LON = DEFAULT_LOCATION.lon
 // Soglia raffiche (km/h) oltre cui scatta l'allerta MARE.
 export const WIND_GUST_THRESHOLD_KMH = 30
 // Quante ore avanti guardare per anticipare l'allerta.
@@ -34,6 +51,8 @@ export interface WeatherReading {
   forecast: WeatherSnapshot
   /** Etichetta breve in italiano, pronta per la UI. */
   label: string
+  /** Localita' a cui si riferisce la lettura. */
+  location: WeatherLocation
 }
 
 /** WMO weather codes che indicano pioggia/rovesci/temporali. */
@@ -53,9 +72,9 @@ export function describeWeather(w: WeatherSnapshot): string {
  * Legge Open-Meteo per Cagliari: condizioni attuali + previsione delle prossime
  * ore. Ritorna null se l'API non risponde (il chiamante decide se saltare).
  */
-export async function fetchWeather(): Promise<WeatherReading | null> {
+export async function fetchWeather(loc: WeatherLocation = DEFAULT_LOCATION): Promise<WeatherReading | null> {
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}`
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}`
       + `&current=precipitation,rain,wind_speed_10m,wind_gusts_10m,weather_code`
       + `&hourly=precipitation,precipitation_probability,wind_gusts_10m,weather_code`
       + `&forecast_days=2&timezone=Europe%2FRome`
@@ -106,7 +125,7 @@ export async function fetchWeather(): Promise<WeatherReading | null> {
       if (better || worst.atLocal === undefined) worst = candidate
     }
 
-    return { now, forecast: worst, label: describeWeather(worst) }
+    return { now, forecast: worst, label: describeWeather(worst), location: loc }
   } catch (e) {
     console.error('[weather-source] fetch failed:', e)
     return null
@@ -117,4 +136,72 @@ export async function fetchWeather(): Promise<WeatherReading | null> {
 export function conditionFor(channel: 'terra' | 'mare', w: WeatherSnapshot): boolean {
   if (channel === 'mare') return w.rain || w.windGustKmh >= WIND_GUST_THRESHOLD_KMH
   return w.rain
+}
+
+
+/**
+ * Ricerca citta' tramite il geocoder gratuito di Open-Meteo (nessuna API key).
+ * Limitata all'Italia: il gestionale ragiona su Olbia, Cagliari, Alghero...
+ */
+export async function searchCities(query: string): Promise<WeatherLocation[]> {
+  const q = (query || '').trim()
+  if (q.length < 2) return []
+  try {
+    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}`
+      + `&count=8&language=it&format=json&countryCode=IT`
+    const res = await fetch(url)
+    if (!res.ok) return []
+    const json = await res.json() as { results?: Array<Record<string, unknown>> }
+    return (json.results || []).map(r => ({
+      name: String(r.name || ''),
+      lat: Number(r.latitude),
+      lon: Number(r.longitude),
+      admin1: r.admin1 ? String(r.admin1) : undefined,
+      country: r.country_code ? String(r.country_code) : 'IT',
+    })).filter(r => r.name && Number.isFinite(r.lat) && Number.isFinite(r.lon))
+  } catch (e) {
+    console.error('[weather-source] geocoding failed:', e)
+    return []
+  }
+}
+
+/** Etichetta leggibile: "Olbia (Sardegna)". */
+export function locationLabel(loc: WeatherLocation): string {
+  return loc.admin1 ? `${loc.name} (${loc.admin1})` : loc.name
+}
+
+interface ConfigStore {
+  from: (t: string) => {
+    select: (c: string) => { eq: (k: string, v: string) => { maybeSingle: () => Promise<{ data: { config?: unknown } | null }> } }
+    update: (v: Record<string, unknown>) => { eq: (k: string, v: string) => Promise<{ error: unknown }> }
+  }
+}
+
+/** Localita' salvata nel gestionale, con fallback su Cagliari. */
+export async function getSavedLocation(supabase: unknown): Promise<WeatherLocation> {
+  try {
+    const db = supabase as ConfigStore
+    const { data } = await db.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+    const cfg = (data?.config as Record<string, unknown>) || {}
+    const loc = cfg.weather_location as WeatherLocation | undefined
+    if (loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lon) && loc.name) return loc
+  } catch (e) {
+    console.error('[weather-source] getSavedLocation failed:', e)
+  }
+  return DEFAULT_LOCATION
+}
+
+/**
+ * Salva la localita'. Rilegge la config FRESCA prima di scrivere e fonde SOLO
+ * la chiave weather_location: la stessa precauzione presa nel cron dopo il
+ * problema del 2026-08-08 (salvataggi concorrenti che si sovrascrivevano).
+ */
+export async function saveLocation(supabase: unknown, loc: WeatherLocation): Promise<void> {
+  const db = supabase as ConfigStore
+  const { data } = await db.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+  const fresh = (data?.config as Record<string, unknown>) || {}
+  const { error } = await db.from('centralina_pro_config')
+    .update({ config: { ...fresh, weather_location: loc } })
+    .eq('id', 'main')
+  if (error) throw new Error(String((error as { message?: string }).message || error))
 }
