@@ -255,6 +255,26 @@ function getInsuranceOptions(vehicle?: Vehicle, tier?: DriverTier, overlay?: Ret
   if (category === 'aziendali') return overlay?.utilitaireInsurance || []
   return tier === 'TIER_2' ? (overlay?.insuranceTier2 || []) : (overlay?.insuranceTier1 || [])
 }
+// Risposta di /.netlify/functions/weather-now (2026-08-22). Stessa lettura
+// Open-Meteo usata dal cron automatico: badge e cron non possono divergere.
+interface MeteoSnapshot {
+  rain: boolean
+  windGustKmh: number
+  precipitationMm?: number
+  precipitationProbability?: number
+  atLocal?: string
+}
+interface MeteoLive {
+  available: boolean
+  luogo?: string
+  label?: string
+  labelNow?: string
+  now?: MeteoSnapshot
+  forecast?: MeteoSnapshot
+  allerta?: { terra: boolean; mare: boolean }
+  soglie?: { ventoKmh: number; oreAvanti: number }
+}
+
 interface Customer {
   id: string
   full_name: string
@@ -7935,6 +7955,67 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     })
   }
 
+  // ── Meteo live (2026-08-22) ────────────────────────────────────────────
+  // Il bottone "Allerta Meteo" inviava alla cieca: nessuna lettura del meteo,
+  // quindi partiva anche col sole. Ora legge la stessa sorgente Open-Meteo del
+  // cron (weather-now -> weather-source) e mostra le condizioni prima di
+  // inviare. Nessun blocco: se non piove avvisa, ma l'invio resta possibile.
+  const [meteo, setMeteo] = useState<MeteoLive | null>(null)
+  const [meteoLoading, setMeteoLoading] = useState(false)
+  const [meteoAuto, setMeteoAuto] = useState<boolean | null>(null)
+
+  const loadMeteo = async () => {
+    setMeteoLoading(true)
+    try {
+      const res = await fetch('/.netlify/functions/weather-now')
+      setMeteo(res.ok ? await res.json() : { available: false })
+    } catch {
+      setMeteo({ available: false })
+    } finally {
+      setMeteoLoading(false)
+    }
+  }
+
+  // Stato "Automatico": un solo interruttore per i due template (terra + mare).
+  const loadMeteoAuto = async () => {
+    try {
+      const { data } = await supabase
+        .from('system_messages')
+        .select('message_key, is_enabled, cron_approved')
+        .in('message_key', ['pro_allerta_meteo', 'pro_allerta_meteo_mare'])
+      const on = (data || []).some((r: { is_enabled?: boolean; cron_approved?: boolean }) =>
+        r.is_enabled !== false && r.cron_approved === true)
+      setMeteoAuto(on)
+    } catch {
+      setMeteoAuto(null)
+    }
+  }
+
+  useEffect(() => {
+    loadMeteo()
+    loadMeteoAuto()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleToggleMeteoAuto = async () => {
+    const newVal = !meteoAuto
+    const ok = window.confirm(newVal
+      ? "Attivare l'invio AUTOMATICO dell'allerta meteo?\n\nOgni ora il sistema controlla la previsione di Cagliari e, se e' prevista pioggia (o vento forte per il Mare) nelle 3 ore successive, invia l'avviso ai noleggi in corso. Una sola volta per episodio, solo tra le 08:00 e le 21:00."
+      : "Disattivare l'invio automatico?\n\nL'allerta meteo partira' solo quando la invii a mano con il bottone Allerta Meteo.")
+    if (!ok) return
+    try {
+      const { error } = await supabase
+        .from('system_messages')
+        .update({ is_automatic: newVal, cron_approved: newVal, updated_at: new Date().toISOString() })
+        .in('message_key', ['pro_allerta_meteo', 'pro_allerta_meteo_mare'])
+      if (error) throw error
+      setMeteoAuto(newVal)
+      toast.success(newVal ? 'Allerta meteo automatica ATTIVA' : 'Allerta meteo in modalita\' manuale')
+    } catch (e) {
+      toast.error('Errore: ' + (e instanceof Error ? e.message : 'Riprova'))
+    }
+  }
+
   // Allerta Meteo — invia un avviso WhatsApp a tutti i clienti con un noleggio
   // auto attualmente in corso. Il testo è editabile da Messaggi di Sistema Pro
   // (chiave pro_allerta_meteo). Prima chiediamo un preview (nessun invio) per
@@ -7960,8 +8041,24 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         .map(r => [r.vehicle, r.name].filter(Boolean).join(' '))
         .filter(Boolean)
         .join(', ')
+      // Legge il meteo REALE prima di chiedere conferma, cosi' l'operatore vede
+      // cosa sta per succedere. Se il meteo non risponde si invia lo stesso.
+      let meteoRiga = ''
+      try {
+        const wRes = await fetch('/.netlify/functions/weather-now')
+        const w: MeteoLive = wRes.ok ? await wRes.json() : { available: false }
+        if (w.available) {
+          setMeteo(w)
+          meteoRiga = `Meteo ${w.luogo || 'Cagliari'} ora: ${w.labelNow}\n`
+            + `Prossime ${w.soglie?.oreAvanti ?? 3} ore: ${w.label}\n`
+            + (w.allerta?.terra ? '' : '\nATTENZIONE: nessuna pioggia prevista. Invii lo stesso?\n')
+            + '\n'
+        }
+      } catch { /* meteo non disponibile: si prosegue */ }
+
       const ok = window.confirm(
         (testOnly ? '[TEST — solo targhe TEST] ' : '') +
+        meteoRiga +
         `Inviare l'allerta meteo a ${count} ${count === 1 ? 'cliente' : 'clienti'} con noleggio in corso?` +
         (lista ? `\n\n${lista}` : '')
       )
@@ -8007,6 +8104,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           onNewUscita={() => { setEditUscitaGroupId(null); setShowUscita(true) }}
           onAllertaMeteo={() => handleAllertaMeteo(false)}
           onAllertaMeteoTest={() => handleAllertaMeteo(true)}
+          meteo={meteo}
+          meteoLoading={meteoLoading}
+          meteoAuto={meteoAuto}
+          onMeteoRefresh={loadMeteo}
+          onMeteoToggleAuto={handleToggleMeteoAuto}
         />
 
         {/* Search Bar */}
@@ -11648,6 +11750,11 @@ function ReservationsDashboardHeader({
   onNewUscita,
   onAllertaMeteo,
   onAllertaMeteoTest,
+  meteo,
+  meteoLoading,
+  meteoAuto,
+  onMeteoRefresh,
+  onMeteoToggleAuto,
   viewMode = 'bookings',
   serviceType = 'rental',
 }: {
@@ -11656,6 +11763,11 @@ function ReservationsDashboardHeader({
   onNewUscita: () => void
   onAllertaMeteo: () => void
   onAllertaMeteoTest: () => void
+  meteo?: MeteoLive | null
+  meteoLoading?: boolean
+  meteoAuto?: boolean | null
+  onMeteoRefresh?: () => void
+  onMeteoToggleAuto?: () => void
   viewMode?: 'bookings' | 'uscite'
   serviceType?: string
 }) {
@@ -11930,6 +12042,47 @@ function ReservationsDashboardHeader({
               <span className="sm:hidden">+ Uscita</span>
             </Button>
           )}
+          {/* 2026-08-22: meteo live accanto al bottone. Ambre = allerta prevista,
+              neutro = sereno. Cliccabile per rileggere Open-Meteo su richiesta —
+              nessun polling: a decidere gli invii e' il cron, ogni ora. */}
+          <button
+            type="button"
+            onClick={onMeteoRefresh}
+            disabled={meteoLoading}
+            title={meteo?.available
+              ? `${meteo.luogo || 'Cagliari'} — ora: ${meteo.labelNow}. Prossime ${meteo.soglie?.oreAvanti ?? 3} ore: ${meteo.label}. Clicca per aggiornare.`
+              : 'Meteo non disponibile — clicca per riprovare'}
+            className={`inline-flex items-center gap-1.5 px-2.5 h-9 rounded-lg border text-xs font-medium transition-colors disabled:opacity-50 ${
+              meteo?.available && (meteo.allerta?.terra || meteo.allerta?.mare)
+                ? 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                : 'border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999A5.002 5.002 0 007 12a4 4 0 00-4 3z" />
+            </svg>
+            {meteoLoading
+              ? 'Meteo...'
+              : meteo?.available
+                ? <span className="hidden sm:inline">{meteo.label}</span>
+                : <span className="hidden sm:inline">Meteo n/d</span>}
+          </button>
+          {/* Un solo interruttore per i due canali (terra + mare), come richiesto. */}
+          <button
+            type="button"
+            onClick={onMeteoToggleAuto}
+            title={meteoAuto
+              ? 'Automatico ATTIVO: il sistema invia da solo quando e\' prevista pioggia o vento forte. Clicca per passare a manuale.'
+              : 'Manuale: l\'allerta parte solo quando la invii tu. Clicca per attivare l\'automatico.'}
+            className={`inline-flex items-center gap-1.5 px-2.5 h-9 rounded-lg border text-xs font-semibold transition-colors ${
+              meteoAuto
+                ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                : 'border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${meteoAuto ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+            {meteoAuto ? 'Auto ON' : 'Auto OFF'}
+          </button>
           <Button onClick={onAllertaMeteo} variant="secondary" className="text-sm border border-amber-500/50 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10">
             <svg className="w-4 h-4 mr-1.5 inline-block align-[-2px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86l-8.45 14.6A2 2 0 003.58 21h16.84a2 2 0 001.73-2.54l-8.45-14.6a2 2 0 00-3.46 0z" />

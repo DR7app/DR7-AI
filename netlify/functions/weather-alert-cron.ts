@@ -1,9 +1,11 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { runWeatherAlert, ensureWeatherTemplates } from './send-weather-alert'
+import { fetchWeather, conditionFor, describeWeather, WIND_GUST_THRESHOLD_KMH } from './weather-source'
 
 // Cron Allerta Meteo automatica (2026-07-18).
-// Ogni ora controlla il meteo REALE di Cagliari (Open-Meteo, gratis, no API key)
+// Ogni ora legge il meteo REALE di Cagliari (Open-Meteo, gratis, no API key) e
+// guarda le PROSSIME ORE, non solo l'istante presente
 // e, se attivo il toggle "Cron ON" del relativo template in Messaggi di Sistema
 // Pro, invia l'Allerta Meteo ai noleggi attualmente fuori.
 //   - TERRA (auto): invia se PIOGGIA (qualsiasi precipitazione).  Template pro_allerta_meteo.
@@ -14,39 +16,12 @@ import { runWeatherAlert, ensureWeatherTemplates } from './send-weather-alert'
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
-// Cagliari.
-const LAT = 39.2238
-const LON = 9.1217
-// Soglia vento (raffiche km/h) oltre cui scatta l'allerta MARE.
-const WIND_GUST_THRESHOLD_KMH = 30
-// Fascia oraria di invio (Europe/Rome). Fuori = niente invii (regola no 22–07).
+// Fascia oraria di invio (Europe/Rome). Fuori = niente invii (regola no 22-07).
 const SEND_HOUR_START = 8
 const SEND_HOUR_END = 21
 
 interface ChannelState { active?: boolean; last_sent_at?: string }
 interface WeatherAlertState { terra?: ChannelState; mare?: ChannelState; updated_at?: string }
-
-async function fetchCagliariWeather(): Promise<{ rain: boolean; windGustKmh: number } | null> {
-  try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=precipitation,rain,wind_speed_10m,wind_gusts_10m,weather_code&timezone=Europe%2FRome`
-    const res = await fetch(url)
-    if (!res.ok) { console.error('[weather-alert-cron] Open-Meteo HTTP', res.status); return null }
-    const json = await res.json() as { current?: Record<string, number> }
-    const c = json.current || {}
-    const precipitation = Number(c.precipitation ?? 0)
-    const rainMm = Number(c.rain ?? 0)
-    const code = Number(c.weather_code ?? 0)
-    const windGustKmh = Number(c.wind_gusts_10m ?? 0)
-    // Pioggia = qualsiasi precipitazione/pioggia, o weather_code di pioggia/temporale.
-    // WMO codes: 51-67 pioggia/drizzle, 80-82 rovesci, 95-99 temporali.
-    const rainCode = (code >= 51 && code <= 67) || (code >= 80 && code <= 82) || (code >= 95 && code <= 99)
-    const rain = precipitation > 0 || rainMm > 0 || rainCode
-    return { rain, windGustKmh }
-  } catch (e) {
-    console.error('[weather-alert-cron] weather fetch failed:', e)
-    return null
-  }
-}
 
 /** Toggle "Cron ON" del template (cron_approved) + template abilitato. */
 async function isChannelEnabled(supabase: ReturnType<typeof createClient>, templateKey: string): Promise<boolean> {
@@ -72,20 +47,27 @@ const handler: Handler = async () => {
   const romeHour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false }).format(new Date()))
   const isDaytime = romeHour >= SEND_HOUR_START && romeHour <= SEND_HOUR_END
 
-  const weather = await fetchCagliariWeather()
-  if (!weather) return { statusCode: 200, body: JSON.stringify({ skipped: 'weather_unavailable' }) }
+  // 2026-08-22: la decisione ora si basa sulla PREVISIONE delle prossime ore,
+  // non piu' sulle condizioni istantanee. Con `current` l'allerta partiva a
+  // cliente gia' sotto la pioggia; con la previsione arriva in anticipo.
+  const reading = await fetchWeather()
+  if (!reading) return { statusCode: 200, body: JSON.stringify({ skipped: 'weather_unavailable' }) }
+  const weather = reading.forecast
 
   // Stato persistito in centralina_pro_config.config.weather_alert_state.
   const { data: cfgRow } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
   const config = ((cfgRow?.config as Record<string, unknown>) || {})
   const state: WeatherAlertState = (config.weather_alert_state as WeatherAlertState) || {}
 
-  const results: Record<string, unknown> = { weather, romeHour, isDaytime }
+  const results: Record<string, unknown> = {
+    now: reading.now, forecast: reading.forecast, label: describeWeather(weather),
+    sogliaVentoKmh: WIND_GUST_THRESHOLD_KMH, romeHour, isDaytime,
+  }
 
-  // Condizioni per canale.
+  // Condizioni per canale (stessa regola usata dal badge manuale).
   const conditions: Record<'terra' | 'mare', boolean> = {
-    terra: weather.rain,
-    mare: weather.rain || weather.windGustKmh >= WIND_GUST_THRESHOLD_KMH,
+    terra: conditionFor('terra', weather),
+    mare: conditionFor('mare', weather),
   }
   const templateKeys: Record<'terra' | 'mare', string> = {
     terra: 'pro_allerta_meteo',
