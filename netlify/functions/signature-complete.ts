@@ -457,6 +457,19 @@ export const handler: Handler = async (event) => {
                     customerPhone = booking?.customer_phone || booking?.booking_details?.customer?.phone || ''
                 }
 
+                // 2026-08-22 (segnalazione direzione: "il firmatario non riceve il
+                // documento firmato"). Per i DOCUMENTI autonomi (niente contratto,
+                // niente prenotazione) il numero PIU' AFFIDABILE e' quello digitato
+                // dall'operatore al momento dell'invio: e' obbligatorio in
+                // document-sign-init ed e' quello a cui e' arrivato il link di firma.
+                // Prima veniva consultato per ULTIMO, dopo una ricerca in anagrafica
+                // per email: e con un documento inviato usando un'email aziendale
+                // (es. info@dr7.app) quella ricerca trovava la scheda DR7 e il PDF
+                // firmato partiva verso il NOSTRO numero invece che al cliente.
+                if (!customerPhone && !contract && sigRequest.signer_phone) {
+                    customerPhone = String(sigRequest.signer_phone)
+                }
+
                 // For standalone documents, look up phone from customers_extended.
                 // Case-insensitive: il signer_email può differire per maiuscole/
                 // spazi dal profilo salvato e un .eq esatto lo mancava in silenzio.
