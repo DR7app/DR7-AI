@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { authFetch } from '../../../utils/authFetch'
+import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import {
   LineChart, Line,
   PieChart, Pie, Cell,
@@ -138,24 +139,50 @@ export default function ReportTrafficTab() {
   }
   const [accessi, setAccessi] = useState<AccessoRecente[]>([])
   const [accessiLoading, setAccessiLoading] = useState(true)
+  const [accessiErrore, setAccessiErrore] = useState<string | null>(null)
+  // Ricerca per data: "chi si e' collegato ieri". Default = oggi.
+  const oggiISO = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+  const [accDa, setAccDa] = useState<string>(oggiISO)
+  const [accA, setAccA] = useState<string>(oggiISO)
+
   useEffect(() => {
     let annullato = false
     ;(async () => {
+      setAccessiLoading(true)
+      setAccessiErrore(null)
+      // list-site-users pagina TUTTI gli account auth: puo' metterci parecchio.
+      // Senza un limite di tempo il riquadro restava su "Caricamento…" per
+      // sempre, senza dire perche' — che e' peggio di un errore.
+      const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 20000))
       try {
-        const res = await authFetch('/.netlify/functions/list-site-users')
+        const res = await Promise.race([authFetch('/.netlify/functions/list-site-users'), timeout]) as Response
         const json = await res.json().catch(() => ({}))
         if (annullato) return
         const rows: AccessoRecente[] = Array.isArray(json?.users) ? json.users : (Array.isArray(json) ? json : [])
-        const ordinati = rows
-          .filter(u => !!u.last_sign_in_at)
-          .sort((a, b) => new Date(b.last_sign_in_at as string).getTime() - new Date(a.last_sign_in_at as string).getTime())
-          .slice(0, 15)
-        setAccessi(ordinati)
-      } catch { /* elenco assente: il resto della pagina resta valido */ }
-      finally { if (!annullato) setAccessiLoading(false) }
+        setAccessi(rows.filter(u => !!u.last_sign_in_at))
+      } catch (e) {
+        if (!annullato) setAccessiErrore(e instanceof Error && e.message === 'timeout'
+          ? 'Elenco non caricato: il server ci ha messo troppo. Riprova.'
+          : 'Elenco accessi non disponibile.')
+      } finally {
+        if (!annullato) setAccessiLoading(false)
+      }
     })()
     return () => { annullato = true }
   }, [])
+
+  // Filtro per periodo, calcolato sul client: l'elenco e' gia' in memoria, non
+  // serve richiamare il server a ogni cambio di data.
+  const accessiFiltrati = useMemo(() => {
+    const daMs = accDa ? new Date(accDa + 'T00:00:00').getTime() : -Infinity
+    const aMs = accA ? new Date(accA + 'T23:59:59').getTime() : Infinity
+    return accessi
+      .filter(u => {
+        const t = new Date(u.last_sign_in_at as string).getTime()
+        return t >= daMs && t <= aMs
+      })
+      .sort((a, b) => new Date(b.last_sign_in_at as string).getTime() - new Date(a.last_sign_in_at as string).getTime())
+  }, [accessi, accDa, accA])
   const [range, setRange] = useState<RangeKey>('28d')
   const [data, setData] = useState<ReportPayload | null>(null)
   const [loading, setLoading] = useState(true)
@@ -361,14 +388,37 @@ export default function ReportTrafficTab() {
           proprio account. Un visitatore non registrato resta anonimo — non e'
           una mancanza del pannello, e' come funziona GA4. */}
       <div className="bg-theme-bg-secondary border border-theme-border rounded-xl p-4">
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-theme-text-secondary">Ultimi accessi al sito</h3>
-          <span className="text-[11px] text-theme-text-muted">clienti entrati nel proprio account</span>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-theme-text-secondary">Accessi al sito</h3>
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-theme-text-muted">
+            <span>Dal</span>
+            <EuropeanDateInput value={accDa} onChange={(__v: string) => setAccDa(__v)} className="px-2 py-1 rounded-md bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs" />
+            <span>al</span>
+            <EuropeanDateInput value={accA} onChange={(__v: string) => setAccA(__v)} className="px-2 py-1 rounded-md bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs" />
+            <button
+              onClick={() => {
+                const ieri = new Date(); ieri.setDate(ieri.getDate() - 1)
+                const iso = ieri.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+                setAccDa(iso); setAccA(iso)
+              }}
+              className="px-2 py-1 rounded-md border border-theme-border hover:text-dr7-gold"
+            >Ieri</button>
+            <button
+              onClick={() => { setAccDa(oggiISO); setAccA(oggiISO) }}
+              className="px-2 py-1 rounded-md border border-theme-border hover:text-dr7-gold"
+            >Oggi</button>
+            <button
+              onClick={() => { setAccDa(''); setAccA('') }}
+              className="px-2 py-1 rounded-md border border-theme-border hover:text-dr7-gold"
+            >Tutti</button>
+          </div>
         </div>
         {accessiLoading ? (
           <p className="text-sm text-theme-text-muted">Caricamento…</p>
-        ) : accessi.length === 0 ? (
-          <p className="text-sm text-theme-text-muted">Nessun accesso registrato.</p>
+        ) : accessiErrore ? (
+          <p className="text-sm text-amber-500">{accessiErrore}</p>
+        ) : accessiFiltrati.length === 0 ? (
+          <p className="text-sm text-theme-text-muted">Nessun accesso nel periodo scelto.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -380,7 +430,7 @@ export default function ReportTrafficTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-theme-border">
-                {accessi.map(u => {
+                {accessiFiltrati.map(u => {
                   const quando = u.last_sign_in_at ? new Date(u.last_sign_in_at) : null
                   const minutiFa = quando ? Math.round((Date.now() - quando.getTime()) / 60000) : null
                   // "Adesso" = ultimi 30 minuti, la stessa finestra del blocco GA4
@@ -410,6 +460,10 @@ export default function ReportTrafficTab() {
                 })}
               </tbody>
             </table>
+            <p className="mt-2 text-[11px] text-theme-text-muted">
+              {accessiFiltrati.length} accesso/i nel periodo · clienti entrati nel proprio account.
+              I visitatori non registrati restano anonimi (limite di GA4).
+            </p>
           </div>
         )}
       </div>
