@@ -136,14 +136,20 @@ export default function ReviewManagementTab() {
   // in the Esclusi section with a clear motivo. Runs on every page load.
   async function autoFixEligibility() {
     try {
+      // 2026-08-22: esclude i blocchi manuali (send_status='BLOCKED' oppure
+      // motivo ALREADY_REVIEWED, incluso lo storico salvato come 'SENT').
+      // Prima lo sweep li riprendeva e li riscriveva in TO_REVIEW/BLOCKED,
+      // cancellando il motivo "gia' recensito" scelto dall'operatore.
       const { data: eligible } = await supabase
         .from('review_candidates')
-        .select('id, source_record_id, service_type')
+        .select('id, source_record_id, service_type, send_status, exclusion_reason_code')
         .eq('eligibility_status', 'ELIGIBLE')
+        .neq('send_status', 'BLOCKED')
 
       if (!eligible || eligible.length === 0) return
 
       for (const candidate of eligible) {
+        if (candidate.exclusion_reason_code === 'ALREADY_REVIEWED') continue
         const { data: booking } = await supabase
           .from('bookings')
           .select('booking_details')
@@ -265,11 +271,30 @@ export default function ReviewManagementTab() {
       // as separate stacked sections (Pronti / Esclusi), so we need them all
       // at once.
       const buckets: TabKey[] = ['ELIGIBLE', 'TO_REVIEW', 'EXCLUDED']
-      const results = await Promise.all(buckets.map(b =>
-        fetch(`${NETLIFY_BASE}/review-candidates?${new URLSearchParams({ eligibility_status: b, service_type: filterServiceType })}`)
-          .then(r => r.ok ? r.json() : { candidates: [] })
-          .catch(() => ({ candidates: [] }))
-      ))
+      // 2026-08-22: la fetch era senza `limit`, quindi la funzione ne restituiva
+      // 50 per bucket (150 in tutto) e la lista risultava incompleta. Ora si
+      // pagina a blocchi di 1000 (tetto PostgREST) finche' il bucket e' esaurito.
+      const PAGE_SIZE = 1000
+      const MAX_PAGES = 10
+      const fetchBucket = async (b: TabKey) => {
+        const rows: ReviewCandidate[] = []
+        for (let page = 0; page < MAX_PAGES; page++) {
+          const qs = new URLSearchParams({
+            eligibility_status: b,
+            service_type: filterServiceType,
+            limit: String(PAGE_SIZE),
+            offset: String(page * PAGE_SIZE),
+          })
+          const d = await fetch(`${NETLIFY_BASE}/review-candidates?${qs}`)
+            .then(r => r.ok ? r.json() : { candidates: [] })
+            .catch(() => ({ candidates: [] }))
+          const batch: ReviewCandidate[] = d.candidates || d || []
+          rows.push(...batch)
+          if (batch.length < PAGE_SIZE) break
+        }
+        return { candidates: rows }
+      }
+      const results = await Promise.all(buckets.map(fetchBucket))
       const merged = results.flatMap(d => d.candidates || d || [])
       // Dedupe by id — a row can briefly appear in two buckets while the
       // background autoFixEligibility sweep is moving it ELIGIBLE→TO_REVIEW,
@@ -427,10 +452,15 @@ export default function ReviewManagementTab() {
     if (!confirm('Marcare questo cliente come gia\' recensito?\nNon riceverà più la richiesta automatica.')) return
     setSendingId(candidateId)
     try {
+      // 2026-08-22: il blocco manuale scrive send_status='BLOCKED' (stato reale),
+      // NON piu' 'SENT'. Con 'SENT' la riga si presentava come "Inviato" (pill
+      // verde) dopo il refresh e autoFixEligibility poteva sovrascriverla,
+      // facendo sparire il blocco. eligibility_status resta 'ELIGIBLE' cosi'
+      // la riga rimane in "Pronti" con il bottone Sblocca a disposizione.
       const { error } = await supabase
         .from('review_candidates')
         .update({
-          send_status: 'SENT',
+          send_status: 'BLOCKED',
           eligibility_status: 'ELIGIBLE',
           exclusion_reason_code: 'ALREADY_REVIEWED',
           exclusion_reason_text: 'Marcato manualmente: cliente ha gia\' lasciato la recensione',
@@ -837,6 +867,14 @@ export default function ReviewManagementTab() {
     return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-50 text-gray-700 border border-gray-200">{type}</span>
   }
 
+  // 2026-08-22: unica fonte di verita' per "bloccato manualmente". Copre sia
+  // il nuovo stato (send_status='BLOCKED') sia le righe storiche salvate come
+  // 'SENT' prima del fix, cosi' un blocco fatto ieri resta bloccato oggi.
+  function isBloccatoManualmente(c: ReviewCandidate) {
+    return c.exclusion_reason_code === 'ALREADY_REVIEWED'
+      && (c.send_status === 'BLOCKED' || c.send_status === 'SENT')
+  }
+
   // Combined status pill (dot + label) — derives a single visual state from
   // eligibility_status × send_status × review_risk. Mirrors the Rentora design.
   function renderStatusPill(c: ReviewCandidate) {
@@ -845,7 +883,9 @@ export default function ReviewManagementTab() {
     let bg = 'bg-gray-50 border-gray-200'
     let label: string = c.send_status
 
-    if (c.eligibility_status === 'EXCLUDED') {
+    if (isBloccatoManualmente(c)) {
+      dot = 'bg-red-500'; text = 'text-red-700'; bg = 'bg-red-50 border-red-200'; label = 'Bloccato'
+    } else if (c.eligibility_status === 'EXCLUDED') {
       dot = 'bg-red-500'; text = 'text-red-700'; bg = 'bg-red-50 border-red-200'; label = 'Escluso'
     } else if (c.send_status === 'SENT') {
       dot = 'bg-green-500'; text = 'text-green-700'; bg = 'bg-green-50 border-green-200'; label = 'Inviato'
@@ -1277,9 +1317,11 @@ export default function ReviewManagementTab() {
                     </button>
                   )}
                   {/* 2026-07-20: UN SOLO bottone che riflette lo stato — se già
-                      bloccato (send_status='SENT') mostra Sblocca (VERDE),
-                      altrimenti Blocca (ROSSO). */}
-                  {candidate.send_status === 'SENT' ? (
+                      bloccato mostra Sblocca (VERDE), altrimenti Blocca (ROSSO).
+                      2026-08-22: la condizione era `send_status === 'SENT'`, che
+                      confondeva "richiesta inviata" e "bloccato a mano". Ora usa
+                      isBloccatoManualmente() + il caso richiesta gia' inviata. */}
+                  {isBloccatoManualmente(candidate) || candidate.send_status === 'SENT' ? (
                     <button
                       onClick={() => handleSblocca(candidate.id)}
                       disabled={sendingId === candidate.id}

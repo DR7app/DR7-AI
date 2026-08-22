@@ -19,7 +19,10 @@ async function handleGet(event: any) {
   const sendStatus = params.send_status || 'ALL';
   const reviewRisk = params.review_risk || 'ALL';
   const search = params.search || '';
-  const limit = Math.min(parseInt(params.limit || '50', 10), 200);
+  // 2026-08-22: il tetto era 200 con default 50, quindi la tab Recensioni
+  // mostrava al massimo 50 candidati per bucket e "mancavano molti avis".
+  // Ora il client pagina esplicitamente con limit=1000 (limite PostgREST).
+  const limit = Math.min(parseInt(params.limit || '50', 10), 1000);
   const offset = parseInt(params.offset || '0', 10);
 
   // Build main query
