@@ -186,20 +186,48 @@ export function matchesAdvancedFilters(tpl: any, booking: any): boolean {
     // Es. start=22, end=7 → niente invii dalle 22:00 alle 06:59 Roma.
     if (isInQuietHours(tpl.quiet_hours_start, tpl.quiet_hours_end)) return false
 
-    // Service type — solo 2 categorie reali nel sistema:
-    //   rental     = car rental (service_type vuoto / 'rental' / 'car_rental')
-    //   prime_wash = lavaggio + meccanica (service_type 'car_wash' /
-    //                'mechanical' / 'mechanical_service')
+    // Service type — 2026-08-23: riscritto.
+    //
+    // Il filtro era una catena di `if (tplSvc === X && ...) return false`: un
+    // valore non previsto NON incontrava nessun ramo e la funzione proseguiva
+    // come se il filtro non esistesse. La tendina offre 8 opzioni ma solo 4
+    // erano gestite, quindi "Solo Noleggio Mare", "Solo Noleggio Aria" e "Solo
+    // Soggiorni" spegnevano il filtro invece di applicarlo: il messaggio
+    // partiva a TUTTI i servizi, lavaggi compresi.
+    //
+    // Ora la regola e' esplicita: si calcola il gruppo della prenotazione e lo
+    // si confronta con quello del template. Se il valore del template non e'
+    // riconosciuto NON si invia (fail-closed): meglio un messaggio mancato che
+    // un messaggio al cliente sbagliato.
     const tplSvc = String(tpl.target_service_type || 'all').toLowerCase()
     if (tplSvc !== 'all') {
-        const bSvc = String(booking.service_type || 'rental').toLowerCase()
-        const bookingIsRental = !booking.service_type || bSvc === 'rental' || bSvc === 'car_rental'
-        const bookingIsPrimeWash = bSvc === 'car_wash' || bSvc === 'mechanical' || bSvc === 'mechanical_service'
-        if (tplSvc === 'rental' && !bookingIsRental) return false
-        if (tplSvc === 'prime_wash' && !bookingIsPrimeWash) return false
-        // Retrocompatibilita': accetta anche le vecchie etichette se gia' configurate
-        if (tplSvc === 'car_wash' && bSvc !== 'car_wash') return false
-        if (tplSvc === 'mechanical' && bSvc !== 'mechanical' && bSvc !== 'mechanical_service') return false
+        const bSvc = String(booking.service_type || '').toLowerCase()
+
+        // service_type vuoto: e' un noleggio auto storico SOLO se non ha
+        // l'impronta di un appuntamento (lavaggio/meccanica usano
+        // appointment_date e non hanno pickup_date).
+        const looksLikeAppointment = !!booking.appointment_date && !booking.pickup_date
+        const bookingGroup =
+            bSvc === 'boat_rental' ? 'boat_rental'
+            : bSvc === 'heli_rental' ? 'heli_rental'
+            : bSvc === 'stay_rental' ? 'stay_rental'
+            : bSvc === 'car_wash' ? 'car_wash'
+            : (bSvc === 'mechanical' || bSvc === 'mechanical_service') ? 'mechanical'
+            : (bSvc === 'rental' || bSvc === 'car_rental' || (!bSvc && !looksLikeAppointment)) ? 'rental'
+            : 'other'
+
+        // Quali gruppi accetta ciascuna opzione della tendina.
+        const ACCEPTS: Record<string, string[]> = {
+            rental: ['rental'],
+            boat_rental: ['boat_rental'],
+            heli_rental: ['heli_rental'],
+            stay_rental: ['stay_rental'],
+            prime_wash: ['car_wash', 'mechanical'],
+            car_wash: ['car_wash'],
+            mechanical: ['mechanical'],
+        }
+        const accepted = ACCEPTS[tplSvc]
+        if (!accepted || !accepted.includes(bookingGroup)) return false
     }
 
     // Cauzione — 4 opzioni:

@@ -163,8 +163,28 @@ function parseStatusCsv(csv: string | null | undefined): Set<string> {
   return new Set(csv.split(',').map(s => s.trim()).filter(Boolean))
 }
 
+/**
+ * 2026-08-23: la UI e la cron non erano d'accordo su cosa significhi
+ * "nessuno stato scelto".
+ *   - target_status NULL  -> la cron applica il fallback storico
+ *                            ['confirmed','active'], ma il form mostrava
+ *                            "tutti gli stati": l'admin non poteva sapere che
+ *                            i CONFERMATI (auto non ancora ritirata) erano
+ *                            inclusi.
+ *   - target_status ''    -> nessun filtro, davvero tutti gli stati.
+ * Qui si calcola l'insieme EFFETTIVO, quello che la cron usera' davvero.
+ */
+function effectiveStatusSet(csv: string | null | undefined): { set: Set<string>; isCronDefault: boolean } {
+  if (csv == null) return { set: new Set(['confirmed', 'active']), isCronDefault: true }
+  return { set: parseStatusCsv(csv), isCronDefault: false }
+}
+
+/** Nota fissa: "confermata" non vuol dire che il cliente ha gia' il mezzo. */
+const STATUS_HINT = 'Confermata = prenotata ma NON ancora ritirata. Attiva / In corso = mezzo gia' + String.fromCharCode(39) + ' consegnato al cliente.'
+
 function statusCsvLabel(csv: string | null | undefined): string {
-  const set = parseStatusCsv(csv)
+  const { set, isCronDefault } = effectiveStatusSet(csv)
+  if (isCronDefault) return 'Confermata, Attiva (predefinito)'
   if (set.size === 0) return 'Tutti gli stati'
   const labels = BOOKING_STATUS_OPTIONS.filter(o => set.has(o.value)).map(o => o.label)
   if (labels.length === 0) return csv || 'Tutti gli stati'
@@ -4309,6 +4329,10 @@ export default function MessaggiSistemaProTab() {
                                         <p className="text-[11px] text-theme-text-muted mt-1.5">
                                             Il messaggio parte SOLO per prenotazioni in uno di questi stati. Lascia vuoto per accettare tutti gli stati. <strong>Importante:</strong> per i trigger "Alla creazione della prenotazione" su sito (cliente non ancora pagato) seleziona anche "In attesa".
                                         </p>
+                                        {/* 2026-08-23: "Confermata" e' preselezionata di default e comprende
+                                            chi NON ha ancora ritirato il mezzo. Senza questa nota un messaggio
+                                            pensato per "chi ha gia' l'auto" finiva anche a chi la ritira domani. */}
+                                        <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">{STATUS_HINT}</p>
                                     </div>
                                     )}
                                 </div>
@@ -5176,14 +5200,15 @@ export default function MessaggiSistemaProTab() {
                                                                 <span className="text-[11px] uppercase tracking-wider text-theme-text-muted font-semibold">Stati ammessi</span>
                                                                 <span className="text-[10px] text-theme-text-muted">
                                                                     {(() => {
-                                                                        const set = parseStatusCsv(template.target_status)
+                                                                        const { set, isCronDefault } = effectiveStatusSet(template.target_status)
+                                                                        if (isCronDefault) return 'predefinito: Confermata + Attiva'
                                                                         return set.size === 0 ? 'tutti gli stati' : `${set.size} selezionati`
                                                                     })()}
                                                                 </span>
                                                             </div>
                                                             <div className="flex flex-wrap gap-1.5">
                                                                 {BOOKING_STATUS_OPTIONS.map(opt => {
-                                                                    const set = parseStatusCsv(template.target_status)
+                                                                    const { set } = effectiveStatusSet(template.target_status)
                                                                     const checked = set.has(opt.value)
                                                                     return (
                                                                         <button
@@ -5206,6 +5231,7 @@ export default function MessaggiSistemaProTab() {
                                                                     )
                                                                 })}
                                                             </div>
+                                                            <p className="mt-1.5 text-[10px] leading-snug text-theme-text-muted">{STATUS_HINT}</p>
                                                         </div>
                                                     </div>
                                                 )}
