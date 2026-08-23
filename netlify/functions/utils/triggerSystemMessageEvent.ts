@@ -173,6 +173,35 @@ function isInQuietHours(start: number | null | undefined, end: number | null | u
 }
 
 /**
+ * Servizio implicito nelle chiavi evento (2026-08-23).
+ *
+ * Le chiavi sono prefissate per servizio: rental_*, carwash_*, mechanical*,
+ * boat_*, heli_*, stay_*. Le chiavi trasversali (payment_*, signature_*,
+ * cauzione_*, fattura_*, tour_*...) non implicano alcun servizio e non
+ * vincolano nulla.
+ */
+const EVENT_SERVICE_PREFIX: Array<[RegExp, string]> = [
+    [/^rental_/, 'rental'],
+    [/^carwash_/, 'car_wash'],
+    [/^mechanical/, 'mechanical'],
+    [/^boat_/, 'boat_rental'],
+    [/^heli_/, 'heli_rental'],
+    [/^stay_/, 'stay_rental'],
+]
+
+function servicesFromEvents(events: unknown): Set<string> {
+    const out = new Set<string>()
+    if (!Array.isArray(events)) return out
+    for (const raw of events) {
+        const k = String(raw || '').toLowerCase()
+        for (const [re, svc] of EVENT_SERVICE_PREFIX) {
+            if (re.test(k)) { out.add(svc); break }
+        }
+    }
+    return out
+}
+
+/**
  * Gate "Tipo servizio" del template. Estratto (2026-08-23) perche' serve anche
  * alle programmazioni ricorrenti, che non passano da matchesAdvancedFilters.
  */
@@ -191,7 +220,17 @@ export function matchesServiceType(tpl: any, booking: any): boolean {
     // si confronta con quello del template. Se il valore del template non e'
     // riconosciuto NON si invia (fail-closed): meglio un messaggio mancato che
     // un messaggio al cliente sbagliato.
-    const tplSvc = String(tpl.target_service_type || 'all').toLowerCase()
+    // 2026-08-23 (richiesta direzione): "quando si prende un evento Noleggio,
+    // e' SOLO noleggio, non lavaggio". Se il template gestisce eventi di un
+    // unico servizio, quel servizio vincola i destinatari anche quando la
+    // tendina Tipo servizio e' rimasta su "Tutti i servizi" — che era il caso
+    // di default e lasciava passare i lavaggi. Una scelta esplicita in tendina
+    // resta comunque prioritaria: qui si riempie solo il caso 'all'.
+    let tplSvc = String(tpl.target_service_type || 'all').toLowerCase()
+    if (tplSvc === 'all') {
+        const implied = servicesFromEvents(tpl.handled_events)
+        if (implied.size === 1) tplSvc = [...implied][0]
+    }
     if (tplSvc !== 'all') {
         const bSvc = String(booking.service_type || '').toLowerCase()
 
@@ -581,7 +620,7 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
     //    saranno gestiti dal cron, non qui.
     const { data: templates } = await supabase
         .from('system_messages')
-        .select('id, message_key, label, trigger_offset_hours, target_status, target_category, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end, target_membership_tier, target_min_prev_bookings, target_max_prev_bookings, target_rental_duration_min, target_rental_duration_max, target_customer_tags, target_residency, target_age_min, target_age_max, target_pickup_hour_min, target_pickup_hour_max, target_source_channel, target_province, target_min_lifetime_value, target_has_unpaid_invoices, target_used_promo_before, target_extension_count_min, target_extension_count_max')
+        .select('id, message_key, label, trigger_offset_hours, target_status, target_category, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end, target_membership_tier, target_min_prev_bookings, target_max_prev_bookings, target_rental_duration_min, target_rental_duration_max, target_customer_tags, target_residency, target_age_min, target_age_max, target_pickup_hour_min, target_pickup_hour_max, target_source_channel, target_province, target_min_lifetime_value, target_has_unpaid_invoices, target_used_promo_before, target_extension_count_min, target_extension_count_max, handled_events')
         .eq('is_automatic', true)
         .eq('is_enabled', true)
         .eq('trigger_event', event)

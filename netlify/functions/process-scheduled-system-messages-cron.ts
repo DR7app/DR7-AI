@@ -74,6 +74,7 @@ interface SystemMessage {
     recipient_mode?: string | null;
     recipient_phones?: string | null;
     recipient_admin_roles?: string | null;
+    handled_events?: string[] | null;
 }
 
 const LOOKBACK_MS = 30 * 60 * 1000;  // 30 min: forgive previous-cron failures
@@ -1126,7 +1127,10 @@ const cronHandler = async () => {
     // migration non e' ancora stata eseguita, PostgREST fallisce la select:
     // in quel caso si riparte con le sole colonne storiche, così il cron
     // continua a lavorare esattamente come prima invece di morire.
-    const RECURRING_COLUMNS = 'send_minute, recurrence_start_date, recurrence_end_date, recipient_mode, recipient_phones, recipient_admin_roles';
+    // 2026-08-23: `handled_events` viaggia qui e non in BASE_COLUMNS di
+    // proposito — se la colonna mancasse, la select cade nel fallback storico
+    // invece di far morire il cron (lezione del lockout del 2026-08-14).
+    const RECURRING_COLUMNS = 'send_minute, recurrence_start_date, recurrence_end_date, recipient_mode, recipient_phones, recipient_admin_roles, handled_events';
 
     let templates: SystemMessage[] | null = null;
     let tplErr: { message: string } | null = null;

@@ -1680,6 +1680,45 @@ const RECIPIENT_MODES: Array<{ value: string; label: string; hint: string }> = [
   { value: 'active_bookings', label: 'Clienti con noleggio in corso', hint: 'Solo chi in questo momento ha il mezzo (ritiro gia\' avvenuto, riconsegna non ancora). Rispetta i filtri Tipo servizio e Stati ammessi.' },
 ]
 
+
+/**
+ * 2026-08-23: servizio implicito nelle chiavi evento scelte. Stessa regola del
+ * backend (netlify/functions/utils/triggerSystemMessageEvent.ts): se il
+ * template gestisce eventi di UN SOLO servizio, quel servizio vincola i
+ * destinatari anche con la tendina su "Tutti i servizi". Serve a mostrarlo
+ * all'admin invece di lasciarglielo scoprire dal cliente sbagliato.
+ */
+const EVENT_SERVICE_PREFIX: Array<[RegExp, string]> = [
+  [/^rental_/, 'rental'],
+  [/^carwash_/, 'car_wash'],
+  [/^mechanical/, 'mechanical'],
+  [/^boat_/, 'boat_rental'],
+  [/^heli_/, 'heli_rental'],
+  [/^stay_/, 'stay_rental'],
+]
+
+const SERVICE_LABELS: Record<string, string> = {
+  rental: 'Noleggio Terra',
+  boat_rental: 'Noleggio Mare',
+  heli_rental: 'Noleggio Aria',
+  stay_rental: 'Soggiorni & Ospitalita',
+  car_wash: 'Lavaggio',
+  mechanical: 'Meccanica',
+  prime_wash: 'Prime Wash (Lavaggio + Meccanica)',
+}
+
+function impliedServiceFromEvents(events: string[] | null | undefined): string | null {
+  if (!Array.isArray(events)) return null
+  const found = new Set<string>()
+  for (const raw of events) {
+    const k = String(raw || '').toLowerCase()
+    for (const [re, svc] of EVENT_SERVICE_PREFIX) {
+      if (re.test(k)) { found.add(svc); break }
+    }
+  }
+  return found.size === 1 ? [...found][0] : null
+}
+
 const ADMIN_ROLE_TAGS: string[] = [
   'direzione', 'developer', 'bypass-otp', 'otp-admin',
   'payment-manager', 'stipendio-editor', 'sito-direzione', 'preventivi-admin',
@@ -5593,6 +5632,14 @@ export default function MessaggiSistemaProTab() {
                                                                         <option value="car_wash">Solo Lavaggio</option>
                                                                         <option value="mechanical">Solo Meccanica</option>
                                                                     </select>
+                                                                    {/* 2026-08-23: se gli eventi scelti sono tutti di un servizio,
+                                                                        quel servizio vincola gia' i destinatari. Prima restava
+                                                                        "Tutti i servizi" e il messaggio Noleggio finiva ai lavaggi. */}
+                                                                    {(template.target_service_type || 'all') === 'all' && impliedServiceFromEvents(template.handled_events) && (
+                                                                        <p className="mt-1 text-[10px] leading-snug text-emerald-600 dark:text-emerald-400">
+                                                                            Vincolato a <strong>{SERVICE_LABELS[impliedServiceFromEvents(template.handled_events) as string]}</strong> dagli eventi selezionati: il messaggio non uscira' su altri servizi.
+                                                                        </p>
+                                                                    )}
                                                                 </div>
                                                                 <div>
                                                                     <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1">Cauzione</label>
