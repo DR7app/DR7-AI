@@ -31,7 +31,7 @@
 import { schedule } from '@netlify/functions';
 import { createHash } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
-import { matchesAdvancedFilters, passesCustomerFilters, loadPaymentMethodAliases, loadResidentProvinces } from './utils/triggerSystemMessageEvent';
+import { matchesAdvancedFilters, matchesServiceType, passesCustomerFilters, loadPaymentMethodAliases, loadResidentProvinces } from './utils/triggerSystemMessageEvent';
 import { getProKeyEventTriggers, OLD_TO_PRO } from '../../src/utils/proTemplateRouting';
 import { getAdminNotificationPhone } from './utils/notificationPhone';
 
@@ -225,11 +225,22 @@ async function resolveConfiguredRecipients(tpl: SystemMessage): Promise<Resolved
     }
 
     if (mode === 'all_customers') {
-        const { data: rows } = await supabase
-            .from('customers_extended')
-            .select('nome, cognome, telefono, email')
-            .not('telefono', 'is', null);
-        for (const c of (rows || []) as Array<{ nome?: string; cognome?: string; telefono?: string; email?: string }>) {
+        // 2026-08-23: la select era senza paginazione, quindi PostgREST
+        // tagliava a 1000 righe e i clienti oltre la millesima non ricevevano
+        // MAI il messaggio — silenziosamente, senza errore.
+        const rows: Array<{ nome?: string; cognome?: string; telefono?: string; email?: string }> = [];
+        for (let page = 0; page < 50; page++) {
+            const { data: batch } = await supabase
+                .from('customers_extended')
+                .select('nome, cognome, telefono, email')
+                .not('telefono', 'is', null)
+                .order('id', { ascending: true })
+                .range(page * 1000, page * 1000 + 999);
+            const got = (batch || []) as typeof rows;
+            rows.push(...got);
+            if (got.length < 1000) break;
+        }
+        for (const c of rows) {
             const phone = normalizePhoneDigits(c.telefono || '');
             if (phone.length >= 8 && !out.has(phone)) {
                 out.set(phone, {
@@ -242,7 +253,67 @@ async function resolveConfiguredRecipients(tpl: SystemMessage): Promise<Resolved
         return [...out.values()];
     }
 
+    // 2026-08-23 — nuovo modo "clienti con noleggio in corso".
+    //
+    // Prima l'unico broadcast possibile era `all_customers`: TUTTA l'anagrafica,
+    // senza guardare le prenotazioni. Un messaggio pensato per "chi ha adesso
+    // l'auto" finiva quindi anche ai clienti del lavaggio e a chi non ha nulla
+    // in corso, mentre i filtri "Tipo servizio" e "Stati ammessi" non venivano
+    // nemmeno letti su questo percorso (non c'e' una prenotazione da filtrare).
+    // Qui i destinatari nascono DALLE prenotazioni, e i due filtri valgono.
+    if (mode === 'active_bookings') {
+        const nowIso = new Date().toISOString();
+        const rows: BookingRow[] = [];
+        for (let page = 0; page < 20; page++) {
+            const { data: batch } = await supabase
+                .from('bookings')
+                .select('id, customer_name, customer_phone, customer_email, status, service_type, pickup_date, dropoff_date, appointment_date, booking_details')
+                .not('status', 'in', '(cancelled,annullata,completed,completata)')
+                .lte('pickup_date', nowIso)
+                .gte('dropoff_date', nowIso)
+                .order('id', { ascending: true })
+                .range(page * 1000, page * 1000 + 999);
+            const got = (batch || []) as unknown as BookingRow[];
+            rows.push(...got);
+            if (got.length < 1000) break;
+        }
+
+        // Stati ammessi: se l'admin ne ha scelti, valgono anche qui.
+        const statusCsv = tpl.target_status;
+        const allowed = statusCsv == null
+            ? null // nessuna scelta esplicita: non restringere oltre "in corso"
+            : new Set(statusCsv.split(',').map(x => x.trim()).filter(Boolean));
+
+        for (const b of rows) {
+            if (allowed && allowed.size > 0 && !allowed.has(String(b.status || ''))) continue;
+            if (!matchesServiceType(tpl, b)) continue;
+            const bd = (b.booking_details || {}) as Record<string, unknown>;
+            const cust = (bd.customer || {}) as Record<string, unknown>;
+            const phone = normalizePhoneDigits(String(b.customer_phone || cust.phone || ''));
+            if (phone.length < 8 || out.has(phone)) continue;
+            out.set(phone, {
+                nome: String(b.customer_name || cust.fullName || 'Cliente'),
+                phone,
+                email: (b.customer_email as string) || (cust.email as string) || null,
+            });
+        }
+        return [...out.values()];
+    }
+
     return [];
+}
+
+interface BookingRow {
+    id: string;
+    customer_name?: string | null;
+    customer_phone?: string | null;
+    customer_email?: string | null;
+    status?: string | null;
+    service_type?: string | null;
+    pickup_date?: string | null;
+    dropoff_date?: string | null;
+    appointment_date?: string | null;
+    booking_details?: Record<string, unknown> | null;
 }
 
 /**

@@ -1673,7 +1673,11 @@ const RECIPIENT_MODES: Array<{ value: string; label: string; hint: string }> = [
   { value: 'customer', label: 'Cliente della pratica', hint: 'Il cliente della prenotazione che ha fatto scattare l\'evento (comportamento standard).' },
   { value: 'custom_phones', label: 'Numeri specifici', hint: 'Uno o più numeri scritti da te. Separali con virgola o a capo.' },
   { value: 'admin_roles', label: 'Operatori per ruolo', hint: 'Tutti gli operatori con i ruoli scelti (numero preso da "Contatto interno" in Operatori).' },
-  { value: 'all_customers', label: 'Tutti i clienti', hint: 'Broadcast a ogni cliente con un telefono in anagrafica. Usare con cautela.' },
+  { value: 'all_customers', label: 'Tutti i clienti', hint: 'Broadcast a ogni cliente con un telefono in anagrafica — ANCHE chi non ha nulla in corso e i clienti del lavaggio. Usare con cautela.' },
+  // 2026-08-23: prima mancava del tutto. Per raggiungere "chi ha adesso il
+  // mezzo" l'unica strada era "Tutti i clienti", che ignora prenotazioni,
+  // Tipo servizio e Stati ammessi.
+  { value: 'active_bookings', label: 'Clienti con noleggio in corso', hint: 'Solo chi in questo momento ha il mezzo (ritiro gia\' avvenuto, riconsegna non ancora). Rispetta i filtri Tipo servizio e Stati ammessi.' },
 ]
 
 const ADMIN_ROLE_TAGS: string[] = [
@@ -1692,7 +1696,8 @@ function recipientSummary(t: { recipient_mode?: string | null; recipient_phones?
     const roles = String(t.recipient_admin_roles || '').split(',').map(s => s.trim()).filter(Boolean)
     return roles.length === 0 ? 'operatori per ruolo — NESSUN ruolo scelto, non partirà' : `operatori con ruolo: ${roles.join(', ')}`
   }
-  if (mode === 'all_customers') return 'tutti i clienti con telefono in anagrafica'
+  if (mode === 'all_customers') return 'tutti i clienti con telefono in anagrafica (anche senza noleggio in corso)'
+  if (mode === 'active_bookings') return 'clienti che hanno il mezzo in questo momento'
   return 'il cliente della pratica'
 }
 

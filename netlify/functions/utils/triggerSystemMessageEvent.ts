@@ -172,20 +172,12 @@ function isInQuietHours(start: number | null | undefined, end: number | null | u
     return h >= start || h < end
 }
 
+/**
+ * Gate "Tipo servizio" del template. Estratto (2026-08-23) perche' serve anche
+ * alle programmazioni ricorrenti, che non passano da matchesAdvancedFilters.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function matchesAdvancedFilters(tpl: any, booking: any): boolean {
-    // Day-of-week: se l'admin ha disabilitato il giorno corrente (Roma),
-    // skippa l'invio. Default '0,1,2,3,4,5,6' = sempre attivo.
-    const dowCsv = String(tpl.target_days_of_week ?? '0,1,2,3,4,5,6')
-    if (dowCsv) {
-        const allowed = new Set(dowCsv.split(',').map((s: string) => parseInt(s.trim(), 10)).filter((n: number) => !isNaN(n)))
-        if (allowed.size > 0 && !allowed.has(romeDayOfWeek())) return false
-    }
-
-    // Quiet hours: se siamo in fascia silenziosa configurata dall'admin, skip.
-    // Es. start=22, end=7 → niente invii dalle 22:00 alle 06:59 Roma.
-    if (isInQuietHours(tpl.quiet_hours_start, tpl.quiet_hours_end)) return false
-
+export function matchesServiceType(tpl: any, booking: any): boolean {
     // Service type — 2026-08-23: riscritto.
     //
     // Il filtro era una catena di `if (tplSvc === X && ...) return false`: un
@@ -229,6 +221,24 @@ export function matchesAdvancedFilters(tpl: any, booking: any): boolean {
         const accepted = ACCEPTS[tplSvc]
         if (!accepted || !accepted.includes(bookingGroup)) return false
     }
+    return true
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function matchesAdvancedFilters(tpl: any, booking: any): boolean {
+    // Day-of-week: se l'admin ha disabilitato il giorno corrente (Roma),
+    // skippa l'invio. Default '0,1,2,3,4,5,6' = sempre attivo.
+    const dowCsv = String(tpl.target_days_of_week ?? '0,1,2,3,4,5,6')
+    if (dowCsv) {
+        const allowed = new Set(dowCsv.split(',').map((s: string) => parseInt(s.trim(), 10)).filter((n: number) => !isNaN(n)))
+        if (allowed.size > 0 && !allowed.has(romeDayOfWeek())) return false
+    }
+
+    // Quiet hours: se siamo in fascia silenziosa configurata dall'admin, skip.
+    // Es. start=22, end=7 → niente invii dalle 22:00 alle 06:59 Roma.
+    if (isInQuietHours(tpl.quiet_hours_start, tpl.quiet_hours_end)) return false
+
+    if (!matchesServiceType(tpl, booking)) return false
 
     // Cauzione — 4 opzioni:
     //   all     → tutte le prenotazioni (no filtro)
