@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
-import { getRomeDateComponents, formatRomeDate, parseUTCToRome } from '../../../utils/timezoneUtils'
+import {
+    DAILY_CATEGORIES, categorizeDayBooking, categoryOf, categoryMeta, labelOf,
+    dailyBookingTime, type DailyType,
+} from '../../../utils/dailyCalendarCategories'
+import { getRomeDateComponents } from '../../../utils/timezoneUtils'
 
 interface Booking {
     id: string
@@ -16,7 +20,7 @@ interface Booking {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     booking_details: any
     status: string
-    type: 'check-in' | 'check-out' | 'lavaggio' | 'meccanica' | 'varie'
+    type: DailyType
 }
 
 interface ActivityCardProps {
@@ -56,15 +60,7 @@ function ActivityCard({ booking, colorClass, gradientClass, glowClass }: Activit
             'N/A'
     }
 
-    const getLabel = () => {
-        switch (booking.type) {
-            case 'check-in': return 'USCITE'
-            case 'check-out': return 'RIENTRI'
-            case 'lavaggio': return 'LAVAGGIO'
-            case 'meccanica': return 'MECCANICA'
-            default: return 'VARIE'
-        }
-    }
+    const getLabel = () => labelOf(booking.type)
 
     return (
         <div className={`
@@ -186,11 +182,20 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
             const queryEnd = new Date(endOfDay)
             queryEnd.setDate(queryEnd.getDate() + 1)
 
+            // 2026-08-23: il filtro era un OR di estremi SCIOLLTI
+            // (pickup >= inizio OR pickup < fine OR ...): vero per quasi ogni
+            // riga, quindi la query scaricava l'intera tabella e PostgREST la
+            // tagliava a 1000 righe — con la tabella cresciuta, giornate intere
+            // sparivano. Ora ogni campo e' un intervallo chiuso dentro un and().
+            const qs = queryStart.toISOString()
+            const qe = queryEnd.toISOString()
             const { data, error } = await supabase
                 .from('bookings')
                 .select('*')
                 .neq('status', 'cancelled')
-                .or(`pickup_date.gte.${queryStart.toISOString()},pickup_date.lt.${queryEnd.toISOString()},dropoff_date.gte.${queryStart.toISOString()},dropoff_date.lt.${queryEnd.toISOString()},appointment_date.gte.${queryStart.toISOString()},appointment_date.lt.${queryEnd.toISOString()}`)
+                .or(`and(pickup_date.gte.${qs},pickup_date.lt.${qe}),`
+                  + `and(dropoff_date.gte.${qs},dropoff_date.lt.${qe}),`
+                  + `and(appointment_date.gte.${qs},appointment_date.lt.${qe})`)
 
             if (error) throw error
 
@@ -205,43 +210,13 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                     components.year === selectedDate.getFullYear()
             }
 
+            // 2026-08-23: la giornata copre TUTTI i business (Terra, Mare, Aria,
+            // Soggiorni), i servizi (Lavaggio, Meccanica) e le Uscite
+            // Straordinarie. Regole in utils/dailyCalendarCategories.
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             data?.forEach((booking: any) => {
-                if (isSameDay(booking.pickup_date)) {
-                    const isRental = !booking.service_type ||
-                        booking.service_type === 'rental' ||
-                        booking.service_type === 'car_rental'
-                    if (isRental) {
-                        categorized.push({ ...booking, type: 'check-in' })
-                    }
-                }
-
-                if (isSameDay(booking.dropoff_date)) {
-                    const isRental = !booking.service_type ||
-                        booking.service_type === 'rental' ||
-                        booking.service_type === 'car_rental'
-                    if (isRental) {
-                        categorized.push({ ...booking, type: 'check-out' })
-                    }
-                }
-
-                // Only external customer washes — exclude internal return washes
-                if (booking.service_type === 'car_wash' &&
-                    isSameDay(booking.appointment_date) &&
-                    booking.customer_name !== 'Lavaggio Rientro' &&
-                    !booking.booking_details?.internal &&
-                    !booking.booking_details?.auto_created) {
-                    categorized.push({ ...booking, type: 'lavaggio' })
-                }
-
-                if ((booking.service_type === 'mechanical_service' || booking.service_type === 'mechanical') &&
-                    isSameDay(booking.appointment_date)) {
-                    categorized.push({ ...booking, type: 'meccanica' })
-                }
-
-                if (booking.service_type === 'varie' &&
-                    (isSameDay(booking.pickup_date) || isSameDay(booking.appointment_date))) {
-                    categorized.push({ ...booking, type: 'varie' })
+                for (const type of categorizeDayBooking(booking, isSameDay)) {
+                    categorized.push({ ...booking, type })
                 }
             })
 
@@ -253,17 +228,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
         }
     }
 
-    const getBookingTime = (booking: Booking): string => {
-        if (booking.type === 'check-in') {
-            return booking.booking_details?.pickupTime ||
-                formatRomeDate(parseUTCToRome(booking.pickup_date!), { hour: '2-digit', minute: '2-digit', hour12: false })
-        }
-        if (booking.type === 'check-out') {
-            return booking.booking_details?.returnTime ||
-                formatRomeDate(parseUTCToRome(booking.dropoff_date!), { hour: '2-digit', minute: '2-digit', hour12: false })
-        }
-        return booking.appointment_time || '00:00'
-    }
+    const getBookingTime = (booking: Booking): string => dailyBookingTime(booking, booking.type)
 
     const getTimeSlot = (time: string): string => {
         const [hours, minutes] = time.split(':').map(Number)
@@ -285,6 +250,12 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
         const minutes = Math.floor(now.getMinutes() / 15) * 15
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
     }
+
+    // Corsie del giorno: solo le categorie che hanno davvero qualcosa in agenda,
+    // nell'ordine del catalogo. Con la sola Terra la vista resta identica a prima;
+    // in una giornata piena si divide fino a otto corsie.
+    const activeCategories = DAILY_CATEGORIES.filter(cat =>
+        bookings.some(b => categoryOf(b.type) === cat.id))
 
     const currentSlot = getCurrentTimeSlot()
     const isToday = selectedDate.getDate() === new Date().getDate() &&
@@ -353,24 +324,15 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                         </div>
                     </div>
 
-                    {/* Category Legend */}
-                    <div className="flex flex-wrap justify-center gap-3 sm:gap-6 py-1 sm:py-2">
-                        <div className="flex items-center gap-1.5">
-                            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-gradient-to-br from-green-500 to-green-600 shadow-lg shadow-green-500/50" />
-                            <span className="text-xs sm:text-sm text-theme-text-secondary font-light">Noleggio</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/50" />
-                            <span className="text-xs sm:text-sm text-theme-text-secondary font-light">Lavaggio</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 shadow-lg shadow-orange-500/50" />
-                            <span className="text-xs sm:text-sm text-theme-text-secondary font-light">Meccanica</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 shadow-lg shadow-purple-500/50" />
-                            <span className="text-xs sm:text-sm text-theme-text-secondary font-light">Varie</span>
-                        </div>
+                    {/* Category Legend — 2026-08-23: generata dal catalogo, cosi'
+                        non puo' piu' restare indietro rispetto alle corsie. */}
+                    <div className="flex flex-wrap justify-center gap-3 sm:gap-5 py-1 sm:py-2">
+                        {DAILY_CATEGORIES.map(cat => (
+                            <div key={cat.id} className="flex items-center gap-1.5">
+                                <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-gradient-to-br ${cat.dot} shadow-lg`} />
+                                <span className="text-xs sm:text-sm text-theme-text-secondary font-light">{cat.label}</span>
+                            </div>
+                        ))}
                     </div>
                 </div>
 
@@ -381,15 +343,14 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                     </div>
                 ) : (
                     <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                        {/* 2026-08-23: le corsie sono quelle DEL GIORNO, non piu' 4 fisse.
+                            Calcolate una volta sola sull'intera giornata: se cambiassero
+                            riga per riga le colonne non resterebbero allineate. */}
                         {TIME_SLOTS.map((slot) => {
                             const slotBookings = getSlotBookings(slot)
                             const isCurrentSlot = isToday && slot === currentSlot
                             const hasBookings = slotBookings.length > 0
 
-                            const noleggioBookings = slotBookings.filter(b => b.type === 'check-in' || b.type === 'check-out')
-                            const lavaggioBookings = slotBookings.filter(b => b.type === 'lavaggio')
-                            const meccanicaBookings = slotBookings.filter(b => b.type === 'meccanica')
-                            const varieBookings = slotBookings.filter(b => b.type === 'varie')
 
                             // On mobile, skip empty slots (unless current time)
                             const mobileHidden = !hasBookings && !isCurrentSlot ? 'hidden sm:flex' : 'flex'
@@ -410,41 +371,30 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                                         </span>
                                     </div>
 
-                                    {/* Desktop: 4-column grid */}
-                                    <div className="hidden sm:grid flex-1 grid-cols-4 gap-3">
-                                        <div className="space-y-2">
-                                            {noleggioBookings.map(booking => (
-                                                <ActivityCard key={booking.id} booking={booking} colorClass="border-green-500" gradientClass="from-green-500/20 to-green-600/10" glowClass="hover:shadow-green-500/30" />
-                                            ))}
-                                        </div>
-                                        <div className="space-y-2">
-                                            {lavaggioBookings.map(booking => (
-                                                <ActivityCard key={booking.id} booking={booking} colorClass="border-blue-500" gradientClass="from-blue-500/20 to-blue-600/10" glowClass="hover:shadow-blue-500/30" />
-                                            ))}
-                                        </div>
-                                        <div className="space-y-2">
-                                            {meccanicaBookings.map(booking => (
-                                                <ActivityCard key={booking.id} booking={booking} colorClass="border-orange-500" gradientClass="from-orange-500/20 to-orange-600/10" glowClass="hover:shadow-orange-500/30" />
-                                            ))}
-                                        </div>
-                                        <div className="space-y-2">
-                                            {varieBookings.map(booking => (
-                                                <ActivityCard key={booking.id} booking={booking} colorClass="border-purple-500" gradientClass="from-purple-500/20 to-purple-600/10" glowClass="hover:shadow-purple-500/30" />
-                                            ))}
-                                        </div>
+                                    {/* Desktop: una colonna per categoria presente oggi */}
+                                    <div
+                                        className="hidden sm:grid flex-1 gap-3"
+                                        style={{ gridTemplateColumns: `repeat(${Math.max(activeCategories.length, 1)}, minmax(0, 1fr))` }}
+                                    >
+                                        {activeCategories.map(cat => (
+                                            <div key={cat.id} className="space-y-2">
+                                                {slotBookings.filter(b => categoryOf(b.type) === cat.id).map(booking => (
+                                                    <ActivityCard
+                                                        key={`${booking.id}-${booking.type}`}
+                                                        booking={booking}
+                                                        colorClass={cat.color}
+                                                        gradientClass={cat.gradient}
+                                                        glowClass={cat.glow}
+                                                    />
+                                                ))}
+                                            </div>
+                                        ))}
                                     </div>
 
                                     {/* Mobile: single column stacked */}
                                     <div className="sm:hidden flex-1 space-y-1.5">
                                         {slotBookings.map(booking => {
-                                            const colorMap: Record<string, { color: string; gradient: string; glow: string }> = {
-                                                'check-in': { color: 'border-green-500', gradient: 'from-green-500/20 to-green-600/10', glow: 'hover:shadow-green-500/30' },
-                                                'check-out': { color: 'border-green-500', gradient: 'from-green-500/20 to-green-600/10', glow: 'hover:shadow-green-500/30' },
-                                                'lavaggio': { color: 'border-blue-500', gradient: 'from-blue-500/20 to-blue-600/10', glow: 'hover:shadow-blue-500/30' },
-                                                'meccanica': { color: 'border-orange-500', gradient: 'from-orange-500/20 to-orange-600/10', glow: 'hover:shadow-orange-500/30' },
-                                                'varie': { color: 'border-purple-500', gradient: 'from-purple-500/20 to-purple-600/10', glow: 'hover:shadow-purple-500/30' },
-                                            }
-                                            const colors = colorMap[booking.type] || colorMap['varie']
+                                            const colors = categoryMeta(categoryOf(booking.type))
                                             return (
                                                 <ActivityCard key={`${booking.id}-${booking.type}`} booking={booking} colorClass={colors.color} gradientClass={colors.gradient} glowClass={colors.glow} />
                                             )
