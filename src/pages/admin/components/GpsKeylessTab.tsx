@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css'
 import { motion } from 'framer-motion'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts'
 import { supabase } from '../../../supabaseClient'
+import { toBusiness, usaCatalogoDedicato, BUSINESS_LABELS, BUSINESS_ASSET_LABELS, type Business } from '../../../utils/businessScope'
 import { useTheme } from '../../../contexts/ThemeContext'
 
 type VehicleStatus = 'online' | 'offline' | 'moving' | 'idle' | 'alarm' | 'blocked'
@@ -266,7 +267,16 @@ function generateHourlyUsage() {
   return data
 }
 
-export default function GpsKeylessTab() {
+/**
+ * 2026-08-24 (direzione): il GPS Flotta e' nel menu di ogni business. Su
+ * Mare/Aria/Soggiorni le righe sono i mezzi di QUEL catalogo, non le auto del
+ * Noleggio Terra: un tracker si aggancia per targa/matricola o per nome. Un
+ * mezzo senza tracker resta in elenco come "offline": e' un'informazione,
+ * non un motivo per mostrare le auto di un altro business.
+ */
+export default function GpsKeylessTab({ business = 'rental' }: { business?: Business | string } = {}) {
+  const biz = toBusiness(business)
+  const isCatalogo = usaCatalogoDedicato(biz)
   const { theme } = useTheme()
   const [vehicles, setVehicles] = useState<SfVehicle[]>([])
   const [, setPositions] = useState<SfPosition[]>([])
@@ -291,15 +301,29 @@ export default function GpsKeylessTab() {
         sfApi<{ vehicles: SfVehicle[] }>({ action: 'getVehicles' }),
         sfApi<{ positions: SfPosition[] }>({ action: 'getPositions' }),
         sfApi<{ events: SfEvent[] }>({ action: 'getEvents' }),
-        supabase
-          .from('vehicles')
-          .select('id, display_name, plate, metadata, status, safefleet_device_id')
-          .neq('status', 'retired')
-          .returns<DR7Vehicle[]>(),
+        isCatalogo
+          ? supabase
+              .from('noleggio_catalog')
+              .select('id, name, image_url, is_active')
+              .eq('service_type', biz)
+              .order('sort_order', { ascending: true })
+              .order('name', { ascending: true })
+          : supabase
+              .from('vehicles')
+              .select('id, display_name, plate, metadata, status, safefleet_device_id')
+              .neq('status', 'retired')
+              .returns<DR7Vehicle[]>(),
       ])
       setMockMode(ping.mock)
 
-      const dr7Vehicles = drRes.data || []
+      // Su Mare/Aria/Soggiorni il catalogo del business prende il posto della
+      // flotta auto, normalizzato nella stessa forma.
+      const dr7Vehicles: DR7Vehicle[] = isCatalogo
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ? ((drRes.data || []) as any[])
+            .filter(c => c.is_active !== false)
+            .map(c => ({ id: c.id, display_name: c.name, plate: null, metadata: { image: c.image_url || null }, status: 'active' } as unknown as DR7Vehicle))
+        : ((drRes.data || []) as DR7Vehicle[])
       const sfVehicles = vRes.vehicles || []
       // Merge DR7 vehicles (image, plate, name) with SafeFleet telemetry (position, speed, status).
       // Match by plate (uppercase trim) — fallback: keep SafeFleet-only vehicles too.
@@ -307,10 +331,14 @@ export default function GpsKeylessTab() {
       sfVehicles.forEach(s => byPlate.set(s.plate.toUpperCase().trim(), s))
       const merged: SfVehicle[] = []
       const seenPlates = new Set<string>()
+      const byName = new Map<string, SfVehicle>()
+      sfVehicles.forEach(s => byName.set(String(s.model || '').toUpperCase().trim(), s))
       dr7Vehicles.forEach((dr, i) => {
         const key = (dr.plate || '').toUpperCase().trim()
-        const sf = key ? byPlate.get(key) : undefined
-        if (sf) seenPlates.add(key)
+        // Il catalogo non ha targa: si aggancia il tracker per nome del mezzo.
+        const sf = (key ? byPlate.get(key) : undefined)
+          || (isCatalogo ? byName.get(String(dr.display_name || '').toUpperCase().trim()) : undefined)
+        if (sf) seenPlates.add((sf.plate || key).toUpperCase().trim())
         merged.push({
           id: sf?.id ?? (1000 + i),
           plate: dr.plate || '—',
@@ -328,10 +356,14 @@ export default function GpsKeylessTab() {
           limits: sf?.limits,
         })
       })
-      // append SafeFleet vehicles that have no matching DR7 record (so user sees them too)
-      sfVehicles.forEach(s => {
-        if (!seenPlates.has(s.plate.toUpperCase().trim())) merged.push(s)
-      })
+      // append SafeFleet vehicles that have no matching DR7 record (so user sees them too).
+      // SOLO su Terra: su Mare/Aria/Soggiorni un tracker non riconosciuto e'
+      // quasi sempre un'auto, e finirebbe nell'elenco del business sbagliato.
+      if (!isCatalogo) {
+        sfVehicles.forEach(s => {
+          if (!seenPlates.has(s.plate.toUpperCase().trim())) merged.push(s)
+        })
+      }
 
       setVehicles(merged)
       setPositions(pRes.positions || [])
@@ -342,7 +374,8 @@ export default function GpsKeylessTab() {
     } finally {
       setLoading(false)
     }
-  }, [selectedId])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, biz, isCatalogo])
 
   useEffect(() => { loadInitial() }, [loadInitial])
 
@@ -438,9 +471,9 @@ export default function GpsKeylessTab() {
           </div>
           <div className="min-w-0">
             <h1 className="text-sm font-bold tracking-tight text-zinc-900 dark:text-white truncate flex items-center gap-2">
-              GPS Fleet Command
+              GPS Fleet Command — {BUSINESS_LABELS[biz]}
             </h1>
-            <p className="text-[10px] text-zinc-500 truncate">Telemetria real-time · {vehicles.length} veicoli</p>
+            <p className="text-[10px] text-zinc-500 truncate">Telemetria real-time · {vehicles.length} {BUSINESS_ASSET_LABELS[biz].assetPlural.toLowerCase()}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">

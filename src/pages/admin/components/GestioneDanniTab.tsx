@@ -7,6 +7,7 @@ import DateRangeFilter from '../../../components/DateRangeFilter'
 import { sanitizeMoney, parseMoney } from '../../../utils/money'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
+import { bookingBelongsTo, toBusiness, BUSINESS_LABELS, type Business } from '../../../utils/businessScope'
 
 // ── Keyword classification (mirrors report-danni.ts) ──────────────────────────
 const DANNI_KEYWORDS = [
@@ -96,7 +97,14 @@ async function openFatturaPdf(invoiceId: string) {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function GestioneDanniTab() {
+/**
+ * 2026-08-24 (direzione): questa tab compare nel menu di OGNI business
+ * (Terra, Mare, Aria, Soggiorni). Prima era registrata una volta sola e
+ * riusata: aprendola dal Mare si vedevano le penali del Noleggio Terra.
+ * `business` la rende la tab di QUEL business e basta — [[businessScope]].
+ */
+export default function GestioneDanniTab({ business = 'rental' }: { business?: Business | string } = {}) {
+  const biz = toBusiness(business)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [customers, setCustomers] = useState<CustomerGroup[]>([])
@@ -123,7 +131,8 @@ export default function GestioneDanniTab() {
   const [payByLinkLoading, setPayByLinkLoading] = useState<string | null>(null)
 
   // ── Data loading ────────────────────────────────────────────────────────────
-  useEffect(() => { loadData() }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadData() }, [biz])
 
   async function loadData() {
     setLoading(true)
@@ -142,7 +151,7 @@ export default function GestioneDanniTab() {
       for (let page = 0; page < 30; page++) {
         const { data: batch, error: bErrPage } = await supabase
           .from('bookings')
-          .select('id, customer_name, customer_email, vehicle_name, pickup_date, booking_details, booked_at')
+          .select('id, customer_name, customer_email, vehicle_name, pickup_date, booking_details, booked_at, service_type, vehicle_type')
           .order('pickup_date', { ascending: false })
           .range(page * 1000, page * 1000 + 999)
         if (bErrPage) throw bErrPage
@@ -151,6 +160,10 @@ export default function GestioneDanniTab() {
         bookings.push(...got)
         if (got.length < 1000) break
       }
+      // Solo le prenotazioni di QUESTO business: una penale del Noleggio Terra
+      // non ha niente da fare nella tab del Mare (e viceversa).
+      const businessBookings = bookings.filter(b => bookingBelongsTo(b, biz))
+      const businessBookingIds = new Set<string>(businessBookings.map(b => String(b.id)))
 
       // 2. Fetch penalty/damage fatture
       const { data: fatture, error: fErr } = await supabase
@@ -164,7 +177,7 @@ export default function GestioneDanniTab() {
 
       // Build a booking lookup for fatture
       const bookingMap = new Map<string, { customer_name: string; customer_email: string; vehicle_name: string; pickup_date: string }>()
-      for (const b of (bookings || [])) {
+      for (const b of businessBookings) {
         bookingMap.set(b.id, {
           customer_name: b.customer_name || '',
           customer_email: b.customer_email || '',
@@ -189,7 +202,7 @@ export default function GestioneDanniTab() {
       }
 
       // 3a. Scan bookings for pending penalties & danni
-      for (const b of (bookings || [])) {
+      for (const b of businessBookings) {
         const details = b.booking_details || {}
         const bookingLabel = `${b.vehicle_name || '—'} — ${b.pickup_date || '—'}`
 
@@ -244,7 +257,7 @@ export default function GestioneDanniTab() {
       // 3b. Scan fatture for invoiced penalty/damage items
       // Track which booking IDs already have entries from booking_details to avoid duplicates
       const bookingIdsWithDetails = new Set<string>()
-      for (const b of (bookings || [])) {
+      for (const b of businessBookings) {
         const details = b.booking_details || {}
         const hasPenalties = Array.isArray(details.penalties) && details.penalties.length > 0
         const hasDanni = Array.isArray(details.danni) && details.danni.length > 0
@@ -253,6 +266,10 @@ export default function GestioneDanniTab() {
 
       for (const f of (fatture || [])) {
         if (!f.items || !Array.isArray(f.items)) continue
+        // Fattura di un ALTRO business: fuori. Le fatture senza prenotazione
+        // collegata restano solo sul Noleggio Terra, dove sono sempre state.
+        if (f.booking_id) { if (!businessBookingIds.has(String(f.booking_id))) continue }
+        else if (biz !== 'rental') continue
         // Skip if this booking's penalties/danni were already added from booking_details
         if (f.booking_id && bookingIdsWithDetails.has(f.booking_id)) continue
 
@@ -322,7 +339,7 @@ export default function GestioneDanniTab() {
 
       // Keep only customers with at least one item, also ensure we track any booking ID
       // for each customer (for adding new items)
-      for (const b of (bookings || [])) {
+      for (const b of businessBookings) {
         const g = map.get(normalizeKey(b.customer_name || ''))
         if (g && !g.mostRecentBookingId) {
           g.mostRecentBookingId = b.id
@@ -887,7 +904,7 @@ export default function GestioneDanniTab() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h2 className="text-2xl font-bold text-theme-text-primary">Gestione Danni & Penali</h2>
+        <h2 className="text-2xl font-bold text-theme-text-primary">Gestione Danni &amp; Penali — {BUSINESS_LABELS[biz]}</h2>
         <button
           onClick={loadData}
           disabled={loading}

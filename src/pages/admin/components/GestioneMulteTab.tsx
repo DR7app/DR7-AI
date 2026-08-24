@@ -4,8 +4,17 @@ import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import { logger } from '../../../utils/logger'
 import { loadMulteConfig, MULTE_CONFIG_DEFAULTS, type MulteConfigValues } from './MulteConfigSection'
+import { bookingBelongsTo, toBusiness, BUSINESS_LABELS, type Business } from '../../../utils/businessScope'
 
-export default function GestioneMulteTab() {
+/**
+ * 2026-08-24 (direzione): "Multe" e' nel menu di ogni business. Lo storico
+ * degli invii PEC va filtrato per business, altrimenti dal Mare si leggono
+ * le multe delle auto del Noleggio Terra. Il business si ricava dalla
+ * prenotazione collegata (`multe_pec_log.booking_id`); le righe senza
+ * prenotazione restano su Terra, dove sono sempre state.
+ */
+export default function GestioneMulteTab({ business = 'rental' }: { business?: Business | string } = {}) {
+    const biz = toBusiness(business)
     const [activeSubTab, setActiveSubTab] = useState<'history' | 'upload'>('history')
     // Multa Upload + PEC State
     const [multaFile, setMultaFile] = useState<File | null>(null)
@@ -114,9 +123,8 @@ export default function GestioneMulteTab() {
     const [pecHistory, setPecHistory] = useState<any[]>([])
     const [loadingHistory, setLoadingHistory] = useState(false)
 
-    useEffect(() => {
-        loadPecHistory()
-    }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { loadPecHistory() }, [biz])
 
     async function loadPecHistory() {
         setLoadingHistory(true)
@@ -125,8 +133,24 @@ export default function GestioneMulteTab() {
                 .from('multe_pec_log')
                 .select('*')
                 .order('created_at', { ascending: false })
-                .limit(50)
-            if (!error && data) setPecHistory(data)
+                .limit(200)
+            if (!error && data) {
+                // Business della multa = business della prenotazione collegata.
+                const ids = Array.from(new Set(data.map(r => r.booking_id).filter(Boolean)))
+                const bizById = new Map<string, string>()
+                if (ids.length) {
+                    const { data: bks } = await supabase
+                        .from('bookings')
+                        .select('id, service_type, vehicle_type, booking_details')
+                        .in('id', ids)
+                    for (const b of (bks || [])) bizById.set(String(b.id), bookingBelongsTo(b, biz) ? 'yes' : 'no')
+                }
+                const filtered = data.filter(r => {
+                    if (!r.booking_id) return biz === 'rental'
+                    return bizById.get(String(r.booking_id)) === 'yes'
+                })
+                setPecHistory(filtered.slice(0, 50))
+            }
         } catch {
             // Table might not exist yet — that's fine
             logger.warn('[GestioneMulte] multe_pec_log table not found, skipping history')
@@ -287,7 +311,7 @@ export default function GestioneMulteTab() {
             <div className="bg-theme-bg-secondary rounded-lg p-3 lg:p-4 border border-theme-border">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <div>
-                        <h2 className="text-2xl font-bold text-theme-text-primary">Gestione Multe</h2>
+                        <h2 className="text-2xl font-bold text-theme-text-primary">Gestione Multe — {BUSINESS_LABELS[biz]}</h2>
                         <p className="text-sm text-theme-text-muted mt-0.5">
                             {activeSubTab === 'history' ? 'Storico comunicazioni PEC inviate' : "Carica il verbale: il destinatario PEC viene proposto dall'organo accertatore"}
                         </p>
