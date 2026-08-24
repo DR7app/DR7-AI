@@ -9,6 +9,7 @@
 // =============================================================================
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
+import { authFetch } from '../../../utils/authFetch'
 import toast from 'react-hot-toast'
 import MoneyInput from '../../../components/MoneyInput'
 
@@ -32,6 +33,13 @@ interface Articolo {
   amazon_url: string | null
   note: string | null
   attivo: boolean
+  // 2026-08-24: contatto memorizzato + ordini periodici. Prima il numero
+  // WhatsApp si ridigitava a ogni ordine e non esisteva una cadenza.
+  contatto_ordine: string | null
+  contatto_tipo: 'whatsapp' | 'email' | null
+  frequenza_giorni: number | null
+  riordino_automatico: boolean
+  ultimo_riordino_periodico: string | null
 }
 interface Movimento { id: string; tipo: string; delta: number | null; qta_prima: number | null; qta_dopo: number | null; motivo: string | null; utente: string | null; created_at: string }
 interface Ordine { id: string; articolo_id: string; fornitore_id: string | null; canale: string; quantita: number; stato: string; auto: boolean; created_at: string }
@@ -112,6 +120,7 @@ export default function InventarioMagazzino() {
   // Invio ordine via WhatsApp a un numero digitato al volo (non solo fornitori).
   const [sendOrderId, setSendOrderId] = useState<string | null>(null)
   const [sendPhone, setSendPhone] = useState('')
+  const [sendCanale, setSendCanale] = useState<'whatsapp' | 'email'>('whatsapp')
 
   // ── Load ─────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -211,7 +220,21 @@ export default function InventarioMagazzino() {
       utente: await currentUserLabel(), ordine_id: ord?.id || null,
     })
 
-    // 4) ALARM allo staff via WhatsApp (Green API). Non-bloccante.
+    // 4) 2026-08-24: se l'articolo e' in modalita' AUTOMATICO e ha un contatto
+    //    salvato, l'ordine parte davvero. Prima si fermava sempre alla bozza:
+    //    "riordino automatico" creava solo un promemoria da mandare a mano.
+    if (a.riordino_automatico !== false && a.contatto_ordine && ord?.id) {
+      const ordineFinto: Ordine = {
+        id: ord.id, articolo_id: a.id, fornitore_id: a.fornitore_id,
+        canale, quantita, stato: 'bozza', auto: true, created_at: new Date().toISOString(),
+      }
+      try {
+        if (a.contatto_tipo === 'email') await inviaOrdineEmail(ordineFinto, a.contatto_ordine)
+        else await inviaOrdineWhatsApp(ordineFinto, a.contatto_ordine)
+      } catch { /* resta bozza: lo staff lo vede e lo manda a mano */ }
+    }
+
+    // 5) ALARM allo staff via WhatsApp (Green API). Non-bloccante.
     const unita = isPct(a) ? '%' : (a.unita || 'pz')
     const msg =
       `⚠️ SCORTA MINIMA — MAGAZZINO DR7\n\n` +
@@ -280,6 +303,13 @@ export default function InventarioMagazzino() {
         amazon_asin: form.amazon_asin || null,
         amazon_url: form.amazon_url || null,
         note: form.note || null,
+        // 2026-08-24: senza queste righe i campi nuovi non venivano MAI salvati
+        // (il payload e' costruito a mano, non e' uno spread del form).
+        contatto_ordine: (form.contatto_ordine || '').toString().trim() || null,
+        contatto_tipo: form.contatto_tipo || null,
+        frequenza_giorni: form.frequenza_giorni == null || (form.frequenza_giorni as unknown as string) === ''
+          ? null : Number(form.frequenza_giorni),
+        riordino_automatico: form.riordino_automatico !== false,
       }
       const isNew = !form.id
       const { data, error } = isNew
@@ -341,21 +371,91 @@ export default function InventarioMagazzino() {
 
   // Invia l'ordine via WhatsApp a un numero qualsiasi (digitato al volo o
   // precompilato dal fornitore), poi porta l'ordine a "inviato".
+  // 2026-08-24: il testo dell'ordine arriva da Messaggi di Sistema Pro
+  // (evento `magazzino_ordine_fornitore`), non piu' scritto in duro qui: cosi'
+  // si modifica dal gestionale come ogni altro messaggio. Se nessun template
+  // gestisce quell'evento si usa il testo storico, senza bloccare l'ordine.
+  const [templateOrdine, setTemplateOrdine] = useState<string | null>(null)
+  useEffect(() => {
+    void (async () => {
+      try {
+        const { data } = await supabase
+          .from('system_messages')
+          .select('message_body, is_enabled, handled_events')
+          .contains('handled_events', ['magazzino_ordine_fornitore'])
+          .limit(5)
+        const row = (data || []).find((r: { is_enabled?: boolean; message_body?: string }) =>
+          r.is_enabled !== false && !!r.message_body)
+        if (row?.message_body) setTemplateOrdine(row.message_body as string)
+      } catch { /* testo storico */ }
+    })()
+  }, [])
+
+  /** Testo dell'ordine, identico su WhatsApp ed email. */
+  function testoOrdine(o: Ordine): string {
+    const a = articoli.find(x => x.id === o.articolo_id)
+    const forn = o.fornitore_id ? fornitoreById.get(o.fornitore_id) : undefined
+    const unita = a && isPct(a) ? '%' : (a?.unita || 'pz')
+
+    if (templateOrdine) {
+      return templateOrdine
+        .replace(/\{\{\s*articolo\s*\}\}/gi, a?.nome || String(o.articolo_id))
+        .replace(/\{\{\s*codice\s*\}\}/gi, a?.codice || '')
+        .replace(/\{\{\s*quantita\s*\}\}/gi, `${num(o.quantita)} ${unita}`)
+        .replace(/\{\{\s*fornitore\s*\}\}/gi, forn?.nome || '')
+        .replace(/\{\{\s*unita\s*\}\}/gi, unita)
+    }
+
+    return `Ordine DR7 — Magazzino\n\n`
+      + `Articolo: ${a?.nome || o.articolo_id}\n`
+      + (a?.codice ? `Codice: ${a.codice}\n` : '')
+      + `Quantita: ${num(o.quantita)} ${unita}\n`
+      + (forn ? `Fornitore: ${forn.nome}\n` : '')
+      + `\nConsegna presso: DR7 — Viale Marconi 229, 09131 Cagliari (CA)`
+  }
+
+  // 2026-08-24: il magazzino sapeva ordinare solo via WhatsApp. Un fornitore
+  // che lavora via email non era raggiungibile dal gestionale.
+  async function inviaOrdineEmail(o: Ordine, emailRaw: string) {
+    const dest = (emailRaw || '').trim()
+    if (!/\S+@\S+\.\S+/.test(dest)) { toast.error('Email non valida'); return }
+    setBusy(true)
+    try {
+      const a = articoli.find(x => x.id === o.articolo_id)
+      const res = await authFetch('/.netlify/functions/send-magazzino-ordine-email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: dest,
+          oggetto: `Ordine DR7 — ${a?.nome || 'Magazzino'}`,
+          testo: testoOrdine(o),
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data?.success !== true) throw new Error(data?.error || `HTTP ${res.status}`)
+      await supabase.from('inv_ordini').update({ stato: 'inviato', sent_at: new Date().toISOString() }).eq('id', o.id)
+
+      // Memorizza il contatto sull'articolo: il prossimo ordine parte gia' pronto.
+      if (a && (a.contatto_ordine !== dest || a.contatto_tipo !== 'email')) {
+        const { error: cErr } = await supabase.from('inv_articoli')
+          .update({ contatto_ordine: dest, contatto_tipo: 'email' }).eq('id', a.id)
+        if (!cErr) {
+          setArticoli(prev => prev.map(x => x.id === a.id
+            ? { ...x, contatto_ordine: dest, contatto_tipo: 'email' } : x))
+        }
+      }
+      toast.success('Ordine inviato via email')
+      setSendOrderId(null); setSendPhone('')
+      await load()
+    } catch (e) { toast.error(`Errore invio: ${(e as Error).message}`) } finally { setBusy(false) }
+  }
+
   async function inviaOrdineWhatsApp(o: Ordine, phoneRaw: string) {
     const phone = (phoneRaw || '').replace(/\D/g, '')
     if (phone.length < 8) { toast.error('Numero non valido'); return }
     setBusy(true)
     try {
       const a = articoli.find(x => x.id === o.articolo_id)
-      const forn = o.fornitore_id ? fornitoreById.get(o.fornitore_id) : undefined
-      const unita = a && isPct(a) ? '%' : (a?.unita || 'pz')
-      const msg =
-        `Ordine DR7 — Magazzino\n\n` +
-        `Articolo: ${a?.nome || o.articolo_id}\n` +
-        (a?.codice ? `Codice: ${a.codice}\n` : '') +
-        `Quantita: ${num(o.quantita)} ${unita}\n` +
-        (forn ? `Fornitore: ${forn.nome}\n` : '') +
-        `\nConsegna presso: DR7 — Viale Marconi 229, 09131 Cagliari (CA)`
+      const msg = testoOrdine(o)
       const res = await fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customPhone: phone, customMessage: msg, type: 'Ordine Magazzino' }),
@@ -363,6 +463,19 @@ export default function InventarioMagazzino() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok || data?.success === false) throw new Error(data?.error || `HTTP ${res.status}`)
       await supabase.from('inv_ordini').update({ stato: 'inviato', sent_at: new Date().toISOString() }).eq('id', o.id)
+
+      // 2026-08-24: memorizza il numero sull'articolo, cosi' il prossimo
+      // ordine dello stesso articolo (il caffe', il detergente...) parte gia'
+      // con il contatto giusto invece di farlo ridigitare.
+      if (a && a.contatto_ordine !== phone) {
+        const { error: cErr } = await supabase.from('inv_articoli')
+          .update({ contatto_ordine: phone, contatto_tipo: 'whatsapp' }).eq('id', a.id)
+        if (!cErr) {
+          setArticoli(prev => prev.map(x => x.id === a.id
+            ? { ...x, contatto_ordine: phone, contatto_tipo: 'whatsapp' } : x))
+        }
+      }
+
       toast.success('Ordine inviato via WhatsApp')
       setSendOrderId(null); setSendPhone('')
       await load()
@@ -523,20 +636,56 @@ export default function InventarioMagazzino() {
                   )}
                   {o.stato === 'bozza' && !ECOM_CANALI.has(o.canale) && sendOrderId !== o.id && (
                     <button
-                      onClick={() => { setSendOrderId(o.id); setSendPhone(forn?.telefono ? forn.telefono.replace(/\D/g, '') : '') }}
+                      onClick={() => {
+                        // 2026-08-24: precompila con il contatto SALVATO
+                        // sull'articolo; solo se manca ripiega sul fornitore.
+                        const tipo = a?.contatto_tipo || 'whatsapp'
+                        setSendCanale(tipo)
+                        setSendOrderId(o.id)
+                        if (tipo === 'email') {
+                          setSendPhone(a?.contatto_ordine || forn?.email || '')
+                        } else {
+                          setSendPhone((a?.contatto_ordine || forn?.telefono || '').replace(/\D/g, ''))
+                        }
+                      }}
                       className="px-2 py-1 rounded bg-green-600 hover:bg-green-700 text-white text-xs font-semibold"
-                    >Invia WhatsApp</button>
+                    >Invia ordine</button>
                   )}
                   {o.stato === 'bozza' && !ECOM_CANALI.has(o.canale) && sendOrderId === o.id && (
-                    <div className="flex items-center gap-1 w-full mt-1">
-                      <input
-                        type="tel" value={sendPhone} onChange={e => setSendPhone(e.target.value)}
-                        placeholder="Numero WhatsApp (es. 39347...)"
-                        className="flex-1 px-2 py-1 rounded bg-theme-bg-tertiary border border-green-500/50 text-xs text-theme-text-primary"
-                        autoFocus
-                      />
-                      <button disabled={busy} onClick={() => inviaOrdineWhatsApp(o, sendPhone)} className="px-2 py-1 rounded bg-green-600 hover:bg-green-700 text-white text-xs font-semibold disabled:opacity-50">Invia</button>
-                      <button onClick={() => { setSendOrderId(null); setSendPhone('') }} className="px-2 py-1 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary text-xs">Annulla</button>
+                    /* 2026-08-24: si sceglie il canale (WhatsApp o email) e il
+                       campo arriva gia' compilato col contatto salvato
+                       sull'articolo. Dopo l'invio il contatto viene memorizzato,
+                       cosi' il prossimo ordine dello stesso articolo non chiede
+                       piu' nulla. */
+                    <div className="w-full mt-1 space-y-1">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setSendCanale('whatsapp')}
+                          className={`px-2 py-1 rounded text-xs font-semibold border ${sendCanale === 'whatsapp' ? 'bg-green-600 text-white border-green-600' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary'}`}
+                        >WhatsApp</button>
+                        <button
+                          onClick={() => setSendCanale('email')}
+                          className={`px-2 py-1 rounded text-xs font-semibold border ${sendCanale === 'email' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary'}`}
+                        >Email</button>
+                        {a?.contatto_ordine && (
+                          <span className="text-[10px] text-theme-text-muted truncate">salvato: {a.contatto_ordine}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type={sendCanale === 'email' ? 'email' : 'tel'}
+                          value={sendPhone} onChange={e => setSendPhone(e.target.value)}
+                          placeholder={sendCanale === 'email' ? 'Email fornitore' : 'Numero WhatsApp (es. 39347...)'}
+                          className="flex-1 px-2 py-1 rounded bg-theme-bg-tertiary border border-green-500/50 text-xs text-theme-text-primary"
+                          autoFocus
+                        />
+                        <button
+                          disabled={busy}
+                          onClick={() => sendCanale === 'email' ? inviaOrdineEmail(o, sendPhone) : inviaOrdineWhatsApp(o, sendPhone)}
+                          className="px-2 py-1 rounded bg-green-600 hover:bg-green-700 text-white text-xs font-semibold disabled:opacity-50"
+                        >Invia</button>
+                        <button onClick={() => { setSendOrderId(null); setSendPhone('') }} className="px-2 py-1 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary text-xs">Annulla</button>
+                      </div>
                     </div>
                   )}
                   {o.stato === 'bozza' && sendOrderId !== o.id && <button onClick={() => ordineTransizione(o, 'inviato')} className="px-2 py-1 rounded bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold">Segna inviato</button>}
@@ -667,6 +816,59 @@ function ArticoloModal({ initial, categorie, fornitori, busy, nextCodeFor, onClo
               <option value="">Default fornitore</option>
               {CANALI.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
+          </div>
+
+          {/* 2026-08-24: contatto memorizzato + cadenza + modalita'.
+              Prima il numero si ridigitava a ogni ordine e "automatico"
+              significava solo "crea una bozza". */}
+          <div className="col-span-2 border-t border-theme-border/60 pt-3 mt-1">
+            <div className="text-[11px] uppercase tracking-wide text-theme-text-muted font-semibold mb-2">Ordine</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={lblCls}>Contatto ordine</label>
+                <input
+                  type="text"
+                  value={f.contatto_ordine ?? ''}
+                  onChange={e => set('contatto_ordine', e.target.value)}
+                  placeholder={f.contatto_tipo === 'email' ? 'fornitore@esempio.it' : '39347...'}
+                  className={inputCls}
+                />
+              </div>
+              <div><label className={lblCls}>Tipo contatto</label>
+                <select value={f.contatto_tipo || 'whatsapp'} onChange={e => set('contatto_tipo', e.target.value)} className={inputCls}>
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="email">Email</option>
+                </select>
+              </div>
+              <div><label className={lblCls}>Modalita</label>
+                <select
+                  value={f.riordino_automatico === false ? 'manuale' : 'automatico'}
+                  onChange={e => set('riordino_automatico', e.target.value === 'automatico')}
+                  className={inputCls}
+                >
+                  <option value="automatico">Automatico — parte da solo</option>
+                  <option value="manuale">Manuale — crea solo la bozza</option>
+                </select>
+              </div>
+              <div><label className={lblCls}>Ogni quanti giorni</label>
+                <input
+                  type="text" inputMode="numeric"
+                  value={f.frequenza_giorni ?? ''}
+                  onChange={e => {
+                    const v = e.target.value.replace(/[^0-9]/g, '')
+                    set('frequenza_giorni', v === '' ? null : Number(v))
+                  }}
+                  placeholder="vuoto = solo a soglia"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+            <p className="text-[10px] text-theme-text-muted mt-2 leading-snug">
+              In automatico l'ordine parte da solo appena si scende sotto la soglia minima, al contatto qui sopra.
+              Il testo del messaggio si modifica in Messaggi di Sistema Pro (evento <code>magazzino_ordine_fornitore</code>).
+              {(!f.contatto_ordine && f.riordino_automatico !== false) && (
+                <span className="block text-amber-500 mt-1">Senza contatto l'automatico non puo' inviare: resta una bozza.</span>
+              )}
+            </p>
           </div>
           <div><label className={lblCls}>Amazon ASIN</label><input value={f.amazon_asin || ''} onChange={e => set('amazon_asin', e.target.value)} className={inputCls} /></div>
           <div><label className={lblCls}>Amazon URL</label><input value={f.amazon_url || ''} onChange={e => set('amazon_url', e.target.value)} className={inputCls} /></div>

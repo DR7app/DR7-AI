@@ -178,3 +178,10 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Riordino periodico magazzino (2026-08-24). Ogni giorno alle 07:00 UTC guarda
+# gli articoli con `frequenza_giorni` e, se e' passato quel tempo, crea e invia
+# l'ordine al contatto salvato sull'articolo. In modalita' manuale si ferma
+# alla bozza.
+[functions."magazzino-riordino-periodico-cron"]
+  schedule = "0 7 * * *"
