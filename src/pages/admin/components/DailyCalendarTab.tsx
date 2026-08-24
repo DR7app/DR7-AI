@@ -228,10 +228,11 @@ export default function DailyCalendarTab() {
     const metaOf = (id: string): DailyCategory =>
         allCategories.find(c => c.id === id)
         || { ...DAILY_PALETTE.slate, id: 'varie', label: 'Altro', enabled: true, colorKey: 'slate' } as DailyCategory
-    // 24/08: una corsia attiva si vede SEMPRE, anche senza niente in agenda.
-    // Prima sparivano le colonne vuote: chi aggiungeva una corsia nuova non la
-    // vedeva comparire e non capiva se avesse funzionato.
-    const activeCategories = allCategories
+    // Niente colonne vuote: una corsia entra nella giornata solo se ha
+    // qualcosa in agenda (direzione, 24/08). Una corsia nuova si verifica
+    // dalla configurazione, non occupando spazio nella griglia.
+    const activeCategories = allCategories.filter(cat =>
+        bookings.some(b => categoryOf(b.type) === cat.id))
     const gridTemplate = `60px repeat(${Math.max(activeCategories.length, 1)}, minmax(0, 1fr))`
 
     const currentSlot = getCurrentTimeSlot()

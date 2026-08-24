@@ -3,7 +3,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import {
   resolveDailyCategories, DAILY_PALETTE, DAILY_PALETTE_KEYS, DAILY_CATEGORIES_CONFIG_KEY,
-  customCategoryId, isCustomCategory,
+  customCategoryId, isCustomCategory, DEFAULT_DAILY_CATEGORIES,
   type DailyCategory, type DailyCategoryConfig,
 } from '../../../utils/dailyCalendarCategories'
 
@@ -80,13 +80,31 @@ export default function DailyCalendarCategoriesConfig({ readOnly = false }: { re
     if (!isCustomCategory(id)) setRemovedIds(prev => prev.includes(id) ? prev : [...prev, id])
   }
 
-  function ripristinaEliminate() {
+  /**
+   * Rimette una corsia di fabbrica eliminata. Torna con il suo id originale
+   * ('terra', 'mare', ...), quindi riprende SUBITO le sue prenotazioni: non
+   * e' una corsia nuova da ricollegare a mano.
+   */
+  function ripristinaTutte() {
     setRemovedIds([])
-    setRows(resolveDailyCategories(rows.map(r => ({
+    setRows(prev => resolveDailyCategories(prev.map(r => ({
       id: r.id, label: r.label, colorKey: r.colorKey, enabled: r.enabled,
       ...(r.custom ? { custom: true, serviceTypes: r.serviceTypes || [] } : {}),
     }))))
     toast.success('Corsie di fabbrica ripristinate — ricordati di salvare')
+  }
+
+  function ripristina(id: string) {
+    const restanti = removedIds.filter(x => x !== id)
+    setRemovedIds(restanti)
+    setRows(prev => resolveDailyCategories([
+      ...prev.map(r => ({
+        id: r.id, label: r.label, colorKey: r.colorKey, enabled: r.enabled,
+        ...(r.custom ? { custom: true, serviceTypes: r.serviceTypes || [] } : {}),
+      })),
+      ...restanti.map(x => ({ id: x, removed: true })),
+    ]))
+    toast.success('Corsia rimessa — ricordati di salvare')
   }
 
   function move(id: string, dir: -1 | 1) {
@@ -282,20 +300,41 @@ export default function DailyCalendarCategoriesConfig({ readOnly = false }: { re
       )}
 
       {removedIds.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 text-[11px] text-theme-text-muted">
-          <span>{removedIds.length} corsia/e di fabbrica eliminate.</span>
-          {!readOnly && (
-            <button
-              type="button"
-              onClick={ripristinaEliminate}
-              className="px-2 h-7 rounded-lg border border-theme-border text-theme-text-primary font-semibold hover:bg-theme-bg-hover transition-colors"
-            >Ripristina corsie di fabbrica</button>
-          )}
+        <div className="rounded-xl border border-dashed border-theme-border p-2.5 space-y-1.5">
+          <p className="text-[11px] text-theme-text-muted">
+            Corsie eliminate. Rimettendole tornano con le loro prenotazioni: sono le stesse di prima,
+            non corsie nuove da ricollegare.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {removedIds.length > 1 && !readOnly && (
+              <button
+                type="button"
+                onClick={ripristinaTutte}
+                className="px-2.5 h-8 rounded-lg border border-dr7-gold text-dr7-gold text-xs font-semibold hover:bg-dr7-gold/10 transition-colors"
+              >
+                Ripristina corsie di fabbrica
+              </button>
+            )}
+            {removedIds.map(id => {
+              const base = DEFAULT_DAILY_CATEGORIES.find(d => d.id === id)
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  disabled={readOnly}
+                  onClick={() => ripristina(id)}
+                  className="px-2.5 h-8 rounded-lg border border-theme-border text-theme-text-primary text-xs font-semibold hover:bg-theme-bg-hover transition-colors disabled:opacity-60"
+                >
+                  + {base?.label || id}
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
 
       <p className="text-[11px] text-theme-text-muted">
-        {attive} corsie attive. Ogni corsia attiva compare nella giornata anche quando e' vuota. Lavaggio e Meccanica condividono la corsia <strong>Prime Wash</strong>:
+        {attive} corsie attive. Lavaggio e Meccanica condividono la corsia <strong>Prime Wash</strong>:
         sono lo stesso reparto, non due colonne separate.
       </p>
     </div>
