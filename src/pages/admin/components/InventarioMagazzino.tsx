@@ -9,6 +9,7 @@
 // =============================================================================
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
+import { toBusiness, BUSINESS_LABELS, BUSINESSES, type Business } from '../../../utils/businessScope'
 import { authFetch } from '../../../utils/authFetch'
 import toast from 'react-hot-toast'
 import MoneyInput from '../../../components/MoneyInput'
@@ -40,6 +41,9 @@ interface Articolo {
   frequenza_giorni: number | null
   riordino_automatico: boolean
   ultimo_riordino_periodico: string | null
+  /** 2026-08-24: business proprietario dell'articolo. NULL = Magazzino
+   *  Generale (azienda). Vedi utils/businessScope.ts. */
+  business: Business | null
 }
 interface Movimento { id: string; tipo: string; delta: number | null; qta_prima: number | null; qta_dopo: number | null; motivo: string | null; utente: string | null; created_at: string }
 interface Ordine { id: string; articolo_id: string; fornitore_id: string | null; canale: string; quantita: number; stato: string; auto: boolean; created_at: string }
@@ -105,7 +109,18 @@ async function currentUserLabel(): Promise<string> {
   } catch { return 'admin' }
 }
 
-export default function InventarioMagazzino() {
+/**
+ * 2026-08-24 (direzione): "il magazzino del Noleggio Mare non e' quello di
+ * Terra". Il modulo resta UNO — stesse categorie, stesse soglie, stesso
+ * riordino — ma ogni articolo appartiene a un business (`inv_articoli.business`)
+ * e la tab di un business mostra SOLO i suoi. `business = null` = Magazzino
+ * Generale (azienda), visibile solo li'.
+ *
+ * `business` assente (prop non passata) = Magazzino Generale: mostra tutto,
+ * con la colonna del business, ed e' l'unico posto da cui si vede l'insieme.
+ */
+export default function InventarioMagazzino({ business }: { business?: Business | string } = {}) {
+  const biz = business ? toBusiness(business) : null
   const [categorie, setCategorie] = useState<Categoria[]>([])
   const [articoli, setArticoli] = useState<Articolo[]>([])
   const [fornitori, setFornitori] = useState<Fornitore[]>([])
@@ -159,11 +174,14 @@ export default function InventarioMagazzino() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return articoli.filter(a => {
+      // Scope business: la tab di un business mostra solo i suoi articoli;
+      // il Magazzino Generale li mostra tutti.
+      if (biz && (a.business || null) !== biz) return false
       if (soloSottoScorta && semaforo(a) !== 'rosso') return false
       if (!q) return true
       return a.nome.toLowerCase().includes(q) || a.codice.toLowerCase().includes(q) || (a.note || '').toLowerCase().includes(q)
     })
-  }, [articoli, search, soloSottoScorta])
+  }, [articoli, search, soloSottoScorta, biz])
 
   const byCategoria = useMemo(() => {
     const m = new Map<string, Articolo[]>()
@@ -174,8 +192,11 @@ export default function InventarioMagazzino() {
     return m
   }, [filtered])
 
-  const sottoScortaCount = useMemo(() => articoli.filter(a => semaforo(a) === 'rosso').length, [articoli])
-  const valoreTotale = useMemo(() => articoli.reduce((s, a) => s + (a.prezzo || 0) * (a.quantita || 0), 0), [articoli])
+  // I contatori seguono lo scope: nella tab del Mare "Articoli totali" e'
+  // il magazzino del Mare, non quello dell'azienda.
+  const inScope = useMemo(() => articoli.filter(a => !biz || (a.business || null) === biz), [articoli, biz])
+  const sottoScortaCount = useMemo(() => inScope.filter(a => semaforo(a) === 'rosso').length, [inScope])
+  const valoreTotale = useMemo(() => inScope.reduce((s, a) => s + (a.prezzo || 0) * (a.quantita || 0), 0), [inScope])
 
   // ── Next code per categoria ─────────────────────────────────────────────────
   function nextCode(catCode: string): string {
@@ -321,11 +342,26 @@ export default function InventarioMagazzino() {
           ? null : Number(form.frequenza_giorni),
         // Deriva dal canale: unica fonte, niente piu' due comandi in conflitto.
         riordino_automatico: form.canale_riordino === 'automatico',
+        // Business dell'articolo: nella tab di un business e' quello, nel
+        // Magazzino Generale e' quello scelto nel form (vuoto = azienda).
+        business: biz ?? (form.business || null),
       }
       const isNew = !form.id
-      const { data, error } = isNew
-        ? await supabase.from('inv_articoli').insert(payload).select('*').single()
-        : await supabase.from('inv_articoli').update(payload).eq('id', form.id!).select('*').single()
+      const run = async (body: Record<string, unknown>) => isNew
+        ? await supabase.from('inv_articoli').insert(body).select('*').single()
+        : await supabase.from('inv_articoli').update(body).eq('id', form.id!).select('*').single()
+      let { data, error } = await run(payload)
+      // La colonna `business` arriva con la migration 20260824. Se il database
+      // e' ancora indietro NON si blocca il salvataggio: si salva senza, e si
+      // dice chiaramente che il magazzino non e' ancora separato per business.
+      // ([[feedback_migrazione_manuale_serve_fallback]])
+      if (error && /business/i.test(error.message || '')) {
+        const { business: _omit, ...senzaBusiness } = payload
+        void _omit
+        const retry = await run(senzaBusiness)
+        data = retry.data; error = retry.error
+        if (!error) toast('Salvato, ma il magazzino non e\' ancora separato per business: esegui la migration 20260824_magazzino_per_business.sql', { icon: '!' })
+      }
       if (error) throw error
       await audit('articolo', (data as Articolo).id, isNew ? 'crea' : 'modifica', undefined, isNew ? null : form.id, payload.codice)
       toast.success(isNew ? 'Articolo creato' : 'Articolo aggiornato')
@@ -536,9 +572,19 @@ export default function InventarioMagazzino() {
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <h2 className="text-xl font-bold text-theme-text-primary">
+          {biz ? `Magazzino — ${BUSINESS_LABELS[biz]}` : 'Magazzino Generale'}
+        </h2>
+        <p className="text-xs text-theme-text-muted">
+          {biz
+            ? 'Solo gli articoli di questo business. Il magazzino aziendale sta in Magazzino > Magazzino Generale.'
+            : 'Tutti gli articoli, di ogni business. Ognuno appartiene al proprio magazzino.'}
+        </p>
+      </div>
       {/* KPI */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Kpi label="Articoli totali" value={String(articoli.length)} />
+        <Kpi label="Articoli totali" value={String(inScope.length)} />
         <Kpi label="Sotto scorta" value={String(sottoScortaCount)} tone={sottoScortaCount > 0 ? 'red' : 'emerald'} />
         <Kpi label="Ordini aperti" value={String(ordini.length)} tone={ordini.length > 0 ? 'amber' : 'default'} />
         <Kpi label="Valore magazzino" value={eur(valoreTotale)} />
@@ -556,7 +602,7 @@ export default function InventarioMagazzino() {
           className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${soloSottoScorta ? 'bg-red-500/15 text-red-300 border-red-500/40' : 'bg-theme-bg-tertiary text-theme-text-secondary border-theme-border'}`}
         >Solo sotto scorta</button>
         <button
-          onClick={() => { const c = categorie[0]?.codice; setEditArticolo({ categoria_codice: c, codice: c ? nextCode(c) : '', quantita: 0 }) }}
+          onClick={() => { const c = categorie[0]?.codice; setEditArticolo({ categoria_codice: c, codice: c ? nextCode(c) : '', quantita: 0, business: biz }) }}
           className="px-3 py-2 rounded-lg text-sm font-semibold bg-cyan-600 hover:bg-cyan-700 text-white"
         >+ Nuovo articolo</button>
         <button onClick={() => setOpenCats(new Set(categorie.map(c => c.codice)))} className="px-3 py-2 rounded-lg text-sm text-theme-text-secondary border border-theme-border">Espandi tutto</button>
@@ -597,7 +643,11 @@ export default function InventarioMagazzino() {
                           <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${SEM_DOT[sem]}`} title={SEM_LABEL[sem]} />
                           <button onClick={() => openDetail(a)} className="text-left min-w-[180px] flex-1">
                             <div className="text-sm font-medium text-theme-text-primary">{a.nome}</div>
-                            <div className="text-[11px] text-theme-text-muted font-mono">{a.codice}{forn ? ` · ${forn.nome}` : ''}</div>
+                            <div className="text-[11px] text-theme-text-muted font-mono">
+                              {a.codice}{forn ? ` · ${forn.nome}` : ''}
+                              {/* Nel Magazzino Generale si vede a colpo d'occhio di chi e' l'articolo. */}
+                              {!biz && <span className="ml-2 px-1.5 py-0.5 rounded border border-theme-border text-theme-text-secondary font-sans">{a.business ? BUSINESS_LABELS[a.business] : 'Azienda'}</span>}
+                            </div>
                           </button>
                           <div className="text-sm tabular-nums text-theme-text-primary min-w-[90px] text-right">
                             {isPct(a) ? `${num(a.giacenza_pct)}%` : `${num(a.quantita)} ${a.unita || ''}`}
@@ -716,6 +766,7 @@ export default function InventarioMagazzino() {
       {editArticolo && (
         <ArticoloModal
           initial={editArticolo}
+          scopeBusiness={biz}
           categorie={categorie}
           fornitori={fornitori}
           busy={busy}
@@ -782,8 +833,8 @@ function MovimentoModal({ ctx, busy, onClose, onConfirm }: { ctx: { articolo: Ar
   )
 }
 
-function ArticoloModal({ initial, categorie, fornitori, busy, nextCodeFor, onClose, onSave, onDelete }: {
-  initial: Partial<Articolo>; categorie: Categoria[]; fornitori: Fornitore[]; busy: boolean
+function ArticoloModal({ initial, scopeBusiness, categorie, fornitori, busy, nextCodeFor, onClose, onSave, onDelete }: {
+  initial: Partial<Articolo>; scopeBusiness: Business | null; categorie: Categoria[]; fornitori: Fornitore[]; busy: boolean
   nextCodeFor: (c: string) => string; onClose: () => void; onSave: (f: Partial<Articolo>) => void; onDelete?: () => void
 }) {
   const [f, setF] = useState<Partial<Articolo>>(initial)
@@ -796,6 +847,24 @@ function ArticoloModal({ initial, categorie, fornitori, busy, nextCodeFor, onClo
       <div className="w-full max-w-lg rounded-xl bg-theme-bg-secondary border border-theme-border p-5 max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <h3 className="text-base font-semibold text-theme-text-primary mb-4">{isNew ? 'Nuovo articolo' : 'Modifica articolo'}</h3>
         <div className="grid grid-cols-2 gap-3">
+          {/* Dentro la tab di un business l'appartenenza e' decisa: non si
+              sceglie, cosi' non si crea per sbaglio un articolo del Mare
+              dentro il magazzino di Terra. Nel Magazzino Generale invece si
+              sceglie (vuoto = magazzino aziendale). */}
+          {scopeBusiness ? (
+            <div className="col-span-2">
+              <label className={lblCls}>Magazzino</label>
+              <div className={`${inputCls} opacity-70`}>{BUSINESS_LABELS[scopeBusiness]}</div>
+            </div>
+          ) : (
+            <div className="col-span-2">
+              <label className={lblCls}>Magazzino</label>
+              <select value={f.business || ''} onChange={e => set('business', e.target.value || null)} className={inputCls}>
+                <option value="">Magazzino Generale (azienda)</option>
+                {BUSINESSES.map(b => <option key={b} value={b}>{BUSINESS_LABELS[b]}</option>)}
+              </select>
+            </div>
+          )}
           <div className="col-span-1">
             <label className={lblCls}>Categoria</label>
             <select value={f.categoria_codice || ''} onChange={e => { const c = e.target.value; set('categoria_codice', c); if (isNew) set('codice', nextCodeFor(c)) }} className={inputCls}>

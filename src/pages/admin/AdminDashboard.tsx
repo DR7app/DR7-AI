@@ -82,7 +82,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'lavaggio-uscite' | 'lavaggio-preventivi' | 'report-mare' | 'report-aria' | 'report-stay' | 'terra-tours' | 'immondizia' | 'ticket' | 'terra-catalog' | 'magazzino-generale' | 'interruttori' | 'acconti'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'lavaggio-uscite' | 'lavaggio-preventivi' | 'report-mare' | 'report-aria' | 'report-stay' | 'terra-tours' | 'immondizia' | 'ticket' | 'terra-catalog' | 'magazzino-generale' | 'magazzino-terra' | 'magazzino-mare' | 'magazzino-aria' | 'magazzino-stay' | 'magazzino-lavaggio' | 'interruttori' | 'acconti'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -326,7 +326,6 @@ export default function AdminDashboard() {
       { tab: 'gestione-danni', label: 'Danni & Penali' },
       { tab: 'gestione-multe', label: 'Multe' },
       { tab: 'aria-catalog', label: 'Elicotteri' },
-      { tab: 'magazzino', label: 'Magazzino' },
       { tab: 'gps-keyless', label: 'GPS Flotta' },
       { tab: 'aria-tours', label: 'Tour' },
       { tab: 'aria-movimenti', label: 'Movimenti' },
@@ -340,7 +339,6 @@ export default function AdminDashboard() {
       { tab: 'gestione-danni', label: 'Danni & Penali' },
       { tab: 'gestione-multe', label: 'Multe' },
       { tab: 'stay-catalog', label: 'Alloggi' },
-      { tab: 'magazzino', label: 'Magazzino' },
       { tab: 'gps-keyless', label: 'GPS Flotta' },
       { tab: 'stay-tours', label: 'Tour' },
     ] },
@@ -355,7 +353,6 @@ export default function AdminDashboard() {
       { tab: 'lavaggio-uscite', label: 'Uscite Straordinarie', permKey: 'carwash' },
       { tab: 'carwash-calendar', label: 'Calendario' },
       { tab: 'carwash-catalog', label: 'Lavaggi' },
-      { tab: 'magazzino', label: 'Magazzino' },
     ] },
     { name: 'Clienti', tabs: [
       { tab: 'customers', label: 'Lead' },
@@ -389,8 +386,25 @@ export default function AdminDashboard() {
       // 2026-07-20: Referral spostato da Marketing a Report, in FONDO alla lista.
       { tab: 'referral', label: 'Referral' },
     ] },
+    // 2026-08-24 (direzione): "Magazzino organizzato in categorie". Il modulo
+    // resta UNO — stesse categorie articolo, stesse soglie, stesso riordino —
+    // ma ogni articolo appartiene a un business (`inv_articoli.business`) e
+    // ogni voce qui sotto mostra SOLO il suo. Il Magazzino Generale e' il
+    // magazzino dell'azienda e l'unico posto da cui si vede l'insieme.
+    // Le voci "Magazzino" che stavano nelle barre dei singoli business sono
+    // sparite: aprivano la stessa scheda per tutti, coi ricambi della flotta
+    // Terra anche dentro Mare, Aria e Lavaggio.
     { name: 'Magazzino', tabs: [
       { tab: 'magazzino-generale', label: 'Magazzino Generale' },
+      { tab: 'magazzino-terra', label: 'Magazzino Terra' },
+      { tab: 'magazzino-mare', label: 'Magazzino Mare' },
+      { tab: 'magazzino-aria', label: 'Magazzino Aria' },
+      { tab: 'magazzino-stay', label: 'Magazzino Soggiorni' },
+      { tab: 'magazzino-lavaggio', label: 'Magazzino Lavaggio e Meccanica' },
+      // Ricambi per singolo veicolo (olio, pastiglie, sensori): scheda diversa
+      // dal magazzino a scorte, legata alla flotta Terra. Resta raggiungibile
+      // qui invece di sparire dal menu insieme alle voci per business.
+      { tab: 'magazzino', label: 'Ricambi per Veicolo' },
     ] },
     // 2026-06-02: sezione Comunicazione rimossa — tutti i sub-tab erano
     // PlaceholderTab vuoti. Se mai serviranno (E-mail, PEC, WhatsApp, SMS,
@@ -518,6 +532,12 @@ export default function AdminDashboard() {
     'terra-catalog': 'Catalogo Noleggio Terra',
     'terra-tours': 'Tour Noleggio Terra',
     'magazzino-generale': 'Magazzino Generale',
+    'magazzino-terra': 'Magazzino Noleggio Terra',
+    'magazzino-mare': 'Magazzino Noleggio Mare',
+    'magazzino-aria': 'Magazzino Noleggio Aria',
+    'magazzino-stay': 'Magazzino Soggiorni & Ospitalità',
+    'magazzino-lavaggio': 'Magazzino Lavaggio & Meccanica',
+    'magazzino': 'Ricambi per Veicolo',
     'gps-keyless': 'GPS Flotta',
     'unpaid': 'In attesa di pagamento',
     'customers': 'Lead',
@@ -1103,6 +1123,11 @@ export default function AdminDashboard() {
           {/* 'fleet' route eliminata 2026-05-22 — vedi nota sulla sidebar. */}
           {activeTab === 'magazzino' && <FleetInventory />}
           {activeTab === 'magazzino-generale' && <InventarioMagazzino />}
+          {activeTab === 'magazzino-terra' && <InventarioMagazzino business="rental" />}
+          {activeTab === 'magazzino-mare' && <InventarioMagazzino business="boat_rental" />}
+          {activeTab === 'magazzino-aria' && <InventarioMagazzino business="heli_rental" />}
+          {activeTab === 'magazzino-stay' && <InventarioMagazzino business="stay_rental" />}
+          {activeTab === 'magazzino-lavaggio' && <InventarioMagazzino business="car_wash" />}
           {activeTab === 'nexi' && (isTabRestricted('nexi') ? <PlaceholderTab title="Accesso non autorizzato" /> : <NexiTab />)}
           {activeTab === 'scadenze' && <ScadenzeTab />}
           {activeTab === 'reports' && (isTabRestricted('reports') ? <PlaceholderTab title="Accesso non autorizzato" /> : <ReportsTab />)}
