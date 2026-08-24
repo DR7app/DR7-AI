@@ -23,6 +23,7 @@ type TriggerEvent =
     | 'on_payment_failed' | 'on_payment_link_expired'
     | 'before_signature' | 'after_signature_review' | 'on_late_return'
     | 'on_review_received' | 'on_promo_gap'
+    | 'on_acconto'
 
 interface TriggerArgs {
     /** ID dell'entità da collegare nel send_log. Se l'evento e' booking-based,
@@ -36,6 +37,13 @@ interface TriggerArgs {
      *  Usalo per gli eventi cauzione/documenti/customer-lifecycle. */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     syntheticBooking?: Record<string, any>
+    /** Numero del destinatario, passato esplicitamente al sender.
+     *  send-whatsapp-notification NON ricava piu' il telefono da
+     *  booking.customer_phone (hardening post-incidente 13/05): senza
+     *  customPhone risponde skipped. Lo passano solo i code-path che sanno
+     *  con certezza a chi va il messaggio (es. acconto -> il collaboratore
+     *  intestatario), cosi' nessun altro evento cambia comportamento. */
+    recipientPhone?: string
 }
 
 /**
@@ -595,7 +603,7 @@ export async function passesCustomerFilters(tpl: any, booking: any, supabase: an
     return true
 }
 
-export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHours = 1, syntheticBooking }: TriggerArgs): Promise<{ sent: number; skipped: number; errors: number }> {
+export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHours = 1, syntheticBooking, recipientPhone }: TriggerArgs): Promise<{ sent: number; skipped: number; errors: number }> {
     const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     const baseUrl = process.env.URL || 'https://platform.dr7ai.com'
 
@@ -664,7 +672,11 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
             const res = await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ booking, messageKey: tpl.message_key }),
+                body: JSON.stringify({
+                    booking,
+                    messageKey: tpl.message_key,
+                    ...(recipientPhone ? { customPhone: recipientPhone } : {}),
+                }),
             })
             const ok = res.ok
             // eslint-disable-next-line @typescript-eslint/no-explicit-any

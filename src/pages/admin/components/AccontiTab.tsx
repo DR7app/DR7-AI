@@ -161,7 +161,7 @@ export default function AccontiTab() {
     const intestatarioNome = scelto ? nomeOperatore(scelto) : me.nome
 
     setSaving(true)
-    const { error } = await supabase.from('acconti_giornalieri').insert({
+    const { data: inserito, error } = await supabase.from('acconti_giornalieri').insert({
       operatore_id: intestatarioId,
       operatore_nome: intestatarioNome || null,
       data,
@@ -170,9 +170,22 @@ export default function AccontiTab() {
       note: note.trim() || null,
       metodo_pagamento: metodo || null,
       created_by: me.id,
-    })
+    }).select('id').maybeSingle()
     setSaving(false)
     if (error) { toast.error('Salvataggio fallito: ' + error.message); return }
+
+    // Messaggi di Sistema Pro — evento "Acconto registrato (collaboratore)".
+    // Il messaggio parte SOLO se la direzione ha creato e attivato un template
+    // con quel trigger; va al collaboratore intestatario (numero letto da
+    // admins.contatto_interno), mai a un cliente. Fire-and-forget: se manca il
+    // numero o il template, il salvataggio dell'acconto resta comunque valido.
+    if (inserito?.id) {
+      fetch('/.netlify/functions/trigger-system-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: 'on_acconto', entityType: 'acconto', entityId: inserito.id }),
+      }).catch(() => { /* non blocca la registrazione */ })
+    }
     setImporto(''); setCausale(''); setNote(''); setMetodo('Contanti')
     toast.success(scelto ? `Acconto registrato per ${intestatarioNome}` : 'Acconto registrato')
     load()

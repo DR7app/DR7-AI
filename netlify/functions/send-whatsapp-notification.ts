@@ -734,6 +734,20 @@ const handler: Handler = async (event) => {
         vars.importo = vars.total;
         vars.amount = vars.total;
         vars.cliente = vars.customer_name;
+
+        // Acconto Giornaliero (evento on_acconto): il "booking" e' sintetico e
+        // porta i dati della riga acconti_giornalieri. Le variabili restano
+        // vuote per tutti gli altri messaggi.
+        if (booking.acconto_data || booking.acconto_causale || booking.operatore_nome) {
+          vars.operatore = booking.operatore_nome || vars.customer_name;
+          vars.collaboratore = vars.operatore;
+          vars.causale = booking.acconto_causale || '';
+          vars.metodo = booking.payment_method || '';
+          vars.metodo_pagamento = vars.metodo;
+          vars.data_acconto = booking.acconto_data || '';
+          vars.acconto = vars.total;
+          vars.importo_acconto = vars.total;
+        }
         vars.booking_ref = vars.booking_id;
         vars.bookingRef = vars.booking_id;
 

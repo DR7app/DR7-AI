@@ -5,8 +5,8 @@
  * reali e chiama triggerSystemMessageEvent.
  *
  * Body atteso:
- *   { event: 'on_cauzione_created' | 'on_cauzione_collected' | ...,
- *     entityType: 'cauzione' | 'customer' | 'document',
+ *   { event: 'on_cauzione_created' | 'on_cauzione_collected' | 'on_acconto' | ...,
+ *     entityType: 'cauzione' | 'customer' | 'document' | 'acconto',
  *     entityId: string }
  *
  * Dedupe via system_message_send_log (UNIQUE template+entity).
@@ -37,6 +37,9 @@ export const handler: Handler = async (event) => {
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let synthetic: Record<string, any> | null = null
+        // Numero destinatario esplicito: valorizzato solo dagli eventi che
+        // sanno con certezza a chi va il messaggio (per ora l'acconto).
+        let recipientPhone: string | undefined
 
         if (entityType === 'cauzione') {
             const { data: c } = await supabase
@@ -116,6 +119,67 @@ export const handler: Handler = async (event) => {
                 booking_details: {},
                 status: 'active',
             }
+        } else if (entityType === 'acconto') {
+            // Acconto Giornaliero registrato dall'amministrazione (tab Acconti).
+            // Il destinatario NON e' un cliente: e' il collaboratore a cui
+            // l'acconto e' intestato (acconti_giornalieri.operatore_id ->
+            // admins.contatto_interno, lo stesso numero usato dai messaggi Pro
+            // con recipient_mode = admin_roles).
+            const { data: acc } = await supabase
+                .from('acconti_giornalieri')
+                .select('id, operatore_id, operatore_nome, data, importo_cents, causale, note, metodo_pagamento')
+                .eq('id', entityId)
+                .maybeSingle()
+            if (!acc) return { statusCode: 404, headers, body: JSON.stringify({ error: 'acconto not found' }) }
+
+            let opNome = acc.operatore_nome || ''
+            let opEmail: string | null = null
+            let opTelefono: string | null = null
+            if (acc.operatore_id) {
+                const { data: op } = await supabase
+                    .from('admins')
+                    .select('nome, email, contatto_interno')
+                    .eq('id', acc.operatore_id)
+                    .maybeSingle()
+                if (op) {
+                    opNome = (op.nome || '').trim() || opNome || (op.email || '').split('@')[0]
+                    opEmail = op.email || null
+                    opTelefono = op.contatto_interno || null
+                }
+            }
+            if (!opTelefono) {
+                // Nessun numero in scheda operatore: si esce dicendo perche',
+                // invece di far partire un invio che il sender scarterebbe in
+                // silenzio.
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: JSON.stringify({
+                        ok: false,
+                        skipped: true,
+                        reason: 'no_operator_phone',
+                        message: `Nessun "Contatto interno" sulla scheda di ${opNome || 'operatore'}: messaggio acconto non inviato.`,
+                    }),
+                }
+            }
+
+            recipientPhone = opTelefono
+            const dataIt = acc.data ? new Date(`${acc.data}T00:00:00`).toLocaleDateString('it-IT') : ''
+            synthetic = {
+                id: acc.id,
+                customer_name: opNome || 'Collaboratore',
+                customer_email: opEmail,
+                customer_phone: opTelefono,
+                // price_total in centesimi: il sender ne ricava {total}/{importo}.
+                price_total: Number(acc.importo_cents || 0),
+                acconto_data: dataIt,
+                acconto_causale: acc.causale || '',
+                acconto_note: acc.note || '',
+                payment_method: acc.metodo_pagamento || '',
+                operatore_nome: opNome || '',
+                booking_details: {},
+                status: 'active',
+            }
         } else {
             return { statusCode: 400, headers, body: JSON.stringify({ error: 'invalid entityType' }) }
         }
@@ -124,6 +188,7 @@ export const handler: Handler = async (event) => {
             bookingId: entityId,
             event: eventName,
             syntheticBooking: synthetic,
+            recipientPhone,
             maxOffsetHours: 1,
         })
 
