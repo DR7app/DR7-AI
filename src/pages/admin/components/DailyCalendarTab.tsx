@@ -4,8 +4,9 @@ import { getRomeDateComponents } from '../../../utils/timezoneUtils'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import {
-    DAILY_CATEGORIES, categorizeDayBooking, categoryOf, categoryMeta, labelOf,
-    dailyBookingTime, type DailyType,
+    resolveDailyCategories, categorizeDayBooking, categoryOf, labelOf,
+    dailyBookingTime, DAILY_PALETTE, DAILY_CATEGORIES_CONFIG_KEY,
+    type DailyType, type DailyCategory, type DailyCategoryConfig,
 } from '../../../utils/dailyCalendarCategories'
 
 interface Booking {
@@ -43,9 +44,23 @@ const TIME_SLOTS = generateTimeSlots()
 
 export default function DailyCalendarTab() {
     const [bookings, setBookings] = useState<Booking[]>([])
+    // Etichette/colori/ordine delle corsie, da Centralina Pro. Null = catalogo
+    // di fabbrica: la vista funziona anche se la config non e' mai stata salvata.
+    const [catConfig, setCatConfig] = useState<DailyCategoryConfig[] | null>(null)
     const [loading, setLoading] = useState(true)
     const [selectedDate, setSelectedDate] = useState(new Date())
     const currentTimeRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        void (async () => {
+            try {
+                const { data } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+                const cfg = (data?.config as Record<string, unknown>) || {}
+                const list = cfg[DAILY_CATEGORIES_CONFIG_KEY]
+                if (Array.isArray(list)) setCatConfig(list as DailyCategoryConfig[])
+            } catch { /* catalogo di fabbrica */ }
+        })()
+    }, [])
 
     useEffect(() => {
         loadDayBookings()
@@ -62,8 +77,11 @@ export default function DailyCalendarTab() {
         return () => {
             subscription.unsubscribe()
         }
+    // catConfig fa parte delle dipendenze: le corsie personalizzate arrivano
+    // dopo il primo render, e senza questo le prenotazioni dirottate su una
+    // corsia nuova non comparirebbero fino al reload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedDate])
+    }, [selectedDate, catConfig])
 
     // Scroll to current time on mount
     useEffect(() => {
@@ -133,12 +151,18 @@ export default function DailyCalendarTab() {
                     romeComponents.year === selectedComponents.year
             }
 
+            // Corsie personalizzate attive: instradano i service_type scelti
+            // dall'admin prima delle regole di fabbrica.
+            const customLanes = resolveDailyCategories(catConfig)
+                .filter(c => c.enabled && c.custom)
+                .map(c => ({ id: c.id, serviceTypes: c.serviceTypes }))
+
             // 2026-08-23: la giornata copre TUTTI i business (Terra, Mare, Aria,
             // Soggiorni), i servizi (Lavaggio, Meccanica) e le Uscite
             // Straordinarie. Regole in utils/dailyCalendarCategories.
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             bookingsToProcess.forEach((booking: any) => {
-                for (const type of categorizeDayBooking(booking, isSameDay)) {
+                for (const type of categorizeDayBooking(booking, isSameDay, customLanes)) {
                     categorized.push({ ...booking, type })
                 }
             })
@@ -196,10 +220,15 @@ export default function DailyCalendarTab() {
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
     }
 
-    // Corsie del giorno: solo le categorie che hanno davvero qualcosa in agenda,
-    // nell'ordine del catalogo. Calcolate una volta sola, altrimenti le colonne
-    // non resterebbero allineate tra una fascia oraria e l'altra.
-    const activeCategories = DAILY_CATEGORIES.filter(cat =>
+    // Corsie del giorno: solo le categorie ATTIVE (Centralina Pro > Calendario
+    // Giornaliero) che hanno davvero qualcosa in agenda, nell'ordine
+    // configurato. Calcolate una volta sola, altrimenti le colonne non
+    // resterebbero allineate tra una fascia oraria e l'altra.
+    const allCategories = resolveDailyCategories(catConfig).filter(c => c.enabled)
+    const metaOf = (id: string): DailyCategory =>
+        allCategories.find(c => c.id === id)
+        || { ...DAILY_PALETTE.slate, id: 'varie', label: 'Altro', enabled: true, colorKey: 'slate' } as DailyCategory
+    const activeCategories = allCategories.filter(cat =>
         bookings.some(b => categoryOf(b.type) === cat.id))
     const gridTemplate = `60px repeat(${Math.max(activeCategories.length, 1)}, minmax(0, 1fr))`
 
@@ -374,7 +403,7 @@ export default function DailyCalendarTab() {
             <div className="md:hidden bg-theme-bg-secondary rounded-lg border border-theme-border shadow-lg overflow-hidden">
                 {/* Category legend */}
                 <div className="flex flex-wrap gap-2 px-3 py-2.5 border-b border-theme-border bg-theme-bg-tertiary">
-                    {DAILY_CATEGORIES.map(cat => (
+                    {allCategories.map(cat => (
                         <div key={cat.id} className="flex items-center gap-1.5">
                             <div className={`w-3 h-3 ${cat.solid} rounded-sm shrink-0`} />
                             <span className="text-[11px] text-theme-text-muted">{cat.label}</span>
@@ -391,8 +420,8 @@ export default function DailyCalendarTab() {
                         // Skip empty slots on mobile (unless it's the current time slot)
                         if (!hasBookings && !isCurrentSlot) return null
 
-                        const getCategoryColor = (type: Booking['type']) => categoryMeta(categoryOf(type)).solidBorder
-                        const getDotColor = (type: Booking['type']) => categoryMeta(categoryOf(type)).solid
+                        const getCategoryColor = (type: Booking['type']) => metaOf(categoryOf(type)).solidBorder
+                        const getDotColor = (type: Booking['type']) => metaOf(categoryOf(type)).solid
                         const getLabel = (type: Booking['type']) => labelOf(type)
 
                         return (

@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import {
-    DAILY_CATEGORIES, categorizeDayBooking, categoryOf, categoryMeta, labelOf,
-    dailyBookingTime, type DailyType,
+    resolveDailyCategories, categorizeDayBooking, categoryOf, labelOf,
+    dailyBookingTime, DAILY_PALETTE, DAILY_CATEGORIES_CONFIG_KEY,
+    type DailyType, type DailyCategory, type DailyCategoryConfig,
 } from '../../../utils/dailyCalendarCategories'
 import { getRomeDateComponents } from '../../../utils/timezoneUtils'
 
@@ -122,9 +123,24 @@ interface DailyCalendarModalProps {
 
 export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarModalProps) {
     const [bookings, setBookings] = useState<Booking[]>([])
+    // Etichette/colori/ordine delle corsie, da Centralina Pro.
+    const [catConfig, setCatConfig] = useState<DailyCategoryConfig[] | null>(null)
     const [loading, setLoading] = useState(true)
     const [selectedDate, setSelectedDate] = useState(new Date())
     const currentTimeRef = useRef<HTMLDivElement>(null)
+
+    // Config corsie: si legge una volta all'apertura.
+    useEffect(() => {
+        if (!isOpen) return
+        void (async () => {
+            try {
+                const { data } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+                const cfg = (data?.config as Record<string, unknown>) || {}
+                const list = cfg[DAILY_CATEGORIES_CONFIG_KEY]
+                if (Array.isArray(list)) setCatConfig(list as DailyCategoryConfig[])
+            } catch { /* catalogo di fabbrica */ }
+        })()
+    }, [isOpen])
 
     useEffect(() => {
         if (isOpen) {
@@ -137,8 +153,9 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
         return () => {
             document.body.style.overflow = 'unset'
         }
+    // catConfig incluso: le corsie personalizzate arrivano dopo il primo render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen, selectedDate])
+    }, [isOpen, selectedDate, catConfig])
 
     useEffect(() => {
         if (!isOpen) return
@@ -210,12 +227,18 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                     components.year === selectedDate.getFullYear()
             }
 
+            // Corsie personalizzate attive: instradano i service_type scelti
+            // dall'admin prima delle regole di fabbrica.
+            const customLanes = resolveDailyCategories(catConfig)
+                .filter(c => c.enabled && c.custom)
+                .map(c => ({ id: c.id, serviceTypes: c.serviceTypes }))
+
             // 2026-08-23: la giornata copre TUTTI i business (Terra, Mare, Aria,
             // Soggiorni), i servizi (Lavaggio, Meccanica) e le Uscite
             // Straordinarie. Regole in utils/dailyCalendarCategories.
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             data?.forEach((booking: any) => {
-                for (const type of categorizeDayBooking(booking, isSameDay)) {
+                for (const type of categorizeDayBooking(booking, isSameDay, customLanes)) {
                     categorized.push({ ...booking, type })
                 }
             })
@@ -251,10 +274,13 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
     }
 
-    // Corsie del giorno: solo le categorie che hanno davvero qualcosa in agenda,
-    // nell'ordine del catalogo. Con la sola Terra la vista resta identica a prima;
-    // in una giornata piena si divide fino a otto corsie.
-    const activeCategories = DAILY_CATEGORIES.filter(cat =>
+    // Corsie del giorno: solo le categorie ATTIVE (Centralina Pro > Calendario
+    // Giornaliero) che hanno davvero qualcosa in agenda, nell'ordine configurato.
+    const allCategories = resolveDailyCategories(catConfig).filter(c => c.enabled)
+    const metaOf = (id: string): DailyCategory =>
+        allCategories.find(c => c.id === id)
+        || { ...DAILY_PALETTE.slate, id: 'varie', label: 'Altro', enabled: true, colorKey: 'slate' } as DailyCategory
+    const activeCategories = allCategories.filter(cat =>
         bookings.some(b => categoryOf(b.type) === cat.id))
 
     const currentSlot = getCurrentTimeSlot()
@@ -327,7 +353,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                     {/* Category Legend — 2026-08-23: generata dal catalogo, cosi'
                         non puo' piu' restare indietro rispetto alle corsie. */}
                     <div className="flex flex-wrap justify-center gap-3 sm:gap-5 py-1 sm:py-2">
-                        {DAILY_CATEGORIES.map(cat => (
+                        {allCategories.map(cat => (
                             <div key={cat.id} className="flex items-center gap-1.5">
                                 <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-gradient-to-br ${cat.dot} shadow-lg`} />
                                 <span className="text-xs sm:text-sm text-theme-text-secondary font-light">{cat.label}</span>
@@ -394,7 +420,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                                     {/* Mobile: single column stacked */}
                                     <div className="sm:hidden flex-1 space-y-1.5">
                                         {slotBookings.map(booking => {
-                                            const colors = categoryMeta(categoryOf(booking.type))
+                                            const colors = metaOf(categoryOf(booking.type))
                                             return (
                                                 <ActivityCard key={`${booking.id}-${booking.type}`} booking={booking} colorClass={colors.color} gradientClass={colors.gradient} glowClass={colors.glow} />
                                             )
