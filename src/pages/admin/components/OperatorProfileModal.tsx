@@ -734,10 +734,10 @@ function AccountSection({ email }: { email: string }) {
     if (!account) {
         return (
             <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3">
-                <div className="text-sm font-semibold text-amber-500">Nessun account gestionale</div>
+                <div className="text-sm font-semibold text-amber-500">Nessun accesso al gestionale</div>
                 <div className="mt-1 text-xs text-theme-text-secondary">
-                    Nessun account con l&apos;email <span className="font-mono">{email}</span>. Finche&apos; non esiste,
-                    il gestionale non ha un numero a cui scrivere: l&apos;avviso di acconto non parte.
+                    Nessuno accede al gestionale con l&apos;email <span className="font-mono">{email}</span>.
+                    Finche&apos; non esiste, non c&apos;e&apos; un numero a cui scrivere: l&apos;avviso di acconto non parte.
                 </div>
             </div>
         )
@@ -747,7 +747,7 @@ function AccountSection({ email }: { email: string }) {
         <div className="rounded-xl border border-theme-border bg-theme-bg-primary px-4 py-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <div className="text-sm font-semibold text-theme-text-primary">Account gestionale</div>
+                    <div className="text-sm font-semibold text-theme-text-primary">Contatti operatore</div>
                     <div className="mt-0.5 text-xs text-theme-text-muted">
                         {account.nome || account.email} · {account.role === 'superadmin' ? 'Superadmin' : 'Operatore'} · {account.stato || 'Attivo'}
                     </div>
@@ -761,7 +761,7 @@ function AccountSection({ email }: { email: string }) {
             </div>
 
             <div className="mt-3">
-                <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Contatto interno (WhatsApp)</div>
+                <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Numero WhatsApp</div>
                 {editing ? (
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                         <input
@@ -782,6 +782,9 @@ function AccountSection({ email }: { email: string }) {
                             : <span className="text-theme-text-muted">— non impostato</span>}
                     </div>
                 )}
+                <div className="mt-0.5 text-[10px] text-theme-text-muted">
+                    E&apos; il campo &quot;Contatto interno&quot; della scheda Operatori: il gestionale scrive qui al collaboratore.
+                </div>
                 {!editing && !numeroValido && (
                     <div className="mt-1 text-xs text-amber-500">
                         Senza un numero completo il messaggio di acconto non viene inviato.
