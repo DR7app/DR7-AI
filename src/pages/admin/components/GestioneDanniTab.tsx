@@ -130,16 +130,35 @@ export default function GestioneDanniTab() {
     setError('')
     try {
       // 1. Fetch all bookings with booking_details
-      const { data: bookings, error: bErr } = await supabase
-        .from('bookings')
-        .select('id, customer_name, customer_email, vehicle_name, pickup_date, booking_details, booked_at')
-
-      if (bErr) throw bErr
+      // 2026-08-24: due difetti in una riga.
+      //   - nessuna paginazione: PostgREST taglia a 1000 righe, quindi oltre
+      //     quella soglia clienti interi sparivano dalla tab senza errore;
+      //   - nessun ordinamento: `mostRecentBookingId` prendeva la PRIMA riga
+      //     incontrata, in ordine arbitrario. Ordinando per pickup_date
+      //     decrescente la prima incontrata e' davvero la piu' recente, che e'
+      //     la prenotazione a cui va agganciata una nuova penale/danno.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const bookings: any[] = []
+      for (let page = 0; page < 30; page++) {
+        const { data: batch, error: bErrPage } = await supabase
+          .from('bookings')
+          .select('id, customer_name, customer_email, vehicle_name, pickup_date, booking_details, booked_at')
+          .order('pickup_date', { ascending: false })
+          .range(page * 1000, page * 1000 + 999)
+        if (bErrPage) throw bErrPage
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const got = (batch || []) as any[]
+        bookings.push(...got)
+        if (got.length < 1000) break
+      }
 
       // 2. Fetch penalty/damage fatture
       const { data: fatture, error: fErr } = await supabase
         .from('fatture')
-        .select('id, booking_id, numero_fattura, importo_totale, items, customer_name, customer_email')
+        // 2026-08-24: serve `data_emissione`. Senza, ogni voce fatturata nasceva
+        // con date:'' e il filtro periodo (Mese/Trimestre) la scartava, facendo
+        // sparire quasi tutto appena si sceglieva un preset.
+        .select('id, booking_id, numero_fattura, importo_totale, items, customer_name, customer_email, data_emissione')
 
       if (fErr) throw fErr
 
@@ -196,7 +215,10 @@ export default function GestioneDanniTab() {
               amountPaid,
               paymentStatus,
               note: entry.note || '',
-              date: entry.date || '',
+              // Fallback sulla data del noleggio: molte penali/danni storici sono
+              // stati registrati senza `date`, e senza fallback il filtro
+              // periodo li considerava fuori da qualunque intervallo.
+              date: String(entry.date || bookingMap.get(b.id)?.pickup_date || '').slice(0, 10),
               status: 'pending',
               arrayKey,
               arrayIndex: idx,
@@ -281,7 +303,7 @@ export default function GestioneDanniTab() {
             amountPaid: fiAmountPaid,
             paymentStatus: fiPaymentStatus,
             note: '',
-            date: '',
+            date: String(f.data_emissione || bookingMap.get(f.booking_id || '')?.pickup_date || '').slice(0, 10),
             status: 'invoiced',
             fatturaNumero: f.numero_fattura || undefined,
             fatturaId: f.id || undefined,
@@ -485,13 +507,24 @@ export default function GestioneDanniTab() {
       const labelLc = label.toLowerCase()
 
       // ── 1) booking_details ──────────────────────────────────────────────
-      const { data: booking, error: fetchErr } = await supabase
-        .from('bookings').select('booking_details').eq('id', item.bookingId).single()
-      if (fetchErr) throw fetchErr
-      const details = booking?.booking_details || {}
+      // 2026-08-24: una voce fatturata puo' NON avere booking_id (danno
+      // registrato sul cliente, non su una prenotazione). Prima si faceva
+      // .eq('id','').single(), che solleva un errore PostgREST: il bottone
+      // Elimina falliva sempre su quelle righe. Ora questo passaggio si salta
+      // e si va dritti alle fatture.
+      let details: Record<string, unknown> = {}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const arr: any[] = [...(details[item.arrayKey] || [])]
+      let arr: any[] = []
       let changedDetails = false
+      let rimosseDaFattura = false
+      if (item.bookingId) {
+        const { data: booking, error: fetchErr } = await supabase
+          .from('bookings').select('booking_details').eq('id', item.bookingId).maybeSingle()
+        if (fetchErr) throw fetchErr
+        details = (booking?.booking_details || {}) as Record<string, unknown>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        arr = [...((details[item.arrayKey] as any[]) || [])]
+      }
       if (item.status === 'pending' && item.arrayIndex >= 0 && item.arrayIndex < arr.length) {
         arr.splice(item.arrayIndex, 1); changedDetails = true
       } else if (labelLc.length >= 3) {
@@ -502,7 +535,7 @@ export default function GestioneDanniTab() {
           if (el && (labelLc.includes(el) || el.includes(labelLc))) { arr.splice(i, 1); changedDetails = true; break }
         }
       }
-      if (changedDetails) {
+      if (changedDetails && item.bookingId) {
         const { error: updErr } = await supabase.from('bookings')
           .update({ booking_details: { ...details, [item.arrayKey]: arr } }).eq('id', item.bookingId)
         if (updErr) throw updErr
@@ -511,8 +544,14 @@ export default function GestioneDanniTab() {
       // ── 2) fatture ── rimuovi le righe corrispondenti da TUTTE le fatture
       //    di questa prenotazione (match su descrizione). Fattura svuotata → eliminata.
       if (labelLc.length >= 3) {
-        const { data: fatt } = await supabase
-          .from('fatture').select('id, items, importo_totale, numero_fattura').eq('booking_id', item.bookingId)
+        // Senza booking_id si punta direttamente alla fattura della voce.
+        let fq = supabase.from('fatture').select('id, items, importo_totale, numero_fattura')
+        fq = item.bookingId
+          ? fq.eq('booking_id', item.bookingId)
+          : item.fatturaId
+            ? fq.eq('id', item.fatturaId)
+            : fq.eq('numero_fattura', item.fatturaNumero || '__nessuna__')
+        const { data: fatt } = await fq
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const matches = (fi: any) => {
           const d = (fi.description || '').toLowerCase()
@@ -524,6 +563,7 @@ export default function GestioneDanniTab() {
           const kept = fitems.filter(fi => !matches(fi))
           if (kept.length === fitems.length) continue
           const removedTotal = fitems.filter(matches).reduce((s, fi) => s + (fi.total || (fi.unit_price || 0) * (fi.quantity || 1)), 0)
+          rimosseDaFattura = true
           if (kept.length === 0) {
             const { error: delErr } = await supabase.from('fatture').delete().eq('id', f.id)
             if (delErr) throw delErr
@@ -545,6 +585,10 @@ export default function GestioneDanniTab() {
         fattura_numero: item.fatturaNumero || null,
       })
 
+      if (!changedDetails && !rimosseDaFattura) {
+        toast.error('Voce non trovata: nulla e\' stato eliminato. Ricarica e riprova.')
+        return
+      }
       toast.success('Voce eliminata')
       setEditModal(null)
       await loadData()
@@ -560,56 +604,94 @@ export default function GestioneDanniTab() {
   async function handleUpdateAmount(item: PenaltyDannoItem, newTotal: number) {
     setSaving(true)
     try {
-      if (item.status === 'pending') {
-        // Update booking_details array
+      // 2026-08-24 BUG "Modifica non modifica davvero".
+      // Difetti del codice precedente:
+      //   1. aggiornava UNA sola fonte. Una penale/danno vive spesso sia in
+      //      booking_details sia in una riga di fattura (lo dice gia'
+      //      handleDeleteItem): cambiato l'uno, l'altro restava al vecchio
+      //      importo e, ricaricando, la riga mostrata tornava com'era;
+      //   2. `if (arr[item.arrayIndex])` e `if (matchIdx >= 0)` fallivano in
+      //      silenzio con un indice ormai spostato o una descrizione diversa;
+      //   3. il toast "Importo aggiornato" partiva comunque, anche quando non
+      //      era stata scritta una riga.
+      // Ora si aggiornano ENTRAMBE le fonti e, se non si tocca nulla, lo si
+      // dice invece di fingere che sia andata bene.
+      const label = (item.label || '').trim()
+      const labelLc = label.toLowerCase()
+      let toccato = false
+
+      // ── 1) booking_details ──────────────────────────────────────────────
+      if (item.bookingId) {
         const { data: booking, error: fetchErr } = await supabase
-          .from('bookings')
-          .select('booking_details')
-          .eq('id', item.bookingId)
-          .single()
-
+          .from('bookings').select('booking_details').eq('id', item.bookingId).maybeSingle()
         if (fetchErr) throw fetchErr
+        if (booking) {
+          const details = booking.booking_details || {}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const arr: any[] = [...(details[item.arrayKey] || [])]
 
-        const details = booking?.booking_details || {}
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const arr: any[] = [...(details[item.arrayKey] || [])]
-        if (arr[item.arrayIndex]) {
-          arr[item.arrayIndex] = { ...arr[item.arrayIndex], amount: newTotal, total: newTotal, quantity: 1 }
+          // Indice se ancora valido, altrimenti si ricerca per etichetta:
+          // dopo un'altra eliminazione gli indici scalano e quello memorizzato
+          // non punta piu' alla voce giusta.
+          let idx = (item.arrayIndex >= 0 && item.arrayIndex < arr.length) ? item.arrayIndex : -1
+          if (idx >= 0) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const el = ((arr[idx] as any).label || (arr[idx] as any).description || '').toLowerCase().trim()
+            if (labelLc && el && !(labelLc.includes(el) || el.includes(labelLc))) idx = -1
+          }
+          if (idx < 0 && labelLc.length >= 3) {
+            idx = arr.findIndex((e) => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const el = ((e as any).label || (e as any).description || (e as any).motivo || '').toLowerCase().trim()
+              return !!el && (labelLc.includes(el) || el.includes(labelLc))
+            })
+          }
+
+          if (idx >= 0) {
+            arr[idx] = { ...arr[idx], amount: newTotal, total: newTotal, quantity: 1 }
+            const { error: updateErr } = await supabase
+              .from('bookings')
+              .update({ booking_details: { ...details, [item.arrayKey]: arr } })
+              .eq('id', item.bookingId)
+            if (updateErr) throw updateErr
+            toccato = true
+          }
         }
+      }
 
-        const { error: updateErr } = await supabase
-          .from('bookings')
-          .update({ booking_details: { ...details, [item.arrayKey]: arr } })
-          .eq('id', item.bookingId)
+      // ── 2) fatture ── stessa voce sulle fatture della prenotazione o su
+      //    quella indicata dall'item (che puo' non avere booking_id).
+      if (labelLc.length >= 3) {
+        let query = supabase.from('fatture').select('id, items, importo_totale')
+        query = item.fatturaId
+          ? query.eq('id', item.fatturaId)
+          : item.bookingId
+            ? query.eq('booking_id', item.bookingId)
+            : query.eq('numero_fattura', item.fatturaNumero || '__nessuna__')
+        const { data: fatt } = await query
 
-        if (updateErr) throw updateErr
-      } else if (item.status === 'invoiced' && item.fatturaNumero) {
-        // Update fattura line item
-        const { data: fattura, error: fetchErr } = await supabase
-          .from('fatture')
-          .select('id, items, importo_totale')
-          .eq('numero_fattura', item.fatturaNumero)
-          .single()
-
-        if (fetchErr || !fattura) throw fetchErr || new Error('Fattura non trovata')
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const fatturaItems: any[] = Array.isArray(fattura.items) ? [...fattura.items] : []
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const matchIdx = fatturaItems.findIndex((fi: any) => fi.description === item.label)
-
-        if (matchIdx >= 0) {
-          const oldTotal = fatturaItems[matchIdx].total || (fatturaItems[matchIdx].unit_price || 0) * (fatturaItems[matchIdx].quantity || 1)
-          fatturaItems[matchIdx] = { ...fatturaItems[matchIdx], unit_price: newTotal, total: newTotal, quantity: 1 }
-          const newImporto = Math.max(0, (fattura.importo_totale || 0) - oldTotal + newTotal)
-
+        for (const f of (fatt || [])) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const fitems: any[] = Array.isArray(f.items) ? [...f.items] : []
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const mIdx = fitems.findIndex((fi: any) => {
+            const d = String(fi.description || '').toLowerCase().trim()
+            return !!d && (d === labelLc || d.includes(labelLc) || labelLc.includes(d))
+          })
+          if (mIdx < 0) continue
+          const oldTotal = fitems[mIdx].total || (fitems[mIdx].unit_price || 0) * (fitems[mIdx].quantity || 1)
+          fitems[mIdx] = { ...fitems[mIdx], unit_price: newTotal, total: newTotal, quantity: 1 }
+          const newImporto = Math.max(0, (f.importo_totale || 0) - oldTotal + newTotal)
           const { error: updateErr } = await supabase
-            .from('fatture')
-            .update({ items: fatturaItems, importo_totale: newImporto })
-            .eq('id', fattura.id)
-
+            .from('fatture').update({ items: fitems, importo_totale: newImporto }).eq('id', f.id)
           if (updateErr) throw updateErr
+          toccato = true
         }
+      }
+
+      if (!toccato) {
+        toast.error('Voce non trovata: nulla e\' stato modificato. Ricarica e riprova.')
+        return
       }
 
       toast.success('Importo aggiornato')
@@ -720,16 +802,43 @@ export default function GestioneDanniTab() {
       return
     }
 
-    const bookingId = editModal.customer.mostRecentBookingId
-    if (!bookingId) {
-      toast.error('Nessuna prenotazione trovata per questo cliente')
-      return
-    }
-
     const arrayKey = editModal.type === 'penali' ? 'penalties' : 'danni'
 
     setSaving(true)
     try {
+      // 2026-08-24: `mostRecentBookingId` viene valorizzato SOLO dal ciclo sulle
+      // prenotazioni. Un cliente le cui voci arrivano dalle fatture non ne ha
+      // nessuna, e l'aggiunta veniva rifiutata con "Nessuna prenotazione
+      // trovata" anche quando il cliente aveva prenotazioni in archivio.
+      // Ora, se manca, la si cerca per email (poi per nome).
+      let bookingId = editModal.customer.mostRecentBookingId
+      if (!bookingId) {
+        const email = (editModal.customer.customerEmail || '').trim()
+        if (email) {
+          const { data } = await supabase
+            .from('bookings').select('id')
+            .ilike('customer_email', email)
+            .order('pickup_date', { ascending: false })
+            .limit(1)
+          bookingId = data?.[0]?.id || null
+        }
+        if (!bookingId) {
+          const nome = (editModal.customer.customerName || '').trim()
+          if (nome) {
+            const { data } = await supabase
+              .from('bookings').select('id')
+              .ilike('customer_name', nome)
+              .order('pickup_date', { ascending: false })
+              .limit(1)
+            bookingId = data?.[0]?.id || null
+          }
+        }
+      }
+      if (!bookingId) {
+        toast.error('Questo cliente non ha nessuna prenotazione a cui agganciare la voce: penali e danni si registrano su una prenotazione.')
+        return
+      }
+
       const { data: booking, error: fetchErr } = await supabase
         .from('bookings')
         .select('booking_details')
