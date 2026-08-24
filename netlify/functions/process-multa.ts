@@ -398,17 +398,82 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
     }
 }
 
+
+/**
+ * Intestazione della lettera "Comunicazione dati conducente" (24/08/2026).
+ *
+ * Prima erano scritti in duro nel testo: il destinatario ("Spett.le Polizia
+ * Municipale di Cagliari" — sbagliato per ogni verbale che non venga da
+ * Cagliari, figurarsi per una multa estera), l'indirizzo DR7, il telefono, la
+ * PEC e il rappresentante legale. Ora arrivano da
+ * `centralina_pro_config.config.multe_config` (Centralina Pro > Gestione Multe)
+ * e possono essere sovrascritti sulla singola multa.
+ */
+export interface MulteConfig {
+    ragione_sociale: string
+    piva: string
+    rappresentante_legale: string
+    indirizzo: string
+    telefono: string
+    pec_mittente: string
+    /** Destinatario proposto quando il verbale non permette di dedurlo. */
+    destinatario_default?: string
+}
+
+const MULTE_CONFIG_FALLBACK: MulteConfig = {
+    ragione_sociale: 'DR7 S.p.A.',
+    piva: '04104640927',
+    rappresentante_legale: 'Campagnola Ilenia',
+    indirizzo: 'Viale Marconi 229, Cagliari (CA)',
+    telefono: '3472817258',
+    pec_mittente: 'Dubai.rent7.0srl@legalmail.it',
+}
+
+async function loadMulteConfig(): Promise<MulteConfig> {
+    try {
+        const { data } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+        const cfg = ((data?.config as Record<string, unknown>) || {}).multe_config as Partial<MulteConfig> | undefined
+        if (!cfg) return MULTE_CONFIG_FALLBACK
+        return {
+            ragione_sociale: cfg.ragione_sociale?.trim() || MULTE_CONFIG_FALLBACK.ragione_sociale,
+            piva: cfg.piva?.trim() || MULTE_CONFIG_FALLBACK.piva,
+            rappresentante_legale: cfg.rappresentante_legale?.trim() || MULTE_CONFIG_FALLBACK.rappresentante_legale,
+            indirizzo: cfg.indirizzo?.trim() || MULTE_CONFIG_FALLBACK.indirizzo,
+            telefono: cfg.telefono?.trim() || MULTE_CONFIG_FALLBACK.telefono,
+            pec_mittente: cfg.pec_mittente?.trim() || MULTE_CONFIG_FALLBACK.pec_mittente,
+            destinatario_default: cfg.destinatario_default?.trim() || undefined,
+        }
+    } catch (e) {
+        console.error('[process-multa] loadMulteConfig failed, uso i valori storici:', e)
+        return MULTE_CONFIG_FALLBACK
+    }
+}
+
 // ── Generate communication letter ────────────────────────────────────────────
 
-function generateLetterText(multa: MultaData, driver: DriverData): string {
+function generateLetterText(
+    multa: MultaData,
+    driver: DriverData,
+    cfg: MulteConfig = MULTE_CONFIG_FALLBACK,
+    /** Sovrascritture valide SOLO per questa multa (indirizzo diverso, ecc.). */
+    override: Partial<MulteConfig> = {},
+): string {
+    const az: MulteConfig = { ...cfg, ...Object.fromEntries(Object.entries(override).filter(([, v]) => !!v)) } as MulteConfig
+    // Destinatario: quello letto dal verbale. "Polizia Municipale di Cagliari"
+    // era scritto in duro e finiva su OGNI lettera, anche di altri comuni.
+    const destinatario = (multa as { ente_denominazione?: string }).ente_denominazione?.trim()
+        || [((multa as { ente_tipo?: string }).ente_tipo || 'Organo accertatore'),
+            (multa as { comune?: string }).comune ? `di ${(multa as { comune?: string }).comune}` : '']
+           .filter(Boolean).join(' ')
+
     const today = new Date()
     const formattedToday = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`
 
-    return `Spett.le Polizia Municipale di Cagliari
+    return `Spett.le ${destinatario}
 
 Oggetto: Comunicazione dati conducente — Verbale n. ${multa.numero_verbale || 'N/D'} del ${multa.data_infrazione || 'N/D'}
 
-Con la presente, la società DR7 S.p.A. (P.IVA 04104640927), in qualità di proprietaria del veicolo targato ${driver.vehicle_plate}, comunica che al momento dell'infrazione contestata con il verbale in oggetto, il veicolo era concesso a noleggio al seguente soggetto:
+Con la presente, la società ${az.ragione_sociale} (P.IVA ${az.piva}), in qualità di proprietaria del veicolo targato ${driver.vehicle_plate}, comunica che al momento dell'infrazione contestata con il verbale in oggetto, il veicolo era concesso a noleggio al seguente soggetto:
 
 DATI DEL CONDUCENTE:
 - Cognome: ${driver.cognome.toUpperCase() || 'N/D'}
@@ -432,11 +497,11 @@ Si allegano alla presente:
 
 Distinti saluti,
 
-DR7 S.p.A.
-Rappresentante Legale: Campagnola Ilenia
-Viale Marconi 229, Cagliari (CA)
-Tel: 3472817258
-PEC: Dubai.rent7.0srl@legalmail.it
+${az.ragione_sociale}
+Rappresentante Legale: ${az.rappresentante_legale}
+${az.indirizzo}
+Tel: ${az.telefono}
+PEC: ${az.pec_mittente}
 
 Cagliari, ${formattedToday}`
 }
@@ -511,6 +576,8 @@ interface ProcessMultaRequest {
     multaData?: MultaData
     driverData?: DriverData
     letterText?: string    // User-edited letter text (if not provided, auto-generated)
+    /** Dati azienda validi solo per questa multa (es. indirizzo diverso). */
+    aziendaOverride?: Partial<MulteConfig>
     pecTo?: string
     pecCc?: string[]
     pecPassword?: string
@@ -580,7 +647,9 @@ const handler: Handler = async (event) => {
                 }
 
                 // Use user-edited letter if provided, otherwise auto-generate
-                const letterText = req.letterText || generateLetterText(req.multaData, req.driverData)
+                const multeCfg = await loadMulteConfig()
+                const letterText = req.letterText
+                    || generateLetterText(req.multaData, req.driverData, multeCfg, req.aziendaOverride || {})
                 const subject = `Comunicazione dati conducente — Verbale n. ${req.multaData.numero_verbale || 'N/D'} — Targa ${req.driverData.vehicle_plate}`
 
                 const attachments: Array<{ filename: string; content: Buffer; contentType: string }> = []
@@ -713,7 +782,7 @@ const handler: Handler = async (event) => {
                 }
 
                 // Step 3: Generate letter (but don't send yet — return for review)
-                const letterText = generateLetterText(multaData, driver)
+                const letterText = generateLetterText(multaData, driver, await loadMulteConfig(), req.aziendaOverride || {})
 
                 // Step 4: propose PEC recipient (organo accertatore dinamico)
                 const pecRecipient = await matchEnte(multaData)

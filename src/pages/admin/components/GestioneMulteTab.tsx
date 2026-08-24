@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import { logger } from '../../../utils/logger'
+import { loadMulteConfig, MULTE_CONFIG_DEFAULTS, type MulteConfigValues } from './MulteConfigSection'
 
 export default function GestioneMulteTab() {
     const [activeSubTab, setActiveSubTab] = useState<'history' | 'upload'>('history')
@@ -33,6 +34,20 @@ export default function GestioneMulteTab() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [rubricaResults, setRubricaResults] = useState<any[]>([])
     const [ccInput, setCcInput] = useState('')
+    // ── Dati azienda per QUESTA multa (24/08/2026) ───────────────────────────
+    // I dati fissi stanno in Centralina Pro > Gestione Multe. Qui si possono
+    // sovrascrivere per il singolo verbale: capita di dover indicare un
+    // indirizzo diverso (multa estera, sede operativa, domicilio eletto).
+    const [azienda, setAzienda] = useState<MulteConfigValues>(MULTE_CONFIG_DEFAULTS)
+    const [aziendaBase, setAziendaBase] = useState<MulteConfigValues>(MULTE_CONFIG_DEFAULTS)
+    const [mostraAzienda, setMostraAzienda] = useState(false)
+
+    useEffect(() => {
+        void (async () => {
+            const cfg = await loadMulteConfig()
+            setAzienda(cfg); setAziendaBase(cfg)
+        })()
+    }, [])
 
     function looksLikePec(email: string): boolean {
         const e = (email || '').toLowerCase().trim()
@@ -205,6 +220,13 @@ export default function GestioneMulteTab() {
                     letterText,
                     pecTo: dest,
                     pecCc: ccList,
+                    // Solo i campi davvero cambiati rispetto alla config: il
+                    // backend ignora le stringhe vuote e tiene i suoi valori.
+                    aziendaOverride: Object.fromEntries(
+                        (Object.keys(azienda) as Array<keyof MulteConfigValues>)
+                            .filter(k => azienda[k] !== aziendaBase[k])
+                            .map(k => [k, azienda[k]])
+                    ),
                 }),
             })
             const data = await res.json()
@@ -635,6 +657,50 @@ export default function GestioneMulteTab() {
                                             {chosenPec && <span className="text-[11px] text-theme-text-muted">({sourceLabel})</span>}
                                         </div>
                                         {pecRecipient?.denominazione && <div className="text-xs text-theme-text-muted">{pecRecipient.denominazione}</div>}
+                                        {/* 24/08/2026: indirizzo e dati azienda per QUESTA multa.
+                                            I valori fissi vivono in Centralina Pro > Gestione Multe;
+                                            qui si scostano solo per il verbale in corso. */}
+                                        <div className="pt-1">
+                                            <button
+                                                onClick={() => setMostraAzienda(v => !v)}
+                                                className="text-xs text-theme-text-secondary underline"
+                                            >
+                                                {mostraAzienda ? 'Chiudi dati azienda' : 'Indirizzo e dati azienda per questa multa'}
+                                            </button>
+                                            {mostraAzienda && (
+                                                <div className="mt-2 rounded-lg border border-theme-border bg-theme-bg-tertiary/40 p-3 space-y-2">
+                                                    {([
+                                                        ['indirizzo', 'Indirizzo'],
+                                                        ['pec_mittente', 'PEC mittente'],
+                                                        ['rappresentante_legale', 'Rappresentante legale'],
+                                                        ['telefono', 'Telefono'],
+                                                    ] as Array<[keyof MulteConfigValues, string]>).map(([k, label]) => (
+                                                        <div key={k}>
+                                                            <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1">{label}</label>
+                                                            <input
+                                                                type="text"
+                                                                value={azienda[k]}
+                                                                onChange={e => setAzienda(prev => ({ ...prev, [k]: e.target.value }))}
+                                                                className="w-full px-2.5 h-8 rounded-lg border border-theme-border bg-theme-bg-primary text-xs text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-dr7-gold"
+                                                            />
+                                                        </div>
+                                                    ))}
+                                                    <div className="flex items-center justify-between pt-1">
+                                                        <span className="text-[10px] text-theme-text-muted">
+                                                            {JSON.stringify(azienda) === JSON.stringify(aziendaBase)
+                                                                ? 'Valori standard di Centralina Pro'
+                                                                : 'Valori modificati solo per questa multa'}
+                                                        </span>
+                                                        <button
+                                                            onClick={() => setAzienda(aziendaBase)}
+                                                            className="text-[11px] text-theme-text-secondary underline"
+                                                        >
+                                                            Ripristina
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
                                         {chosenPec && !looksLikePec(chosenPec) && (
                                             <div className="text-[11px] text-amber-400">Questo indirizzo non sembra una PEC — confermi comunque?</div>
                                         )}
