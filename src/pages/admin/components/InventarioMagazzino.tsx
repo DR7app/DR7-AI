@@ -15,7 +15,13 @@ import toast from 'react-hot-toast'
 import MoneyInput from '../../../components/MoneyInput'
 
 // ── Tipi ─────────────────────────────────────────────────────────────────────
-interface Categoria { id: string; codice: string; nome: string; ordine: number; attiva: boolean }
+interface Categoria {
+  id: string; codice: string; nome: string; ordine: number; attiva: boolean
+  /** 2026-08-24: business in cui la categoria si vede. NULL/vuoto = tutti.
+   *  I ricambi veicoli stanno nel magazzino Lavaggio & Meccanica, non in
+   *  quello del Mare. Vedi 20260824_magazzino_categorie_per_business.sql */
+  business_scope?: string[] | null
+}
 interface Fornitore { id: string; nome: string; email: string | null; telefono: string | null; canale_riordino_default: string | null }
 interface Articolo {
   id: string
@@ -171,6 +177,19 @@ export default function InventarioMagazzino({ business }: { business?: Business 
     const m = new Map<string, Ordine>(); ordini.forEach(o => m.set(o.articolo_id, o)); return m
   }, [ordini])
 
+  // Gli ordini seguono lo scope come gli articoli: nella tab del Mare non
+  // devono comparire (ne' contare) gli ordini del magazzino aziendale.
+  const articoloById = useMemo(() => {
+    const m = new Map<string, Articolo>(); articoli.forEach(a => m.set(a.id, a)); return m
+  }, [articoli])
+  const ordiniInScope = useMemo(() => {
+    if (!biz) return ordini
+    return ordini.filter(o => {
+      const a = articoloById.get(o.articolo_id)
+      return a ? (a.business || null) === biz : false
+    })
+  }, [ordini, articoloById, biz])
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return articoli.filter(a => {
@@ -182,6 +201,18 @@ export default function InventarioMagazzino({ business }: { business?: Business 
       return a.nome.toLowerCase().includes(q) || a.codice.toLowerCase().includes(q) || (a.note || '').toLowerCase().includes(q)
     })
   }, [articoli, search, soloSottoScorta, biz])
+
+  // Categorie visibili nella tab: quelle trasversali piu' quelle di questo
+  // business. Se la colonna `business_scope` non esiste ancora (migration non
+  // applicata) restano visibili tutte, come prima.
+  const categorieInScope = useMemo(() => {
+    if (!biz) return categorie
+    return categorie.filter(c => {
+      const scope = c.business_scope
+      if (!scope || scope.length === 0) return true
+      return scope.includes(biz)
+    })
+  }, [categorie, biz])
 
   const byCategoria = useMemo(() => {
     const m = new Map<string, Articolo[]>()
@@ -531,16 +562,31 @@ export default function InventarioMagazzino({ business }: { business?: Business 
 
   // Crea un ordine manuale (on-demand) per un articolo, anche se non e' sotto
   // scorta. Poi lo si invia via WhatsApp al numero che si vuole.
+  // Apre la finestra d'invio gia' compilata: contatto salvato sull'articolo,
+  // altrimenti quello del fornitore. Prima bisognava cercare l'ordine in fondo
+  // alla pagina: "Ordine aperto" e basta, senza sapere cosa fare dopo.
+  function openSend(o: Ordine) {
+    const a = articoli.find(x => x.id === o.articolo_id)
+    const forn = o.fornitore_id ? fornitoreById.get(o.fornitore_id) : undefined
+    const tipo: 'whatsapp' | 'email' = (a?.contatto_tipo as 'whatsapp' | 'email') || (o.canale === 'email' ? 'email' : 'whatsapp')
+    setSendCanale(tipo)
+    setSendOrderId(o.id)
+    setSendPhone(tipo === 'email'
+      ? (a?.contatto_ordine || forn?.email || '')
+      : (a?.contatto_ordine || forn?.telefono || '').replace(/\D/g, ''))
+  }
+
   async function creaOrdineManuale(a: Articolo) {
-    if (openOrderByArticolo.has(a.id)) { toast('Ordine gia aperto per questo articolo', { icon: 'ℹ️' }); return }
+    const gia = openOrderByArticolo.get(a.id)
+    if (gia) { openSend(gia); return }
     setBusy(true)
     try {
       const forn = a.fornitore_id ? fornitoreById.get(a.fornitore_id) : undefined
       const canale = a.canale_riordino || forn?.canale_riordino_default || 'whatsapp'
       const quantita = a.quantita_riordino || a.soglia_minima || 1
-      const { error } = await supabase.from('inv_ordini').insert({
+      const { data: nuovo, error } = await supabase.from('inv_ordini').insert({
         articolo_id: a.id, fornitore_id: a.fornitore_id, canale, quantita, stato: 'bozza', auto: false,
-      })
+      }).select('*').single()
       if (error) throw error
       // E-commerce (Amazon/Shein/Temu): l'ordine si fa sul sito. Apriamo il link
       // giusto invece di proporre un invio WhatsApp a un fornitore inesistente.
@@ -548,8 +594,11 @@ export default function InventarioMagazzino({ business }: { business?: Business 
       if (shopUrl) {
         window.open(shopUrl, '_blank', 'noopener,noreferrer')
         toast.success(`Ordine creato — completa l'acquisto su ${canale.charAt(0).toUpperCase() + canale.slice(1)}, poi segna "inviato"`)
-      } else {
-        toast.success('Ordine creato — invialo via WhatsApp al numero che vuoi')
+      } else if (nuovo) {
+        // Niente passaggio in piu': la finestra d'invio si apre subito, gia'
+        // compilata con numero o email.
+        setOrdini(prev => [...prev, nuovo as Ordine])
+        openSend(nuovo as Ordine)
       }
       await load()
     } catch (e) { toast.error(`Errore: ${(e as Error).message}`) } finally { setBusy(false) }
@@ -586,7 +635,7 @@ export default function InventarioMagazzino({ business }: { business?: Business 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi label="Articoli totali" value={String(inScope.length)} />
         <Kpi label="Sotto scorta" value={String(sottoScortaCount)} tone={sottoScortaCount > 0 ? 'red' : 'emerald'} />
-        <Kpi label="Ordini aperti" value={String(ordini.length)} tone={ordini.length > 0 ? 'amber' : 'default'} />
+        <Kpi label="Ordini aperti" value={String(ordiniInScope.length)} tone={ordiniInScope.length > 0 ? 'amber' : 'default'} />
         <Kpi label="Valore magazzino" value={eur(valoreTotale)} />
       </div>
 
@@ -602,10 +651,10 @@ export default function InventarioMagazzino({ business }: { business?: Business 
           className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${soloSottoScorta ? 'bg-red-500/15 text-red-300 border-red-500/40' : 'bg-theme-bg-tertiary text-theme-text-secondary border-theme-border'}`}
         >Solo sotto scorta</button>
         <button
-          onClick={() => { const c = categorie[0]?.codice; setEditArticolo({ categoria_codice: c, codice: c ? nextCode(c) : '', quantita: 0, business: biz }) }}
+          onClick={() => { const c = categorieInScope[0]?.codice; setEditArticolo({ categoria_codice: c, codice: c ? nextCode(c) : '', quantita: 0, business: biz }) }}
           className="px-3 py-2 rounded-lg text-sm font-semibold bg-cyan-600 hover:bg-cyan-700 text-white"
         >+ Nuovo articolo</button>
-        <button onClick={() => setOpenCats(new Set(categorie.map(c => c.codice)))} className="px-3 py-2 rounded-lg text-sm text-theme-text-secondary border border-theme-border">Espandi tutto</button>
+        <button onClick={() => setOpenCats(new Set(categorieInScope.map(c => c.codice)))} className="px-3 py-2 rounded-lg text-sm text-theme-text-secondary border border-theme-border">Espandi tutto</button>
         <button onClick={() => setOpenCats(new Set())} className="px-3 py-2 rounded-lg text-sm text-theme-text-secondary border border-theme-border">Comprimi tutto</button>
       </div>
 
@@ -613,7 +662,7 @@ export default function InventarioMagazzino({ business }: { business?: Business 
         <div className="py-16 text-center text-theme-text-muted">Caricamento…</div>
       ) : (
         <div className="space-y-2.5">
-          {categorie.map(cat => {
+          {categorieInScope.map(cat => {
             const items = byCategoria.get(cat.codice) || []
             if (soloSottoScorta && items.length === 0) return null
             const open = openCats.has(cat.codice)
@@ -659,7 +708,14 @@ export default function InventarioMagazzino({ business }: { business?: Business 
                             <button onClick={() => setMovModal({ articolo: a, tipo: 'carico' })} className="w-7 h-7 grid place-items-center rounded bg-emerald-600/80 hover:bg-emerald-600 text-white text-sm font-bold" title="Carico">+</button>
                             <button onClick={() => setMovModal({ articolo: a, tipo: 'scarico' })} className="w-7 h-7 grid place-items-center rounded bg-red-600/80 hover:bg-red-600 text-white text-sm font-bold" title="Scarico">−</button>
                             <button onClick={() => setMovModal({ articolo: a, tipo: 'rettifica' })} className="px-2 h-7 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary text-xs" title="Rettifica inventario fisico">Rett.</button>
-                            {!hasOpenOrder && <button onClick={() => creaOrdineManuale(a)} disabled={busy} className="px-2 h-7 rounded bg-green-600/80 hover:bg-green-600 text-white text-xs font-semibold disabled:opacity-50" title="Crea un ordine di riordino (Amazon/Shein/Temu apre il sito; WhatsApp/email invia al numero scelto)">Ordina</button>}
+                            <button
+                            onClick={() => creaOrdineManuale(a)}
+                            disabled={busy}
+                            className={`px-2 h-7 rounded text-white text-xs font-semibold disabled:opacity-50 ${hasOpenOrder ? 'bg-amber-600/80 hover:bg-amber-600' : 'bg-green-600/80 hover:bg-green-600'}`}
+                            title={hasOpenOrder
+                              ? "Ordine gia' aperto: apre la finestra d'invio"
+                              : "Crea l'ordine e apre subito la finestra d'invio (Amazon/Shein/Temu apre il sito)"}
+                          >{hasOpenOrder ? 'Invia' : 'Ordina'}</button>
                             <button onClick={() => setEditArticolo(a)} className="px-2 h-7 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary text-xs">Modifica</button>
                           </div>
                         </div>
@@ -675,11 +731,11 @@ export default function InventarioMagazzino({ business }: { business?: Business 
       )}
 
       {/* Ordini aperti */}
-      {ordini.length > 0 && (
+      {ordiniInScope.length > 0 && (
         <div className="rounded-xl border border-theme-border bg-theme-bg-secondary p-4">
-          <h3 className="text-sm font-semibold text-theme-text-primary mb-3">Ordini di riordino aperti ({ordini.length})</h3>
+          <h3 className="text-sm font-semibold text-theme-text-primary mb-3">Ordini di riordino aperti ({ordiniInScope.length})</h3>
           <div className="space-y-1.5">
-            {ordini.map(o => {
+            {ordiniInScope.map(o => {
               const a = articoli.find(x => x.id === o.articolo_id)
               const forn = o.fornitore_id ? fornitoreById.get(o.fornitore_id) : undefined
               return (
@@ -695,61 +751,13 @@ export default function InventarioMagazzino({ business }: { business?: Business 
                       title={`Apri ${o.canale} per completare l'ordine`}
                     >Apri {o.canale}</button>
                   )}
-                  {o.stato === 'bozza' && !ECOM_CANALI.has(o.canale) && sendOrderId !== o.id && (
+                  {o.stato === 'bozza' && !ECOM_CANALI.has(o.canale) && (
                     <button
-                      onClick={() => {
-                        // 2026-08-24: precompila con il contatto SALVATO
-                        // sull'articolo; solo se manca ripiega sul fornitore.
-                        const tipo = a?.contatto_tipo || 'whatsapp'
-                        setSendCanale(tipo)
-                        setSendOrderId(o.id)
-                        if (tipo === 'email') {
-                          setSendPhone(a?.contatto_ordine || forn?.email || '')
-                        } else {
-                          setSendPhone((a?.contatto_ordine || forn?.telefono || '').replace(/\D/g, ''))
-                        }
-                      }}
+                      onClick={() => openSend(o)}
                       className="px-2 py-1 rounded bg-green-600 hover:bg-green-700 text-white text-xs font-semibold"
                     >Invia ordine</button>
                   )}
-                  {o.stato === 'bozza' && !ECOM_CANALI.has(o.canale) && sendOrderId === o.id && (
-                    /* 2026-08-24: si sceglie il canale (WhatsApp o email) e il
-                       campo arriva gia' compilato col contatto salvato
-                       sull'articolo. Dopo l'invio il contatto viene memorizzato,
-                       cosi' il prossimo ordine dello stesso articolo non chiede
-                       piu' nulla. */
-                    <div className="w-full mt-1 space-y-1">
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setSendCanale('whatsapp')}
-                          className={`px-2 py-1 rounded text-xs font-semibold border ${sendCanale === 'whatsapp' ? 'bg-green-600 text-white border-green-600' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary'}`}
-                        >WhatsApp</button>
-                        <button
-                          onClick={() => setSendCanale('email')}
-                          className={`px-2 py-1 rounded text-xs font-semibold border ${sendCanale === 'email' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary'}`}
-                        >Email</button>
-                        {a?.contatto_ordine && (
-                          <span className="text-[10px] text-theme-text-muted truncate">salvato: {a.contatto_ordine}</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <input
-                          type={sendCanale === 'email' ? 'email' : 'tel'}
-                          value={sendPhone} onChange={e => setSendPhone(e.target.value)}
-                          placeholder={sendCanale === 'email' ? 'Email fornitore' : 'Numero WhatsApp (es. 39347...)'}
-                          className="flex-1 px-2 py-1 rounded bg-theme-bg-tertiary border border-green-500/50 text-xs text-theme-text-primary"
-                          autoFocus
-                        />
-                        <button
-                          disabled={busy}
-                          onClick={() => sendCanale === 'email' ? inviaOrdineEmail(o, sendPhone) : inviaOrdineWhatsApp(o, sendPhone)}
-                          className="px-2 py-1 rounded bg-green-600 hover:bg-green-700 text-white text-xs font-semibold disabled:opacity-50"
-                        >Invia</button>
-                        <button onClick={() => { setSendOrderId(null); setSendPhone('') }} className="px-2 py-1 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary text-xs">Annulla</button>
-                      </div>
-                    </div>
-                  )}
-                  {o.stato === 'bozza' && sendOrderId !== o.id && <button onClick={() => ordineTransizione(o, 'inviato')} className="px-2 py-1 rounded bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold">Segna inviato</button>}
+                  {o.stato === 'bozza' && <button onClick={() => ordineTransizione(o, 'inviato')} className="px-2 py-1 rounded bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold">Segna inviato</button>}
                   {(o.stato === 'inviato' || o.stato === 'confermato') && <button onClick={() => ordineTransizione(o, 'ricevuto')} className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">Ricevuto (carico)</button>}
                   <button onClick={() => ordineTransizione(o, 'annullato')} className="px-2 py-1 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary text-xs">Annulla</button>
                 </div>
@@ -759,6 +767,60 @@ export default function InventarioMagazzino({ business }: { business?: Business 
         </div>
       )}
 
+      {/* Modal invio ordine — si apre appena si clicca "Ordina", gia' compilato */}
+      {sendOrderId && (() => {
+        const o = ordini.find(x => x.id === sendOrderId)
+        if (!o) return null
+        const a = articoloById.get(o.articolo_id)
+        return (
+          <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4" onClick={() => { setSendOrderId(null); setSendPhone('') }}>
+            <div className="w-full max-w-md rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 space-y-4" onClick={e => e.stopPropagation()}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-bold text-theme-text-primary">Invia ordine</h3>
+                  <p className="text-xs text-theme-text-muted">{a?.nome || o.articolo_id} · {num(o.quantita)} {a?.unita || ''}</p>
+                </div>
+                <button onClick={() => { setSendOrderId(null); setSendPhone('') }} className="text-theme-text-muted hover:text-theme-text-primary text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-full hover:bg-theme-bg-hover">&times;</button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setSendCanale('whatsapp'); setSendPhone(p => p.includes('@') ? '' : p) }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${sendCanale === 'whatsapp' ? 'bg-green-600 text-white border-green-600' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary'}`}
+                >WhatsApp</button>
+                <button
+                  onClick={() => { setSendCanale('email'); setSendPhone(p => p.includes('@') ? p : (a?.contatto_tipo === 'email' ? (a?.contatto_ordine || '') : '')) }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${sendCanale === 'email' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary'}`}
+                >Email</button>
+                {a?.contatto_ordine && (
+                  <span className="text-[10px] text-theme-text-muted truncate">salvato: {a.contatto_ordine}</span>
+                )}
+              </div>
+
+              <input
+                type={sendCanale === 'email' ? 'email' : 'tel'}
+                value={sendPhone}
+                onChange={e => setSendPhone(e.target.value)}
+                placeholder={sendCanale === 'email' ? 'Email fornitore' : 'Numero WhatsApp (es. 39347...)'}
+                className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary"
+                autoFocus
+              />
+
+              <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap text-[11px] text-theme-text-secondary bg-theme-bg-tertiary/50 border border-theme-border rounded-lg p-3">{testoOrdine(o)}</pre>
+
+              <div className="flex items-center justify-end gap-2">
+                <button onClick={() => { setSendOrderId(null); setSendPhone('') }} className="px-3 py-2 rounded-lg text-sm border border-theme-border text-theme-text-secondary">Annulla</button>
+                <button
+                  disabled={busy}
+                  onClick={() => sendCanale === 'email' ? inviaOrdineEmail(o, sendPhone) : inviaOrdineWhatsApp(o, sendPhone)}
+                  className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold disabled:opacity-50"
+                >{busy ? 'Invio…' : 'Invia ordine'}</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Modal movimento */}
       {movModal && <MovimentoModal ctx={movModal} busy={busy} onClose={() => setMovModal(null)} onConfirm={(v, m) => applyMovimento(movModal.articolo, movModal.tipo, v, m)} />}
 
@@ -767,7 +829,7 @@ export default function InventarioMagazzino({ business }: { business?: Business 
         <ArticoloModal
           initial={editArticolo}
           scopeBusiness={biz}
-          categorie={categorie}
+          categorie={categorieInScope}
           fornitori={fornitori}
           busy={busy}
           nextCodeFor={nextCode}
