@@ -160,6 +160,28 @@ const handler: Handler = async () => {
   // l'errore VERO (quota? NOT_FOUND? PERMISSION_DENIED?). Sappiamo gia'
   // che la location e' settata — il nodo del problema e' la chiamata
   // metrics, non quella di scoperta.
+  // 2026-08-24: `accounts_found: 1` qui sotto era un valore FISSO, messo solo
+  // perche' esiste una location in cache. Non diceva niente su quale API
+  // funziona. Ora si prova davvero anche l'Account Management API: se quella
+  // risponde e la Performance no, il progetto e' abilitato solo a meta' e il
+  // problema e' la quota della sola Performance API.
+  if (hasBusinessScope) {
+    try {
+      const r = await oauth2.request<{ accounts?: Array<{ name: string }> }>({
+        url: 'https://mybusinessaccountmanagement.googleapis.com/v1/accounts',
+        method: 'GET',
+      })
+      const n = r.data?.accounts?.length || 0
+      diag.recommendations.push(`Account Management API: OK, ${n} account visibili. Il progetto e' abilitato a questa API.`)
+    } catch (e: unknown) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const err = e as any
+      const code = err?.code || err?.response?.status || err?.status
+      const detail = err?.response?.data?.error?.message || err?.message || String(e)
+      diag.recommendations.push(`Account Management API: FALLITA [${code || '?'}] ${detail}`)
+    }
+  }
+
   if (diag.location_cache.name) {
     diag.accounts_test.accounts_found = 1
     try {
