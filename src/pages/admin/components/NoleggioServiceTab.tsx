@@ -128,8 +128,15 @@ interface PreventivoRow {
   customer_name: string | null
   customer_phone: string | null
   asset_name: string | null
+  asset_id?: string | null
   start_date: string | null
   end_date: string | null
+  start_time?: string | null
+  end_time?: string | null
+  is_tour?: boolean | null
+  duration_label?: string | null
+  duration_minutes?: number | null
+  passengers?: number | null
   amount: number
   notes: string | null
   status: string
@@ -1455,7 +1462,15 @@ function CatalogView({ serviceType, labels }: { serviceType: NoleggioServiceType
 
 /* ------------------------------ PREVENTIVI ------------------------------ */
 
-const EMPTY_PREV = { customer_name: '', customer_phone: '', asset_name: '', start_date: '', end_date: '', amount: '', notes: '', status: 'bozza' }
+// 2026-08-24: il preventivo ora ha le stesse leve di Terra — mezzo scelto dal
+// CATALOGO (non piu' digitato a mano), orari, e la modalita' tour con durata e
+// passeggeri. `asset_name` resta valorizzato per stampe e storico.
+const EMPTY_PREV = {
+  customer_name: '', customer_phone: '', asset_id: '', asset_name: '',
+  start_date: '', end_date: '', start_time: '', end_time: '',
+  is_tour: false, duration_label: '', duration_minutes: '', passengers: '',
+  amount: '', notes: '', status: 'bozza',
+}
 const PREV_STATUSES = ['bozza', 'inviato', 'accettato', 'rifiutato']
 
 function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceType; labels: NoleggioServiceLabels }) {
@@ -1466,12 +1481,27 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
   const [form, setForm] = useState<typeof EMPTY_PREV>(EMPTY_PREV)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
+  // Catalogo del business: alimenta la tendina del mezzo. Senza, l'admin
+  // doveva riscrivere a mano il nome dell'elicottero gia' presente a catalogo.
+  const [catalogo, setCatalogo] = useState<CatalogRow[]>([])
+
+  useEffect(() => {
+    void (async () => {
+      const { data } = await supabase
+        .from('noleggio_catalog')
+        .select('id, service_type, name, description, price_per_day, capacity, image_url, is_active, sort_order, tour_durations')
+        .eq('service_type', serviceType)
+        .eq('is_active', true)
+        .order('sort_order').order('name')
+      setCatalogo((data || []) as CatalogRow[])
+    })()
+  }, [serviceType])
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
     const { data, error: e } = await supabase
       .from('noleggio_preventivi')
-      .select('id, service_type, customer_name, customer_phone, asset_name, start_date, end_date, amount, notes, status, created_at')
+      .select('id, service_type, customer_name, customer_phone, asset_name, asset_id, start_date, end_date, start_time, end_time, is_tour, duration_label, duration_minutes, passengers, amount, notes, status, created_at')
       .eq('service_type', serviceType)
       .order('created_at', { ascending: false })
     if (e) setError(missingTableHint(e.message))
@@ -1484,8 +1514,14 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
   function openEdit(p: PreventivoRow) {
     setEditingId(p.id)
     setForm({
-      customer_name: p.customer_name || '', customer_phone: p.customer_phone || '', asset_name: p.asset_name || '',
+      customer_name: p.customer_name || '', customer_phone: p.customer_phone || '',
+      asset_id: p.asset_id || '', asset_name: p.asset_name || '',
       start_date: p.start_date ? p.start_date.substring(0, 10) : '', end_date: p.end_date ? p.end_date.substring(0, 10) : '',
+      start_time: p.start_time || '', end_time: p.end_time || '',
+      is_tour: p.is_tour === true,
+      duration_label: p.duration_label || '',
+      duration_minutes: p.duration_minutes != null ? String(p.duration_minutes) : '',
+      passengers: p.passengers != null ? String(p.passengers) : '',
       amount: centsToEur(p.amount), notes: p.notes || '', status: p.status || 'bozza',
     })
     setShowForm(true)
@@ -1496,9 +1532,20 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
       service_type: serviceType,
       customer_name: form.customer_name.trim() || null,
       customer_phone: form.customer_phone.trim() || null,
-      asset_name: form.asset_name.trim() || null,
+      asset_id: form.asset_id || null,
+      // Il nome resta salvato: se il mezzo viene poi tolto dal catalogo, il
+      // preventivo storico continua a dire di che cosa parlava.
+      asset_name: (form.asset_id
+        ? (catalogo.find(c => c.id === form.asset_id)?.name || form.asset_name)
+        : form.asset_name).trim() || null,
       start_date: form.start_date || null,
       end_date: form.end_date || null,
+      start_time: form.start_time || null,
+      end_time: form.end_time || null,
+      is_tour: !!form.is_tour,
+      duration_label: form.duration_label.trim() || null,
+      duration_minutes: form.duration_minutes === '' ? null : Number(form.duration_minutes),
+      passengers: form.passengers === '' ? null : Number(form.passengers),
       amount: eurToCents(form.amount),
       notes: form.notes.trim() || null,
       status: form.status,
@@ -1592,13 +1639,78 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input className={INPUT_CLS} placeholder="Cliente" value={form.customer_name} onChange={e => setForm({ ...form, customer_name: e.target.value })} />
             <input className={INPUT_CLS} placeholder="Telefono (WhatsApp)" value={form.customer_phone} onChange={e => setForm({ ...form, customer_phone: e.target.value })} />
-            <input className={INPUT_CLS} placeholder={labels.asset} value={form.asset_name} onChange={e => setForm({ ...form, asset_name: e.target.value })} />
+            {/* 2026-08-24: il mezzo si SCEGLIE dal catalogo. Prima era un campo
+                libero e bisognava riscrivere il nome di un elicottero gia'
+                inserito. Resta la voce "altro" per i casi fuori catalogo. */}
+            <select
+              className={INPUT_CLS}
+              value={form.asset_id || (form.asset_name ? '__altro__' : '')}
+              onChange={e => {
+                const v = e.target.value
+                if (v === '__altro__') { setForm(f => ({ ...f, asset_id: '' })); return }
+                const c = catalogo.find(x => x.id === v)
+                setForm(f => ({
+                  ...f, asset_id: v, asset_name: c?.name || '',
+                  // Il prezzo del catalogo precompila l'importo solo se vuoto:
+                  // un importo gia' scritto a mano non viene sovrascritto.
+                  amount: f.amount || (c?.price_per_day ? centsToEur(c.price_per_day) : ''),
+                }))
+              }}
+            >
+              <option value="">— Scegli {labels.asset.toLowerCase()} —</option>
+              {catalogo.map(c => (
+                <option key={c.id} value={c.id}>{c.name}{c.capacity ? ` (${c.capacity} p.)` : ''}</option>
+              ))}
+              <option value="__altro__">Altro (scrivi a mano)</option>
+            </select>
+            {!form.asset_id && (
+              <input className={INPUT_CLS} placeholder={`${labels.asset} (fuori catalogo)`} value={form.asset_name} onChange={e => setForm({ ...form, asset_name: e.target.value })} />
+            )}
             <input className={INPUT_CLS} placeholder="Importo (€)" inputMode="decimal" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} />
             <EuropeanDateInput className={INPUT_CLS} value={form.start_date} onChange={(__v: string) => setForm({ ...form, start_date: __v })} />
             <EuropeanDateInput className={INPUT_CLS} value={form.end_date} onChange={(__v: string) => setForm({ ...form, end_date: __v })} />
+            {/* Orari, come sui preventivi Terra. */}
+            <input type="time" className={INPUT_CLS} value={form.start_time} onChange={e => setForm({ ...form, start_time: e.target.value })} />
+            <input type="time" className={INPUT_CLS} value={form.end_time} onChange={e => setForm({ ...form, end_time: e.target.value })} />
             <select className={INPUT_CLS} value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
               {PREV_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
+          </div>
+
+          {/* Tour o noleggio: cambia cosa si preventiva. */}
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+              <input type="checkbox" checked={form.is_tour} onChange={e => setForm({ ...form, is_tour: e.target.checked })} />
+              Preventivo per un tour
+            </label>
+            {form.is_tour && (() => {
+              const sel = catalogo.find(c => c.id === form.asset_id)
+              const durate = sel?.tour_durations || []
+              return (
+                <div className="flex flex-wrap items-center gap-2">
+                  {durate.length > 0 && (
+                    <select
+                      className={INPUT_CLS}
+                      value={durate.some(d => d.label === form.duration_label) ? form.duration_label : '__custom__'}
+                      onChange={e => {
+                        if (e.target.value === '__custom__') return
+                        const d = durate.find(x => x.label === e.target.value)
+                        if (d) setForm(f => ({
+                          ...f, duration_label: d.label, duration_minutes: String(d.minutes),
+                          amount: String(d.price),
+                        }))
+                      }}
+                    >
+                      {durate.map((d, i) => <option key={i} value={d.label}>{d.label} — €{d.price}/persona</option>)}
+                      <option value="__custom__">Personalizzata…</option>
+                    </select>
+                  )}
+                  <input className={INPUT_CLS} placeholder="Durata (es. 30 MIN)" value={form.duration_label} onChange={e => setForm({ ...form, duration_label: e.target.value })} />
+                  <input className={INPUT_CLS} placeholder="Minuti" inputMode="numeric" value={form.duration_minutes} onChange={e => setForm({ ...form, duration_minutes: e.target.value.replace(/[^0-9]/g, '') })} />
+                  <input className={INPUT_CLS} placeholder="Passeggeri" inputMode="numeric" value={form.passengers} onChange={e => setForm({ ...form, passengers: e.target.value.replace(/[^0-9]/g, '') })} />
+                </div>
+              )
+            })()}
           </div>
           <textarea className={INPUT_CLS} placeholder="Note" rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
           <div className="flex gap-2">
