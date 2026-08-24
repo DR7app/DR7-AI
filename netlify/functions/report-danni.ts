@@ -5,6 +5,24 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+// PostgREST tronca ogni select a 1000 righe. Con 2.500+ prenotazioni in
+// archivio le piu' RECENTI restavano fuori, quindi il filtro "30 giorni" del
+// report mostrava zero anche con danni e penali appena registrati.
+async function fetchAll<T = Record<string, unknown>>(table: string, columns: string, tweak?: (q: any) => any): Promise<T[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const PAGE = 1000
+  const out: T[] = []
+  for (let i = 0; i < 200; i++) {
+    let q: any = supabase.from(table).select(columns) // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (tweak) q = tweak(q)
+    const { data, error } = await q.range(i * PAGE, i * PAGE + PAGE - 1)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    out.push(...(data as T[]))
+    if (data.length < PAGE) break
+  }
+  return out
+}
+
 // Keywords from PenaltyModal labels that indicate PHYSICAL DAMAGE to the vehicle
 // Matches: fermo_incidente, fermo_alto_valore, fermo_utilitarie, fermo_furgoni,
 // foro_sigaretta, gonfia_ripara, sporco, igienizzazione, controlli_elettronici, cani, pista
@@ -149,11 +167,8 @@ export const handler: Handler = async (event) => {
     // bucketing for the report — no `data_pagamento` column exists on this
     // table (verified 2026-05-28: only report-danni referenced it, FatturaTab
     // uses `stato` exclusively). Querying it caused a 500 on the function.
-    const { data: fatture, error: fattureError } = await supabase
-      .from('fatture')
-      .select('id, booking_id, importo_totale, items, customer_name, data_emissione, stato')
-
-    if (fattureError) throw fattureError
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fatture = await fetchAll<any>('fatture', 'id, booking_id, importo_totale, items, customer_name, data_emissione, stato')
 
     // Filter to penalty invoices, then classify as danni or penali
     const matchingInvoices = (fatture || []).filter(f => {
@@ -275,9 +290,8 @@ export const handler: Handler = async (event) => {
             ? [{ key: 'danni', type: 'danni' }]
             : [{ key: 'penalties', type: 'penali' }]
 
-      const { data: allBookings } = await supabase
-        .from('bookings')
-        .select('id, vehicle_name, vehicle_plate, customer_name, booking_details, service_type, pickup_date, dropoff_date, status')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const allBookings = await fetchAll<any>('bookings', 'id, vehicle_name, vehicle_plate, customer_name, booking_details, service_type, pickup_date, dropoff_date, status')
 
       if (allBookings) {
         for (const b of allBookings) {
@@ -349,10 +363,8 @@ export const handler: Handler = async (event) => {
       // (schema reale: created_at, data_incasso, data_restituzione, ecc.).
       // La query falliva silenziosamente (error non catturato) e i danni da
       // cauzione bloccata sparivano dal report.
-      const { data: cauzioni } = await supabase
-        .from('cauzioni')
-        .select('id, veicolo_id, cliente_id, importo, created_at, data_incasso, stato')
-        .eq('stato', 'Bloccata')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cauzioni = await fetchAll<any>('cauzioni', 'id, veicolo_id, cliente_id, importo, created_at, data_incasso, stato', q => q.eq('stato', 'Bloccata'))
 
       if (cauzioni && cauzioni.length > 0) {
         // Resolve vehicle info for cauzioni

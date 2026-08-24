@@ -1,5 +1,18 @@
 import { useState, useMemo, useEffect } from 'react'
+import {
+  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip,
+} from 'recharts'
+import { useTheme } from '../../../contexts/ThemeContext'
 import { supabase } from '../../../supabaseClient'
+
+// Palette verificata (sei controlli, chiaro e scuro). L'esito tiene sempre lo
+// stesso colore, anche quando una fetta sparisce.
+const ESITO_COLORS = {
+  convertiti: '#16a34a',
+  aperti: '#0891b2',
+  scaduti: '#d97706',
+  rifiutati: '#be123c',
+}
 
 interface Preventivo {
   id: string
@@ -153,6 +166,8 @@ function Trend({ current, previous, format = 'number' }: { current: number; prev
 }
 
 export default function ReportPreventiviTab() {
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
   const now = new Date()
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
@@ -220,13 +235,17 @@ export default function ReportPreventiviTab() {
     }
   }
 
-  // Reset loaded state when month changes
+  // Il report si carica da solo: niente pulsante "Genera Report" da premere.
   useEffect(() => {
     setLoaded(false)
     setPreventivi([])
     setPrevMonthData([])
+    fetchReport()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMonth])
 
+  // Dati dei grafici. `perdite` e `overview` sono calcolati piu' sotto:
+  // questi memo li leggono, quindi vanno dichiarati dopo di loro.
   // ===== FILTERED DATA =====
   const filtered = useMemo(() => {
     return preventivi.filter(p => {
@@ -279,7 +298,13 @@ export default function ReportPreventiviTab() {
     }
     const totalValue = filtered.reduce((s, p) => s + getAmount(p), 0)
     const convertedValue = filtered.filter(isConverted).reduce((s, p) => s + getAmount(p), 0)
-    const lostValue = filtered.filter(p => !isConverted(p)).reduce((s, p) => s + getAmount(p), 0)
+    // Perso = rifiutato o scaduto. Prima era "tutto cio' che non e' convertito",
+    // quindi bozze e preventivi ancora aperti finivano tra le perdite: il
+    // numero risultava enorme e non voleva dire niente.
+    const lostValue = filtered.filter(p => isRifiutato(p) || isExpired(p)).reduce((s, p) => s + getAmount(p), 0)
+    const pendingValue = filtered
+      .filter(p => !isConverted(p) && !isRifiutato(p) && !isExpired(p))
+      .reduce((s, p) => s + getAmount(p), 0)
     const conversionRate = total > 0 ? (converted / total) * 100 : 0
     const withCustomer = filtered.filter(p => p.customer_id || p.customer_name).length
     const withDelivery = filtered.filter(p => p.delivery_enabled).length
@@ -294,7 +319,7 @@ export default function ReportPreventiviTab() {
     return {
       total, active, converted, expired,
       rifiutatiCount, rifiutatiValue, rifiutatiByMotivo,
-      totalValue, convertedValue, lostValue, conversionRate,
+      totalValue, convertedValue, lostValue, pendingValue, conversionRate,
       withCustomer, withDelivery,
       prevTotal, prevConverted, prevRifiutati, prevConversionRate, prevTotalValue,
     }
@@ -420,6 +445,36 @@ export default function ReportPreventiviTab() {
   }, [filtered])
 
   // ===== PERDITE (LOSSES) =====
+  // ===== DATI GRAFICI =====
+  const esitoMix = useMemo(() => {
+    const buckets = [
+      { name: 'Convertiti', color: ESITO_COLORS.convertiti, match: (p: Preventivo) => isConverted(p) },
+      { name: 'Aperti', color: ESITO_COLORS.aperti, match: (p: Preventivo) => !isConverted(p) && !isExpired(p) && !isRifiutato(p) },
+      { name: 'Scaduti', color: ESITO_COLORS.scaduti, match: (p: Preventivo) => isExpired(p) },
+      { name: 'Rifiutati', color: ESITO_COLORS.rifiutati, match: (p: Preventivo) => isRifiutato(p) },
+    ]
+    return buckets
+      .map(b => {
+        const rows = filtered.filter(b.match)
+        return { name: b.name, color: b.color, count: rows.length, value: rows.reduce((s, p) => s + getAmount(p), 0) }
+      })
+      .filter(b => b.count > 0)
+  }, [filtered])
+
+  // Perso davvero: rifiutati + scaduti, non tutto il non-convertito.
+  const perditeChart = useMemo(() => {
+    const byVehicle = new Map<string, number>()
+    filtered.filter(p => isRifiutato(p) || isExpired(p)).forEach(p => {
+      const key = p.vehicle_name || 'N/A'
+      byVehicle.set(key, (byVehicle.get(key) || 0) + getAmount(p))
+    })
+    return Array.from(byVehicle.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8)
+      .reverse()
+  }, [filtered])
+
   const perdite = useMemo(() => {
     const nonConverted = filtered.filter(p => !isConverted(p))
 
@@ -656,9 +711,13 @@ export default function ReportPreventiviTab() {
           <button
             onClick={fetchReport}
             disabled={loading}
-            className="px-6 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#0A8FA3] transition-colors disabled:opacity-50"
+            title="Ricarica il report"
+            aria-label="Ricarica il report"
+            className="w-9 h-9 rounded-full border border-theme-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover transition-colors flex items-center justify-center disabled:opacity-40"
           >
-            {loading ? 'Caricamento...' : 'Genera Report'}
+            <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
           </button>
         </div>
       </div>
@@ -806,7 +865,96 @@ export default function ReportPreventiviTab() {
                   trend={<Trend current={overview.totalValue} previous={overview.prevTotalValue} format="currency" />}
                 />
                 <StatCard label="Valore Convertito" value={formatCurrency(overview.convertedValue)} color="text-green-400" />
-                <StatCard label="Valore Potenziale Perso" value={formatCurrency(overview.lostValue)} color="text-red-400" highlight />
+                <StatCard
+                  label="Valore Perso (rifiutati + scaduti)"
+                  value={formatCurrency(overview.lostValue)}
+                  color="text-red-400"
+                  highlight
+                  sub={`ancora aperti ${formatCurrency(overview.pendingValue)}`}
+                />
+              </div>
+
+              {/* Grafici */}
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+                  <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider mb-1">Esito preventivi</h3>
+                  <p className="text-[11px] text-theme-text-muted mb-3">Valore per esito — totale {formatCurrency(overview.totalValue)}</p>
+                  {esitoMix.length === 0 ? (
+                    <div className="h-[220px] flex items-center justify-center text-sm text-theme-text-muted">Nessun preventivo nel periodo</div>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                      <div className="w-full sm:w-1/2 h-[220px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={esitoMix}
+                              dataKey="value"
+                              cx="50%" cy="50%"
+                              innerRadius="58%"
+                              outerRadius="92%"
+                              paddingAngle={2}
+                              strokeWidth={2}
+                              stroke={isDark ? '#09090b' : '#ffffff'}
+                            >
+                              {esitoMix.map(r => <Cell key={r.name} fill={r.color} />)}
+                            </Pie>
+                            <Tooltip
+                              formatter={(v: unknown) => formatCurrency(Number(v) || 0)}
+                              contentStyle={{
+                                background: isDark ? '#09090b' : '#ffffff',
+                                border: '1px solid rgba(120,120,120,0.35)',
+                                borderRadius: 8,
+                                fontSize: 12,
+                                color: isDark ? '#fff' : '#18181b',
+                              }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <ul className="w-full sm:w-1/2 space-y-1.5">
+                        {esitoMix.map(r => (
+                          <li key={r.name} className="flex items-center justify-between text-xs">
+                            <span className="flex items-center gap-2 text-theme-text-secondary">
+                              <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: r.color }} />
+                              {r.name}
+                              <span className="text-theme-text-muted">({r.count})</span>
+                            </span>
+                            <span className="text-theme-text-primary font-semibold tabular-nums">{formatCurrency(r.value)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+                  <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider mb-1">Valore perso per veicolo</h3>
+                  <p className="text-[11px] text-theme-text-muted mb-3">Primi 8 — preventivi rifiutati o scaduti</p>
+                  {perditeChart.length === 0 ? (
+                    <div className="h-[220px] flex items-center justify-center text-sm text-theme-text-muted">Nessuna perdita nel periodo</div>
+                  ) : (
+                    <div style={{ height: Math.max(220, perditeChart.length * 30) }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={perditeChart} layout="vertical" margin={{ top: 4, right: 12, left: 4, bottom: 0 }}>
+                          <XAxis type="number" tick={{ fontSize: 11, fill: isDark ? '#a1a1aa' : '#71717a' }} axisLine={false} tickLine={false} />
+                          <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11, fill: isDark ? '#a1a1aa' : '#71717a' }} axisLine={false} tickLine={false} />
+                          <Tooltip
+                            cursor={{ fill: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)' }}
+                            formatter={(v: unknown) => formatCurrency(Number(v) || 0)}
+                            contentStyle={{
+                              background: isDark ? '#09090b' : '#ffffff',
+                              border: '1px solid rgba(120,120,120,0.35)',
+                              borderRadius: 8,
+                              fontSize: 12,
+                              color: isDark ? '#fff' : '#18181b',
+                            }}
+                          />
+                          <Bar dataKey="value" fill={ESITO_COLORS.rifiutati} radius={[0, 4, 4, 0]} barSize={14} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1160,12 +1308,14 @@ function StatCard({
   color,
   highlight,
   trend,
+  sub,
 }: {
   label: string
   value: string | number
   color?: string
   highlight?: boolean
   trend?: React.ReactNode
+  sub?: string
 }) {
   return (
     <div className={`rounded-xl border p-4 ${highlight ? 'border-red-500/40 bg-red-500/5' : 'border-theme-border bg-theme-bg-secondary/50'}`}>
@@ -1174,6 +1324,7 @@ function StatCard({
         {value}
         {trend}
       </p>
+      {sub && <p className="text-[11px] text-theme-text-muted mt-0.5">{sub}</p>}
     </div>
   )
 }

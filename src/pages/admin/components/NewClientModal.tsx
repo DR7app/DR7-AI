@@ -852,6 +852,35 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     }
   }
 
+  // Documenti gia' archiviati (admin: customer_documents, sito/invito:
+  // user_documents): senza questo il riepilogo mostrava 0/3 anche con la
+  // patente e la carta d'identita' gia' caricate.
+  const [existingDocTypes, setExistingDocTypes] = useState<string[]>([])
+  useEffect(() => {
+    const cid = initialData?.id
+    if (!isOpen || !cid) { setExistingDocTypes([]); return }
+    let cancelled = false
+    ;(async () => {
+      const ids = Array.from(new Set([cid, initialData?.user_id].filter(Boolean))) as string[]
+      const [custDocs, userDocs] = await Promise.all([
+        supabase.from('customer_documents').select('document_type').eq('customer_id', cid),
+        supabase.from('user_documents').select('document_type').in('user_id', ids),
+      ])
+      if (cancelled) return
+      setExistingDocTypes([...(custDocs.data || []), ...(userDocs.data || [])]
+        .map((d: { document_type: string }) => d.document_type)
+        .filter(Boolean))
+    })()
+    return () => { cancelled = true }
+  }, [isOpen, initialData?.id, initialData?.user_id])
+
+  // Chiusura sempre raggiungibile: Esc oltre alla X in alto a destra.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
   const handleClose = () => {
     // Reset essential fields or all
     setErrors({})
@@ -990,7 +1019,12 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
   const previewName = formData.tipo_cliente === 'persona_fisica'
     ? `${formData.nome} ${formData.cognome}`.trim()
     : formData.tipo_cliente === 'azienda' ? formData.denominazione : formData.ente_ufficio
-  const docsCount = [driversLicenseFront, identityFront, codiceFiscaleFront].filter(Boolean).length
+  const hasArchived = (aliases: string[]) => existingDocTypes.some(t => aliases.includes(t))
+  const docsCount = [
+    driversLicenseFront || hasArchived(['drivers_license', 'drivers_license_front', 'patenteFront', 'license']),
+    identityFront || hasArchived(['identity_document', 'identity_document_front', 'cartaIdentitaFront', 'id', 'passaporto']),
+    codiceFiscaleFront || hasArchived(['codice_fiscale', 'codice_fiscale_front', 'codiceFiscaleFront']),
+  ].filter(Boolean).length
   const docsTotal = formData.tipo_cliente === 'persona_fisica' ? 3 : 1
   const scoreLabel = filledScore >= 80 ? 'Eccellente' : filledScore >= 60 ? 'Buono' : filledScore >= 30 ? 'In corso' : 'Da compilare'
   const scoreColor = filledScore >= 80 ? 'text-emerald-600' : filledScore >= 60 ? 'text-amber-600' : filledScore >= 30 ? 'text-orange-600' : 'text-rose-600'
@@ -998,6 +1032,17 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-0 sm:p-4">
+      {/* Chiusura di emergenza: sopra al modale, quindi cliccabile anche se
+          l'header sticky finisce fuori dall'area visibile. */}
+      <button
+        type="button"
+        onClick={handleClose}
+        aria-label="Chiudi"
+        title="Chiudi (Esc)"
+        className="fixed top-3 right-3 z-[60] w-10 h-10 rounded-full bg-theme-bg-secondary border border-theme-border text-theme-text-primary text-2xl leading-none flex items-center justify-center shadow-lg hover:bg-theme-bg-hover"
+      >
+        &times;
+      </button>
       <div ref={scrollContainerRef} className="bg-theme-bg-secondary border border-theme-border rounded-none sm:rounded-2xl w-full sm:max-w-[1400px] h-full sm:h-auto sm:max-h-[95vh] overflow-y-auto shadow-2xl flex flex-col">
         {/* ── Sticky header: breadcrumb + 7-step progress strip ────────── */}
         <div className="sticky top-0 bg-theme-bg-secondary border-b border-theme-border z-20">

@@ -423,7 +423,7 @@ export default function ReportPenaliDanniTab() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2a4 4 0 014-4h6m0 0l-3-3m3 3l-3 3M5 5h4l2 3h6a2 2 0 012 2v0" />
             </svg>
-            Genera Report
+            Esporta CSV
           </button>
         </div>
       </div>

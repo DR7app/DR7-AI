@@ -52,6 +52,24 @@ function classifyInvoice(items: any[]): 'danni' | 'penali' | null {
   return result
 }
 
+// PostgREST tronca ogni select a 1000 righe: senza paginazione il report
+// perdeva prenotazioni, fatture e cauzioni oltre la prima pagina, quindi la
+// spesa dei clienti risultava piu' bassa del reale.
+async function fetchAll<T = Record<string, unknown>>(table: string, columns: string, tweak?: (q: any) => any): Promise<T[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const PAGE = 1000
+  const out: T[] = []
+  for (let i = 0; i < 200; i++) {
+    let q: any = supabase.from(table).select(columns) // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (tweak) q = tweak(q)
+    const { data, error } = await q.range(i * PAGE, i * PAGE + PAGE - 1)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    out.push(...(data as T[]))
+    if (data.length < PAGE) break
+  }
+  return out
+}
+
 const norm = (s: string | null | undefined): string => (s || '').trim().toLowerCase()
 const phoneKey = (s: string | null | undefined): string => {
   const digits = (s || '').replace(/\D/g, '')
@@ -67,37 +85,30 @@ export const handler: Handler = async (event) => {
     // 0) Pull every customer in customers_extended — this is the canonical roster.
     //    Even customers with zero bookings appear in the report.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const allCustomers: any[] = []
-    {
-      const PAGE = 1000
-      let from = 0
-      for (let i = 0; i < 50; i++) {
-        const { data, error } = await supabase
-          .from('customers_extended')
-          .select('id, user_id, nome, cognome, ragione_sociale, denominazione, ente_ufficio, tipo_cliente, email, telefono, status, status_cliente, created_at')
-          .range(from, from + PAGE - 1)
-        if (error) break
-        if (!data || data.length === 0) break
-        allCustomers.push(...data)
-        if (data.length < PAGE) break
-        from += PAGE
-      }
-    }
+    const allCustomers: any[] = await fetchAll<any>( // eslint-disable-line @typescript-eslint/no-explicit-any
+      'customers_extended',
+      'id, user_id, nome, cognome, ragione_sociale, denominazione, ente_ufficio, tipo_cliente, email, telefono, status, status_cliente, created_at',
+    )
 
     // 1) Bookings, vehicles, cauzioni, fatture, dr7 club, wallet — in parallel.
-    const [bookingsRes, vehiclesRes, cauzioniRes, fattureRes, clubRes, walletRes, rechargeRes] = await Promise.all([
-      supabase
-        .from('bookings')
-        .select('id, user_id, customer_name, customer_email, customer_phone, price_total, status, service_type, payment_method, payment_status, booking_details, pickup_date, dropoff_date, appointment_date, vehicle_id, booked_at, created_at'),
-      supabase.from('vehicles').select('id, category'),
-      supabase.from('cauzioni').select('cliente_id, importo, stato, riferimento_contratto_id'),
-      supabase.from('fatture').select('id, booking_id, importo_totale, items, customer_name, customer_email'),
-      supabase.from('dr7_club_subscriptions').select('user_id, plan, status, expires_at').eq('status', 'active'),
-      supabase.from('user_credit_balance').select('user_id, balance'),
-      supabase.from('credit_wallet_purchases').select('user_id, recharge_amount, payment_status, created_at'),
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const [bookingsAll, vehiclesAll, cauzioniAll, fattureAll, clubAll, walletAll, rechargeAll] = await Promise.all([
+      fetchAll<any>('bookings', 'id, user_id, customer_name, customer_email, customer_phone, price_total, status, service_type, payment_method, payment_status, booking_details, pickup_date, dropoff_date, appointment_date, vehicle_id, booked_at, created_at'),
+      fetchAll<any>('vehicles', 'id, category'),
+      fetchAll<any>('cauzioni', 'cliente_id, importo, stato, riferimento_contratto_id'),
+      fetchAll<any>('fatture', 'id, booking_id, importo_totale, items, customer_name, customer_email'),
+      fetchAll<any>('dr7_club_subscriptions', 'user_id, plan, status, expires_at', q => q.eq('status', 'active')),
+      fetchAll<any>('user_credit_balance', 'user_id, balance'),
+      fetchAll<any>('credit_wallet_purchases', 'user_id, recharge_amount, payment_status, created_at'),
     ])
-
-    if (bookingsRes.error) throw bookingsRes.error
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    const bookingsRes = { data: bookingsAll }
+    const vehiclesRes = { data: vehiclesAll }
+    const cauzioniRes = { data: cauzioniAll }
+    const fattureRes = { data: fattureAll }
+    const clubRes = { data: clubAll }
+    const walletRes = { data: walletAll }
+    const rechargeRes = { data: rechargeAll }
 
     // 2) Build vehicle category lookup
     const vehicleCategoryMap = new Map<string, string>()

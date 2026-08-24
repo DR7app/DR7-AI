@@ -1,4 +1,9 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import {
+  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip,
+} from 'recharts'
+import { useTheme } from '../../../contexts/ThemeContext'
+import ReportClienteModal from './ReportClienteModal'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import type { ClientTier } from '../../../contexts/ClientStatusContext'
 import DateRangePicker, { resolveDateRange, isInRange, type DateRangeValue } from '../../../components/admin/DateRangePicker'
@@ -185,6 +190,10 @@ const COLUMN_GROUPS: ColumnGroup[] = [
   },
 ]
 
+// Palette categoriale verificata (sei controlli, chiaro e scuro): l'ordine e'
+// fisso, ogni servizio tiene sempre il suo colore anche se un altro sparisce.
+const SERVICE_COLORS = ['#8b5cf6', '#16a34a', '#0891b2', '#ec4899', '#d97706']
+
 const SORT_OPTIONS: { value: SortField; label: string }[] = [
   { value: 'totale_spesa', label: 'Spesa Totale' },
   { value: 'totale_prenotazioni', label: 'Prenotazioni Totali' },
@@ -204,6 +213,9 @@ export default function ReportClientiTab() {
   const [dateRange, setDateRange] = useState<DateRangeValue>({ preset: 'all' })
   const [sortField, setSortField] = useState<SortField>('totale_spesa')
   const [sortAsc, setSortAsc] = useState(false)
+  const [openCustomerId, setOpenCustomerId] = useState<string | null>(null)
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
 
   // #38 Modifica manuale report
   const [overrides, setOverrides] = useState<LoadedOverrides>({ raw: [], removed: new Set(), edits: new Map(), added: [], notesByRow: new Map() })
@@ -271,6 +283,13 @@ export default function ReportClientiTab() {
     }
   }
 
+  // Il report si carica da solo all'apertura della tab: niente pulsante
+  // "Genera Report" da premere ogni volta.
+  useEffect(() => {
+    fetchClienti()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const range = useMemo(() => resolveDateRange(dateRange), [dateRange])
 
   const filteredClienti = useMemo(() => {
@@ -293,7 +312,7 @@ export default function ReportClientiTab() {
   // #38: applica gli override PRIMA di ordinare/totalizzare.
   const adjustedClienti = useMemo(() =>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    applyOverrides(filteredClienti as any, overrides, (c: any) => c.customerId) as any,
+    applyOverrides(filteredClienti as any, overrides, (c: any) => c.customerId) as CustomerReport[],
     [filteredClienti, overrides])
 
   const sortedClienti = useMemo(() =>
@@ -317,26 +336,94 @@ export default function ReportClientiTab() {
     return t
   }, [sortedClienti])
 
+  // Classifica: chi ha speso di piu' e chi pesa in negativo
+  // (danni + penali + prenotazioni annullate).
+  const topSpenders = useMemo(
+    () => [...adjustedClienti].filter(c => c.totale_spesa > 0).sort((a, b) => b.totale_spesa - a.totale_spesa).slice(0, 10),
+    [adjustedClienti]
+  )
+  const spesaTotaleFiltrata = useMemo(
+    () => adjustedClienti.reduce((s, c) => s + c.totale_spesa, 0),
+    [adjustedClienti]
+  )
+  const negativi = useMemo(
+    () => adjustedClienti
+      .map(c => ({ c, negativo: c.danni_spesa + c.penali_spesa }))
+      .filter(x => x.negativo > 0 || x.c.annullate_count > 0)
+      .sort((a, b) => (b.negativo - a.negativo) || (b.c.annullate_count - a.c.annullate_count))
+      .slice(0, 10),
+    [adjustedClienti]
+  )
+  // Grafici: ripartizione della spesa per servizio e acquisizione clienti.
+  const serviceMix = useMemo(() => {
+    const rows = [
+      { name: 'Supercar', value: adjustedClienti.reduce((s, c) => s + c.supercar_spesa, 0) },
+      { name: 'Urban', value: adjustedClienti.reduce((s, c) => s + c.urban_spesa, 0) },
+      { name: 'Aziendali', value: adjustedClienti.reduce((s, c) => s + c.aziendali_spesa, 0) },
+      { name: 'Lavaggi', value: adjustedClienti.reduce((s, c) => s + c.lavaggi_spesa, 0) },
+      { name: 'Meccanica', value: adjustedClienti.reduce((s, c) => s + c.meccanica_spesa, 0) },
+    ]
+    // Il colore segue il servizio, non la posizione: chi ha 0 sparisce dal
+    // grafico ma gli altri non cambiano tinta.
+    return rows.map((r, i) => ({ ...r, color: SERVICE_COLORS[i] })).filter(r => r.value > 0)
+  }, [adjustedClienti])
+
+  const nuoviClienti = useMemo(() => {
+    const mesi: { key: string; label: string; clienti: number }[] = []
+    const now = new Date()
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      mesi.push({
+        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+        label: d.toLocaleDateString('it-IT', { month: 'short' }),
+        clienti: 0,
+      })
+    }
+    const idx = new Map(mesi.map((m, i) => [m.key, i]))
+    adjustedClienti.forEach(c => {
+      if (!c.prima_prenotazione) return
+      const d = new Date(c.prima_prenotazione)
+      if (Number.isNaN(d.getTime())) return
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const i = idx.get(k)
+      if (i !== undefined) mesi[i].clienti += 1
+    })
+    return mesi
+  }, [adjustedClienti])
+
+  const rankByCustomer = useMemo(() => {
+    const m = new Map<string, number>()
+    ;[...adjustedClienti].sort((a, b) => b.totale_spesa - a.totale_spesa)
+      .forEach((c, i) => { if (c.customerId) m.set(c.customerId, i + 1) })
+    return m
+  }, [adjustedClienti])
+
 
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h2 className="text-2xl font-bold text-theme-text-primary">Report Clienti</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-theme-text-primary">Report Clienti</h2>
+          <button
+            onClick={fetchClienti}
+            disabled={loading}
+            title="Ricarica il report"
+            aria-label="Ricarica il report"
+            className="w-8 h-8 rounded-full border border-theme-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-hover transition-colors flex items-center justify-center disabled:opacity-40"
+          >
+            <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+        </div>
         <DateRangePicker value={dateRange} onChange={setDateRange} />
       </div>
 
-      {/* Controls */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
-        <button
-          onClick={fetchClienti}
-          disabled={loading}
-          className="px-6 py-2 bg-dr7-gold text-white font-semibold rounded-full hover:bg-[#0A8FA3] transition-colors disabled:opacity-50"
-        >
-          {loading ? 'Caricamento...' : 'Genera Report'}
-        </button>
-      </div>
+      {loading && (
+        <div className="text-sm text-theme-text-muted">Caricamento report...</div>
+      )}
 
       {error && (
         <div className="bg-red-500/20 border border-red-500 text-red-300 px-4 py-3 rounded-lg text-sm">
@@ -347,22 +434,199 @@ export default function ReportClientiTab() {
       {clientiData && (
         <div className="space-y-4">
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
-              <p className="text-xs text-theme-text-muted">Clienti Totali</p>
-              <p className="text-2xl font-bold text-theme-text-primary">{clientiData.totalCustomers}</p>
+              <p className="text-xs text-theme-text-muted uppercase tracking-wider">Clienti</p>
+              <p className="text-2xl font-bold text-theme-text-primary">{adjustedClienti.length}</p>
+              <p className="text-[11px] text-theme-text-muted">su {clientiData.totalCustomers} totali</p>
             </div>
             <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
-              <p className="text-xs text-theme-text-muted">Spesa Totale</p>
-              <p className="text-2xl font-bold text-dr7-gold">
-                {formatCurrency(clientiData.customers.reduce((s, c) => s + c.totale_spesa, 0))}
+              <p className="text-xs text-theme-text-muted uppercase tracking-wider">Spesa Totale</p>
+              <p className="text-2xl font-bold text-dr7-gold">{formatCurrency(spesaTotaleFiltrata)}</p>
+              <p className="text-[11px] text-theme-text-muted">
+                media {formatCurrency(adjustedClienti.length ? spesaTotaleFiltrata / adjustedClienti.length : 0)}
               </p>
             </div>
             <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
-              <p className="text-xs text-theme-text-muted">Prenotazioni Totali</p>
+              <p className="text-xs text-theme-text-muted uppercase tracking-wider">Prenotazioni</p>
               <p className="text-2xl font-bold text-theme-text-primary">
-                {clientiData.customers.reduce((s, c) => s + c.totale_prenotazioni, 0)}
+                {adjustedClienti.reduce((s, c) => s + c.totale_prenotazioni, 0)}
               </p>
+              <p className="text-[11px] text-theme-text-muted">
+                {adjustedClienti.reduce((s, c) => s + c.annullate_count, 0)} annullate
+              </p>
+            </div>
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+              <p className="text-xs text-theme-text-muted uppercase tracking-wider">Miglior Cliente</p>
+              {topSpenders[0] ? (
+                <>
+                  <p className="text-base font-bold text-theme-text-primary truncate">{topSpenders[0].name}</p>
+                  <p className="text-lg font-bold text-dr7-gold leading-tight">{formatCurrency(topSpenders[0].totale_spesa)}</p>
+                </>
+              ) : (
+                <p className="text-2xl font-bold text-theme-text-muted">-</p>
+              )}
+            </div>
+          </div>
+
+          {/* Classifiche: Top spesa + Negativo */}
+          {(topSpenders.length > 0 || negativi.length > 0) && (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-theme-border bg-dr7-gold/5">
+                  <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider">Top Clienti — Spesa</h3>
+                  <span className="text-[11px] text-theme-text-muted">primi {topSpenders.length}</span>
+                </div>
+                <div className="divide-y divide-theme-border">
+                  {topSpenders.map((c, i) => {
+                    const quota = spesaTotaleFiltrata > 0 ? (c.totale_spesa / spesaTotaleFiltrata) * 100 : 0
+                    const medal = i === 0 ? 'bg-dr7-gold text-black' : i === 1 ? 'bg-zinc-300 text-black' : i === 2 ? 'bg-amber-700 text-white' : 'bg-theme-bg-tertiary text-theme-text-muted'
+                    return (
+                      <button
+                        key={c.customerId || i}
+                        onClick={() => c.customerId && setOpenCustomerId(c.customerId)}
+                        className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-theme-bg-tertiary/40 transition-colors"
+                      >
+                        <span className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold ${medal}`}>{i + 1}</span>
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-sm font-medium text-theme-text-primary truncate">{c.name}</span>
+                          <span className="block text-[11px] text-theme-text-muted truncate">
+                            {c.totale_prenotazioni} pren. · {c.totale_giorni}g
+                            {c.email !== '-' ? ` · ${c.email}` : ''}
+                          </span>
+                          <span className="block mt-1 h-1 rounded-full bg-theme-bg-tertiary overflow-hidden">
+                            <span className="block h-full bg-dr7-gold" style={{ width: `${Math.min(100, quota)}%` }} />
+                          </span>
+                        </span>
+                        <span className="text-right shrink-0">
+                          <span className="block text-sm font-bold text-dr7-gold">{formatCurrency(c.totale_spesa)}</span>
+                          <span className="block text-[11px] text-theme-text-muted">{quota.toFixed(1)}%</span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-theme-border bg-red-500/5">
+                  <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider">Negativo — Danni, Penali, Annullate</h3>
+                  <span className="text-[11px] text-theme-text-muted">primi {negativi.length}</span>
+                </div>
+                {negativi.length === 0 ? (
+                  <div className="px-4 py-6 text-center text-sm text-theme-text-muted">Nessun cliente con danni, penali o annullate.</div>
+                ) : (
+                  <div className="divide-y divide-theme-border">
+                    {negativi.map(({ c, negativo }, i) => (
+                      <button
+                        key={c.customerId || i}
+                        onClick={() => c.customerId && setOpenCustomerId(c.customerId)}
+                        className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-theme-bg-tertiary/40 transition-colors"
+                      >
+                        <span className="w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold bg-red-500/15 text-red-400">{i + 1}</span>
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-sm font-medium text-theme-text-primary truncate">{c.name}</span>
+                          <span className="block text-[11px] text-theme-text-muted truncate">
+                            {c.danni_eventi > 0 ? `${c.danni_eventi} danni · ` : ''}
+                            {c.penali_eventi > 0 ? `${c.penali_eventi} penali · ` : ''}
+                            {c.annullate_count} annullate
+                          </span>
+                        </span>
+                        <span className="text-right shrink-0">
+                          <span className="block text-sm font-bold text-red-400">{negativo > 0 ? `- ${formatCurrency(negativo)}` : '-'}</span>
+                          <span className="block text-[11px] text-theme-text-muted">su {formatCurrency(c.totale_spesa)}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Grafici */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {/* Ripartizione spesa per servizio */}
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+              <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider mb-1">Spesa per servizio</h3>
+              <p className="text-[11px] text-theme-text-muted mb-3">Totale {formatCurrency(spesaTotaleFiltrata)}</p>
+              {serviceMix.length === 0 ? (
+                <div className="h-[220px] flex items-center justify-center text-sm text-theme-text-muted">Nessuna spesa nel periodo</div>
+              ) : (
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                  <div className="w-full sm:w-1/2 h-[220px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={serviceMix}
+                          dataKey="value"
+                          cx="50%" cy="50%"
+                          innerRadius="58%"
+                          outerRadius="92%"
+                          paddingAngle={2}
+                          strokeWidth={2}
+                          stroke={isDark ? '#09090b' : '#ffffff'}
+                        >
+                          {serviceMix.map(r => <Cell key={r.name} fill={r.color} />)}
+                        </Pie>
+                        <Tooltip
+                          formatter={(v: unknown) => formatCurrency(Number(v) || 0)}
+                          contentStyle={{
+                            background: isDark ? '#09090b' : '#ffffff',
+                            border: '1px solid rgba(120,120,120,0.35)',
+                            borderRadius: 8,
+                            fontSize: 12,
+                            color: isDark ? '#fff' : '#18181b',
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  {/* Legenda con valori: l'identita' non e' mai solo il colore */}
+                  <ul className="w-full sm:w-1/2 space-y-1.5">
+                    {serviceMix.map(r => (
+                      <li key={r.name} className="flex items-center justify-between text-xs">
+                        <span className="flex items-center gap-2 text-theme-text-secondary">
+                          <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: r.color }} />
+                          {r.name}
+                        </span>
+                        <span className="text-theme-text-primary font-semibold tabular-nums">
+                          {formatCurrency(r.value)}
+                          <span className="text-theme-text-muted font-normal ml-1.5">
+                            {spesaTotaleFiltrata > 0 ? `${((r.value / spesaTotaleFiltrata) * 100).toFixed(0)}%` : ''}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* Nuovi clienti per mese */}
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+              <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider mb-1">Nuovi clienti</h3>
+              <p className="text-[11px] text-theme-text-muted mb-3">Per mese di prima prenotazione — ultimi 12 mesi</p>
+              <div className="h-[220px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={nuoviClienti} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: isDark ? '#a1a1aa' : '#71717a' }} axisLine={false} tickLine={false} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: isDark ? '#a1a1aa' : '#71717a' }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      cursor={{ fill: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)' }}
+                      formatter={(v: unknown) => [`${Number(v) || 0} clienti`, ''] as [string, string]}
+                      contentStyle={{
+                        background: isDark ? '#09090b' : '#ffffff',
+                        border: '1px solid rgba(120,120,120,0.35)',
+                        borderRadius: 8,
+                        fontSize: 12,
+                        color: isDark ? '#fff' : '#18181b',
+                      }}
+                    />
+                    <Bar dataKey="clienti" fill={SERVICE_COLORS[2]} radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
 
@@ -452,7 +716,17 @@ export default function ReportClientiTab() {
                         style={{ boxShadow: '4px 0 10px -2px rgba(0,0,0,0.15)' }}
                       >
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-medium text-theme-text-primary text-sm leading-tight">{c.name}</span>
+                          <span className="w-5 h-5 shrink-0 rounded-full bg-theme-bg-tertiary text-[10px] font-bold text-theme-text-muted flex items-center justify-center" title="Posizione per spesa totale">
+                            {rankByCustomer.get(c.customerId) ?? '-'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => c.customerId && setOpenCustomerId(c.customerId)}
+                            className="font-medium text-theme-text-primary text-sm leading-tight hover:text-dr7-gold transition-colors text-left"
+                            title="Apri report cliente"
+                          >
+                            {c.name}
+                          </button>
                           <ClientStatusBadge
                             tier={c.status_cliente ?? undefined}
                             dr7Club={c.dr7_club}
@@ -544,7 +818,13 @@ export default function ReportClientiTab() {
                 <div key={c.customerId || i} className="bg-theme-bg-tertiary/30 rounded-lg p-4 border border-theme-border">
                   {/* Name + Email */}
                   <div className="mb-3">
-                    <p className="font-semibold text-theme-text-primary text-sm">{c.name}</p>
+                    <button
+                      type="button"
+                      onClick={() => c.customerId && setOpenCustomerId(c.customerId)}
+                      className="font-semibold text-theme-text-primary text-sm text-left hover:text-dr7-gold transition-colors"
+                    >
+                      #{rankByCustomer.get(c.customerId) ?? '-'} · {c.name}
+                    </button>
                     {c.email !== '-' && <p className="text-xs text-theme-text-muted">{c.email}</p>}
                   </div>
 
@@ -636,13 +916,17 @@ export default function ReportClientiTab() {
         </div>
       )}
 
+      {openCustomerId && (
+        <ReportClienteModal customerId={openCustomerId} onClose={() => setOpenCustomerId(null)} />
+      )}
+
       {/* Empty state */}
       {!clientiData && !loading && !error && (
         <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-12 text-center">
           <svg className="w-16 h-16 mx-auto text-theme-text-muted mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          <p className="text-theme-text-muted text-lg mb-2">Clicca "Genera Report" per visualizzare i dati</p>
+          <p className="text-theme-text-muted text-lg mb-2">Nessun dato da mostrare</p>
           <p className="text-theme-text-muted text-sm">Il report include noleggi, lavaggi, meccanica, penali e danni per cliente</p>
         </div>
       )}

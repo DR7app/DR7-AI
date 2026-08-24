@@ -559,12 +559,59 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
   const fmtDate = (d: string) => new Date(d).toLocaleDateString('it-IT')
   const daysSince = (d: Date) => Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24))
 
-  const docStatus = (type: string, legacy?: string) => {
-    const doc = documents.find(d => d.document_type === type || (legacy ? d.document_type === legacy : false))
-    if (!doc) return { label: 'Mancante', color: 'text-red-400' }
-    if (doc.status === 'verified') return { label: 'Verificato', color: 'text-green-400' }
-    if (doc.status === 'pending_verification') return { label: 'In attesa', color: 'text-yellow-400' }
-    return { label: 'Rifiutato', color: 'text-red-400' }
+  // Alias dei document_type. I camelCase del sito sono gia' normalizzati in
+  // fase di caricamento; qui restano le forme legacy (riga singola senza
+  // fronte/retro) e quelle scritte dal wizard di prenotazione ('id',
+  // 'license'), altrimenti un documento presente risultava mancante.
+  const DOC_ALIASES: Record<string, string[]> = {
+    identity_document_front: ['identity_document_front', 'identity_document', 'id', 'passaporto', 'passport'],
+    identity_document_back: ['identity_document_back'],
+    drivers_license_front: ['drivers_license_front', 'drivers_license', 'license'],
+    drivers_license_back: ['drivers_license_back'],
+    codice_fiscale_front: ['codice_fiscale_front', 'codice_fiscale'],
+    codice_fiscale_back: ['codice_fiscale_back'],
+    libretto_front: ['libretto_front', 'libretto'],
+    libretto_back: ['libretto_back'],
+  }
+  const aliasesOf = (type: string, legacy?: string) => {
+    const list = DOC_ALIASES[type] || [type]
+    return legacy && !list.includes(legacy) ? [...list, legacy] : list
+  }
+
+  // customer_documents (caricamenti admin) non porta sempre uno stato di
+  // verifica: un documento presente senza stato e' "Caricato", mai "Rifiutato".
+  const statusLabel = (status?: string) => {
+    if (status === 'verified') return { label: 'Verificato', color: 'text-green-400' }
+    if (status === 'pending_verification') return { label: 'In attesa', color: 'text-yellow-400' }
+    if (status === 'rejected') return { label: 'Rifiutato', color: 'text-red-400' }
+    return { label: 'Caricato', color: 'text-blue-400' }
+  }
+
+  // Il libretto serve solo se il cliente lascia un veicolo in garanzia: se
+  // manca non e' un documento carente, quindi niente rosso.
+  const docStatus = (type: string, legacy?: string, optional?: boolean) => {
+    const accepted = aliasesOf(type, legacy)
+    const matches = documents.filter(d => accepted.includes(d.document_type))
+    const doc = matches.find(d => d.status === 'verified')
+      || matches.find(d => d.status === 'pending_verification')
+      || matches[0]
+    if (!doc) return optional
+      ? { label: 'Non richiesto', color: 'text-theme-text-muted' }
+      : { label: 'Mancante', color: 'text-red-400' }
+    return statusLabel(doc.status)
+  }
+
+  // Riepilogo per documento (fronte + retro insieme).
+  const docGroupStatus = (types: string[], optional?: boolean) => {
+    const accepted = types.flatMap(t => aliasesOf(t))
+    const found = documents.filter(d => accepted.includes(d.document_type))
+    if (found.length === 0) return optional
+      ? { label: 'Non richiesto', color: 'text-theme-text-muted' }
+      : { label: 'Mancante', color: 'text-red-400' }
+    if (found.some(d => d.status === 'verified')) return statusLabel('verified')
+    if (found.some(d => d.status === 'pending_verification')) return statusLabel('pending_verification')
+    if (found.every(d => d.status === 'rejected')) return statusLabel('rejected')
+    return statusLabel(undefined)
   }
 
   if (loading) {
@@ -1132,10 +1179,10 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                       { type: 'drivers_license_back', label: 'Patente Retro' },
                       { type: 'codice_fiscale_front', label: 'Codice Fiscale Fronte' },
                       { type: 'codice_fiscale_back', label: 'Codice Fiscale Retro' },
-                      { type: 'libretto_front', label: 'Libretto Fronte' },
-                      { type: 'libretto_back', label: 'Libretto Retro' },
-                    ].map(({ type, label, legacy }) => {
-                      const s = docStatus(type, legacy)
+                      { type: 'libretto_front', label: 'Libretto Fronte', optional: true },
+                      { type: 'libretto_back', label: 'Libretto Retro', optional: true },
+                    ].map(({ type, label, legacy, optional }: { type: string; label: string; legacy?: string; optional?: boolean }) => {
+                      const s = docStatus(type, legacy, optional)
                       return (
                         <div key={type} className="flex items-center justify-between text-sm">
                           <span className="text-theme-text-primary">{label}</span>
@@ -1478,14 +1525,14 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
                 </div>
                 <div className="space-y-1.5">
                   {[
-                    { type: 'patente', label: 'Patente' },
-                    { type: 'carta_identita', label: 'Carta identità' },
-                    { type: 'codice_fiscale', label: 'Codice fiscale' },
-                    { type: 'passaporto', label: 'Passaporto' },
+                    { key: 'patente', label: 'Patente', types: ['drivers_license_front', 'drivers_license_back'] },
+                    { key: 'carta_identita', label: 'Carta identità', types: ['identity_document_front', 'identity_document_back'] },
+                    { key: 'codice_fiscale', label: 'Codice fiscale', types: ['codice_fiscale_front', 'codice_fiscale_back'] },
+                    { key: 'libretto', label: 'Libretto', types: ['libretto_front', 'libretto_back'], optional: true },
                   ].map(d => {
-                    const status = docStatus(d.type)
+                    const status = docGroupStatus(d.types, d.optional)
                     return (
-                      <div key={d.type} className="flex items-center justify-between text-xs">
+                      <div key={d.key} className="flex items-center justify-between text-xs">
                         <span className="text-theme-text-secondary">{d.label}</span>
                         <span className={`font-semibold ${status.color}`}>{status.label}</span>
                       </div>
