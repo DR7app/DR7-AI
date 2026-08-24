@@ -811,10 +811,18 @@ function ArticoloModal({ initial, categorie, fornitori, busy, nextCodeFor, onClo
               {fornitori.map(fo => <option key={fo.id} value={fo.id}>{fo.nome}</option>)}
             </select>
           </div>
-          <div><label className={lblCls}>Canale riordino</label>
+          {/* 2026-08-24: etichette esplicite. "manuale" era nella lista dei
+              CANALI e sembrava l'interruttore automatico/manuale, che invece
+              e' il campo "Modalita" qui sotto. Il canale dice COME si invia,
+              la modalita' dice SE parte da sola. */}
+          <div><label className={lblCls}>Canale riordino (come inviare)</label>
             <select value={f.canale_riordino || ''} onChange={e => set('canale_riordino', e.target.value)} className={inputCls}>
               <option value="">Default fornitore</option>
-              {CANALI.map(c => <option key={c} value={c}>{c}</option>)}
+              {CANALI.map(c => (
+                <option key={c} value={c}>
+                  {c === 'manuale' ? 'manuale — nessun invio, solo registrazione' : c}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -839,7 +847,7 @@ function ArticoloModal({ initial, categorie, fornitori, busy, nextCodeFor, onClo
                   <option value="email">Email</option>
                 </select>
               </div>
-              <div><label className={lblCls}>Modalita</label>
+              <div><label className={lblCls}>Modalita (se parte da sola)</label>
                 <select
                   value={f.riordino_automatico === false ? 'manuale' : 'automatico'}
                   onChange={e => set('riordino_automatico', e.target.value === 'automatico')}
