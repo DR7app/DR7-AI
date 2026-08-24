@@ -254,6 +254,12 @@ export interface DailyCategoryConfig {
   /** true = corsia aggiunta dall'admin, non di fabbrica. */
   custom?: boolean
   /**
+   * true = corsia tolta dall'admin. Serve per le corsie DI FABBRICA: senza
+   * questo segno tornerebbero da sole al primo caricamento, perche' il
+   * catalogo di fabbrica riaggiunge in coda tutto cio' che non e' configurato.
+   */
+  removed?: boolean
+  /**
    * Solo per le corsie personalizzate: quali `service_type` finiscono qui.
    * Senza almeno un valore la corsia esiste ma non raccoglie nulla — la UI
    * lo segnala invece di lasciarla silenziosamente vuota.
@@ -290,6 +296,7 @@ export function resolveDailyCategories(saved?: DailyCategoryConfig[] | null): Da
 
   for (const s of (Array.isArray(saved) ? saved : [])) {
     if (seen.has(s.id)) continue
+    if (s.removed) { seen.add(s.id); continue }
     if (isCustomCategory(s.id)) {
       // Corsia aggiunta dall'admin: non ha una voce di fabbrica alle spalle.
       seen.add(s.id)

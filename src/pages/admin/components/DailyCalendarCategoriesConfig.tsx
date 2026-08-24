@@ -24,6 +24,9 @@ export default function DailyCalendarCategoriesConfig({ readOnly = false }: { re
   const [saving, setSaving] = useState(false)
   const [rows, setRows] = useState<DailyCategory[]>([])
   const [nuovaLabel, setNuovaLabel] = useState('')
+  // Corsie di fabbrica eliminate: vanno ricordate, altrimenti il catalogo di
+  // fabbrica le riaggiunge al ricaricamento.
+  const [removedIds, setRemovedIds] = useState<string[]>([])
 
   useEffect(() => { void load() }, [])
 
@@ -33,7 +36,9 @@ export default function DailyCalendarCategoriesConfig({ readOnly = false }: { re
       const { data } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
       const cfg = (data?.config as Record<string, unknown>) || {}
       const saved = cfg[DAILY_CATEGORIES_CONFIG_KEY]
-      setRows(resolveDailyCategories(Array.isArray(saved) ? saved as DailyCategoryConfig[] : null))
+      const list = Array.isArray(saved) ? saved as DailyCategoryConfig[] : null
+      setRows(resolveDailyCategories(list))
+      setRemovedIds((list || []).filter(x => x.removed).map(x => x.id))
     } catch (e) {
       toast.error('Errore nel caricamento: ' + (e instanceof Error ? e.message : 'riprova'))
       setRows(resolveDailyCategories(null))
@@ -68,10 +73,20 @@ export default function DailyCalendarCategoriesConfig({ readOnly = false }: { re
   }
 
   function rimuovi(id: string) {
-    if (!isCustomCategory(id)) return
     const r = rows.find(x => x.id === id)
     if (!window.confirm(`Eliminare la corsia "${r?.label || id}"? Le prenotazioni non vengono toccate.`)) return
     setRows(prev => prev.filter(x => x.id !== id))
+    // Le corsie di fabbrica tornerebbero da sole: le si segna come eliminate.
+    if (!isCustomCategory(id)) setRemovedIds(prev => prev.includes(id) ? prev : [...prev, id])
+  }
+
+  function ripristinaEliminate() {
+    setRemovedIds([])
+    setRows(resolveDailyCategories(rows.map(r => ({
+      id: r.id, label: r.label, colorKey: r.colorKey, enabled: r.enabled,
+      ...(r.custom ? { custom: true, serviceTypes: r.serviceTypes || [] } : {}),
+    }))))
+    toast.success('Corsie di fabbrica ripristinate — ricordati di salvare')
   }
 
   function move(id: string, dir: -1 | 1) {
@@ -98,10 +113,14 @@ export default function DailyCalendarCategoriesConfig({ readOnly = false }: { re
       // chiave delle corsie, altrimenti un salvataggio concorrente sparisce.
       const { data: fresh } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
       const base = (fresh?.config as Record<string, unknown>) || {}
-      const payload: DailyCategoryConfig[] = rows.map(r => ({
-        id: r.id, label: r.label, colorKey: r.colorKey, enabled: r.enabled,
-        ...(r.custom ? { custom: true, serviceTypes: r.serviceTypes || [] } : {}),
-      }))
+      const payload: DailyCategoryConfig[] = [
+        ...rows.map(r => ({
+          id: r.id, label: r.label, colorKey: r.colorKey, enabled: r.enabled,
+          ...(r.custom ? { custom: true, serviceTypes: r.serviceTypes || [] } : {}),
+        })),
+        // Le corsie di fabbrica eliminate restano scritte, con removed: true.
+        ...removedIds.filter(id => !rows.some(r => r.id === id)).map(id => ({ id, removed: true })),
+      ]
       const { data, error } = await supabase
         .from('centralina_pro_config')
         .update({ config: { ...base, [DAILY_CATEGORIES_CONFIG_KEY]: payload } })
@@ -208,17 +227,17 @@ export default function DailyCalendarCategoriesConfig({ readOnly = false }: { re
                   title="Quali service_type finiscono in questa corsia. Separali con virgola."
                   className="w-full sm:w-64 px-2.5 h-9 rounded-lg border border-theme-border bg-theme-bg-primary text-xs font-mono text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-dr7-gold disabled:opacity-60"
                 />
-                <button
-                  type="button"
-                  disabled={readOnly}
-                  onClick={() => rimuovi(r.id)}
-                  title="Elimina corsia"
-                  className="shrink-0 w-8 h-8 rounded-full border border-red-300 text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-60"
-                >
-                  &times;
-                </button>
               </>
             )}
+            <button
+              type="button"
+              disabled={readOnly}
+              onClick={() => rimuovi(r.id)}
+              title="Elimina corsia"
+              className="shrink-0 w-8 h-8 rounded-full border border-red-300 text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-60"
+            >
+              &times;
+            </button>
             <button
               type="button"
               disabled={readOnly}
@@ -262,8 +281,21 @@ export default function DailyCalendarCategoriesConfig({ readOnly = false }: { re
         </p>
       )}
 
+      {removedIds.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-theme-text-muted">
+          <span>{removedIds.length} corsia/e di fabbrica eliminate.</span>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={ripristinaEliminate}
+              className="px-2 h-7 rounded-lg border border-theme-border text-theme-text-primary font-semibold hover:bg-theme-bg-hover transition-colors"
+            >Ripristina corsie di fabbrica</button>
+          )}
+        </div>
+      )}
+
       <p className="text-[11px] text-theme-text-muted">
-        {attive} corsie attive. Lavaggio e Meccanica condividono la corsia <strong>Prime Wash</strong>:
+        {attive} corsie attive. Ogni corsia attiva compare nella giornata anche quando e' vuota. Lavaggio e Meccanica condividono la corsia <strong>Prime Wash</strong>:
         sono lo stesso reparto, non due colonne separate.
       </p>
     </div>

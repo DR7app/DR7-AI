@@ -2326,7 +2326,13 @@ export default function CentralinaProTab() {
         </div>
       </div>
 
-      {!isCauzioniViewOnly && section !== 'catalogo' && section !== 'status-clienti' && section !== 'autisti' && (
+      {/* La barra grande salva lo snapshot della Centralina. Le sezioni che
+          scrivono da sole la propria chiave di config (catalogo, status
+          clienti, autisti, corsie del calendario, multe) hanno gia' il loro
+          Salva: mostrarne due confondeva, e quello grande li' non salvava
+          niente di quella sezione. */}
+      {!isCauzioniViewOnly && section !== 'catalogo' && section !== 'status-clienti' && section !== 'autisti'
+        && section !== 'calendario-giornaliero' && section !== 'gestione-multe' && (
         <SaveBar
           changes={changes}
           justSaved={justSaved}
