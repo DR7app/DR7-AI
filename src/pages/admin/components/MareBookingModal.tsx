@@ -508,6 +508,12 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
     d.listino = lordoCents
     d.note = note.trim() || null
     d.amountPaid = eurToCents(amountPaid)
+    // 2026-08-24: id della barca a catalogo. Il Report Mare aggancia la
+    // prenotazione al mezzo per `booking_details.vehicle_id`; senza id resta
+    // solo il confronto sul NOME esatto, e un nome fuori catalogo fa sparire
+    // l'incassato dai totali senza nessun avviso. Non si usa
+    // `bookings.vehicle_id`, che riferisce `vehicles` (flotta Terra).
+    if (asset?.id) d.vehicle_id = asset.id
 
     const totaleDaSalvare = eurToCents(priceFinal) || computedCents
 

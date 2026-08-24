@@ -312,7 +312,8 @@ export default function AdminDashboard() {
       { tab: 'gestione-danni', label: 'Danni & Penali' },
       { tab: 'gestione-multe', label: 'Multe' },
       { tab: 'mare-catalog', label: 'Barche' },
-      { tab: 'magazzino', label: 'Magazzino' },
+      // 2026-08-24 (direzione): "Magazzino" tolto anche da Noleggio Mare —
+      // tutto vive in Magazzino > Magazzino Generale, come gia' fatto su Terra.
       { tab: 'gps-keyless', label: 'GPS Flotta' },
       { tab: 'mare-tours', label: 'Tour' },
     ] },

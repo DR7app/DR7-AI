@@ -250,7 +250,7 @@ export const handler: Handler = async (event) => {
     } else if (reportType === 'washes') {
       return await generateWashReport(monthStartISO, monthEndISO, periodLabel, daysInMonth)
     } else if (reportType === 'cauzioni') {
-      return await generateCauzioniReport(monthStartISO, monthEndISO, periodLabel)
+      return await generateCauzioniReport(monthStartISO, monthEndISO, periodLabel, business)
     } else if (reportType === 'diagnose') {
       const plate = params.plate?.toUpperCase().replace(/\s/g, '')
       return await runDiagnostics(plate, monthStartISO, monthEndISO, periodLabel)
@@ -363,11 +363,20 @@ async function generateVehicleReport(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allBookings: any[] = []
   for (let pageStart = 0; ; pageStart += 1000) {
-    const { data: page, error: bookingsError } = await supabase
+    // 2026-08-24: per Mare/Aria/Soggiorni si filtra il service_type GIA' lato
+    // database. Prima si scaricavano tutte le prenotazioni della tabella
+    // (2.537 righe, JSONB booking_details incluso) per poi tenerne 16 in JS:
+    // il Report Aria finiva quasi sempre in "canceling statement due to
+    // statement timeout". Terra resta a filtro JS perche' e' il complemento
+    // (service_type NULL, 'rental', 'car_rental', ...) e non si esprime con
+    // una uguaglianza.
+    let query = supabase
       .from('bookings')
       .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, appointment_date, payment_status, payment_method, customer_name, customer_email, created_at, updated_at')
       .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active', 'pending', 'Confirmed', 'Completed', 'Active'])
       .or('customer_email.is.null,customer_email.neq.admin@dr7.app')
+    if (business !== 'rental') query = query.eq('service_type', business)
+    const { data: page, error: bookingsError } = await query
       .order('created_at', { ascending: false })
       .range(pageStart, pageStart + 999)
 
@@ -527,7 +536,14 @@ async function generateVehicleReport(
       .trim()
   }
 
-  const vehicleReports = (vehicles || []).map(vehicle => {
+  // 2026-08-24: il corpo del report per UNA riga e' una funzione con nome,
+  // cosi' lo stesso calcolo serve sia i mezzi del catalogo/flotta sia la riga
+  // "Non abbinati" (prenotazioni che nessun mezzo ha rivendicato). Prima quelle
+  // prenotazioni finivano solo in `unmatchedBookings` e il loro incassato
+  // spariva dai totali: Report Aria luglio mostrava 2.490 invece di 2.888
+  // perche' una riga aveva vehicle_name "Bell 407 GX" invece di "Bell 407 GXP".
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const buildVehicleRow = (vehicle: any, forcedBookings?: any[]) => {
     const vPlate = (vehicle.plate || '').replace(/\s/g, '').toUpperCase()
     const vName = normName(vehicle.display_name)
 
@@ -536,7 +552,7 @@ async function generateVehicleReport(
     // points to a vehicle that no longer exists in the vehicles table
     // (orphaned reference). Previously this case dropped the booking from
     // every vehicle report and admins saw wallet bookings disappear.
-    const vehicleBookings = rentalBookings.filter(b => {
+    const vehicleBookings = forcedBookings ?? rentalBookings.filter(b => {
       const bPlate = (b.vehicle_plate || '').replace(/\s/g, '').toUpperCase()
       const detailsPlate = (b.booking_details?.vehicle_plate || b.booking_details?.plate || '').replace(/\s/g, '').toUpperCase()
       const bName = normName(b.vehicle_name)
@@ -939,7 +955,9 @@ async function generateVehicleReport(
     }
 
     return report
-  })
+  }
+
+  const vehicleReports = (vehicles || []).map(v => buildVehicleRow(v))
 
   // Sort by utilization rate descending
   vehicleReports.sort((a, b) => b.utilizationRate - a.utilizationRate)
@@ -949,9 +967,8 @@ async function generateVehicleReport(
   vehicleReports.forEach(vr => {
     vr._bookingIds?.forEach((id: string) => allMatchedIds.add(id))
   })
-  const unmatchedBookings = rentalBookings
-    .filter(b => !allMatchedIds.has(b.id))
-    .map(b => ({
+  const unmatchedRaw = rentalBookings.filter(b => !allMatchedIds.has(b.id))
+  const unmatchedBookings = unmatchedRaw.map(b => ({
       id: b.id,
       vehicle_name: b.vehicle_name,
       vehicle_plate: b.vehicle_plate,
@@ -961,6 +978,21 @@ async function generateVehicleReport(
       service_type: b.service_type,
       status: b.status
     }))
+
+  // 2026-08-24: riga di chiusura per le prenotazioni che nessun mezzo ha
+  // rivendicato (nome mezzo non presente a catalogo/flotta, id orfano...).
+  // Senza di lei l'incassato di quelle prenotazioni non compariva in NESSUN
+  // totale: i soldi sparivano dal report senza un solo avviso. Compare solo
+  // se ci sono davvero prenotazioni non abbinate.
+  if (unmatchedRaw.length > 0) {
+    const orphanRow = buildVehicleRow(
+      { id: '__unmatched__', display_name: 'Non abbinati', plate: null, status: 'unmatched', category: '-', metadata: null },
+      unmatchedRaw,
+    )
+    delete orphanRow._bookingIds
+    orphanRow.unmatched = true
+    vehicleReports.push(orphanRow)
+  }
 
   // Clean up debug fields from output (unless debug mode)
   const cleanReports = debug
@@ -972,7 +1004,8 @@ async function generateVehicleReport(
     body: JSON.stringify({
       month,
       daysInMonth,
-      vehicleCount: cleanReports.length,
+      // vehicleCount = mezzi veri: la riga "Non abbinati" non e' un mezzo.
+      vehicleCount: cleanReports.filter((v: any) => !v.unmatched).length,
       totalBookingsFound: rentalBookings.length,
       unmatchedBookings: unmatchedBookings.length > 0 ? unmatchedBookings : undefined,
       totalRentalRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + v.rentalRevenue, 0) * 100) / 100,
@@ -985,7 +1018,10 @@ async function generateVehicleReport(
       // del rental). Visualizzato come voce separata nella UI.
       totalAnticipatedRevenue: Math.round(cleanReports.reduce((sum: number, v: any) => sum + (v.anticipatedRevenue || 0), 0) * 100) / 100,
       anticipatedBookingsCount: cleanReports.reduce((sum: number, v: any) => sum + (v.anticipatedBookings?.length || 0), 0),
-      avgUtilizationRate: Math.round((cleanReports.reduce((sum: number, v: any) => sum + v.utilizationRate, 0) / Math.max(1, cleanReports.length)) * 100) / 100,
+      avgUtilizationRate: (() => {
+        const reali = cleanReports.filter((v: any) => !v.unmatched)
+        return Math.round((reali.reduce((sum: number, v: any) => sum + v.utilizationRate, 0) / Math.max(1, reali.length)) * 100) / 100
+      })(),
       vehicles: cleanReports
     })
   }
@@ -1317,7 +1353,8 @@ async function generateWashReport(
 async function generateCauzioniReport(
   monthStartISO: string,
   monthEndISO: string,
-  month: string
+  month: string,
+  business: ReportBusiness = 'rental'
 ) {
   // Fetch cauzioni that were processed (incassate/restituite/sbloccate/bloccate) in this month
   const { data: cauzioni, error } = await supabase
@@ -1334,7 +1371,37 @@ async function generateCauzioniReport(
 
   if (error) throw error
 
-  const items = (cauzioni || []).map((c: any) => {
+  // 2026-08-24: le cauzioni appartengono al business della prenotazione che le
+  // ha generate. Senza questo filtro l'endpoint ignorava `business` e il tab
+  // Cauzioni di Report Mare e Report Aria mostrava le 91 cauzioni di Noleggio
+  // Terra (Audi RS3, Vito, GLE 63) per 118.401 EUR — dati di un altro business.
+  // Una cauzione senza prenotazione collegata resta di Terra: `cauzioni.veicolo_id`
+  // punta a `vehicles`, cioe' alla sola flotta Terra (barche ed elicotteri
+  // vivono in `noleggio_catalog`).
+  const bookingIds = Array.from(new Set(
+    (cauzioni || []).map((c: any) => c.riferimento_contratto_id).filter(Boolean)
+  )) as string[]
+  const serviceTypeByBooking = new Map<string, string | null>()
+  for (let i = 0; i < bookingIds.length; i += 1000) {
+    const { data: rows } = await supabase
+      .from('bookings')
+      .select('id, service_type')
+      .in('id', bookingIds.slice(i, i + 1000))
+    ;(rows || []).forEach(r => serviceTypeByBooking.set(r.id, r.service_type))
+  }
+  // Terra resta il contenitore storico (tutto cio' che non e' un business
+  // dedicato), esattamente come prima: si toglie solo cio' che appartiene a
+  // Mare/Aria/Soggiorni. Non si riusa `appartieneAlBusiness` perche' quella
+  // scarta anche lavaggio e uscite straordinarie, che qui non vanno persi.
+  const cauzioniDelBusiness = (cauzioni || []).filter((c: any) => {
+    const st = String(
+      (c.riferimento_contratto_id ? serviceTypeByBooking.get(c.riferimento_contratto_id) : null) || ''
+    ).trim().toLowerCase()
+    if (business === 'rental') return !(BUSINESS_DEDICATI as readonly string[]).includes(st)
+    return st === business
+  })
+
+  const items = cauzioniDelBusiness.map((c: any) => {
     let clienteName = 'Sconosciuto'
     if (c.customers_extended) {
       if (c.customers_extended.tipo_cliente === 'azienda' && (c.customers_extended.ragione_sociale || c.customers_extended.denominazione)) {

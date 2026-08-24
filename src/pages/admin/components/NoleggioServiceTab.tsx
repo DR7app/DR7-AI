@@ -507,6 +507,14 @@ function BookingsView({ serviceType, labels }: { serviceType: NoleggioServiceTyp
       if (tourDepId) details.tour_departure_id = tourDepId
     }
 
+    // 2026-08-24: si scrive anche l'id del mezzo a catalogo. Il Report legge
+    // `booking_details.vehicle_id` e senza di esso l'unico aggancio era il NOME
+    // esatto: una prenotazione salvata "Bell 407 GX" invece di "Bell 407 GXP"
+    // usciva dai totali (398 EUR persi sul Report Aria di luglio). L'id sta in
+    // booking_details, non in `bookings.vehicle_id`, che riferisce `vehicles`
+    // (flotta Terra) e non `noleggio_catalog`.
+    if (selectedAssetObj?.id) details.vehicle_id = selectedAssetObj.id
+
     const payload = {
       service_type: serviceType,
       customer_name: form.customer_name.trim(),
@@ -1350,7 +1358,7 @@ function CatalogView({ serviceType, labels }: { serviceType: NoleggioServiceType
       .eq('service_type', serviceType)
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true })
-    if (e) setError(missingTableHint(e.message))
+    if (e) setError(missingTableHint(e.message, (e as { code?: string }).code))
     else setItems((data || []) as CatalogRow[])
     setLoading(false)
   }, [serviceType])
@@ -1380,16 +1388,23 @@ function CatalogView({ serviceType, labels }: { serviceType: NoleggioServiceType
       ? await supabase.from('noleggio_catalog').update(payload).eq('id', editingId)
       : await supabase.from('noleggio_catalog').insert(payload)
     setSaving(false)
-    if (e) { setError(missingTableHint(e.message)); return }
+    if (e) { setError(missingTableHint(e.message, (e as { code?: string }).code)); return }
     setShowForm(false); load()
   }
   async function toggleActive(it: CatalogRow) {
-    await supabase.from('noleggio_catalog').update({ is_active: !it.is_active, updated_at: new Date().toISOString() }).eq('id', it.id)
+    // 2026-08-24: l'errore veniva ingoiato — si cliccava e non succedeva
+    // niente, senza sapere perche'.
+    const { error: e } = await supabase.from('noleggio_catalog')
+      .update({ is_active: !it.is_active, updated_at: new Date().toISOString() }).eq('id', it.id)
+    if (e) { setError(missingTableHint(e.message, (e as { code?: string }).code)); return }
+    setError('')
     load()
   }
   async function remove(it: CatalogRow) {
     if (!window.confirm(`Eliminare "${it.name}" dal catalogo?`)) return
-    await supabase.from('noleggio_catalog').delete().eq('id', it.id)
+    const { error: e } = await supabase.from('noleggio_catalog').delete().eq('id', it.id)
+    if (e) { setError(missingTableHint(e.message, (e as { code?: string }).code)); return }
+    setError('')
     load()
   }
 
@@ -1504,7 +1519,7 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
       .select('id, service_type, customer_name, customer_phone, asset_name, asset_id, start_date, end_date, start_time, end_time, is_tour, duration_label, duration_minutes, passengers, amount, notes, status, created_at')
       .eq('service_type', serviceType)
       .order('created_at', { ascending: false })
-    if (e) setError(missingTableHint(e.message))
+    if (e) setError(missingTableHint(e.message, (e as { code?: string }).code))
     else setRows((data || []) as PreventivoRow[])
     setLoading(false)
   }, [serviceType])
@@ -1555,7 +1570,7 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
       ? await supabase.from('noleggio_preventivi').update(payload).eq('id', editingId)
       : await supabase.from('noleggio_preventivi').insert(payload)
     setSaving(false)
-    if (e) { setError(missingTableHint(e.message)); return }
+    if (e) { setError(missingTableHint(e.message, (e as { code?: string }).code)); return }
     setShowForm(false); load()
   }
   async function remove(p: PreventivoRow) {
@@ -1602,6 +1617,7 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
           pickup_date: inizio,
           dropoff_date: toIso(p.end_date || p.start_date, '18:00'),
         }
+    const catalogoIdPerNome = catalogo.find(c => (c.name || '').trim().toLowerCase() === (p.asset_name || '').trim().toLowerCase())?.id || null
     const payload = {
       service_type: serviceType,
       customer_name: p.customer_name || 'Cliente',
@@ -1613,7 +1629,10 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
       price_total: p.amount || 0,
       status: 'confirmed',
       payment_status: 'pending', // Da Saldare, come una nuova prenotazione
-      booking_details: { from_preventivo_id: p.id, ...(p.notes ? { note: p.notes } : {}) },
+      // vehicle_id dal catalogo (match sul nome scelto nel preventivo): e' cio'
+      // che permette al Report di attribuire l'incasso al mezzo giusto anche se
+      // il nome viene poi corretto o rinominato a catalogo.
+      booking_details: { from_preventivo_id: p.id, ...(catalogoIdPerNome ? { vehicle_id: catalogoIdPerNome } : {}), ...(p.notes ? { note: p.notes } : {}) },
       created_at: new Date().toISOString(),
     }
     const { error } = await supabase.from('bookings').insert(payload).select('id').single()
@@ -1945,7 +1964,7 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
         .eq('service_type', serviceType)
         .order('sort_order', { ascending: true }).order('name', { ascending: true })
       if (cancelled) return
-      if (e) setError(missingTableHint(e.message))
+      if (e) setError(missingTableHint(e.message, (e as { code?: string }).code))
       else {
         const list = (data || []) as CatalogRow[]
         setAssets(list)
@@ -2066,7 +2085,9 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
       // campi guest come fa il Car Wash.
       guest_name: cust.name.trim(), guest_phone: cust.phone.trim() || null,
       // manually_confirmed NON è una colonna di bookings: va in booking_details (come ReservationsTab).
-      booking_details: { tour_departure_id: dep.id, seats: labelsStr, seat_count: chosen.length, passengers: passengersDetail, note: tourNote.trim() || null, manually_confirmed: tourConfirm, ...(tourConfirm ? { manually_confirmed_at: new Date().toISOString() } : {}) },
+      // vehicle_id = id del mezzo a catalogo: e' l'aggancio che il Report usa
+      // per attribuire l'incasso. Senza, resta solo il nome esatto (vedi sopra).
+      booking_details: { tour_departure_id: dep.id, ...(selectedAsset?.id ? { vehicle_id: selectedAsset.id } : {}), seats: labelsStr, seat_count: chosen.length, passengers: passengersDetail, note: tourNote.trim() || null, manually_confirmed: tourConfirm, ...(tourConfirm ? { manually_confirmed_at: new Date().toISOString() } : {}) },
       created_at: new Date().toISOString(),
     }).select('id').single()
     if (be || !bk) { setBooking(false); setError('Errore prenotazione: ' + (be?.message || '')); return }
@@ -2585,9 +2606,26 @@ function ErrorBox({ msg }: { msg: string }) {
 function EmptyBox({ msg }: { msg: string }) {
   return <div className="text-theme-text-muted text-sm py-10 text-center border border-theme-border rounded-lg">{msg}</div>
 }
-function missingTableHint(msg: string): string {
-  if (/noleggio_catalog|noleggio_preventivi|does not exist|relation .* does not exist|schema cache/i.test(msg)) {
-    return 'Tabelle non ancora create: esegui la migration Stage 2 (noleggio_catalog / noleggio_preventivi) nel SQL editor Supabase.'
+/**
+ * 2026-08-24: prima bastava che il messaggio CONTENESSE "noleggio_catalog"
+ * per dire "tabelle non ancora create". Cosi' un vincolo violato o un
+ * permesso RLS — errori veri, con una causa precisa — venivano raccontati
+ * come una migration mancante: si andava a cercare una tabella che c'era
+ * gia'. Ora si distingue per codice, e il messaggio del database resta
+ * sempre visibile in coda.
+ */
+function missingTableHint(msg: string, code?: string): string {
+  const dettaglio = msg ? ` (dettaglio: ${msg})` : ''
+  if (code === '42P01' || code === 'PGRST205' || /relation .* does not exist|could not find the table|schema cache/i.test(msg)) {
+    return `Tabella non ancora creata: esegui la migration Stage 2 (noleggio_catalog / noleggio_preventivi) nel SQL editor Supabase.${dettaglio}`
   }
+  if (code === '23514' || /violates check constraint/i.test(msg)) {
+    return `Il database non accetta questo valore: un vincolo (CHECK) lo esclude. Se hai appena aggiunto un nuovo tipo di servizio, va allargato il vincolo.${dettaglio}`
+  }
+  if (code === '42501' || /row-level security|permission denied/i.test(msg)) {
+    return `Permessi insufficienti su questa tabella (RLS): l'utente admin non e' autorizzato a scrivere.${dettaglio}`
+  }
+  if (code === '23505') return `Esiste gia' un elemento con questi dati.${dettaglio}`
+  if (code === '42703') return `Colonna mancante: la tabella e' piu' vecchia del gestionale, manca una migration.${dettaglio}`
   return msg
 }

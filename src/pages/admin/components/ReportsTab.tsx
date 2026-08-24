@@ -413,10 +413,6 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
   // Spese fisse mensili per veicolo (vehicles.metadata.fixed_expenses).
   const [fixedExpenses, setFixedExpenses] = useState<Record<string, FixedExpense[]>>({})
   const [savingExpenses, setSavingExpenses] = useState<string | null>(null)
-  const totalFixedExpenses = useMemo(
-    () => Object.values(fixedExpenses).reduce((s, arr) => s + sumFx(arr), 0),
-    [fixedExpenses]
-  )
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -516,6 +512,18 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
   const [error, setError] = useState('')
 
   const [vehicleData, setVehicleData] = useState<VehicleReportData | null>(null)
+
+  // 2026-08-24: le spese fisse si sommano SOLO sui mezzi presenti in questo
+  // report. Prima si sommava tutta la tabella `vehicles` a prescindere dal
+  // business: il Margine Netto di Report Mare e Report Aria sottraeva i 22.050
+  // EUR di rate/leasing delle AUTO (Manhart, Huracan, Vito, Yaris, A45S, RS3)
+  // da un fatturato di barche ed elicotteri — Aria luglio mostrava -19.560.
+  const totalFixedExpenses = useMemo(() => {
+    const ids = new Set((vehicleData?.vehicles || []).map(v => v.vehicleId))
+    return Object.entries(fixedExpenses)
+      .filter(([id]) => ids.has(id))
+      .reduce((s, [, arr]) => s + sumFx(arr), 0)
+  }, [fixedExpenses, vehicleData])
   // Modifiche manuali al report (nuova funzione): override applicati alle righe
   // veicolo prima dei totali. Chiave riga = periodo|vehicleId (scope per periodo).
   const [overrides, setOverrides] = useState<LoadedOverrides | null>(null)
@@ -1105,7 +1113,11 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
             row (Cliente, Ritiro, Riconsegna, GG Tot/Mese, Pagamento,
             Totale, Penali, Danni, Ricavo Mese) but stacked in cards so
             it's readable on mobile without horizontal scroll. */}
-        {isExpanded && (
+        {/* 2026-08-24: le spese fisse vivono in `vehicles.metadata`, tabella
+            della sola flotta Terra. Sulle righe Mare/Aria/Soggiorni (id di
+            `noleggio_catalog`) l'UPDATE non toccava nessuna riga e il dato
+            spariva al reload senza un errore: meglio non mostrare l'editor. */}
+        {isExpanded && business === 'rental' && (
           <div className="mt-3 pt-3 border-t border-theme-border" onClick={e => e.stopPropagation()}>
             <FixedExpensesEditor
               vehicleId={v.vehicleId}
@@ -1335,7 +1347,7 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
           ) : (
             <td className="text-right px-4 py-3 text-dr7-gold font-bold">
               {formatCurrency(v.totalRevenue + (v.anticipatedRevenue || 0))}
-              {sumFx(fixedExpenses[v.vehicleId]) > 0 && (
+              {business === 'rental' && sumFx(fixedExpenses[v.vehicleId]) > 0 && (
                 <div className={`text-[10px] font-semibold ${(v.totalRevenue - sumFx(fixedExpenses[v.vehicleId])) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                   Margine {formatCurrency(v.totalRevenue - sumFx(fixedExpenses[v.vehicleId]))}
                 </div>
@@ -1343,7 +1355,7 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
             </td>
           )}
         </tr>
-        {isExpanded && (
+        {isExpanded && business === 'rental' && (
           <tr key={`${v.vehicleId}-spese`}>
             <td colSpan={13} className="px-4 py-2 bg-theme-bg-primary/30">
               <FixedExpensesEditor
