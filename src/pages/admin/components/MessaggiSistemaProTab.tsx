@@ -5205,8 +5205,18 @@ export default function MessaggiSistemaProTab() {
                                                                 <>
                                                                     <span className="text-theme-text-muted text-xs">―</span>
                                                                     <div className="flex items-center gap-1">
-                                                                        <input type="number" value={template.trigger_offset_hours || 24}
-                                                                            onChange={e => handleUpdateAutomation(template.id, 'trigger_offset_hours', parseInt(e.target.value) || 0)}
+                                                                        {/* 2026-08-24: `|| 24` rimpiazzava lo ZERO con 24 a ogni
+                                                                            render. Chi scriveva 0 ("parte subito") vedeva il campo
+                                                                            tornare a 24 e credeva che il valore non si potesse
+                                                                            cambiare: il salvataggio era andato a buon fine, era la
+                                                                            casella a mentire. `??` tiene 0 e usa 24 solo quando il
+                                                                            campo e' davvero vuoto in DB. */}
+                                                                        <input type="number" min={0} value={template.trigger_offset_hours ?? 24}
+                                                                            onChange={e => {
+                                                                                const raw = e.target.value.trim()
+                                                                                const parsed = raw === '' ? 0 : parseInt(raw, 10)
+                                                                                handleUpdateAutomation(template.id, 'trigger_offset_hours', Number.isFinite(parsed) ? Math.max(0, parsed) : 0)
+                                                                            }}
                                                                             className="w-12 text-xs text-center bg-dr7-gold/15 text-dr7-gold font-bold rounded-full px-2 py-1 border-none focus:outline-none" />
                                                                         <span className="text-xs text-dr7-gold font-bold">ore</span>
                                                                     </div>

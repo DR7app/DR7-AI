@@ -145,6 +145,12 @@ export default function UnpaidBookingsTab() {
   // associati al cliente. Cliente passa se ha almeno un booking nel range.
   const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
   const [partialPayItemKey, setPartialPayItemKey] = useState<string | null>(null)
+  // "Nuovo Incasso": scorciatoia per arrivare alla voce da incassare senza
+  // scorrere la lista. Non registra il pagamento da sola — apre il campo
+  // dell'incasso gia' esistente sulla riga giusta, che e' l'unico posto dove
+  // la logica di pagamento (residuo, fattura automatica, storico) e' corretta.
+  const [nuovoIncassoOpen, setNuovoIncassoOpen] = useState(false)
+  const [nuovoIncassoQuery, setNuovoIncassoQuery] = useState('')
   const [partialPayValue, setPartialPayValue] = useState('')
   const [editAmountKey, setEditAmountKey] = useState<string | null>(null)
   const [editAmountValue, setEditAmountValue] = useState('')
@@ -2331,6 +2337,98 @@ export default function UnpaidBookingsTab() {
 
   // ── Build Customer Groups ──────────────────────────────────────────────────
 
+  /**
+   * Esporta la lista insolventi in CSV (24/08/2026). Il pulsante c'era ma non
+   * era collegato a niente: cliccarlo non faceva assolutamente nulla.
+   * Esporta ESATTAMENTE quello che si vede a schermo, filtri compresi: una
+   * riga per voce da incassare, non una per cliente, cosi' il file si puo'
+   * usare per il sollecito e per la riconciliazione.
+   */
+  function esportaInsolventiCsv(groups: CustomerGroup[]) {
+    if (groups.length === 0) { toast.error('Nessun insolvente da esportare'); return }
+    const eur = (cents: number) => (cents / 100).toFixed(2).replace('.', ',')
+    const dataIt = (d?: string) => d ? new Date(d).toLocaleDateString('it-IT') : ''
+    const q = (v: unknown) => {
+      const t = String(v ?? '')
+      return /[";\n]/.test(t) ? `"${t.split('"').join('""')}"` : t
+    }
+    const righe: string[][] = []
+    for (const g of groups) {
+      const anagrafica = [g.customerName, g.customerEmail || '', g.customerPhone || '']
+      for (const b of g.noleggioBookings) {
+        const totale = b.price_total || 0
+        const pagato = b.booking_details?.amountPaid || 0
+        righe.push([...anagrafica, 'Noleggio', b.vehicle_name || '', b.vehicle_plate || '',
+          dataIt(b.pickup_date), dataIt(b.dropoff_date), eur(totale), eur(pagato),
+          eur(Math.max(0, totale - pagato)), b.payment_status || '', b.payment_method || ''])
+      }
+      for (const b of g.primeWashBookings) {
+        const totale = b.price_total || 0
+        const pagato = b.booking_details?.amountPaid || 0
+        righe.push([...anagrafica, 'Prime Wash', b.service_name || b.vehicle_name || '', b.vehicle_plate || '',
+          dataIt(b.appointment_date), '', eur(totale), eur(pagato),
+          eur(Math.max(0, totale - pagato)), b.payment_status || '', b.payment_method || ''])
+      }
+      for (const it of [...g.penaliItems, ...g.danniItems]) {
+        righe.push([...anagrafica, it.type === 'danni' ? 'Danno' : 'Penale', it.label || '',
+          it.booking?.vehicle_plate || '', dataIt(it.booking?.pickup_date), '',
+          eur(Math.round(it.amount * 100)), eur(Math.round(it.amountPaid * 100)),
+          eur(Math.round(it.remaining * 100)), it.paymentStatus || '', ''])
+      }
+    }
+    const intestazioni = ['Cliente', 'Email', 'Telefono', 'Tipo', 'Descrizione', 'Targa',
+      'Data inizio', 'Data fine', 'Totale EUR', 'Pagato EUR', 'Residuo EUR', 'Stato pagamento', 'Metodo']
+    // Punto e virgola + BOM: Excel in italiano apre il file gia' in colonne.
+    const csv = '\uFEFF' + [intestazioni, ...righe].map(r => r.map(q).join(';')).join('\r\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `insolventi_${new Date().toLocaleDateString('en-CA')}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    toast.success(`Esportate ${righe.length} voci da incassare`)
+  }
+
+  /** Tutte le voci ancora da incassare, appiattite: una riga = un pagamento. */
+  function vociDaIncassare(groups: CustomerGroup[]) {
+    const out: { key: string; customerKey: string; cliente: string; tipo: string; descrizione: string; residuoCents: number }[] = []
+    for (const g of groups) {
+      for (const b of g.noleggioBookings) {
+        const residuo = Math.max(0, (b.price_total || 0) - (b.booking_details?.amountPaid || 0))
+        if (residuo <= 0) continue
+        out.push({ key: `noleggio:${b.id}`, customerKey: g.customerKey, cliente: g.customerName,
+          tipo: 'Noleggio', descrizione: [b.vehicle_name, b.vehicle_plate].filter(Boolean).join(' · '), residuoCents: residuo })
+      }
+      for (const b of g.primeWashBookings) {
+        const residuo = Math.max(0, (b.price_total || 0) - (b.booking_details?.amountPaid || 0))
+        if (residuo <= 0) continue
+        out.push({ key: `pw:${b.id}`, customerKey: g.customerKey, cliente: g.customerName,
+          tipo: 'Prime Wash', descrizione: b.service_name || b.vehicle_name || '', residuoCents: residuo })
+      }
+      for (const it of [...g.penaliItems, ...g.danniItems]) {
+        if (it.remaining <= 0) continue
+        const itemKey = `${it.type}:${it.bookingId}:${it.source}:${it.itemIndex ?? 0}`
+        out.push({ key: `partial:${itemKey}`, customerKey: g.customerKey, cliente: g.customerName,
+          tipo: it.type === 'danni' ? 'Danno' : 'Penale', descrizione: it.label || '',
+          residuoCents: Math.round(it.remaining * 100) })
+      }
+    }
+    return out.sort((a, b) => b.residuoCents - a.residuoCents)
+  }
+
+  function apriIncasso(v: { key: string; customerKey: string }) {
+    setExpandedCustomers(prev => new Set(prev).add(v.customerKey))
+    setPartialPayItemKey(v.key)
+    setNuovoIncassoOpen(false)
+    setNuovoIncassoQuery('')
+    // Il gruppo si espande in questo render: lo scroll aspetta il paint.
+    requestAnimationFrame(() => {
+      document.getElementById(`grp-${v.customerKey}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
+
   const customerGroups = useMemo((): CustomerGroup[] => {
     const groupMap = new Map<string, CustomerGroup>()
 
@@ -3336,8 +3434,9 @@ export default function UnpaidBookingsTab() {
             </span>
             <button
               type="button"
+              onClick={() => setNuovoIncassoOpen(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-cyan-500 text-white shadow-lg shadow-cyan-500/30 hover:bg-cyan-600 transition-colors"
-              title="Registra un nuovo incasso manuale (placeholder, da wirare)"
+              title="Cerca la voce da incassare e apri il campo dell'importo"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -3346,8 +3445,9 @@ export default function UnpaidBookingsTab() {
             </button>
             <button
               type="button"
+              onClick={() => esportaInsolventiCsv(customerGroups)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-theme-bg-tertiary border border-theme-border text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
-              title="Esporta lista insolventi (placeholder, da wirare)"
+              title="Scarica in CSV la lista che stai vedendo, una riga per voce da incassare"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
@@ -3662,7 +3762,7 @@ export default function UnpaidBookingsTab() {
           const hasDanni = group.danniItems.length > 0
 
           return (
-            <div key={group.customerKey} className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
+            <div key={group.customerKey} id={`grp-${group.customerKey}`} className="bg-theme-bg-secondary rounded-lg border border-theme-border overflow-hidden">
               {/* Accordion Header */}
               <button
                 onClick={() => toggleExpanded(group.customerKey)}
@@ -4294,6 +4394,81 @@ export default function UnpaidBookingsTab() {
           </div>
         </div>
       )}
+
+      {/* Nuovo Incasso: si cerca la voce e si apre il campo dell'importo sulla
+          riga giusta. L'incasso vero passa dal flusso gia' esistente. */}
+      {nuovoIncassoOpen && (() => {
+        const voci = vociDaIncassare(customerGroups)
+        const q = nuovoIncassoQuery.trim().toLowerCase()
+        const filtrate = q
+          ? voci.filter(v => `${v.cliente} ${v.tipo} ${v.descrizione}`.toLowerCase().includes(q))
+          : voci
+        return (
+          <div
+            className="fixed inset-0 z-[120] bg-black/60 flex items-start justify-center p-4 pt-[10vh]"
+            onClick={() => setNuovoIncassoOpen(false)}
+          >
+            <div
+              className="w-full max-w-lg rounded-2xl border border-theme-border bg-theme-bg-secondary shadow-2xl overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3 p-4 border-b border-theme-border">
+                <div>
+                  <h3 className="text-base font-bold text-theme-text-primary">Nuovo incasso</h3>
+                  <p className="text-xs text-theme-text-muted">
+                    Scegli cosa stai incassando: si apre il campo dell'importo sulla voce.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setNuovoIncassoOpen(false)}
+                  className="text-theme-text-muted hover:text-theme-text-primary text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-full hover:bg-theme-bg-hover"
+                >&times;</button>
+              </div>
+
+              <div className="p-4 pb-2">
+                <input
+                  autoFocus
+                  value={nuovoIncassoQuery}
+                  onChange={e => setNuovoIncassoQuery(e.target.value)}
+                  placeholder="Cerca cliente, targa, penale..."
+                  className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary placeholder:text-theme-text-muted"
+                />
+              </div>
+
+              <div className="max-h-[45vh] overflow-y-auto divide-y divide-theme-border/60">
+                {filtrate.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-sm text-theme-text-muted">
+                    {voci.length === 0 ? 'Non c\'e\' niente da incassare.' : 'Nessuna voce con questa ricerca.'}
+                  </div>
+                ) : filtrate.slice(0, 60).map(v => (
+                  <button
+                    key={v.key}
+                    onClick={() => apriIncasso(v)}
+                    className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-theme-bg-hover transition-colors"
+                  >
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm font-medium text-theme-text-primary truncate">{v.cliente}</span>
+                      <span className="block text-[11px] text-theme-text-muted truncate">
+                        {v.tipo}{v.descrizione ? ` · ${v.descrizione}` : ''}
+                      </span>
+                    </span>
+                    <span className="text-sm font-bold text-orange-400 tabular-nums shrink-0">
+                      &euro;{(v.residuoCents / 100).toFixed(2)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {filtrate.length > 60 && (
+                <div className="px-4 py-2 text-[11px] text-theme-text-muted border-t border-theme-border">
+                  Mostrate le 60 voci col residuo piu' alto su {filtrate.length}: restringi la ricerca.
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })()}
+
     </div>
   )
 }
