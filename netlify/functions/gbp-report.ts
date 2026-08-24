@@ -366,7 +366,20 @@ const handler: Handler = async (event) => {
 
     let userWarning: string
     if (isQuota) {
-      userWarning = 'Quota Google esaurita (limite richieste/minuto). Riprova tra 60-120 secondi.'
+      // 2026-08-24: "riprova tra 60-120 secondi" mandava in un ciclo di
+      // tentativi inutili. Se non e' MAI riuscita una chiamata (nessuna cache
+      // scritta su nessun periodo) non e' un limite temporaneo: la Business
+      // Profile Performance API nasce con quota 0 e Google la concede solo su
+      // richiesta esplicita. Aspettare non servira' mai.
+      let maiRiuscita = false
+      try {
+        const { data: caches } = await sb.from('app_secrets').select('key').like('key', 'gbp_report_cache_%')
+        maiRiuscita = !caches || caches.length === 0
+      } catch { /* in dubbio, restiamo sul messaggio prudente */ }
+      const progetto = /project_number:(\d+)/.exec(detail)?.[1]
+      userWarning = maiRiuscita
+        ? `Quota della Business Profile Performance API a zero${progetto ? ` sul progetto Google ${progetto}` : ''}: nessuna chiamata e' mai riuscita, quindi non e' un limite temporaneo. Va richiesto l'aumento in Google Cloud Console (API e servizi > Quote), e il progetto deve essere abilitato alle Business Profile API. Aspettare non risolve.`
+        : 'Quota Google esaurita (limite richieste/minuto). Riprova tra 60-120 secondi.'
     } else if (isNotFound) {
       userWarning = `Location ID non trovato su Google Business Profile. L'ID salvato non corrisponde a nessuna scheda. Apri Diagnostica e inserisci il numero REALE dall'URL di business.google.com (NON il numero da Google Maps — sono diversi). Dettaglio: ${detail}`
     } else if (isPermission) {

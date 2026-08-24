@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { saveAccount } from '../utils/savedAccounts'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { logAdminAction } from '../utils/logAdminAction'
@@ -35,6 +36,9 @@ export default function Login() {
 
       if (data.session) {
         logAdminAction('login', 'session', undefined, { email: normalizedEmail })
+        // Account salvato sul dispositivo: da "Aggiungi Account" si passa da
+        // uno all'altro senza ridigitare la password.
+        saveAccount(data.session)
         navigate('/admin')
       }
     } catch (err: unknown) {

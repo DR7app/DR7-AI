@@ -1,4 +1,6 @@
 import { useState, useEffect, Suspense } from 'react'
+import { listSavedAccounts, saveAccount, removeSavedAccount, type SavedAccount } from '../../utils/savedAccounts'
+import toast from 'react-hot-toast'
 import { createPortal } from 'react-dom'
 import { supabase } from '../../supabaseClient'
 import { useNavigate } from 'react-router-dom'
@@ -206,8 +208,73 @@ export default function AdminDashboard() {
   async function handleSignOut() {
     clearAdminCache()
     try { sessionStorage.removeItem(ACTIVE_TAB_KEY) } catch { /* ignore */ }
-    await supabase.auth.signOut()
+    // Uscire da un account lo toglie dall'elenco: il signOut revoca il suo
+    // token, lasciarlo li' darebbe una voce che al clic non funziona.
+    if (adminEmail) removeSavedAccount(adminEmail)
+    // Se resta un altro account salvato ci si passa, invece di chiedere di
+    // nuovo la password: e' il comportamento che ci si aspetta con piu'
+    // account sullo stesso dispositivo.
+    const restanti = listSavedAccounts().filter(a => a.email !== (adminEmail || '').toLowerCase())
+    await supabase.auth.signOut({ scope: 'local' })
+    if (restanti.length > 0) {
+      const { error } = await supabase.auth.setSession({
+        access_token: restanti[0].accessToken,
+        refresh_token: restanti[0].refreshToken,
+      })
+      if (!error) {
+        toast.success(`Ora sei su ${restanti[0].email}`)
+        window.location.assign('/admin')
+        return
+      }
+      removeSavedAccount(restanti[0].email)
+    }
     navigate('/login')
+  }
+
+  /**
+   * Aggiungi un altro account: la sessione attuale resta salvata sul
+   * dispositivo, si esce SOLO da questo browser (`scope: 'local'`, altrimenti
+   * il token salvato verrebbe revocato) e si va al login.
+   */
+  // La sessione in corso entra nell'elenco anche se l'accesso e' avvenuto
+  // prima di questa funzione: senza, chi era gia' dentro non si vedrebbe
+  // comparire fra gli account salvati.
+  useEffect(() => {
+    void (async () => {
+      const { data } = await supabase.auth.getSession()
+      if (data.session) saveAccount(data.session)
+    })()
+  }, [])
+
+  async function handleAddAccount() {
+    const { data } = await supabase.auth.getSession()
+    if (data.session) saveAccount(data.session)
+    clearAdminCache()
+    try { sessionStorage.removeItem(ACTIVE_TAB_KEY) } catch { /* ignore */ }
+    await supabase.auth.signOut({ scope: 'local' })
+    navigate('/login')
+  }
+
+  /** Passa a un account gia' salvato, senza ridigitare la password. */
+  async function handleSwitchAccount(acc: SavedAccount) {
+    const { data } = await supabase.auth.getSession()
+    if (data.session) saveAccount(data.session)
+    const { error } = await supabase.auth.setSession({
+      access_token: acc.accessToken,
+      refresh_token: acc.refreshToken,
+    })
+    if (error) {
+      // Token scaduto o revocato: si toglie dall'elenco e si chiede la password.
+      removeSavedAccount(acc.email)
+      toast.error(`Sessione di ${acc.email} non piu' valida: rifai l'accesso`)
+      await supabase.auth.signOut({ scope: 'local' })
+      navigate('/login')
+      return
+    }
+    clearAdminCache()
+    try { sessionStorage.removeItem(ACTIVE_TAB_KEY) } catch { /* ignore */ }
+    // Ricarica piena: ruolo, permessi e dati sono tutti legati all'utente.
+    window.location.assign('/admin')
   }
 
   async function handleChangePassword(e: React.FormEvent) {
@@ -996,17 +1063,37 @@ export default function AdminDashboard() {
                         i permessi), non serve un secondo posto che faccia la
                         stessa cosa in modo diverso. Nascosto a chi non puo'
                         gestire gli operatori. */}
-                    {!isCollaboratore && hasPermission('operatori') && (
-                      <button
-                        onClick={() => { setUserMenuOpen(false); setActiveTab('operatori') }}
-                        className="w-full text-left px-3 py-3 hover:bg-theme-bg-tertiary text-theme-text-primary flex items-center gap-2 min-h-[44px]"
-                      >
-                        <svg className="w-4 h-4 text-theme-text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                        </svg>
-                        Aggiungi Account
-                      </button>
-                    )}
+                    {/* Altri account gia' salvati su questo dispositivo: un clic
+                        e si passa dall'uno all'altro, senza password. */}
+                    {listSavedAccounts().filter(a => a.email !== (adminEmail || '').toLowerCase()).map(acc => (
+                      <div key={acc.email} className="w-full flex items-center gap-1 px-1">
+                        <button
+                          onClick={() => { setUserMenuOpen(false); handleSwitchAccount(acc) }}
+                          className="flex-1 min-w-0 text-left px-2 py-3 rounded hover:bg-theme-bg-tertiary text-theme-text-primary flex items-center gap-2 min-h-[44px]"
+                          title={`Passa a ${acc.email}`}
+                        >
+                          <span className="w-5 h-5 shrink-0 rounded-full bg-theme-bg-tertiary border border-theme-border text-[10px] font-bold flex items-center justify-center uppercase">
+                            {acc.email.slice(0, 1)}
+                          </span>
+                          <span className="truncate text-[13px]">{acc.email}</span>
+                        </button>
+                        <button
+                          onClick={() => { removeSavedAccount(acc.email); setUserMenuOpen(false) }}
+                          title="Togli questo account dal dispositivo"
+                          className="shrink-0 w-7 h-7 rounded-full text-theme-text-muted hover:text-red-400 hover:bg-theme-bg-tertiary text-lg leading-none"
+                        >&times;</button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => { setUserMenuOpen(false); handleAddAccount() }}
+                      className="w-full text-left px-3 py-3 hover:bg-theme-bg-tertiary text-theme-text-primary flex items-center gap-2 min-h-[44px]"
+                      title="Accedi con un altro account: questo resta salvato e ci torni con un clic"
+                    >
+                      <svg className="w-4 h-4 text-theme-text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                      </svg>
+                      Aggiungi Account
+                    </button>
                     <button
                       onClick={() => { setUserMenuOpen(false); handleSignOut() }}
                       className="w-full text-left px-3 py-3 hover:bg-theme-bg-tertiary text-red-400 flex items-center gap-2 min-h-[44px]"
