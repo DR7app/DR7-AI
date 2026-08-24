@@ -863,7 +863,21 @@ export default function GestioneMulteTab({ business = 'rental' }: { business?: B
                                 </div>
                                 <div className="text-xs text-theme-text-muted space-y-1">
                                     <div>Allegati: {pecResult.attachmentCount}</div>
+                                    {/* Prova della presa in carico: chi ha accettato il server PEC
+                                        e cosa ha risposto. "Inviata" senza questo non dimostrava niente. */}
+                                    {Array.isArray(pecResult.accepted) && pecResult.accepted.length > 0 && (
+                                        <div>Accettati dal server PEC: <span className="font-mono">{pecResult.accepted.join(', ')}</span></div>
+                                    )}
+                                    {Array.isArray(pecResult.rejected) && pecResult.rejected.length > 0 && (
+                                        <div className="text-red-400">Rifiutati: <span className="font-mono">{pecResult.rejected.join(', ')}</span></div>
+                                    )}
+                                    {pecResult.smtpResponse && (
+                                        <div className="font-mono opacity-60 break-all">Risposta server: {pecResult.smtpResponse}</div>
+                                    )}
                                     <div className="font-mono opacity-60">ID: {pecResult.messageId}</div>
+                                    <div className="opacity-70">
+                                        La ricevuta di accettazione e consegna arriva sulla casella PEC del mittente.
+                                    </div>
                                 </div>
                                 <Button onClick={resetMulta} className="mt-4">
                                     Nuova Multa

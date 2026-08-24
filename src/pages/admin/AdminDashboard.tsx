@@ -85,7 +85,7 @@ const TabLoader = () => (
   </div>
 )
 
-type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'lavaggio-uscite' | 'lavaggio-preventivi' | 'report-mare' | 'report-aria' | 'report-stay' | 'terra-tours' | 'immondizia' | 'ticket' | 'terra-catalog' | 'mare-danni' | 'mare-multe' | 'mare-gps' | 'aria-danni' | 'aria-multe' | 'aria-gps' | 'stay-danni' | 'stay-multe' | 'stay-gps' | 'magazzino-generale' | 'magazzino-terra' | 'magazzino-mare' | 'magazzino-aria' | 'magazzino-stay' | 'magazzino-lavaggio' | 'interruttori' | 'acconti'
+type TabType = 'reservations' | 'report-preventivi' | 'customers' | 'vehicles' | 'calendar' | 'cauzioni' | 'carwash' | 'carwash-calendar' | 'carwash-catalog' |'fattura' | 'contratto' | 'unpaid' | 'marketing-pro' | 'campagna-marketing' | 'social-links' | 'reviews' | 'magazzino' | 'scanner' | 'nexi' | 'birthdays' | 'scadenze' | 'reports' | 'bulk-import' | 'referral' | 'gestione-danni' | 'gestione-multe' | 'gps-keyless' | 'codice-sconto' | 'report-noleggio' | 'report-lavaggio' | 'report-clienti' | 'report-autisti' | 'report-penali-danni' | 'customer-wallet' | 'cargos' | 'trustera' | 'emtn' | 'operatori' | 'rilevazione-orari' | 'dashboard-kpi' | 'revenue-pricing' | 'site-users' | 'centralina-pro' | 'gestione-otp' | 'verifica-documenti' | 'fornitori' | 'report-traffic' | 'report-gmb' | 'sito' | 'mare-bookings' | 'mare-calendar' | 'mare-catalog' | 'mare-tours' | 'mare-preventivi' | 'aria-bookings' | 'aria-calendar' | 'aria-catalog' | 'aria-tours' | 'aria-preventivi' | 'aria-movimenti' | 'stay-bookings' | 'stay-calendar' | 'stay-catalog' | 'stay-tours' | 'stay-preventivi' | 'mare-contratti' | 'aria-contratti' | 'stay-contratti' | 'mare-uscite' | 'aria-uscite' | 'stay-uscite' | 'lavaggio-uscite' | 'lavaggio-preventivi' | 'report-mare' | 'report-aria' | 'report-stay' | 'terra-tours' | 'immondizia' | 'ticket' | 'terra-catalog' | 'mare-danni' | 'mare-multe' | 'mare-gps' | 'aria-danni' | 'aria-multe' | 'aria-gps' | 'stay-danni' | 'stay-multe' | 'stay-gps' | 'magazzino-generale' | 'magazzino-terra' | 'magazzino-mare' | 'magazzino-aria' | 'magazzino-stay' | 'magazzino-lavaggio' | 'multe-terra' | 'multe-lavaggio' | 'interruttori' | 'acconti'
 
 export default function AdminDashboard() {
   // Persist the active tab to sessionStorage so a chunk-load failure
@@ -289,7 +289,6 @@ export default function AdminDashboard() {
       { tab: 'calendar', label: 'Calendario' },
       { tab: 'contratto', label: 'Contratti' },
       { tab: 'gestione-danni', label: 'Danni & Penali' },
-      { tab: 'gestione-multe', label: 'Multe' },
       { tab: 'cargos', label: 'Cargos' },
       // 2026-06-10: sezione "Flotta" spostata DENTRO Noleggio.
       { tab: 'vehicles', label: 'Veicoli' },
@@ -313,7 +312,6 @@ export default function AdminDashboard() {
       { tab: 'mare-calendar', label: 'Calendario' },
       { tab: 'mare-contratti', label: 'Contratti' },
       { tab: 'mare-danni', label: 'Danni & Penali', permKey: 'gestione-danni' },
-      { tab: 'mare-multe', label: 'Multe', permKey: 'gestione-multe' },
       { tab: 'mare-catalog', label: 'Barche' },
       // 2026-08-24 (direzione): "Magazzino" tolto anche da Noleggio Mare —
       // tutto vive in Magazzino > Magazzino Generale, come gia' fatto su Terra.
@@ -327,7 +325,6 @@ export default function AdminDashboard() {
       { tab: 'aria-calendar', label: 'Calendario' },
       { tab: 'aria-contratti', label: 'Contratti' },
       { tab: 'aria-danni', label: 'Danni & Penali', permKey: 'gestione-danni' },
-      { tab: 'aria-multe', label: 'Multe', permKey: 'gestione-multe' },
       { tab: 'aria-catalog', label: 'Elicotteri' },
       { tab: 'aria-gps', label: 'GPS Flotta', permKey: 'gps-keyless' },
       { tab: 'aria-tours', label: 'Tour' },
@@ -340,7 +337,6 @@ export default function AdminDashboard() {
       { tab: 'stay-calendar', label: 'Calendario' },
       { tab: 'stay-contratti', label: 'Contratti' },
       { tab: 'stay-danni', label: 'Danni & Penali', permKey: 'gestione-danni' },
-      { tab: 'stay-multe', label: 'Multe', permKey: 'gestione-multe' },
       { tab: 'stay-catalog', label: 'Alloggi' },
       { tab: 'stay-gps', label: 'GPS Flotta', permKey: 'gps-keyless' },
       { tab: 'stay-tours', label: 'Tour' },
@@ -414,6 +410,14 @@ export default function AdminDashboard() {
     // Chiamate, Chat GPT, Aruba) si reintroducono qui.
     { name: 'Amministrazione', tabs: [
       { tab: 'unpaid', label: 'In attesa di pagamento' },
+      // 24/08 (direzione): le Multe stanno in Amministrazione, una voce per
+      // business. Un solo id per voce: una stessa tab in due sezioni fa
+      // rimbalzare la sidebar su Terra ([[tab_condivisa_rimbalza_su_terra]]).
+      { tab: 'multe-terra', label: 'Multe Noleggio Terra', permKey: 'gestione-multe' },
+      { tab: 'mare-multe', label: 'Multe Noleggio Mare', permKey: 'gestione-multe' },
+      { tab: 'aria-multe', label: 'Multe Noleggio Aria', permKey: 'gestione-multe' },
+      { tab: 'stay-multe', label: 'Multe Soggiorni', permKey: 'gestione-multe' },
+      { tab: 'multe-lavaggio', label: 'Multe Lavaggio e Meccanica', permKey: 'gestione-multe' },
       { tab: 'cauzioni', label: 'Cauzioni' },
       { tab: 'scadenze', label: 'Scadenze' },
       { tab: 'fattura', label: 'Fattura' },
@@ -497,6 +501,8 @@ export default function AdminDashboard() {
     'contratto': 'Contratti',
     'gestione-danni': 'Gestione Danni & Penali',
     'gestione-multe': 'Gestione Multe',
+    'multe-terra': 'Multe Noleggio Terra',
+    'multe-lavaggio': 'Multe Lavaggio e Meccanica',
     'cargos': 'Cargos',
     'trustera': 'DR7 Trust',
     'mare-bookings': 'Prenotazioni Noleggio Mare',
@@ -1158,6 +1164,8 @@ export default function AdminDashboard() {
               per tutti i business, come prima. */}
           {activeTab === 'gestione-danni' && <GestioneDanniTab />}
           {activeTab === 'gestione-multe' && <GestioneMulteTab />}
+          {activeTab === 'multe-terra' && <GestioneMulteTab business="rental" />}
+          {activeTab === 'multe-lavaggio' && <GestioneMulteTab business="car_wash" />}
           {activeTab === 'mare-danni' && <GestioneDanniTab business="boat_rental" />}
           {activeTab === 'mare-multe' && <GestioneMulteTab business="boat_rental" />}
           {activeTab === 'mare-gps' && <GpsKeylessTab business="boat_rental" />}

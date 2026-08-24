@@ -522,7 +522,7 @@ async function sendPEC(
     pecTo?: string,
     pecPassword?: string,
     pecCc?: string[]
-): Promise<{ messageId: string }> {
+): Promise<{ messageId: string; accepted: string[]; rejected: string[]; response: string }> {
     const pass = pecPassword || PEC_PASSWORD
     if (!pass) throw new Error('Password PEC non configurata. Aggiungi PEC_PASSWORD nelle variabili d\'ambiente Netlify.')
 
@@ -558,7 +558,18 @@ async function sendPEC(
         })),
     })
 
-    return { messageId: info.messageId }
+    // Il server SMTP puo' accettare il messaggio e rifiutare un destinatario:
+    // senza questo controllo la schermata diceva "inviata" anche quando la PEC
+    // non era stata presa in carico per nessuno.
+    const accepted = (info.accepted || []).map(String)
+    const rejected = (info.rejected || []).map(String)
+    if (accepted.length === 0) {
+        throw new Error(`Nessun destinatario accettato dal server PEC${rejected.length ? ` (rifiutati: ${rejected.join(', ')})` : ''}. ${info.response || ''}`.trim())
+    }
+    if (!accepted.some(a => a.toLowerCase().includes(to.toLowerCase()))) {
+        throw new Error(`Il destinatario ${to} e' stato rifiutato dal server PEC. Accettati: ${accepted.join(', ') || 'nessuno'}. ${info.response || ''}`.trim())
+    }
+    return { messageId: info.messageId, accepted, rejected, response: String(info.response || '') }
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────
@@ -741,6 +752,11 @@ const handler: Handler = async (event) => {
                     body: JSON.stringify({
                         success: true,
                         messageId: result.messageId,
+                        // Prova concreta della presa in carico: chi ha accettato
+                        // il server PEC e cosa ha risposto.
+                        accepted: result.accepted,
+                        rejected: result.rejected,
+                        smtpResponse: result.response,
                         letterText,
                         attachmentCount: attachments.length,
                     }),
