@@ -368,6 +368,13 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
   useEffect(() => {
     let cancelled = false
     async function loadCanonical() {
+      // 2026-08-24 BUG (direzione): "il calendario Mare scrive 62 noleggi ma
+      // sono i dati di Terra". `monthly-report?type=vehicles` E' il report del
+      // Noleggio TERRA e non conosce il business: veniva chiamato comunque,
+      // quindi Mare/Aria/Soggiorni mostravano in intestazione il conteggio e il
+      // fatturato di Terra. Su un business dedicato si usano i numeri calcolati
+      // localmente sulle sue prenotazioni (gia' filtrate per service_type).
+      if (serviceType) { setCanonicalFatturato(null); setCanonicalBookings(null); return }
       try {
         const yyyymm = `${currentRomeComponents.year}-${String(currentRomeComponents.month + 1).padStart(2, '0')}`
         const res = await authFetch(`/.netlify/functions/monthly-report?type=vehicles&month=${yyyymm}`)
@@ -386,7 +393,8 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
     }
     loadCanonical()
     return () => { cancelled = true }
-  }, [currentRomeComponents.year, currentRomeComponents.month])
+    // serviceType nelle dipendenze: cambiando business si rivaluta subito.
+  }, [serviceType, currentRomeComponents.year, currentRomeComponents.month])
 
   const daysInMonth = useMemo(() => {
     // 0-indexed month for Date constructor is correct
