@@ -1241,7 +1241,23 @@ export const handler: Handler = async (event) => {
     // what Report Noleggio shows. THIS WAS THE BUG.
     const authHeader = event.headers.authorization || event.headers.Authorization || ''
 
-    const [noleggioCanonical, lavaggioCanonical] = await Promise.all([
+    // 2026-08-24: il Dashboard chiamava monthly-report SENZA `business`, cioe'
+    // solo Noleggio Terra. Mare, Aria e Soggiorni non entravano MAI nelle
+    // Entrate: mancavano all'appello interi business. Ora si chiede un report
+    // per ciascuno, con la stessa funzione del Report Noleggio.
+    const altriBusiness = ['boat_rental', 'heli_rental', 'stay_rental'] as const
+    const chiediBusiness = (biz: string) => safe(`monthly-report:${biz}`, async () => {
+      const r = await fetch(`${reportOrigin}/.netlify/functions/monthly-report?type=vehicles&month=${month}&business=${biz}`, {
+        headers: { Authorization: authHeader },
+      })
+      if (!r.ok) {
+        console.warn(`[dashboard-kpi] monthly-report:${biz} returned ${r.status}`)
+        return null
+      }
+      return await r.json() as { totalRevenue?: number; totalBookingsFound?: number }
+    }, null as null | Record<string, unknown>)
+
+    const [noleggioCanonical, lavaggioCanonical, mareCanonical, ariaCanonical, soggiorniCanonical] = await Promise.all([
       safe('monthly-report:vehicles', async () => {
         const r = await fetch(`${reportOrigin}/.netlify/functions/monthly-report?type=vehicles&month=${month}`, {
           headers: { Authorization: authHeader },
@@ -1274,9 +1290,22 @@ export const handler: Handler = async (event) => {
           internalWashesCount?: number
         }
       }, null as null | Record<string, unknown>),
+      ...altriBusiness.map(chiediBusiness),
     ])
 
+    // Un business senza prenotazioni nel periodo torna 0: e' un dato, non un
+    // errore. Se invece la chiamata fallisce restiamo su null e il Dashboard
+    // lo segnala invece di far sparire il business dai totali.
+    const perBusiness = (r: Record<string, unknown> | null) => ({
+      ricavoTotale: r?.totalRevenue !== undefined ? Number(r.totalRevenue) : 0,
+      prenotazioniCount: r?.totalBookingsFound !== undefined ? Number(r.totalBookingsFound) : 0,
+      canonical: !!r,
+    })
+
     const monthlyReports = {
+      mare: perBusiness(mareCanonical as Record<string, unknown> | null),
+      aria: perBusiness(ariaCanonical as Record<string, unknown> | null),
+      soggiorni: perBusiness(soggiorniCanonical as Record<string, unknown> | null),
       noleggio: {
         // Canonical revenue from monthly-report endpoint (same numbers
         // ReportsTab shows). Falls back to local computation if endpoint
@@ -1291,6 +1320,14 @@ export const handler: Handler = async (event) => {
           : confirmedBookings + pendingBookings,
         prenotazioniAnnullateCount: response.revenue.cancelledRentalsCount,
         prenotazioniAnnullateValue: response.revenue.cancelledRentalsTotal,
+        // Scomposizione come nel Report Noleggio: quanto e' noleggio puro e
+        // quanto sono penali e danni dentro lo stesso totale.
+        ricavoNoleggioPuro: noleggioCanonical?.totalRentalRevenue !== undefined
+          ? Number(noleggioCanonical.totalRentalRevenue) : null,
+        ricavoPenali: noleggioCanonical?.totalPenaltyRevenue !== undefined
+          ? Number(noleggioCanonical.totalPenaltyRevenue) : null,
+        ricavoDanni: noleggioCanonical?.totalDanniRevenue !== undefined
+          ? Number(noleggioCanonical.totalDanniRevenue) : null,
         link: 'reports',
         canonical: !!noleggioCanonical,
       },

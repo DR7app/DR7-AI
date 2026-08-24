@@ -38,7 +38,11 @@ interface DashboardData {
     incassato: number; daIncassare: number; insolutiScaduti: number
   }
   monthlyReports?: {
-    noleggio: { ricavoTotale: number; ricavoMesePrev: number; ricavoChangePercent: number; prenotazioniCount: number; prenotazioniAnnullateCount: number; prenotazioniAnnullateValue: number; link: string }
+    /** 2026-08-24: Mare, Aria e Soggiorni mancavano del tutto dalle Entrate. */
+    mare?: { ricavoTotale: number; prenotazioniCount: number; canonical: boolean }
+    aria?: { ricavoTotale: number; prenotazioniCount: number; canonical: boolean }
+    soggiorni?: { ricavoTotale: number; prenotazioniCount: number; canonical: boolean }
+    noleggio: { ricavoTotale: number; ricavoMesePrev: number; ricavoChangePercent: number; prenotazioniCount: number; prenotazioniAnnullateCount: number; prenotazioniAnnullateValue: number; link: string; ricavoNoleggioPuro?: number | null; ricavoPenali?: number | null; ricavoDanni?: number | null }
     lavaggio: { ricavoTotale: number; count: number; link: string }
     clienti: { nuoviMese: number; attiviMese: number; totale: number; changePercent: number; link: string }
     penaliDanni: { danniTotale: number; danniCount: number; insolutiTotale: number; insolutiCount: number; link: string }
@@ -661,8 +665,20 @@ export default function DashboardTab() {
         // mr.noleggio.ricavoTotale already includes rental + penali + danni
         // (it's totalRevenue from monthly-report, not just rental).
         // mr.lavaggio.ricavoTotale is car_wash only — meccanica added separately.
+        // 2026-08-24: Mare, Aria e Soggiorni entrano nelle Entrate. Prima il
+        // Dashboard chiedeva a monthly-report solo il Noleggio Terra, quindi i
+        // loro incassi non comparivano da nessuna parte.
+        const mare = mr.mare?.ricavoTotale ?? 0
+        const aria = mr.aria?.ricavoTotale ?? 0
+        const soggiorni = mr.soggiorni?.ricavoTotale ?? 0
+        const businessScollegati = [
+          mr.mare && !mr.mare.canonical ? 'Mare' : null,
+          mr.aria && !mr.aria.canonical ? 'Aria' : null,
+          mr.soggiorni && !mr.soggiorni.canonical ? 'Soggiorni' : null,
+        ].filter(Boolean) as string[]
         const entrate =
           mr.noleggio.ricavoTotale +
+          mare + aria + soggiorni +
           mr.lavaggio.ricavoTotale +
           meccanica
         const uscitePagate = mr.fornitori.pagatoMese
@@ -678,13 +694,31 @@ export default function DashboardTab() {
                 <p className="text-[10px] uppercase tracking-widest text-emerald-300 font-semibold mb-2">Entrate (totali attività)</p>
                 <p className="text-3xl font-bold text-emerald-400 leading-tight">€ {fmtDec(entrate)}</p>
                 <div className="mt-3 space-y-1 text-xs text-theme-text-muted">
-                  <div className="flex justify-between"><span>Noleggio</span><span className="text-theme-text-primary">€ {fmtDec(mr.noleggio.ricavoTotale)}</span></div>
+                  <div className="flex justify-between"><span>Noleggio Terra</span><span className="text-theme-text-primary">€ {fmtDec(mr.noleggio.ricavoTotale)}</span></div>
+                  <div className="flex justify-between"><span>Noleggio Mare</span><span className="text-theme-text-primary">€ {fmtDec(mare)}</span></div>
+                  <div className="flex justify-between"><span>Noleggio Aria</span><span className="text-theme-text-primary">€ {fmtDec(aria)}</span></div>
+                  <div className="flex justify-between"><span>Soggiorni</span><span className="text-theme-text-primary">€ {fmtDec(soggiorni)}</span></div>
                   <div className="flex justify-between"><span>Lavaggi</span><span className="text-theme-text-primary">€ {fmtDec(mr.lavaggio.ricavoTotale)}</span></div>
                   <div className="flex justify-between"><span>Meccanica</span><span className="text-theme-text-primary">€ {fmtDec(meccanica)}</span></div>
-                  <div className="flex justify-between text-[10px] text-theme-text-muted/80"><span>(di cui Penali+Danni nel Noleggio)</span><span>€ {fmtDec(insolutiTot + danniTot)}</span></div>
+                  {/* Come nel Report Noleggio: dentro il Noleggio Terra si
+                      vede quanto e' noleggio puro e quanto sono penali e danni. */}
+                  {mr.noleggio.ricavoNoleggioPuro != null ? (
+                    <>
+                      <div className="flex justify-between text-[10px] text-theme-text-muted/80 pl-3"><span>di cui noleggio</span><span>€ {fmtDec(mr.noleggio.ricavoNoleggioPuro)}</span></div>
+                      <div className="flex justify-between text-[10px] text-theme-text-muted/80 pl-3"><span>di cui penali</span><span>€ {fmtDec(mr.noleggio.ricavoPenali ?? 0)}</span></div>
+                      <div className="flex justify-between text-[10px] text-theme-text-muted/80 pl-3"><span>di cui danni</span><span>€ {fmtDec(mr.noleggio.ricavoDanni ?? 0)}</span></div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between text-[10px] text-theme-text-muted/80"><span>(di cui Penali+Danni nel Noleggio)</span><span>€ {fmtDec(insolutiTot + danniTot)}</span></div>
+                  )}
                   <div className="flex justify-between pt-1 border-t border-emerald-500/20 mt-1">
                     <span>Incassato</span><span className="text-emerald-300">€ {fmtDec(d.revenue.incassato)}</span>
                   </div>
+                  {businessScollegati.length > 0 && (
+                    <div className="text-[10px] text-amber-400 pt-1">
+                      {businessScollegati.join(', ')}: report non raggiungibile, quei ricavi non sono nel totale.
+                    </div>
+                  )}
                 </div>
               </div>
               {/* Uscite */}
