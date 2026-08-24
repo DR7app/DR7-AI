@@ -184,7 +184,17 @@ export default function AccontiTab() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ event: 'on_acconto', entityType: 'acconto', entityId: inserito.id }),
-      }).catch(() => { /* non blocca la registrazione */ })
+      })
+        .then(r => r.json())
+        .then((r: { skipped?: boolean; reason?: string; message?: string; sent?: number }) => {
+          // L'esito va detto: un avviso che non parte in silenzio e' esattamente
+          // il motivo per cui non ci si accorge che il collaboratore non riceve
+          // mai niente.
+          if (r?.reason === 'no_operator_phone') {
+            toast(r.message || 'Messaggio non inviato: manca il Contatto interno dell\'operatore.', { icon: '!', duration: 7000 })
+          }
+        })
+        .catch(() => { /* non blocca la registrazione */ })
     }
     setImporto(''); setCausale(''); setNote(''); setMetodo('Contanti')
     toast.success(scelto ? `Acconto registrato per ${intestatarioNome}` : 'Acconto registrato')
