@@ -377,8 +377,10 @@ const handler: Handler = async (event) => {
         maiRiuscita = !caches || caches.length === 0
       } catch { /* in dubbio, restiamo sul messaggio prudente */ }
       const progetto = /project_number:(\d+)/.exec(detail)?.[1]
+      // 0 QPM = progetto non ancora approvato da Google (300 QPM = approvato).
+      // Non e' un limite da aspettare: si chiede l'accesso col modulo ufficiale.
       userWarning = maiRiuscita
-        ? `Quota della Business Profile Performance API a zero${progetto ? ` sul progetto Google ${progetto}` : ''}: nessuna chiamata e' mai riuscita, quindi non e' un limite temporaneo. Va richiesto l'aumento in Google Cloud Console (API e servizi > Quote), e il progetto deve essere abilitato alle Business Profile API. Aspettare non risolve.`
+        ? `Progetto Google${progetto ? ` ${progetto}` : ''} non ancora abilitato alle Business Profile API: quota 0 richieste/minuto, nessuna chiamata e' mai riuscita. Va chiesto l'accesso con il modulo support.google.com/business/contact/api_default ("Application for Basic API Access"), dall'email che e' proprietaria o gestore della scheda DR7. All'approvazione la quota passa a 300/minuto. Aspettare non risolve.`
         : 'Quota Google esaurita (limite richieste/minuto). Riprova tra 60-120 secondi.'
     } else if (isNotFound) {
       userWarning = `Location ID non trovato su Google Business Profile. L'ID salvato non corrisponde a nessuna scheda. Apri Diagnostica e inserisci il numero REALE dall'URL di business.google.com (NON il numero da Google Maps — sono diversi). Dettaglio: ${detail}`
