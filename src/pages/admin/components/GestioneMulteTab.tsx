@@ -199,11 +199,17 @@ export default function GestioneMulteTab({ business = 'rental' }: { business?: B
             // Destinatario PEC proposto dal riconoscimento dell'organo accertatore.
             const rec = data.pecRecipient || null
             setPecRecipient(rec)
-            setChosenPec(rec?.pec || '')
+            // Se dal verbale non si ricava l'ente si usa il "Destinatario di
+            // riserva" di Centralina Pro > Gestione Multe, invece di lasciare
+            // il campo vuoto: quello e' il posto dove l'indirizzo si cambia.
+            const riserva = (aziendaBase.destinatario_default || '').trim()
+            const proposto = rec?.pec || riserva
+            setChosenPec(proposto)
             setChosenEnteId(rec?.ente_id || null)
             setSelMode(rec?.source === 'verbale' ? 'verbale' : rec?.source === 'rubrica' ? (rec.confidence >= 0.85 ? 'automatica' : 'rubrica') : 'manuale')
             setConfirmRecipient(false)
-            setShowChangeRecipient(!rec?.pec) // se nessuna proposta, apri subito la scelta
+            // Con la riserva la proposta c'e' ma va comunque guardata.
+            setShowChangeRecipient(!rec?.pec)
             setMultaStep('review')
             toast.success('Conducente trovato! Controlla i dati prima di inviare.')
         } catch (err: unknown) {
@@ -217,10 +223,19 @@ export default function GestioneMulteTab({ business = 'rental' }: { business?: B
     async function handleSendPec() {
         if (!multaData || !driverData) { toast.error('Dati mancanti'); return }
         // Regola non negoziabile: mai un invio a destinatario non confermato.
-        const dest = chosenPec.trim().toLowerCase()
-        if (!dest || !/\S+@\S+\.\S+/.test(dest)) {
-            toast.error('Destinatario PEC mancante o non valido — scegli o inserisci una PEC'); return
+        // Piu' destinatari: si possono scrivere separati da virgola, punto e
+        // virgola o a capo. Il primo e' il destinatario, gli altri viaggiano in
+        // copia (il log e la conferma mostrano l'elenco completo).
+        const destList = chosenPec.split(/[,;\s]+/).map(x => x.trim().toLowerCase()).filter(Boolean)
+        const destInvalidi = destList.filter(x => !/\S+@\S+\.\S+/.test(x))
+        if (destList.length === 0 || destInvalidi.length > 0) {
+            toast.error(destInvalidi.length > 0
+                ? `Indirizzo non valido: ${destInvalidi[0]}`
+                : 'Destinatario PEC mancante — scegli o inserisci un indirizzo')
+            return
         }
+        const dest = destList[0]
+        const destExtra = destList.slice(1)
         if (!confirmRecipient) {
             toast.error('Conferma il destinatario prima di inviare'); return
         }
@@ -229,7 +244,10 @@ export default function GestioneMulteTab({ business = 'rental' }: { business?: B
         if (alreadySent && !window.confirm(`Questa multa (verbale ${multaData.numero_verbale}) risulta già inviata il ${new Date(alreadySent.created_at).toLocaleDateString('it-IT')} a ${alreadySent.pec_to}. Inviare di nuovo?`)) {
             return
         }
-        const ccList = ccInput.split(/[,;\s]+/).map(s => s.trim().toLowerCase()).filter(s => /\S+@\S+\.\S+/.test(s))
+        const ccList = [
+            ...destExtra,
+            ...ccInput.split(/[,;\s]+/).map(s => s.trim().toLowerCase()).filter(s => /\S+@\S+\.\S+/.test(s)),
+        ].filter((v, i, a) => a.indexOf(v) === i && v !== dest)
         setPecSending(true)
         try {
             const res = await fetch('/.netlify/functions/process-multa', {
@@ -255,7 +273,7 @@ export default function GestioneMulteTab({ business = 'rental' }: { business?: B
             })
             const data = await res.json()
             if (data.error) { toast.error('Errore invio PEC: ' + data.error); return }
-            setPecResult({ ...data, pecTo: dest })
+            setPecResult({ ...data, pecTo: destList.join(', ') })
             setMultaStep('sent')
             toast.success(`PEC inviata con ${data.attachmentCount} allegati!`)
 
@@ -270,7 +288,7 @@ export default function GestioneMulteTab({ business = 'rental' }: { business?: B
                 conducente_codice_fiscale: driverData.codice_fiscale || null,
                 booking_id: driverData.booking_id || null,
                 pec_message_id: data.messageId || null,
-                pec_to: dest,
+                pec_to: destList.join(', '),
                 ente_id: chosenEnteId,
                 modalita_selezione: selMode,
                 confidenza: pecRecipient?.confidence ?? null,
@@ -668,7 +686,12 @@ export default function GestioneMulteTab({ business = 'rental' }: { business?: B
                                         : conf >= 0.5
                                             ? { c: 'bg-amber-500/15 text-amber-300 border-amber-500/40', t: `Confidenza media ${Math.round(conf * 100)}%` }
                                             : { c: 'bg-red-500/15 text-red-300 border-red-500/40', t: 'Confidenza bassa — verifica' }
-                                const sourceLabel = selMode === 'verbale' ? 'rilevata dal verbale' : selMode === 'rubrica' || selMode === 'automatica' ? 'da rubrica' : 'inserita manualmente'
+                                const riservaCfg = (aziendaBase.destinatario_default || '').trim().toLowerCase()
+                                const daRiserva = !pecRecipient?.pec && !!riservaCfg && chosenPec.trim().toLowerCase() === riservaCfg
+                                const sourceLabel = selMode === 'verbale' ? 'rilevata dal verbale'
+                                    : selMode === 'rubrica' || selMode === 'automatica' ? 'da rubrica'
+                                    : daRiserva ? 'destinatario di riserva (Centralina Pro)'
+                                    : 'inserita manualmente'
                                 const pecNotInRubrica = selMode === 'verbale' && !chosenEnteId
                                 return (
                                     <div className="bg-theme-bg-secondary rounded-lg border border-theme-border p-4 space-y-3">
@@ -753,8 +776,21 @@ export default function GestioneMulteTab({ business = 'rental' }: { business?: B
                                                     )}
                                                 </div>
                                                 <div>
-                                                    <label className="block text-[11px] uppercase tracking-wide text-theme-text-muted mb-1">…oppure inserisci una PEC manualmente</label>
-                                                    <input value={chosenPec} onChange={e => { setChosenPec(e.target.value); setChosenEnteId(null); setSelMode('manuale'); setConfirmRecipient(false) }} placeholder="pec@comune.esempio.legalmail.it" className="w-full px-3 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-sm text-theme-text-primary font-mono" />
+                                                    <label className="block text-[11px] uppercase tracking-wide text-theme-text-muted mb-1">…oppure inserisci gli indirizzi manualmente</label>
+                                                    <input value={chosenPec} onChange={e => { setChosenPec(e.target.value); setChosenEnteId(null); setSelMode('manuale'); setConfirmRecipient(false) }} placeholder="pec@comune.esempio.legalmail.it, altro@ente.it" className="w-full px-3 py-2 rounded-lg bg-theme-bg-primary border border-theme-border text-sm text-theme-text-primary font-mono" />
+                                                    <p className="mt-1 text-[11px] text-theme-text-muted">
+                                                        Piu' indirizzi separati da virgola: il primo e' il destinatario, gli altri vanno in copia.
+                                                    </p>
+                                                    {(aziendaBase.destinatario_default || '').trim() && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => { setChosenPec(aziendaBase.destinatario_default.trim()); setChosenEnteId(null); setSelMode('manuale'); setConfirmRecipient(false) }}
+                                                            className="mt-1.5 text-[11px] text-theme-text-secondary underline"
+                                                            title="Il destinatario di riserva impostato in Centralina Pro > Gestione Multe"
+                                                        >
+                                                            Usa il destinatario di riserva ({aziendaBase.destinatario_default.trim()})
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
                                         )}
