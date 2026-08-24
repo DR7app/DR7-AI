@@ -64,6 +64,13 @@ export default function CauzioneScadenzaConfig({ readOnly = false }: { readOnly?
   const [modalita, setModalita] = useState<'lavorativi' | 'calendario'>('lavorativi')
   const [orarioInvio, setOrarioInvio] = useState<number | ''>(8)
   const [colonnaMancante, setColonnaMancante] = useState(false)
+  // Avviso di scadenza: quando parte, a chi, e se lo manda il cron o l'admin.
+  const [avvisoMancante, setAvvisoMancante] = useState(false)
+  const [avvisoModalita, setAvvisoModalita] = useState<'automatico' | 'manuale'>('automatico')
+  const [avvisoOffsets, setAvvisoOffsets] = useState<number[]>([0])
+  const [avvisoWhatsapp, setAvvisoWhatsapp] = useState('')
+  const [avvisoEmail, setAvvisoEmail] = useState('')
+  const [invioOra, setInvioOra] = useState(false)
 
   useEffect(() => { void load() }, [])
 
@@ -95,10 +102,41 @@ export default function CauzioneScadenzaConfig({ readOnly = false }: { readOnly?
         setModalita(full.data.modalita_calcolo === 'calendario' ? 'calendario' : 'lavorativi')
         setOrarioInvio(full.data.orario_invio ?? 8)
       }
+      // Colonne dell'avviso: select separata, cosi' se la migration
+      // 20260824_cauzioni_avviso_scadenza_config non e' stata eseguita il
+      // resto del pannello continua a funzionare.
+      const avviso = await supabase
+        .from('cauzioni_config')
+        .select('avviso_modalita, avviso_offsets, avviso_whatsapp, avviso_email')
+        .eq('id', 'main')
+        .maybeSingle()
+      if (avviso.error) {
+        setAvvisoMancante(true)
+      } else if (avviso.data) {
+        setAvvisoModalita(avviso.data.avviso_modalita === 'manuale' ? 'manuale' : 'automatico')
+        const offs = Array.isArray(avviso.data.avviso_offsets) ? avviso.data.avviso_offsets.map(Number) : [0]
+        setAvvisoOffsets(offs.filter(n => Number.isInteger(n) && n >= -3 && n <= 3))
+        setAvvisoWhatsapp(avviso.data.avviso_whatsapp || '')
+        setAvvisoEmail(avviso.data.avviso_email || '')
+      }
     } catch (e) {
       toast.error('Errore nel caricamento: ' + (e instanceof Error ? e.message : 'riprova'))
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function inviaOra() {
+    setInvioOra(true)
+    try {
+      const res = await fetch('/.netlify/functions/trigger-cauzione-avviso', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (data?.ok) toast.success(data.message || 'Avviso inviato')
+      else toast(data?.message || 'Niente da inviare', { icon: 'ℹ️', duration: 8000 })
+    } catch (e) {
+      toast.error('Errore: ' + (e instanceof Error ? e.message : 'riprova'))
+    } finally {
+      setInvioOra(false)
     }
   }
 
@@ -117,6 +155,12 @@ export default function CauzioneScadenzaConfig({ readOnly = false }: { readOnly?
         updated_at: new Date().toISOString(),
       }
       if (!colonnaMancante) patch.modalita_calcolo = modalita
+      if (!avvisoMancante) {
+        patch.avviso_modalita = avvisoModalita
+        patch.avviso_offsets = avvisoOffsets.length > 0 ? [...avvisoOffsets].sort((a, b) => a - b) : [0]
+        patch.avviso_whatsapp = avvisoWhatsapp.trim() || null
+        patch.avviso_email = avvisoEmail.trim() || null
+      }
 
       // .select() per contare le righe toccate: se la riga singleton non
       // esistesse l'update non fallirebbe, semplicemente non farebbe nulla.
@@ -244,6 +288,114 @@ export default function CauzioneScadenzaConfig({ readOnly = false }: { readOnly?
       <p className="mt-2 text-[11px] text-theme-text-muted">
         Una scadenza forzata a mano su una singola cauzione non viene mai ricalcolata da questa impostazione.
       </p>
+
+      {/* ── Avviso di scadenza: quando, a chi, come ─────────────────────── */}
+      <div className="mt-5 pt-4 border-t border-theme-border">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <h4 className="text-sm font-bold text-theme-text-primary">Avviso di scadenza</h4>
+            <p className="text-xs text-theme-text-muted mt-0.5">
+              Quando far partire l'avviso rispetto alla scadenza, e a chi mandarlo.
+              Il testo e' quello di Messaggi di Sistema Pro (Scadenza Cauzione A/B/C).
+            </p>
+          </div>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={inviaOra}
+              disabled={invioOra || avvisoMancante}
+              className="shrink-0 px-3 h-9 rounded-lg border border-theme-border text-theme-text-primary text-xs font-semibold hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
+              title="Manda subito l'avviso per le cauzioni che rientrano nei momenti scelti"
+            >
+              {invioOra ? 'Invio...' : 'Invia ora'}
+            </button>
+          )}
+        </div>
+
+        {avvisoMancante && (
+          <p className="mb-3 text-[11px] leading-snug text-amber-600 dark:text-amber-400">
+            Migrazione <code>20260824_cauzioni_avviso_scadenza_config.sql</code> non ancora eseguita: fino ad allora
+            l'avviso parte il giorno stesso della scadenza, solo via WhatsApp ai numeri staff della Centralina.
+          </p>
+        )}
+
+        <div className="mb-3">
+          <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1.5">
+            Quando (rispetto alla scadenza)
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            {[-3, -2, -1, 0, 1, 2, 3].map(off => {
+              const attivo = avvisoOffsets.includes(off)
+              const label = off === 0
+                ? 'Giorno stesso'
+                : off < 0
+                  ? `${Math.abs(off)} ${Math.abs(off) === 1 ? 'giorno' : 'giorni'} prima`
+                  : `${off} ${off === 1 ? 'giorno' : 'giorni'} dopo`
+              return (
+                <button
+                  key={off}
+                  type="button"
+                  disabled={readOnly || avvisoMancante}
+                  onClick={() => setAvvisoOffsets(prev => prev.includes(off) ? prev.filter(x => x !== off) : [...prev, off])}
+                  className={`px-2.5 h-8 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 ${
+                    attivo
+                      ? 'bg-dr7-gold text-white border-dr7-gold'
+                      : 'bg-theme-bg-primary text-theme-text-secondary border-theme-border hover:bg-theme-bg-hover'
+                  }`}
+                >{label}</button>
+              )
+            })}
+          </div>
+          <p className="mt-1.5 text-[11px] text-theme-text-muted">
+            Si possono scegliere piu' momenti: ogni cauzione riceve un avviso per ciascuno.
+            Nessuna scelta = solo il giorno stesso.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1">Invio</label>
+            <select
+              disabled={readOnly || avvisoMancante}
+              value={avvisoModalita}
+              onChange={e => setAvvisoModalita(e.target.value === 'manuale' ? 'manuale' : 'automatico')}
+              className="w-full px-2.5 h-9 rounded-lg border border-theme-border bg-theme-bg-primary text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-dr7-gold disabled:opacity-60"
+            >
+              <option value="automatico">Automatico (lo manda il sistema)</option>
+              <option value="manuale">Manuale (solo con "Invia ora")</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1">Numero WhatsApp</label>
+            <textarea
+              disabled={readOnly || avvisoMancante}
+              value={avvisoWhatsapp}
+              onChange={e => setAvvisoWhatsapp(e.target.value)}
+              rows={2}
+              placeholder="39347..., uno per riga"
+              className="w-full px-2.5 py-2 rounded-lg border border-theme-border bg-theme-bg-primary text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-dr7-gold disabled:opacity-60"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted font-semibold mb-1">Email</label>
+            <textarea
+              disabled={readOnly || avvisoMancante}
+              value={avvisoEmail}
+              onChange={e => setAvvisoEmail(e.target.value)}
+              rows={2}
+              placeholder="nome@dr7.app, uno per riga"
+              className="w-full px-2.5 py-2 rounded-lg border border-theme-border bg-theme-bg-primary text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-dr7-gold disabled:opacity-60"
+            />
+          </div>
+        </div>
+
+        <p className="mt-2 text-[11px] text-theme-text-muted">
+          Lasciando vuoto il numero WhatsApp si usano quelli staff gia' impostati in Centralina.
+          Gli avvisi non partono mai tra le 22:00 e le 07:00, tranne con "Invia ora".
+        </p>
+      </div>
     </div>
   )
 }

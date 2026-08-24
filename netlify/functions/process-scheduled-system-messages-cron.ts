@@ -31,6 +31,7 @@
 import { schedule } from '@netlify/functions';
 import { createHash } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import nodemailer from 'nodemailer';
 import { matchesAdvancedFilters, matchesServiceType, passesCustomerFilters, loadPaymentMethodAliases, loadResidentProvinces } from './utils/triggerSystemMessageEvent';
 import { getProKeyEventTriggers, OLD_TO_PRO } from '../../src/utils/proTemplateRouting';
 import { getAdminNotificationPhone } from './utils/notificationPhone';
@@ -84,6 +85,15 @@ const LOOKFORWARD_MS = 8 * 60 * 1000; // 8 min: small overlap with next cron run
 // 07:00. Copre l'intero cron (template clienti + promemoria autista + rimborso
 // cauzioni). Prima le colonne quiet_hours_start/end esistevano ma non venivano
 // mai applicate: qualsiasi messaggio poteva partire di notte.
+// SMTP condiviso con le altre funzioni (info@dr7.app): serve all'avviso di
+// scadenza cauzione quando in Centralina Pro e' impostata anche un'email.
+const avvisoTransporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.secureserver.net',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
+});
+
 const QUIET_START_HOUR = 22; // incluso: da 22:00
 const QUIET_END_HOUR = 7;    // escluso: fino alle 06:59, riparte alle 07:00
 
@@ -832,8 +842,49 @@ async function resolveCauzioniStaffRecipients(): Promise<{ nome: string; phone: 
     return [...out.values()];
 }
 
-async function processScadenzaCauzioneAvviso(now: number): Promise<{ sent: number; skipped: number; errors: number }> {
+/**
+ * Configurazione dell'avviso di scadenza cauzione (Centralina Pro > Cauzioni).
+ * Se la migration 20260824_cauzioni_avviso_scadenza_config.sql non e' ancora
+ * stata eseguita si torna al comportamento storico: avviso il giorno stesso,
+ * solo WhatsApp allo staff, automatico.
+ */
+async function loadAvvisoCauzioneConfig(): Promise<{
+    modalita: 'automatico' | 'manuale';
+    offsets: number[];
+    whatsapp: string[];
+    email: string[];
+}> {
+    const fallback = { modalita: 'automatico' as const, offsets: [0], whatsapp: [] as string[], email: [] as string[] };
+    try {
+        const { data, error } = await supabase
+            .from('cauzioni_config')
+            .select('avviso_modalita, avviso_offsets, avviso_whatsapp, avviso_email')
+            .eq('id', 'main')
+            .maybeSingle();
+        if (error || !data) return fallback;
+        const split = (v: unknown) => String(v || '')
+            .split(/[\n,;]+/).map(x => x.trim()).filter(Boolean);
+        const offsets = Array.isArray(data.avviso_offsets) && data.avviso_offsets.length > 0
+            ? data.avviso_offsets.map(Number).filter(n => Number.isInteger(n) && n >= -3 && n <= 3)
+            : [0];
+        return {
+            modalita: data.avviso_modalita === 'manuale' ? 'manuale' : 'automatico',
+            offsets: offsets.length > 0 ? offsets : [0],
+            whatsapp: split(data.avviso_whatsapp).map(x => x.replace(/\D/g, '')).filter(x => x.length >= 8),
+            email: split(data.avviso_email).filter(x => /\S+@\S+\.\S+/.test(x)),
+        };
+    } catch { return fallback; }
+}
+
+/** Data (Rome, YYYY-MM-DD) spostata di `giorni` rispetto a oggi. */
+function romeDatePlus(now: number, giorni: number): string {
+    const d = new Date(now + giorni * 86400000);
+    return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' });
+}
+
+export async function processScadenzaCauzioneAvviso(now: number, opts?: { force?: boolean }): Promise<{ sent: number; skipped: number; errors: number; reason?: string }> {
     let sent = 0, skipped = 0, errors = 0;
+    const force = opts?.force === true;
 
     // 1) Template varianti approvate (toggle ON/OFF in Messaggi di Sistema Pro).
     const { data: tplRows } = await supabase
@@ -843,34 +894,49 @@ async function processScadenzaCauzioneAvviso(now: number): Promise<{ sent: numbe
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tplByVariant: Record<string, any> = {};
     (tplRows || []).forEach((r: { message_key: string; is_enabled: boolean; cron_approved: boolean; message_body: string }) => {
-        if (r.is_enabled !== false && r.cron_approved === true && r.message_body) {
+        if (r.is_enabled !== false && r.message_body && (force || r.cron_approved === true)) {
             tplByVariant[r.message_key.slice(-1).toUpperCase()] = r; // A / B / C
         }
     });
-    if (Object.keys(tplByVariant).length === 0) return { sent, skipped, errors };
+    if (Object.keys(tplByVariant).length === 0) {
+        return { sent, skipped, errors, reason: force
+            ? 'Nessun template "Scadenza Cauzione" attivo in Messaggi di Sistema Pro'
+            : undefined };
+    }
+
+    const cfg = await loadAvvisoCauzioneConfig();
+    // In modalita' manuale il cron non manda niente: parte solo da "Invia ora".
+    if (!force && cfg.modalita === 'manuale') return { sent, skipped, errors };
 
     // 2) Gate orario: dall'ora del template (Rome, default 8) in poi, mai di notte.
-    if (isRomeQuietHours(now)) return { sent, skipped, errors };
     const todayRome = new Date(now).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' });
-    const romeHour = getRomeHour(now);
-    const sendHour = Number((Object.values(tplByVariant)[0] as { send_hour: number | null })?.send_hour ?? 8);
-    if (romeHour < sendHour || romeHour >= QUIET_START_HOUR) return { sent, skipped, errors };
+    if (!force) {
+        if (isRomeQuietHours(now)) return { sent, skipped, errors };
+        const romeHour = getRomeHour(now);
+        const sendHour = Number((Object.values(tplByVariant)[0] as { send_hour: number | null })?.send_hour ?? 8);
+        if (romeHour < sendHour || romeHour >= QUIET_START_HOUR) return { sent, skipped, errors };
+    }
 
-    // 3) Cauzioni in scadenza OGGI, ancora DA_RESTITUIRE, incassate o pre-autorizzate,
-    //    non in stato terminale, non gia' avvisate oggi.
+    // 3) Cauzioni cui l'avviso tocca OGGI. Un offset di -1 (un giorno prima)
+    //    guarda le cauzioni che scadono domani; +2 quelle scadute due giorni fa.
+    const targetDates = [...new Set(cfg.offsets.map(o => romeDatePlus(now, -o)))];
     const { data: cauzRows } = await supabase
         .from('cauzioni')
         .select('*')
-        .eq('scadenza_cauzione', todayRome)
+        .in('scadenza_cauzione', targetDates)
         .eq('stato_restituzione', 'DA_RESTITUIRE')
         .not('stato', 'in', '(Restituita,Sbloccata,Bloccata,Danno)');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const due = (cauzRows || []).filter((c: any) => {
-        if (c.scadenza_avviso_sent_on === todayRome) return false;
+        if (!force && c.scadenza_avviso_sent_on === todayRome) return false;
         const incassataOPreauth = !!c.data_incasso || c.metodo === 'preautorizzazione';
         return incassataOPreauth;
     });
-    if (due.length === 0) return { sent, skipped, errors };
+    if (due.length === 0) {
+        return { sent, skipped, errors, reason: force
+            ? `Nessuna cauzione da avvisare (scadenza ${targetDates.join(', ')})`
+            : undefined };
+    }
 
     // Nomi cliente
     const { validateIban } = await import('../../src/utils/ibanValidation');
@@ -889,8 +955,14 @@ async function processScadenzaCauzioneAvviso(now: number): Promise<{ sent: numbe
         });
     }
 
-    // Destinatari staff: numeri configurati in Centralina + fallback admins.
-    const recipients = await resolveCauzioniStaffRecipients();
+    // Destinatari: quelli scelti in Centralina Pro > Cauzioni; se non ce ne
+    // sono si ricade sui numeri staff gia' configurati.
+    const recipients = cfg.whatsapp.length > 0
+        ? cfg.whatsapp.map(phone => ({ nome: 'Staff', phone }))
+        : await resolveCauzioniStaffRecipients();
+    if (recipients.length === 0 && cfg.email.length === 0) {
+        return { sent, skipped, errors, reason: 'Nessun destinatario: imposta numero WhatsApp o email in Centralina Pro > Cauzioni' };
+    }
 
     const baseUrl = process.env.URL || 'https://platform.dr7ai.com';
     const fmtEur = (n: number) => Number(n || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -921,7 +993,8 @@ async function processScadenzaCauzioneAvviso(now: number): Promise<{ sent: numbe
         const dest = recipients.map((r: { nome: string }) => r.nome).join(', ');
         const { error: logErr } = await supabase.from('cauzioni_scadenza_log').insert({
             cauzione_id: c.id, message_code: 'SCADENZA_CAUZIONE', variante: variant,
-            destinatari: dest, canali: 'whatsapp', chiave_antidup: chiave, esito: { status: 'pending' },
+            destinatari: dest, canali: cfg.email.length > 0 ? 'whatsapp,email' : 'whatsapp',
+            chiave_antidup: chiave, esito: { status: 'pending' },
         });
         if (logErr) { skipped++; continue; } // gia' inviato oggi (conflict) o errore: non doppiare
 
@@ -934,7 +1007,7 @@ async function processScadenzaCauzioneAvviso(now: number): Promise<{ sent: numbe
             veicolo: c.veicolo_nome || c.veicolo || '—',
             targa: c.veicolo_targa || c.targa || '—',
             data_riconsegna: c.data_restituzione_veicolo ? new Date(c.data_restituzione_veicolo + 'T00:00:00').toLocaleDateString('it-IT') : '—',
-            data_scadenza: new Date(todayRome + 'T00:00:00').toLocaleDateString('it-IT'),
+            data_scadenza: new Date(String(c.scadenza_cauzione) + 'T00:00:00').toLocaleDateString('it-IT'),
             intestatario_rimborso: c.intestatario_conto || nome,
             importo_da_restituire: fmtEur(daRestituire),
             iban_rimborso: c.iban ? ibanCheck.normalized : '',
@@ -959,6 +1032,21 @@ async function processScadenzaCauzioneAvviso(now: number): Promise<{ sent: numbe
                     body: JSON.stringify({ customPhone: r.phone, customMessage: body, type: 'Scadenza Cauzione' }),
                 });
                 if (res.ok) ok = true; else errors++;
+            } catch { errors++; }
+        }
+        // Email: stesso testo, agli indirizzi scelti in Centralina Pro.
+        for (const to of cfg.email) {
+            try {
+                await avvisoTransporter.sendMail({
+                    from: '"DR7 Cauzioni" <info@dr7.app>',
+                    to,
+                    subject: `Scadenza cauzione — ${nome}`,
+                    text: body,
+                    html: `<pre style="font-family:system-ui,Segoe UI,Roboto,sans-serif;font-size:14px;white-space:pre-wrap">${
+                        body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    }</pre>`,
+                });
+                ok = true;
             } catch { errors++; }
         }
         if (ok) {
