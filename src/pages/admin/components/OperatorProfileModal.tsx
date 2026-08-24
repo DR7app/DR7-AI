@@ -331,11 +331,11 @@ export default function OperatorProfileModal({
 
     return (
         <div
-            className="fixed inset-0 z-50 bg-black/80 sm:flex sm:items-center sm:justify-center sm:p-4"
+            className="fixed inset-0 z-50 overflow-y-auto bg-black/80 sm:flex sm:items-start sm:justify-center sm:p-4"
             onClick={onClose}
         >
             <div
-                className="bg-theme-bg-secondary border-theme-border h-full w-full overflow-y-auto sm:h-auto sm:max-h-[90vh] sm:max-w-6xl sm:rounded-2xl sm:border"
+                className="bg-theme-bg-secondary border-theme-border h-full w-full overflow-y-auto sm:my-4 sm:h-auto sm:max-h-[92vh] sm:max-w-6xl sm:rounded-2xl sm:border"
                 onClick={e => e.stopPropagation()}
                 style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
             >
@@ -392,6 +392,15 @@ export default function OperatorProfileModal({
                     <div className="mt-2 text-[11px] text-theme-text-muted">
                         {fmtDate(range.start)} → {fmtDate(range.end)} · {range.days.length} giorni
                     </div>
+                </div>
+
+                {/* Account gestionale — la scheda Operatori e questa scheda paga
+                    parlano della stessa persona ma vivono su due tabelle diverse
+                    (operatori_persone qui, admins per l'accesso). Il numero
+                    WhatsApp sta sull'account: senza mostrarlo qui non si capiva
+                    dove scriverlo. */}
+                <div className="px-4 sm:px-6 pt-3 sm:pt-4">
+                    <AccountSection email={operatore.email} />
                 </div>
 
                 {/* Contratto — sezione editabile con condizioni del contratto */}
@@ -655,6 +664,133 @@ function emptyContratto(): Contratto {
 
 // 2026-05-22: HIDE_KEY_OPTIONS + HideUiSection rimossi (commit d3423982
 // ha tolto il call site). Git history conserva il codice se servisse rimetterlo.
+
+interface AccountRow {
+    id: string
+    nome: string | null
+    email: string
+    role: string | null
+    stato: string | null
+    contatto_interno: string | null
+}
+
+/**
+ * Account gestionale collegato all'operatore (tabella `admins`, agganciata per
+ * email). Mostra chi e' e permette di scrivere il "Contatto interno", cioe' il
+ * numero WhatsApp su cui il gestionale scrive al collaboratore (avviso acconto
+ * e messaggi Pro con destinatario staff). Match case-insensitive: le email
+ * salvate con la maiuscola non devono far sparire l'account.
+ */
+function AccountSection({ email }: { email: string }) {
+    const { hasRole } = useAdminRole()
+    const puoModificare = hasRole('direzione') || hasRole('developer')
+    const [account, setAccount] = useState<AccountRow | null>(null)
+    const [loading, setLoading] = useState(true)
+    const [editing, setEditing] = useState(false)
+    const [draft, setDraft] = useState('')
+    const [saving, setSaving] = useState(false)
+
+    useEffect(() => {
+        let cancelled = false
+        setLoading(true)
+        ;(async () => {
+            const { data } = await supabase
+                .from('admins')
+                .select('id, nome, email, role, stato, contatto_interno')
+                .ilike('email', email)
+                .maybeSingle()
+            if (cancelled) return
+            setAccount((data as AccountRow) || null)
+            setDraft(((data as AccountRow)?.contatto_interno) || '')
+            setLoading(false)
+        })()
+        return () => { cancelled = true }
+    }, [email])
+
+    async function salva() {
+        if (!account) return
+        setSaving(true)
+        const valore = draft.trim() || null
+        const { error } = await supabase
+            .from('admins')
+            .update({ contatto_interno: valore })
+            .eq('id', account.id)
+        setSaving(false)
+        if (error) { toast.error('Salvataggio fallito: ' + error.message); return }
+        setAccount({ ...account, contatto_interno: valore })
+        setEditing(false)
+        toast.success('Contatto aggiornato')
+    }
+
+    // Numero utilizzabile da WhatsApp: solo cifre, almeno 8 (un interno a 2-3
+    // cifre non e' un numero e il messaggio non partirebbe).
+    const soloCifre = (account?.contatto_interno || '').replace(/\D/g, '')
+    const numeroValido = soloCifre.length >= 8
+
+    if (loading) {
+        return <div className="rounded-xl border border-theme-border bg-theme-bg-primary px-4 py-3 text-xs text-theme-text-muted">Caricamento account…</div>
+    }
+
+    if (!account) {
+        return (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3">
+                <div className="text-sm font-semibold text-amber-500">Nessun account gestionale</div>
+                <div className="mt-1 text-xs text-theme-text-secondary">
+                    Nessun account con l&apos;email <span className="font-mono">{email}</span>. Finche&apos; non esiste,
+                    il gestionale non ha un numero a cui scrivere: l&apos;avviso di acconto non parte.
+                </div>
+            </div>
+        )
+    }
+
+    return (
+        <div className="rounded-xl border border-theme-border bg-theme-bg-primary px-4 py-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <div className="text-sm font-semibold text-theme-text-primary">Account gestionale</div>
+                    <div className="mt-0.5 text-xs text-theme-text-muted">
+                        {account.nome || account.email} · {account.role === 'superadmin' ? 'Superadmin' : 'Operatore'} · {account.stato || 'Attivo'}
+                    </div>
+                </div>
+                {puoModificare && !editing && (
+                    <button
+                        onClick={() => { setDraft(account.contatto_interno || ''); setEditing(true) }}
+                        className="rounded-full border border-theme-border px-3 py-1 text-xs font-medium text-theme-text-secondary hover:text-theme-text-primary"
+                    >Modifica</button>
+                )}
+            </div>
+
+            <div className="mt-3">
+                <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Contatto interno (WhatsApp)</div>
+                {editing ? (
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <input
+                            value={draft}
+                            onChange={e => setDraft(e.target.value)}
+                            placeholder="es. 3401234567"
+                            className="min-w-[180px] flex-1 rounded-lg border border-theme-border bg-theme-bg-secondary px-3 py-2 text-sm text-theme-text-primary focus:outline-none"
+                        />
+                        <button onClick={salva} disabled={saving} className="rounded-lg bg-dr7-gold px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
+                            {saving ? 'Salvo…' : 'Salva'}
+                        </button>
+                        <button onClick={() => setEditing(false)} className="rounded-lg border border-theme-border px-3 py-2 text-xs text-theme-text-secondary">Annulla</button>
+                    </div>
+                ) : (
+                    <div className="mt-1 text-sm text-theme-text-primary">
+                        {account.contatto_interno
+                            ? <span className="font-mono">{account.contatto_interno}</span>
+                            : <span className="text-theme-text-muted">— non impostato</span>}
+                    </div>
+                )}
+                {!editing && !numeroValido && (
+                    <div className="mt-1 text-xs text-amber-500">
+                        Senza un numero completo il messaggio di acconto non viene inviato.
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
 
 function ContrattoSection({ operatoreId }: { operatoreId: string }) {
     const { hasRole } = useAdminRole()
