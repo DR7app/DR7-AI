@@ -238,7 +238,7 @@ export const DEFAULT_DAILY_CATEGORIES: Array<{ id: DailyCategoryId; label: strin
   { id: 'mare',       label: 'Mare',         colorKey: 'cyan',   enabled: true },
   { id: 'aria',       label: 'Aria',         colorKey: 'indigo', enabled: true },
   { id: 'soggiorni',  label: 'Soggiorni',    colorKey: 'amber',  enabled: true },
-  { id: 'prime_wash', label: 'Prime Wash',   colorKey: 'blue',   enabled: true },
+  { id: 'prime_wash', label: 'Lavaggio & Meccanica',   colorKey: 'blue',   enabled: true },
   { id: 'uscite',     label: 'Uscite Str.',  colorKey: 'teal',   enabled: true },
   // 24/08: "Varie" non esiste nell'operativita' reale — resta disponibile ma
   // spenta, cosi' le eventuali righe storiche service_type='varie' non

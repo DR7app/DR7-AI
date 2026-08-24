@@ -334,7 +334,7 @@ export default function DailyCalendarCategoriesConfig({ readOnly = false }: { re
       )}
 
       <p className="text-[11px] text-theme-text-muted">
-        {attive} corsie attive. Lavaggio e Meccanica condividono la corsia <strong>Prime Wash</strong>:
+        {attive} corsie attive. Lavaggio e Meccanica condividono la corsia <strong>Lavaggio & Meccanica</strong>:
         sono lo stesso reparto, non due colonne separate.
       </p>
     </div>

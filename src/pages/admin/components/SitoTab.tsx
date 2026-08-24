@@ -4109,7 +4109,7 @@ function FooterEditor({
             {/* Link rows */}
             <FooterLinkSection
                 title="Division links (riga 1, bold)"
-                hint="Es. Supercar & Luxury Division, Prime Wash, Contattaci"
+                hint="Es. Supercar & Luxury Division, Lavaggio & Meccanica, Contattaci"
                 links={copy.division_links}
                 onChange={(idx, patch) => updateLink('division_links', idx, patch)}
                 onMoveUp={(idx) => moveLink('division_links', idx, -1)}
@@ -4946,7 +4946,7 @@ function MechanicalEditor({ copy, setCopy }: { copy: MechanicalCopy; setCopy: (n
                 </p>
                 <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[12px] text-blue-700">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                    Il <b>catalogo servizi</b> (prezzi, nomi, categorie) si gestisce dal tab <b>Catalogo Prime Wash</b> con il filtro <b>MECCANICA</b>.
+                    Il <b>catalogo servizi</b> (prezzi, nomi, categorie) si gestisce dal tab <b>Catalogo Lavaggio &amp; Meccanica</b> con il filtro <b>MECCANICA</b>.
                 </div>
             </div>
 
@@ -5028,7 +5028,7 @@ function CarWashEditor({ copy, setCopy }: { copy: CarWashCopy; setCopy: (next: C
                 </p>
                 <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[12px] text-blue-700">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                    Il <b>catalogo lavaggi</b> (servizi, prezzi, immagini) si gestisce dal tab <b>Catalogo Prime Wash</b> con il filtro <b>LAVAGGIO</b>.
+                    Il <b>catalogo lavaggi</b> (servizi, prezzi, immagini) si gestisce dal tab <b>Catalogo Lavaggio &amp; Meccanica</b> con il filtro <b>LAVAGGIO</b>.
                 </div>
             </div>
 

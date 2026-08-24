@@ -439,8 +439,8 @@ export default function ReportPenaliDanniTab() {
         <KpiCard label="Totale Contenzioso" value={fmtEur(kpi.contenziosoTot)} accent="gold" sub="combinato" big />
         <KpiCard label="Danni Noleggio" value={fmtEur(kpi.danniNoleggio)} accent="rose" sub="parco veicoli" />
         <KpiCard label="Penali Noleggio" value={fmtEur(kpi.penaliNoleggio)} accent="orange" sub="violazioni contrattuali" />
-        <KpiCard label="Danni Lavaggio" value={fmtEur(kpi.danniLavaggio)} accent="rose" sub="Prime Wash + meccanica" />
-        <KpiCard label="Penali Lavaggio" value={fmtEur(kpi.penaliLavaggio)} accent="orange" sub="Prime Wash + meccanica" />
+        <KpiCard label="Danni Lavaggio" value={fmtEur(kpi.danniLavaggio)} accent="rose" sub="Lavaggio & Meccanica" />
+        <KpiCard label="Penali Lavaggio" value={fmtEur(kpi.penaliLavaggio)} accent="orange" sub="Lavaggio & Meccanica" />
       </div>
 
       {/* ── Row 2: charts + Azioni Rapide sidebar ────────────────────── */}

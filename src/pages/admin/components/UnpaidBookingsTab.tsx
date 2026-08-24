@@ -2365,7 +2365,7 @@ export default function UnpaidBookingsTab() {
       for (const b of g.primeWashBookings) {
         const totale = b.price_total || 0
         const pagato = b.booking_details?.amountPaid || 0
-        righe.push([...anagrafica, 'Prime Wash', b.service_name || b.vehicle_name || '', b.vehicle_plate || '',
+        righe.push([...anagrafica, 'Lavaggio & Meccanica', b.service_name || b.vehicle_name || '', b.vehicle_plate || '',
           dataIt(b.appointment_date), '', eur(totale), eur(pagato),
           eur(Math.max(0, totale - pagato)), b.payment_status || '', b.payment_method || ''])
       }
@@ -2405,7 +2405,7 @@ export default function UnpaidBookingsTab() {
         const residuo = Math.max(0, (b.price_total || 0) - (b.booking_details?.amountPaid || 0))
         if (residuo <= 0) continue
         out.push({ key: `pw:${b.id}`, customerKey: g.customerKey, cliente: g.customerName,
-          tipo: 'Prime Wash', descrizione: b.service_name || b.vehicle_name || '', residuoCents: residuo })
+          tipo: 'Lavaggio & Meccanica', descrizione: b.service_name || b.vehicle_name || '', residuoCents: residuo })
       }
       for (const it of [...g.penaliItems, ...g.danniItems]) {
         if (it.remaining <= 0) continue
@@ -3120,7 +3120,7 @@ export default function UnpaidBookingsTab() {
                   className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold"
                 >Pagato</button>
                 <button
-                  onClick={() => sendPayByLink(booking, remainingCents / 100, `Prime Wash ${serviceName}`)}
+                  onClick={() => sendPayByLink(booking, remainingCents / 100, `Lavaggio & Meccanica ${serviceName}`)}
                   className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-semibold"
                 >Invia Link</button>
                 {partialLinkKey !== bkKey && (
@@ -3143,7 +3143,7 @@ export default function UnpaidBookingsTab() {
                     <button onClick={() => {
                       const amt = parseFloat(partialLinkValue)
                       if (!amt || amt <= 0) return
-                      sendPayByLink(booking, Math.min(amt, remainingCents / 100), `Prime Wash ${serviceName} (parziale)`)
+                      sendPayByLink(booking, Math.min(amt, remainingCents / 100), `Lavaggio & Meccanica ${serviceName} (parziale)`)
                       setPartialLinkKey(null)
                     }} className="px-2 py-1 bg-purple-600 text-white rounded text-xs font-semibold">Invia</button>
                     <button onClick={() => setPartialLinkKey(null)} className="px-2 py-1 bg-gray-600 text-white rounded text-xs">X</button>
@@ -3683,7 +3683,7 @@ export default function UnpaidBookingsTab() {
             >
               <option value="all">Tutte le categorie ({allGroups.total})</option>
               <option value="rental">Noleggio ({allGroups.rental})</option>
-              <option value="prime_wash">Prime Wash ({allGroups.pw})</option>
+              <option value="prime_wash">Lavaggio & Meccanica ({allGroups.pw})</option>
             </select>
 
             {/* Stato — placeholder (TBD wiring) */}
@@ -3775,7 +3775,7 @@ export default function UnpaidBookingsTab() {
                   </div>
                   <div className="flex gap-2 mt-0.5">
                     {hasNoleggio && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">Noleggio</span>}
-                    {hasPW && <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-900/50 text-cyan-300">Prime Wash</span>}
+                    {hasPW && <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-900/50 text-cyan-300">Lavaggio & Meccanica</span>}
                     {hasPenali && <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/50 text-yellow-300">Penali</span>}
                     {hasDanni && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-900/50 text-red-300">Danni</span>}
                   </div>
@@ -3881,7 +3881,7 @@ export default function UnpaidBookingsTab() {
                   {/* Prime Wash section */}
                   {hasPW && (
                     <div>
-                      <div className="text-xs font-bold text-cyan-400 uppercase mb-1.5">Prime Wash</div>
+                      <div className="text-xs font-bold text-cyan-400 uppercase mb-1.5">Lavaggio & Meccanica</div>
                       <PrimeWashCell group={group} />
                     </div>
                   )}
@@ -4144,7 +4144,7 @@ export default function UnpaidBookingsTab() {
                     <NoleggioCell group={group} />
                   </div>
                   <div>
-                    <div className="text-[10px] uppercase tracking-wider text-cyan-400 font-semibold mb-1">Prime Wash</div>
+                    <div className="text-[10px] uppercase tracking-wider text-cyan-400 font-semibold mb-1">Lavaggio & Meccanica</div>
                     <PrimeWashCell group={group} />
                   </div>
                   <div>
@@ -4221,7 +4221,7 @@ export default function UnpaidBookingsTab() {
             {(() => {
               const cats = [
                 { label: 'Noleggio', count: allGroups.rental, color: 'bg-blue-400', textColor: 'text-blue-300', bgColor: 'bg-blue-500/10' },
-                { label: 'Prime Wash', count: allGroups.pw, color: 'bg-cyan-400', textColor: 'text-cyan-300', bgColor: 'bg-cyan-500/10' },
+                { label: 'Lavaggio & Meccanica', count: allGroups.pw, color: 'bg-cyan-400', textColor: 'text-cyan-300', bgColor: 'bg-cyan-500/10' },
                 { label: 'Penali', count: allGroups.penali, color: 'bg-yellow-400', textColor: 'text-yellow-300', bgColor: 'bg-yellow-500/10' },
                 { label: 'Danni', count: allGroups.danni, color: 'bg-red-400', textColor: 'text-red-300', bgColor: 'bg-red-500/10' },
               ]

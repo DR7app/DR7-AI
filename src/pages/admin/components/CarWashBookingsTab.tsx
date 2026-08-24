@@ -1605,7 +1605,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         })
         const waResult = await waResp.json().catch(() => ({}))
         if (!waResp.ok || waResult?.skipped) {
-          toast.error('Nessun template configurato in Messaggi di Sistema Pro per "Invio link pagamento" (Prime Wash). Apri il tuo template "Link pagamento lavaggi", verifica che sia ATTIVO, abbia un testo, abbia "Quando si invia il link di pagamento al cliente" tra gli eventi gestiti, e Tipo servizio = Prime Wash.', { id: toastId, duration: 12000 })
+          toast.error('Nessun template configurato in Messaggi di Sistema Pro per "Invio link pagamento" (Lavaggio & Meccanica). Apri il tuo template "Link pagamento lavaggi", verifica che sia ATTIVO, abbia un testo, abbia "Quando si invia il link di pagamento al cliente" tra gli eventi gestiti, e Tipo servizio = Lavaggio & Meccanica.', { id: toastId, duration: 12000 })
         } else {
           toast.success('Nuovo link generato e inviato via WhatsApp!', { id: toastId })
         }
@@ -1691,7 +1691,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       })
       const waResult = await waResp.json().catch(() => ({}))
       if (!waResp.ok || waResult?.skipped) {
-        toast.error('Nessun template configurato in Messaggi di Sistema Pro per "Auto pronta / Servizio finito" (Prime Wash). Verifica il template: ATTIVO, body non vuoto, evento "service_ready_customer" tra gli eventi gestiti, Tipo servizio = Prime Wash.', { id: toastId, duration: 12000 })
+        toast.error('Nessun template configurato in Messaggi di Sistema Pro per "Auto pronta / Servizio finito" (Lavaggio & Meccanica). Verifica il template: ATTIVO, body non vuoto, evento "service_ready_customer" tra gli eventi gestiti, Tipo servizio = Lavaggio & Meccanica.', { id: toastId, duration: 12000 })
       } else {
         toast.success('WhatsApp AUTO PRONTA inviato al cliente', { id: toastId })
       }
@@ -2252,7 +2252,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
           currency: 'EUR',
           status: 'confirmed',
           // 2026-06-04: rispecchia il lavaggio (stato + metodo reale), niente
-          // voce fittizia "(Prime Wash)" che inquinava i dropdown pagamento.
+          // voce fittizia "(Lavaggio & Meccanica)" che inquinava i dropdown pagamento.
           payment_status: ['paid', 'completed', 'succeeded'].includes((formData.payment_status || '').toLowerCase()) ? 'paid' : 'pending',
           payment_method: formData.payment_method || null,
           booking_details: {
@@ -2510,7 +2510,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
             })
             const waResult = await waResp.json().catch(() => ({}))
             if (!waResp.ok || waResult?.skipped) {
-              toast.error('Nessun template configurato in Messaggi di Sistema Pro per "Invio link pagamento" (Prime Wash). Verifica il template "Link pagamento lavaggi": ATTIVO, body non vuoto, evento "Quando si invia il link di pagamento al cliente" spuntato, Tipo servizio = Prime Wash.', { duration: 12000 })
+              toast.error('Nessun template configurato in Messaggi di Sistema Pro per "Invio link pagamento" (Lavaggio & Meccanica). Verifica il template "Link pagamento lavaggi": ATTIVO, body non vuoto, evento "Quando si invia il link di pagamento al cliente" spuntato, Tipo servizio = Lavaggio & Meccanica.', { duration: 12000 })
             }
           }
           toast.success('Pay by Link generato e inviato al cliente!')
@@ -3614,7 +3614,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         <div className="flex-1 overflow-y-auto">
                           {filtered.length === 0 ? (
                             <div className="px-4 py-6 text-center text-xs text-theme-text-muted">
-                              {q ? 'Nessuna corrispondenza.' : 'Nessuna targa nello storico Prime Wash.'}
+                              {q ? 'Nessuna corrispondenza.' : 'Nessuna targa nello storico Lavaggio & Meccanica.'}
                             </div>
                           ) : (
                             filtered.slice(0, 100).map((v, i) => {
@@ -4047,7 +4047,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 ))}
                 {Object.keys(servicesByCategory).length === 0 && (
                   <p className="text-xs text-theme-text-muted italic">
-                    Nessun servizio attivo in questa categoria. Aggiungili da Prime Wash &rarr; Catalogo.
+                    Nessun servizio attivo in questa categoria. Aggiungili da Lavaggio &amp; Meccanica &rarr; Catalogo.
                   </p>
                 )}
               </div>
@@ -4505,7 +4505,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                       </div>
                       <div className="min-w-0">
                         <p className="text-[11px] font-bold text-theme-text-primary">Soddisfatti o Rimborsati</p>
-                        <p className="text-[10px] text-theme-text-muted leading-snug">Garanzia Prime Wash su tutti i nostri servizi</p>
+                        <p className="text-[10px] text-theme-text-muted leading-snug">Garanzia Lavaggio &amp; Meccanica su tutti i nostri servizi</p>
                       </div>
                     </div>
                   </div>

@@ -11266,7 +11266,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       AUTO DI CORTESIA
                     </span>
                     <span className="text-xs text-theme-text-secondary">
-                      Blocco veicolo collegato a un lavaggio Prime Wash — nessun pagamento dovuto.
+                      Blocco veicolo collegato a un lavaggio Lavaggio & Meccanica — nessun pagamento dovuto.
                     </span>
                   </div>
                 )}

@@ -43,7 +43,7 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
   {
     id: 'prenotazione_lavaggio_conferma',
     label: 'Conferma prenotazione lavaggio',
-    used_in: 'Prime Wash > Conferma prenotazione',
+    used_in: 'Lavaggio & Meccanica > Conferma prenotazione',
     reason: 'Confermare un lavaggio richiede autorizzazione direzionale.',
     group: 'Lavaggio',
     wired: true,
@@ -51,7 +51,7 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
   {
     id: 'paid_wash_modify',
     label: 'Modifica lavaggio gia pagato',
-    used_in: 'Prime Wash > Modifica su prenotazione pagata/confermata',
+    used_in: 'Lavaggio & Meccanica > Modifica su prenotazione pagata/confermata',
     reason: 'Modificare un lavaggio gia pagato richiede approvazione direzionale.',
     group: 'Lavaggio',
     wired: true,
@@ -59,7 +59,7 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
   {
     id: 'cortesia_durata_extra',
     label: 'Auto di cortesia oltre la durata del lavaggio',
-    used_in: 'Prime Wash > Prime Courtesy Drive con durata superiore al lavaggio',
+    used_in: 'Lavaggio & Meccanica > Prime Courtesy Drive con durata superiore al lavaggio',
     reason: 'L\'auto di cortesia dura piu\' del lavaggio: serve autorizzazione direzionale.',
     group: 'Lavaggio',
     wired: true,
@@ -67,7 +67,7 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
   {
     id: 'carwash_slot_occupied',
     label: 'Forza slot lavaggio occupato',
-    used_in: 'Prime Wash > Slot lavaggio occupato / conflitto programmazione',
+    used_in: 'Lavaggio & Meccanica > Slot lavaggio occupato / conflitto programmazione',
     reason: 'Lo slot lavaggio scelto e occupato o viola una regola di programmazione: forzare richiede autorizzazione direzionale.',
     group: 'Lavaggio',
     wired: true,
@@ -75,7 +75,7 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
   {
     id: 'carwash_blocked_slot',
     label: 'Forza orario lavaggio bloccato',
-    used_in: 'Prime Wash > orario dentro un Blocco/Chiusura straordinaria (Centralina Pro > Orari Lavaggio)',
+    used_in: 'Lavaggio & Meccanica > orario dentro un Blocco/Chiusura straordinaria (Centralina Pro > Orari Lavaggio)',
     reason: 'L\'orario scelto e in un blocco/chiusura straordinaria: forzarlo richiede autorizzazione direzionale.',
     group: 'Lavaggio',
     wired: true,
@@ -83,7 +83,7 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
   {
     id: 'carwash_data_passata',
     label: 'Data lavaggio nel passato',
-    used_in: 'Prime Wash > Salva prenotazione con data/ora nel passato',
+    used_in: 'Lavaggio & Meccanica > Salva prenotazione con data/ora nel passato',
     reason: 'La data e ora del lavaggio sono nel passato: prenotare nel passato richiede autorizzazione direzionale.',
     group: 'Lavaggio',
     wired: true,
@@ -139,7 +139,7 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
   {
     id: 'manual_category_carwash',
     label: 'Selezione manuale categoria veicolo',
-    used_in: 'Prime Wash > Targa non trovata > Seleziona categoria manuale',
+    used_in: 'Lavaggio & Meccanica > Targa non trovata > Seleziona categoria manuale',
     reason: 'Targa non riconosciuta: serve autorizzazione per inserirla manualmente.',
     group: 'Lavaggio',
     wired: true,
@@ -147,7 +147,7 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
   {
     id: 'foreign_plate_carwash',
     label: 'Targa estera al lavaggio',
-    used_in: 'Prime Wash > Targa estera selezionata',
+    used_in: 'Lavaggio & Meccanica > Targa estera selezionata',
     reason: 'Lavaggio con targa estera: richiede autorizzazione direzionale.',
     group: 'Lavaggio',
     wired: true,
@@ -155,8 +155,8 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
   {
     id: 'carta_punti_lavaggio',
     label: 'Pagamento Carta Punti (Lavaggio)',
-    used_in: 'Prime Wash > Nuova prenotazione > Metodo pagamento = Carta Punti',
-    reason: 'Pagamento con Carta Punti su una prenotazione Prime Wash richiede autorizzazione direzionale per ogni singola operazione. L\'OTP viene consumato dopo il salvataggio, quindi la prossima prenotazione Carta Punti richiederà un nuovo OTP.',
+    used_in: 'Lavaggio & Meccanica > Nuova prenotazione > Metodo pagamento = Carta Punti',
+    reason: 'Pagamento con Carta Punti su una prenotazione Lavaggio & Meccanica richiede autorizzazione direzionale per ogni singola operazione. L\'OTP viene consumato dopo il salvataggio, quindi la prossima prenotazione Carta Punti richiederà un nuovo OTP.',
     group: 'Lavaggio',
     wired: true,
   },
@@ -205,7 +205,7 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
   {
     id: 'wash.delete',
     label: 'Elimina prenotazione lavaggio',
-    used_in: 'Prime Wash > tasto Elimina sulla riga',
+    used_in: 'Lavaggio & Meccanica > tasto Elimina sulla riga',
     reason: 'Eliminare un lavaggio richiede autorizzazione direzionale.',
     group: 'Lavaggio',
     wired: true,
@@ -213,7 +213,7 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
   {
     id: 'wash.mark_paid',
     label: 'Segna lavaggio pagato',
-    used_in: 'Prime Wash > tasto Segna pagato sulla riga',
+    used_in: 'Lavaggio & Meccanica > tasto Segna pagato sulla riga',
     reason: 'Segnare manualmente un lavaggio come pagato richiede approvazione.',
     group: 'Lavaggio',
     wired: false,

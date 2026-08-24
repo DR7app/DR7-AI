@@ -17,7 +17,7 @@ export const PERMISSION_SECTIONS: { name: string; tabs: { key: string; label: st
     { key: 'gestione-multe', label: 'Multe' },
     { key: 'cargos', label: 'Cargos' },
   ]},
-  { name: 'Prime Wash', tabs: [
+  { name: 'Lavaggio & Meccanica', tabs: [
     { key: 'carwash', label: 'Prenotazioni' },
     { key: 'carwash-calendar', label: 'Calendario' },
     { key: 'carwash-catalog', label: 'Catalogo' },

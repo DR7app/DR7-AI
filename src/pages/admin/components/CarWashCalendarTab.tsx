@@ -222,7 +222,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         })
         const waResult = await waResp.json().catch(() => ({}))
         if (!waResp.ok || waResult?.skipped) {
-          toast.error('Template "Auto pronta / Lavaggio concluso" non configurato in Messaggi di Sistema Pro. Verifica: ATTIVO, body non vuoto, evento "service_ready_customer" tra eventi gestiti, Tipo servizio = Prime Wash.', { duration: 12000 })
+          toast.error('Template "Auto pronta / Lavaggio concluso" non configurato in Messaggi di Sistema Pro. Verifica: ATTIVO, body non vuoto, evento "service_ready_customer" tra eventi gestiti, Tipo servizio = Lavaggio & Meccanica.', { duration: 12000 })
         } else {
           toast.success('WhatsApp AUTO PRONTA inviato al cliente')
         }
@@ -1362,7 +1362,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
               >
                 ×
               </button>
-              <div className="text-theme-text-muted text-xs font-medium uppercase tracking-widest mb-1">Prime Wash</div>
+              <div className="text-theme-text-muted text-xs font-medium uppercase tracking-widest mb-1">Lavaggio & Meccanica</div>
               <h3 className="text-2xl font-bold text-theme-text-primary tracking-tight">
                 {selectedBooking.customer_name || selectedBooking.booking_details?.customer?.fullName || 'N/A'}
               </h3>

@@ -1480,7 +1480,7 @@ function listActiveFilters(t: Record<string, any>): string[] {
   if (svc !== 'all') {
     const map: Record<string, string> = {
       rental: 'Noleggio Terra', boat_rental: 'Noleggio Mare', heli_rental: 'Noleggio Aria',
-      stay_rental: 'Soggiorni', prime_wash: 'Prime Wash', car_wash: 'Lavaggio', mechanical: 'Meccanica',
+      stay_rental: 'Soggiorni', prime_wash: 'Lavaggio & Meccanica', car_wash: 'Lavaggio', mechanical: 'Meccanica',
     }
     out.push(`Tipo servizio: solo ${map[svc] || svc}`)
   }
@@ -1705,7 +1705,7 @@ const SERVICE_LABELS: Record<string, string> = {
   stay_rental: 'Soggiorni & Ospitalita',
   car_wash: 'Lavaggio',
   mechanical: 'Meccanica',
-  prime_wash: 'Prime Wash (Lavaggio + Meccanica)',
+  prime_wash: 'Lavaggio & Meccanica',
 }
 
 function impliedServiceFromEvents(events: string[] | null | undefined): string | null {
@@ -4403,7 +4403,7 @@ export default function MessaggiSistemaProTab() {
                                                 <option value="boat_rental">Noleggio Mare</option>
                                                 <option value="heli_rental">Noleggio Aria</option>
                                                 <option value="stay_rental">Soggiorni & Ospitalità</option>
-                                                <option value="prime_wash">Prime Wash (Lavaggio + Meccanica)</option>
+                                                <option value="prime_wash">Lavaggio &amp; Meccanica</option>
                                                 <option value="car_wash">Solo Lavaggio</option>
                                                 <option value="mechanical">Solo Meccanica</option>
                                             </select>
@@ -5640,7 +5640,7 @@ export default function MessaggiSistemaProTab() {
                                                                         <option value="boat_rental">Solo Noleggio Mare</option>
                                                                         <option value="heli_rental">Solo Noleggio Aria</option>
                                                                         <option value="stay_rental">Solo Soggiorni & Ospitalità</option>
-                                                                        <option value="prime_wash">Solo Prime Wash (Lavaggio + Meccanica)</option>
+                                                                        <option value="prime_wash">Solo Lavaggio &amp; Meccanica</option>
                                                                         <option value="car_wash">Solo Lavaggio</option>
                                                                         <option value="mechanical">Solo Meccanica</option>
                                                                     </select>
