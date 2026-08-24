@@ -200,21 +200,41 @@ async function matchEnte(multa: MultaData): Promise<PecRecipient> {
 // ── Find driver from booking ─────────────────────────────────────────────────
 
 async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: string): Promise<DriverData | null> {
-    // Parse date from DD/MM/YYYY to ISO
+    // Parse date from DD/MM/YYYY. L'ora sul verbale e' ora italiana: la
+    // convertiamo a UTC con l'offset reale di Europe/Rome in quella data
+    // (+2 legale / +1 solare). Prima si usava new Date('YYYY-MM-DDTHH:MM:00')
+    // che su Netlify (server in UTC) interpretava l'orario come UTC e
+    // spostava l'istante di 1-2 ore: bastava a far cadere fuori intervallo
+    // le multe prese vicino al ritiro o alla riconsegna.
     const [dd, mm, yyyy] = dataInfrazione.split('/')
     const timeStr = oraInfrazione || '12:00'
-    const searchDateTime = new Date(`${yyyy}-${mm}-${dd}T${timeStr}:00`)
-    const isoSearch = searchDateTime.toISOString()
+    const romeOffsetMs = (isoLocal: string): number => {
+        const asUtc = Date.parse(`${isoLocal}Z`)
+        if (isNaN(asUtc)) return 0
+        // Formatta quell'istante a Roma e ricalcola la differenza.
+        const romeStr = new Date(asUtc).toLocaleString('sv-SE', { timeZone: 'Europe/Rome' })
+        return Date.parse(`${romeStr.replace(' ', 'T')}Z`) - asUtc
+    }
+    const localIso = `${yyyy}-${mm}-${dd}T${timeStr}:00`
+    const searchMs = Date.parse(`${localIso}Z`) - romeOffsetMs(localIso)
+    const isoSearch = new Date(searchMs).toISOString()
 
-    // Find bookings overlapping with the infraction date/time
+    // Finestra di ricerca: TUTTO il giorno dell'infrazione (ora italiana).
+    // Il match esatto sull'istante resta preferito, ma la query non lo impone
+    // piu': una multa presa la mattina del giorno di ritiro (o dopo l'orario
+    // di riconsegna, con l'auto ancora dal cliente) non trovava alcun
+    // noleggio e la funzione rispondeva "Nessun noleggio trovato".
+    const dayStartIso = new Date(Date.parse(`${yyyy}-${mm}-${dd}T00:00:00Z`) - romeOffsetMs(`${yyyy}-${mm}-${dd}T00:00:00`)).toISOString()
+    const dayEndIso = new Date(Date.parse(`${yyyy}-${mm}-${dd}T23:59:59Z`) - romeOffsetMs(`${yyyy}-${mm}-${dd}T23:59:59`)).toISOString()
+
     const { data: bookings, error } = await supabase
         .from('bookings')
         .select(`
             id, pickup_date, dropoff_date, customer_name, customer_email,
             customer_phone, vehicle_name, vehicle_plate, booking_details, user_id, contract_url
         `)
-        .lte('pickup_date', isoSearch)
-        .gte('dropoff_date', isoSearch)
+        .lte('pickup_date', dayEndIso)
+        .gte('dropoff_date', dayStartIso)
         .not('status', 'in', '(cancelled,annullata)')
 
     if (error || !bookings || bookings.length === 0) return null
@@ -223,10 +243,32 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
     const normalize = (s: string) => s?.replace(/\s/g, '').toUpperCase() || ''
     const targetPlate = normalize(targa)
 
-    const match = bookings.find(b => {
+    const plateMatches = bookings.filter(b => {
         const bPlate = normalize(b.vehicle_plate || b.booking_details?.vehicle_plate || '')
-        return bPlate === targetPlate || bPlate.includes(targetPlate)
+        return !!bPlate && (bPlate === targetPlate || bPlate.includes(targetPlate))
     })
+
+    if (plateMatches.length === 0) return null
+
+    // Priorita': il noleggio che contiene davvero l'istante dell'infrazione.
+    // Altrimenti (multa presa nel giorno ma fuori dall'orario registrato) si
+    // prende quello con l'intervallo piu' vicino all'istante.
+    const contains = plateMatches.find(b => {
+        const p = Date.parse(b.pickup_date)
+        const d = Date.parse(b.dropoff_date)
+        return !isNaN(p) && !isNaN(d) && p <= searchMs && searchMs <= d
+    })
+    const match = contains || plateMatches.slice().sort((a, b) => {
+        const dist = (bk: typeof a) => {
+            const p = Date.parse(bk.pickup_date)
+            const d = Date.parse(bk.dropoff_date)
+            if (isNaN(p) || isNaN(d)) return Number.MAX_SAFE_INTEGER
+            if (searchMs < p) return p - searchMs
+            if (searchMs > d) return searchMs - d
+            return 0
+        }
+        return dist(a) - dist(b)
+    })[0]
 
     if (!match) return null
 
