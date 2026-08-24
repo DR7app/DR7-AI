@@ -45,7 +45,12 @@ interface Movimento { id: string; tipo: string; delta: number | null; qta_prima:
 interface Ordine { id: string; articolo_id: string; fornitore_id: string | null; canale: string; quantita: number; stato: string; auto: boolean; created_at: string }
 
 type Semaforo = 'rosso' | 'giallo' | 'verde' | 'grigio'
-const CANALI = ['whatsapp', 'email', 'amazon', 'shein', 'temu', 'manuale'] as const
+// 2026-08-24: 'automatico' sta QUI, accanto a 'manuale'. Prima era un campo
+// "Modalita" separato e si finiva con "Canale: manuale" + "Modalita:
+// automatico" nella stessa scheda: due comandi che si contraddicevano.
+// Ora la scelta e' una sola: automatico = parte da solo al raggiungimento
+// della soglia, usando il contatto e il tipo indicati sotto.
+const CANALI = ['whatsapp', 'email', 'amazon', 'shein', 'temu', 'manuale', 'automatico'] as const
 
 // Canali e-commerce: l'ordine si fa aprendo il sito, NON mandando un WhatsApp a
 // un fornitore. "Ordina" per questi apre direttamente il link giusto.
@@ -223,7 +228,12 @@ export default function InventarioMagazzino() {
     // 4) 2026-08-24: se l'articolo e' in modalita' AUTOMATICO e ha un contatto
     //    salvato, l'ordine parte davvero. Prima si fermava sempre alla bozza:
     //    "riordino automatico" creava solo un promemoria da mandare a mano.
-    if (a.riordino_automatico !== false && a.contatto_ordine && ord?.id) {
+    // Il canale e' la fonte: gli articoli salvati prima di oggi hanno
+    // riordino_automatico=true per default, ma se il canale dice 'manuale'
+    // non deve partire nulla da solo.
+    const parteDaSola = a.canale_riordino === 'automatico'
+      || (a.canale_riordino !== 'manuale' && a.riordino_automatico === true && !!a.contatto_ordine && a.canale_riordino === null)
+    if (parteDaSola && a.contatto_ordine && ord?.id) {
       const ordineFinto: Ordine = {
         id: ord.id, articolo_id: a.id, fornitore_id: a.fornitore_id,
         canale, quantita, stato: 'bozza', auto: true, created_at: new Date().toISOString(),
@@ -309,7 +319,8 @@ export default function InventarioMagazzino() {
         contatto_tipo: form.contatto_tipo || null,
         frequenza_giorni: form.frequenza_giorni == null || (form.frequenza_giorni as unknown as string) === ''
           ? null : Number(form.frequenza_giorni),
-        riordino_automatico: form.riordino_automatico !== false,
+        // Deriva dal canale: unica fonte, niente piu' due comandi in conflitto.
+        riordino_automatico: form.canale_riordino === 'automatico',
       }
       const isNew = !form.id
       const { data, error } = isNew
@@ -815,12 +826,14 @@ function ArticoloModal({ initial, categorie, fornitori, busy, nextCodeFor, onClo
               CANALI e sembrava l'interruttore automatico/manuale, che invece
               e' il campo "Modalita" qui sotto. Il canale dice COME si invia,
               la modalita' dice SE parte da sola. */}
-          <div><label className={lblCls}>Canale riordino (come inviare)</label>
+          <div><label className={lblCls}>Canale riordino</label>
             <select value={f.canale_riordino || ''} onChange={e => set('canale_riordino', e.target.value)} className={inputCls}>
               <option value="">Default fornitore</option>
               {CANALI.map(c => (
                 <option key={c} value={c}>
-                  {c === 'manuale' ? 'manuale — nessun invio, solo registrazione' : c}
+                  {c === 'manuale' ? 'manuale — lo invio io'
+                    : c === 'automatico' ? 'automatico — parte da solo sotto soglia'
+                    : c}
                 </option>
               ))}
             </select>
@@ -847,16 +860,6 @@ function ArticoloModal({ initial, categorie, fornitori, busy, nextCodeFor, onClo
                   <option value="email">Email</option>
                 </select>
               </div>
-              <div><label className={lblCls}>Modalita (se parte da sola)</label>
-                <select
-                  value={f.riordino_automatico === false ? 'manuale' : 'automatico'}
-                  onChange={e => set('riordino_automatico', e.target.value === 'automatico')}
-                  className={inputCls}
-                >
-                  <option value="automatico">Automatico — parte da solo</option>
-                  <option value="manuale">Manuale — crea solo la bozza</option>
-                </select>
-              </div>
               <div><label className={lblCls}>Ogni quanti giorni</label>
                 <input
                   type="text" inputMode="numeric"
@@ -870,13 +873,9 @@ function ArticoloModal({ initial, categorie, fornitori, busy, nextCodeFor, onClo
                 />
               </div>
             </div>
-            <p className="text-[10px] text-theme-text-muted mt-2 leading-snug">
-              In automatico l'ordine parte da solo appena si scende sotto la soglia minima, al contatto qui sopra.
-              Il testo del messaggio si modifica in Messaggi di Sistema Pro (evento <code>magazzino_ordine_fornitore</code>).
-              {(!f.contatto_ordine && f.riordino_automatico !== false) && (
-                <span className="block text-amber-500 mt-1">Senza contatto l'automatico non puo' inviare: resta una bozza.</span>
-              )}
-            </p>
+            {f.canale_riordino === 'automatico' && !f.contatto_ordine && (
+              <p className="text-[10px] text-amber-500 mt-2">Senza contatto l'automatico non puo' inviare: resta una bozza.</p>
+            )}
           </div>
           <div><label className={lblCls}>Amazon ASIN</label><input value={f.amazon_asin || ''} onChange={e => set('amazon_asin', e.target.value)} className={inputCls} /></div>
           <div><label className={lblCls}>Amazon URL</label><input value={f.amazon_url || ''} onChange={e => set('amazon_url', e.target.value)} className={inputCls} /></div>
