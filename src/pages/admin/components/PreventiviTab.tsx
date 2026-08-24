@@ -23,6 +23,8 @@ import { isOtpRequired } from '../../../utils/otpConfigCache'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import { toBusiness, BUSINESS_LABELS, BUSINESS_ASSET_LABELS, type Business } from '../../../utils/businessScope'
+import { uscitaUsaFlottaAuto } from '../../../utils/uscitaStraordinaria'
 import { classifyDriverTier, calculateAge, calculateLicenseYears } from '../../../utils/tierClassification'
 import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking as AvailabilityBooking } from '../../../utils/vehicleAvailability'
 import { logAdminAction } from '../../../utils/logAdminAction'
@@ -216,6 +218,14 @@ interface Props {
     pickupDate: Date
     fromPreventivo: Record<string, unknown>
   }) => void
+  /**
+   * 2026-08-24 (direzione): "anche il Preventivo deve essere come quello di
+   * Noleggio Terra, per Mare e Aria". E' la stessa scheda: cambia il
+   * business di cui mostra e crea i preventivi, e da dove prende i mezzi
+   * (flotta auto su Terra, `noleggio_catalog` sugli altri).
+   * 'rental' (default) | 'boat_rental' | 'heli_rental' | 'stay_rental'
+   */
+  serviceType?: string
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -419,7 +429,12 @@ async function getBossPhone(): Promise<string> {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking }: Props) {
+export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking, serviceType = 'rental' }: Props) {
+  const biz: Business = toBusiness(serviceType)
+  // I business dedicati (Mare, Aria, Soggiorni) lavorano su `noleggio_catalog`
+  // invece che sulla flotta auto: stessa distinzione di ReservationsTab.
+  const isAltroBusiness = !uscitaUsaFlottaAuto(serviceType)
+  const assetLabels = BUSINESS_ASSET_LABELS[biz]
   // 2026-08-10 (roadmap #43): gate OTP per la CONVERSIONE preventivo ->
   // prenotazione. Volutamente separato dal flusso OTP interno di questa tab
   // (trippedCodes/motivazioni), che governa il SALVATAGGIO del preventivo:
@@ -1241,6 +1256,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         }
       }
     }
+    // Priority 3 (2026-08-24): Mare/Aria/Soggiorni. Non hanno ne' prezzo
+    // dinamico per veicolo ne' tariffe per categoria: la tariffa e' quella
+    // scritta a catalogo sul mezzo (`price_per_day`, in centesimi). Senza
+    // questo il preventivo di una barca nasceva a 0,00 EUR.
+    if (listDailyRate === 0 && isAltroBusiness && selectedVehicle?.daily_rate) {
+      listDailyRate = Math.round(Number(selectedVehicle.daily_rate)) / 100
+    }
     const maggiorazione = parseFloat(form.maggiorazione_pct) || 0
 
     // Base prices at list rate
@@ -1541,7 +1563,12 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       if (error) throw error
 
       const now = new Date()
-      const updated: Preventivo[] = (data || []).map(p => {
+      // 2026-08-24: ogni business vede SOLO i suoi preventivi. Il filtro e'
+      // lato client di proposito: se la colonna `service_type` non esiste
+      // ancora, le righe valgono come Noleggio Terra (dove sono sempre
+      // state) invece di far fallire la query e svuotare la tab.
+      const soloBusiness = (data || []).filter(p => toBusiness((p as { service_type?: string }).service_type) === biz)
+      const updated: Preventivo[] = soloBusiness.map(p => {
         if (p.status === 'inviato' && p.expires_at && new Date(p.expires_at) < now) {
           supabase.from('preventivi').update({ status: 'scaduto' }).eq('id', p.id).then(() => {})
           return { ...p, status: 'scaduto' }
@@ -1558,6 +1585,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   }
 
   async function loadNoCauzioneRequests() {
+    // Su Mare/Aria/Soggiorni la sezione non esiste: nessuna query.
+    if (isAltroBusiness) { setNoCauzioneRequests([]); return }
     setNoCauzioneLoading(true)
     try {
       const { data } = await supabase
@@ -1692,7 +1721,33 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
   }
 
   async function loadVehicles() {
-    // Load ALL vehicles (including unavailable) — preventivo is a quote, not a booking
+    // Load ALL vehicles (including unavailable) — preventivo is a quote, not a booking.
+    // 2026-08-24: su Mare/Aria/Soggiorni i mezzi sono quelli del catalogo del
+    // business (barche, elicotteri, alloggi), normalizzati nella stessa forma
+    // della flotta cosi' il resto del form non cambia. `daily_rate` in
+    // CENTESIMI, come su `vehicles`.
+    if (isAltroBusiness) {
+      const { data } = await supabase
+        .from('noleggio_catalog')
+        .select('id, name, price_per_day, capacity, image_url, is_active')
+        .eq('service_type', serviceType)
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mapped = ((data || []) as any[])
+        .filter(c => c.is_active !== false)
+        .map(c => ({
+          id: c.id,
+          display_name: c.name,
+          plate: null,
+          category: null,
+          status: 'available',
+          daily_rate: Number(c.price_per_day) || 0,
+          metadata: c.image_url ? { image: c.image_url } : null,
+        }))
+      setVehicles(mapped)
+      return
+    }
     const { data } = await supabase
       .from('vehicles')
       .select('*')
@@ -1772,7 +1827,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
 
   async function handleSave(sendAfterSave: boolean = false) {
     if (!form.vehicle_id || !form.pickup_date || !form.return_date) {
-      toast.error('Seleziona veicolo e date')
+      toast.error(`Seleziona ${assetLabels.asset.toLowerCase()} e date`)
       return
     }
     if (rentalDays < 1) {
@@ -1962,7 +2017,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         : (Number(pricing.kmIncluded) || 0) + (pricing.kmPackagesKm ?? 0)
 
       const record = {
-        vehicle_id: form.vehicle_id,
+        // 2026-08-24: `preventivi.vehicle_id` riferisce `vehicles` (flotta
+        // auto). Su Mare/Aria/Soggiorni il mezzo viene da `noleggio_catalog`:
+        // la colonna resta NULL e l'id vive in extras_detail.asset_id.
+        vehicle_id: isAltroBusiness ? null : form.vehicle_id,
+        // Business del preventivo: senza, un preventivo del Mare comparirebbe
+        // nell'elenco del Noleggio Terra.
+        service_type: biz,
         vehicle_name: selectedVehicle?.display_name || '',
         vehicle_plate: selectedVehicle?.plate || null,
         vehicle_category: selectedVehicle?.category || null,
@@ -1997,6 +2058,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         driver_tier: form.driver_tier,
         pricing_trace: revenueData || null,
         extras_detail: {
+          // Mezzo del catalogo (Mare/Aria/Soggiorni): unico posto dove
+          // l'id sopravvive, visto che vehicle_id resta NULL.
+          asset_id: isAltroBusiness ? (form.vehicle_id || null) : null,
           residente_sardegna: form.residente_sardegna,
           include_lavaggio: form.include_lavaggio,
           include_no_cauzione: form.include_no_cauzione,
@@ -2035,27 +2099,32 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
 
       console.log('[PreventiviTab] Saving preventivo with created_by:', record.created_by, 'editing:', editingId)
 
-      let data, error
-      if (editingId) {
-        // Update existing preventivo (don't overwrite created_by/status)
-        const { created_by: _cb, status: _st, ...updateRecord } = record
-        const result = await supabase
-          .from('preventivi')
-          .update({ ...updateRecord, updated_at: new Date().toISOString() })
-          .eq('id', editingId)
-          .select()
-          .single()
-        data = result.data
-        error = result.error
-      } else {
-        // Insert new preventivo
-        const result = await supabase
-          .from('preventivi')
-          .insert([record])
-          .select()
-          .single()
-        data = result.data
-        error = result.error
+      const salva = async (body: Record<string, unknown>) => {
+        if (editingId) {
+          // Update existing preventivo (don't overwrite created_by/status)
+          const { created_by: _cb, status: _st, ...updateRecord } = body as Record<string, unknown>
+          void _cb; void _st
+          return await supabase
+            .from('preventivi')
+            .update({ ...updateRecord, updated_at: new Date().toISOString() })
+            .eq('id', editingId)
+            .select()
+            .single()
+        }
+        return await supabase.from('preventivi').insert([body]).select().single()
+      }
+      let { data, error } = await salva(record)
+      // La colonna `service_type` arriva con la migration 20260824. Finche' il
+      // database e' indietro NON si blocca il salvataggio: si salva senza e si
+      // avvisa. ([[feedback_migrazione_manuale_serve_fallback]])
+      if (error && /service_type/i.test(error.message || '')) {
+        const { service_type: _st2, ...senzaBusiness } = record
+        void _st2
+        const retry = await salva(senzaBusiness)
+        data = retry.data; error = retry.error
+        if (!error && isAltroBusiness) {
+          toast('Salvato, ma i preventivi non sono ancora separati per business: esegui la migration 20260824_preventivi_service_type.sql', { icon: '!', duration: 9000 })
+        }
       }
 
       if (error) throw error
@@ -3070,7 +3139,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       // user_id satisfies the bookings_user_or_guest_check constraint
       // (existing ConvertPreventivoModal does the same).
       user_id: customer_id,
-      vehicle_id: p.vehicle_id,
+      // Come alla creazione: su Mare/Aria/Soggiorni la colonna resta NULL
+      // (riferisce la flotta auto) e l'id del mezzo va in booking_details.
+      vehicle_id: isAltroBusiness ? null : p.vehicle_id,
       vehicle_name: p.vehicle_name,
       vehicle_plate: p.vehicle_plate,
       pickup_date: p.pickup_date,
@@ -3091,7 +3162,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       // create da ReservationsTab (parseFloat, non centesimi). Se No Cauzione,
       // resta 0.
       deposit_amount: (p.no_cauzione_total || 0) > 0 ? 0 : (Number(p.deposit_amount) || 0),
-      service_type: 'rental',
+      // La prenotazione nasce nel business del preventivo: convertendo un
+      // preventivo del Mare deve finire fra le prenotazioni del Mare.
+      service_type: biz === 'rental' ? 'rental' : biz,
+      vehicle_type: biz === 'boat_rental' ? 'boat' : biz === 'heli_rental' ? 'helicopter' : biz === 'stay_rental' ? 'stay' : 'car',
       booking_source: 'admin',
       // 2026-05-23: NON aggiungere km_limit/unlimited_km al top-level
       // della insert su bookings — quelle colonne NON esistono nello
@@ -3105,6 +3179,10 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       booking_details: {
         from_preventivo: p.id,
         source: 'admin_preventivo_accept',
+        // Mezzo del catalogo: il calendario e i report lo cercano qui.
+        ...(isAltroBusiness
+          ? { vehicle_id: (p.extras_detail as Record<string, unknown> | null)?.asset_id || p.vehicle_id || null }
+          : {}),
         // Segna la conferma manuale (red box) così la regola anti-duplicato
         // della conferma noleggio funziona come in ReservationsTab e la
         // booking resta confermata in calendario.
@@ -3561,7 +3639,11 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         {/* Subtab Switch — nascosto per collaboratori (hanno solo
             `reservations-preventivi`) e quando admin ha spuntato
             `hide:richieste-no-cauzione` per quell'operatore. */}
-        {!isPreventivoOnly && !hideRichiesteNoCauzione && (() => {
+        {/* 2026-08-24: "Richieste No Cauzione" nasce dalle prenotazioni del
+            Noleggio Terra (cauzione auto). Su Mare, Aria e Soggiorni non
+            esiste: mostrarla vorrebbe dire far comparire dati di Terra
+            dentro un altro business. */}
+        {!isAltroBusiness && !isPreventivoOnly && !hideRichiesteNoCauzione && (() => {
           const pendingCount = noCauzioneRequests.filter((b: any) => b.booking_details?.no_cauzione_status === 'pending').length
           return (
             <div className="flex gap-1 bg-theme-bg-tertiary rounded-lg p-0.5">
@@ -5116,7 +5198,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
 
       {/* Desktop header (≥ 640px) */}
       <div className="hidden sm:flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-theme-text-primary">{editingId ? 'Modifica Preventivo' : 'Nuovo Preventivo'}</h2>
+        <h2 className="text-2xl font-bold text-theme-text-primary">{editingId ? 'Modifica Preventivo' : 'Nuovo Preventivo'} — {BUSINESS_LABELS[biz]}</h2>
         <Button variant="secondary" onClick={() => { setView('list'); setEditingId(null); resetForm() }}>Torna alla Lista</Button>
       </div>
 
@@ -5188,7 +5270,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
       {/* Vehicle + Fascia/Customer combined dropdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Select
-          label="Veicolo *"
+          label={`${assetLabels.asset} *`}
           value={form.vehicle_id}
           onChange={(e) => {
             const newId = e.target.value
@@ -5209,7 +5291,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
             }))
           }}
           options={[
-            { value: '', label: 'Seleziona veicolo...' },
+            { value: '', label: `Seleziona ${assetLabels.asset.toLowerCase()}...` },
             ...vehicles.map(v => ({ value: v.id, label: `${v.display_name}${v.plate ? ` (${v.plate})` : ''}${v.status === 'maintenance' ? ' [Manutenzione]' : ''}` }))
           ]}
         />
@@ -5523,6 +5605,13 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
         placeholder="0"
       />
 
+      {/* 2026-08-24 (direzione): assicurazione, cauzione, km e lavaggio sono
+          concetti del Noleggio Terra. Una barca non fa chilometri e non si
+          assicura come un'auto — e' lo stesso motivo per cui non compaiono
+          nel form delle Prenotazioni di Mare, Aria e Soggiorni. Mostrarle
+          qui sarebbe peggio che ometterle: campi da compilare che non
+          finiscono da nessuna parte. I Servizi restano, per tutti. */}
+      {!isAltroBusiness && (<>
       {/* Insurance — 2026-05-22: convertito da dropdown a lista di radio
           card visibili sempre. Prima era un Select e veniva saltato spesso
           (l'operatore non lo apriva e il preventivo partiva senza assicurazione).
@@ -5689,6 +5778,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking 
           })()}
         </div>
       </div>
+
+      </>)}
 
       {/* Servizi Experience — design UNICO: stessa card "Aggiungi" per tutti
           (Secondo Guidatore + DR7 FLEX inclusi, niente più checkbox/stepper misti). */}

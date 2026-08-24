@@ -67,6 +67,9 @@ const RilevazioneOrariTab = lazyWithRetry(() => import('./components/Rilevazione
 const DashboardTab = lazyWithRetry(() => import('./components/DashboardTab'))
 // RevenuePricingTab removed — replaced by CentralinaProTab
 const ReportPreventiviTab = lazyWithRetry(() => import('./components/ReportPreventiviTab'))
+// 2026-08-24: la scheda Preventivi del Noleggio Terra e' anche quella di
+// Mare, Aria e Soggiorni — cambia solo il business che riceve.
+const PreventiviTab = lazyWithRetry(() => import('./components/PreventiviTab'))
 const CentralinaProTab = lazyWithRetry(() => import('./components/CentralinaProTab'))
 const InterruttoriTab = lazyWithRetry(() => import('./components/InterruttoriTab'))
 const AccontiTab = lazyWithRetry(() => import('./components/AccontiTab'))
@@ -1097,7 +1100,7 @@ export default function AdminDashboard() {
           {activeTab === 'mare-calendar' && <NoleggioServiceTab serviceType="boat_rental" view="calendar" labels={{ title: 'Noleggio Mare', asset: 'Barca', assetPlural: 'Barche' }} />}
           {activeTab === 'mare-catalog' && <NoleggioServiceTab serviceType="boat_rental" view="catalog" labels={{ title: 'Noleggio Mare', asset: 'Barca', assetPlural: 'Barche' }} />}
           {activeTab === 'mare-tours' && <NoleggioServiceTab serviceType="boat_rental" view="tours" labels={{ title: 'Noleggio Mare', asset: 'Barca', assetPlural: 'Barche' }} />}
-          {activeTab === 'mare-preventivi' && <NoleggioServiceTab serviceType="boat_rental" view="preventivi" labels={{ title: 'Noleggio Mare', asset: 'Barca', assetPlural: 'Barche' }} />}
+          {activeTab === 'mare-preventivi' && <PreventiviTab serviceType="boat_rental" />}
           {/* Contratti per business: stessa tab del Noleggio Terra, ognuno col
               proprio modello PDF (contract_mare.pdf, contract_aria.pdf, ...). */}
           {/* Uscite Straordinarie per business: stesso componente del Noleggio
@@ -1114,13 +1117,13 @@ export default function AdminDashboard() {
           {activeTab === 'aria-calendar' && <NoleggioServiceTab serviceType="heli_rental" view="calendar" labels={{ title: 'Noleggio Aria', asset: 'Elicottero', assetPlural: 'Elicotteri' }} />}
           {activeTab === 'aria-catalog' && <NoleggioServiceTab serviceType="heli_rental" view="catalog" labels={{ title: 'Noleggio Aria', asset: 'Elicottero', assetPlural: 'Elicotteri' }} />}
           {activeTab === 'aria-tours' && <NoleggioServiceTab serviceType="heli_rental" view="tours" labels={{ title: 'Noleggio Aria', asset: 'Elicottero', assetPlural: 'Elicotteri' }} />}
-          {activeTab === 'aria-preventivi' && <NoleggioServiceTab serviceType="heli_rental" view="preventivi" labels={{ title: 'Noleggio Aria', asset: 'Elicottero', assetPlural: 'Elicotteri' }} />}
+          {activeTab === 'aria-preventivi' && <PreventiviTab serviceType="heli_rental" />}
           {activeTab === 'aria-movimenti' && <MovimentiAereiTab />}
           {activeTab === 'stay-bookings' && <NoleggioServiceTab serviceType="stay_rental" view="bookings" labels={{ title: 'Soggiorni & Ospitalità', asset: 'Alloggio', assetPlural: 'Alloggi' }} />}
           {activeTab === 'stay-calendar' && <NoleggioServiceTab serviceType="stay_rental" view="calendar" labels={{ title: 'Soggiorni & Ospitalità', asset: 'Alloggio', assetPlural: 'Alloggi' }} />}
           {activeTab === 'stay-catalog' && <NoleggioServiceTab serviceType="stay_rental" view="catalog" labels={{ title: 'Soggiorni & Ospitalità', asset: 'Alloggio', assetPlural: 'Alloggi' }} />}
           {activeTab === 'stay-tours' && <NoleggioServiceTab serviceType="stay_rental" view="tours" labels={{ title: 'Soggiorni & Ospitalità', asset: 'Alloggio', assetPlural: 'Alloggi' }} />}
-          {activeTab === 'stay-preventivi' && <NoleggioServiceTab serviceType="stay_rental" view="preventivi" labels={{ title: 'Soggiorni & Ospitalità', asset: 'Alloggio', assetPlural: 'Alloggi' }} />}
+          {activeTab === 'stay-preventivi' && <PreventiviTab serviceType="stay_rental" />}
           {activeTab === 'fattura' && (isTabRestricted('fattura') ? <PlaceholderTab title="Accesso non autorizzato" /> : <FatturaTab />)}
           {activeTab === 'contratto' && <ContrattoTab />}
           {activeTab === 'cauzioni' && (isTabRestricted('cauzioni') ? <PlaceholderTab title="Accesso non autorizzato" /> : <CauzioniTab />)}
