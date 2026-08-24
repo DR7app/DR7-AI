@@ -4,7 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import { logger } from '../../../utils/logger'
 import { loadMulteConfig, MULTE_CONFIG_DEFAULTS, type MulteConfigValues } from './MulteConfigSection'
-import { bookingBelongsTo, toBusiness, BUSINESS_LABELS, type Business } from '../../../utils/businessScope'
+import { bookingBelongsTo, toBusiness, BUSINESS_LABELS, BUSINESSES, type Business } from '../../../utils/businessScope'
 
 /**
  * 2026-08-24 (direzione): "Multe" e' nel menu di ogni business. Lo storico
@@ -13,8 +13,12 @@ import { bookingBelongsTo, toBusiness, BUSINESS_LABELS, type Business } from '..
  * prenotazione collegata (`multe_pec_log.booking_id`); le righe senza
  * prenotazione restano su Terra, dove sono sempre state.
  */
-export default function GestioneMulteTab({ business = 'rental' }: { business?: Business | string } = {}) {
-    const biz = toBusiness(business)
+export default function GestioneMulteTab({ business }: { business?: Business | string } = {}) {
+    // Senza `business` la tab e' quella unica di Amministrazione: i business
+    // sono sotto-schede qui dentro, non cinque voci nel menu.
+    const [bizScelto, setBizScelto] = useState<Business>(toBusiness(business || 'rental'))
+    const biz = business ? toBusiness(business) : bizScelto
+    const mostraSelettore = !business
     const [activeSubTab, setActiveSubTab] = useState<'history' | 'upload'>('history')
     // Multa Upload + PEC State
     const [multaFile, setMultaFile] = useState<File | null>(null)
@@ -329,12 +333,12 @@ export default function GestioneMulteTab({ business = 'rental' }: { business?: B
             <div className="bg-theme-bg-secondary rounded-lg p-3 lg:p-4 border border-theme-border">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <div>
-                        <h2 className="text-2xl font-bold text-theme-text-primary">Gestione Multe — {BUSINESS_LABELS[biz]}</h2>
+                        <h2 className="text-2xl font-bold text-theme-text-primary">Multe — {BUSINESS_LABELS[biz]}</h2>
                         <p className="text-sm text-theme-text-muted mt-0.5">
                             {activeSubTab === 'history' ? 'Storico comunicazioni PEC inviate' : "Carica il verbale: il destinatario PEC viene proposto dall'organo accertatore"}
                         </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                         <button
                             onClick={handleSyncIpa}
                             disabled={syncingIpa}
@@ -359,6 +363,26 @@ export default function GestioneMulteTab({ business = 'rental' }: { business?: B
                         </div>
                     </div>
                 </div>
+
+                {/* Business come sotto-schede: una sola voce "Multe" nel menu di
+                    Amministrazione invece di cinque. */}
+                {mostraSelettore && (
+                    <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-theme-border">
+                        {BUSINESSES.map(b => (
+                            <button
+                                key={b}
+                                onClick={() => { setBizScelto(b); resetMulta() }}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                                    biz === b
+                                        ? 'bg-dr7-gold text-white border-dr7-gold'
+                                        : 'bg-theme-bg-tertiary text-theme-text-secondary border-theme-border hover:text-theme-text-primary hover:bg-theme-bg-hover'
+                                }`}
+                            >
+                                {BUSINESS_LABELS[b]}
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* ── STORICO PEC ──────────────────────────────────────────── */}

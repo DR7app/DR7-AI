@@ -410,14 +410,10 @@ export default function AdminDashboard() {
     // Chiamate, Chat GPT, Aruba) si reintroducono qui.
     { name: 'Amministrazione', tabs: [
       { tab: 'unpaid', label: 'In attesa di pagamento' },
-      // 24/08 (direzione): le Multe stanno in Amministrazione, una voce per
-      // business. Un solo id per voce: una stessa tab in due sezioni fa
-      // rimbalzare la sidebar su Terra ([[tab_condivisa_rimbalza_su_terra]]).
-      { tab: 'multe-terra', label: 'Multe Noleggio Terra', permKey: 'gestione-multe' },
-      { tab: 'mare-multe', label: 'Multe Noleggio Mare', permKey: 'gestione-multe' },
-      { tab: 'aria-multe', label: 'Multe Noleggio Aria', permKey: 'gestione-multe' },
-      { tab: 'stay-multe', label: 'Multe Soggiorni', permKey: 'gestione-multe' },
-      { tab: 'multe-lavaggio', label: 'Multe Lavaggio e Meccanica', permKey: 'gestione-multe' },
+      // 24/08 (direzione): le Multe stanno in Amministrazione con UNA voce
+      // sola; i business sono sotto-schede dentro la tab, altrimenti cinque
+      // righe di menu seppelliscono "In attesa di pagamento".
+      { tab: 'gestione-multe', label: 'Multe' },
       { tab: 'cauzioni', label: 'Cauzioni' },
       { tab: 'scadenze', label: 'Scadenze' },
       { tab: 'fattura', label: 'Fattura' },
