@@ -20,6 +20,7 @@ import MoneyInput from '../../../components/MoneyInput'
 import AlarmInventoryModal from '../../../components/admin/AlarmInventoryModal'
 import AllarmiApertiPanel from '../../../components/admin/AllarmiApertiPanel'
 import { useVehicleAlarm } from '../../../contexts/VehicleAlarmContext'
+import CauzioneScadenzaConfig from './CauzioneScadenzaConfig'
 
 type FleetVehicle = {
   id: string
@@ -2201,6 +2202,7 @@ export default function CentralinaProTab() {
                       Sola lettura
                     </span>
                   </div>
+                  <CauzioneScadenzaConfig readOnly />
                   <CauzioniSection
                     deposits={deposits}
                     setDeposits={setDeposits}
@@ -2209,7 +2211,13 @@ export default function CentralinaProTab() {
                   />
                 </div>
               ) : (
-                <CauzioniSection deposits={deposits} setDeposits={setDeposits} fasce={fasce} categories={categories} />
+                <>
+                  {/* 2026-08-24: la scadenza di restituzione si cambia da qui.
+                      Prima era scritta in due posti in disaccordo (trigger DB a
+                      giorni di calendario, Netlify a 14 lavorativi in duro). */}
+                  <CauzioneScadenzaConfig />
+                  <CauzioniSection deposits={deposits} setDeposits={setDeposits} fasce={fasce} categories={categories} />
+                </>
               )
             )}
             {section === 'p5' && <ServiziSection servizi={servizi} setServizi={setServizi} fasce={fasce} categories={categories} />}

@@ -12102,10 +12102,12 @@ function ReservationsDashboardHeader({
           </h2>
           <p className="text-sm text-theme-text-muted mt-1">{isUscite ? 'Gestisci e monitora le uscite straordinarie con autista' : 'Gestisci e monitora tutte le prenotazioni'}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        {/* 2026-08-24: gap ridotto (era gap-2/sm:gap-3) — con i tre controlli
+            meteo la riga sfondava lo schermo e "Test Meteo" restava tagliato. */}
+        <div className="flex flex-wrap items-center gap-1.5 justify-end">
           <a
             href="?tab=calendar"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-theme-border bg-theme-bg-secondary hover:bg-theme-bg-hover text-theme-text-primary text-sm font-medium transition-colors"
+            className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl border border-theme-border bg-theme-bg-secondary hover:bg-theme-bg-hover text-theme-text-primary text-sm font-medium transition-colors"
           >
             <svg className="w-4 h-4 text-dr7-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -12148,7 +12150,7 @@ function ReservationsDashboardHeader({
             {meteoLoading
               ? 'Meteo...'
               : meteo?.available
-                ? <span className="hidden sm:inline">{meteo.location?.name || meteo.luogo}: {meteo.label}</span>
+                ? <span className="hidden sm:inline">{meteo.label}</span>
                 : <span className="hidden sm:inline">Meteo n/d</span>}
           </button>
           {/* Selettore citta' (2026-08-22): il meteo non e' piu' fisso su Cagliari.
@@ -12223,7 +12225,7 @@ function ReservationsDashboardHeader({
             <span className="sm:hidden">Meteo</span>
           </Button>
           <Button onClick={onAllertaMeteoTest} variant="secondary" className="text-sm border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover">
-            <span className="hidden sm:inline">Test Meteo (targhe TEST)</span>
+            <span className="hidden sm:inline">Test Meteo</span>
             <span className="sm:hidden">Test</span>
           </Button>
         </div>

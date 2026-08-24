@@ -184,8 +184,38 @@ export const handler: Handler = async (event) => {
         // partire dal primo lavorativo DOPO la restituzione — se l'auto torna
         // venerdi', il giorno 1 e' il lunedi'. Il 14 e' voluto (commit
         // 219f636c), confermato dalla direzione il 12/08.
-        const scadenzaDate = scadenzaGiorniLavorativi(returnDate, 14)
-        console.log(`📅 Calculated scadenza: ${scadenzaDate} (14 giorni lavorativi, festivi esclusi, dopo ${returnDate})`)
+        // 2026-08-24: i giorni e la modalita' arrivano da `cauzioni_config`
+        // (Centralina Pro > Cauzioni), non piu' scritti in duro qui. Prima
+        // questo codice imponeva 14 lavorativi mentre il trigger DB sommava
+        // giorni di CALENDARIO presi dalla stessa tabella: due regole in
+        // disaccordo sulla stessa colonna, vinceva chi scriveva per ultimo.
+        // Se la config non e' leggibile si resta su 14 lavorativi (regola
+        // confermata dalla direzione il 12/08).
+        let giorniScadenza = 14
+        let modalitaScadenza: 'lavorativi' | 'calendario' = 'lavorativi'
+        try {
+            const { data: cfgRow } = await supabase
+                .from('cauzioni_config')
+                .select('giorni_restituzione_default, modalita_calcolo')
+                .eq('id', 'main')
+                .maybeSingle()
+            const g = Number(cfgRow?.giorni_restituzione_default)
+            if (Number.isFinite(g) && g >= 1) giorniScadenza = g
+            if (cfgRow?.modalita_calcolo === 'calendario') modalitaScadenza = 'calendario'
+        } catch (e) {
+            console.warn('⚠️ cauzioni_config non leggibile, uso 14 giorni lavorativi:', e)
+        }
+
+        let scadenzaDate: string
+        if (modalitaScadenza === 'calendario') {
+            const [yy, mm, gg] = String(returnDate).slice(0, 10).split('-').map(Number)
+            const d = new Date(yy, (mm || 1) - 1, gg || 1)
+            d.setDate(d.getDate() + giorniScadenza)
+            scadenzaDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        } else {
+            scadenzaDate = scadenzaGiorniLavorativi(returnDate, giorniScadenza)
+        }
+        console.log(`📅 Calculated scadenza: ${scadenzaDate} (${giorniScadenza} giorni ${modalitaScadenza}, dopo ${returnDate})`)
 
         const cauzioneData: Record<string, any> = {
             cliente_id: customerId,
