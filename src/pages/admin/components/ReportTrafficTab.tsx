@@ -384,7 +384,17 @@ export default function ReportTrafficTab() {
             <h3 className="text-sm font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">In tempo reale (ultimi 30 min)</h3>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <KpiTile label="Utenti attivi ora" value={data.realtime.activeUsers} valueClass="text-emerald-400" />
+            {/* 24/08: si chiamava "Utenti attivi ora" e sembrava il numero di
+                account collegati al gestionale. Sono visitatori anonimi del
+                sito pubblico contati da GA4, che di identita' non ne da'
+                nessuna. Chi si e' collegato al proprio account e' nel
+                riquadro "Accessi recenti" qui sotto. */}
+            <KpiTile
+              label="Visitatori sul sito ora"
+              value={data.realtime.activeUsers}
+              valueClass="text-emerald-400"
+              sub="anonimi, da GA4"
+            />
             <KpiTile label="Pagine viste (30m)" value={data.realtime.pageviews30m} valueClass="text-cyan-400" />
             <KpiTile label="Eventi (30m)" value={data.realtime.events30m} valueClass="text-blue-400" />
             <KpiTile label="Conversioni (30m)" value={data.realtime.conversions30m} valueClass="text-violet-400" />

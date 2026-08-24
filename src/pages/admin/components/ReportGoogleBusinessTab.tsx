@@ -153,6 +153,16 @@ export default function ReportGoogleBusinessTab() {
           >
             Diagnostica
           </button>
+          {/* 24/08: il link per collegare l'account esisteva solo dentro il
+              messaggio d'errore "serve una nuova autorizzazione". Se i dati
+              non arrivavano per altri motivi non c'era modo di ricollegarsi. */}
+          <a
+            href="/.netlify/functions/ga-oauth-start"
+            title="Autorizza DR7 ad accedere alla scheda Google Business: spunta anche 'Gestisci la tua scheda di Google Business'"
+            className="px-2 py-1 rounded-md border border-cyan-500/60 text-[11px] font-semibold text-cyan-600 dark:text-cyan-300 hover:bg-cyan-500/10 transition-colors"
+          >
+            Collega account Google
+          </a>
           <div className="flex gap-1 text-xs">
             {RANGES.map(r => (
               <button
