@@ -4347,7 +4347,16 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
       // If car changed, update vehicle fields on the booking
       if (newVehicle) {
-        bookingUpdate.vehicle_id = newVehicle.id
+        // Su Mare/Aria/Soggiorni il mezzo e' del catalogo: la colonna
+        // vehicle_id riferisce la flotta auto e resta NULL, l'id vive in
+        // booking_details (come alla creazione).
+        if (isAltroBusiness) {
+          bookingUpdate.vehicle_id = null
+          updatedBookingDetails.vehicle_id = newVehicle.id
+          bookingUpdate.booking_details = updatedBookingDetails
+        } else {
+          bookingUpdate.vehicle_id = newVehicle.id
+        }
         bookingUpdate.vehicle_name = newVehicle.display_name
         bookingUpdate.vehicle_plate = newVehicle.plate || newVehicle.targa || ''
       }
@@ -6184,7 +6193,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         vehicle_type: isAltroBusiness
           ? (serviceType === 'boat_rental' ? 'boat' : serviceType === 'heli_rental' ? 'helicopter' : 'stay')
           : 'car',
-        vehicle_id: formData.vehicle_id, // CRITICAL: Store vehicle_id for availability filtering
+        // 2026-08-24: su Mare/Aria/Soggiorni il mezzo viene da
+        // `noleggio_catalog`, mentre `bookings.vehicle_id` riferisce
+        // `vehicles` (la flotta auto). Scriverci l'id del catalogo e' una
+        // chiave esterna che non esiste: la prenotazione non si salvava.
+        // L'id del mezzo va in `booking_details.vehicle_id`, dove il
+        // calendario e i report lo cercano gia'.
+        vehicle_id: isAltroBusiness ? null : formData.vehicle_id, // CRITICAL: Store vehicle_id for availability filtering
         vehicle_name: vehicle?.display_name || 'N/A',
         vehicle_plate: vehicle?.plate || null,
         vehicle_image_url: null,
@@ -6328,6 +6343,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             id: customerId, // Primary field for customer resolution
             customerId: customerId // Backward compatibility
           },
+          // 2026-08-24: su Mare/Aria/Soggiorni questo NON e' un duplicato ma
+          // l'unico posto dove finisce l'id del mezzo: la colonna
+          // bookings.vehicle_id riferisce la flotta auto e resta NULL.
           vehicle_id: formData.vehicle_id, // Also store in booking_details for backward compatibility
           pickupLocation: formData.pickup_location,
           dropoffLocation: formData.dropoff_location,

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
+import { bookingBelongsTo } from '../../../utils/businessScope'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
 import { formatRomeDate } from '../../../utils/timezoneUtils'
 import { normalizeBooking, computeLanes, type CalendarEvent } from '../../../utils/calendarLogic'
@@ -285,11 +286,12 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
       if (allBookings) {
         // Su un business dedicato si mostrano SOLO le sue prenotazioni;
         // su Terra resta il filtro storico (tutto tranne lavaggio e meccanica).
-        const validBookings = serviceType
-          ? allBookings.filter(b => b.service_type === serviceType)
-          : allBookings.filter(b =>
-              !['car_wash', 'mechanical_service', 'mechanical'].includes(b.service_type || '')
-            )
+        // 2026-08-24 (direzione): anche il calendario di TERRA deve mostrare
+        // solo Terra. Prima escludeva lavaggio e meccanica ma lasciava
+        // passare barche, elicotteri e soggiorni: righe di un altro business
+        // che, non trovando il mezzo, sparivano o si appiccicavano a un'auto
+        // qualsiasi. La regola sta in un posto solo: businessScope.
+        const validBookings = allBookings.filter(b => bookingBelongsTo(b, serviceType || 'rental'))
 
         // Enrich bookings missing customer_name from customers_extended
         const needsEnrichment = validBookings.filter(b =>
