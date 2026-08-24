@@ -290,7 +290,9 @@ export default function AdminDashboard() {
       { tab: 'cargos', label: 'Cargos' },
       // 2026-06-10: sezione "Flotta" spostata DENTRO Noleggio.
       { tab: 'vehicles', label: 'Veicoli' },
-      { tab: 'magazzino', label: 'Magazzino' },
+      // 2026-08-24 (direzione): "Magazzino" tolto da Noleggio Terra — tutto
+      // vive in Magazzino > Magazzino Generale. La tab `magazzino` resta
+      // registrata: e' ancora nelle barre di Mare/Aria/Soggiorni/Lavaggio.
       { tab: 'gps-keyless', label: 'GPS Flotta' },
       { tab: 'terra-tours', label: 'Tour' },
     ] },
