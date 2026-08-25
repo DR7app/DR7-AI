@@ -77,7 +77,7 @@ import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
 import UscitaStraordinariaModal from './UscitaStraordinariaModal'
-import { USCITA_SERVICE_TYPE, uscitaBelongsTo, uscitaUsaFlottaAuto } from '../../../utils/uscitaStraordinaria'
+import { USCITA_SERVICE_TYPE, USCITA_ASSET_LABELS, uscitaBelongsTo, uscitaUsaFlottaAuto } from '../../../utils/uscitaStraordinaria'
 import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import PenaltyModal from './PenaltyModal'
@@ -576,6 +576,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   // auto del Noleggio Terra, quindi legge `vehicles` come Terra. Resta pero'
   // un business distinto per le uscite, separato da `vehicle_type`.
   const isAltroBusiness = !uscitaUsaFlottaAuto(serviceType)
+  // 25/08/2026: il form chiamava "Veicolo" anche un alloggio o una barca, e la
+  // riga della scelta diceva "Mostra tutti i veicoli" pure su Soggiorni. Qui
+  // c'e' il nome giusto per il business servito; dove una parola sola non
+  // basta il testo passa a "disponibilita'", che vale per tutti.
+  const assetLabels = USCITA_ASSET_LABELS[serviceType as keyof typeof USCITA_ASSET_LABELS] || USCITA_ASSET_LABELS.rental
   const { canViewFinancials } = useAdminRole()
   const paymentMethods = usePaymentMethods()
   const [reservations, setReservations] = useState<Reservation[]>([])
@@ -5759,7 +5764,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               { label: 'Dettaglio conflitto', value: availabilityResult.reason || 'Slot non disponibile' },
             ]))
             // 2026-05-30: regola definitiva sui conflitti di disponibilita'.
-            //  - Checkbox "Mostra tutti i veicoli (ignora disponibilità)"
+            //  - Checkbox "Mostra tutte le disponibilità (ignora il calendario)"
             //    spuntata = bypass esplicito ("so cosa sto facendo"),
             //    nessun OTP. Solo gli operatori che vedono la checkbox
             //    (admin Reservations) possono attivare questo bypass.
@@ -9286,18 +9291,18 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 {!formData.pickup_date || !formData.return_date ? (
                   <div className="p-4 bg-yellow-900/20 border border-yellow-600/50 rounded-lg">
                     <p className="text-yellow-400 text-sm">
-                      Seleziona le date per vedere i veicoli disponibili
+                      Seleziona le date per vedere le disponibilità
                     </p>
                   </div>
                 ) : (
                   <>
                     <Select
-                      label={`Veicolo (${vehiclesForDropdown.length} ${showAllVehicles ? 'totali' : 'disponibili'})`}
+                      label={`${assetLabels.asset} (${vehiclesForDropdown.length} ${showAllVehicles ? 'totali' : 'disponibili'})`}
                       required
                       value={formData.vehicle_id}
                       onChange={(e) => { const v = e.target.value; setFormData(prev => ({ ...prev, vehicle_id: v })) }}
                       options={[
-                        { value: '', label: 'Seleziona veicolo...' },
+                        { value: '', label: `Seleziona ${assetLabels.asset.toLowerCase()}...` },
                         ...vehiclesForDropdown.map((v: Vehicle) => {
                           let label = v.plate || v.targa ? `${v.display_name} (Targa: ${v.plate || v.targa})` : v.display_name
                           const earliestTime = vehicleEarliestTimes.get(v.id)
@@ -9317,13 +9322,13 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                         onChange={(e) => setShowAllVehicles(e.target.checked)}
                         className="w-4 h-4 rounded border-theme-border bg-theme-bg-tertiary text-amber-500 focus:ring-amber-500"
                       />
-                      <span className="text-sm text-amber-400">Mostra tutti i veicoli (ignora disponibilità)</span>
+                      <span className="text-sm text-amber-400">Mostra tutte le disponibilità (ignora il calendario)</span>
                     </label>
                   </>
                 )}
                 {formData.pickup_date && formData.return_date && vehiclesForDropdown.length === 0 && !showAllVehicles && (
                   <p className="text-red-400 text-sm mt-2">
-                    Nessun veicolo disponibile per le date selezionate. Usa la checkbox sopra per mostrare tutti.
+                    Nessuna disponibilità per le date selezionate. Usa la checkbox sopra per mostrare tutto.
                   </p>
                 )}
               </div>
@@ -11853,7 +11858,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                         onClick={() => setExtendData({ ...extendData, show_all_vehicles: !extendData.show_all_vehicles })}
                         className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
                       >
-                        {extendData.show_all_vehicles ? 'Nascondi ritirati' : 'Mostra tutti i veicoli'}
+                        {extendData.show_all_vehicles ? 'Nascondi ritirati' : 'Mostra tutte le disponibilità'}
                       </button>
                     </div>
                     <select
