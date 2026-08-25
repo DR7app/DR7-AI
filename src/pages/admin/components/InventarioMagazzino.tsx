@@ -13,6 +13,8 @@ import { toBusiness, BUSINESS_LABELS, BUSINESSES, type Business } from '../../..
 import { authFetch } from '../../../utils/authFetch'
 import toast from 'react-hot-toast'
 import MoneyInput from '../../../components/MoneyInput'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import { componiNumero, separaPrefisso } from '../../../utils/prefissiPaesi'
 
 // ── Tipi ─────────────────────────────────────────────────────────────────────
 interface Categoria {
@@ -60,25 +62,13 @@ type Semaforo = 'rosso' | 'giallo' | 'verde' | 'grigio'
 // automatico" nella stessa scheda: due comandi che si contraddicevano.
 // Ora la scelta e' una sola: automatico = parte da solo al raggiungimento
 // della soglia, usando il contatto e il tipo indicati sotto.
-const CANALI = ['whatsapp', 'email', 'amazon', 'shein', 'temu', 'manuale', 'automatico'] as const
-
-// Canali e-commerce: l'ordine si fa aprendo il sito, NON mandando un WhatsApp a
-// un fornitore. "Ordina" per questi apre direttamente il link giusto.
-const ECOM_CANALI = new Set(['amazon', 'shein', 'temu'])
-
-/** Link del sito per completare l'ordine e-commerce dell'articolo. null se non applicabile. */
-function ecommerceUrl(a: { nome?: string | null; amazon_url?: string | null; amazon_asin?: string | null } | undefined, canale: string): string | null {
-  if (!a) return null
-  const q = encodeURIComponent(String(a.nome || '').trim())
-  if (canale === 'amazon') {
-    if (a.amazon_url) return a.amazon_url
-    if (a.amazon_asin) return `https://www.amazon.it/dp/${encodeURIComponent(a.amazon_asin)}`
-    return `https://www.amazon.it/s?k=${q}`
-  }
-  if (canale === 'shein') return `https://www.shein.com/pdsearch/${q}`
-  if (canale === 'temu') return `https://www.temu.com/search_result.html?search_key=${q}`
-  return null
-}
+//
+// 2026-08-25 (direzione): i canali e-commerce sono usciti. "Ordina" apriva
+// Amazon/Shein/Temu in una scheda nuova e l'ordine restava a meta': nessun
+// messaggio partiva, il fornitore non sapeva niente e la bozza rimaneva li'.
+// Adesso OGNI articolo ordina allo stesso modo, dalla finestra "Ordina":
+// WhatsApp, email o entrambi. I link dei siti non ci sono piu'.
+const CANALI = ['whatsapp', 'email', 'manuale', 'automatico'] as const
 
 // ── Utilita ──────────────────────────────────────────────────────────────────
 function eur(n: number | null | undefined): string {
@@ -549,7 +539,11 @@ export default function InventarioMagazzino({ business }: { business?: Business 
         body: JSON.stringify({ customPhone: phone, customMessage: msg, type: 'Ordine Magazzino' }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok || data?.success === false) throw new Error(data?.error || `HTTP ${res.status}`)
+      if (!res.ok) throw new Error(data?.error || data?.message || `HTTP ${res.status}`)
+      // Vedi inviaWhatsAppRaw: 200 + skipped = non inviato.
+      if (data?.skipped === true || data?.success !== true) {
+        throw new Error(data?.message || data?.error || data?.reason || 'invio non eseguito')
+      }
       await supabase.from('inv_ordini').update({ stato: 'inviato', sent_at: new Date().toISOString() }).eq('id', o.id)
 
       // 2026-08-24: memorizza il numero sull'articolo, cosi' il prossimo
@@ -589,7 +583,10 @@ export default function InventarioMagazzino({ business }: { business?: Business 
     setSendOrderId(o.id)
     setSendWhatsapp(tipo === 'whatsapp')
     setSendEmailOn(tipo === 'email')
-    setSendPhone(String(telPrecompilato).replace(/\D/g, ''))
+    // Il numero salvato puo' essere "+39...", "0039...", "347..." o avere
+    // spazi: si normalizza in E.164 una volta sola, qui.
+    const sep = separaPrefisso(String(telPrecompilato))
+    setSendPhone(componiNumero(sep.dial, sep.numero) || '')
     setSendEmailAddr(String(emailPrecompilata))
     setSendTesto(testoOrdine(o))
     setSendOggetto(`Ordine DR7 — ${a?.nome || 'Magazzino'}`)
@@ -613,9 +610,10 @@ export default function InventarioMagazzino({ business }: { business?: Business 
     if (!sendWhatsapp && !sendEmailOn) { toast.error('Scegli almeno un canale'); return }
     const testo = sendTesto.trim()
     if (!testo) { toast.error('Il messaggio e\' vuoto'); return }
-    const tel = sendPhone.replace(/\D/g, '')
+    // Il campo produce gia' "+39347...": si manda quello, prefisso compreso.
+    const tel = sendPhone.trim()
     const email = sendEmailAddr.trim()
-    if (sendWhatsapp && tel.length < 8) { toast.error('Numero WhatsApp non valido'); return }
+    if (sendWhatsapp && tel.replace(/\D/g, '').length < 8) { toast.error('Numero WhatsApp non valido'); return }
     if (sendEmailOn && !/\S+@\S+\.\S+/.test(email)) { toast.error('Email non valida'); return }
 
     setBusy(true)
@@ -657,7 +655,16 @@ export default function InventarioMagazzino({ business }: { business?: Business 
     } finally { setBusy(false) }
   }
 
-  /** Invio WhatsApp puro: nessun effetto sull'ordine, ritorna solo l'esito. */
+  /**
+   * Invio WhatsApp puro: nessun effetto sull'ordine, ritorna solo l'esito.
+   *
+   * 2026-08-25: il controllo era `data.success === false`, ma la function
+   * risponde 200 con `{ success: true, skipped: true }` quando il numero non
+   * e' utilizzabile o manca il destinatario. Il magazzino lo leggeva come
+   * "inviato": l'ordine passava a inviato, il toast diceva WhatsApp + email e
+   * al fornitore arrivava solo l'email. Ora vale solo `success === true` senza
+   * `skipped`, e il motivo del server finisce nel messaggio d'errore.
+   */
   async function inviaWhatsAppRaw(phone: string, msg: string): Promise<{ ok: boolean; error?: string }> {
     try {
       const res = await fetch('/.netlify/functions/send-whatsapp-notification', {
@@ -665,7 +672,10 @@ export default function InventarioMagazzino({ business }: { business?: Business 
         body: JSON.stringify({ customPhone: phone, customMessage: msg, type: 'Ordine Magazzino' }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok || data?.success === false) return { ok: false, error: data?.error || `HTTP ${res.status}` }
+      if (!res.ok) return { ok: false, error: data?.error || data?.message || `HTTP ${res.status}` }
+      if (data?.skipped === true || data?.success !== true) {
+        return { ok: false, error: data?.message || data?.error || data?.reason || 'invio non eseguito' }
+      }
       return { ok: true }
     } catch (e) { return { ok: false, error: (e as Error).message } }
   }
@@ -695,15 +705,9 @@ export default function InventarioMagazzino({ business }: { business?: Business 
         articolo_id: a.id, fornitore_id: a.fornitore_id, canale, quantita, stato: 'bozza', auto: false,
       }).select('*').single()
       if (error) throw error
-      // E-commerce (Amazon/Shein/Temu): l'ordine si fa sul sito. Apriamo il link
-      // giusto invece di proporre un invio WhatsApp a un fornitore inesistente.
-      const shopUrl = ECOM_CANALI.has(canale) ? ecommerceUrl(a, canale) : null
-      if (shopUrl) {
-        window.open(shopUrl, '_blank', 'noopener,noreferrer')
-        toast.success(`Ordine creato — completa l'acquisto su ${canale.charAt(0).toUpperCase() + canale.slice(1)}, poi segna "inviato"`)
-      } else if (nuovo) {
-        // Niente passaggio in piu': la finestra d'invio si apre subito, gia'
-        // compilata con numero o email.
+      // Un solo comportamento per tutti gli articoli: la finestra d'invio si
+      // apre subito, gia' compilata con numero ed email.
+      if (nuovo) {
         setOrdini(prev => [...prev, nuovo as Ordine])
         openSend(nuovo as Ordine)
       }
@@ -821,7 +825,7 @@ export default function InventarioMagazzino({ business }: { business?: Business 
                             className={`px-2 h-7 rounded text-white text-xs font-semibold disabled:opacity-50 ${hasOpenOrder ? 'bg-amber-600/80 hover:bg-amber-600' : 'bg-green-600/80 hover:bg-green-600'}`}
                             title={hasOpenOrder
                               ? "Ordine gia' aperto: apre la finestra d'invio"
-                              : "Crea l'ordine e apre subito la finestra d'invio (Amazon/Shein/Temu apre il sito)"}
+                              : "Crea l'ordine e apre la finestra d'invio: WhatsApp, email o entrambi"}
                           >{hasOpenOrder ? 'Invia' : 'Ordina'}</button>
                             <button onClick={() => setEditArticolo(a)} className="px-2 h-7 rounded bg-theme-bg-tertiary border border-theme-border text-theme-text-secondary text-xs">Modifica</button>
                           </div>
@@ -851,14 +855,7 @@ export default function InventarioMagazzino({ business }: { business?: Business 
                   <span className="text-[11px] px-1.5 py-0.5 rounded bg-theme-bg-tertiary text-theme-text-muted uppercase">{o.canale}</span>
                   {forn && <span className="text-[11px] text-theme-text-muted">{forn.nome}</span>}
                   <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 uppercase">{o.stato}</span>
-                  {o.stato === 'bozza' && ECOM_CANALI.has(o.canale) && (
-                    <button
-                      onClick={() => { const u = ecommerceUrl(a, o.canale); if (u) window.open(u, '_blank', 'noopener,noreferrer') }}
-                      className="px-2 py-1 rounded bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold"
-                      title={`Apri ${o.canale} per completare l'ordine`}
-                    >Apri {o.canale}</button>
-                  )}
-                  {o.stato === 'bozza' && !ECOM_CANALI.has(o.canale) && (
+                  {o.stato === 'bozza' && (
                     <button
                       onClick={() => openSend(o)}
                       className="px-2 py-1 rounded bg-green-600 hover:bg-green-700 text-white text-xs font-semibold"
@@ -907,12 +904,10 @@ export default function InventarioMagazzino({ business }: { business?: Business 
               </div>
 
               {sendWhatsapp && (
-                <input
-                  type="tel"
+                <TelefonoConPrefisso
                   value={sendPhone}
-                  onChange={e => setSendPhone(e.target.value)}
-                  placeholder="Numero WhatsApp (es. 39347...)"
-                  className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary"
+                  onChange={setSendPhone}
+                  placeholder="Numero WhatsApp senza prefisso"
                 />
               )}
 
@@ -1113,6 +1108,12 @@ function ArticoloModal({ initial, scopeBusiness, categorie, fornitori, busy, nex
                     : c}
                 </option>
               ))}
+              {/* Articoli salvati quando esistevano i canali e-commerce: il
+                  valore resta leggibile invece di sparire dalla tendina.
+                  Ordinano dalla stessa finestra degli altri. */}
+              {f.canale_riordino && !(CANALI as readonly string[]).includes(f.canale_riordino) && (
+                <option value={f.canale_riordino}>{f.canale_riordino} — canale non piu' disponibile</option>
+              )}
             </select>
           </div>
 
@@ -1123,13 +1124,25 @@ function ArticoloModal({ initial, scopeBusiness, categorie, fornitori, busy, nex
             <div className="text-[11px] uppercase tracking-wide text-theme-text-muted font-semibold mb-2">Ordine</div>
             <div className="grid grid-cols-2 gap-3">
               <div><label className={lblCls}>Contatto ordine</label>
-                <input
-                  type="text"
-                  value={f.contatto_ordine ?? ''}
-                  onChange={e => set('contatto_ordine', e.target.value)}
-                  placeholder={f.contatto_tipo === 'email' ? 'fornitore@esempio.it' : '39347...'}
-                  className={inputCls}
-                />
+                {/* 2026-08-25: il numero non si scrive piu' a mano. Il paese si
+                    sceglie dalla bandiera e il contatto si salva in forma
+                    internazionale: e' l'unica che WhatsApp consegna. */}
+                {f.contatto_tipo === 'email' ? (
+                  <input
+                    type="email"
+                    value={f.contatto_ordine ?? ''}
+                    onChange={e => set('contatto_ordine', e.target.value)}
+                    placeholder="fornitore@esempio.it"
+                    className={inputCls}
+                  />
+                ) : (
+                  <TelefonoConPrefisso
+                    value={f.contatto_ordine ?? ''}
+                    onChange={v => set('contatto_ordine', v)}
+                    selectClassName={`w-[104px] shrink-0 ${inputCls}`}
+                    className={`flex-1 min-w-0 ${inputCls}`}
+                  />
+                )}
               </div>
               <div><label className={lblCls}>Tipo contatto</label>
                 <select value={f.contatto_tipo || 'whatsapp'} onChange={e => set('contatto_tipo', e.target.value)} className={inputCls}>
@@ -1154,8 +1167,10 @@ function ArticoloModal({ initial, scopeBusiness, categorie, fornitori, busy, nex
               <p className="text-[10px] text-amber-500 mt-2">Senza contatto l'automatico non puo' inviare: resta una bozza.</p>
             )}
           </div>
-          <div><label className={lblCls}>Amazon ASIN</label><input value={f.amazon_asin || ''} onChange={e => set('amazon_asin', e.target.value)} className={inputCls} /></div>
-          <div><label className={lblCls}>Amazon URL</label><input value={f.amazon_url || ''} onChange={e => set('amazon_url', e.target.value)} className={inputCls} /></div>
+          {/* 2026-08-25: ASIN e URL Amazon erano qui solo per costruire il
+              link del sito. I link non ci sono piu', quindi i campi spariscono
+              dalla scheda; le colonne restano in tabella e i valori gia'
+              salvati non vengono toccati. */}
           <div className="col-span-2"><label className={lblCls}>Note</label><input value={f.note || ''} onChange={e => set('note', e.target.value)} className={inputCls} /></div>
         </div>
         <div className="flex items-center gap-2 mt-5">
