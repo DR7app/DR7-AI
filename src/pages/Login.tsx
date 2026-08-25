@@ -59,11 +59,23 @@ export default function Login() {
     setForgotLoading(true)
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim().toLowerCase(), {
-        redirectTo: `${window.location.origin}/reset-password`,
+      // 2026-08-25: NON si usa piu' supabase.auth.resetPasswordForEmail.
+      // platform.dr7ai.com non e' nei "Redirect URLs" del progetto Supabase
+      // (condiviso col sito): GoTrue scartava l'indirizzo e rimandava alla
+      // Site URL, cioe' al sito pubblico. La function genera il token lato
+      // server e manda un link diretto qui. Vedi netlify/functions/
+      // request-password-reset.ts.
+      const res = await fetch('/.netlify/functions/request-password-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail.trim().toLowerCase() }),
       })
-      if (error) throw error
-      setForgotMessage('Email di recupero inviata. Controlla la tua casella di posta.')
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || 'Errore durante l\'invio dell\'email di recupero')
+      }
+      // Risposta volutamente identica anche se l'email non e' registrata.
+      setForgotMessage('Se l\'indirizzo appartiene a un operatore, l\'email di recupero e\' stata inviata. Controlla la casella di posta.')
     } catch (err: unknown) {
       setForgotError((err as Error).message || 'Errore durante l\'invio dell\'email di recupero')
     } finally {

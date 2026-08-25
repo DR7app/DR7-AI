@@ -20,6 +20,29 @@ export default function ResetPassword() {
       setReady(true)
     }
 
+    // 2026-08-25: link generato da netlify/functions/request-password-reset.ts.
+    // Arriva come ?token_hash=...&type=recovery invece del solito frammento
+    // #access_token: il token non e' ancora una sessione, va scambiato qui con
+    // verifyOtp (che parla con Supabase via SDK, senza passare da
+    // /auth/v1/verify e quindi senza dipendere dalla Site URL del dashboard).
+    const params = new URLSearchParams(window.location.search)
+    const tokenHash = params.get('token_hash')
+    const tipo = params.get('type')
+    if (tokenHash && (tipo === 'recovery' || tipo === 'invite' || tipo === 'magiclink')) {
+      supabase.auth
+        .verifyOtp({ token_hash: tokenHash, type: tipo })
+        .then(({ error: verifyError }) => {
+          if (verifyError) {
+            setError('Link non valido o scaduto. Richiedi una nuova email di recupero.')
+            return
+          }
+          setReady(true)
+          // Il token e' monouso: via dall'URL, cosi' un refresh non lo ripropone
+          // e non resta nella cronologia del browser.
+          window.history.replaceState({}, '', window.location.pathname)
+        })
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         setReady(true)
@@ -99,9 +122,18 @@ export default function ResetPassword() {
 
             {!ready ? (
               <div className="text-center space-y-4">
-                <p className="text-theme-text-muted text-sm">
-                  Caricamento in corso... Se non vieni reindirizzato, il link potrebbe essere scaduto.
-                </p>
+                {/* Il link scaduto/gia' usato va detto qui: il riquadro rosso
+                    del form non e' ancora montato, senza questo l'utente
+                    resterebbe su "Caricamento in corso" per sempre. */}
+                {error ? (
+                  <div className="bg-red-500/10 border border-red-500/30 text-red-500 px-4 py-3 rounded-full text-sm">
+                    {error}
+                  </div>
+                ) : (
+                  <p className="text-theme-text-muted text-sm">
+                    Caricamento in corso... Se non vieni reindirizzato, il link potrebbe essere scaduto.
+                  </p>
+                )}
                 <button
                   onClick={() => navigate('/login')}
                   className="text-sm text-dr7-gold hover:underline"
