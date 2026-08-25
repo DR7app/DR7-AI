@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import OtpInput from './OtpInput'
+import NumeroTelefono from '../../components/NumeroTelefono'
 
 interface ReferralRegistrationFormProps {
   onRegistered: (data: { participant_id: string; referral_code: string; balance_cents: number }) => void
@@ -199,7 +200,7 @@ export default function ReferralRegistrationForm({ onRegistered, initialReferral
         <div className="space-y-6">
           <div className="text-center">
             <p className="text-gray-400 mb-2">Abbiamo inviato un codice a 6 cifre via WhatsApp al numero</p>
-            <p className="text-white font-semibold text-lg">{telefono}</p>
+            <p className="text-white font-semibold text-lg"><NumeroTelefono valore={telefono} /></p>
           </div>
 
           <OtpInput value={otpCode} onChange={setOtpCode} disabled={loading} />

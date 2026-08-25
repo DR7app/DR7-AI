@@ -5,6 +5,7 @@ import { useAdminRole } from '../../../hooks/useAdminRole'
 import MechanicalBookingForm from './MechanicalBookingForm'
 import { getRomeDateComponents } from '../../../utils/timezoneUtils'
 import { logger } from '../../../utils/logger'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 interface MechanicalBooking {
   id: string
@@ -486,7 +487,7 @@ export default function MechanicalCalendarTab() {
                     </div>
                     <div>
                       <span className="text-theme-text-muted">Telefono:</span>
-                      <p className="text-theme-text-primary font-semibold">{booking.customer_phone || booking.booking_details?.customer?.phone || 'N/A'}</p>
+                      <p className="text-theme-text-primary font-semibold"><NumeroTelefono valore={booking.customer_phone || booking.booking_details?.customer?.phone} vuoto="N/A" /></p>
                     </div>
                     <div>
                       <span className="text-theme-text-muted">Email:</span>

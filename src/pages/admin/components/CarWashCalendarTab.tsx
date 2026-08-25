@@ -13,6 +13,7 @@ import { logAdminAction } from '../../../utils/logAdminAction'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 // 2026-05-22: Premium telemetry restyle scoped to this page only.
 // 2026-05-27: gated to dark mode only — overriding theme vars in light
@@ -1400,7 +1401,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                 </div>
                 <div className="px-4 py-3 flex items-center justify-between">
                   <span className="text-theme-text-muted text-sm">Telefono</span>
-                  <span className="text-theme-text-primary text-sm font-medium">{selectedBooking.customer_phone || selectedBooking.booking_details?.customer?.phone || '—'}</span>
+                  <span className="text-theme-text-primary text-sm font-medium"><NumeroTelefono valore={selectedBooking.customer_phone || selectedBooking.booking_details?.customer?.phone} vuoto="—" /></span>
                 </div>
               </div>
 

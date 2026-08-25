@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 // #38 Modifica manuale report: correggi/rimuovi/aggiungi voci autista.
 import { loadReportOverrides, applyOverrides, saveEditOverride, saveRemoveOverride, saveAddOverride, deleteOverrideByRow, deleteOverrideById, type LoadedOverrides } from '../../../utils/reportOverrides'
 import { ReportRowModal, type FieldDef } from './ReportRowModal'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 interface AutistaLite { id: string; full_name: string; phone: string }
 
@@ -433,7 +434,7 @@ export default function ReportAutistiTab() {
                         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                         {(s as any)._overrideNote && <span className="ml-1 text-[11px] text-amber-400" title={(s as any)._overrideNote}>✎</span>}
                       </td>
-                      <td className="px-4 py-2 text-theme-text-secondary">{s.phone || '—'}</td>
+                      <td className="px-4 py-2 text-theme-text-secondary"><NumeroTelefono valore={s.phone} vuoto="—" /></td>
                       <td className="px-4 py-2"><span className={s.count > 0 ? 'text-theme-text-primary font-semibold' : 'text-theme-text-muted'}>{s.count}</span></td>
                       <td className="px-4 py-2 text-theme-text-secondary">{fmtDate(s.last)}</td>
                       {editReport && (

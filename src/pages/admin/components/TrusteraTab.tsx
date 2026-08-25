@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 type SubTab = 'documenti' | 'marketing'
 
@@ -660,7 +661,7 @@ function DocumentiSubTab() {
                       {req.signer_phone && (
                         <div>
                           <span className="text-theme-text-muted">Telefono:</span>
-                          <p className="text-theme-text-primary">{req.signer_phone}</p>
+                          <p className="text-theme-text-primary"><NumeroTelefono valore={req.signer_phone} /></p>
                         </div>
                       )}
                       <div>
@@ -861,7 +862,7 @@ function MarketingConsentSubTab() {
                   <tr key={c.id} className="border-b border-theme-border/30 hover:bg-theme-bg-hover/50">
                     <td className="py-3 px-4 font-semibold text-theme-text-primary">{name}</td>
                     <td className="py-3 px-4 text-theme-text-secondary">{c.email || '-'}</td>
-                    <td className="py-3 px-4 text-theme-text-secondary">{c.telefono || '-'}</td>
+                    <td className="py-3 px-4 text-theme-text-secondary"><NumeroTelefono valore={c.telefono} vuoto="-" /></td>
                     <td className="py-3 px-4 text-center">
                       {c.marketing_consent === true && (
                         <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-dr7-gold/20 text-dr7-gold">Si</span>

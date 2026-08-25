@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 import Button from './Button'
 import NewClientModal from './NewClientModal'
 import { logger } from '../../../utils/logger'
@@ -2122,7 +2123,7 @@ export default function CustomersTab() {
                   </div>
                   <div>
                     <span className="text-sm text-theme-text-muted">Telefono:</span>
-                    <p className="text-sm text-theme-text-primary font-medium">{viewingCustomerDetails.telefono || viewingCustomerDetails.phone || '-'}</p>
+                    <NumeroTelefono valore={viewingCustomerDetails.telefono || viewingCustomerDetails.phone} link className="text-sm text-theme-text-primary font-medium" />
                   </div>
                   <div>
                     <span className="text-sm text-theme-text-muted">Numero Patente:</span>
@@ -2288,7 +2289,7 @@ export default function CustomersTab() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-theme-text-muted">Telefono:</span>
-                      <span className="text-sm text-theme-text-primary">{viewingDocuments.phone || '-'}</span>
+                      <NumeroTelefono valore={viewingDocuments.phone} className="text-sm text-theme-text-primary" />
                     </div>
                   </div>
                 </div>
@@ -2872,7 +2873,7 @@ export default function CustomersTab() {
 
             <div className="text-xs text-theme-text-muted space-y-0.5 mb-2">
               {customer.email && <div className="truncate">{customer.email}</div>}
-              {customer.phone && <div>{customer.phone}</div>}
+              {customer.phone && <div><NumeroTelefono valore={customer.phone} /></div>}
             </div>
 
             <div className="flex gap-2 flex-wrap">
@@ -3001,7 +3002,7 @@ export default function CustomersTab() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm text-theme-text-primary">{customer.email || '-'}</td>
-                  <td className="px-4 py-3 text-sm text-theme-text-primary">{customer.phone || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-theme-text-primary"><NumeroTelefono valore={customer.phone} /></td>
                   <td className="px-4 py-3 text-sm font-medium text-dr7-gold">{walletBalances.has(customer.id) ? `€${walletBalances.get(customer.id)!.toFixed(2)}` : '-'}</td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex gap-2 flex-wrap">

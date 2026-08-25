@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { authFetch } from '../../../utils/authFetch'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 interface SiteUser {
   id: string
@@ -195,7 +196,7 @@ export default function SiteUsersTab() {
                     <tr key={u.id} className="border-b border-theme-border/50 hover:bg-theme-bg-hover/30">
                       <td className="py-2 px-3 text-theme-text-primary font-medium">{fullName}</td>
                       <td className="py-2 px-3 text-theme-text-muted text-xs truncate max-w-[200px]">{u.email}</td>
-                      <td className="py-2 px-3 text-theme-text-muted text-xs">{u.telefono || '-'}</td>
+                      <td className="py-2 px-3 text-theme-text-muted text-xs"><NumeroTelefono valore={u.telefono} vuoto="-" /></td>
                       <td className="py-2 px-3 text-theme-text-muted text-xs whitespace-nowrap">{fmtDate(u.created_at)}</td>
                       <td className="py-2 px-3 text-theme-text-muted text-xs whitespace-nowrap">
                         {u.last_sign_in_at ? fmtDate(u.last_sign_in_at) : '-'}

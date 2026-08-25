@@ -8,6 +8,7 @@ import { formatEUR, centsToEuros } from '../../../utils/moneyUtils'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 interface BookingDetailsPanelProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -235,7 +236,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
               <div className="text-sm text-theme-text-muted">{booking.customer_email || resolvedCustomer?.email}</div>
             )}
             {(booking.customer_phone || resolvedCustomer?.phone) && (
-              <div className="text-sm text-theme-text-muted">{booking.customer_phone || resolvedCustomer?.phone}</div>
+              <div className="text-sm text-theme-text-muted"><NumeroTelefono valore={booking.customer_phone || resolvedCustomer?.phone} /></div>
             )}
           </div>
 

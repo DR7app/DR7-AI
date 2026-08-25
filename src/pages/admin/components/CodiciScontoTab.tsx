@@ -6,6 +6,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import toast from 'react-hot-toast'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 // Static accent palette mirrored on the screenshot — keeps each panel
 // visually distinct without inventing data.
@@ -586,7 +587,7 @@ export default function CodiciScontoTab() {
                                                 <>
                                                     <div className="text-theme-text-primary">{code.customer_email}</div>
                                                     {code.customer_phone && (
-                                                        <div className="text-theme-text-muted">{code.customer_phone}</div>
+                                                        <div className="text-theme-text-muted"><NumeroTelefono valore={code.customer_phone} /></div>
                                                     )}
                                                 </>
                                             ) : (
@@ -1076,7 +1077,7 @@ export default function CodiciScontoTab() {
                                                             >
                                                                 <div className="text-sm text-theme-text-primary font-medium truncate">{name}</div>
                                                                 <div className="text-xs text-theme-text-muted truncate">
-                                                                    {c.telefono || 'No phone'}{c.email ? ` · ${c.email}` : ''}
+                                                                    <NumeroTelefono valore={c.telefono} vuoto="No phone" />{c.email ? ` · ${c.email}` : ''}
                                                                 </div>
                                                             </button>
                                                         )

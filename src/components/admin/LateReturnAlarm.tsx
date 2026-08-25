@@ -3,6 +3,7 @@ import { supabase } from '../../supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import type { Session } from '@supabase/supabase-js';
+import NumeroTelefono from '../NumeroTelefono'
 
 interface LateBooking {
     id: string;
@@ -285,7 +286,7 @@ const LateReturnAlarm: React.FC = () => {
                                             <div className="text-[15px] font-semibold text-gray-900 truncate">{b.vehicle_name || 'Veicolo'}</div>
                                             <div className="text-sm text-gray-700 truncate">{b.customer_name}</div>
                                             {b.customer_phone && b.customer_phone !== '-' && (
-                                                <div className="text-xs text-gray-500 truncate">{b.customer_phone}</div>
+                                                <div className="text-xs text-gray-500 truncate"><NumeroTelefono valore={b.customer_phone} /></div>
                                             )}
                                         </div>
                                         <div className="shrink-0 text-right">

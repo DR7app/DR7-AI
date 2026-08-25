@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 interface Vehicle {
     id: string
@@ -1502,7 +1503,7 @@ export default function FleetInventory() {
                             if (top.length === 0) return null
                             return top.map(([phone, count]) => (
                                 <div key={phone} className="flex items-center justify-between text-xs py-1.5">
-                                    <span className="text-theme-text-primary font-mono">{phone}</span>
+                                    <span className="text-theme-text-primary font-mono"><NumeroTelefono valore={phone} /></span>
                                     <span className="text-theme-text-muted">{count} ricambi</span>
                                 </div>
                             ))
@@ -1678,7 +1679,7 @@ function FornitoriManagementPanel({ fornitori, onChanged }: { fornitori: FleetFo
               {fornitori.map(f => (
                 <tr key={f.id} className="border-t border-theme-border hover:bg-theme-bg-hover/30">
                   <td className="px-4 py-3 font-medium text-theme-text-primary">{f.nome}</td>
-                  <td className="px-4 py-3 text-theme-text-secondary font-mono">{f.telefono}</td>
+                  <td className="px-4 py-3 text-theme-text-secondary font-mono"><NumeroTelefono valore={f.telefono} /></td>
                   <td className="px-4 py-3 text-theme-text-muted text-xs">{f.note || '—'}</td>
                   <td className="px-4 py-3 text-right">
                     <button onClick={() => startEdit(f)} className="px-3 py-1 text-xs bg-theme-bg-tertiary hover:bg-theme-bg-hover rounded mr-1">Modifica</button>

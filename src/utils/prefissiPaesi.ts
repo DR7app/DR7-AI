@@ -295,3 +295,30 @@ export function componiNumero(dial: string, numeroLocale: string): string | null
     if (!locale) return null
     return `${dial}${locale}`
 }
+
+/**
+ * Paese di un numero salvato, per mostrarne la bandiera.
+ *
+ * Stessa lettura di `separaPrefisso`, quindi stessa convenzione: un numero
+ * senza "+" ne' "00" e' considerato italiano, esattamente come fa il resto
+ * del gestionale quando compone per Green API. Il prefisso piu' lungo vince
+ * (+377 Monaco non finisce letto come +37).
+ *
+ * Prefissi condivisi da piu' paesi (+1 US/CA, +7 RU/KZ): vince quello in
+ * PAESI_FREQUENTI, altrimenti il primo dell'elenco. Dal solo numero non si
+ * puo' distinguere, e tirare a indovinare un paese raro sarebbe peggio.
+ */
+export function paeseDaNumero(valore: string | null | undefined): Paese | null {
+    if (!(valore || '').trim()) return null
+    const { dial } = separaPrefisso(valore)
+    const candidati = PAESI.filter(p => p.dial === dial)
+    if (candidati.length === 0) return null
+    const frequente = PAESI_FREQUENTI.map(iso => candidati.find(p => p.iso === iso)).find(Boolean)
+    return frequente || candidati[0]
+}
+
+/** Bandiera del paese di un numero salvato; stringa vuota se non si capisce. */
+export function bandieraNumero(valore: string | null | undefined): string {
+    const paese = paeseDaNumero(valore)
+    return paese ? bandiera(paese.iso) : ''
+}

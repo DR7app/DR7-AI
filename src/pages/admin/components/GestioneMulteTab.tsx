@@ -5,6 +5,7 @@ import Button from './Button'
 import { logger } from '../../../utils/logger'
 import { loadMulteConfig, MULTE_CONFIG_DEFAULTS, type MulteConfigValues } from './MulteConfigSection'
 import { bookingBelongsTo, toBusiness, BUSINESS_LABELS, BUSINESSES, type Business } from '../../../utils/businessScope'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 /**
  * 2026-08-24 (direzione): "Multe" e' nel menu di ogni business. Lo storico
@@ -649,7 +650,7 @@ export default function GestioneMulteTab({ business }: { business?: Business | s
                                     </div>
                                     <div>
                                         <div className="text-[10px] text-theme-text-muted uppercase">Telefono</div>
-                                        <div className="text-theme-text-primary">{driverData.customer_phone || 'N/D'}</div>
+                                        <div className="text-theme-text-primary"><NumeroTelefono valore={driverData.customer_phone} vuoto="N/D" /></div>
                                     </div>
                                     <div>
                                         <div className="text-[10px] text-theme-text-muted uppercase">Residenza</div>

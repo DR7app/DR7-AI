@@ -5,6 +5,7 @@ import SocialLinksTab from './SocialLinksTab'
 import { getProKeyEventTriggers, EVENT_DESCRIPTIONS, suggestEventsForTemplate, PENDING_EVENTS } from '../../../utils/proTemplateRouting'
 const EVENT_LABELS_IT = EVENT_DESCRIPTIONS
 import toast from 'react-hot-toast'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 interface SystemMessage {
     id: string
@@ -5880,7 +5881,7 @@ export default function MessaggiSistemaProTab() {
                                                                                         {new Date(log.created_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
                                                                                     </span>
                                                                                     {log.customer_phone && (
-                                                                                        <span className="text-theme-text-secondary font-mono shrink-0">{log.customer_phone}</span>
+                                                                                        <span className="text-theme-text-secondary font-mono shrink-0"><NumeroTelefono valore={log.customer_phone} /></span>
                                                                                     )}
                                                                                     {log.error && (
                                                                                         <span className="text-red-400/80 truncate" title={log.error}>{log.error}</span>
@@ -6084,7 +6085,7 @@ export default function MessaggiSistemaProTab() {
                                             className="w-full text-left px-4 py-2.5 hover:bg-theme-bg-hover transition-colors border-b border-theme-border last:border-0"
                                         >
                                             <span className="font-medium text-theme-text-primary">{c.full_name}</span>
-                                            <span className="text-theme-text-muted text-sm ml-2">{c.telefono}</span>
+                                            <span className="text-theme-text-muted text-sm ml-2"><NumeroTelefono valore={c.telefono} /></span>
                                         </button>
                                     ))}
                                 </div>
@@ -6159,7 +6160,7 @@ export default function MessaggiSistemaProTab() {
                                             </span>
                                         )}
                                         <span className="font-medium text-theme-text-primary text-sm">{log.customer_name}</span>
-                                        <span className="text-xs text-theme-text-muted font-mono">{log.customer_phone}</span>
+                                        <span className="text-xs text-theme-text-muted font-mono"><NumeroTelefono valore={log.customer_phone} /></span>
                                     </div>
                                     <span className="text-xs text-theme-text-muted">
                                         {new Date(log.sent_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}

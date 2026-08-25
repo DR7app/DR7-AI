@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import { logger } from '../../../utils/logger'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 interface CustomerBirthday {
     id: string
@@ -701,7 +702,7 @@ export default function BirthdaysTab() {
                                     <td className="p-4">
                                         {customer.phone ? (
                                             <a href={`tel:${customer.phone}`} className="text-blue-400 hover:underline">
-                                                {customer.phone}
+                                                <NumeroTelefono valore={customer.phone} />
                                             </a>
                                         ) : (
                                             <span className="text-theme-text-muted">-</span>

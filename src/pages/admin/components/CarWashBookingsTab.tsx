@@ -26,6 +26,7 @@ import GestisciMenu, { type GestisciSection } from './GestisciMenu'
 import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 const ROME_TZ = 'Europe/Rome'
 
@@ -5296,7 +5297,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             </div>
                             <div className="text-xs text-dr7-gold font-mono">DR7-{String(booking.id || '').substring(0, 8).toUpperCase()}</div>
                             <div className="text-xs text-theme-text-muted">{booking.customer_email || booking.booking_details?.customer?.email || '-'}</div>
-                            <div className="text-xs text-theme-text-muted">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
+                            <div className="text-xs text-theme-text-muted"><NumeroTelefono valore={booking.customer_phone || booking.booking_details?.customer?.phone} vuoto="-" /></div>
                             {(booking.booking_details?.vehicleMakeModel || (booking.vehicle_name && booking.vehicle_name !== 'Car Wash Service')) && (
                               <div className="flex items-center gap-1.5 mt-1">
                                 <span className="text-xs text-theme-text-primary">{booking.booking_details?.vehicleMakeModel || booking.vehicle_name}</span>
@@ -5475,7 +5476,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                               DR7-{String(booking.id || '').substring(0, 8).toUpperCase()}
                             </div>
                             <div className="text-xs text-theme-text-muted mt-0.5">
-                              {booking.customer_phone || booking.booking_details?.customer?.phone || '-'}
+                              <NumeroTelefono valore={booking.customer_phone || booking.booking_details?.customer?.phone} vuoto="-" />
                             </div>
                           </>
                         )}

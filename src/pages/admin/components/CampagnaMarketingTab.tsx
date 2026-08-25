@@ -7,6 +7,7 @@ import { useClientStatus, tierToStatusKey } from '../../../contexts/ClientStatus
 import { clientStatusColor } from '../../../utils/clientStatusConfig'
 import CampaignCalendarView, { type ScheduledCampaign, type RecurrenceType } from './CampaignCalendarView'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 const ROME_TZ = 'Europe/Rome'
 
@@ -1211,7 +1212,7 @@ export default function CampagnaMarketingTab() {
                                                     />
                                                 </td>
                                                 <td className="p-2 text-theme-text-primary font-medium">{c.full_name}</td>
-                                                <td className="p-2 text-theme-text-muted text-xs">{c.phone || '-'}</td>
+                                                <td className="p-2 text-theme-text-muted text-xs"><NumeroTelefono valore={c.phone} vuoto="-" /></td>
                                             </tr>
                                         ))}
                                         {paginated.length === 0 && (

@@ -6,6 +6,7 @@ import NewClientModal from '../../../components/NewClientModal'
 import Button from './Button'
 import Input from './Input'
 import { logger } from '../../../utils/logger'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1504,7 +1505,7 @@ export default function CargosTab() {
                                                                 ? `${b.customerData.cognome} ${b.customerData.nome}`
                                                                 : b.customer_name || 'ND000000000'}
                                                         </div>
-                                                        <div className="text-xs text-theme-text-muted">{b.customer_phone || ''}</div>
+                                                        <div className="text-xs text-theme-text-muted"><NumeroTelefono valore={b.customer_phone} /></div>
                                                     </td>
                                                     <td className="px-3 py-2.5 text-theme-text-primary">{b.vehicle_name}</td>
                                                     <td className="px-3 py-2.5 font-mono text-theme-text-primary">{b.vehicle_plate || b.booking_details?.vehicle_plate || '—'}</td>

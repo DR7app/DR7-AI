@@ -35,6 +35,7 @@ import {
   isWithinOfficeHoursForDate,
 } from '../../../utils/noleggioHours'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 // ─── Time slots ─────────────────────────────────────────────────────────────
 //
@@ -4731,7 +4732,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
                       )}
                       {!p.customer_name && p.customer_phone && (
                         <div className="text-xs text-theme-text-muted flex items-center gap-1.5 flex-wrap">
-                          <span>{p.customer_phone}</span>
+                          <span><NumeroTelefono valore={p.customer_phone} /></span>
                           <ClientStatusBadge phone={p.customer_phone} />
                         </div>
                       )}

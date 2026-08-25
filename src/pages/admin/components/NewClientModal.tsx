@@ -8,6 +8,7 @@ import CalcolaCFButton from '../../../components/CalcolaCFButton'
 import CompilaButton, { type ExtractedData, type DataConflict } from '../../../components/CompilaButton'
 import { validateIban, formatIbanGroups } from '../../../utils/ibanValidation'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -1234,7 +1235,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   {(previewName || '?').split(/\s+/).slice(0, 2).map(p => p[0]?.toUpperCase()).join('') || '?'}
                 </div>
                 <div className="font-bold text-theme-text-primary truncate w-full">{previewName || 'Nuovo cliente'}</div>
-                <div className="text-xs text-theme-text-muted mt-0.5 truncate w-full">{formData.telefono || '—'}</div>
+                <div className="text-xs text-theme-text-muted mt-0.5 truncate w-full"><NumeroTelefono valore={formData.telefono} vuoto="—" /></div>
                 <div className="text-xs text-theme-text-muted truncate w-full">{formData.email || '—'}</div>
                 <div className="mt-3 text-[11px] text-theme-text-muted px-2">
                   L'anteprima riflette in tempo reale i dati inseriti nel form.

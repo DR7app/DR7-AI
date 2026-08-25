@@ -3,6 +3,7 @@ import { fetchAllRows } from '../../../utils/fetchAllRows'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import toast from 'react-hot-toast'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 interface CompletedBooking {
     id: string
@@ -544,7 +545,7 @@ export default function ReviewsTab() {
                                         </td>
                                         <td className="p-4 text-sm text-theme-text-muted">
                                             <div>{b.customer_email || '-'}</div>
-                                            <div>{b.customer_phone || '-'}</div>
+                                            <div><NumeroTelefono valore={b.customer_phone} vuoto="-" /></div>
                                         </td>
                                         <td className="p-4 text-dr7-gold font-mono">
                                             €{(b.price_total / 100).toFixed(2)}

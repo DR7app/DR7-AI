@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 interface Cauzione {
     id: string
@@ -334,7 +335,7 @@ export default function CheckInTab() {
                                         </div>
                                     </div>
                                     {phone && (
-                                        <div className="text-sm text-theme-text-muted">{phone}</div>
+                                        <div className="text-sm text-theme-text-muted"><NumeroTelefono valore={phone} /></div>
                                     )}
                                     {booking.customer_email && (
                                         <div className="text-sm text-theme-text-muted">{booking.customer_email}</div>
@@ -414,7 +415,7 @@ export default function CheckInTab() {
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-4">
-                                                    <span className="text-theme-text-primary text-sm">{phone || '-'}</span>
+                                                    <span className="text-theme-text-primary text-sm"><NumeroTelefono valore={phone} vuoto="-" /></span>
                                                 </td>
                                                 <td className="px-4 py-4">
                                                     <span className="text-theme-text-primary text-sm">{booking.pickup_location || '-'}</span>

@@ -10,6 +10,7 @@ import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import DateRangeFilter from '../../../components/DateRangeFilter'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 interface Customer {
   id: string
@@ -378,7 +379,7 @@ export default function MechanicalBookingTab() {
               <tr key={booking.id} className="border-t border-theme-border hover:bg-theme-bg-tertiary/50">
                 <td className="px-4 py-3 text-sm text-theme-text-primary">
                   <div>{booking.customer_name || booking.booking_details?.customer?.fullName || 'N/A'}</div>
-                  <div className="text-theme-text-muted text-xs">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
+                  <div className="text-theme-text-muted text-xs"><NumeroTelefono valore={booking.customer_phone || booking.booking_details?.customer?.phone} vuoto="-" /></div>
                 </td>
                 <td className="px-4 py-3 text-sm">
                   <ClientStatusBadge

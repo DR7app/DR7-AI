@@ -7,6 +7,7 @@ import LimitationOverrideModal from '../../../components/LimitationOverrideModal
 import { authFetch } from '../../../utils/authFetch'
 import WalletAnalytics from './WalletAnalytics'
 import MoneyInput from '../../../components/MoneyInput'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 
 interface CustomerResult {
   id: string
@@ -770,7 +771,7 @@ export default function CustomerWalletTab() {
 
                       {/* Telefono */}
                       <div className="text-sm text-theme-text-secondary truncate">
-                        {customer.phone || '—'}
+                        <NumeroTelefono valore={customer.phone} vuoto="—" />
                       </div>
 
                       {/* Email */}

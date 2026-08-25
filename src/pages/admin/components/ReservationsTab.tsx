@@ -78,6 +78,7 @@ import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
 import UscitaStraordinariaModal from './UscitaStraordinariaModal'
 import { USCITA_SERVICE_TYPE, USCITA_ASSET_LABELS, uscitaBelongsTo, uscitaUsaFlottaAuto } from '../../../utils/uscitaStraordinaria'
+import NumeroTelefono from '../../../components/NumeroTelefono'
 import MissingFieldsModal from '../../../components/MissingFieldsModal'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import PenaltyModal from './PenaltyModal'
@@ -11016,7 +11017,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                           email={booking.customer_email || booking.booking_details?.customer?.email}
                         />
                       </div>
-                      <div className="text-sm text-theme-text-muted">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
+                      <div className="text-sm text-theme-text-muted"><NumeroTelefono valore={booking.customer_phone || booking.booking_details?.customer?.phone} vuoto="-" /></div>
                     </div>
                     {isCourtesy ? (
                       <span className="px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap bg-sky-500/20 text-sky-300 border border-sky-500/40">
@@ -11199,7 +11200,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                           />
                         </td>
                         <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
-                          {booking.customer_phone || booking.booking_details?.customer?.phone || '-'}
+                          <NumeroTelefono valore={booking.customer_phone || booking.booking_details?.customer?.phone} vuoto="-" />
                         </td>
                         <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap w-full">
                           {isCarWash ? (
