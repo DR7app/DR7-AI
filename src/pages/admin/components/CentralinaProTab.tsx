@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { CONTRATTO_VOCI as VOCI, CONTRATTO_DEFAULT as VOCI_DEFAULT, type ContrattoAzione } from '../../../utils/contrattoModifiche'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
@@ -1437,6 +1438,25 @@ function businessRow(id: BusinessId): string {
   return BUSINESSES.find(b => b.id === id)?.row || 'main'
 }
 
+/**
+ * Config di partenza di un business MAI configurato: nessuna eredita' da Terra.
+ * Le voci elencate qui restano vuote di proposito — sono quelle legate alle
+ * categorie (che su Mare/Aria/Soggiorni non sono quelle delle auto). Le altre
+ * sezioni non compaiono: applyRemoteSnapshot le porta ai valori di partenza,
+ * non a quelli di Terra. Terra ('main') non passa mai di qui.
+ */
+function snapshotVuoto(id: BusinessId): PersistedSnapshot {
+  if (id === 'terra') return { categories: INITIAL_CATEGORIES } as unknown as PersistedSnapshot
+  return {
+    categories: [],
+    insurance: [],
+    km: [],
+    deposits: {},
+    penali: {},
+    danni: {},
+  } as unknown as PersistedSnapshot
+}
+
 async function loadPersistedFromSupabase(rowId: string = 'main'): Promise<PersistedSnapshot | null> {
   try {
     const { data, error } = await supabase
@@ -1594,6 +1614,9 @@ function mergePrezzoDinamico(saved: Partial<PrezzoDinamicoConfig> | null | undef
   }
 }
 
+export { CONTRATTO_VOCI, CONTRATTO_DEFAULT } from '../../../utils/contrattoModifiche'
+export type { ContrattoAzione } from '../../../utils/contrattoModifiche'
+
 // ── Contratto & Modifiche ────────────────────────────────────────────────────
 // 2026-08-20 (richiesta direzione): finora QUALSIASI modifica a una prenotazione
 // gia' firmata riconduceva il contratto (firma originale ristampata sulle nuove
@@ -1608,36 +1631,6 @@ function mergePrezzoDinamico(saved: Partial<PrezzoDinamicoConfig> | null | undef
 // firma o COSA ha accettato in termini di responsabilita' (veicolo, guidatore,
 // garanti, copertura assicurativa); si RICONDUCE quando cambiano importi,
 // date o condizioni gia' coperte dalla clausola di riconduzione.
-export const CONTRATTO_VOCI: { key: string; label: string; hint: string }[] = [
-  { key: 'veicolo',    label: 'Cambio veicolo',        hint: 'Targa o modello diversi da quelli firmati' },
-  { key: 'date_orari', label: 'Date e orari',          hint: 'Ritiro o riconsegna spostati' },
-  { key: 'prezzo',     label: 'Prezzo',                hint: 'Totale del noleggio modificato' },
-  { key: 'guidatore',  label: 'Guidatore / conducente', hint: 'Intestatario o secondo guidatore cambiato' },
-  { key: 'luoghi',     label: 'Luoghi ritiro/riconsegna', hint: 'Indirizzo di consegna o rientro diverso' },
-  { key: 'estensione', label: 'Estensione',            hint: 'Noleggio prolungato oltre la data firmata' },
-  { key: 'garanti',    label: 'Garanti',               hint: 'Garante veicolo o fideiussori aggiunti, tolti o cambiati' },
-  { key: 'assicurazioni', label: 'Assicurazioni',      hint: 'Formula, copertura o franchigia diverse da quelle accettate' },
-  { key: 'cauzione',   label: 'Cauzioni',              hint: 'Importo o formula della cauzione modificati' },
-  { key: 'servizi_extra', label: 'Servizi extra',      hint: 'Servizi aggiuntivi aggiunti o rimossi (seggiolino, consegna, accessori...)' },
-  { key: 'km',         label: 'Km',                    hint: 'Km inclusi o tariffa di sforo modificati' },
-  { key: 'metodo_pagamento', label: 'Metodo pagamento', hint: 'Modalita\' di pagamento diversa da quella indicata nel contratto' },
-]
-export type ContrattoAzione = 'rifirma' | 'ricondotto'
-export const CONTRATTO_DEFAULT: Record<string, ContrattoAzione> = {
-  veicolo: 'rifirma',      // il default che la direzione ha chiesto esplicitamente
-  date_orari: 'ricondotto',
-  prezzo: 'ricondotto',
-  guidatore: 'rifirma',    // firma una persona diversa: va rifirmato
-  luoghi: 'ricondotto',
-  estensione: 'ricondotto', // e' esattamente il caso per cui la clausola esiste
-  garanti: 'rifirma',       // il garante FIRMA: se cambia, la firma vecchia non lo copre
-  assicurazioni: 'rifirma', // cambia la franchigia a carico del cliente
-  cauzione: 'ricondotto',
-  servizi_extra: 'ricondotto',
-  km: 'ricondotto',
-  metodo_pagamento: 'ricondotto',
-}
-
 function ContrattoModificheSection({ regole, setRegole }: {
   regole: Record<string, ContrattoAzione>
   setRegole: (r: Record<string, ContrattoAzione>) => void
@@ -1660,8 +1653,8 @@ function ContrattoModificheSection({ regole, setRegole }: {
       </div>
 
       <div className="space-y-2">
-        {CONTRATTO_VOCI.map(v => {
-          const val = regole[v.key] || CONTRATTO_DEFAULT[v.key] || 'ricondotto'
+        {VOCI.map(v => {
+          const val = regole[v.key] || VOCI_DEFAULT[v.key] || 'ricondotto'
           return (
             <div key={v.key} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-theme-border bg-theme-bg-primary px-4 py-3">
               <div className="min-w-0">
@@ -1763,7 +1756,7 @@ export default function CentralinaProTab() {
   const [km, setKm] = useState<KmConfig[]>(initialKm)
   const [deposits, setDeposits] = useState<DepositsConfig>(initialDeposits)
   // Regole "cosa fa una modifica al contratto gia' firmato" — vedi CONTRATTO_VOCI.
-  const [contrattoRegole, setContrattoRegole] = useState<Record<string, ContrattoAzione>>(CONTRATTO_DEFAULT)
+  const [contrattoRegole, setContrattoRegole] = useState<Record<string, ContrattoAzione>>(VOCI_DEFAULT)
   const [servizi, setServizi] = useState<ServiziConfig>(initialServizi)
   const [prezzoDinamico, setPrezzoDinamico] = useState<PrezzoDinamicoConfig>(initialPrezzoDinamico)
   const [preventivi, setPreventivi] = useState<PreventiviConfig>(initialPreventivi)
@@ -1843,16 +1836,24 @@ export default function CentralinaProTab() {
     { const v = remote.lavaggio_hours ?? INITIAL_LAVAGGIO_HOURS; setLavaggioHours(v); setSavedLavaggioHours(v) }
     { const v = remote.noleggio_hours ?? INITIAL_NOLEGGIO_HOURS; setNoleggioHours(v); setSavedNoleggioHours(v) }
     { const so = Array.isArray(remote.sezioni_off) ? remote.sezioni_off : []; setSezioniOff(so); setSavedSezioniOff(so) }
-    { const cm = (remote.contratto_modifica && typeof remote.contratto_modifica === 'object') ? remote.contratto_modifica as Record<string, ContrattoAzione> : null; setContrattoRegole({ ...CONTRATTO_DEFAULT, ...(cm || {}) }) }
+    { const cm = (remote.contratto_modifica && typeof remote.contratto_modifica === 'object') ? remote.contratto_modifica as Record<string, ContrattoAzione> : null; setContrattoRegole({ ...VOCI_DEFAULT, ...(cm || {}) }) }
   }
 
-  // Snapshot corrente dagli state hook (per salvataggio + copia al cambio business).
-  function buildSnapshot(): PersistedSnapshot {
-    return { categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours, sezioni_off: sezioniOff, contratto_modifica: contrattoRegole }
-  }
+  // (buildSnapshot e' stato rimosso il 2026-08-25: serviva SOLO a copiare Terra
+  // sul business appena aperto. Il salvataggio costruisce il suo snapshot da
+  // solo, con le cauzioni ripulite — vedi savePersisted piu' sotto.)
 
-  // Cambio business: salva il corrente sulla sua riga, poi carica il nuovo. Se
-  // il nuovo non esiste ancora, lo semina come COPIA di Terra ('main').
+  // Cambio business: salva il corrente sulla sua riga, poi carica il nuovo.
+  //
+  // 2026-08-25 (direzione): "LES BUSINESS DOIVENT ETRE INDEPENDANTS". Fino a
+  // oggi la PRIMA apertura di Mare / Aria / Soggiorni / Lavaggio copiava tutta
+  // la config di Terra sulla riga del business: categorie auto sulle barche,
+  // prezzi, penali, danni e cauzioni del noleggio auto sugli elicotteri. Ogni
+  // business nasceva come un clone di Terra e sembrava "gia' configurato".
+  // Adesso un business mai configurato parte PULITO: categorie vuote (le
+  // proprie se le crea) e il resto ai valori di partenza, senza ereditare
+  // niente da Terra. E non si scrive niente sulla riga finche' non si preme
+  // Salva: aprire un business per guardarlo non lo configura.
   async function switchBusiness(newId: BusinessId) {
     if (newId === businessId || switchingBusiness) return
     // Non auto-committiamo: il salvataggio resta esplicito (tasto Salva). Se ci
@@ -1867,12 +1868,7 @@ export default function CentralinaProTab() {
       // carica il nuovo business
       const targetRow = businessRow(newId)
       let remote = await loadPersistedFromSupabase(targetRow)
-      if (!remote) {
-        // Semina da una copia di Terra ('main'), poi persisti sulla nuova riga.
-        const terra = await loadPersistedFromSupabase('main') || buildSnapshot()
-        remote = JSON.parse(JSON.stringify(terra)) as PersistedSnapshot
-        savePersisted(remote, targetRow)
-      }
+      if (!remote) remote = snapshotVuoto(newId)
       setBusinessId(newId)
       applyRemoteSnapshot(remote)
       setJustSaved(false)

@@ -5,6 +5,7 @@ import { isWithinOfficeHoursForDate, getOfficeMinuteRangesForDate } from '../../
 import { supabase } from '../../../supabaseClient'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import { decidiAzioneContratto, type ContrattoAzione } from '../../../utils/contrattoModifiche'
+import { businessRowForServiceType } from '../../../utils/businessConfigClient'
 import { isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
 import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
 import {
@@ -1174,35 +1175,51 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   // per voce. Scritte da Centralina Pro > Contratto & Modifiche. Fino al
   // 2026-08-25 questa config veniva salvata ma NON letta da nessuno: ogni
   // modifica riconduceva, anche il cambio veicolo impostato su "Rifirma".
+  //
+  // 2026-08-25 (direzione): ogni business ha la SUA configurazione. Questa tab
+  // serve Terra ma anche le uscite di Mare/Aria/Soggiorni: leggeva sempre e
+  // solo la riga 'main', quindi le regole impostate stando su Noleggio Aria
+  // finivano su `business_aria` e non le applicava nessuno. Adesso si legge la
+  // riga del business del servizio, con fallback su 'main' voce per voce: chi
+  // non ha configurato eredita l'azienda, chi ha configurato viene rispettato.
   const [contrattoRegole, setContrattoRegole] = useState<Record<string, ContrattoAzione> | null>(null)
+  const configRowId = businessRowForServiceType(serviceType)
   useEffect(() => {
     let cancelled = false
-    ;(async () => {
+    type ProCfg = { deposits?: Record<string, unknown>; automations?: ProAutomations; contratto_modifica?: Record<string, ContrattoAzione> }
+    const applica = (business: ProCfg | null, main: ProCfg | null) => {
+      const scegli = <T,>(pick: (c: ProCfg) => T | undefined | null): T | null =>
+        (business ? pick(business) : null) ?? (main ? pick(main) : null) ?? null
+      setProDeposits(scegli<Record<string, unknown>>(c => c.deposits))
+      setCoeffFlags(buildCoeffFlags(scegli<ProAutomations>(c => c.automations) || undefined))
+      setContrattoRegole(scegli<Record<string, ContrattoAzione>>(c => c.contratto_modifica))
+    }
+    const leggi = async () => {
+      const ids = configRowId === 'main' ? ['main'] : [configRowId, 'main']
       const { data } = await supabase
         .from('centralina_pro_config')
-        .select('config')
-        .eq('id', 'main')
-        .maybeSingle()
+        .select('id, config')
+        .in('id', ids)
       if (cancelled) return
-      const cfg = (data?.config as { deposits?: Record<string, unknown>; automations?: ProAutomations; contratto_modifica?: Record<string, ContrattoAzione> } | undefined) || {}
-      setProDeposits(cfg.deposits || null)
-      setCoeffFlags(buildCoeffFlags(cfg.automations))
-      setContrattoRegole(cfg.contratto_modifica || null)
-    })()
+      const righe = (data || []) as { id: string; config: ProCfg | null }[]
+      const main = righe.find(r => r.id === 'main')?.config || null
+      const business = configRowId === 'main' ? main : (righe.find(r => r.id === configRowId)?.config || null)
+      applica(business, main)
+    }
+    leggi()
+    // Realtime: il filtro accetta un solo id, e le righe da seguire sono due
+    // (business + main). Si ascolta la tabella e si rilegge quando cambia una
+    // delle due — la rilettura tiene insieme la precedenza business/main.
     const channel = supabase
       .channel('reservations-deposits')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config', filter: 'id=eq.main' }, (payload) => {
-        const cfg = (payload.new as { config?: { deposits?: Record<string, unknown>; automations?: ProAutomations; contratto_modifica?: Record<string, ContrattoAzione> } } | undefined)?.config
-        if (cfg && typeof cfg === 'object') {
-          setProDeposits(cfg.deposits || null)
-          setCoeffFlags(buildCoeffFlags(cfg.automations))
-          setContrattoRegole(cfg.contratto_modifica || null)
-        }
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config' }, (payload) => {
+        const id = (payload.new as { id?: string } | undefined)?.id
+        if (id === 'main' || id === configRowId) leggi()
       })
       .subscribe()
     return () => { cancelled = true; supabase.removeChannel(channel) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [configRowId])
 
   // Full list of cauzione options for the current (vehicle category × fascia × residenza)
   // pulled live from Centralina Pro. Drives the new "Opzione Cauzione" dropdown
@@ -4546,7 +4563,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               const contractRes = await authFetch('/.netlify/functions/generate-contract', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ bookingId: extendingBooking.id, reconduct: true }),
+                body: JSON.stringify({ bookingId: extendingBooking.id, reconduct: true, motivo: 'estensione' }),
               })
               if (contractRes.ok) {
                 const cd = await contractRes.json().catch(() => ({} as any))
@@ -7434,6 +7451,33 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           '| che impongono la rifirma:', azioneContratto.vociRifirma,
           '→', reconductThisSave ? 'RICONDOTTO' : 'RIFIRMA')
       }
+
+      // 2026-08-25: la decisione RIFIRMA va SCRITTA sulla prenotazione, non solo
+      // usata qui. Senza traccia, bastava un "Rinvia contratto" o il callback del
+      // saldo pagato (che passano reconduct:true fisso) per riconciliare comunque:
+      // il cliente riceveva il contratto gia' firmato per la vettura che non aveva
+      // mai accettato. generate-contract legge questo flag e RIFIUTA di riconciliare
+      // finche' e' alzato; signature-complete lo abbassa quando la firma nuova
+      // arriva davvero.
+      if (editingId && azioneContratto.rifirma && insertedBooking?.id) {
+        try {
+          const { data: bRow } = await supabase
+            .from('bookings').select('booking_details').eq('id', insertedBooking.id).maybeSingle()
+          const bd = (bRow?.booking_details || {}) as Record<string, unknown>
+          await supabase.from('bookings').update({
+            booking_details: {
+              ...bd,
+              contratto_rifirma_richiesta: true,
+              contratto_rifirma_voci: azioneContratto.vociRifirma,
+              contratto_rifirma_at: new Date().toISOString(),
+            },
+          }).eq('id', insertedBooking.id)
+        } catch (flagErr) {
+          // Non blocca il salvataggio: il link di firma parte comunque qui sotto.
+          console.error('[Contratto] flag rifirma non salvato:', flagErr)
+        }
+      }
+
       let contractReconducted = false
       try {
         const genRes = await handleGenerateContract(insertedBooking, false, { reconduct: reconductThisSave })
