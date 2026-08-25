@@ -33,8 +33,18 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-/** Netlify valorizza URL con il dominio primario del sito (platform.dr7ai.com). */
-const BASE_URL = process.env.URL || 'https://platform.dr7ai.com'
+/**
+ * Dominio del GESTIONALE, esplicito e non calcolato.
+ *
+ * Sono due recuperi password distinti che NON devono mai incrociarsi:
+ *   - gestionale -> platform.dr7ai.com/reset-password  (questa function)
+ *   - sito       -> dr7.app/reset-password             (Sito/netlify/functions/
+ *                                                       request-password-reset.js)
+ * Con `process.env.URL` il valore dipenderebbe dal dominio primario impostato
+ * su Netlify: se cambia, l'operatore rischia di nuovo di atterrare sul sito.
+ * ADMIN_BASE_URL resta come scappatoia (staging, dominio nuovo).
+ */
+const BASE_URL = process.env.ADMIN_BASE_URL || 'https://platform.dr7ai.com'
 
 /** Risposta unica: non riveliamo mai se l'email e' registrata. */
 function ok(headers: Record<string, string>) {
