@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing'
+import { fetchAllRows } from '../../../utils/fetchAllRows'
+import { loadCached } from '../../../utils/dataCache'
 import { isWithinOfficeHoursForDate, getOfficeMinuteRangesForDate } from '../../../utils/noleggioHours'
 import { supabase } from '../../../supabaseClient'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
@@ -2312,7 +2314,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   const [userEmail, setUserEmail] = useState<string | null>(null)
 
   useEffect(() => {
-    loadData()
+    // Apertura tab: se le stesse letture sono state fatte da poco si riusano,
+    // cosi' tornare su Noleggio non ricarica mezza tabella. Ogni ricarica
+    // dopo un salvataggio passa da `loadData()` senza opzioni e rilegge.
+    loadData({ useCache: true })
     // Fetch current user email
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
@@ -2481,52 +2486,105 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.vehicle_id, rentalConfig])
 
-  async function loadData() {
+  async function loadData(opts: { useCache?: boolean } = {}) {
     setLoading(true)
+    // `useCache` e' vero SOLO all'apertura della tab: tornare su Noleggio dopo
+    // pochi secondi non deve riscaricare mezza tabella. Tutti i richiami dopo
+    // un salvataggio arrivano senza opzioni, quindi rileggono dal database e
+    // il numero a video e' quello appena scritto.
+    const bypass = !opts.useCache
     try {
-      // Fetch ALL bookings to ensure we don't filter out NULLs or unexpected values via SQL
-      // We will filter client-side to be 100% sure we get what we want.
-      // 2026-07-27 FIX (bug Andrea Testa): PostgREST limita ogni richiesta a 1000
-      // righe. Senza paginare, con oltre 1000 prenotazioni totali (car wash + tour
-      // + shadow rows vivono tutte in `bookings`) le prenotazioni piu' vecchie
-      // sparivano dalla lista Noleggio pur restando visibili nel calendario.
-      // Paginiamo in blocchi da 1000 finche' non arriviamo in fondo.
+      // 25/08/2026 - apertura della tab: da SOMMA a MASSIMO.
+      //
+      // Le letture qui sotto sono indipendenti fra loro, ma erano sei `await`
+      // in fila: il tempo di apertura era la somma dei sei (12 s misurati).
+      // Ora partono tutte INSIEME e si aspettano insieme. Stesse tabelle,
+      // stesse colonne, stesse righe: non si carica un dato in meno.
+      //
+      // 2026-07-27 FIX (bug Andrea Testa): PostgREST limita ogni richiesta a
+      // 1000 righe, quindi le tabelle grandi vanno paginate o le prenotazioni
+      // piu' vecchie spariscono. `fetchAllRows` pagina esattamente come prima,
+      // ma chiede le pagine in parallelo invece che una dopo l'altra.
+      //
+      // NB: i builder di supabase-js partono solo quando qualcuno chiama
+      // `then()`, quindi qui va messo `.then(r => r)` - senza, la richiesta
+      // resterebbe ferma fino all'await e non ci sarebbe nessun parallelismo.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const allBookings: any[] = []
-      let bookingsError: unknown = null
-      {
-        const PAGE = 1000
-        for (let start = 0; ; start += PAGE) {
-          const { data: page, error: pageErr } = await supabase
-            .from('bookings')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .range(start, start + PAGE - 1)
-          if (pageErr) { bookingsError = pageErr; break }
-          if (!page || page.length === 0) break
-          allBookings.push(...page)
-          if (page.length < PAGE) break
-        }
-      }
+      const bookingsPromise = loadCached('reservations:bookings', () => fetchAllRows<any>((from, to) => supabase
+        .from('bookings')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, to)), { bypass })
 
-      // Fetch contracts separately to avoid join issues. Paginato come i bookings
-      // (>1000 contratti) cosi' il link "contratto firmato" non sparisce sulle
+      const contractsPromise = loadCached('reservations:contracts', () => fetchAllRows<{ booking_id: string; signed_pdf_url: string | null }>((from, to) => supabase
+        .from('contracts')
+        .select('booking_id, signed_pdf_url')
+        .range(from, to), { dedupeById: false }), { bypass })
+
+      // customers_extended passa dalla Netlify function (bypassa la RLS e
+      // pagina oltre le 1000 righe).
+      const customersExtendedPromise = loadCached('reservations:customers_extended', async () => {
+        try {
+          const custResponse = await fetch('/.netlify/functions/list-customers')
+          const custResult = await custResponse.json()
+          if (custResponse.ok && custResult.customers) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return { rows: custResult.customers as any[], error: null as { message: string } | null }
+          }
+          return { rows: null, error: { message: custResult.error } as { message: string } | null }
+        } catch (e: unknown) {
+          const errMsg = e instanceof Error ? e.message : String(e)
+          return { rows: null, error: { message: errMsg } as { message: string } | null }
+        }
+      }, { bypass })
+
+      const legacyCustomersPromise = loadCached('reservations:customers_legacy', () => supabase
+        .from('customers')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .then(r => r), { bypass })
+
+      // I mezzi selezionabili. Terra li prende dalla flotta (`vehicles`);
+      // Mare, Aria e Soggiorni dal catalogo del business.
+      const vehiclesPromise = loadCached(`reservations:vehicles:${serviceType || 'terra'}`, () => (isAltroBusiness
+        ? supabase
+            .from('noleggio_catalog')
+            .select('id, name, price_per_day, is_active')
+            .eq('service_type', serviceType)
+            .order('sort_order', { ascending: true })
+            .order('name', { ascending: true })
+        : supabase
+            .from('vehicles')
+            .select('*')
+            .or('status.neq.retired,display_name.eq.Test')
+            .order('display_name')
+      ).then(r => r), { bypass })
+
+      const reservationsPromise = fetch(`${API_BASE}/reservations`, {
+        headers: { 'Authorization': `Bearer ${API_TOKEN}` }
+      }).then(async r => {
+        if (!r.ok) {
+          console.error('Reservations API error:', r.status, await r.text())
+          return { data: [] }
+        }
+        return r.json()
+      }).catch((apiError) => {
+        console.error('API fetch error:', apiError)
+        return { data: [] }
+      })
+
+      const [bookingsRes, contractsRes] = await Promise.all([bookingsPromise, contractsPromise])
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const allBookings: any[] = bookingsRes.data
+      const bookingsError: unknown = bookingsRes.error
+
+      // Contratti presi a parte per evitare i problemi di join. Paginati come
+      // i bookings cosi' il link "contratto firmato" non sparisce sulle
       // prenotazioni piu' vecchie.
       const contractsMap = new Map()
-      let contractsError: unknown = null
-      {
-        const PAGE = 1000
-        for (let start = 0; ; start += PAGE) {
-          const { data: page, error: pageErr } = await supabase
-            .from('contracts')
-            .select('booking_id, signed_pdf_url')
-            .range(start, start + PAGE - 1)
-          if (pageErr) { contractsError = pageErr; break }
-          if (!page || page.length === 0) break
-          page.forEach(c => contractsMap.set(c.booking_id, c))
-          if (page.length < PAGE) break
-        }
-      }
+      const contractsError: unknown = contractsRes.error
+      contractsRes.data.forEach(c => contractsMap.set(c.booking_id, c))
 
       if (contractsError) {
         console.error('Failed to load contracts:', contractsError)
@@ -2592,15 +2650,19 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
       setBookings(filteredBookings)
 
-      // Fetch customers from bookings table (same as CustomersTab)
-      const { data: bookingsForCustomers, error: bookingsCustomerError } = await supabase
-        .from('bookings')
-        .select('customer_name, customer_email, customer_phone, user_id, booked_at, booking_details')
-        .order('booked_at', { ascending: false })
-
-      if (bookingsCustomerError) {
-        console.error('Failed to load customers from bookings:', bookingsCustomerError)
-      }
+      // I clienti "derivati" dalle prenotazioni. Prima erano una SECONDA
+      // lettura completa di `bookings` (stesse righe, sei colonne) e per di
+      // piu' senza paginazione, quindi tagliata a 1000 righe: i clienti delle
+      // prenotazioni piu' vecchie non arrivavano mai. Ora si riusano le righe
+      // gia' in memoria - piu' complete, non meno - riordinate come prima
+      // (booked_at decrescente) perche' l'ordine decide quale nome vince
+      // quando lo stesso cliente compare su piu' prenotazioni.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const bookingsForCustomers: any[] = [...allBookings].sort((a, b) => {
+        const ta = a.booked_at ? new Date(a.booked_at).getTime() : 0
+        const tb = b.booked_at ? new Date(b.booked_at).getTime() : 0
+        return tb - ta
+      })
 
       // CRITICAL FIX: Use customer ID as the canonical Map key
       // This ensures no duplicates and all customers from customers_extended are loaded
@@ -2661,23 +2723,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
       logger.log('[ReservationsTab] Customers from bookings:', customerMap.size)
 
-      // Also fetch from customers_extended via Netlify function (bypasses RLS, paginates beyond 1000 limit)
+      // customers_extended: la richiesta e' partita a inizio loadData.
+      const custOutcome = await customersExtendedPromise
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let customersExtendedData: any[] | null = null
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let customersExtendedError: any = null
-      try {
-        const custResponse = await fetch('/.netlify/functions/list-customers')
-        const custResult = await custResponse.json()
-        if (custResponse.ok && custResult.customers) {
-          customersExtendedData = custResult.customers
-        } else {
-          customersExtendedError = { message: custResult.error }
-        }
-      } catch (e: unknown) {
-        const _errMsg = e instanceof Error ? e.message : String(e)
-        customersExtendedError = { message: _errMsg }
-      }
+      const customersExtendedData: any[] | null = custOutcome.rows
+      const customersExtendedError: { message: string } | null = custOutcome.error
 
       if (customersExtendedError) {
         console.error('Failed to load customers_extended:', customersExtendedError)
@@ -2721,11 +2771,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
       logger.log('[ReservationsTab] Total unique customers after customers_extended:', customerMap.size)
 
-      // Also check legacy customers table if it exists (for backward compatibility)
-      const { data: customersTableData, error: customersTableError } = await supabase
-        .from('customers')
-        .select('*')
-        .order('created_at', { ascending: false })
+      // Tabella `customers` legacy (retrocompatibilita'): partita a inizio loadData.
+      const { data: customersTableData, error: customersTableError } = await legacyCustomersPromise
 
       if (!customersTableError && customersTableData) {
         customersTableData.forEach(c => {
@@ -2792,34 +2839,28 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       // CENTESIMI come sulla flotta: noleggio_catalog salva gia' cosi'.
       let vehiclesData: Vehicle[] | null = null
       let vehiclesError: { message: string } | null = null
-      if (isAltroBusiness) {
-        const { data, error } = await supabase
-          .from('noleggio_catalog')
-          .select('id, name, price_per_day, is_active')
-          .eq('service_type', serviceType)
-          .order('sort_order', { ascending: true })
-          .order('name', { ascending: true })
-        vehiclesError = error
-        vehiclesData = ((data || []) as { id: string; name: string; price_per_day: number | null; is_active?: boolean }[])
-          .filter(c => c.is_active !== false)
-          .map(c => ({
-            id: c.id,
-            display_name: c.name,
-            plate: null,
-            status: 'available' as const,
-            daily_rate: Number(c.price_per_day) || 0,
-            metadata: null,
-            created_at: '',
-            updated_at: '',
-          }))
-      } else {
-        const res = await supabase
-          .from('vehicles')
-          .select('*')
-          .or('status.neq.retired,display_name.eq.Test')
-          .order('display_name')
-        vehiclesData = res.data as Vehicle[] | null
+      {
+        const res = await vehiclesPromise
         vehiclesError = res.error
+        if (isAltroBusiness) {
+          // Catalogo del business normalizzato nella forma della flotta, cosi'
+          // tutto il form a valle non cambia. `daily_rate` in CENTESIMI come
+          // sulla flotta: noleggio_catalog salva gia' cosi'.
+          vehiclesData = ((res.data || []) as { id: string; name: string; price_per_day: number | null; is_active?: boolean }[])
+            .filter(c => c.is_active !== false)
+            .map(c => ({
+              id: c.id,
+              display_name: c.name,
+              plate: null,
+              status: 'available' as const,
+              daily_rate: Number(c.price_per_day) || 0,
+              metadata: null,
+              created_at: '',
+              updated_at: '',
+            }))
+        } else {
+          vehiclesData = res.data as Vehicle[] | null
+        }
       }
 
       if (vehiclesError) {
@@ -2836,29 +2877,16 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         setVehicles(vehiclesData || [])
       }
 
-      // Fetch reservations from API (if available)
-      try {
-        const resData = await fetch(`${API_BASE}/reservations`, {
-          headers: { 'Authorization': `Bearer ${API_TOKEN}` }
-        }).then(async r => {
-          if (!r.ok) {
-            console.error('Reservations API error:', r.status, await r.text())
-            return { data: [] }
-          }
-          return r.json()
-        })
+      // Reservations API: la richiesta e' partita a inizio loadData.
+      const resData = await reservationsPromise
 
-        setReservations(resData.data || [])
+      setReservations(resData.data || [])
 
-        logger.log('Loaded data:', {
-          reservations: resData.data?.length || 0,
-          customers: customersArray.length,
-          vehicles: vehiclesData?.length || 0
-        })
-      } catch (apiError) {
-        console.error('API fetch error:', apiError)
-        setReservations([])
-      }
+      logger.log('Loaded data:', {
+        reservations: resData.data?.length || 0,
+        customers: customersArray.length,
+        vehicles: vehiclesData?.length || 0
+      })
     } catch (error) {
       console.error('Failed to load data:', error)
     } finally {

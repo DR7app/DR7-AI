@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { bookingBelongsTo } from '../../../utils/businessScope'
 import { getHolidayForDate, isSunday } from '../../../data/italianHolidays'
@@ -11,11 +11,78 @@ import { FinancialData } from '../../../components/FinancialData'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { authFetch } from '../../../utils/authFetch'
+import { loadCached } from '../../../utils/dataCache'
 import { getPaletteForCategory } from '../../../utils/categoryPalettes'
+import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
+import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
+import { useCalendarLayout, LAYOUT_LIMITS } from '../../../hooks/useCalendarLayout'
 
 // --- Configuration ---
 const CELL_WIDTH = 45 // Fixed width for day cells
 const MIN_ROW_HEIGHT = 60
+
+// Codice limitation per la modifica del layout (larghezze/altezze). La riga vive
+// in system_otp_overrides: la direzione la attiva/disattiva da Gestione OTP.
+// Il layout e' CONDIVISO fra tutti gli operatori, quindi va autorizzato.
+const LAYOUT_OTP_CODE = 'calendario_noleggio_layout'
+
+/**
+ * Maniglia di ridimensionamento stile Excel. Invisibile finche' non ci passi
+ * sopra; il drag e' catturato sul pointer cosi' non si perde uscendo
+ * dall'elemento. `onDrag` riceve il delta in px dall'inizio del trascinamento,
+ * `onCommit` scatta una sola volta al rilascio (li' si salva su DB).
+ */
+function ResizeHandle({ axis, onDrag, onCommit, title }: {
+  axis: 'x' | 'y'
+  onDrag: (delta: number) => void
+  onCommit: () => void
+  title: string
+}) {
+  const start = useRef(0)
+  const dragging = useRef(false)
+
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    start.current = axis === 'x' ? e.clientX : e.clientY
+    dragging.current = true
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dragging.current) return
+    const now = axis === 'x' ? e.clientX : e.clientY
+    onDrag(now - start.current)
+  }
+  const end = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dragging.current) return
+    dragging.current = false
+    try { e.currentTarget.releasePointerCapture(e.pointerId) } catch { /* gia' rilasciato */ }
+    onCommit()
+  }
+
+  return (
+    <div
+      role="separator"
+      title={title}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={end}
+      onPointerCancel={end}
+      onClick={e => e.stopPropagation()}
+      className={
+        axis === 'x'
+          ? 'absolute top-0 right-0 h-full w-[7px] translate-x-[3px] cursor-col-resize z-[60] group/rh flex justify-center'
+          : 'absolute bottom-0 left-0 w-full h-[7px] translate-y-[3px] cursor-row-resize z-[60] group/rh flex items-center'
+      }
+    >
+      <div className={
+        axis === 'x'
+          ? 'w-[3px] h-full rounded-full bg-dr7-gold/0 group-hover/rh:bg-dr7-gold transition-colors'
+          : 'h-[3px] w-full rounded-full bg-dr7-gold/0 group-hover/rh:bg-dr7-gold transition-colors'
+      } />
+    </div>
+  )
+}
 
 // Oltre questo numero di corsie la riga smette di crescere e le barre si
 // stringono: una riga alta mezzo schermo per un solo mezzo e' peggio del male.
@@ -152,10 +219,36 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
   // Scroll Sync Refs
   const gridRef = useRef<HTMLDivElement>(null)
 
+  // ── Layout manuale (larghezze colonne / altezze righe) ────────────────────
+  // Persistito CONDIVISO in app_settings: se lo cambia un operatore lo vedono
+  // tutti. Per questo la modifica passa dal gate OTP `calendario_noleggio_layout`.
+  const calLayout = useCalendarLayout()
+  const override = useLimitationOverride()
+  const [layoutEditing, setLayoutEditing] = useState(false)
+  // Valori base del drag corrente: fissati al pointerdown cosi' il delta si
+  // applica sempre alla misura di partenza giusta.
+  const dragBase = useRef<{ leftColW: number; cellW: number; rowH: number }>({ leftColW: 0, cellW: 0, rowH: 0 })
+
+  const toggleLayoutEditing = () => {
+    if (layoutEditing) { setLayoutEditing(false); return }
+    if (override.hasOverride(LAYOUT_OTP_CODE)) { setLayoutEditing(true); return }
+    // requestOverride ritorna true quando l'OTP e' bypassato (regola disattivata
+    // o operatore con role:bypass-otp): in quel caso si sblocca subito.
+    const bypassed = override.requestOverride(
+      LAYOUT_OTP_CODE,
+      'Modificare larghezze e altezze del Calendario Noleggio richiede autorizzazione: il layout e\u2019 condiviso con tutti gli operatori.',
+    )
+    if (bypassed) setLayoutEditing(true)
+  }
+
+  useEffect(() => {
+    if (override.hasOverride(LAYOUT_OTP_CODE)) setLayoutEditing(true)
+  }, [override.overrideCodes]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // --- Data Loading ---
   useEffect(() => {
     const win = monthWindow(currentDate.getFullYear(), currentDate.getMonth())
-    loadData(win)
+    loadData(win, { useCache: true })
     // Realtime: ascolta sia bookings (creazioni/modifiche/cancellazioni)
     // sia vehicles (cambi status, categoria, foto, prezzo). Cosi' qualunque
     // azione fatta in admin da un altro operatore — o sul sito da un cliente
@@ -199,13 +292,34 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
     return () => { cancelled = true; sub.unsubscribe() }
   }, [])
 
-  async function loadData(win: { from: string; to: string }) {
+  async function loadData(win: { from: string; to: string }, opts: { useCache?: boolean } = {}) {
     setLoading(true)
+    // `useCache` solo all'apertura del calendario e al cambio mese. Le
+    // ricariche innescate dal realtime (una prenotazione e' cambiata) arrivano
+    // senza opzioni e rileggono sempre dal database.
+    const bypass = !opts.useCache
     try {
       // Le righe del calendario sono i mezzi. Terra li prende dalla flotta
       // (`vehicles`); Mare, Aria e Soggiorni dal catalogo `noleggio_catalog`,
       // che e' dove vivono barche, elicotteri e strutture. Si normalizzano
       // nella stessa forma cosi' tutto il resto del calendario non cambia.
+      // 25/08/2026 - mezzi e prenotazioni non dipendono l'uno dall'altro, ma
+      // erano due `await` in fila e il calendario aspettava la somma dei due
+      // (8 s misurati). Ora partono insieme: stesse query, stesse righe.
+      const bookingsResponsePromise = loadCached(
+        `calendar:bookings:${win.from}:${win.to}`,
+        async () => {
+          const res = await authFetch(
+            `/.netlify/functions/list-bookings?from=${encodeURIComponent(win.from)}&to=${encodeURIComponent(win.to)}`
+          )
+          // In cache va il CORPO gia' letto: una Response si puo' leggere una
+          // volta sola, riusarla al secondo giro darebbe un body vuoto.
+          if (!res.ok) return { ok: false as const, status: res.status, body: null }
+          return { ok: true as const, status: res.status, body: await res.json() }
+        },
+        { bypass }
+      )
+
       let vehiclesData: Vehicle[] | null = null
       if (serviceType) {
         const { data: cat } = await supabase
@@ -232,14 +346,13 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
       let allBookings: any[] | null = null
       let failure: string | null = null
 
-      const qs = `?from=${encodeURIComponent(win.from)}&to=${encodeURIComponent(win.to)}`
       try {
-        const bookingsResponse = await authFetch(`/.netlify/functions/list-bookings${qs}`)
+        const bookingsResponse = await bookingsResponsePromise
         if (!bookingsResponse.ok) {
           failure = `list-bookings ha risposto ${bookingsResponse.status}`
         } else {
-          const bookingsResult = await bookingsResponse.json()
-          if (Array.isArray(bookingsResult.bookings)) allBookings = bookingsResult.bookings
+          const bookingsResult = bookingsResponse.body
+          if (Array.isArray(bookingsResult?.bookings)) allBookings = bookingsResult.bookings
           else failure = 'list-bookings ha risposto senza prenotazioni'
         }
       } catch {
@@ -311,18 +424,22 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const customersById = new Map<string, any>()
 
-          if (emails.length > 0) {
-            const { data } = await supabase.from('customers_extended')
-              .select('id, nome, cognome, telefono, email, denominazione, ragione_sociale, tipo_cliente')
-              .in('email', emails)
-            if (data) for (const c of data) { if (c.email) customersByEmail.set(c.email, c) }
-          }
-          if (userIds.length > 0) {
-            const { data } = await supabase.from('customers_extended')
-              .select('id, nome, cognome, telefono, email, denominazione, ragione_sociale, tipo_cliente')
-              .in('id', userIds)
-            if (data) for (const c of data) { customersById.set(c.id, c) }
-          }
+          // I due lookup guardano campi diversi (email e id) e non si
+          // aspettano a vicenda: partono insieme.
+          const [byEmailRes, byIdRes] = await Promise.all([
+            emails.length > 0
+              ? supabase.from('customers_extended')
+                  .select('id, nome, cognome, telefono, email, denominazione, ragione_sociale, tipo_cliente')
+                  .in('email', emails)
+              : Promise.resolve({ data: null }),
+            userIds.length > 0
+              ? supabase.from('customers_extended')
+                  .select('id, nome, cognome, telefono, email, denominazione, ragione_sociale, tipo_cliente')
+                  .in('id', userIds)
+              : Promise.resolve({ data: null }),
+          ])
+          if (byEmailRes.data) for (const c of byEmailRes.data) { if (c.email) customersByEmail.set(c.email, c) }
+          if (byIdRes.data) for (const c of byIdRes.data) { customersById.set(c.id, c) }
 
           for (const b of needsEnrichment) {
             const email = b.customer_email || b.booking_details?.customer?.email
@@ -418,7 +535,8 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
   // colonna sinistra stretta, celle a larghezza fissa leggibile (con scroll
   // orizzontale) e righe più alte (con scroll verticale) invece di comprimere.
   const isNarrow = gridW > 0 && gridW < 640
-  const LEFT_COL_W = isNarrow ? 128 : 300
+  // Su mobile il layout manuale non si applica (la vista e' un'altra).
+  const LEFT_COL_W = isNarrow ? 128 : (calLayout.layout.leftColW ?? LAYOUT_LIMITS.leftColW.auto)
   useEffect(() => {
     const el = gridRef.current
     if (!el) return
@@ -434,7 +552,7 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
     window.addEventListener('resize', update)
     return () => { cancelAnimationFrame(raf); clearTimeout(t); ro.disconnect(); window.removeEventListener('resize', update) }
   }, [loading])
-  const cellWidth = useMemo(() => {
+  const autoCellWidth = useMemo(() => {
     if (!gridW) return CELL_WIDTH
     // Mobile: NON comprimere il mese intero a schermo (celle da 22px illeggibili).
     // Larghezza fissa leggibile + scroll orizzontale naturale del contenitore.
@@ -443,6 +561,9 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
     if (avail <= 0 || daysInMonth <= 0) return CELL_WIDTH
     return Math.max(22, Math.floor(avail / daysInMonth))
   }, [gridW, daysInMonth, isNarrow, LEFT_COL_W])
+  // Larghezza effettiva delle colonne giorno: il valore manuale (se impostato)
+  // vince sul fit-to-screen. Su mobile resta sempre l'automatico.
+  const cellWidth = isNarrow ? autoCellWidth : (calLayout.layout.cellW ?? autoCellWidth)
 
   const navigateMonth = (dir: 'prev' | 'next') => {
     setCurrentDate(p => {
@@ -854,6 +975,30 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
               {hideFinancials ? 'MOSTRA' : 'NASCONDI'}
             </button>
           )}
+          <div className="hidden lg:flex items-center gap-1.5">
+            <button
+              onClick={toggleLayoutEditing}
+              title={layoutEditing
+                ? 'Esci dalla modifica: trascina i bordi per larghezze e altezze'
+                : 'Modifica larghezze colonne e altezze righe (richiede autorizzazione)'}
+              className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors border ${layoutEditing
+                ? 'bg-dr7-gold text-white border-dr7-gold'
+                : 'bg-theme-text-primary/5 text-theme-text-primary/90 border-theme-border/50 hover:bg-theme-text-primary/10'
+                }`}
+            >
+              {layoutEditing ? 'FINE DIMENSIONI' : 'DIMENSIONI'}
+            </button>
+            {layoutEditing && calLayout.hasManualLayout && (
+              <button
+                onClick={() => calLayout.resetAll()}
+                title="Torna alle dimensioni automatiche (tutto a schermo)"
+                className="px-3 py-1.5 rounded text-xs font-semibold border border-theme-border/50 bg-theme-text-primary/5 text-theme-text-primary/90 hover:bg-theme-text-primary/10"
+              >
+                RESET AUTO
+              </button>
+            )}
+            {calLayout.saving && <span className="text-[10px] text-theme-text-muted">salvataggio...</span>}
+          </div>
           <input
             type="text"
             placeholder="Cerca veicolo o cliente..."
@@ -864,6 +1009,17 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
         </div>
       </div>
       {/* filtro periodo spostato nella control bar (sopra) per liberare spazio */}
+
+      <LimitationOverrideModal
+        isOpen={override.limitationState.isOpen}
+        limitationCode={override.limitationState.limitationCode}
+        limitationMessage={override.limitationState.limitationMessage}
+        actionContext={override.limitationState.actionContext}
+        draftSessionId={override.draftSessionId}
+        flowType={override.flowType}
+        onCancel={override.cancelLimitation}
+        onOverrideApproved={override.handleOverrideApproved}
+      />
 
       {/* 2. Scrollable Calendar Area */}
       {loadError && (
@@ -881,8 +1037,17 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
           <div
             className={`sticky left-0 z-[41] shrink-0 bg-theme-bg-primary border-r border-theme-border/30 flex items-center font-bold text-xs text-theme-text-muted uppercase tracking-wider backdrop-blur-sm shadow-[4px_0_10px_-2px_var(--color-theme-shadow)] ${isNarrow ? 'px-2' : 'px-4'}`}
             style={{ width: LEFT_COL_W }}
+            onPointerDownCapture={() => { dragBase.current.leftColW = LEFT_COL_W }}
           >
             <span className="truncate">{isNarrow ? 'Veicolo' : 'Veicolo / Targa'}</span>
+            {layoutEditing && !isNarrow && (
+              <ResizeHandle
+                axis="x"
+                title="Trascina per la larghezza della colonna Veicolo"
+                onDrag={d => calLayout.setLeftColW(dragBase.current.leftColW + d)}
+                onCommit={() => { calLayout.persist(); dragBase.current.leftColW = LEFT_COL_W }}
+              />
+            )}
           </div>
 
           {/* Day Columns Header */}
@@ -910,7 +1075,16 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
                     width: cellWidth,
                     boxShadow: isToday ? 'inset 2px 0 0 0 rgba(45, 138, 126, 0.7), inset -2px 0 0 0 rgba(45, 138, 126, 0.7)' : undefined
                   }}
+                  onPointerDownCapture={() => { dragBase.current.cellW = cellWidth }}
                 >
+                  {layoutEditing && (
+                    <ResizeHandle
+                      axis="x"
+                      title="Trascina per la larghezza di tutte le colonne giorno"
+                      onDrag={d => calLayout.setCellW(dragBase.current.cellW + d)}
+                      onCommit={() => { calLayout.persist(); dragBase.current.cellW = cellWidth }}
+                    />
+                  )}
                   {/* Red dot for Sundays and holidays */}
                   {(isHol || isSun) && (
                     <div
@@ -950,7 +1124,10 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
             // quindi SCROLLA invece di schiacciare — stessa scelta del 20/07.
             const laneCount = Math.max(1, row.laneCount)
             const ROW_PADDING = 6
-            const rowHeight = Math.max(fitRowHeight, ROW_PADDING + Math.min(laneCount, MAX_GROW_LANES) * laneMinHeight)
+            // Altezza manuale per QUESTO veicolo (se impostata) — vince su tutto
+            // il calcolo automatico; altrimenti resta la logica fit + corsie.
+            const manualRowH = !isNarrow ? calLayout.layout.rowH?.[row.vehicle.id] : undefined
+            const rowHeight = manualRowH || Math.max(fitRowHeight, ROW_PADDING + Math.min(laneCount, MAX_GROW_LANES) * laneMinHeight)
             const laneH = (rowHeight - ROW_PADDING) / laneCount
 
             return (
@@ -963,7 +1140,16 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
                 <div
                   className={`sticky left-0 z-[30] bg-theme-bg-primary/95 group-hover:bg-theme-bg-secondary/95 border-r border-theme-border/30 flex items-center backdrop-blur-sm shrink-0 shadow-[4px_0_10px_-2px_var(--color-theme-shadow)] ${isNarrow ? 'gap-1.5 px-2' : 'gap-3 px-4'}`}
                   style={{ width: LEFT_COL_W }}
+                  onPointerDownCapture={() => { dragBase.current.rowH = rowHeight }}
                 >
+                  {layoutEditing && !isNarrow && (
+                    <ResizeHandle
+                      axis="y"
+                      title={`Trascina per l\u2019altezza della riga ${row.vehicle.display_name}`}
+                      onDrag={d => calLayout.setRowH(row.vehicle.id, dragBase.current.rowH + d)}
+                      onCommit={() => { calLayout.persist(); dragBase.current.rowH = rowHeight }}
+                    />
+                  )}
                   {/* Vehicle image (from vehicles.metadata.image set in VehiclesTab).
                       Fallback to a generic SVG car silhouette so the row layout stays
                       consistent for vehicles that don't have an image uploaded yet. */}

@@ -39,15 +39,22 @@ export const handler: Handler = async (event) => {
     const windowTo = event.queryStringParameters?.to || null;
 
     try {
-        // Fetch non-cancelled bookings, paginated past the 1000-row limit
-        const allBookings: any[] = [];
+        // Fetch non-cancelled bookings, paginated past the 1000-row limit.
+        //
+        // 25/08/2026: le pagine partivano UNA DOPO L'ALTRA, quindi il tempo di
+        // risposta era la somma dei giri. Ora la prima pagina chiede anche il
+        // conteggio esatto e le restanti partono tutte insieme. Stesse righe,
+        // stesse colonne: cambia solo che si aspetta il MASSIMO invece della
+        // SOMMA.
         const PAGE_SIZE = 1000;
-        let from = 0;
 
-        while (true) {
-            let query = supabase
-                .from('bookings')
-                .select('*')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const buildQuery = (withCount: boolean) => {
+            let query = withCount
+                ? supabase.from('bookings').select('*', { count: 'exact' })
+                : supabase.from('bookings').select('*');
+
+            query = query
                 .neq('status', 'cancelled')
                 .neq('status', 'annullata');
 
@@ -61,22 +68,46 @@ export const handler: Handler = async (event) => {
                 query = query.or(`dropoff_date.is.null,dropoff_date.gte.${windowFrom}`);
             }
 
-            const { data, error } = await query
-                .order('pickup_date', { ascending: true })
-                .range(from, from + PAGE_SIZE - 1);
+            return query.order('pickup_date', { ascending: true });
+        };
 
-            if (error) {
-                console.error('[list-bookings] Error:', error);
-                throw error;
+        const firstPage = await buildQuery(true).range(0, PAGE_SIZE - 1);
+        if (firstPage.error) {
+            console.error('[list-bookings] Error:', firstPage.error);
+            throw firstPage.error;
+        }
+
+        const allBookings: any[] = [...(firstPage.data || [])];
+        const total = firstPage.count ?? allBookings.length;
+
+        if (total > PAGE_SIZE) {
+            const offsets: number[] = [];
+            for (let start = PAGE_SIZE; start < total; start += PAGE_SIZE) offsets.push(start);
+
+            const rest = await Promise.all(
+                offsets.map(start => buildQuery(false).range(start, start + PAGE_SIZE - 1))
+            );
+
+            for (const page of rest) {
+                if (page.error) {
+                    console.error('[list-bookings] Error:', page.error);
+                    throw page.error;
+                }
+                allBookings.push(...(page.data || []));
             }
 
-            if (data && data.length > 0) {
-                allBookings.push(...data);
-                from += data.length;
-                if (data.length < PAGE_SIZE) break;
-            } else {
-                break;
-            }
+            // Se qualcuno inserisce una prenotazione MENTRE stiamo paginando, la
+            // stessa riga puo' scivolare in due pagine: si toglie il doppione,
+            // mai una riga distinta.
+            const seen = new Set<string>();
+            const unique = allBookings.filter(b => {
+                if (!b?.id) return true;
+                if (seen.has(b.id)) return false;
+                seen.add(b.id);
+                return true;
+            });
+            allBookings.length = 0;
+            allBookings.push(...unique);
         }
 
         console.log(`[list-bookings] Total bookings fetched: ${allBookings.length}` +

@@ -25,32 +25,52 @@ export const handler: Handler = async (event) => {
     );
 
     try {
-        // Fetch ALL customers from customers_extended
-        // Supabase defaults to 1000 rows — paginate to get everything
-        const allCustomers: any[] = [];
+        // Fetch ALL customers from customers_extended.
+        // Supabase taglia a 1000 righe, quindi si pagina.
+        //
+        // 25/08/2026: le pagine partivano una dopo l'altra e il tempo di
+        // risposta era la somma dei giri. Ora la prima chiede anche il
+        // conteggio esatto e le altre partono tutte insieme. Stesse righe.
         const PAGE_SIZE = 1000;
-        let from = 0;
 
-        while (true) {
-            const { data, error } = await supabase
-                .from('customers_extended')
-                .select('*')
-                .order('updated_at', { ascending: false })
-                .range(from, from + PAGE_SIZE - 1);
+        const page = (from: number, withCount: boolean) => (withCount
+            ? supabase.from('customers_extended').select('*', { count: 'exact' })
+            : supabase.from('customers_extended').select('*'))
+            .order('updated_at', { ascending: false })
+            .range(from, from + PAGE_SIZE - 1);
 
-            if (error) {
-                console.error('[list-customers] Error:', error);
-                throw error;
+        const firstPage = await page(0, true);
+        if (firstPage.error) {
+            console.error('[list-customers] Error:', firstPage.error);
+            throw firstPage.error;
+        }
+
+        const allCustomers: any[] = [...(firstPage.data || [])];
+        const total = firstPage.count ?? allCustomers.length;
+
+        if (total > PAGE_SIZE) {
+            const offsets: number[] = [];
+            for (let from = PAGE_SIZE; from < total; from += PAGE_SIZE) offsets.push(from);
+
+            const rest = await Promise.all(offsets.map(from => page(from, false)));
+            for (const p of rest) {
+                if (p.error) {
+                    console.error('[list-customers] Error:', p.error);
+                    throw p.error;
+                }
+                allCustomers.push(...(p.data || []));
             }
 
-            if (data && data.length > 0) {
-                allCustomers.push(...data);
-                from += data.length;
-                // If we got fewer than PAGE_SIZE, we've reached the end
-                if (data.length < PAGE_SIZE) break;
-            } else {
-                break;
-            }
+            // Doppioni possibili solo se qualcuno scrive mentre paginiamo.
+            const seen = new Set<string>();
+            const unique = allCustomers.filter(c => {
+                if (!c?.id) return true;
+                if (seen.has(c.id)) return false;
+                seen.add(c.id);
+                return true;
+            });
+            allCustomers.length = 0;
+            allCustomers.push(...unique);
         }
 
         console.log(`[list-customers] Total customers fetched: ${allCustomers.length}`);
