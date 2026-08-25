@@ -4,6 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import {
   resolveDailyCategories, DAILY_PALETTE, DAILY_PALETTE_KEYS, DAILY_CATEGORIES_CONFIG_KEY,
   customCategoryId, isCustomCategory, DEFAULT_DAILY_CATEGORIES,
+  DAILY_BUSINESS_PRESETS, FACTORY_LANE_SERVICE_TYPES, PRESET_SERVICE_TYPES, presetForLabel,
   type DailyCategory, type DailyCategoryConfig,
 } from '../../../utils/dailyCalendarCategories'
 
@@ -59,17 +60,55 @@ export default function DailyCalendarCategoriesConfig({ readOnly = false }: { re
     }))
   }
 
+  /**
+   * Accende/spegne un business su una corsia personalizzata. Il business e'
+   * l'unita' con cui ragiona l'ufficio; i `service_type` restano sotto.
+   */
+  function toggleBusiness(id: string, preset: { serviceTypes: string[] }) {
+    setRows(prev => prev.map(r => {
+      if (r.id !== id) return r
+      const cur = (r.serviceTypes || []).map(x => String(x).toLowerCase().trim()).filter(Boolean)
+      const acceso = preset.serviceTypes.every(t => cur.includes(t))
+      const next = acceso
+        ? cur.filter(t => !preset.serviceTypes.includes(t))
+        : Array.from(new Set([...cur, ...preset.serviceTypes]))
+      return { ...r, serviceTypes: next }
+    }))
+  }
+
+  /** I service_type scritti a mano, cioe' quelli fuori dai business predefiniti. */
+  function extraTypes(r: DailyCategory): string[] {
+    return (r.serviceTypes || [])
+      .map(x => String(x).toLowerCase().trim())
+      .filter(x => x && !PRESET_SERVICE_TYPES.includes(x))
+  }
+
+  function setExtraTypes(r: DailyCategory, raw: string) {
+    const daPreset = (r.serviceTypes || [])
+      .map(x => String(x).toLowerCase().trim())
+      .filter(x => PRESET_SERVICE_TYPES.includes(x))
+    const scritti = raw.split(',').map(x => x.trim().toLowerCase()).filter(Boolean)
+    patch(r.id, { serviceTypes: Array.from(new Set([...daPreset, ...scritti])) })
+  }
+
   function aggiungi() {
     const label = nuovaLabel.trim()
     if (!label) { toast.error('Dai un nome alla corsia'); return }
     const id = customCategoryId(label)
     if (rows.some(r => r.id === id)) { toast.error('Esiste gia una corsia con questo nome'); return }
     const pal = DAILY_PALETTE.slate
+    // 25/08: se la corsia si chiama come un business (Aria, Mare, Lavaggio...)
+    // nasce gia' collegata ai suoi service_type. Prima restava vuota e sembrava
+    // rotta: la colonna c'era ma non raccoglieva niente.
+    const preset = presetForLabel(label)
     setRows(prev => [...prev, {
-      ...pal, id, label, enabled: true, colorKey: pal.key, custom: true, serviceTypes: [],
+      ...pal, id, label, enabled: true, colorKey: pal.key, custom: true,
+      serviceTypes: preset ? [...preset.serviceTypes] : [],
     }])
     setNuovaLabel('')
-    toast.success('Corsia aggiunta — scegli i tipi di servizio che deve raccogliere, poi Salva')
+    toast.success(preset
+      ? `Corsia aggiunta e collegata a ${preset.label} — ricordati di salvare`
+      : 'Corsia aggiunta — scegli i business che deve raccogliere, poi Salva')
   }
 
   function rimuovi(id: string) {
@@ -234,18 +273,48 @@ export default function DailyCalendarCategoriesConfig({ readOnly = false }: { re
               })}
             </div>
 
-            {r.custom && (
-              <>
+            {r.custom ? (
+              <div className="w-full space-y-1.5 pt-1">
+                <p className="text-[11px] text-theme-text-muted">
+                  Business raccolti da questa corsia — clicca per collegarla:
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {DAILY_BUSINESS_PRESETS.map(preset => {
+                    const cur = (r.serviceTypes || []).map(x => String(x).toLowerCase().trim())
+                    const acceso = preset.serviceTypes.every(t => cur.includes(t))
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        disabled={readOnly}
+                        onClick={() => toggleBusiness(r.id, preset)}
+                        title={preset.serviceTypes.join(', ')}
+                        className={`px-2.5 h-7 rounded-full border text-[11px] font-semibold transition-colors disabled:opacity-60 ${
+                          acceso
+                            ? 'border-dr7-gold bg-dr7-gold/15 text-dr7-gold'
+                            : 'border-theme-border text-theme-text-muted hover:bg-theme-bg-hover'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    )
+                  })}
+                </div>
                 <input
                   type="text"
                   disabled={readOnly}
-                  value={(r.serviceTypes || []).join(', ')}
-                  onChange={e => patch(r.id, { serviceTypes: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })}
-                  placeholder="service_type raccolti (es. varie, tour)"
-                  title="Quali service_type finiscono in questa corsia. Separali con virgola."
-                  className="w-full sm:w-64 px-2.5 h-9 rounded-lg border border-theme-border bg-theme-bg-primary text-xs font-mono text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-dr7-gold disabled:opacity-60"
+                  value={extraTypes(r).join(', ')}
+                  onChange={e => setExtraTypes(r, e.target.value)}
+                  placeholder="altri service_type, separati da virgola (facoltativo)"
+                  title="Solo per casi fuori catalogo: qualsiasi altro service_type presente su bookings."
+                  className="w-full sm:w-72 px-2.5 h-8 rounded-lg border border-theme-border bg-theme-bg-primary text-[11px] font-mono text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-dr7-gold disabled:opacity-60"
                 />
-              </>
+              </div>
+            ) : (
+              <p className="w-full text-[11px] text-theme-text-muted pt-0.5">
+                Raccoglie: <span className="font-mono">{(FACTORY_LANE_SERVICE_TYPES[r.id] || ['-']).join(', ')}</span>
+                {' '}— corsia di fabbrica, gia' collegata.
+              </p>
             )}
             <button
               type="button"
@@ -294,10 +363,34 @@ export default function DailyCalendarCategoriesConfig({ readOnly = false }: { re
 
       {rows.some(r => r.custom && r.enabled && (r.serviceTypes || []).length === 0) && (
         <p className="text-[11px] text-amber-600 dark:text-amber-400">
-          Una corsia personalizzata senza <code>service_type</code> resta sempre vuota: indica quali tipi di
-          prenotazione deve raccogliere, altrimenti occupa una colonna senza mai mostrare nulla.
+          Una corsia personalizzata senza business collegato resta sempre vuota: clicca almeno un business
+          (Noleggio Terra, Mare, Aria, Soggiorni, Lavaggio, Meccanica, Uscite, Varie), altrimenti la corsia
+          esiste ma non raccoglie nessuna prenotazione.
         </p>
       )}
+
+      {(() => {
+        // 25/08: una corsia personalizzata ha la precedenza sulle regole di
+        // fabbrica. Se raccoglie gli stessi service_type di una corsia di
+        // fabbrica accesa, quella resta vuota e sparisce dalla griglia — cosa
+        // che dall'esterno sembra un calendario rotto.
+        const conflitti: string[] = []
+        for (const c of rows.filter(r => r.custom && r.enabled)) {
+          const tipi = (c.serviceTypes || []).map(x => String(x).toLowerCase().trim())
+          for (const f of rows.filter(r => !r.custom && r.enabled)) {
+            const ft = FACTORY_LANE_SERVICE_TYPES[f.id] || []
+            if (ft.some(t => tipi.includes(t))) conflitti.push(`"${c.label}" e "${f.label}"`)
+          }
+        }
+        if (conflitti.length === 0) return null
+        return (
+          <p className="text-[11px] text-amber-600 dark:text-amber-400">
+            {conflitti.join(', ')} raccolgono le stesse prenotazioni. Vince la corsia personalizzata:
+            l'altra resta vuota e sparisce dalla giornata. Tieni una corsia sola per business — la corsia
+            di fabbrica separa gia' uscite e rientri, quella personalizzata no.
+          </p>
+        )
+      })()}
 
       {removedIds.length > 0 && (
         <div className="rounded-xl border border-dashed border-theme-border p-2.5 space-y-1.5">

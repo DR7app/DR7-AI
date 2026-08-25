@@ -267,6 +267,58 @@ export interface DailyCategoryConfig {
   serviceTypes?: string[]
 }
 
+/**
+ * Servizi predefiniti dei business DR7 (25/08/2026).
+ *
+ * Una corsia aggiunta a mano non sapeva a cosa agganciarsi: bisognava
+ * conoscere e scrivere i `service_type` esatti. Qui c'e' il catalogo, cosi'
+ * la corsia si collega scegliendo il business invece di indovinare la stringa.
+ * Sono gli stessi valori usati da `categorizeDayBooking` per le corsie di
+ * fabbrica: una corsia "Aria" personalizzata raccoglie esattamente cio' che
+ * raccoglie la corsia Aria di fabbrica.
+ */
+export const DAILY_BUSINESS_PRESETS: Array<{ id: string; label: string; serviceTypes: string[] }> = [
+  { id: 'terra',      label: 'Noleggio Terra',        serviceTypes: ['rental', 'car_rental'] },
+  { id: 'mare',       label: 'Noleggio Mare',         serviceTypes: ['boat_rental'] },
+  { id: 'aria',       label: 'Noleggio Aria',         serviceTypes: ['heli_rental'] },
+  { id: 'soggiorni',  label: 'Soggiorni',             serviceTypes: ['stay_rental'] },
+  { id: 'lavaggio',   label: 'Lavaggio',              serviceTypes: ['car_wash'] },
+  { id: 'meccanica',  label: 'Meccanica',             serviceTypes: ['mechanical', 'mechanical_service'] },
+  { id: 'uscite',     label: 'Uscite Straordinarie',  serviceTypes: ['uscita_straordinaria'] },
+  { id: 'varie',      label: 'Varie',                 serviceTypes: ['varie'] },
+]
+
+/** Cosa raccoglie ogni corsia di fabbrica — solo per mostrarlo in configurazione. */
+export const FACTORY_LANE_SERVICE_TYPES: Record<DailyCategoryId, string[]> = {
+  terra: ['rental', 'car_rental', '(storico senza service_type)'],
+  mare: ['boat_rental'],
+  aria: ['heli_rental'],
+  soggiorni: ['stay_rental'],
+  prime_wash: ['car_wash', 'mechanical', 'mechanical_service'],
+  uscite: ['uscita_straordinaria'],
+  varie: ['varie'],
+}
+
+/** Tutti i service_type che compaiono nei preset, per separare i valori "liberi". */
+export const PRESET_SERVICE_TYPES: string[] = Array.from(
+  new Set(DAILY_BUSINESS_PRESETS.flatMap(p => p.serviceTypes)),
+)
+
+/**
+ * Preset con lo stesso nome della corsia (accento/maiuscole ignorati), cosi'
+ * una corsia nuova chiamata "Aria" nasce gia' collegata a heli_rental invece
+ * di restare una colonna vuota.
+ */
+export function presetForLabel(label: string): { id: string; label: string; serviceTypes: string[] } | undefined {
+  const norm = (x: string) => String(x).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
+  const n = norm(label)
+  if (!n) return undefined
+  return DAILY_BUSINESS_PRESETS.find(p => {
+    const pl = norm(p.label)
+    return pl === n || norm(p.id) === n || pl.endsWith(' ' + n)
+  })
+}
+
 export const CUSTOM_PREFIX = 'custom:'
 export function isCustomCategory(id: string): boolean {
   return String(id).startsWith(CUSTOM_PREFIX)
