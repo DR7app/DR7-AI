@@ -258,6 +258,14 @@ export const OTP_ACTION_CATALOG: OtpAction[] = [
     group: 'Sistema',
     wired: false,
   },
+  {
+    id: 'calendario_noleggio_layout',
+    label: 'Modifica dimensioni Calendario Noleggio',
+    used_in: 'Calendario Noleggio > pulsante DIMENSIONI',
+    reason: 'Il layout del calendario e\u2019 condiviso con tutti gli operatori: modificarlo richiede autorizzazione direzionale.',
+    group: 'Sistema',
+    wired: true,
+  },
 ]
 
 export function getOtpAction(id: string): OtpAction | undefined {
