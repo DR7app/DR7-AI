@@ -124,17 +124,15 @@ const handler: Handler = async (event) => {
                     contractType: 'MIT_UNSCHEDULED',
                 },
             },
-            // 25/08/2026: NIENTE `expirationDate` in fondo al payload.
-            // Lo schema documentato di POST /v2/orders/paybylink ha solo
-            // `order` e `paymentSession` alla radice: la data di scadenza vive
-            // dentro paymentSession (sopra), e basta. Il duplicato in radice
-            // era un campo fuori schema, e Nexi rispondeva 400 su un campo che
-            // noi non mandiamo affatto:
-            //   ERROR DURING PARSE FIELD creationTime VALUE 2026-08-25 08:39:03.6
-            //   - DATE DOES NOT RESPECT ANY SUPPORTED FORMAT: [2026-08-24 ...]
-            // cioe' il loro parser istanziava l'entita' PayByLink di radice e
-            // si rompeva sul `creationTime` che ci mette lui, con l'ora dentro,
-            // mentre il formato ammesso e' la sola data.
+            // 25/08/2026 (verificato sul campo, 12 varianti provate contro
+            // l'API di produzione): `expirationDate` alla RADICE e' OBBLIGATORIO.
+            // Senza, Nexi risponde sempre 400 anche se la data e' dentro
+            // paymentSession:
+            //   ERROR DURING PARSE FIELD expirationTime VALUE null
+            //   - DATE DOES NOT RESPECT ANY SUPPORTED FORMAT: [2026-08-25 ...]
+            // Con la data in radice il link parte (status ACTIVE, scadenza
+            // riportata a 23:59:59 del giorno indicato). Non toglierla.
+            expirationDate: nexiExpirationStr,
         };
 
         console.log('[nexi-pay-by-link] Payload:', JSON.stringify(payload));
