@@ -217,16 +217,19 @@ export default function AdminDashboard() {
     const restanti = listSavedAccounts().filter(a => a.email !== (adminEmail || '').toLowerCase())
     await supabase.auth.signOut({ scope: 'local' })
     if (restanti.length > 0) {
-      const { error } = await supabase.auth.setSession({
+      const { data: nuova, error } = await supabase.auth.setSession({
         access_token: restanti[0].accessToken,
         refresh_token: restanti[0].refreshToken,
       })
       if (!error) {
+        if (nuova?.session) saveAccount(nuova.session)
         toast.success(`Ora sei su ${restanti[0].email}`)
         window.location.assign('/admin')
         return
       }
-      removeSavedAccount(restanti[0].email)
+      // Anche qui l'account resta salvato: si chiede solo la password.
+      navigate(`/login?email=${encodeURIComponent(restanti[0].email)}`)
+      return
     }
     navigate('/login')
   }
@@ -259,18 +262,22 @@ export default function AdminDashboard() {
   async function handleSwitchAccount(acc: SavedAccount) {
     const { data } = await supabase.auth.getSession()
     if (data.session) saveAccount(data.session)
-    const { error } = await supabase.auth.setSession({
+    const { data: nuova, error } = await supabase.auth.setSession({
       access_token: acc.accessToken,
       refresh_token: acc.refreshToken,
     })
     if (error) {
-      // Token scaduto o revocato: si toglie dall'elenco e si chiede la password.
-      removeSavedAccount(acc.email)
-      toast.error(`Sessione di ${acc.email} non piu' valida: rifai l'accesso`)
+      // 25/08: l'account NON si cancella piu' dall'elenco. Un token scaduto e'
+      // normale dopo qualche ora: si va al login con l'email gia' scritta e
+      // basta la password, invece di perdere l'account salvato.
+      toast.error(`${acc.email}: serve di nuovo la password (${error.message})`)
       await supabase.auth.signOut({ scope: 'local' })
-      navigate('/login')
+      navigate(`/login?email=${encodeURIComponent(acc.email)}`)
       return
     }
+    // Il rinnovo ha appena ruotato i token: si riscrive subito l'elenco, senza
+    // aspettare il ricaricamento della pagina.
+    if (nuova?.session) saveAccount(nuova.session)
     clearAdminCache()
     try { sessionStorage.removeItem(ACTIVE_TAB_KEY) } catch { /* ignore */ }
     // Ricarica piena: ruolo, permessi e dati sono tutti legati all'utente.

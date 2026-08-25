@@ -1,11 +1,15 @@
 import { useState } from 'react'
 import { saveAccount } from '../utils/savedAccounts'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { logAdminAction } from '../utils/logAdminAction'
 
 export default function Login() {
-  const [email, setEmail] = useState('')
+  // 25/08: si arriva qui anche dal cambio account, quando la sessione salvata
+  // e' scaduta. L'email arriva nell'indirizzo: si riscrive solo la password.
+  const [searchParams] = useSearchParams()
+  const emailDaCambioAccount = searchParams.get('email') || ''
+  const [email, setEmail] = useState(emailDaCambioAccount)
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -89,6 +93,12 @@ export default function Login() {
 
           {!showForgot ? (
             <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
+              {emailDaCambioAccount && (
+                <div className="rounded-xl border border-dr7-gold/40 bg-dr7-gold/10 px-4 py-3 text-xs text-theme-text-primary">
+                  La sessione salvata di <strong>{emailDaCambioAccount}</strong> e' scaduta.
+                  L'account resta nell'elenco: scrivi solo la password per rientrare.
+                </div>
+              )}
               {/* Email */}
               <div>
                 <label htmlFor="email" className="block text-[11px] font-bold uppercase tracking-wider text-dr7-gold mb-2">
