@@ -352,7 +352,7 @@ export const handler: Handler = async (event) => {
     }
 
     try {
-        const { bookingId, reconduct } = JSON.parse(event.body || '{}')
+        const { bookingId, reconduct, motivo } = JSON.parse(event.body || '{}')
 
         if (!bookingId) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Missing bookingId' }) }
@@ -1819,7 +1819,48 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
         // con le nuove date e lo inviamo via WhatsApp come contratto firmato.
         let reconductHandled = false
         let reconductedSignedUrl: string | null = null
+
+        // 2026-08-25: la RICONDUZIONE non e' piu' una decisione del chiamante.
+        // Fino ad oggi ogni "Rinvia contratto", ogni estensione e ogni callback
+        // di pagamento passava reconduct:true fisso, quindi le regole di
+        // Centralina Pro > Contratto & Modifiche valevano SOLO al Salva della
+        // modifica: cambiavi la vettura, salvavi (parte la rifirma), poi un
+        // qualsiasi reinvio o il saldo pagato riconduceva lo stesso e il cliente
+        // si ritrovava di nuovo il contratto gia' firmato. Qui c'e' l'unico
+        // collo di bottiglia: qualunque sia il chiamante, la riconduzione salta
+        // se una delle due condizioni e' vera.
+        //
+        //  1) `booking_details.contratto_rifirma_richiesta` — il Salva ha
+        //     deciso RIFIRMA (voce su "rifirma" toccata). Resta finche' una
+        //     firma nuova non arriva davvero (la pulisce signature-complete).
+        //  2) motivo='estensione' e la voce "Estensione" e' su Rifirma. Prima
+        //     quella voce era decorativa: i flussi di estensione riconducevano
+        //     sempre, qualunque cosa dicesse la direzione.
+        let reconductBloccatoDa: string | null = null
         if (reconduct) {
+            const bd = (booking.booking_details || {}) as Record<string, any>
+            if (bd.contratto_rifirma_richiesta === true) {
+                const voci = Array.isArray(bd.contratto_rifirma_voci) ? bd.contratto_rifirma_voci.join(', ') : ''
+                reconductBloccatoDa = `rifirma richiesta al salvataggio${voci ? ` (${voci})` : ''}`
+            } else if (motivo === 'estensione') {
+                try {
+                    const { data: cfgRow } = await supabase
+                        .from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+                    const regole = (cfgRow?.config as any)?.contratto_modifica || {}
+                    // Default storico 'ricondotto': senza config si comporta come prima.
+                    if (String(regole.estensione || 'ricondotto') === 'rifirma') {
+                        reconductBloccatoDa = 'voce "Estensione" impostata su Rifirma in Centralina Pro'
+                    }
+                } catch (cfgErr: any) {
+                    console.warn('[generate-contract] regole contratto non lette, riconduzione invariata:', cfgErr?.message)
+                }
+            }
+        }
+        if (reconductBloccatoDa) {
+            console.log(`[generate-contract] reconduct ${bookingId} ANNULLATO — ${reconductBloccatoDa}: il cliente deve rifirmare`)
+        }
+
+        if (reconduct && !reconductBloccatoDa) {
             try {
                 // 2026-07-16 FIX (Ricardo Garbati): la firma esistente puo' essere
                 // legata alla signature_requests via booking_id OPPURE via

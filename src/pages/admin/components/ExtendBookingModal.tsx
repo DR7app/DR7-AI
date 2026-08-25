@@ -126,7 +126,7 @@ export default function ExtendBookingModal({ booking, serviceType, assetLabel, o
                 await authFetch('/.netlify/functions/generate-contract', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ bookingId: booking.id, reconduct: true }),
+                    body: JSON.stringify({ bookingId: booking.id, reconduct: true, motivo: 'estensione' }),
                 })
             } catch { /* ignore */ }
 

@@ -644,7 +644,7 @@ const handler: Handler = async (event) => {
                     const contractRes = await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/generate-contract`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
-                        body: JSON.stringify({ bookingId: booking.id, reconduct: true })
+                        body: JSON.stringify({ bookingId: booking.id, reconduct: true, motivo: 'estensione' })
                     });
                     if (contractRes.ok) {
                         const cd = await contractRes.json().catch(() => ({} as any));
@@ -919,7 +919,7 @@ const handler: Handler = async (event) => {
                     const contractRes = await fetch(`${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/generate-contract`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN || ''}` },
-                        body: JSON.stringify({ bookingId: booking.id, reconduct: true })
+                        body: JSON.stringify({ bookingId: booking.id, reconduct: true, motivo: 'modifica' })
                     });
                     if (contractRes.ok) {
                         const cd = await contractRes.json().catch(() => ({} as any));

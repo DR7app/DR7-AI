@@ -337,6 +337,27 @@ export const handler: Handler = async (event) => {
             })
             .eq('id', sigRequest.id)
 
+        // 2026-08-25: la firma richiesta e' arrivata → abbassa il flag
+        // `contratto_rifirma_richiesta` alzato dal salvataggio della modifica
+        // (cambio veicolo, guidatore, garanti...). Finche' e' alzato,
+        // generate-contract rifiuta di riconciliare: senza questa pulizia una
+        // successiva modifica innocua (date, prezzo) resterebbe bloccata sulla
+        // rifirma per sempre.
+        const bookingIdPerFlag = sigRequest.booking_id || contract?.booking_id
+        if (bookingIdPerFlag) {
+            try {
+                const { data: bRow } = await supabase
+                    .from('bookings').select('booking_details').eq('id', bookingIdPerFlag).maybeSingle()
+                const bd = (bRow?.booking_details || {}) as Record<string, any>
+                if (bd.contratto_rifirma_richiesta) {
+                    const { contratto_rifirma_richiesta, contratto_rifirma_voci, contratto_rifirma_at, ...resto } = bd
+                    void contratto_rifirma_richiesta; void contratto_rifirma_voci; void contratto_rifirma_at
+                    await supabase.from('bookings').update({ booking_details: resto }).eq('id', bookingIdPerFlag)
+                    console.log(`[signature-complete] flag rifirma azzerato per booking ${bookingIdPerFlag}`)
+                }
+            } catch (e: any) { console.warn('[signature-complete] flag rifirma non azzerato:', e?.message) }
+        }
+
         // 2026-07-13: conserva l'immagine firma (update separato, best-effort):
         // serve per RISTAMPARE la firma sul contratto ricondotto in estensione.
         // Se la colonna non esiste ancora, la firma resta comunque valida.
