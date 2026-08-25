@@ -25,6 +25,7 @@ interface AdminOption {
   nome: string | null
   email: string | null
   stato: string | null
+  archived_at: string | null
 }
 
 interface Acconto {
@@ -102,12 +103,20 @@ export default function AccontiTab() {
     ;(async () => {
       const { data: d, error } = await supabase
         .from('admins')
-        .select('id, nome, email, stato')
+        .select('id, nome, email, stato, archived_at')
+        .is('archived_at', null)
         .order('nome', { ascending: true })
       if (annullato) return
       // RLS bloccata: niente tendina, resta la registrazione per se' stessi.
       if (error) { setOperatori([]); return } // eslint-disable-line curly
-      const attivi = ((d as AdminOption[]) || []).filter(a => (a.stato || 'Attivo').toLowerCase() === 'attivo')
+      // 2026-08-25: l'archiviazione di un operatore (Operatori > Storico) scrive
+      // `archived_at`, NON `stato` — filtrare solo su `stato` lasciava gli ex
+      // operatori nella tendina "Operatore", quindi l'Amministrazione poteva
+      // ancora intestare un acconto a chi non lavora piu' qui. Doppio filtro:
+      // archiviati fuori (anche lato query) e stato diverso da Attivo fuori.
+      const attivi = ((d as AdminOption[]) || [])
+        .filter(a => !a.archived_at)
+        .filter(a => (a.stato || 'Attivo').toLowerCase() === 'attivo')
       setOperatori(attivi)
     })()
     return () => { annullato = true }
