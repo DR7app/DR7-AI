@@ -1,6 +1,8 @@
-import { useState } from 'react'
-import ReservationsTab from './ReservationsTab'
-import PreventiviTab from './PreventiviTab'
+import { useState, Suspense } from 'react'
+import lazyWithRetry from '../../../utils/lazyWithRetry'
+// Due tab distinte: chi apre Noleggio non deve scaricare anche Preventivi.
+const ReservationsTab = lazyWithRetry(() => import('./ReservationsTab'))
+const PreventiviTab = lazyWithRetry(() => import('./PreventiviTab'))
 import { useAdminRole } from '../../../hooks/useAdminRole'
 
 interface RentalTabsProps {
@@ -77,6 +79,9 @@ export default function RentalTabs({ initialData: externalInitialData, onDataCon
                 </div>
             )}
 
+            {/* Confine locale: cambiare sotto-tab non deve far lampeggiare
+                tutta l'area della sezione. */}
+            <Suspense fallback={<div className="p-8 text-center text-theme-text-muted">Caricamento...</div>}>
             <div>
                 {activeSubTab === 'bookings' && (
                     <ReservationsTab
@@ -91,6 +96,7 @@ export default function RentalTabs({ initialData: externalInitialData, onDataCon
                     <ReservationsTab viewMode="uscite" />
                 )}
             </div>
+            </Suspense>
         </div>
     )
 }

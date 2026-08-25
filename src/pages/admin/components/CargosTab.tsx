@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { fetchAllRows } from '../../../utils/fetchAllRows'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import NewClientModal from '../../../components/NewClientModal'
@@ -630,6 +631,12 @@ export default function CargosTab() {
         setSendResult(null)
 
         try {
+            // 25/08/2026: in modalita' "Tutte" questa lettura non era paginata.
+            // PostgREST ne restituiva 1000 su 1619 (misurato): fino a 619
+            // prenotazioni non arrivavano mai nell'elenco da trasmettere alla
+            // Polizia di Stato, e il conteggio a video era falso. Ora si legge
+            // per pagine, quindi arrivano tutte.
+            const buildQuery = (from: number, to: number) => {
             let query = supabase
                 .from('bookings')
                 .select(`
@@ -661,7 +668,10 @@ export default function CargosTab() {
                 }
             }
 
-            const { data: rawBookings, error } = await query
+                return query.range(from, to)
+            }
+
+            const { data: rawBookings, error } = await fetchAllRows<any>(buildQuery)
 
             if (error) throw error
 

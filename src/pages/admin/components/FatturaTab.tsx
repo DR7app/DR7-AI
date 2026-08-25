@@ -1573,34 +1573,9 @@ export default function FatturaTab() {
 // upload/network che si risolvono col Reinvia.
 // Polling ogni 60s + realtime sul cambio sdi_status.
 // eslint-disable-next-line react-refresh/only-export-components
-export function useFatturaScartataCount() {
-  const [count, setCount] = useState(0)
-
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      const { count: n } = await supabase
-        .from('fatture')
-        .select('id', { count: 'exact', head: true })
-        .in('sdi_status', ['rejected', 'scartata'])
-        .eq('sdi_notification_seen', false)
-      if (!cancelled && typeof n === 'number') setCount(n)
-    }
-    load()
-    const id = setInterval(load, 60_000)
-    const channel = supabase
-      .channel('fattura-scartata-count')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fatture' }, load)
-      .subscribe()
-    return () => {
-      cancelled = true
-      clearInterval(id)
-      supabase.removeChannel(channel)
-    }
-  }, [])
-
-  return count
-}
+// Il contatore vive in src/hooks/useFatturaScartataCount.ts: importarlo da
+// qui tirerebbe l'intera tab nel chunk principale del gestionale.
+export { useFatturaScartataCount } from '../../../hooks/useFatturaScartataCount'
 
 // ─── InvoiceFooterEditor ─────────────────────────────────────────────────
 // Direzione edits the 3 footer lines printed on every invoice PDF.

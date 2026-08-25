@@ -5,25 +5,29 @@ import { createPortal } from 'react-dom'
 import { supabase } from '../../supabaseClient'
 import { useNavigate } from 'react-router-dom'
 import { useTheme, PALETTES, type Palette } from '../../contexts/ThemeContext'
-import RentalTabs from './components/RentalTabs'
 // Uscite Straordinarie di Mare/Aria/Soggiorni: stesso componente del Noleggio
 // Terra in viewMode='uscite', parametrizzato per business. Nessun peso in piu'
 // sul bundle: RentalTabs lo importa gia' in modo eager.
-import ReservationsTab from './components/ReservationsTab'
-import ImmondiziaTab from './components/ImmondiziaTab'
-import TicketTab from './components/TicketTab'
-import MovimentiAereiTab from './components/MovimentiAereiTab'
 import { useVehicleAlarm } from '../../contexts/VehicleAlarmContext'
-import { useBirthdayCount } from './components/BirthdaysTab'
-import { useFatturaScartataCount } from './components/FatturaTab'
+import { useBirthdayCount } from '../../hooks/useBirthdayCount'
+import { useFatturaScartataCount } from '../../hooks/useFatturaScartataCount'
 import PlaceholderTab from './components/PlaceholderTab'
-import MyDayEditorModal from './components/MyDayEditorModal'
 import { useAdminRole } from '../../hooks/useAdminRole'
 import { clearAdminCache } from '../../utils/logAdminAction'
 import lazyWithRetry from '../../utils/lazyWithRetry'
 import SedePicker from '../../components/SedePicker'
 
 // Lazy-load all tabs with automatic retry on chunk load failure (post-deploy resilience)
+// 25/08/2026 - questi erano import statici, quindi finivano nel chunk
+// principale e venivano scaricati da CHIUNQUE apra il gestionale, anche da
+// chi non tocca mai queste tab. RentalTabs in particolare si tira dietro
+// ReservationsTab (12.800 righe) e PreventiviTab (6.300).
+const RentalTabs = lazyWithRetry(() => import('./components/RentalTabs'))
+const ReservationsTab = lazyWithRetry(() => import('./components/ReservationsTab'))
+const ImmondiziaTab = lazyWithRetry(() => import('./components/ImmondiziaTab'))
+const TicketTab = lazyWithRetry(() => import('./components/TicketTab'))
+const MovimentiAereiTab = lazyWithRetry(() => import('./components/MovimentiAereiTab'))
+const MyDayEditorModal = lazyWithRetry(() => import('./components/MyDayEditorModal'))
 const CustomersTab = lazyWithRetry(() => import('./components/CustomersTab'))
 const CustomerWalletTab = lazyWithRetry(() => import('./components/CustomerWalletTab'))
 const SiteUsersTab = lazyWithRetry(() => import('./components/SiteUsersTab'))

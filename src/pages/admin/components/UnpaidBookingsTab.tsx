@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { fetchAllRows } from '../../../utils/fetchAllRows'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { isTestPlate } from '../../../utils/testPlates'
@@ -336,26 +337,32 @@ export default function UnpaidBookingsTab() {
       // them from "In attesa di pagamento" even though they appeared in
       // the wash calendar.
 
+      // 25/08/2026: le tre letture erano in fila e nessuna era paginata.
+      // La prima oggi porta 941 righe (misurato): sotto le 1000 per un soffio,
+      // ma appena le supera PostgREST comincia a tagliare in silenzio e gli
+      // importi non pagati calano da soli. Ora sono paginate e partono
+      // insieme: stesse righe, tutte, e si aspetta il massimo non la somma.
+
       // Primary fetch: active/pending bookings that might be unpaid.
-      const { data: activeData, error: activeErr } = await supabase
+      const activePromise = fetchAllRows<any>((from, to) => supabase
         .from('bookings')
         .select('*')
         .not('status', 'in', '(cancelled,annullata,completed,completata,deleted)')
         .neq('customer_name', 'Lavaggio Rientro')
         .order('created_at', { ascending: false })
-
-      if (activeErr) throw activeErr
+        .range(from, to))
 
       // Secondary fetch: cancelled / completed bookings that still have
       // unpaid penali or danni. Without this, a penale added against a
       // cancelled booking would never appear in "In attesa di pagamento".
-      const { data: terminalWithItems } = await supabase
+      const terminalWithItemsPromise = fetchAllRows<any>((from, to) => supabase
         .from('bookings')
         .select('*')
         .in('status', ['cancelled', 'annullata', 'completed', 'completata'])
         .neq('customer_name', 'Lavaggio Rientro')
         .or('booking_details->penalties.neq.[],booking_details->danni.neq.[]')
         .order('created_at', { ascending: false })
+        .range(from, to))
 
       // Tertiary fetch: completed/completata bookings where the booking
       // itself is STILL UNPAID. Car wash bookings get auto-flagged
@@ -364,13 +371,22 @@ export default function UnpaidBookingsTab() {
       // row has status='completed' + payment_status='pending' — and
       // without this fetch it disappears from "In attesa di pagamento"
       // because the primary query excludes completed statuses.
-      const { data: terminalUnpaid } = await supabase
+      const terminalUnpaidPromise = fetchAllRows<any>((from, to) => supabase
         .from('bookings')
         .select('*')
         .in('status', ['completed', 'completata'])
         .not('payment_status', 'in', '(paid,completed,succeeded)')
         .neq('customer_name', 'Lavaggio Rientro')
         .order('created_at', { ascending: false })
+        .range(from, to))
+
+      const [activeRes, terminalWithItemsRes, terminalUnpaidRes] = await Promise.all([
+        activePromise, terminalWithItemsPromise, terminalUnpaidPromise,
+      ])
+      if (activeRes.error) throw activeRes.error
+      const activeData = activeRes.data
+      const terminalWithItems = terminalWithItemsRes.data
+      const terminalUnpaid = terminalUnpaidRes.data
 
       // 2026-05-30: a cancelled/completed booking should only stay in
       // "In attesa di pagamento" if a penale/danno is ACTUALLY UNPAID.

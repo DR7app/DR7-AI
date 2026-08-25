@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { fetchAllRows } from '../../../utils/fetchAllRows'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import toast from 'react-hot-toast'
@@ -43,11 +44,16 @@ export default function ReviewsTab() {
         try {
             // Fetch all bookings
             // We consider "completed" if status is 'completed' OR 'paid' OR if the date is in the past and status is not 'cancelled'
-            const { data, error } = await supabase
+            // 25/08/2026: questa lettura non era paginata, quindi PostgREST ne
+            // restituiva 1000 su 1619 (misurato). 619 prenotazioni concluse non
+            // comparivano MAI fra quelle a cui chiedere la recensione, e il
+            // conteggio a video era falso. Ora si leggono tutte.
+            const { data, error } = await fetchAllRows<any>((from, to) => supabase
                 .from('bookings')
                 .select('*')
                 .neq('status', 'cancelled')
                 .order('created_at', { ascending: false })
+                .range(from, to))
 
             if (error) throw error
 
