@@ -6,6 +6,7 @@ import {
     type DailyType, type DailyCategory, type DailyCategoryConfig,
 } from '../../../utils/dailyCalendarCategories'
 import { getRomeDateComponents } from '../../../utils/timezoneUtils'
+import BookingDetailsPanel from './BookingDetailsPanel'
 
 interface Booking {
     id: string
@@ -29,6 +30,10 @@ interface ActivityCardProps {
     colorClass: string
     gradientClass: string
     glowClass: string
+    // 25/08/2026: la card aveva gia' `cursor-pointer` ma nessun click: il
+    // puntatore prometteva un dettaglio che non si apriva. Ora apre la scheda
+    // della prenotazione, come nel Calendario mensile.
+    onOpen: (booking: Booking) => void
 }
 
 // Generate 15-minute time slots for business hours (9 AM - 8 PM)
@@ -46,7 +51,7 @@ const generateTimeSlots = () => {
 
 const TIME_SLOTS = generateTimeSlots()
 
-function ActivityCard({ booking, colorClass, gradientClass, glowClass }: ActivityCardProps) {
+function ActivityCard({ booking, colorClass, gradientClass, glowClass, onOpen }: ActivityCardProps) {
     const parseCustomerName = (fullName: string | null) => {
         if (!fullName) return 'N/A'
         const parts = fullName.trim().split(' ')
@@ -64,7 +69,13 @@ function ActivityCard({ booking, colorClass, gradientClass, glowClass }: Activit
     const getLabel = () => labelOf(booking.type)
 
     return (
-        <div className={`
+        <div
+            role="button"
+            tabIndex={0}
+            onClick={() => onOpen(booking)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(booking) } }}
+            title="Apri la scheda della prenotazione"
+            className={`
             relative group
             bg-gradient-to-br ${gradientClass}
             backdrop-blur-sm
@@ -75,6 +86,7 @@ function ActivityCard({ booking, colorClass, gradientClass, glowClass }: Activit
             hover:scale-[1.02]
             hover:shadow-lg ${glowClass}
             cursor-pointer
+            focus:outline-none focus:ring-2 focus:ring-dr7-gold
         `}>
             <div
                 className={`
@@ -127,6 +139,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
     const [catConfig, setCatConfig] = useState<DailyCategoryConfig[] | null>(null)
     const [loading, setLoading] = useState(true)
     const [selectedDate, setSelectedDate] = useState(new Date())
+    const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
     const currentTimeRef = useRef<HTMLDivElement>(null)
 
     // Config corsie: si legge una volta all'apertura.
@@ -414,6 +427,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                                                         colorClass={cat.color}
                                                         gradientClass={cat.gradient}
                                                         glowClass={cat.glow}
+                                                        onOpen={setSelectedBooking}
                                                     />
                                                 ))}
                                             </div>
@@ -425,7 +439,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                                         {slotBookings.map(booking => {
                                             const colors = metaOf(categoryOf(booking.type))
                                             return (
-                                                <ActivityCard key={`${booking.id}-${booking.type}`} booking={booking} colorClass={colors.color} gradientClass={colors.gradient} glowClass={colors.glow} />
+                                                <ActivityCard key={`${booking.id}-${booking.type}`} booking={booking} colorClass={colors.color} gradientClass={colors.gradient} glowClass={colors.glow} onOpen={setSelectedBooking} />
                                             )
                                         })}
                                         {!hasBookings && isCurrentSlot && (
@@ -438,6 +452,31 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                     </div>
                 )}
             </div>
+
+            {/* Scheda prenotazione sopra il calendario (z-[200] contro z-50 di
+                questa modale). "Modifica" la riapre in Prenotazioni. */}
+            {/* Il wrapper ferma il click: questo nodo vive dentro l'overlay del
+                calendario, che su onClick chiude tutto. Senza, ogni click nella
+                scheda chiudeva anche il calendario sotto. */}
+            {selectedBooking && (
+                <div onClick={(e) => e.stopPropagation()}>
+                <BookingDetailsPanel
+                    booking={selectedBooking}
+                    onClose={() => setSelectedBooking(null)}
+                    onEdit={(bookingId) => {
+                        window.dispatchEvent(new CustomEvent('openBookingForm', {
+                            detail: {
+                                bookingId,
+                                vehicleId: (selectedBooking as { vehicle_id?: string }).vehicle_id,
+                                date: selectedBooking.pickup_date ? new Date(selectedBooking.pickup_date) : selectedDate,
+                            },
+                        }))
+                        setSelectedBooking(null)
+                        onClose()
+                    }}
+                />
+                </div>
+            )}
         </div>
     )
 }

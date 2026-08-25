@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { getRomeDateComponents } from '../../../utils/timezoneUtils'
 import { logger } from '../../../utils/logger'
+import BookingDetailsPanel from './BookingDetailsPanel'
 import { authFetch } from '../../../utils/authFetch'
 import {
     resolveDailyCategories, categorizeDayBooking, categoryOf, labelOf,
@@ -49,6 +50,11 @@ export default function DailyCalendarTab() {
     const [catConfig, setCatConfig] = useState<DailyCategoryConfig[] | null>(null)
     const [loading, setLoading] = useState(true)
     const [selectedDate, setSelectedDate] = useState(new Date())
+    // 25/08/2026: cliccando un evento si apre la scheda della prenotazione,
+    // lo stesso pannello del Calendario mensile. Prima le card della giornata
+    // erano l'unico posto del gestionale dove una prenotazione a schermo non si
+    // poteva aprire: bisognava andarla a cercare in Prenotazioni.
+    const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
     const currentTimeRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
@@ -356,7 +362,12 @@ export default function DailyCalendarTab() {
                                 return (
                                     <div
                                         key={booking.id}
-                                        className={`${bgColor} text-theme-text-primary rounded px-1.5 lg:px-2 py-1 lg:py-1.5 text-xs mb-1 shadow-md hover:shadow-lg transition-shadow overflow-hidden`}
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => setSelectedBooking(booking)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedBooking(booking) } }}
+                                        title="Apri la scheda della prenotazione"
+                                        className={`${bgColor} text-theme-text-primary rounded px-1.5 lg:px-2 py-1 lg:py-1.5 text-xs mb-1 shadow-md hover:shadow-lg transition-shadow overflow-hidden cursor-pointer focus:outline-none focus:ring-2 focus:ring-dr7-gold`}
                                         style={bookingHasNotes ? { boxShadow: 'inset 0 0 0 2.5px #FACC15' } : undefined}
                                     >
                                         <div
@@ -444,7 +455,11 @@ export default function DailyCalendarTab() {
                                     {slotBookings.map((booking) => (
                                         <div
                                             key={`${booking.id}-${booking.type}`}
-                                            className={`border-l-4 ${getCategoryColor(booking.type)} bg-theme-bg-tertiary rounded-r-lg px-2.5 py-2 overflow-hidden`}
+                                            role="button"
+                                            tabIndex={0}
+                                            onClick={() => setSelectedBooking(booking)}
+                                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedBooking(booking) } }}
+                                            className={`border-l-4 ${getCategoryColor(booking.type)} bg-theme-bg-tertiary rounded-r-lg px-2.5 py-2 overflow-hidden cursor-pointer active:bg-theme-bg-hover focus:outline-none focus:ring-2 focus:ring-dr7-gold`}
                                         >
                                             <div className="flex items-center gap-1.5 mb-0.5">
                                                 <div className={`w-2 h-2 rounded-full shrink-0 ${getDotColor(booking.type)}`} />
@@ -469,6 +484,26 @@ export default function DailyCalendarTab() {
                     })}
                 </div>
             </div>
+
+            {/* Scheda prenotazione: stesso pannello del Calendario mensile, cosi'
+                le due viste non divergono. "Modifica" riapre la prenotazione in
+                Prenotazioni, come fa CalendarTab. */}
+            {selectedBooking && (
+                <BookingDetailsPanel
+                    booking={selectedBooking}
+                    onClose={() => setSelectedBooking(null)}
+                    onEdit={(bookingId) => {
+                        window.dispatchEvent(new CustomEvent('openBookingForm', {
+                            detail: {
+                                bookingId,
+                                vehicleId: (selectedBooking as { vehicle_id?: string }).vehicle_id,
+                                date: selectedBooking.pickup_date ? new Date(selectedBooking.pickup_date) : selectedDate,
+                            },
+                        }))
+                        setSelectedBooking(null)
+                    }}
+                />
+            )}
         </div>
     )
 }
