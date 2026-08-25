@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
+import { preparaAvatarJpeg, AvatarError, AVATAR_ACCEPT } from '../../../utils/avatarImage'
 import { formatAdminLog, formatEntityLabel } from '../../../utils/formatAdminLog'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import OperatoriReportDashboardV2 from './OperatoriReportDashboardV2'
@@ -45,6 +46,15 @@ interface Admin {
   permissions?: string[] | null
   /** Valorizzata = operatore archiviato: niente accesso, storico conservato. */
   archived_at?: string | null
+  /**
+   * Foto profilo. NON vive su `admins`: la colonna e' operatori_persone.avatar_url
+   * (stessa usata da Rilevazione Orari, Report Operatori, Payroll e dall'header
+   * via useAdminRole). Qui viene agganciata per email in loadAdmins cosi' la
+   * foto e' unica in tutto il gestionale.
+   */
+  avatar_url?: string | null
+  /** id della riga operatori_persone abbinata per email (serve per l'upload). */
+  persona_id?: string | null
 }
 
 // Role tags mirror useAdminRole.AdminRoleTag. Direzione can grant these
@@ -490,6 +500,21 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
     const isDirection = hasRoleRef.current('direzione') || hasRoleRef.current('developer') || myRoleRef.current === 'superadmin'
 
     const { data } = await supabase.from('admins').select('id, email, nome, role, sede, reparto, tipo_rapporto, stato, responsabile, contatto_interno, permissions, archived_at')
+
+    // Foto profilo: unica sorgente = operatori_persone.avatar_url, abbinata per
+    // email. Non duplichiamo la colonna su `admins`, altrimenti la stessa
+    // persona avrebbe due foto diverse fra Operatori e Rilevazione Orari.
+    const personaByEmail = new Map<string, { id: string; avatar_url: string | null }>()
+    try {
+      const { data: personeRows } = await supabase
+        .from('operatori_persone')
+        .select('id, email, avatar_url')
+      for (const p of personeRows || []) {
+        const key = (p.email || '').toLowerCase()
+        if (key) personaByEmail.set(key, { id: p.id, avatar_url: p.avatar_url })
+      }
+    } catch { /* senza foto si mostrano le iniziali */ }
+
     if (data) {
       // La vista "Storico" mostra SOLO gli archiviati; quella normale solo gli
       // attivi. Un ex operatore non deve piu' comparire fra chi lavora.
@@ -506,7 +531,11 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
         // Same priority → alphabetical
         return (a.nome || a.email).localeCompare(b.nome || b.email)
       })
-      setAdmins(filtered)
+      const withPhoto: Admin[] = filtered.map(a => {
+        const persona = personaByEmail.get((a.email || '').toLowerCase())
+        return { ...a, avatar_url: persona?.avatar_url ?? null, persona_id: persona?.id ?? null }
+      })
+      setAdmins(withPhoto)
       if (!selectedAdmin && filtered.length > 0) setSelectedAdmin(filtered[0].id)
     }
     setLoading(false)
@@ -697,6 +726,110 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
     }
   }
 
+  // ─── Foto profilo operatore ─────────────────────────────────────────────
+  // La foto sta su operatori_persone.avatar_url (bucket `operator-avatars`),
+  // la stessa colonna che leggono Rilevazione Orari, Report Operatori, Payroll
+  // e l'header del gestionale. Se l'operatore non ha ancora una riga
+  // operatori_persone (invitato prima che esistesse, o creato a mano su
+  // `admins`) la creiamo al volo, altrimenti la foto non avrebbe dove finire.
+  const [avatarBusy, setAvatarBusy] = useState<string | null>(null)
+
+  async function ensurePersonaId(admin: Admin): Promise<string | null> {
+    if (admin.persona_id) return admin.persona_id
+    const email = (admin.email || '').toLowerCase()
+    if (!email) {
+      toast.error('Operatore senza email: impossibile abbinare la foto.')
+      return null
+    }
+    // ilike, non eq: le email storiche non sono tutte in minuscolo e un `eq`
+    // fallito qui creerebbe una seconda scheda per la stessa persona.
+    const { data: existing } = await supabase
+      .from('operatori_persone')
+      .select('id')
+      .ilike('email', email)
+      .maybeSingle()
+    if (existing?.id) return existing.id
+    const { data: created, error } = await supabase
+      .from('operatori_persone')
+      .insert({
+        email,
+        nome: admin.nome || email.split('@')[0],
+        cognome: null,
+        ruolo: null,
+        ore_target_giornaliere: 8,
+        attivo: (admin.stato || 'Attivo').toLowerCase() === 'attivo',
+      })
+      .select('id')
+      .single()
+    if (error || !created?.id) {
+      toast.error('Creazione scheda operatore fallita: ' + (error?.message || 'errore sconosciuto'))
+      return null
+    }
+    return created.id
+  }
+
+  function applyAvatar(adminId: string, personaId: string | null, url: string | null) {
+    setAdmins(prev => prev.map(a => a.id === adminId
+      ? { ...a, avatar_url: url, persona_id: personaId ?? a.persona_id }
+      : a))
+  }
+
+  async function uploadAdminAvatar(admin: Admin, file: File) {
+    // Foto sempre ri-codificata in JPEG dal browser: vedi utils/avatarImage.
+    let jpeg: Blob
+    try {
+      jpeg = await preparaAvatarJpeg(file)
+    } catch (err) {
+      toast.error(err instanceof AvatarError ? err.message : 'Foto non caricabile: riprova con un JPG.', { duration: 10000 })
+      return
+    }
+    setAvatarBusy(admin.id)
+    try {
+      const personaId = await ensurePersonaId(admin)
+      if (!personaId) return
+      const path = `${personaId}/${Date.now()}.jpg`
+      const { error: upErr } = await supabase.storage
+        .from('operator-avatars')
+        .upload(path, jpeg, { upsert: true, contentType: 'image/jpeg' })
+      if (upErr) {
+        toast.error('Upload fallito: ' + upErr.message)
+        return
+      }
+      const { data: pub } = supabase.storage.from('operator-avatars').getPublicUrl(path)
+      const { error: dbErr } = await supabase
+        .from('operatori_persone')
+        .update({ avatar_url: pub.publicUrl })
+        .eq('id', personaId)
+      if (dbErr) {
+        toast.error('Salvataggio foto fallito: ' + dbErr.message)
+        return
+      }
+      applyAvatar(admin.id, personaId, pub.publicUrl)
+      toast.success('Foto profilo aggiornata')
+    } finally {
+      setAvatarBusy(null)
+    }
+  }
+
+  async function removeAdminAvatar(admin: Admin) {
+    if (!admin.persona_id || !admin.avatar_url) return
+    setAvatarBusy(admin.id)
+    try {
+      const { error } = await supabase
+        .from('operatori_persone')
+        .update({ avatar_url: null })
+        .eq('id', admin.persona_id)
+      if (error) {
+        toast.error('Rimozione foto fallita: ' + error.message)
+        return
+      }
+      applyAvatar(admin.id, admin.persona_id, null)
+      toast.success('Foto rimossa — tornano le iniziali')
+    } finally {
+      setAvatarBusy(null)
+    }
+  }
+
   // Toggle a single role tag on an existing admin. Writes admins.permissions
   // and refreshes local state so the gates that read hasRole() update on
   // next render. Reserved to direzione.
@@ -855,7 +988,9 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
           return (
             <button key={admin.id} onClick={() => setSelectedAdmin(admin.id)}
               className={`flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border transition-all ${active ? 'bg-dr7-gold/10 border-dr7-gold text-theme-text-primary' : 'bg-theme-bg-secondary border-theme-border text-theme-text-secondary hover:border-dr7-gold/50'}`}>
-              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${avatarColor(admin.id)}`}>{initials(admin.nome, admin.email)}</span>
+              {admin.avatar_url
+                ? <img src={admin.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover border border-theme-border" />
+                : <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${avatarColor(admin.id)}`}>{initials(admin.nome, admin.email)}</span>}
               <span className="text-sm font-medium">{admin.nome || admin.email.split('@')[0]}</span>
               <span className="text-[10px] uppercase tracking-wider opacity-70">{
                 isAdminDirezione(admin)
@@ -890,7 +1025,40 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
             {/* SECTION 1 — TESTATA OPERATORE */}
             <Section title="Testata operatore" subtitle="Identità e contatti">
               <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold ${avatarColor(selected.id)}`}>{initials(selected.nome, selected.email)}</div>
+                {/* Foto profilo: chiunque puo' cambiare la propria, la
+                    direzione puo' cambiare quella di tutti. */}
+                {(() => {
+                  const canEditPhoto = canEditOperators || selected.email?.toLowerCase() === (adminEmail || '').toLowerCase()
+                  const busy = avatarBusy === selected.id
+                  return (
+                    <div className="relative w-20 h-20 shrink-0">
+                      {selected.avatar_url
+                        ? <img src={selected.avatar_url} alt="" className="w-20 h-20 rounded-full object-cover border border-theme-border" />
+                        : <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold ${avatarColor(selected.id)}`}>{initials(selected.nome, selected.email)}</div>}
+                      {busy && (
+                        <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center text-[10px] text-white">…</div>
+                      )}
+                      {canEditPhoto && !busy && (
+                        <label
+                          className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-theme-text-primary text-theme-bg-primary flex items-center justify-center cursor-pointer hover:opacity-90 shadow-md"
+                          title={selected.avatar_url ? 'Cambia foto' : 'Carica foto'}
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth={2} strokeLinecap="round" d="M3 9a2 2 0 012-2h2.5L9 5h6l1.5 2H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" strokeWidth={2} /></svg>
+                          <input
+                            type="file"
+                            accept={AVATAR_ACCEPT}
+                            className="hidden"
+                            onChange={async e => {
+                              const file = e.target.files?.[0]
+                              e.target.value = ''
+                              if (file) await uploadAdminAvatar(selected, file)
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  )
+                })()}
                 <div className="flex-1">
                   <div className="text-2xl font-bold text-theme-text-primary">{selected.nome || selected.email.split('@')[0]}</div>
                   <div className="text-sm text-theme-text-secondary">{
@@ -913,7 +1081,42 @@ function AuditLogView({ onSwitchView, archived = false }: { onSwitchView: () => 
                 <ProfileFieldEditable label="Stato"           value={selected.stato || 'Attivo'} placeholder="Attivo / Sospeso / Inattivo" canEdit={canEditOperators} onSave={(v) => updateOperatorField(selected.id, 'stato', v)} />
                 <ProfileFieldEditable label="Responsabile"    value={selected.responsabile}     placeholder="Nome responsabile"             canEdit={canEditOperators} onSave={(v) => updateOperatorField(selected.id, 'responsabile', v)} />
                 <ProfileFieldEditable label="Contatto interno" value={selected.contatto_interno} placeholder="Telefono interno"             canEdit={canEditOperators} onSave={(v) => updateOperatorField(selected.id, 'contatto_interno', v)} />
-                <ProfileField label="Foto profilo" value="Iniziali" />
+                {(() => {
+                  const canEditPhoto = canEditOperators || selected.email?.toLowerCase() === (adminEmail || '').toLowerCase()
+                  const busy = avatarBusy === selected.id
+                  return (
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Foto profilo</div>
+                      <div className="text-sm text-theme-text-primary mt-0.5">{selected.avatar_url ? 'Caricata' : 'Iniziali'}</div>
+                      {canEditPhoto && (
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          <label className={`text-[11px] underline cursor-pointer text-dr7-gold hover:opacity-80 ${busy ? 'pointer-events-none opacity-50' : ''}`}>
+                            {selected.avatar_url ? 'Cambia' : 'Carica'}
+                            <input
+                              type="file"
+                              accept={AVATAR_ACCEPT}
+                              className="hidden"
+                              onChange={async e => {
+                                const file = e.target.files?.[0]
+                                e.target.value = ''
+                                if (file) await uploadAdminAvatar(selected, file)
+                              }}
+                            />
+                          </label>
+                          {selected.avatar_url && (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => removeAdminAvatar(selected)}
+                              className="text-[11px] underline text-theme-text-muted hover:text-theme-text-primary disabled:opacity-50"
+                            >Rimuovi</button>
+                          )}
+                        </div>
+                      )}
+                      <div className="text-[10px] text-theme-text-muted mt-0.5">JPG, PNG o WebP — max 2 MB</div>
+                    </div>
+                  )
+                })()}
                 <ProfileField label="ID interno" value={selected.id.slice(0, 8)} />
               </div>
 
