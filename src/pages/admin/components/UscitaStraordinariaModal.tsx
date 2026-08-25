@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
+import { isVehicleTypeCheckError, senzaVehicleType, AVVISO_VEHICLE_TYPE } from '../../../utils/vehicleTypeCheck'
 import { authFetch } from '../../../utils/authFetch'
 import Button from './Button'
 import Input from './Input'
@@ -9,6 +10,7 @@ import AddressAutocomplete from './AddressAutocomplete'
 import NewClientModal from './NewClientModal'
 import {
   USCITA_SERVICE_TYPE,
+  uscitaUsaFlottaAuto,
   USCITA_MOTIVAZIONI,
   USCITA_LUOGHI,
   USCITA_SERVIZI_EXTRA,
@@ -178,6 +180,9 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, serv
   // Business dell'uscita. Sconosciuto / assente = Terra, come le righe storiche.
   const business: UscitaBusiness = isUscitaBusiness(serviceType) ? serviceType : 'rental'
   const assetLabels = USCITA_ASSET_LABELS[business]
+  // Terra e Lavaggio lavorano sulla flotta auto; Mare, Aria e Soggiorni su un
+  // catalogo dedicato, i cui id NON stanno in bookings.vehicle_id.
+  const usaFlottaAuto = uscitaUsaFlottaAuto(business)
   // Edit mode: id delle prenotazioni originali del gruppo (per rilevare le card rimosse).
   const [origBookingIds, setOrigBookingIds] = useState<string[]>([])
   const [title, setTitle] = useState('')
@@ -402,7 +407,16 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, serv
           // valore l'insert tornava 400 silenzioso (PostgREST non
           // verbalizza il check failed nel response body).
           booking_source: 'admin',
-          vehicle_id: c.vehicle_id,
+          // 2026-08-25: qui stava l'"errore salvataggio" delle uscite di
+          // Mare / Aria / Soggiorni. Su quei business il mezzo viene da
+          // `noleggio_catalog`, mentre `bookings.vehicle_id` riferisce
+          // `vehicles` (la flotta auto): scriverci l'id del catalogo e' una
+          // chiave esterna che non esiste e il database rifiuta la riga.
+          // Terra funzionava perche' li' l'id e' davvero della flotta.
+          // Stessa soluzione gia' adottata dalle prenotazioni il 24/08: la
+          // colonna resta NULL e l'id vero va in booking_details.vehicle_id,
+          // dove calendario e report lo cercano gia'.
+          vehicle_id: usaFlottaAuto ? c.vehicle_id : null,
           vehicle_name: v?.display_name || '',
           vehicle_plate: c.plate || v?.plate || null,
           customer_name: `Uscita: ${label}`,
@@ -422,6 +436,9 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, serv
           amount_paid: payStatus === 'paid' ? priceCents : eurToCents(c.payment.amount && c.payment.state === 'Pagamento parziale' ? '0' : '0'),
           booking_details: {
             amountPaid: payStatus === 'paid' ? priceCents : 0,
+            // Id del mezzo SEMPRE qui: su Terra duplica la colonna, sugli
+            // altri business e' l'unico posto in cui esiste.
+            vehicle_id: c.vehicle_id,
             uscita: {
               group_id: groupId,
               business,
@@ -452,14 +469,31 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, serv
       const toUpdate = rows
         .map((row, i) => ({ id: valid[i]._editBookingId, row }))
         .filter((x): x is { id: string; row: typeof rows[number] } => !!x.id)
+      // 2026-08-25: su Mare / Aria / Soggiorni l'uscita nasce col tipo del
+      // mezzo ('boat', 'helicopter', 'stay') e il CHECK storico su
+      // bookings.vehicle_type la RIFIUTA: "errore salvataggio" solo su quei
+      // business, mentre Terra ('car') passava. Stesso repli gia' adottato
+      // sulle prenotazioni: si risalva senza quel campo finche' la migrazione
+      // non e' passata. Il business dell'uscita non si perde — vive in
+      // booking_details.uscita.business, che uscitaBusinessOf legge per primo.
+      let vehicleTypeRifiutato = false
       if (toInsert.length) {
-        const { error } = await supabase.from('bookings').insert(toInsert)
+        let { error } = await supabase.from('bookings').insert(toInsert)
+        if (isVehicleTypeCheckError(error)) {
+          vehicleTypeRifiutato = true
+          ;({ error } = await supabase.from('bookings').insert(toInsert.map(senzaVehicleType)))
+        }
         if (error) throw error
       }
       for (const u of toUpdate) {
-        const { error } = await supabase.from('bookings').update(u.row).eq('id', u.id)
+        let { error } = await supabase.from('bookings').update(u.row).eq('id', u.id)
+        if (isVehicleTypeCheckError(error)) {
+          vehicleTypeRifiutato = true
+          ;({ error } = await supabase.from('bookings').update(senzaVehicleType(u.row)).eq('id', u.id))
+        }
         if (error) throw error
       }
+      if (vehicleTypeRifiutato) toast(AVVISO_VEHICLE_TYPE, { duration: 9000, icon: '!' })
       if (editGroupId) {
         const keptIds = new Set(toUpdate.map(u => u.id))
         const removed = origBookingIds.filter(id => !keptIds.has(id))

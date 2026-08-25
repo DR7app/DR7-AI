@@ -305,7 +305,12 @@ export function cardFromUscitaBooking(booking: any, localId: string): UscitaVehi
   return {
     ...base,
     _editBookingId: booking.id,
-    vehicle_id: booking.vehicle_id || '',
+    // 2026-08-25: su Mare/Aria/Soggiorni la colonna `vehicle_id` resta NULL
+    // (riferisce la flotta auto, non il catalogo del business) e l'id vero
+    // vive in booking_details.vehicle_id — stesso posto in cui lo scrivono le
+    // prenotazioni. In modifica va riletto da li', altrimenti la card si apre
+    // senza mezzo selezionato e il salvataggio la scarta.
+    vehicle_id: booking.vehicle_id || booking.booking_details?.vehicle_id || '',
     plate: booking.vehicle_plate || '',
     autista_ids: Array.isArray(u.autista_ids) ? u.autista_ids : [],
     vehicle_to_drive: u.vehicle_to_drive || {},
