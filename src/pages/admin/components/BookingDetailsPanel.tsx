@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
@@ -25,6 +26,16 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
   // Synchronous lock: state updates are async, so a fast double-click would
   // slip past the `autoProntaSending` check below. The ref flips immediately.
   const autoProntaLock = useRef(false)
+
+  // 25/08/2026: Esc chiude il pannello. Aperto dal Calendario Giornaliero
+  // (modale) l'unica via d'uscita era la X, che li' finiva sotto la barra in
+  // alto: la scheda non si chiudeva piu'. La X ora e' raggiungibile (portale
+  // qui sotto), ma una scorciatoia da tastiera resta la rete di sicurezza.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   // "Auto Pronta": notifica WhatsApp al cliente che il veicolo è pronto al
   // ritiro. Invia il template Pro agganciato all'evento "Auto pronta Noleggio"
@@ -170,7 +181,12 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
   const pickupDate = new Date(booking.pickup_date)
   const dropoffDate = new Date(booking.dropoff_date)
 
-  return (
+  // Il pannello vive in un portale su <body>. Chi lo apre puo' essere dentro un
+  // contenitore con `backdrop-blur` e uno z-index basso (la modale del
+  // Calendario Giornaliero, z-50): li' `fixed` e `z-[200]` non bastano, perche'
+  // quel contenitore e' un contesto di impilamento a se' e la barra in alto
+  // (z-[60]) copriva il pannello — X di chiusura inclusa.
+  return createPortal(
     // 2026-05-22: pannello dettagli ANCORATO a destra (slide-in da destra)
     // invece che modale centrata. Click sull'overlay continua a chiudere.
     <div className="fixed inset-0 z-[200] flex justify-end bg-theme-overlay/60 backdrop-blur-sm" onClick={onClose}>
@@ -477,6 +493,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
           )}
         </div>
       </motion.div>
-    </div>
+    </div>,
+    document.body,
   )
 }
