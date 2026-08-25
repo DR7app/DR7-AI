@@ -13,8 +13,6 @@ import { useAdminRole } from '../../../hooks/useAdminRole'
 import { authFetch } from '../../../utils/authFetch'
 import { loadCached } from '../../../utils/dataCache'
 import { getPaletteForCategory } from '../../../utils/categoryPalettes'
-import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
-import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import { useCalendarLayout, LAYOUT_LIMITS } from '../../../hooks/useCalendarLayout'
 
 // --- Configuration ---
@@ -24,7 +22,6 @@ const MIN_ROW_HEIGHT = 60
 // Codice limitation per la modifica del layout (larghezze/altezze). La riga vive
 // in system_otp_overrides: la direzione la attiva/disattiva da Gestione OTP.
 // Il layout e' CONDIVISO fra tutti gli operatori, quindi va autorizzato.
-const LAYOUT_OTP_CODE = 'calendario_noleggio_layout'
 
 /**
  * Maniglia di ridimensionamento stile Excel. Invisibile finche' non ci passi
@@ -221,29 +218,19 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
 
   // ── Layout manuale (larghezze colonne / altezze righe) ────────────────────
   // Persistito CONDIVISO in app_settings: se lo cambia un operatore lo vedono
-  // tutti. Per questo la modifica passa dal gate OTP `calendario_noleggio_layout`.
-  const calLayout = useCalendarLayout()
-  const override = useLimitationOverride()
+  // tutti.
+  //
+  // 2026-08-25 (direzione): niente piu' OTP. Le dimensioni si cambiano e si
+  // rimettono a posto con "Reset auto", quindi il codice a ogni ritocco era
+  // solo un ostacolo. Questo calendario serve anche Mare, Aria e Soggiorni:
+  // ognuno salva le SUE misure (chiave per service_type nell'hook).
+  const calLayout = useCalendarLayout(serviceType)
   const [layoutEditing, setLayoutEditing] = useState(false)
   // Valori base del drag corrente: fissati al pointerdown cosi' il delta si
   // applica sempre alla misura di partenza giusta.
   const dragBase = useRef<{ leftColW: number; cellW: number; rowH: number }>({ leftColW: 0, cellW: 0, rowH: 0 })
 
-  const toggleLayoutEditing = () => {
-    if (layoutEditing) { setLayoutEditing(false); return }
-    if (override.hasOverride(LAYOUT_OTP_CODE)) { setLayoutEditing(true); return }
-    // requestOverride ritorna true quando l'OTP e' bypassato (regola disattivata
-    // o operatore con role:bypass-otp): in quel caso si sblocca subito.
-    const bypassed = override.requestOverride(
-      LAYOUT_OTP_CODE,
-      'Modificare larghezze e altezze del Calendario Noleggio richiede autorizzazione: il layout e\u2019 condiviso con tutti gli operatori.',
-    )
-    if (bypassed) setLayoutEditing(true)
-  }
-
-  useEffect(() => {
-    if (override.hasOverride(LAYOUT_OTP_CODE)) setLayoutEditing(true)
-  }, [override.overrideCodes]) // eslint-disable-line react-hooks/exhaustive-deps
+  const toggleLayoutEditing = () => setLayoutEditing(v => !v)
 
   // --- Data Loading ---
   useEffect(() => {
@@ -1009,17 +996,6 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
         </div>
       </div>
       {/* filtro periodo spostato nella control bar (sopra) per liberare spazio */}
-
-      <LimitationOverrideModal
-        isOpen={override.limitationState.isOpen}
-        limitationCode={override.limitationState.limitationCode}
-        limitationMessage={override.limitationState.limitationMessage}
-        actionContext={override.limitationState.actionContext}
-        draftSessionId={override.draftSessionId}
-        flowType={override.flowType}
-        onCancel={override.cancelLimitation}
-        onOverrideApproved={override.handleOverrideApproved}
-      />
 
       {/* 2. Scrollable Calendar Area */}
       {loadError && (

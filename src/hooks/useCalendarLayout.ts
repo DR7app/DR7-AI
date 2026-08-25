@@ -8,8 +8,18 @@
  *
  * Persistenza CONDIVISA in `app_settings` (stessa tabella di
  * carwash_hidden_plates / birthday settings): il layout e' uno solo per tutti
- * gli operatori — se lo cambia uno, lo vedono tutti. Per questo la modifica e'
- * protetta da OTP nel componente chiamante (codice `calendario_noleggio_layout`).
+ * gli operatori — se lo cambia uno, lo vedono tutti.
+ *
+ * 2026-08-25 (direzione): niente piu' OTP per cambiare le dimensioni. Era un
+ * passaggio in piu' per un'operazione che si annulla con "Reset auto", e
+ * bloccava una cosa che serve tutti i giorni.
+ *
+ * 2026-08-25: UN LAYOUT PER CALENDARIO. La chiave era una sola, quindi le
+ * larghezze scelte su Terra si applicavano anche a Mare, Aria e Soggiorni —
+ * che hanno un numero di mezzi e nomi diversi, quindi misure diverse. Ogni
+ * business tiene le sue: `calendar_noleggio_layout` (Terra, chiave storica
+ * lasciata com'e' per non perdere le misure gia' salvate) e
+ * `calendar_noleggio_layout__<service_type>` per gli altri.
  *
  * `app_settings.value` e' TEXT → serializziamo in JSON come fanno gli altri
  * consumatori della tabella.
@@ -17,8 +27,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabaseClient'
 
-/** Chiave singola in app_settings. */
-const SETTINGS_KEY = 'calendar_noleggio_layout'
+/** Chiave in app_settings, una per calendario. */
+const SETTINGS_KEY_BASE = 'calendar_noleggio_layout'
+function settingsKey(serviceType?: string): string {
+  // Terra (nessun serviceType, o 'car_rental') resta sulla chiave storica.
+  if (!serviceType || serviceType === 'car_rental' || serviceType === 'rental') return SETTINGS_KEY_BASE
+  return `${SETTINGS_KEY_BASE}__${serviceType}`
+}
 
 /** Limiti di sicurezza: un drag non puo' rendere il calendario inusabile. */
 export const LAYOUT_LIMITS = {
@@ -42,7 +57,8 @@ function clamp(v: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(v)))
 }
 
-export function useCalendarLayout() {
+export function useCalendarLayout(serviceType?: string) {
+  const SETTINGS_KEY = settingsKey(serviceType)
   const [layout, setLayout] = useState<CalendarLayout>(EMPTY)
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -52,6 +68,9 @@ export function useCalendarLayout() {
 
   useEffect(() => {
     let cancelled = false
+    latestRef.current = EMPTY
+    setLayout(EMPTY)
+    setLoaded(false)
     ;(async () => {
       const { data } = await supabase
         .from('app_settings')
@@ -85,7 +104,9 @@ export function useCalendarLayout() {
       setLoaded(true)
     })()
     return () => { cancelled = true }
-  }, [])
+    // Cambiando business (Mare -> Aria) si rileggono le misure di QUEL
+    // calendario, invece di tenere quelle del precedente.
+  }, [SETTINGS_KEY])
 
   /** Aggiorna in locale (durante il drag). NON scrive su DB. */
   const applyLocal = useCallback((patch: (prev: CalendarLayout) => CalendarLayout) => {
@@ -115,7 +136,7 @@ export function useCalendarLayout() {
     } finally {
       setSaving(false)
     }
-  }, [])
+  }, [SETTINGS_KEY])
 
   const setLeftColW = useCallback((px: number) => {
     applyLocal(prev => ({ ...prev, leftColW: clamp(px, LAYOUT_LIMITS.leftColW.min, LAYOUT_LIMITS.leftColW.max) }))
