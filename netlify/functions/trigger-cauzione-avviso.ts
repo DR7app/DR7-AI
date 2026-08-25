@@ -15,6 +15,9 @@ export const handler: Handler = async (event) => {
         if (ok) message = `Avviso inviato per ${res.sent} cauzione/i.`;
         else if (res.reason) message = res.reason;
         else if (res.errors > 0) message = `Invio fallito (${res.errors} errori) — controlla numero WhatsApp ed email dei destinatari.`;
+        // Senza questo ramo tutte le cauzioni scartate finivano in un generico
+        // "Niente da inviare", indistinguibile da un pulsante che non funziona.
+        else if (res.skipped > 0) message = `${res.skipped} cauzione/i saltate: gia' avvisate oggi, variante del messaggio spenta, o importo da restituire pari a zero.`;
         else message = 'Niente da inviare.';
         return { statusCode: 200, headers, body: JSON.stringify({ ok, ...res, message }) };
     } catch (e) {

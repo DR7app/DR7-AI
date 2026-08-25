@@ -1806,34 +1806,42 @@ export default function CentralinaProTab() {
   const [switchingBusiness, setSwitchingBusiness] = useState(false)
 
   // Applica uno snapshot remoto agli state hook (usato al mount e al cambio
-  // business). Ogni campo e' guardato: se manca, lo state resta com'e'.
+  // business).
+  //
+  // 2026-08-25 (direzione: "Terra e' Terra, Mare e' Mare"): quando una chiave
+  // MANCA nella riga del business, lo state NON puo' restare com'e'. Prima
+  // restava, quindi passando da Terra a Mare la sezione non ancora configurata
+  // sul Mare continuava a mostrare i valori di Terra — e il Salva successivo li
+  // scriveva davvero sulla riga del Mare, propagando la config di Terra senza
+  // che nessuno l'avesse chiesto. Ora una chiave assente torna al DEFAULT di
+  // fabbrica: quello che vedi su un business e' solo cio' che quel business ha.
   function applyRemoteSnapshot(remote: PersistedSnapshot) {
-    if (remote.categories) { setCategories(remote.categories); setSavedCategories(remote.categories) }
-    if (remote.fasce) { setFasce(remote.fasce); setSavedFasce(remote.fasce) }
-    if (remote.insurance) { setInsurance(remote.insurance); setSavedInsurance(remote.insurance) }
-    if (remote.km) { setKm(remote.km); setSavedKm(remote.km) }
-    if (remote.deposits) {
-      const migrated = migrateDeposits(remote.deposits)
+    { const v = remote.categories || INITIAL_CATEGORIES; setCategories(v); setSavedCategories(v) }
+    { const v = remote.fasce || INITIAL_FASCE; setFasce(v); setSavedFasce(v) }
+    { const v = remote.insurance || INITIAL_INSURANCE; setInsurance(v); setSavedInsurance(v) }
+    { const v = remote.km || INITIAL_KM; setKm(v); setSavedKm(v) }
+    {
+      const migrated = migrateDeposits(remote.deposits || INITIAL_DEPOSITS)
       const healed: DepositsConfig = {}
       for (const [catId, byFascia] of Object.entries(migrated)) {
         healed[catId] = canonicalizeDepositIds(byFascia as DepositsByFascia)
       }
       setDeposits(healed); setSavedDeposits(healed)
     }
-    if (remote.servizi) { setServizi(remote.servizi); setSavedServizi(remote.servizi) }
-    if (remote.prezzoDinamico) {
-      const merged = mergePrezzoDinamico(remote.prezzoDinamico)
+    { const v = remote.servizi || INITIAL_SERVIZI; setServizi(v); setSavedServizi(v) }
+    {
+      const merged = mergePrezzoDinamico(remote.prezzoDinamico || INITIAL_PREZZO_DINAMICO)
       setPrezzoDinamico(merged); setSavedPrezzoDinamico(merged)
     }
-    if (remote.preventivi) { setPreventivi(remote.preventivi); setSavedPreventivi(remote.preventivi) }
-    if (remote.penali !== undefined) { const m = migratePenali(remote.penali); setPenali(m); setSavedPenali(m) }
-    if (remote.danni !== undefined) { const m = migrateDanni(remote.danni); setDanni(m); setSavedDanni(m) }
-    if (remote.fiscal !== undefined) { setFiscal(remote.fiscal); setSavedFiscal(remote.fiscal) }
-    if (remote.dr7_club !== undefined) { setDr7Club(remote.dr7_club); setSavedDr7Club(remote.dr7_club) }
-    if (remote.automations !== undefined) { setAutomations(remote.automations); setSavedAutomations(remote.automations) }
-    if (remote.marketing !== undefined) { setMarketing(remote.marketing); setSavedMarketing(remote.marketing) }
-    if (remote.lavaggio_hours !== undefined) { setLavaggioHours(remote.lavaggio_hours); setSavedLavaggioHours(remote.lavaggio_hours) }
-    if (remote.noleggio_hours !== undefined) { setNoleggioHours(remote.noleggio_hours); setSavedNoleggioHours(remote.noleggio_hours) }
+    { const v = remote.preventivi || INITIAL_PREVENTIVI; setPreventivi(v); setSavedPreventivi(v) }
+    { const m = migratePenali(remote.penali ?? INITIAL_PENALI); setPenali(m); setSavedPenali(m) }
+    { const m = migrateDanni(remote.danni ?? INITIAL_DANNI); setDanni(m); setSavedDanni(m) }
+    { const v = remote.fiscal ?? INITIAL_FISCAL; setFiscal(v); setSavedFiscal(v) }
+    { const v = remote.dr7_club ?? INITIAL_DR7_CLUB; setDr7Club(v); setSavedDr7Club(v) }
+    { const v = remote.automations ?? INITIAL_AUTOMATIONS; setAutomations(v); setSavedAutomations(v) }
+    { const v = remote.marketing ?? INITIAL_MARKETING; setMarketing(v); setSavedMarketing(v) }
+    { const v = remote.lavaggio_hours ?? INITIAL_LAVAGGIO_HOURS; setLavaggioHours(v); setSavedLavaggioHours(v) }
+    { const v = remote.noleggio_hours ?? INITIAL_NOLEGGIO_HOURS; setNoleggioHours(v); setSavedNoleggioHours(v) }
     { const so = Array.isArray(remote.sezioni_off) ? remote.sezioni_off : []; setSezioniOff(so); setSavedSezioniOff(so) }
     { const cm = (remote.contratto_modifica && typeof remote.contratto_modifica === 'object') ? remote.contratto_modifica as Record<string, ContrattoAzione> : null; setContrattoRegole({ ...CONTRATTO_DEFAULT, ...(cm || {}) }) }
   }
@@ -2212,6 +2220,7 @@ export default function CentralinaProTab() {
                       Sola lettura
                     </span>
                   </div>
+                  <GlobaleBadge cosa="La scadenza di restituzione della cauzione" />
                   <CauzioneScadenzaConfig readOnly />
                   <CauzioniSection
                     deposits={deposits}
@@ -2225,6 +2234,7 @@ export default function CentralinaProTab() {
                   {/* 2026-08-24: la scadenza di restituzione si cambia da qui.
                       Prima era scritta in due posti in disaccordo (trigger DB a
                       giorni di calendario, Netlify a 14 lavorativi in duro). */}
+                  <GlobaleBadge cosa="La scadenza di restituzione della cauzione" />
                   <CauzioneScadenzaConfig />
                   <CauzioniSection deposits={deposits} setDeposits={setDeposits} fasce={fasce} categories={categories} />
                 </>
@@ -2267,6 +2277,7 @@ export default function CentralinaProTab() {
               // catalogo. Si apre su Aperti: chi entra qui di solito ha un
               // allarme che suona, non una soglia da cambiare.
               <div className="space-y-3">
+                <GlobaleBadge cosa="Il catalogo degli allarmi" />
                 <div className="flex items-center gap-1.5">
                   {([['aperti', 'Aperti'], ['config', 'Configurazione']] as [VistaAllarmi, string][]).map(([k, lbl]) => (
                     <button
@@ -2322,8 +2333,18 @@ export default function CentralinaProTab() {
                 {businessId === 'soggiorni' && <NoleggioServiceTab serviceType="stay_rental" view="catalog" labels={{ title: 'Soggiorni & Ospitalità', asset: 'Alloggio', assetPlural: 'Alloggi' }} />}
               </div>
             )}
-            {section === 'status-clienti' && <ClientStatusConfigSection />}
-            {section === 'autisti' && <AutistiConfigSection />}
+            {section === 'status-clienti' && (
+              <>
+                <GlobaleBadge cosa="Lo status dei clienti" />
+                <ClientStatusConfigSection />
+              </>
+            )}
+            {section === 'autisti' && (
+              <>
+                <GlobaleBadge cosa="L'elenco degli autisti" />
+                <AutistiConfigSection />
+              </>
+            )}
             </>)}
           </main>
         </div>
@@ -3023,6 +3044,29 @@ function diffInsuranceList(
     if (prev.deductible_fixed !== o.deductible_fixed) out.push(`${prefix} / ${o.name}: franchigia ${prev.deductible_fixed} → ${o.deductible_fixed}`)
     if (prev.deductible_percent !== o.deductible_percent) out.push(`${prefix} / ${o.name}: scoperto % ${prev.deductible_percent} → ${o.deductible_percent}`)
   })
+}
+
+/**
+ * Etichetta per le sezioni che NON hanno una riga per business.
+ *
+ * 25/08/2026 (direzione): "se cambio un dato su Noleggio Terra cambia anche su
+ * Mare e Aria". Vero per queste sezioni: non stanno nel JSON per business della
+ * Centralina ma in tabelle singleton (`cauzioni_config`, `system_alarms`,
+ * `client_status`) o sono elenchi di persone condivisi. La riga per business
+ * qui non esisterebbe comunque: quello che serve e' dirlo, invece di mostrare
+ * un pannello che sembra separato e non lo e'.
+ */
+function GlobaleBadge({ cosa }: { cosa: string }) {
+  return (
+    <div className="mb-3 flex items-start gap-2 rounded-lg border border-theme-border bg-theme-bg-tertiary px-3 py-2">
+      <span className="shrink-0 mt-[1px] px-1.5 py-0.5 rounded-full bg-theme-bg-secondary border border-theme-border text-[10px] uppercase tracking-wider font-semibold text-theme-text-muted">
+        Globale
+      </span>
+      <p className="text-[11px] leading-snug text-theme-text-secondary">
+        {cosa} non si configura per business: quello che cambi qui vale per Terra, Mare, Aria, Soggiorni e Lavaggio.
+      </p>
+    </div>
+  )
 }
 
 type ListItem = { id: string; label: string }

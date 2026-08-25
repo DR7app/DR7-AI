@@ -71,6 +71,10 @@ export default function CauzioneScadenzaConfig({ readOnly = false }: { readOnly?
   const [avvisoWhatsapp, setAvvisoWhatsapp] = useState('')
   const [avvisoEmail, setAvvisoEmail] = useState('')
   const [invioOra, setInvioOra] = useState(false)
+  // Esito dell'ultimo "Invia ora". Il toast e' passeggero: quando l'avviso NON
+  // parte (nessuna cauzione in scadenza, nessun destinatario, template spento)
+  // il motivo deve restare a schermo, altrimenti il pulsante sembra rotto.
+  const [esitoInvio, setEsitoInvio] = useState<{ ok: boolean; testo: string } | null>(null)
 
   useEffect(() => { void load() }, [])
 
@@ -128,13 +132,38 @@ export default function CauzioneScadenzaConfig({ readOnly = false }: { readOnly?
 
   async function inviaOra() {
     setInvioOra(true)
+    setEsitoInvio(null)
     try {
       const res = await fetch('/.netlify/functions/trigger-cauzione-avviso', { method: 'POST' })
-      const data = await res.json().catch(() => ({}))
-      if (data?.ok) toast.success(data.message || 'Avviso inviato')
-      else toast(data?.message || 'Niente da inviare', { icon: 'ℹ️', duration: 8000 })
+      // Il corpo puo' NON essere JSON (404 della funzione, 502 di Netlify, pagina
+      // di errore): prima si guarda lo stato HTTP. Senza questo controllo un
+      // errore del server diventava lo stesso "Niente da inviare" di quando non
+      // c'e' davvero nulla da mandare, e il pulsante sembrava non fare niente.
+      const raw = await res.text()
+      let data: { ok?: boolean; message?: string; error?: string; sent?: number; skipped?: number; errors?: number } = {}
+      try { data = JSON.parse(raw) } catch { /* risposta non JSON */ }
+      if (!res.ok) {
+        const dettaglio = data.error || data.message || raw.slice(0, 120).trim()
+        const testo = res.status === 404
+          ? 'Funzione trigger-cauzione-avviso non trovata sul sito (deploy mancante).'
+          : `Errore server ${res.status}${dettaglio ? ': ' + dettaglio : ''}`
+        setEsitoInvio({ ok: false, testo })
+        toast.error(testo, { duration: 8000 })
+        return
+      }
+      if (data.ok) {
+        const testo = data.message || 'Avviso inviato'
+        setEsitoInvio({ ok: true, testo })
+        toast.success(testo)
+      } else {
+        const testo = data.message || 'Niente da inviare'
+        setEsitoInvio({ ok: false, testo })
+        toast(testo, { icon: 'ℹ️', duration: 8000 })
+      }
     } catch (e) {
-      toast.error('Errore: ' + (e instanceof Error ? e.message : 'riprova'))
+      const testo = 'Errore: ' + (e instanceof Error ? e.message : 'riprova')
+      setEsitoInvio({ ok: false, testo })
+      toast.error(testo)
     } finally {
       setInvioOra(false)
     }
@@ -311,6 +340,21 @@ export default function CauzioneScadenzaConfig({ readOnly = false }: { readOnly?
             </button>
           )}
         </div>
+
+        {esitoInvio && (
+          <p
+            className={`mb-3 text-[11px] leading-snug ${esitoInvio.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}
+            role="status"
+          >
+            {esitoInvio.testo}
+            {!esitoInvio.ok && (
+              <span className="block text-theme-text-muted">
+                &quot;Invia ora&quot; usa le impostazioni gia' salvate: se hai appena cambiato i momenti o i
+                destinatari, premi prima Salva.
+              </span>
+            )}
+          </p>
+        )}
 
         {avvisoMancante && (
           <p className="mb-3 text-[11px] leading-snug text-amber-600 dark:text-amber-400">
