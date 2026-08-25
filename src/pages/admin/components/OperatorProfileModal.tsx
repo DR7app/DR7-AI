@@ -12,10 +12,12 @@
  * already used in the team dashboard.
  */
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import { useAdminRole } from '../../../hooks/useAdminRole'
+import { PREFISSO_DEFAULT, separaPrefisso, componiNumero, etichettaPaese, paesiOrdinati, bandiera } from '../../../utils/prefissiPaesi'
 import {
     fetchPauseConfigOperatore,
     pausaObbligatoriaDelGiorno,
@@ -329,9 +331,14 @@ export default function OperatorProfileModal({
     const initials = `${(operatore.nome || '').charAt(0)}${(operatore.cognome || '').charAt(0)}`.toUpperCase() || operatore.email.charAt(0).toUpperCase()
     const tone = avatarTone(operatore.email || operatore.nome)
 
-    return (
+    // 2026-08-25: il modal era `z-50`, sotto l'header del gestionale
+    // (`sticky top-0 z-[60]` in AdminDashboard) e sotto la sidebar (z-[70]):
+    // la barra bianca copriva la testata del profilo — nome dell'operatore
+    // tagliato a meta'. Portale su <body> (nessun contesto di impilamento
+    // ereditato) + z sopra header, sidebar e menu palette (z-[9991]).
+    return createPortal(
         <div
-            className="fixed inset-0 z-50 overflow-y-auto bg-black/80 sm:flex sm:items-start sm:justify-center sm:p-4"
+            className="fixed inset-0 z-[9995] overflow-y-auto bg-black/80 sm:flex sm:items-start sm:justify-center sm:p-4"
             onClick={onClose}
         >
             <div
@@ -575,7 +582,7 @@ export default function OperatorProfileModal({
                 )}
             </div>
         </div>
-    )
+    , document.body)
 }
 
 type KpiTone = 'emerald' | 'sky' | 'amber' | 'rose' | 'muted'
@@ -687,6 +694,9 @@ function AccountSection({ email }: { email: string }) {
     const [account, setAccount] = useState<AccountRow | null>(null)
     const [loading, setLoading] = useState(true)
     const [editing, setEditing] = useState(false)
+    // Il contatto si edita in due pezzi: prefisso da tendina + numero locale.
+    const paesi = useMemo(() => paesiOrdinati(), [])
+    const [draftDial, setDraftDial] = useState(PREFISSO_DEFAULT)
     const [draft, setDraft] = useState('')
     const [saving, setSaving] = useState(false)
 
@@ -701,7 +711,9 @@ function AccountSection({ email }: { email: string }) {
                 .maybeSingle()
             if (cancelled) return
             setAccount((data as AccountRow) || null)
-            setDraft(((data as AccountRow)?.contatto_interno) || '')
+            const iniziale = separaPrefisso(((data as AccountRow)?.contatto_interno) || '')
+            setDraftDial(iniziale.dial)
+            setDraft(iniziale.numero)
             setLoading(false)
         })()
         return () => { cancelled = true }
@@ -709,8 +721,15 @@ function AccountSection({ email }: { email: string }) {
 
     async function salva() {
         if (!account) return
+        // Solo cifre nel numero locale: spazi, punti e trattini scritti a mano
+        // arrivavano dentro al valore salvato e sporcavano il confronto.
+        const localeCifre = draft.replace(/\D/g, '').replace(/^0+/, '')
+        if (localeCifre && localeCifre.length < 6) {
+            toast.error('Numero troppo corto: manca qualche cifra.')
+            return
+        }
         setSaving(true)
-        const valore = draft.trim() || null
+        const valore = componiNumero(draftDial, draft)
         const { error } = await supabase
             .from('admins')
             .update({ contatto_interno: valore })
@@ -718,6 +737,7 @@ function AccountSection({ email }: { email: string }) {
         setSaving(false)
         if (error) { toast.error('Salvataggio fallito: ' + error.message); return }
         setAccount({ ...account, contatto_interno: valore })
+        setDraft(localeCifre)
         setEditing(false)
         toast.success('Contatto aggiornato')
     }
@@ -726,6 +746,11 @@ function AccountSection({ email }: { email: string }) {
     // cifre non e' un numero e il messaggio non partirebbe).
     const soloCifre = (account?.contatto_interno || '').replace(/\D/g, '')
     const numeroValido = soloCifre.length >= 8
+    // Bandiera accanto al numero salvato: si ricava dal prefisso memorizzato.
+    const paeseSalvato = useMemo(() => {
+        const { dial } = separaPrefisso(account?.contatto_interno)
+        return [...paesi.frequenti, ...paesi.altri].find(p => p.dial === dial) || null
+    }, [account?.contatto_interno, paesi])
 
     if (loading) {
         return <div className="rounded-xl border border-theme-border bg-theme-bg-primary px-4 py-3 text-xs text-theme-text-muted">Caricamento account…</div>
@@ -754,7 +779,12 @@ function AccountSection({ email }: { email: string }) {
                 </div>
                 {puoModificare && !editing && (
                     <button
-                        onClick={() => { setDraft(account.contatto_interno || ''); setEditing(true) }}
+                        onClick={() => {
+                            const attuale = separaPrefisso(account.contatto_interno)
+                            setDraftDial(attuale.dial)
+                            setDraft(attuale.numero)
+                            setEditing(true)
+                        }}
                         className="rounded-full border border-theme-border px-3 py-1 text-xs font-medium text-theme-text-secondary hover:text-theme-text-primary"
                     >Modifica</button>
                 )}
@@ -764,10 +794,28 @@ function AccountSection({ email }: { email: string }) {
                 <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Numero WhatsApp</div>
                 {editing ? (
                     <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <select
+                            value={draftDial}
+                            onChange={e => setDraftDial(e.target.value)}
+                            aria-label="Prefisso internazionale"
+                            className="w-[230px] shrink-0 rounded-lg border border-theme-border bg-theme-bg-secondary px-2 py-2 text-sm text-theme-text-primary focus:outline-none"
+                        >
+                            <optgroup label="Piu' usati">
+                                {paesi.frequenti.map(p => (
+                                    <option key={p.iso} value={p.dial}>{etichettaPaese(p)}</option>
+                                ))}
+                            </optgroup>
+                            <optgroup label="Tutti i paesi">
+                                {paesi.altri.map(p => (
+                                    <option key={p.iso} value={p.dial}>{etichettaPaese(p)}</option>
+                                ))}
+                            </optgroup>
+                        </select>
                         <input
                             value={draft}
                             onChange={e => setDraft(e.target.value)}
-                            placeholder="es. 3401234567"
+                            inputMode="numeric"
+                            placeholder="es. 3401234567 (senza prefisso)"
                             className="min-w-[180px] flex-1 rounded-lg border border-theme-border bg-theme-bg-secondary px-3 py-2 text-sm text-theme-text-primary focus:outline-none"
                         />
                         <button onClick={salva} disabled={saving} className="rounded-lg bg-dr7-gold px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
@@ -776,10 +824,18 @@ function AccountSection({ email }: { email: string }) {
                         <button onClick={() => setEditing(false)} className="rounded-lg border border-theme-border px-3 py-2 text-xs text-theme-text-secondary">Annulla</button>
                     </div>
                 ) : (
-                    <div className="mt-1 text-sm text-theme-text-primary">
+                    <div className="mt-1 flex items-center gap-2 text-sm text-theme-text-primary">
                         {account.contatto_interno
-                            ? <span className="font-mono">{account.contatto_interno}</span>
+                            ? <>
+                                {paeseSalvato && <span title={paeseSalvato.nome} className="text-base leading-none">{bandiera(paeseSalvato.iso)}</span>}
+                                <span className="font-mono">{account.contatto_interno}</span>
+                              </>
                             : <span className="text-theme-text-muted">— non impostato</span>}
+                    </div>
+                )}
+                {editing && (
+                    <div className="mt-1 text-[10px] text-theme-text-muted">
+                        Verra&apos; salvato come <span className="font-mono">{draftDial}{draft.replace(/\D/g, '').replace(/^0+/, '') || '…'}</span> — scegli il paese e scrivi il numero senza prefisso e senza lo zero iniziale.
                     </div>
                 )}
                 <div className="mt-0.5 text-[10px] text-theme-text-muted">
