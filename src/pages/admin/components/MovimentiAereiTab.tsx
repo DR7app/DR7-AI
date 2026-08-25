@@ -16,6 +16,20 @@
 // prenotazione (posizionamenti, manutenzione, voli tecnici) e quelli si
 // possono ancora cancellare. I movimenti automatici no: sono il riflesso
 // della prenotazione, si correggono correggendo quella.
+//
+// 2026-08-25: l'aeromobile non si scrive piu' a mano. La tendina elenca gli
+// elicotteri che ci sono gia' nel catalogo Noleggio Aria — come la tendina
+// del mezzo nella tab Tour — cosi' il nome e' sempre lo stesso e i movimenti
+// si possono contare per aeromobile. "Altro" resta per i voli di un mezzo
+// che non e' in flotta (posizionamenti, aeromobili di terzi).
+//
+// La lista SEGUE il catalogo: si ricarica a ogni apertura della tab, dopo ogni
+// movimento registrato o cancellato e col pulsante Aggiorna. Il movimento
+// salva anche l'id dell'elicottero (`aeromobile_catalog_id`), quindi se in
+// Elicotteri si RINOMINA un mezzo lo storico si aggiorna da solo; il nome
+// testuale resta come copia per gli elicotteri poi cancellati dal catalogo.
+// La colonna e' aggiunta dalla migration 20260825_movimenti_aerei_catalog_id:
+// finche' non e' eseguita il salvataggio riprova senza id, non si blocca.
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
@@ -43,6 +57,11 @@ function nowLocalInput(): string {
 
 const DURATA_TOUR_DEFAULT_MIN = 30
 
+/** Valore della tendina che riapre il campo libero. */
+const AEROMOBILE_ALTRO = '__altro__'
+
+interface Aeromobile { id: string; name: string }
+
 export default function MovimentiAereiTab() {
   const [rows, setRows] = useState<Movimento[]>([])
   const [loading, setLoading] = useState(true)
@@ -50,6 +69,12 @@ export default function MovimentiAereiTab() {
   const [when, setWhen] = useState(nowLocalInput())
   const [tipo, setTipo] = useState<'decollo' | 'atterraggio'>('decollo')
   const [aeromobile, setAeromobile] = useState('')
+  // Elicotteri del catalogo Noleggio Aria: la tendina del form elenca gli
+  // attivi (stessa sorgente della tendina mezzo nella tab Tour). I nomi di
+  // TUTTI, anche dei disattivati, servono solo dentro load() per rileggere il
+  // nome aggiornato nello storico, quindi restano una variabile locale.
+  const [flotta, setFlotta] = useState<Aeromobile[]>([])
+  const [aeromobileSel, setAeromobileSel] = useState('')
   const [nota, setNota] = useState('')
   // Di default si guarda cio' che e' GIA' stato fatto: e' la domanda che si
   // fa a questa tab. Il programmato resta a un clic.
@@ -60,19 +85,48 @@ export default function MovimentiAereiTab() {
     const adesso = Date.now()
     const out: Movimento[] = []
 
+    // ── 0. Catalogo elicotteri: si rilegge a ogni caricamento, cosi' un mezzo
+    //      aggiunto, rinominato o disattivato in Elicotteri si vede subito.
+    const { data: cat } = await supabase
+      .from('noleggio_catalog')
+      .select('id, name, is_active, sort_order')
+      .eq('service_type', 'heli_rental')
+      .order('sort_order', { ascending: true })
+      .order('name', { ascending: true })
+    const nomi: Record<string, string> = {}
+    for (const c of (cat || [])) nomi[String(c.id)] = c.name
+    setFlotta((cat || []).filter(c => c.is_active !== false).map(c => ({ id: String(c.id), name: c.name })))
+
     // ── 1. Registro manuale ────────────────────────────────────────────────
-    const { data: manuali, error } = await supabase
-      .from('movimenti_aerei')
-      .select('id, movement_at, tipo, aeromobile, nota')
-      .order('movement_at', { ascending: false })
-      .limit(500)
-    if (error) toast.error('Errore: ' + error.message)
+    //      `aeromobile_catalog_id` esiste solo dopo la migration: se manca,
+    //      PostgREST rifiuta la select e si rilegge senza quella colonna.
+    let manuali: Array<{ id: string; movement_at: string; tipo: 'decollo' | 'atterraggio'; aeromobile: string | null; nota: string | null; aeromobile_catalog_id?: string | null }> | null = null
+    {
+      const conId = await supabase
+        .from('movimenti_aerei')
+        .select('id, movement_at, tipo, aeromobile, nota, aeromobile_catalog_id')
+        .order('movement_at', { ascending: false })
+        .limit(500)
+      if (conId.error) {
+        const senzaId = await supabase
+          .from('movimenti_aerei')
+          .select('id, movement_at, tipo, aeromobile, nota')
+          .order('movement_at', { ascending: false })
+          .limit(500)
+        if (senzaId.error) toast.error('Errore: ' + senzaId.error.message)
+        manuali = senzaId.data
+      } else manuali = conId.data
+    }
     for (const m of (manuali || [])) {
+      // Il nome vivo del catalogo vince sulla copia salvata: se l'elicottero
+      // e' stato rinominato lo storico segue. Cancellato dal catalogo -> resta
+      // il nome con cui e' stato registrato.
+      const dalCatalogo = m.aeromobile_catalog_id ? nomi[String(m.aeromobile_catalog_id)] : undefined
       out.push({
         id: `man:${m.id}`,
         movement_at: m.movement_at,
         tipo: m.tipo,
-        aeromobile: m.aeromobile,
+        aeromobile: dalCatalogo || m.aeromobile,
         nota: m.nota,
         origine: 'manuale',
         fase: m.tipo === 'decollo' ? 'andata' : 'ritorno',
@@ -133,11 +187,11 @@ export default function MovimentiAereiTab() {
         const nomi = new Map<string, string>()
         const durate = new Map<string, number>()
         if (ids.length) {
-          const { data: cat } = await supabase
+          const { data: catTour } = await supabase
             .from('noleggio_catalog')
             .select('id, name, tour_durations')
             .in('id', ids)
-          for (const c of (cat || [])) {
+          for (const c of (catTour || [])) {
             nomi.set(String(c.id), c.name)
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const durs = (c as any).tour_durations as Array<{ minutes?: number }> | null
@@ -172,16 +226,28 @@ export default function MovimentiAereiTab() {
 
   useEffect(() => { load() }, [load])
 
+
   const add = async () => {
     setSaving(true)
     const iso = when ? new Date(when).toISOString() : new Date().toISOString()
-    const { error } = await supabase.from('movimenti_aerei').insert({
-      movement_at: iso, tipo, aeromobile: aeromobile.trim() || null, nota: nota.trim() || null,
-    })
+    // Scelto in tendina -> si salva l'id (il nome segue le rinomine) piu' il
+    // nome com'e' adesso. "Altro" o catalogo vuoto -> solo il testo scritto.
+    const scelto = flotta.find(f => f.id === aeromobileSel)
+    const base = {
+      movement_at: iso,
+      tipo,
+      aeromobile: scelto ? scelto.name : (aeromobile.trim() || null),
+      nota: nota.trim() || null,
+    }
+    let { error } = await supabase.from('movimenti_aerei').insert({ ...base, aeromobile_catalog_id: scelto?.id ?? null })
+    // Migration non ancora eseguita: si salva lo stesso, senza l'id.
+    if (error && /aeromobile_catalog_id/i.test(error.message || '')) {
+      ({ error } = await supabase.from('movimenti_aerei').insert(base))
+    }
     setSaving(false)
     if (error) { toast.error('Errore: ' + error.message); return }
     toast.success('Movimento registrato')
-    setAeromobile(''); setNota(''); setWhen(nowLocalInput())
+    setAeromobile(''); setAeromobileSel(''); setNota(''); setWhen(nowLocalInput())
     load()
   }
 
@@ -192,6 +258,7 @@ export default function MovimentiAereiTab() {
     const { error } = await supabase.from('movimenti_aerei').delete().eq('id', vero)
     if (error) { toast.error('Errore: ' + error.message); return }
     setRows(prev => prev.filter(x => x.id !== r.id))
+    load()
   }
 
   // Conteggi oggi / mese (Europe/Rome via toLocaleDateString). Contano i
@@ -251,7 +318,12 @@ export default function MovimentiAereiTab() {
           onClick={() => setSoloEffettuati(v => !v)}
           className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors ${soloEffettuati ? 'bg-dr7-gold text-black border-dr7-gold' : 'bg-theme-bg-tertiary text-theme-text-secondary border-theme-border'}`}
         >{soloEffettuati ? 'Solo effettuati' : 'Effettuati + programmati'}</button>
-        <span className="text-xs text-theme-text-muted">{visibili.length} movimenti in elenco</span>
+        <button
+          onClick={load}
+          disabled={loading}
+          className="px-3 py-1.5 rounded-lg text-sm font-semibold border border-theme-border bg-theme-bg-tertiary text-theme-text-secondary disabled:opacity-50"
+        >{loading ? 'Aggiorno…' : 'Aggiorna'}</button>
+        <span className="text-xs text-theme-text-muted">{visibili.length} movimenti in elenco · {flotta.length} elicotteri in catalogo</span>
       </div>
 
       {/* Registra */}
@@ -271,7 +343,23 @@ export default function MovimentiAereiTab() {
           </div>
           <div>
             <label className="text-xs text-theme-text-muted block mb-1">Aeromobile (opzionale)</label>
-            <input value={aeromobile} onChange={e => setAeromobile(e.target.value)} placeholder="es. Airbus H125" className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary" />
+            <div className="space-y-2">
+              <select
+                value={aeromobileSel}
+                onChange={e => { setAeromobileSel(e.target.value); if (e.target.value !== AEROMOBILE_ALTRO) setAeromobile('') }}
+                className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary"
+              >
+                <option value="">— Non indicato —</option>
+                {flotta.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                <option value={AEROMOBILE_ALTRO}>Altro (scrivi)</option>
+              </select>
+              {(aeromobileSel === AEROMOBILE_ALTRO || flotta.length === 0) && (
+                <input value={aeromobile} onChange={e => setAeromobile(e.target.value)} placeholder="es. Airbus H125" className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary" />
+              )}
+              {flotta.length === 0 && (
+                <p className="text-[11px] text-theme-text-muted">Nessun elicottero attivo nel catalogo: aggiungili nella tab Elicotteri e compariranno qui.</p>
+              )}
+            </div>
           </div>
           <div>
             <label className="text-xs text-theme-text-muted block mb-1">Nota (opzionale)</label>
