@@ -15,6 +15,7 @@ import PlaceholderTab from './components/PlaceholderTab'
 import { useAdminRole } from '../../hooks/useAdminRole'
 import { clearAdminCache } from '../../utils/logAdminAction'
 import { preparaAvatarJpeg, AvatarError, AVATAR_ACCEPT } from '../../utils/avatarImage'
+import { errorePassword, regolePassword, PASSWORD_MIN } from '../../utils/passwordPolicy'
 import lazyWithRetry from '../../utils/lazyWithRetry'
 import SedePicker from '../../components/SedePicker'
 
@@ -362,8 +363,11 @@ export default function AdminDashboard() {
   async function handleChangePassword(e: React.FormEvent) {
     e.preventDefault()
     setPasswordMsg(null)
-    if (newPassword.length < 6) {
-      setPasswordMsg({ type: 'error', text: 'La password deve avere almeno 6 caratteri.' })
+    // 2026-08-25 (richiesta direzione): maiuscola + numero + simbolo. Stessa
+    // regola della pagina di reset e della creazione operatore.
+    const mancante = errorePassword(newPassword)
+    if (mancante) {
+      setPasswordMsg({ type: 'error', text: mancante })
       return
     }
     if (newPassword !== confirmPassword) {
@@ -1456,13 +1460,13 @@ export default function AdminDashboard() {
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
-                    minLength={6}
+                    minLength={PASSWORD_MIN}
                     autoComplete="new-password"
                     data-lpignore="true"
                     data-1p-ignore="true"
                     data-form-type="other"
                     className="w-full px-4 py-3 pr-12 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all"
-                    placeholder="Min. 6 caratteri"
+                    placeholder="Maiuscola, numero, simbolo"
                   />
                   <button
                     type="button"
@@ -1482,6 +1486,17 @@ export default function AdminDashboard() {
                     )}
                   </button>
                 </div>
+                {/* Checklist viva: si vede cosa manca mentre si scrive. */}
+                <ul className="mt-3 space-y-1">
+                  {regolePassword(newPassword).map(r => (
+                    <li key={r.id} className={`flex items-center gap-2 text-xs ${r.ok ? 'text-emerald-500' : 'text-theme-text-muted'}`}>
+                      <span aria-hidden="true" className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] leading-none ${r.ok ? 'border-emerald-500 bg-emerald-500/10' : 'border-theme-border'}`}>
+                        {r.ok ? '\u2713' : ''}
+                      </span>
+                      {r.testo}
+                    </li>
+                  ))}
+                </ul>
               </div>
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Conferma password</label>
@@ -1491,7 +1506,7 @@ export default function AdminDashboard() {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
-                    minLength={6}
+                    minLength={PASSWORD_MIN}
                     autoComplete="new-password"
                     data-lpignore="true"
                     data-1p-ignore="true"

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
+import { generaPasswordTemporanea, errorePassword } from '../../../utils/passwordPolicy'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import Input from './Input'
@@ -108,15 +109,12 @@ interface Props {
   onCreated: () => void
 }
 
-// Generate a temporary 12-char password admin can share with the operator.
-// Mixed case + digits + safe symbols, excludes ambiguous chars (0/O/l/I).
+// 2026-08-25: la password temporanea si genera da utils/passwordPolicy, che
+// GARANTISCE maiuscola + numero + simbolo. Il vecchio generatore pescava a
+// caso da un unico insieme: poteva uscire una password senza maiuscole o
+// senza simboli, cioe' rifiutata dalla regola che ora vale ovunque.
 function generateTempPassword(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&'
-  let out = ''
-  const arr = new Uint32Array(12)
-  crypto.getRandomValues(arr)
-  for (let i = 0; i < 12; i++) out += chars[arr[i] % chars.length]
-  return out
+  return generaPasswordTemporanea(14)
 }
 
 interface CreatedCredentials {
@@ -197,8 +195,9 @@ export default function InviteOperatoreModal({ open, onClose, onCreated }: Props
     const trimmedPassword = password.trim()
     // Temp password is mandatory: NO email-invite flow. Admin shares the
     // generated credentials directly with the operator (WhatsApp / SMS / call).
-    if (!trimmedPassword || trimmedPassword.length < 8) {
-      toast.error('La password temporanea deve avere almeno 8 caratteri')
+    const mancante = errorePassword(trimmedPassword)
+    if (mancante) {
+      toast.error('Password temporanea: ' + mancante)
       return
     }
     const permissions = Array.from(selected)
