@@ -6572,6 +6572,23 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       const isConflictError = (e: { code?: string; message?: string } | null | undefined) =>
         !!e && (e.code === '23505' || /CONFLICT_DOUBLE_BOOKING/i.test(e.message || ''))
 
+      // 2026-08-25: su Mare/Aria/Soggiorni la prenotazione nasce col tipo di
+      // mezzo ('boat' / 'helicopter' / 'stay'), ma il CHECK su
+      // bookings.vehicle_type e' quello dei tempi del solo noleggio auto: il
+      // DATABASE rifiuta la riga (23514) e la prenotazione non si salva.
+      // La migrazione 20260825_bookings_vehicle_type_business.sql allarga il
+      // vincolo, ma va eseguita a mano: finche' non e' passata si salva senza
+      // quel campo (NULL e' sempre ammesso da un CHECK) invece di perdere la
+      // prenotazione. Vedi la stessa regola sui preventivi per business.
+      const isVehicleTypeCheckError = (e: { code?: string; message?: string; details?: string } | null | undefined) =>
+        !!e && e.code === '23514' && /vehicle_type/i.test(`${e.message || ''} ${e.details || ''}`)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const senzaVehicleType = (payload: any) => {
+        const { vehicle_type: _scartato, ...resto } = payload
+        return resto
+      }
+      let vehicleTypeRifiutato = false
+
       let insertedBooking
       if (editingId) {
         // Update existing booking - trigger will properly exclude current booking from conflict check
@@ -6601,6 +6618,16 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             .single())
         }
 
+        if (isVehicleTypeCheckError(bookingError)) {
+          vehicleTypeRifiutato = true
+          ;({ data, error: bookingError } = await supabase
+            .from('bookings')
+            .update({ ...senzaVehicleType(bookingData), updated_at: new Date().toISOString() })
+            .eq('id', editingId)
+            .select()
+            .single())
+        }
+
         if (bookingError) {
           console.error('Failed to update booking:', bookingError)
           console.error('Booking data that failed:', bookingData)
@@ -6613,6 +6640,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         }
         insertedBooking = data
         logger.log('Booking updated successfully:', insertedBooking)
+        if (vehicleTypeRifiutato) {
+          toast('Prenotazione salvata, ma il database non accetta ancora il tipo di mezzo di questo business. Esegui la migrazione 20260825_bookings_vehicle_type_business.sql in Supabase.', { duration: 9000, icon: '!' })
+        }
 
         // Audit diff: capture every field that actually changed between the
         // snapshot loaded into the form (editFormSnapshotRef) and the saved
@@ -6677,6 +6707,15 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             .single())
         }
 
+        if (isVehicleTypeCheckError(bookingError)) {
+          vehicleTypeRifiutato = true
+          ;({ data, error: bookingError } = await supabase
+            .from('bookings')
+            .insert([senzaVehicleType(bookingData)])
+            .select()
+            .single())
+        }
+
         if (bookingError) {
           console.error('Failed to create booking:', bookingError)
           console.error('Booking data that failed:', bookingData)
@@ -6686,6 +6725,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         }
         insertedBooking = data
         logger.log('Booking created successfully:', insertedBooking)
+        if (vehicleTypeRifiutato) {
+          toast('Prenotazione salvata, ma il database non accetta ancora il tipo di mezzo di questo business. Esegui la migrazione 20260825_bookings_vehicle_type_business.sql in Supabase.', { duration: 9000, icon: '!' })
+        }
         logAdminAction('create_booking', 'booking', insertedBooking?.id, {
           ...buildBookingContext(insertedBooking),
           customer: insertedBooking?.customer_name || customerInfo?.full_name,
@@ -11004,7 +11046,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         {/* Desktop Table View */}
         <div className="hidden lg:block rounded-lg overflow-x-auto">
           <div className="overflow-x-auto overflow-y-visible custom-scrollbar">
-            <table className="w-full table-auto">
+            <table className="table-auto">
               <thead className="sticky top-0 z-10">
                 <tr>
                   <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Nome</th>
