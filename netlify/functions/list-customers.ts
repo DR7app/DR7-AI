@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { requireAuth } from './require-auth'
 
 export const handler: Handler = async (event) => {
     const headers = {
@@ -18,6 +19,13 @@ export const handler: Handler = async (event) => {
         return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) };
     }
 
+    // 25/08/2026 - questo endpoint rispondeva 200 A CHIUNQUE, senza nessun
+    // controllo: bastava l'indirizzo per scaricare l'anagrafica completa
+    // (2059 clienti, nome, email, telefono, codice fiscale, patente).
+    // Ora vuole la sessione come tutte le altre function che leggono dati.
+    const { error: authErr } = await requireAuth(event)
+    if (authErr) return authErr
+
     // Initialize Supabase with service role key (bypasses RLS)
     const supabase = createClient(
         process.env.VITE_SUPABASE_URL!,
@@ -33,9 +41,25 @@ export const handler: Handler = async (event) => {
         // conteggio esatto e le altre partono tutte insieme. Stesse righe.
         const PAGE_SIZE = 1000;
 
+        // ?fields=picker -> solo le colonne che servono a chi usa questo
+        // elenco come anagrafica di scelta cliente. Misurato in produzione:
+        // la riga intera ha 88 colonne e pesa 5,13 MB su 2059 clienti; queste
+        // 17 pesano 0,65 MB. Stessi clienti, tutti, solo con meno campi.
+        // Senza il parametro la risposta resta quella di prima, intera.
+        const PICKER_FIELDS = [
+            'id', 'tipo_cliente', 'nome', 'cognome', 'denominazione',
+            'ragione_sociale', 'ente_ufficio', 'email', 'telefono',
+            'numero_patente', 'note', 'created_at', 'updated_at',
+            'data_nascita', 'scadenza_patente', 'data_scadenza_patente',
+            'data_rilascio_patente', 'patente_data_rilascio', 'metadata',
+        ].join(',');
+        const columns = event.queryStringParameters?.fields === 'picker'
+            ? PICKER_FIELDS
+            : '*';
+
         const page = (from: number, withCount: boolean) => (withCount
-            ? supabase.from('customers_extended').select('*', { count: 'exact' })
-            : supabase.from('customers_extended').select('*'))
+            ? supabase.from('customers_extended').select(columns, { count: 'exact' })
+            : supabase.from('customers_extended').select(columns))
             .order('updated_at', { ascending: false })
             .range(from, from + PAGE_SIZE - 1);
 

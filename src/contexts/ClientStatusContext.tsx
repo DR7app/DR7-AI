@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { authFetch } from '../utils/authFetch'
 import { supabase } from '../supabaseClient'
 import {
   clientStatusColor,
@@ -160,7 +161,7 @@ export function ClientStatusProvider({ children }: { children: ReactNode }) {
       const dr7UserIds = new Set<string>()
       const dr7Emails = new Set<string>()
       try {
-        const res = await fetch('/.netlify/functions/list-club-members')
+        const res = await authFetch('/.netlify/functions/list-club-members')
         if (res.ok) {
           const data = await res.json()
           for (const m of (data.members || [])) {

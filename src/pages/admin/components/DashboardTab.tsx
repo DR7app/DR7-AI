@@ -321,7 +321,7 @@ export default function DashboardTab() {
       // and merge into one range-wide payload.
       const months = monthsInRange(from, to)
       const results = await Promise.all(months.map(async (mo) => {
-        const res = await fetch(`/.netlify/functions/get-incoming-invoices?month=${mo}`)
+        const res = await authFetch(`/.netlify/functions/get-incoming-invoices?month=${mo}`)
         const json = await res.json()
         if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
         return json

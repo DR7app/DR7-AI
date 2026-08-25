@@ -1,4 +1,5 @@
 import { getCorsOrigin } from './cors-headers'
+import { requireAuth } from './require-auth'
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { searchIncomingInvoices, getIncomingInvoice } from './aruba-utils'
@@ -63,6 +64,11 @@ export const handler: Handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' }
   }
+
+  // 25/08/2026 - questa function rispondeva 200 A CHIUNQUE: bastava
+  // l'indirizzo per scaricare le fatture dei fornitori.
+  const { error: authErr } = await requireAuth(event)
+  if (authErr) return authErr
 
   try {
     const params = event.queryStringParameters || {}

@@ -1220,7 +1220,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let customersData: any[] = []
       try {
-        const custResponse = await fetch('/.netlify/functions/list-customers')
+        const custResponse = await authFetch('/.netlify/functions/list-customers')
         const custResult = await custResponse.json()
         if (custResponse.ok && custResult.customers) {
           customersData = custResult.customers

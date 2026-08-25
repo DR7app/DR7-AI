@@ -153,7 +153,7 @@ export default function DocumentsVerificationTab() {
       let useClientFallback = false
 
       try {
-        const response = await fetch('/.netlify/functions/get-verification-requests')
+        const response = await authFetch('/.netlify/functions/get-verification-requests')
 
         if (response.ok && response.headers.get('content-type')?.includes('application/json')) {
           const result = await response.json()

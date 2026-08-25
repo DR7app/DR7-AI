@@ -8,6 +8,7 @@
  * the presentation is new.
  */
 import { useEffect, useState, useMemo, useCallback, type ReactElement } from 'react'
+import { authFetch } from '../../../utils/authFetch'
 import toast from 'react-hot-toast'
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -155,7 +156,7 @@ export default function IncomingInvoicesView() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/.netlify/functions/get-incoming-invoices?from=${dateFrom}&to=${dateTo}&mode=${mode}`)
+      const res = await authFetch(`/.netlify/functions/get-incoming-invoices?from=${dateFrom}&to=${dateTo}&mode=${mode}`)
       const text = await res.text()
       let json: { success?: boolean; error?: string; invoices?: IncomingInvoice[] }
       try { json = JSON.parse(text) } catch {
@@ -367,7 +368,7 @@ export default function IncomingInvoicesView() {
     }
     setDownloading(inv.id + ':' + kind)
     try {
-      const res = await fetch(`/.netlify/functions/get-incoming-invoices?action=download&filename=${encodeURIComponent(inv.filename)}`)
+      const res = await authFetch(`/.netlify/functions/get-incoming-invoices?action=download&filename=${encodeURIComponent(inv.filename)}`)
       const json = await res.json()
       if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
       const data = json.invoice || {}

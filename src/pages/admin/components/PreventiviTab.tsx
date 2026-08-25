@@ -1509,7 +1509,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   async function loadCustomers() {
     try {
       // Use Netlify function (service role, bypasses RLS)
-      const res = await fetch('/.netlify/functions/list-customers')
+      const res = await authFetch('/.netlify/functions/list-customers')
       if (!res.ok) {
         console.error('[PreventiviTab] list-customers failed:', res.status)
         return

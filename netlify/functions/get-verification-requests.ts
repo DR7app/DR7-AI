@@ -1,5 +1,6 @@
 
 import { Handler } from '@netlify/functions'
+import { requireAuth } from './require-auth'
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
@@ -7,6 +8,12 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 export const handler: Handler = async (event) => {
+
+    // 25/08/2026 - questa function rispondeva 200 A CHIUNQUE: bastava
+    // l'indirizzo per scaricare 833 documenti d'identita' con nome, email e percorso del file.
+    // Ora vuole la sessione, come le altre function che leggono dati.
+    const { error: authErr } = await requireAuth(event)
+    if (authErr) return authErr
     if (event.httpMethod !== 'GET') {
         return { statusCode: 405, body: 'Method Not Allowed' }
     }

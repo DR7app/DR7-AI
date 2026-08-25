@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
+import { authFetch } from '../../../../utils/authFetch'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../../supabaseClient'
 import { useAdminRole } from '../../../../hooks/useAdminRole'
@@ -287,7 +288,7 @@ export default function FornitoreSimpleView({ fornitore, onBack }: Props) {
         // istantanee (signed URL invece di chiamare di nuovo Aruba).
         if (doc.aruba_filename) {
             try {
-                const res = await fetch(`/.netlify/functions/get-incoming-invoices?action=download&filename=${encodeURIComponent(doc.aruba_filename)}`)
+                const res = await authFetch(`/.netlify/functions/get-incoming-invoices?action=download&filename=${encodeURIComponent(doc.aruba_filename)}`)
                 const json = await res.json()
                 if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
                 const data = json.invoice || {}

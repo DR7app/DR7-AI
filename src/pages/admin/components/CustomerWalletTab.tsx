@@ -113,7 +113,7 @@ export default function CustomerWalletTab() {
       // Load ALL customers (admin-created + site-created) — used for phone /
       // nome / cognome lookup later when stitching site users to a customer
       // row.
-      const response = await fetch('/.netlify/functions/list-customers')
+      const response = await authFetch('/.netlify/functions/list-customers')
       const result = await response.json()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const allCustomers: any[] = result.customers || []

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import toast from 'react-hot-toast'
@@ -270,7 +271,7 @@ export default function CampagnaMarketingTab() {
             const map = new Map<string, Customer>()
 
             // Use Netlify function (bypasses RLS) — same source as Lead/Clienti tab
-            const response = await fetch('/.netlify/functions/list-customers')
+            const response = await authFetch('/.netlify/functions/list-customers')
             const result = await response.json()
             if (!response.ok) throw new Error(result.error || 'list-customers failed')
 

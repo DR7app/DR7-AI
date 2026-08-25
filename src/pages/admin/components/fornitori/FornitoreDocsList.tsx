@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { authFetch } from '../../../../utils/authFetch'
 import { supabase } from '../../../../supabaseClient'
 import Button from '../Button'
 import FornitoreDocumentUpload from './FornitoreDocumentUpload'
@@ -137,7 +138,7 @@ export default function FornitoreDocsList({ fornitore, tipiFilter, statiFilter, 
     async function downloadAruba(doc: FornitoreDocument, kind: 'pdf' | 'xml') {
         if (!doc.aruba_filename) return
         try {
-            const res = await fetch(`/.netlify/functions/get-incoming-invoices?action=download&filename=${encodeURIComponent(doc.aruba_filename)}`)
+            const res = await authFetch(`/.netlify/functions/get-incoming-invoices?action=download&filename=${encodeURIComponent(doc.aruba_filename)}`)
             const json = await res.json()
             if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`)
             const data = json.invoice || {}

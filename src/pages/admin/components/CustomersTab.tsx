@@ -312,7 +312,7 @@ export default function CustomersTab() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let exportSource: any[] = []
       try {
-        const res = await fetch('/.netlify/functions/list-customers')
+        const res = await authFetch('/.netlify/functions/list-customers')
         const json = await res.json()
         if (res.ok && Array.isArray(json.customers)) {
           exportSource = json.customers
@@ -589,7 +589,7 @@ export default function CustomersTab() {
       let customersExtendedError: any = null
 
       try {
-        const response = await fetch('/.netlify/functions/list-customers')
+        const response = await authFetch('/.netlify/functions/list-customers')
         const result = await response.json()
         if (!response.ok) {
           customersExtendedError = { code: result.code, message: result.error }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { authFetch } from '../../../utils/authFetch'
 
 // Classe input condivisa (identica a NoleggioServiceTab INPUT_CLS).
 const INPUT_CLS = 'px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary text-sm w-full placeholder:text-theme-text-muted focus:outline-none focus:border-dr7-gold'
@@ -12,7 +13,7 @@ export interface Lead { id: string; name: string; phone: string; email: string }
 // query diretta su `customers` (mostrava solo un sottoinsieme).
 export async function fetchLeads(): Promise<Lead[]> {
   try {
-    const res = await fetch('/.netlify/functions/list-customers')
+    const res = await authFetch('/.netlify/functions/list-customers')
     const json = await res.json()
     const rows: Record<string, unknown>[] = json?.customers || []
     return rows.map((c, i) => {

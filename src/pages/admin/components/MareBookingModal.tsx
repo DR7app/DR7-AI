@@ -189,7 +189,7 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
   const [showNewClient, setShowNewClient] = useState(false)
   const loadCustomers = async (selectId?: string) => {
     try {
-      const res = await fetch('/.netlify/functions/list-customers')
+      const res = await authFetch('/.netlify/functions/list-customers')
       const json = await res.json()
       const rows = (json?.customers || []) as Record<string, unknown>[]
       const list: CustomerLite[] = rows.map((c, i) => {

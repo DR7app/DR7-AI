@@ -15,7 +15,11 @@ const handler: Handler = async (event) => {
     return { statusCode: 204, headers, body: '' }
   }
 
-  // No auth required — read-only endpoint for admin badge display
+  // 25/08/2026 - questa function importava requireAuth ma non lo chiamava mai:
+  // rispondeva 200 A CHIUNQUE e bastava l'indirizzo per scaricare l'elenco
+  // degli iscritti al DR7 Club con le loro email.
+  const { error: authErr } = await requireAuth(event)
+  if (authErr) return authErr
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''

@@ -3,6 +3,7 @@
  * Shows KPIs, booking history, wallet, documents, risk score, economic chart
  */
 import { useState, useEffect, useMemo } from 'react'
+import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import { effectivePenaltyAmount } from '../../../utils/penaltyAmount'
@@ -227,7 +228,7 @@ export default function ReportClienteModal({ customerId, onClose }: ReportClient
       // resolves even when the list function is unreachable / RLS-blocked.
       let resolvedIsClub = false
       try {
-        const clubRes = await fetch('/.netlify/functions/list-club-members')
+        const clubRes = await authFetch('/.netlify/functions/list-club-members')
         if (clubRes.ok) {
           const clubData = await clubRes.json()
           const members = clubData.members || []
