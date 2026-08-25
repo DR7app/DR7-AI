@@ -61,6 +61,29 @@ BEGIN
   RAISE NOTICE 'bookings_vehicle_type_check ora ammette: %', valori;
 END $$;
 
+-- ── RECUPERO RIGHE GIA' SALVATE ─────────────────────────────────
+-- Finche' il vincolo era stretto il gestionale salvava la prenotazione
+-- SENZA il tipo di mezzo (meglio NULL che perdere la prenotazione). Quelle
+-- righe esistono e sono visibili nel loro elenco - l'elenco filtra per
+-- service_type - ma il tipo di mezzo e' rimasto vuoto. Qui lo rimettiamo.
+-- Tocca SOLO le righe di Mare / Aria / Soggiorni con vehicle_type nullo:
+-- il Noleggio Terra storico ha la colonna vuota per progetto e non si tocca.
+-- Conta PRIMA quante righe verranno toccate (l'ancora e' service_type):
+SELECT service_type, COUNT(*) AS righe_da_riempire
+  FROM public.bookings
+ WHERE vehicle_type IS NULL
+   AND service_type IN ('boat_rental', 'heli_rental', 'stay_rental')
+ GROUP BY service_type;
+
+UPDATE public.bookings
+   SET vehicle_type = CASE service_type
+                        WHEN 'boat_rental' THEN 'boat'
+                        WHEN 'heli_rental' THEN 'helicopter'
+                        ELSE 'stay'
+                      END
+ WHERE vehicle_type IS NULL
+   AND service_type IN ('boat_rental', 'heli_rental', 'stay_rental');
+
 -- ── VERIFICA ────────────────────────────────────────────────────────────────
 SELECT pg_get_constraintdef(oid) AS definizione_nuova
   FROM pg_constraint
