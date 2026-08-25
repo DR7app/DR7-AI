@@ -642,6 +642,30 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editFormSnapshotRef = useRef<Record<string, any> | null>(null)
 
+  // 2026-08-25: il form di prenotazione NON e' un overlay, e' un blocco in cima
+  // alla pagina. Cliccando "Modifica" su una riga in fondo alla lista si apriva
+  // fuori schermo: bisognava risalire tutta la pagina per compilarlo e ridiscendere
+  // per ritrovare la riga. Ora si porta il form sotto gli occhi all'apertura e si
+  // torna esattamente al punto di partenza alla chiusura.
+  const bookingFormRef = useRef<HTMLFormElement | null>(null)
+  const scrollBeforeFormRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (showForm) {
+      // Memorizza la posizione SOLO all'apertura: se il form resta aperto e un
+      // re-render ripassa di qui, non deve sovrascrivere il punto di ritorno.
+      if (scrollBeforeFormRef.current === null) scrollBeforeFormRef.current = window.scrollY
+      // rAF: il form e' appena stato montato, senza attendere il paint
+      // scrollIntoView misurerebbe una posizione sbagliata.
+      requestAnimationFrame(() => {
+        bookingFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    } else if (scrollBeforeFormRef.current !== null) {
+      const y = scrollBeforeFormRef.current
+      scrollBeforeFormRef.current = null
+      requestAnimationFrame(() => window.scrollTo({ top: y, behavior: 'smooth' }))
+    }
+  }, [showForm])
+
   // 2026-05-18: quando l'admin scrive a mano nel campo "Importo Totale (€)",
   // questo flag diventa true e i recalc effects NON sovrascrivono piu' il
   // total_amount. Cosi' l'admin puo' decidere il prezzo finale a piacere
@@ -8518,7 +8542,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         />
 
         {showForm && (
-          <form onSubmit={handleSubmit} className="p-4 sm:p-6 rounded-lg mb-6 border border-theme-border/30">
+          <form ref={bookingFormRef} onSubmit={handleSubmit} className="p-4 sm:p-6 rounded-lg mb-6 border border-theme-border/30">
             <h3 className="text-lg sm:text-xl font-semibold text-dr7-gold mb-4">
               {editingId ? 'Modifica Prenotazione' : 'Nuova Prenotazione'}
             </h3>
