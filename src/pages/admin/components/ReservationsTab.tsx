@@ -3231,7 +3231,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   // riconduce il contratto (ristampa la firma sulle nuove date + invio WhatsApp del
   // firmato) invece di invalidarla. Ritorna { reconducted } così il chiamante sa se
   // deve ancora mandare il link di firma. Vedi handleConfirmExtend / handleResendContract.
-  async function handleGenerateContract(booking: Booking, _silent?: boolean, opts?: { reconduct?: boolean }) {
+  async function handleGenerateContract(booking: Booking, _silent?: boolean, opts?: { reconduct?: boolean; resign?: boolean }) {
     logger.log('[ReservationsTab] 🖱️ Generating contract for booking:', booking.id)
     if (!booking.id) {
       console.error('[ReservationsTab] ❌ No booking ID found')
@@ -3282,7 +3282,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       const response = await authFetch('/.netlify/functions/generate-contract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: booking.id, ...(opts?.reconduct ? { reconduct: true } : {}) })
+        body: JSON.stringify({ bookingId: booking.id, ...(opts?.reconduct ? { reconduct: true } : {}), ...(opts?.resign ? { resign: true } : {}) })
       })
 
       const data = await response.json().catch(() => ({} as Record<string, unknown>))
@@ -7504,7 +7504,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
       let contractReconducted = false
       try {
-        const genRes = await handleGenerateContract(insertedBooking, false, { reconduct: reconductThisSave })
+        const genRes = await handleGenerateContract(insertedBooking, false, { reconduct: reconductThisSave, resign: azioneContratto.rifirma })
         contractReconducted = !!genRes?.reconducted
         logger.log('[Auto-Gen] ✅ Contract generated successfully', contractReconducted ? '(ricondotto — nessuna nuova firma)' : '')
       } catch (err) {
@@ -7894,11 +7894,16 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             const sigRes = await fetch('/.netlify/functions/signature-init', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ contractId: contractForSig.id, bookingId: insertedBooking.id })
+              // Rifirma decisa da Contratto & Modifiche: il link deve ripartire
+              // per TUTTI i firmatari (cliente, 2o guidatore, garante,
+              // fideiussori), non solo per chi non risulta gia' firmato.
+              body: JSON.stringify({ contractId: contractForSig.id, bookingId: insertedBooking.id, ...(azioneContratto.rifirma ? { resign: true } : {}) })
             })
             if (sigRes.ok) {
               logger.log('[Auto-Gen] ✅ Signing link sent via WhatsApp')
-              if (editingId) toast.success('Nuovo contratto inviato per firma', { duration: 4000 })
+              if (editingId) toast.success(azioneContratto.rifirma
+                ? `Rifirma richiesta a tutti i firmatari (${azioneContratto.vociRifirma.join(', ')})`
+                : 'Nuovo contratto inviato per firma', { duration: 5000 })
               // Garante signing link is now handled by signature-init (multi-signer support)
             } else {
               const sigErr = await sigRes.json()

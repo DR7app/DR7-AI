@@ -352,7 +352,11 @@ export const handler: Handler = async (event) => {
     }
 
     try {
-        const { bookingId, reconduct, motivo } = JSON.parse(event.body || '{}')
+        // `resign`: la modifica appena salvata e' di quelle che, per la
+        // configurazione Contratto & Modifiche, impongono la RIFIRMA. In quel
+        // caso il contratto vecchio non vale piu' per NESSUNO dei firmatari —
+        // vedi il blocco 8a-bis.
+        const { bookingId, reconduct, motivo, resign } = JSON.parse(event.body || '{}')
 
         if (!bookingId) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Missing bookingId' }) }
@@ -2006,22 +2010,45 @@ Il veicolo è coperto da assicurazione Kasko. Il cliente è responsabile per tut
         // caso Fofana 2026-05-30) la firma resta valida. Stessa logica hash gia'
         // usata da signature-init per decidere chi deve rifirmare.
         // Riconduzione: la firma e' stata portata sulle nuove date. NON superseder.
+        //
+        // 2026-08-25 (direzione): "si c'est a resigner, ca doit etre resigne par
+        // TOUS". Con `resign:true` non si guarda piu' l'hash: TUTTE le firme di
+        // quel contratto decadono, garante e fideiussori compresi. Serviva
+        // perche' una firma con `original_pdf_hash` NULL (righe vecchie, o
+        // salvate prima che l'hash venisse memorizzato) non veniva mai
+        // superseded — restava 'signed' e signature-init la saltava: il cliente
+        // riceveva il nuovo link, il garante niente. Fuori da `resign` la
+        // regola resta rigorosamente legata all'hash (regressione Fofana: una
+        // rigenerazione senza modifiche NON deve invalidare le firme).
+        // Si guarda anche il legame per `contract_id`: una richiesta collegata
+        // solo al contratto (e non al booking) altrimenti sfuggiva.
         if (!reconductHandled) try {
             const newPdfHash = createHash('sha256').update(Buffer.from(pdfBytes)).digest('hex')
-            const { data: signedReqs } = await supabase
+            const contractIds = (existingContracts || []).map(c => c.id)
+            const { data: signedByBooking } = await supabase
                 .from('signature_requests')
                 .select('id, original_pdf_hash')
                 .eq('booking_id', bookingId)
                 .eq('status', 'signed')
-            const obsolete = (signedReqs || []).filter(
-                r => r.original_pdf_hash && r.original_pdf_hash !== newPdfHash
-            )
+            const { data: signedByContract } = contractIds.length
+                ? await supabase
+                    .from('signature_requests')
+                    .select('id, original_pdf_hash')
+                    .in('contract_id', contractIds)
+                    .eq('status', 'signed')
+                : { data: [] as { id: string; original_pdf_hash: string | null }[] }
+            const perId = new Map<string, { id: string; original_pdf_hash: string | null }>()
+            for (const r of [...(signedByBooking || []), ...(signedByContract || [])]) perId.set(r.id, r)
+            const signedReqs = Array.from(perId.values())
+            const obsolete = resign
+                ? signedReqs
+                : signedReqs.filter(r => r.original_pdf_hash && r.original_pdf_hash !== newPdfHash)
             if (obsolete.length > 0) {
                 await supabase
                     .from('signature_requests')
                     .update({ status: 'superseded', updated_at: new Date().toISOString() })
                     .in('id', obsolete.map(r => r.id))
-                console.log(`[generate-contract] Superseded ${obsolete.length} firma/e su PDF obsoleto (booking ${bookingId}) — richiesta nuova firma`)
+                console.log(`[generate-contract] Superseded ${obsolete.length} firma/e (booking ${bookingId}) — ${resign ? 'RIFIRMA richiesta dalla configurazione: decadono tutte' : 'PDF obsoleto'} — richiesta nuova firma`)
             }
         } catch (obsoleteErr) {
             console.warn('[generate-contract] Failed to supersede obsolete signed requests:', obsoleteErr)

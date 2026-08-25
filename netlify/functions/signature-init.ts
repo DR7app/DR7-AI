@@ -94,7 +94,9 @@ export const handler: Handler = async (event) => {
     }
 
     try {
-        const { contractId, bookingId } = JSON.parse(event.body || '{}')
+        // `resign`: la modifica impone la RIFIRMA (Centralina Pro > Contratto &
+        // Modifiche). Allora il link va a TUTTI i firmatari, nessuno escluso.
+        const { contractId, bookingId, resign } = JSON.parse(event.body || '{}')
 
         if (!contractId && !bookingId) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Contract ID or Booking ID is required' }) }
@@ -295,8 +297,14 @@ export const handler: Handler = async (event) => {
             : { data: null }
         // Solo i NOMI: il telefono non identifica un firmatario (due lead
         // distinte possono condividerlo) — vedi roadmap #19 piu' avanti.
+        // 2026-08-25 (direzione): "si c'est a resigner, ca doit etre resigne par
+        // TOUS". Con resign:true la lista dei "gia' firmato" resta VUOTA: il
+        // link riparte per cliente, secondo guidatore, garante e fideiussori.
+        // Prima bastava che la firma del garante avesse `original_pdf_hash`
+        // NULL (righe vecchie) perche' venisse considerata ancora valida: il
+        // cliente riceveva il contratto da rifirmare e il garante niente.
         const signedNames = new Set<string>()
-        for (const r of [...(signedByContract || []), ...(signedByBooking || [])]) {
+        for (const r of (resign ? [] : [...(signedByContract || []), ...(signedByBooking || [])])) {
             // Skip se questa firma e' su una versione obsoleta del PDF —
             // il signer deve firmare la nuova versione.
             const sigHash = (r as { original_pdf_hash?: string | null }).original_pdf_hash
@@ -461,7 +469,7 @@ export const handler: Handler = async (event) => {
             return { statusCode: 400, body: JSON.stringify({ error: 'Nessun firmatario con numero di telefono — impossibile inviare il contratto via WhatsApp' }) }
         }
 
-        console.log(`[signature-init] Creating ${signers.length} signing request(s) for contract ${contract.contract_number}`)
+        console.log(`[signature-init] Creating ${signers.length} signing request(s) for contract ${contract.contract_number}${resign ? ' — RIFIRMA: nessun firmatario viene saltato' : ''}`)
 
         const tokenExpiresAt = new Date(Date.now() + TOKEN_EXPIRY_HOURS * 60 * 60 * 1000)
         const ipAddress = event.headers['x-forwarded-for'] || event.headers['client-ip'] || 'unknown'
