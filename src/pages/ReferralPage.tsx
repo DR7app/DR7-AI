@@ -45,7 +45,8 @@ export default function ReferralPage() {
       <header className="border-b border-white/10 bg-[#0d0d1a]/80 backdrop-blur-md">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/rentora-dark.jpeg" alt="DR7" className="h-14" />
+            {/* 2026-08-25: era rimasto il logo Rentora, il marchio vecchio. */}
+            <img src="/dr7-logo.png" alt="DR7 A.I." className="h-14 w-auto object-contain" />
           </div>
           {participantId && (
             <button

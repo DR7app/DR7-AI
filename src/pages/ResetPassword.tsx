@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useTheme } from '../contexts/ThemeContext'
+import { regolePassword, errorePassword } from '../utils/passwordPolicy'
 
 export default function ResetPassword() {
   const [password, setPassword] = useState('')
@@ -68,8 +69,11 @@ export default function ResetPassword() {
       return
     }
 
-    if (password.length < 6) {
-      setError('La password deve essere di almeno 6 caratteri')
+    // 2026-08-25 (richiesta direzione): maiuscola + numero + simbolo, non piu'
+    // solo la lunghezza. Il messaggio dice cosa manca, non "password non valida".
+    const mancante = errorePassword(password)
+    if (mancante) {
+      setError(mancante)
       return
     }
 
@@ -112,8 +116,17 @@ export default function ResetPassword() {
         <div className={`bg-theme-bg-primary rounded-2xl px-6 md:px-12 pt-8 md:pt-12 pb-12 md:pb-20 border border-theme-border relative ${theme === 'dark' ? 'shadow-2xl' : ''}`}>
 
           <div className="relative">
-            <div className="flex justify-center mb-4">
-              <img src={theme === 'dark' ? '/rentora-dark.jpeg' : '/rentora-light.jpeg'} alt="DR7" className={`h-48 md:h-72 lg:h-96 w-auto max-w-full object-contain ${theme === 'dark' ? 'drop-shadow-2xl' : 'mix-blend-multiply'}`} />
+            {/* 2026-08-25: qui c'era ancora il logo Rentora (rentora-dark /
+                rentora-light .jpeg), cioe' il marchio vecchio, mentre il Login
+                mostra gia' dr7-logo.png. Chi reimpostava la password vedeva un
+                marchio che non esiste piu'. Stesso file e stesso trattamento
+                del Login: PNG trasparente, una sola immagine per i due temi. */}
+            <div className="flex justify-center mb-6">
+              <img
+                src="/dr7-logo.png"
+                alt="DR7 A.I."
+                className="h-14 sm:h-16 w-auto max-w-[200px] object-contain"
+              />
             </div>
 
             <h2 className="text-xl font-semibold text-theme-text-primary text-center mb-6">
@@ -160,6 +173,18 @@ export default function ResetPassword() {
                     className="w-full px-4 py-3 bg-theme-input-bg border border-theme-input-border rounded-full text-theme-text-primary placeholder-theme-text-muted focus:outline-none focus:border-dr7-gold focus:ring-2 focus:ring-dr7-gold/20 transition-all duration-200"
                     placeholder="••••••••"
                   />
+                  {/* Checklist viva: si vede subito cosa manca invece di
+                      scoprirlo dopo aver premuto il bottone. */}
+                  <ul className="mt-3 space-y-1">
+                    {regolePassword(password).map(r => (
+                      <li key={r.id} className={`flex items-center gap-2 text-xs ${r.ok ? 'text-emerald-500' : 'text-theme-text-muted'}`}>
+                        <span aria-hidden="true" className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] leading-none ${r.ok ? 'border-emerald-500 bg-emerald-500/10' : 'border-theme-border'}`}>
+                          {r.ok ? '\u2713' : ''}
+                        </span>
+                        {r.testo}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
 
                 <div>
