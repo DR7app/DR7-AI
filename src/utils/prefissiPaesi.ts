@@ -309,8 +309,27 @@ export function componiNumero(dial: string, numeroLocale: string): string | null
  * puo' distinguere, e tirare a indovinare un paese raro sarebbe peggio.
  */
 export function paeseDaNumero(valore: string | null | undefined): Paese | null {
-    if (!(valore || '').trim()) return null
-    const { dial } = separaPrefisso(valore)
+    const grezzo = (valore || '').trim()
+    if (!grezzo) return null
+    const cifre = grezzo.replace(/\D/g, '')
+    if (!cifre) return null
+
+    // 2026-08-25: il paese si AFFERMA solo quando si sa davvero.
+    // `separaPrefisso` ripiega su +39 per i numeri scritti senza prefisso —
+    // corretto quando si compila il campo, sbagliato quando si mostra una
+    // bandiera: "33684697632" (un francese salvato senza +) usciva con la
+    // bandiera italiana, cioe' l'informazione opposta a quella vera. Meglio
+    // nessuna bandiera che una bandiera falsa.
+    const esplicito = grezzo.startsWith('+') || cifre.startsWith('00')
+    if (!esplicito) {
+        // Senza prefisso internazionale vale solo il formato nazionale
+        // italiano: cellulare 3XXXXXXXXX (10 cifre) o fisso 0... (9-11).
+        const formatoItaliano = /^3\d{9}$/.test(cifre) || /^0\d{8,10}$/.test(cifre)
+        if (!formatoItaliano) return null
+        return PAESI.find(p => p.iso === 'IT') || null
+    }
+
+    const { dial } = separaPrefisso(grezzo)
     const candidati = PAESI.filter(p => p.dial === dial)
     if (candidati.length === 0) return null
     const frequente = PAESI_FREQUENTI.map(iso => candidati.find(p => p.iso === iso)).find(Boolean)
