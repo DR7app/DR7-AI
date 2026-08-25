@@ -47,11 +47,22 @@ const handler: Handler = async (event) => {
       return { statusCode: 200, headers, body: JSON.stringify({ success: true, rimossa: true }) }
     }
 
-    // upsert: una sola riga per casella.
-    const { error } = await supabase
+    // Aggiorna-o-inserisci fatto a mano: `service_secrets` e' stata creata
+    // direttamente su Supabase e non e' detto che `key` abbia un indice unico,
+    // quindi un upsert con onConflict potrebbe essere rifiutato dal database.
+    const { data: esistente } = await supabase
       .from('service_secrets')
-      .upsert({ key, value }, { onConflict: 'key' })
-    if (error) throw error
+      .select('key')
+      .eq('key', key)
+      .maybeSingle()
+
+    if (esistente) {
+      const { error } = await supabase.from('service_secrets').update({ value }).eq('key', key)
+      if (error) throw error
+    } else {
+      const { error } = await supabase.from('service_secrets').insert({ key, value })
+      if (error) throw error
+    }
 
     return { statusCode: 200, headers, body: JSON.stringify({ success: true, key }) }
   } catch (e) {
