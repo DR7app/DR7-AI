@@ -71,6 +71,37 @@ type Semaforo = 'rosso' | 'giallo' | 'verde' | 'grigio'
 const CANALI = ['whatsapp', 'email', 'manuale', 'automatico'] as const
 
 // ── Utilita ──────────────────────────────────────────────────────────────────
+
+/**
+ * Segnaposto rimasti nel testo dell'ordine.
+ *
+ * 2026-08-25: `send-whatsapp-notification` RIFIUTA qualunque messaggio che
+ * contenga ancora un "{...}" — risponde 200 con
+ * "Body collapsed to placeholders/whitespace — skipped (template likely
+ * misconfigured)" e non invia niente. Un template scritto in Messaggi di
+ * Sistema Pro con nomi diversi da quelli sostituiti qui (o un nome articolo
+ * con una graffa) bastava a far fallire SOLO il WhatsApp, mentre l'email
+ * partiva: e' esattamente quello che si e' visto in produzione.
+ */
+const RE_SEGNAPOSTO = /\{\{?[^{}\n]{1,60}\}?\}/g
+
+/** Toglie i segnaposto non sostituiti e restituisce quali erano. */
+function pulisciSegnaposto(testo: string): { testo: string; rimossi: string[] } {
+  const trovati = testo.match(RE_SEGNAPOSTO)
+  if (!trovati || trovati.length === 0) return { testo, rimossi: [] }
+  const pulito = testo
+    .replace(RE_SEGNAPOSTO, '')
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+  return { testo: pulito, rimossi: [...new Set(trovati)] }
+}
+
+/** Caratteri "veri": stessa conta del controllo lato server (< 20 = bloccato). */
+function caratteriUtili(testo: string): number {
+  return testo.replace(/[\s\W]/g, '').length
+}
+
 function eur(n: number | null | undefined): string {
   if (n == null) return '—'
   return '€' + n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -469,19 +500,49 @@ export default function InventarioMagazzino({ business }: { business?: Business 
     })()
   }, [])
 
-  /** Testo dell'ordine, identico su WhatsApp ed email. */
+  /**
+   * Testo dell'ordine, identico su WhatsApp ed email.
+   *
+   * 2026-08-25: le sostituzioni valevano solo per i nomi a doppia graffa
+   * ({{articolo}}). I template scritti in Messaggi di Sistema Pro usano la
+   * graffa singola ({articolo}, {ordine_dettagli}, {data}...), quindi il
+   * segnaposto restava nel testo e WhatsApp rifiutava l'intero messaggio.
+   * Ora si sostituiscono entrambe le forme, con i nomi davvero usati nei
+   * template DR7, e quello che resta viene tolto prima di partire.
+   */
   function testoOrdine(o: Ordine): string {
     const a = articoli.find(x => x.id === o.articolo_id)
     const forn = o.fornitore_id ? fornitoreById.get(o.fornitore_id) : undefined
     const unita = a && isPct(a) ? '%' : (a?.unita || 'pz')
+    const adesso = new Date()
+    const consegna = 'DR7 — Viale Marconi 229, 09131 Cagliari (CA)'
+    const dettaglio = `${num(o.quantita)} ${unita} — ${a?.nome || ''}${a?.codice ? ` (${a.codice})` : ''}`
 
     if (templateOrdine) {
-      return templateOrdine
-        .replace(/\{\{\s*articolo\s*\}\}/gi, a?.nome || String(o.articolo_id))
-        .replace(/\{\{\s*codice\s*\}\}/gi, a?.codice || '')
-        .replace(/\{\{\s*quantita\s*\}\}/gi, `${num(o.quantita)} ${unita}`)
-        .replace(/\{\{\s*fornitore\s*\}\}/gi, forn?.nome || '')
-        .replace(/\{\{\s*unita\s*\}\}/gi, unita)
+      const vars: Record<string, string> = {
+        articolo: a?.nome || String(o.articolo_id),
+        nome: a?.nome || '',
+        codice: a?.codice || '',
+        quantita: `${num(o.quantita)} ${unita}`,
+        qta: num(o.quantita),
+        unita,
+        fornitore: forn?.nome || '',
+        ordine_dettagli: dettaglio,
+        items_count: num(o.quantita),
+        note: a?.note || '',
+        magazzino: biz ? BUSINESS_LABELS[biz] : 'Generale',
+        consegna,
+        indirizzo: consegna,
+        // Formato europeo: 25/08/2026 e 21:45, mai AM/PM.
+        data: adesso.toLocaleDateString('it-IT'),
+        ora: adesso.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false }),
+      }
+      let testo = templateOrdine
+      for (const [k, v] of Object.entries(vars)) {
+        testo = testo.replace(new RegExp(`\\{\\{\\s*${k}\\s*\\}\\}`, 'gi'), v)
+        testo = testo.replace(new RegExp(`\\{\\s*${k}\\s*\\}`, 'gi'), v)
+      }
+      return pulisciSegnaposto(testo).testo
     }
 
     return `Ordine DR7 — Magazzino\n\n`
@@ -608,8 +669,19 @@ export default function InventarioMagazzino({ business }: { business?: Business 
    */
   async function inviaOrdine(o: Ordine) {
     if (!sendWhatsapp && !sendEmailOn) { toast.error('Scegli almeno un canale'); return }
-    const testo = sendTesto.trim()
+    // Il testo e' modificabile a mano: si ripulisce comunque QUI, l'ultimo
+    // punto prima della rete. WhatsApp scarta l'intero messaggio se trova un
+    // "{...}", e lo fa rispondendo 200: senza questa pulizia l'ordine partiva
+    // solo per email e il fornitore non riceveva il WhatsApp.
+    const { testo, rimossi } = pulisciSegnaposto(sendTesto.trim())
     if (!testo) { toast.error('Il messaggio e\' vuoto'); return }
+    if (rimossi.length > 0) {
+      toast(`Segnaposto non riconosciuti, rimossi dal messaggio: ${rimossi.join(' ')}`, { duration: 7000 })
+    }
+    if (sendWhatsapp && caratteriUtili(testo) < 20) {
+      toast.error('Messaggio troppo corto: WhatsApp lo rifiuta. Scrivi almeno una riga di testo.')
+      return
+    }
     // Il campo produce gia' "+39347...": si manda quello, prefisso compreso.
     const tel = sendPhone.trim()
     const email = sendEmailAddr.trim()
@@ -947,6 +1019,13 @@ export default function InventarioMagazzino({ business }: { business?: Business 
                 <div className="mt-1 text-[10px] text-theme-text-muted">
                   Lo stesso testo va su WhatsApp e nell'email. Modificalo prima di inviare: quello che leggi qui e' quello che riceve il fornitore.
                 </div>
+                {/* Segnaposto rimasti: WhatsApp scarta tutto il messaggio, non
+                    solo la parola. Si vede prima di premere Ordina. */}
+                {pulisciSegnaposto(sendTesto).rimossi.length > 0 && (
+                  <div className="mt-1 text-[10px] text-amber-500">
+                    Segnaposto non sostituiti: <span className="font-mono">{pulisciSegnaposto(sendTesto).rimossi.join(' ')}</span> — verranno tolti dal messaggio (WhatsApp rifiuta i testi che li contengono).
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-2">
