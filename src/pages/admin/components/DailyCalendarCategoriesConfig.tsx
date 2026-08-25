@@ -325,18 +325,37 @@ export default function DailyCalendarCategoriesConfig({ readOnly = false }: { re
             >
               &times;
             </button>
-            <button
-              type="button"
-              disabled={readOnly}
-              onClick={() => patch(r.id, { enabled: !r.enabled })}
-              className={`shrink-0 px-2.5 h-8 rounded-full border text-[11px] font-semibold transition-colors disabled:opacity-60 ${
-                r.enabled
-                  ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-                  : 'border-theme-border text-theme-text-muted hover:bg-theme-bg-hover'
-              }`}
-            >
-              {r.enabled ? 'Attiva' : 'Spenta'}
-            </button>
+            {/* ON / OFF: due tasti espliciti, non un'etichetta che cambia da sola */}
+            <div className="shrink-0 inline-flex rounded-full border border-theme-border overflow-hidden">
+              <button
+                type="button"
+                disabled={readOnly}
+                onClick={() => patch(r.id, { enabled: true })}
+                aria-pressed={r.enabled}
+                title="Accendi la corsia"
+                className={`px-3 h-8 text-[11px] font-bold tracking-wide transition-colors disabled:opacity-60 ${
+                  r.enabled
+                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                    : 'text-theme-text-muted hover:bg-theme-bg-hover'
+                }`}
+              >
+                ON
+              </button>
+              <button
+                type="button"
+                disabled={readOnly}
+                onClick={() => patch(r.id, { enabled: false })}
+                aria-pressed={!r.enabled}
+                title="Spegni la corsia"
+                className={`px-3 h-8 text-[11px] font-bold tracking-wide border-l border-theme-border transition-colors disabled:opacity-60 ${
+                  !r.enabled
+                    ? 'bg-red-500/15 text-red-600 dark:text-red-400'
+                    : 'text-theme-text-muted hover:bg-theme-bg-hover'
+                }`}
+              >
+                OFF
+              </button>
+            </div>
           </div>
         ))}
       </div>

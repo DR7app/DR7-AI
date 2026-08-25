@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import {
-    resolveDailyCategories, categorizeDayBooking, categoryOf, labelOf,
-    dailyBookingTime, DAILY_PALETTE, DAILY_CATEGORIES_CONFIG_KEY,
+    resolveDailyCategories, categorizeDayBooking, categoryOf, badgeOf,
+    dailyBookingTime, dailyTimeSlots, orphanLaneCounts,
+    DAILY_PALETTE, DAILY_CATEGORIES_CONFIG_KEY,
     type DailyType, type DailyCategory, type DailyCategoryConfig,
 } from '../../../utils/dailyCalendarCategories'
 import { getRomeDateComponents } from '../../../utils/timezoneUtils'
@@ -30,28 +31,20 @@ interface ActivityCardProps {
     colorClass: string
     gradientClass: string
     glowClass: string
+    /**
+     * Nome della corsia (Mare, Aria, Soggiorni...). 25/08: sulla card il badge
+     * diceva solo 'USCITE' / 'RIENTRI', identico per tutti i business: si
+     * capiva "di chi" fosse la prenotazione solo dal colore, andando a
+     * ripescare la legenda. Ora il nome sta scritto.
+     */
+    laneLabel?: string
     // 25/08/2026: la card aveva gia' `cursor-pointer` ma nessun click: il
     // puntatore prometteva un dettaglio che non si apriva. Ora apre la scheda
     // della prenotazione, come nel Calendario mensile.
     onOpen: (booking: Booking) => void
 }
 
-// Generate 15-minute time slots for business hours (9 AM - 8 PM)
-const generateTimeSlots = () => {
-    const slots: string[] = []
-    for (let hour = 9; hour <= 20; hour++) {
-        for (let minute = 0; minute < 60; minute += 15) {
-            const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-            slots.push(time)
-            if (hour === 20 && minute === 0) break
-        }
-    }
-    return slots
-}
-
-const TIME_SLOTS = generateTimeSlots()
-
-function ActivityCard({ booking, colorClass, gradientClass, glowClass, onOpen }: ActivityCardProps) {
+function ActivityCard({ booking, colorClass, gradientClass, glowClass, laneLabel, onOpen }: ActivityCardProps) {
     const parseCustomerName = (fullName: string | null) => {
         if (!fullName) return 'N/A'
         const parts = fullName.trim().split(' ')
@@ -66,7 +59,7 @@ function ActivityCard({ booking, colorClass, gradientClass, glowClass, onOpen }:
             'N/A'
     }
 
-    const getLabel = () => labelOf(booking.type)
+    const getLabel = () => badgeOf(booking.type, laneLabel)
 
     return (
         <div
@@ -266,6 +259,15 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
 
     const getBookingTime = (booking: Booking): string => dailyBookingTime(booking, booking.type)
 
+    // 25/08: la griglia oraria segue la giornata invece di essere fissa
+    // 09:00-20:00. Fuori da quella finestra la card non trovava una riga a cui
+    // agganciarsi e la prenotazione spariva in silenzio (tipico di Aria/Mare,
+    // dove l'orario non e' quello del banco noleggio).
+    const TIME_SLOTS = useMemo(
+        () => dailyTimeSlots(bookings.map(b => dailyBookingTime(b, b.type))),
+        [bookings],
+    )
+
     const getTimeSlot = (time: string): string => {
         const [hours, minutes] = time.split(':').map(Number)
         const roundedMinutes = Math.floor(minutes / 15) * 15
@@ -298,6 +300,11 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
     // dalla configurazione, non occupando spazio nella griglia.
     const activeCategories = allCategories.filter(cat =>
         bookings.some(b => categoryOf(b.type) === cat.id))
+
+    // 25/08: prenotazioni di oggi la cui corsia non e' accesa. La griglia
+    // disegna solo `activeCategories`, quindi senza questo avviso sparirebbero
+    // dalla giornata senza lasciare traccia.
+    const corsieMancanti = orphanLaneCounts(bookings.map(b => b.type), allCategories.map(c => c.id))
 
     const currentSlot = getCurrentTimeSlot()
     const isToday = selectedDate.getDate() === new Date().getDate() &&
@@ -385,6 +392,13 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                     </div>
                 ) : (
                     <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                        {corsieMancanti.length > 0 && (
+                            <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] sm:text-xs text-amber-700 dark:text-amber-300">
+                                {corsieMancanti.map(c => `${c.count} ${c.count === 1 ? 'prenotazione' : 'prenotazioni'} di ${c.label}`).join(', ')}
+                                {' '}non {corsieMancanti.length === 1 && corsieMancanti[0].count === 1 ? 'compare' : 'compaiono'} qui sotto:
+                                {' '}la corsia e' spenta o eliminata. Riaccendila in Centralina Pro &gt; Calendario Giornaliero.
+                            </div>
+                        )}
                         {/* 2026-08-23: le corsie sono quelle DEL GIORNO, non piu' 4 fisse.
                             Calcolate una volta sola sull'intera giornata: se cambiassero
                             riga per riga le colonne non resterebbero allineate. */}
@@ -427,6 +441,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                                                         colorClass={cat.color}
                                                         gradientClass={cat.gradient}
                                                         glowClass={cat.glow}
+                                                        laneLabel={cat.label}
                                                         onOpen={setSelectedBooking}
                                                     />
                                                 ))}
@@ -439,7 +454,7 @@ export default function DailyCalendarModal({ isOpen, onClose }: DailyCalendarMod
                                         {slotBookings.map(booking => {
                                             const colors = metaOf(categoryOf(booking.type))
                                             return (
-                                                <ActivityCard key={`${booking.id}-${booking.type}`} booking={booking} colorClass={colors.color} gradientClass={colors.gradient} glowClass={colors.glow} onOpen={setSelectedBooking} />
+                                                <ActivityCard key={`${booking.id}-${booking.type}`} booking={booking} colorClass={colors.color} gradientClass={colors.gradient} glowClass={colors.glow} laneLabel={colors.label} onOpen={setSelectedBooking} />
                                             )
                                         })}
                                         {!hasBookings && isCurrentSlot && (

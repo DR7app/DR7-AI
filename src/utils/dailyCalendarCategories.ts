@@ -352,8 +352,20 @@ export function resolveDailyCategories(saved?: DailyCategoryConfig[] | null): Da
     if (isCustomCategory(s.id)) {
       // Corsia aggiunta dall'admin: non ha una voce di fabbrica alle spalle.
       seen.add(s.id)
-      push(s.id, (s.label || '').trim() || 'Corsia', s.colorKey || 'slate', s.enabled !== false,
-        true, Array.isArray(s.serviceTypes) ? s.serviceTypes : [])
+      const label = (s.label || '').trim() || 'Corsia'
+      let tipi = Array.isArray(s.serviceTypes) ? s.serviceTypes.filter(Boolean) : []
+      // 25/08/2026: una corsia salvata PRIMA che `aggiungi()` collegasse da
+      // sola i business (es. "Aria", rifatta a mano dopo aver eliminato la
+      // corsia di fabbrica) resta con la lista vuota: la colonna c'e', la
+      // legenda pure, ma non raccoglie niente — e se la corsia di fabbrica
+      // corrispondente e' stata eliminata quelle prenotazioni non compaiono
+      // in nessuna colonna. Qui il nome ricollega la corsia al suo business,
+      // esattamente come alla creazione.
+      if (tipi.length === 0) {
+        const preset = presetForLabel(label)
+        if (preset) tipi = [...preset.serviceTypes]
+      }
+      push(s.id, label, s.colorKey || 'slate', s.enabled !== false, true, tipi)
       continue
     }
     const base = byId.get(s.id)
@@ -400,6 +412,27 @@ export function labelOf(type: DailyType | string): string {
     case 'uscita': return 'STRAORDINARIA'
     default: return 'VARIE'
   }
+}
+
+/**
+ * Badge della card nel Calendario Giornaliero (25/08/2026).
+ *
+ * `labelOf` da sola dice solo il MOMENTO ('USCITE' / 'RIENTRI'), identico per
+ * Terra, Mare, Aria e Soggiorni: sulla card il business si distingueva dal
+ * solo colore, e per capire "di chi" fosse una prenotazione bisognava
+ * ricordare la legenda. Qui il nome della corsia entra nel badge.
+ *
+ * Il momento si aggiunge solo dove esiste davvero una coppia ritiro/rientro.
+ * Su lavaggio, meccanica, uscite e corsie personalizzate il nome della corsia
+ * dice gia' tutto: ripetere non aggiunge niente e allunga il badge.
+ */
+export function badgeOf(type: DailyType | string, laneLabel?: string): string {
+  const corsia = (laneLabel || '').trim().toUpperCase()
+  const t = String(type)
+  const dueTempi = t.endsWith('-in') || t.endsWith('-out') || t === 'check-in' || t === 'check-out'
+  if (!corsia) return labelOf(type)
+  if (!dueTempi) return corsia
+  return `${corsia} - ${labelOf(type)}`
 }
 
 /** Business a due tempi (ritiro + rientro): service_type -> prefisso del tipo. */
@@ -492,6 +525,85 @@ export function dailyBookingTime(booking: any, type: DailyType | string): string
     return d.uscita?.pickup?.time || hhmm(booking.pickup_date) || '09:00'
   }
   return booking.appointment_time || '00:00'
+}
+
+/**
+ * Righe orarie della giornata (25/08/2026).
+ *
+ * Le due viste avevano una griglia FISSA 09:00-20:00 costruita una volta sola
+ * a livello di modulo, e la card si agganciava alla riga per uguaglianza di
+ * stringa. Una prenotazione fuori da quella finestra non finiva in nessuna
+ * riga: spariva dal Calendario Giornaliero senza un errore, senza un vuoto,
+ * senza niente. Si vedeva soprattutto su Mare/Aria/Soggiorni, dove l'orario
+ * non e' quello del banco noleggio (un volo alle 07:30, un rientro alle 21:00)
+ * e dove, se l'orario manca del tutto, la data nasce a mezzanotte UTC = 02:00
+ * a Roma — di nuovo fuori griglia.
+ *
+ * Ora la fascia di base resta 09:00-20:00 ma si ALLARGA fino a coprire il
+ * primo e l'ultimo evento del giorno. La giornata non puo' piu' nascondere
+ * una prenotazione: al massimo mostra qualche riga in piu'.
+ */
+export function dailyTimeSlots(times: string[] = []): string[] {
+  const QUARTO = 15
+  const inMinuti = (hhmm: string): number | null => {
+    const m = /^(\d{1,2}):(\d{2})/.exec(String(hhmm || '').trim())
+    if (!m) return null
+    const h = Number(m[1]), min = Number(m[2])
+    if (!Number.isFinite(h) || !Number.isFinite(min) || h > 23 || min > 59) return null
+    return h * 60 + min
+  }
+
+  let inizio = 9 * 60
+  let fine = 20 * 60
+  for (const t of times) {
+    const v = inMinuti(t)
+    if (v === null) continue
+    if (v < inizio) inizio = Math.floor(v / QUARTO) * QUARTO
+    if (v > fine) fine = Math.ceil(v / QUARTO) * QUARTO
+  }
+
+  const out: string[] = []
+  for (let m = inizio; m <= fine; m += QUARTO) {
+    out.push(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`)
+  }
+  return out
+}
+
+/**
+ * Nome leggibile di una corsia che NON e' fra quelle accese (25/08/2026).
+ *
+ * Serve per dire all'operatore quale corsia manca quando una prenotazione del
+ * giorno non ha una colonna dove stare. Senza, il messaggio direbbe 'aria' o
+ * 'custom:qualcosa' invece di 'Aria'.
+ */
+export function laneNameFor(id: string): string {
+  const base = DEFAULT_DAILY_CATEGORIES.find(d => d.id === id)
+  if (base) return base.label
+  if (isCustomCategory(id)) return id.slice(CUSTOM_PREFIX.length).replace(/-/g, ' ') || 'Corsia'
+  return id
+}
+
+/**
+ * Prenotazioni del giorno che non hanno una corsia accesa dove comparire.
+ *
+ * 25/08: la griglia disegna SOLO le corsie accese. Una prenotazione la cui
+ * corsia e' stata spenta o eliminata veniva caricata, categorizzata e poi
+ * disegnata da nessuna parte: spariva dalla giornata in silenzio, e dall'esterno
+ * sembrava che il calendario non fosse collegato ai business. Ora la giornata
+ * lo dice invece di ingoiarla.
+ */
+export function orphanLaneCounts(
+  types: Array<DailyType | string>,
+  activeIds: string[],
+): Array<{ id: string; label: string; count: number }> {
+  const attive = new Set(activeIds)
+  const conteggio = new Map<string, number>()
+  for (const t of types) {
+    const id = categoryOf(t)
+    if (attive.has(id)) continue
+    conteggio.set(id, (conteggio.get(id) || 0) + 1)
+  }
+  return [...conteggio.entries()].map(([id, count]) => ({ id, label: laneNameFor(id), count }))
 }
 
 /** Chiave JSONB in centralina_pro_config.config dove vive la configurazione. */

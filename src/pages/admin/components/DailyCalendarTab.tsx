@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { getRomeDateComponents } from '../../../utils/timezoneUtils'
 import { logger } from '../../../utils/logger'
 import BookingDetailsPanel from './BookingDetailsPanel'
 import { authFetch } from '../../../utils/authFetch'
 import {
-    resolveDailyCategories, categorizeDayBooking, categoryOf, labelOf,
-    dailyBookingTime, DAILY_PALETTE, DAILY_CATEGORIES_CONFIG_KEY,
+    resolveDailyCategories, categorizeDayBooking, categoryOf, badgeOf,
+    dailyBookingTime, dailyTimeSlots, orphanLaneCounts,
+    DAILY_PALETTE, DAILY_CATEGORIES_CONFIG_KEY,
     type DailyType, type DailyCategory, type DailyCategoryConfig,
 } from '../../../utils/dailyCalendarCategories'
 
@@ -28,20 +29,6 @@ interface Booking {
 }
 
 // Generate 15-minute time slots for business hours (9 AM - 8 PM)
-const generateTimeSlots = () => {
-    const slots: string[] = []
-    for (let hour = 9; hour <= 20; hour++) {
-        for (let minute = 0; minute < 60; minute += 15) {
-            const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-            slots.push(time)
-            // Stop at 20:00 (don't add 20:15, 20:30, 20:45)
-            if (hour === 20 && minute === 0) break
-        }
-    }
-    return slots
-}
-
-const TIME_SLOTS = generateTimeSlots()
 
 export default function DailyCalendarTab() {
     const [bookings, setBookings] = useState<Booking[]>([])
@@ -184,6 +171,14 @@ export default function DailyCalendarTab() {
     // Get booking time
     const getBookingTime = (booking: Booking): string => dailyBookingTime(booking, booking.type)
 
+    // 25/08: griglia oraria che segue la giornata invece della finestra fissa
+    // 09:00-20:00. Fuori da quella finestra la card non trovava una riga e la
+    // prenotazione spariva senza segnalare niente.
+    const TIME_SLOTS = useMemo(
+        () => dailyTimeSlots(bookings.map(b => dailyBookingTime(b, b.type))),
+        [bookings],
+    )
+
     // Map booking to time slot
     const getTimeSlot = (time: string): string => {
         const [hours, minutes] = time.split(':').map(Number)
@@ -239,6 +234,10 @@ export default function DailyCalendarTab() {
     // dalla configurazione, non occupando spazio nella griglia.
     const activeCategories = allCategories.filter(cat =>
         bookings.some(b => categoryOf(b.type) === cat.id))
+
+    // 25/08: vedi DailyCalendarModal — una prenotazione la cui corsia e' spenta
+    // o eliminata non ha una colonna dove stare e sparirebbe in silenzio.
+    const corsieMancanti = orphanLaneCounts(bookings.map(b => b.type), allCategories.map(c => c.id))
     const gridTemplate = `60px repeat(${Math.max(activeCategories.length, 1)}, minmax(0, 1fr))`
 
     const currentSlot = getCurrentTimeSlot()
@@ -312,6 +311,14 @@ export default function DailyCalendarTab() {
                 </div>
             </div>
 
+            {corsieMancanti.length > 0 && (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                    {corsieMancanti.map(c => `${c.count} ${c.count === 1 ? 'prenotazione' : 'prenotazioni'} di ${c.label}`).join(', ')}
+                    {' '}non {corsieMancanti.length === 1 && corsieMancanti[0].count === 1 ? 'compare' : 'compaiono'} in griglia:
+                    {' '}la corsia e' spenta o eliminata. Riaccendila in Centralina Pro &gt; Calendario Giornaliero.
+                </div>
+            )}
+
             {/* Calendar Grid — Desktop */}
             <div className="hidden md:block bg-theme-bg-secondary rounded-lg border border-theme-border shadow-lg overflow-x-auto">
                 {/* Header Row with Categories — 2026-08-23: una colonna per
@@ -339,17 +346,15 @@ export default function DailyCalendarTab() {
 
                         // Separate bookings by type
 
-                        const renderBookings = (bookings: Booking[], bgColor: string) => {
+                        const renderBookings = (bookings: Booking[], bgColor: string, laneLabel: string) => {
                             if (bookings.length === 0) {
                                 return <span className="text-theme-text-secondary text-xs">—</span>
                             }
                             return bookings.map((booking) => {
-                                const label =
-                                    booking.type === 'check-in' ? 'USCITE' :
-                                        booking.type === 'check-out' ? 'RIENTRI' :
-                                            booking.type === 'lavaggio' ? 'LAVAGGIO' :
-                                                booking.type === 'meccanica' ? 'MECCANICA' :
-                                                    'VARIE'
+                                // 25/08: il badge porta il nome del business
+                                // (Mare, Aria, Soggiorni...) e non solo il momento:
+                                // 'RIENTRI' da solo e' identico per tutte le corsie.
+                                const label = badgeOf(booking.type, laneLabel)
 
                                 // Determine label text color based on booking type
                                 const labelColor =
@@ -404,7 +409,7 @@ export default function DailyCalendarTab() {
 
                                 {activeCategories.map(cat => (
                                     <div key={cat.id} className="p-1.5 border-l border-theme-border">
-                                        {renderBookings(slotBookings.filter(b => categoryOf(b.type) === cat.id), cat.solid)}
+                                        {renderBookings(slotBookings.filter(b => categoryOf(b.type) === cat.id), cat.solid, cat.label)}
                                     </div>
                                 ))}
                             </div>
@@ -436,7 +441,7 @@ export default function DailyCalendarTab() {
 
                         const getCategoryColor = (type: Booking['type']) => metaOf(categoryOf(type)).solidBorder
                         const getDotColor = (type: Booking['type']) => metaOf(categoryOf(type)).solid
-                        const getLabel = (type: Booking['type']) => labelOf(type)
+                        const getLabel = (type: Booking['type']) => badgeOf(type, metaOf(categoryOf(type)).label)
 
                         return (
                             <div
