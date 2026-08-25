@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
 import nodemailer from 'nodemailer'
+import { getEmailFromSmtp } from './utils/emailFrom'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -139,7 +140,7 @@ export const handler: Handler = async (event) => {
         console.log(`[send-manual-ticket-pdf] Sending email to customer: ${email}`)
 
         await transporter.sendMail({
-            from: '"DR7" <info@dr7.app>',
+            from: await getEmailFromSmtp('"DR7" <info@dr7.app>'),
             to: email,
             subject: `Il Tuo Biglietto - LOTTERIA DR7 (#${String(ticketNumber).padStart(4, '0')})`,
             text: `Grazie per l'acquisto!\n\nIn allegato trovi il tuo biglietto della lotteria DR7.\n\nNumero Biglietto: #${String(ticketNumber).padStart(4, '0')}\n\nIn bocca al lupo!\nDR7`,
@@ -154,7 +155,7 @@ export const handler: Handler = async (event) => {
         console.log(`[send-manual-ticket-pdf] Sending notification to admin: ${adminEmail}`)
 
         await transporter.sendMail({
-            from: '"DR7 System" <info@dr7.app>',
+            from: await getEmailFromSmtp('"DR7 System" <info@dr7.app>'),
             to: adminEmail,
             subject: `🎯 Vendita Manuale Biglietto #${String(ticketNumber).padStart(4, '0')}`,
             text: `È stato venduto un biglietto della lotteria manualmente.\n\nN. Biglietto: #${String(ticketNumber).padStart(4, '0')}\nCliente: ${fullName}\nEmail: ${email}\nTelefono: ${phone}\n\nIl PDF del biglietto è in allegato.`,

@@ -19,6 +19,57 @@ const TTL_MS = 5 * 60 * 1000
 let cached = ''
 let cachedAt = 0
 
+/**
+ * Indirizzo puro da un mittente scritto come "Nome <a@b.it>".
+ * Restituisce stringa vuota se non c'e' niente di riconoscibile.
+ */
+export function estraiIndirizzoEmail(mittente: string): string {
+  const dentroParentesi = /<([^<>]+)>/.exec(mittente || '')
+  const grezzo = (dentroParentesi ? dentroParentesi[1] : mittente || '').trim()
+  return /\S+@\S+\.\S+/.test(grezzo) ? grezzo : ''
+}
+
+/** Dominio di un indirizzo, minuscolo. '' se non c'e'. */
+export function dominioEmail(indirizzoOMittente: string): string {
+  const addr = estraiIndirizzoEmail(indirizzoOMittente) || (indirizzoOMittente || '')
+  const dom = addr.split('@')[1] || ''
+  return dom.trim().toLowerCase()
+}
+
+/**
+ * Decide il mittente per un invio SMTP.
+ *
+ * L'SMTP autenticato (GoDaddy/secureserver) rifiuta un `From` di un dominio
+ * diverso dalla casella con cui ci si e' autenticati: mettendo in Centralina
+ * un indirizzo di un altro dominio, TUTTE le email SMTP smetterebbero di
+ * partire. Qui l'indirizzo configurato si usa solo se e' dello stesso dominio
+ * dell'account SMTP; altrimenti si tiene quello storico e si logga il perche'.
+ *
+ * Funzione pura per poterla testare: riceve i valori, non li va a leggere.
+ */
+export function scegliMittenteSmtp(configurato: string, smtpUser: string, fallback: string): string {
+  const cfg = (configurato || '').trim()
+  if (!cfg) return fallback
+  if (!estraiIndirizzoEmail(cfg)) return fallback
+  const domSmtp = dominioEmail(smtpUser || '')
+  if (!domSmtp) return cfg
+  const domCfg = dominioEmail(cfg)
+  if (domCfg && domCfg !== domSmtp) {
+    console.warn(
+      `[emailFrom] mittente configurato (${domCfg}) diverso dal dominio SMTP (${domSmtp}): ` +
+      `l'SMTP lo rifiuterebbe, uso "${fallback}".`
+    )
+    return fallback
+  }
+  return cfg
+}
+
+/** Come getEmailFrom, ma per gli invii che passano dall'SMTP autenticato. */
+export async function getEmailFromSmtp(fallback = FALLBACK): Promise<string> {
+  const configurato = await getEmailFrom(fallback)
+  return scegliMittenteSmtp(configurato, process.env.SMTP_USER || '', fallback)
+}
+
 export async function getEmailFrom(fallback = FALLBACK): Promise<string> {
   const now = Date.now()
   if (cached && now - cachedAt < TTL_MS) return cached

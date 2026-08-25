@@ -1,6 +1,7 @@
 import type { Handler } from "@netlify/functions";
 import { Resend } from 'resend';
 import { getGoogleReviewLink } from './utils/loadMarketing';
+import { getEmailFrom } from './utils/emailFrom'
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
@@ -40,7 +41,7 @@ export const handler: Handler = async (event) => {
 
       try {
         const { error } = await resend.emails.send({
-          from: 'DR7 <info@dr7.app>',
+          from: await getEmailFrom('DR7 <info@dr7.app>'),
           to: booking.email,
           subject: "Come è stata la tua esperienza con DR7?",
           html: `

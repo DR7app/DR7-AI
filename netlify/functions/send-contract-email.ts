@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions'
 import nodemailer from 'nodemailer'
 import { createClient } from '@supabase/supabase-js'
 import { renderTemplate } from './utils/messageTemplates'
+import { getEmailFromSmtp } from './utils/emailFrom'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -117,7 +118,7 @@ export const handler: Handler = async (event) => {
             }
         }
         const mailOptions = {
-            from: '"DR7" <info@dr7.app>',
+            from: await getEmailFromSmtp('"DR7" <info@dr7.app>'),
             to: recipientEmail,
             subject: subjectFromTpl || `Contratto Noleggio DR7 — ${booking.vehicle_name}`,
             text: bodyText,

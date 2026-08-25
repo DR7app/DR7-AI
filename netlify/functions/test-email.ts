@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions'
 import { Resend } from 'resend'
+import { getEmailFrom } from './utils/emailFrom'
 
 export const handler: Handler = async (event) => {
     const headers = {
@@ -44,7 +45,7 @@ export const handler: Handler = async (event) => {
         const resend = new Resend(apiKey)
 
         const { data, error } = await resend.emails.send({
-            from: 'DR7 <info@dr7.app>',
+            from: await getEmailFrom('DR7 <info@dr7.app>'),
             to: email,
             subject: '✅ Test Email - DR7',
             html: `

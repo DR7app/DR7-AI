@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { getMessageTemplate } from './utils/messageTemplates';
 import { getMarketingConfig } from './utils/loadMarketing';
+import { getEmailFrom } from './utils/emailFrom'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -279,7 +280,7 @@ const handler: Handler = async (event) => {
 
         const resend = new Resend(resendApiKey);
         const { error: resendError } = await resend.emails.send({
-          from: 'DR7 <info@dr7.app>',
+          from: await getEmailFrom('DR7 <info@dr7.app>'),
           to: candidate.customer_email,
           subject: emailSubject || 'Come \u00e8 stata la tua esperienza con DR7?',
           html: emailBody,

@@ -23,6 +23,7 @@ import type { Handler } from '@netlify/functions'
 import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { requireAuth } from './require-auth'
+import { getEmailFrom } from './utils/emailFrom'
 
 // 2026-08-18: stessa catena di limitation-override-otp / send-wallet-otp.
 //   1) centralina_pro_config.config.notifications.otp_recipient (modificabile
@@ -386,7 +387,7 @@ export const handler: Handler = async (event) => {
   const resend = new Resend(apiKey)
   const html = renderEmailHtml(payload, sample, operatorName, operatorEmail, recipient)
   const { error: emailError } = await resend.emails.send({
-    from: 'DR7 <info@dr7.app>',
+    from: await getEmailFrom('DR7 <info@dr7.app>'),
     to: recipient,
     subject: `[ANTEPRIMA OTP] ${operatorName} chiede: ${codeToLabel[payload.limitationCode] || payload.limitationMessage.split('.')[0]} — Codice fittizio ${FAKE_CODE}`,
     html,

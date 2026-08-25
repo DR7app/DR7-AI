@@ -35,6 +35,7 @@ import nodemailer from 'nodemailer';
 import { matchesAdvancedFilters, matchesServiceType, passesCustomerFilters, loadPaymentMethodAliases, loadResidentProvinces } from './utils/triggerSystemMessageEvent';
 import { getProKeyEventTriggers, OLD_TO_PRO } from '../../src/utils/proTemplateRouting';
 import { getAdminNotificationPhone } from './utils/notificationPhone';
+import { getEmailFromSmtp } from './utils/emailFrom'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -1038,7 +1039,7 @@ export async function processScadenzaCauzioneAvviso(now: number, opts?: { force?
         for (const to of cfg.email) {
             try {
                 await avvisoTransporter.sendMail({
-                    from: '"DR7 Cauzioni" <info@dr7.app>',
+                    from: await getEmailFromSmtp('"DR7 Cauzioni" <info@dr7.app>'),
                     to,
                     subject: `Scadenza cauzione — ${nome}`,
                     text: body,

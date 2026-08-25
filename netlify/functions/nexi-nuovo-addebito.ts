@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { requireAuth } from './require-auth'
 import { renderTemplate } from './utils/messageTemplates'
+import { getEmailFrom } from './utils/emailFrom'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -96,7 +97,7 @@ export const handler: Handler = async (event) => {
             }
             const emailHtml = `<pre style="font-family: Arial, sans-serif; white-space: pre-wrap;">${emailBody}</pre>`
             const { error: emailError } = await resend.emails.send({
-                from: 'DR7 <info@dr7.app>',
+                from: await getEmailFrom('DR7 <info@dr7.app>'),
                 to: customerEmail,
                 subject: emailSubject,
                 html: emailHtml,

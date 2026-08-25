@@ -83,7 +83,12 @@ const handler: Handler = async (event) => {
   //    dal proprio profilo (/reset-password classico).
   //  - password assente → inviteUserByEmail, l'operatore riceve un'email
   //    con un link per impostare la sua password (flusso storico).
-  const baseUrl = process.env.URL || 'https://platform.dr7ai.com'
+  // 2026-08-25: dominio ESPLICITO, come in request-password-reset.
+  // Con `process.env.URL` il link dipendeva dal dominio primario impostato su
+  // Netlify: se cambia, l'operatore invitato atterra su un altro sito e non
+  // riesce a impostare la password. ADMIN_BASE_URL resta come scappatoia
+  // (staging, dominio nuovo).
+  const baseUrl = process.env.ADMIN_BASE_URL || 'https://platform.dr7ai.com'
   const redirectTo = `${baseUrl}/reset-password`
 
   let newUserId: string

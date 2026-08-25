@@ -4,6 +4,7 @@ import { Resend } from 'resend'
 import { PDFDocument } from 'pdf-lib'
 import crypto from 'crypto'
 import { renderTemplate } from './utils/messageTemplates'
+import { getEmailFrom } from './utils/emailFrom'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -233,7 +234,7 @@ const processHandler: Handler = async () => {
 
             const resend = new Resend(process.env.RESEND_API_KEY)
             const { error: emailError } = await resend.emails.send({
-                from: 'DR7 <info@dr7.app>',
+                from: await getEmailFrom('DR7 <info@dr7.app>'),
                 to: addebito.customer_email,
                 subject: `Comunicazione formale addebito in corso - Contratto ${addebito.contract_number}`,
                 html: pdfAttached

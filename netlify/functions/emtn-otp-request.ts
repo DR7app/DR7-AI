@@ -19,6 +19,7 @@ import {
     hashOtpCode,
     jsonResponse,
 } from './utils/emtn'
+import { getEmailFrom } from './utils/emailFrom'
 
 const OTP_TTL_MINUTES = 10
 
@@ -84,7 +85,7 @@ export const handler: Handler = async (event) => {
             if (!apiKey) throw new Error('RESEND_API_KEY mancante')
             const resend = new Resend(apiKey)
             await resend.emails.send({
-                from: 'DR7 <info@dr7.app>',
+                from: await getEmailFrom('DR7 <info@dr7.app>'),
                 to: email,
                 subject: 'EMTN — Codice di autorizzazione consultazione',
                 html: `

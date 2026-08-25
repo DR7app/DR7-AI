@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { requireAuth } from './require-auth'
 import { userHasRole } from './utils/adminRoles'
+import { getEmailFrom } from './utils/emailFrom'
 
 // OTP recipient — direzione's working channel. Config chain matches
 // limitation-override-otp.ts:
@@ -86,7 +87,7 @@ export const handler: Handler = async (event) => {
     const actionLabel = action === 'credit' ? 'CREDITO' : 'ADDEBITO'
 
     const { error: emailError } = await resend.emails.send({
-      from: 'DR7 <info@dr7.app>',
+      from: await getEmailFrom('DR7 <info@dr7.app>'),
       to: await getOtpRecipients(),
       subject: `Codice Verifica Wallet - ${actionLabel} €${parseFloat(amount).toFixed(2)}`,
       html: `

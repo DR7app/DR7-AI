@@ -1,6 +1,7 @@
 import { Handler, schedule } from '@netlify/functions'
 import nodemailer from 'nodemailer'
 import { createClient } from '@supabase/supabase-js'
+import { getEmailFromSmtp } from './utils/emailFrom'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -138,7 +139,7 @@ const scheduledHandler: Handler = async (event) => {
         const adminEmail = process.env.ADMIN_EMAIL || 'info@dr7.app'
 
         await transporter.sendMail({
-            from: '"DR7 Allarmi" <info@dr7.app>',
+            from: await getEmailFromSmtp('"DR7 Allarmi" <info@dr7.app>'),
             to: adminEmail,
             subject: `⏰ SCADENZA CAUZIONE: ${expiringCauzioni.length} cauzione/i in scadenza OGGI`,
             html: getExpirationAlarmHTML(enrichedCauzioni),

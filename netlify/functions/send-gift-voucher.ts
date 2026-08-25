@@ -1,5 +1,6 @@
 import { Handler } from '@netlify/functions'
 import nodemailer from 'nodemailer'
+import { getEmailFromSmtp } from './utils/emailFrom'
 
 // SMTP configuration - uses info@dr7.app
 const transporter = nodemailer.createTransport({
@@ -96,7 +97,7 @@ export const handler: Handler = async (event) => {
                     .replace(/{cognome}/g, customer.cognome || '')
 
                 const mailOptions = {
-                    from: '"DR7" <info@dr7.app>',
+                    from: await getEmailFromSmtp('"DR7" <info@dr7.app>'),
                     to: customer.email,
                     subject: subject,
                     html: `
