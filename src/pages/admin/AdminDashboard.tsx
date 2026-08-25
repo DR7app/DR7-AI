@@ -1,4 +1,4 @@
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { listSavedAccounts, saveAccount, removeSavedAccount, type SavedAccount } from '../../utils/savedAccounts'
 import toast from 'react-hot-toast'
 import { createPortal } from 'react-dom'
@@ -167,6 +167,12 @@ export default function AdminDashboard() {
   // serve in futuro, riaggiungerlo qui basato su:
   // adminRole === 'superadmin' || hasRole('direzione') || hasRole('developer')
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  // Foto profilo cambiata da qui: `useAdminRole` la legge una volta sola
+  // all'avvio, quindi la nuova URL vive qui finche' la pagina non si ricarica.
+  const [avatarLocale, setAvatarLocale] = useState<string | null>(null)
+  const [avatarSaving, setAvatarSaving] = useState(false)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+  const avatarMostrato = avatarLocale || adminAvatar
   const { theme, toggleTheme, palette, setPalette } = useTheme()
   const [paletteMenuOpen, setPaletteMenuOpen] = useState(false)
 
@@ -252,6 +258,62 @@ export default function AdminDashboard() {
       if (data.session) saveAccount(data.session)
     })()
   }, [])
+
+  /**
+   * Cambia la foto profilo dal menu utente (25/08/2026).
+   *
+   * Prima si poteva fare solo da Operatori / Rilevazione Orari, cioe' da una
+   * tab che non tutti aprono e che i collaboratori non vedono nemmeno: la
+   * propria foto era in alto a destra ma non si toccava da li'.
+   * Stessa destinazione dell'upload gia' esistente (bucket `operator-avatars`
+   * + `operatori_persone.avatar_url`), cosi' la foto resta UNA sola ovunque.
+   */
+  async function handleAvatarFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // stesso file due volte di fila: senza reset il change non riparte
+    if (!file) return
+    if (!file.type.startsWith('image/')) { toast.error('Carica un\'immagine (jpg, png, webp).'); return }
+    if (file.size > 2 * 1024 * 1024) { toast.error('File troppo grande (max 2 MB).'); return }
+
+    setAvatarSaving(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { toast.error('Sessione scaduta: rientra e riprova.'); return }
+
+      // La scheda operatore si trova per user_id; su chi e' stato creato prima
+      // del collegamento resta solo l'email.
+      let opRow: { id: string } | null = null
+      const { data: byUser } = await supabase.from('operatori_persone').select('id').eq('user_id', user.id).maybeSingle()
+      opRow = byUser
+      if (!opRow && user.email) {
+        const { data: byEmail } = await supabase.from('operatori_persone').select('id').eq('email', user.email).maybeSingle()
+        opRow = byEmail
+      }
+      if (!opRow) {
+        toast.error('Nessuna scheda operatore collegata a questo account: chiedi in Operatori di crearla.')
+        return
+      }
+
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+      const path = `${opRow.id}/${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage
+        .from('operator-avatars')
+        .upload(path, file, { upsert: true, contentType: file.type })
+      if (upErr) { toast.error('Upload fallito: ' + upErr.message); return }
+
+      const { data: pub } = supabase.storage.from('operator-avatars').getPublicUrl(path)
+      const { error: dbErr } = await supabase
+        .from('operatori_persone')
+        .update({ avatar_url: pub.publicUrl })
+        .eq('id', opRow.id)
+      if (dbErr) { toast.error('Salvataggio foto fallito: ' + dbErr.message); return }
+
+      setAvatarLocale(pub.publicUrl)
+      toast.success('Foto profilo aggiornata')
+    } finally {
+      setAvatarSaving(false)
+    }
+  }
 
   async function handleAddAccount() {
     const { data } = await supabase.auth.getSession()
@@ -975,8 +1037,8 @@ export default function AdminDashboard() {
                 title={adminEmail || 'Operatore'}
               >
                 <div className="w-8 h-8 rounded-full overflow-hidden bg-dr7-gold/20 text-dr7-gold flex items-center justify-center text-xs font-bold border border-dr7-gold/30 shrink-0">
-                  {adminAvatar ? (
-                    <img src={adminAvatar} alt={adminName || 'Operatore'} className="w-full h-full object-cover" />
+                  {avatarMostrato ? (
+                    <img src={avatarMostrato} alt={adminName || 'Operatore'} className="w-full h-full object-cover" />
                   ) : (() => {
                     const src = adminName || adminEmail || ''
                     const parts = src.split(/[\s@.]+/).filter(Boolean)
@@ -999,15 +1061,32 @@ export default function AdminDashboard() {
                       off-screen on narrow phones. Touch targets >=44px. */}
                   <div className="absolute right-0 top-12 z-50 w-64 max-w-[calc(100vw-1rem)] bg-theme-bg-secondary border border-theme-border rounded-xl shadow-2xl py-2 text-sm overflow-hidden">
                     <div className="px-3 pb-2 border-b border-theme-border flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-full overflow-hidden bg-dr7-gold/20 text-dr7-gold flex items-center justify-center text-sm font-bold border border-dr7-gold/30 shrink-0">
-                        {adminAvatar ? (
-                          <img src={adminAvatar} alt={adminName || 'Operatore'} className="w-full h-full object-cover" />
+                      {/* La foto si cambia da qui: un clic apre il file. */}
+                      <button
+                        type="button"
+                        onClick={() => avatarInputRef.current?.click()}
+                        disabled={avatarSaving}
+                        title="Cambia foto profilo"
+                        className="relative group w-11 h-11 rounded-full overflow-hidden bg-dr7-gold/20 text-dr7-gold flex items-center justify-center text-sm font-bold border border-dr7-gold/30 shrink-0 disabled:opacity-60"
+                      >
+                        {avatarMostrato ? (
+                          <img src={avatarMostrato} alt={adminName || 'Operatore'} className="w-full h-full object-cover" />
                         ) : (() => {
                           const src = adminName || adminEmail || ''
                           const parts = src.split(/[\s@.]+/).filter(Boolean)
                           return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '?'
                         })()}
-                      </div>
+                        <span className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-black/50 text-white text-[9px] font-semibold uppercase tracking-wide">
+                          {avatarSaving ? '...' : 'Cambia'}
+                        </span>
+                      </button>
+                      <input
+                        ref={avatarInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleAvatarFile}
+                      />
                       <div className="min-w-0">
                         <div className="text-xs font-bold text-theme-text-primary truncate">{adminName || 'Operatore'}</div>
                         <div className="text-[11px] text-theme-text-muted truncate">{adminEmail || '—'}</div>
@@ -1060,6 +1139,17 @@ export default function AdminDashboard() {
                         <div className="border-t border-theme-border my-1" />
                       </>
                     )}
+                    <button
+                      onClick={() => avatarInputRef.current?.click()}
+                      disabled={avatarSaving}
+                      className="w-full text-left px-3 py-3 hover:bg-theme-bg-tertiary text-theme-text-primary flex items-center gap-2 min-h-[44px] disabled:opacity-60"
+                    >
+                      <svg className="w-4 h-4 text-theme-text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      {avatarSaving ? 'Caricamento foto...' : 'Cambia Foto'}
+                    </button>
                     <button
                       onClick={() => { setUserMenuOpen(false); setShowPasswordModal(true); setPasswordMsg(null); setNewPassword(''); setConfirmPassword(''); setPasswordVisible(false); }}
                       className="w-full text-left px-3 py-3 hover:bg-theme-bg-tertiary text-theme-text-primary flex items-center gap-2 min-h-[44px]"

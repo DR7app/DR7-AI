@@ -2044,14 +2044,57 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   const [bookingDateRange, setBookingDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
   // Helper: ritorna true se la prenotazione cade nel range (inclusive).
   // Confronta su pickup_date in formato YYYY-MM-DD (timezone-agnostic).
-  const bookingPassesDate = (b: Booking): boolean => {
-    if (!bookingDateRange.from && !bookingDateRange.to) return true
-    const pickup = String(b.pickup_date || '').slice(0, 10) // YYYY-MM-DD
-    if (!pickup) return true // niente data → non filtrare via
-    if (bookingDateRange.from && pickup < bookingDateRange.from) return false
-    if (bookingDateRange.to && pickup > bookingDateRange.to) return false
-    return true
-  }
+  /**
+   * Le prenotazioni che passano periodo + ricerca (25/08/2026).
+   *
+   * La stessa selezione era scritta QUATTRO volte dentro il JSX (card mobile,
+   * righe tabella e i due controlli di "lista vuota"): veniva quindi rifatta
+   * per intero a ogni render, anche solo spuntando una casella nel form di
+   * una nuova prenotazione. Finche' PostgREST tagliava la lettura a 1000
+   * righe si sentiva poco; da quando arrivano tutte (2500+ e in crescita) il
+   * form era diventato lento a rispondere.
+   *
+   * Stesse regole di prima, identiche: cambia solo che si calcolano una volta
+   * sola e si rifanno quando cambiano davvero i dati, il periodo o la ricerca.
+   */
+  const bookingsVisibili = useMemo(() => {
+    const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
+    const norm = (x: string) => x.replace(/[\s\-\+\(\)]/g, '')
+    const normalisedWords = words.map(norm)
+    const { from, to } = bookingDateRange
+    return bookings.filter(booking => {
+      // 2026-06-01: filtro periodo prima della ricerca testuale.
+      if (from || to) {
+        const pickup = String(booking.pickup_date || '').slice(0, 10) // YYYY-MM-DD
+        if (pickup) { // niente data → non filtrare via
+          if (from && pickup < from) return false
+          if (to && pickup > to) return false
+        }
+      }
+      if (normalisedWords.length === 0) return true
+      // Coverage estesa per "campi nome": alcune prenotazioni hanno fullName,
+      // altre nome+cognome separati, altre solo first_name/last_name in
+      // booking_details.customer. Senza questa lista la ricerca per nome
+      // ometteva booking validi (es. Andrea Testa).
+      const cust = booking.booking_details?.customer || {}
+      const nameParts = [
+        cust.fullName, cust.full_name, cust.name,
+        cust.first_name, cust.last_name,
+        cust.firstName, cust.lastName,
+        cust.nome, cust.cognome,
+        booking.customer_name,
+      ].filter(Boolean).join(' ')
+      const customerName = nameParts.toLowerCase()
+      const customerEmail = (booking.customer_email || cust.email || '').toLowerCase()
+      const customerPhone = (booking.customer_phone || cust.phone || cust.telefono || '').toLowerCase()
+      const vehicleName = (booking.vehicle_name || '').toLowerCase()
+      const vehiclePlate = (booking.vehicle_plate || '').toLowerCase()
+      const bookingId = String(booking.id || '').toLowerCase()
+      const bookingCode = bookingId.substring(0, 8)
+      const searchText = norm(`${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7${bookingCode}`)
+      return normalisedWords.every(word => searchText.includes(word))
+    })
+  }, [bookings, bookingSearchQuery, bookingDateRange])
 
   // Quick Edit Customer Modal State
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -3268,7 +3311,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   // riconduce il contratto (ristampa la firma sulle nuove date + invio WhatsApp del
   // firmato) invece di invalidarla. Ritorna { reconducted } così il chiamante sa se
   // deve ancora mandare il link di firma. Vedi handleConfirmExtend / handleResendContract.
-  async function handleGenerateContract(booking: Booking, _silent?: boolean, opts?: { reconduct?: boolean; resign?: boolean }) {
+  async function handleGenerateContract(booking: Booking, auto?: boolean, opts?: { reconduct?: boolean; resign?: boolean }) {
     logger.log('[ReservationsTab] 🖱️ Generating contract for booking:', booking.id)
     if (!booking.id) {
       console.error('[ReservationsTab] ❌ No booking ID found')
@@ -3356,6 +3399,16 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     } catch (error: unknown) {
       const _errMsg = error instanceof Error ? error.message : String(error)
       console.error('Error generating contract:', error)
+      // 2026-08-25: modello di contratto non caricato per il business (Mare,
+      // Aria, Soggiorni). In auto-generazione — salvataggio o conferma della
+      // prenotazione — il toast tornava a ogni salvataggio senza che ci fosse
+      // niente da correggere sulla prenotazione: l'admin sa gia' che il modello
+      // manca. Lo teniamo SOLO sul click esplicito del bottone Contratto, dove
+      // il bottone deve dire perche' non ha prodotto nulla.
+      if (auto && /Modello di contratto mancante/i.test(_errMsg)) {
+        logger.warn('[handleGenerateContract] modello del business assente — avviso non mostrato in auto-generazione')
+        return null
+      }
       toast.error('Errore generazione contratto: ' + _errMsg, { duration: 12000 })
       return null
     } finally {
@@ -7541,7 +7594,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
       let contractReconducted = false
       try {
-        const genRes = await handleGenerateContract(insertedBooking, false, { reconduct: reconductThisSave, resign: azioneContratto.rifirma })
+        const genRes = await handleGenerateContract(insertedBooking, true, { reconduct: reconductThisSave, resign: azioneContratto.rifirma })
         contractReconducted = !!genRes?.reconducted
         logger.log('[Auto-Gen] ✅ Contract generated successfully', contractReconducted ? '(ricondotto — nessuna nuova firma)' : '')
       } catch (err) {
@@ -10927,524 +10980,426 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           </form>
         )}
 
-        {/* Mobile Card View */}
-        <div className="lg:hidden space-y-3">
-          {bookings.filter(booking => {
-            // 2026-06-01: filtro periodo prima della ricerca testuale.
-            if (!bookingPassesDate(booking)) return false
-            // Search filter
-            if (!bookingSearchQuery) return true
-            const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
-            // Coverage estesa per "campi nome": alcune prenotazioni hanno
-            // fullName, altre nome+cognome separati, altre solo first_name/
-            // last_name in booking_details.customer. Senza questa lista la
-            // ricerca per nome ometteva booking validi (es. Andrea Testa).
-            const cust = booking.booking_details?.customer || {}
-            const nameParts = [
-              cust.fullName, cust.full_name, cust.name,
-              cust.first_name, cust.last_name,
-              cust.firstName, cust.lastName,
-              cust.nome, cust.cognome,
-              booking.customer_name,
-            ].filter(Boolean).join(' ')
-            const customerName = nameParts.toLowerCase()
-            const customerEmail = (booking.customer_email || cust.email || '').toLowerCase()
-            const customerPhone = (booking.customer_phone || cust.phone || cust.telefono || '').toLowerCase()
-            const vehicleName = (booking.vehicle_name || '').toLowerCase()
-            const vehiclePlate = (booking.vehicle_plate || '').toLowerCase()
-            const bookingId = String(booking.id || '').toLowerCase()
-            const bookingCode = bookingId.substring(0, 8)
-            const norm = (s: string) => s.replace(/[\s\-\+\(\)]/g, '')
-            const normalisedWords = words.map(norm)
-            const searchText = norm(`${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7${bookingCode}`)
-            return normalisedWords.every(word => searchText.includes(word))
-          }).length === 0 && (
-              <div className="rounded-lg border border-theme-border/30 p-8 text-center text-theme-text-muted">
-                {bookingSearchQuery ? `Nessuna prenotazione trovata per "${bookingSearchQuery}"` : 'Nessuna prenotazione trovata'}
-              </div>
-            )}
-
-          {/* Display bookings as cards on mobile */}
-          {bookings.filter(booking => {
-            // 2026-06-01: filtro periodo prima della ricerca testuale.
-            if (!bookingPassesDate(booking)) return false
-            // Search filter
-            if (!bookingSearchQuery) return true
-            const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
-            // Coverage estesa per "campi nome": alcune prenotazioni hanno
-            // fullName, altre nome+cognome separati, altre solo first_name/
-            // last_name in booking_details.customer. Senza questa lista la
-            // ricerca per nome ometteva booking validi (es. Andrea Testa).
-            const cust = booking.booking_details?.customer || {}
-            const nameParts = [
-              cust.fullName, cust.full_name, cust.name,
-              cust.first_name, cust.last_name,
-              cust.firstName, cust.lastName,
-              cust.nome, cust.cognome,
-              booking.customer_name,
-            ].filter(Boolean).join(' ')
-            const customerName = nameParts.toLowerCase()
-            const customerEmail = (booking.customer_email || cust.email || '').toLowerCase()
-            const customerPhone = (booking.customer_phone || cust.phone || cust.telefono || '').toLowerCase()
-            const vehicleName = (booking.vehicle_name || '').toLowerCase()
-            const vehiclePlate = (booking.vehicle_plate || '').toLowerCase()
-            const bookingId = String(booking.id || '').toLowerCase()
-            const bookingCode = bookingId.substring(0, 8)
-            const norm = (s: string) => s.replace(/[\s\-\+\(\)]/g, '')
-            const normalisedWords = words.map(norm)
-            const searchText = norm(`${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7${bookingCode}`)
-            return normalisedWords.every(word => searchText.includes(word))
-          }).map((booking) => {
-            const isCarWash = booking.service_type === 'car_wash'
-            // 2026-06-04: riga "auto di cortesia" (shadow rental del Prime Wash).
-            // Non è un noleggio pagato: badge dedicato, niente "Pagato".
-            const isCourtesy = booking.booking_details?.is_courtesy_block === true
-            return (
-              <div
-                key={`booking-card-${booking.id}`}
-                className="rounded-lg p-4 cursor-pointer hover:bg-theme-text-primary/5 transition-colors border border-theme-border/30"
-                onClick={() => setSelectedBooking(booking)}
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex-1">
-                    <div className="font-semibold text-theme-text-primary mb-1 flex items-center gap-1.5 flex-wrap">
-                      <span>{booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}</span>
-                      <ClientStatusBadge
-                        userId={booking.user_id}
-                        email={booking.customer_email || booking.booking_details?.customer?.email}
-                      />
-                    </div>
-                    <div className="text-sm text-theme-text-muted">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
-                  </div>
-                  {isCourtesy ? (
-                    <span className="px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap bg-sky-500/20 text-sky-300 border border-sky-500/40">
-                      AUTO DI CORTESIA
-                    </span>
-                  ) : (
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' ||
-                    booking.payment_status === 'paid' ||
-                    booking.payment_status === 'succeeded' ||
-                    (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
-                    ? 'bg-green-900 text-green-300'
-                    : booking.payment_status === 'partial'
-                    ? 'bg-amber-900 text-amber-300'
-                    : 'bg-red-900 text-red-300'
-                    }`}>
-                    {booking.payment_status === 'completed' ||
-                      booking.payment_status === 'paid' ||
-                      booking.payment_status === 'succeeded' ||
-                      (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
-                      ? <>Pagato{booking.payment_method && <span className="ml-1 opacity-70">· {booking.payment_method}</span>}</>
-                      : booking.payment_status === 'partial'
-                      ? `Parziale €${((booking.amount_paid || 0) / 100).toFixed(0)}`
-                      : 'Non Pagato'}
-                  </span>
-                  )}
+        {/* 25/08/2026 — l'elenco si disegna quando il form e' chiuso.
+            Con il form aperto restava sotto, montato: ogni casella spuntata
+            ridisegnava tutte le prenotazioni in memoria (2500+ righe, il
+            doppio contando le card mobile), e il form rispondeva in ritardo.
+            Alla chiusura del form l'elenco torna identico a prima. */}
+        {!showForm && (
+          <>
+          {/* Mobile Card View */}
+          <div className="lg:hidden space-y-3">
+            {bookingsVisibili.length === 0 && (
+                <div className="rounded-lg border border-theme-border/30 p-8 text-center text-theme-text-muted">
+                  {bookingSearchQuery ? `Nessuna prenotazione trovata per "${bookingSearchQuery}"` : 'Nessuna prenotazione trovata'}
                 </div>
+              )}
 
-                <div className="mb-2">
-                  <div className="flex items-center gap-2 text-theme-text-primary">
-                    {isCarWash ? (
-                      <>
-                        <span className="text-sm">{booking.service_name || 'Autolavaggio'}</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="text-sm">{booking.vehicle_name}</span>
-                        {isCourtesy && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30">
-                            Cortesia
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                  {!isCarWash && booking.vehicle_plate && (
-                    <div className="text-xs text-theme-text-muted mt-1">Targa: {booking.vehicle_plate}</div>
-                  )}
-                </div>
-
-                <div className="text-xs text-theme-text-muted mb-2">
-                  {isCarWash
-                    ? `${booking.appointment_date ? new Date(booking.appointment_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' }) : '-'}${booking.appointment_time ? ` alle ${booking.appointment_time}` : ''}`
-                    : `${booking.pickup_date ? new Date(typeof booking.pickup_date === 'number' ? booking.pickup_date * 1000 : booking.pickup_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome', hour12: false }) : '-'} → ${booking.dropoff_date ? new Date(typeof booking.dropoff_date === 'number' ? booking.dropoff_date * 1000 : booking.dropoff_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome', hour12: false }) : '-'}`
-                  }
-                </div>
-
-                <div className="flex justify-between items-center mt-3 gap-2" onClick={(e) => e.stopPropagation()}>
-                  <div className="text-lg font-bold text-theme-text-primary">
-                    {canViewFinancials || userEmail === 'dubai.rent7.0srl@gmail.com' ? `€${(booking.price_total / 100).toFixed(2)}` : '***'}
-                  </div>
-                  {(() => {
-                    const isPaid = booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded'
-                    const hasContract = !!(booking.booking_details?.contract_generated_at || booking.contract_url)
-                    const sections: GestisciSection[] = [
-                      {
-                        title: 'Gestione',
-                        actions: [
-                          { label: 'Modifica', onClick: () => handleEditBooking(booking) },
-                          { label: 'Estendi', onClick: () => handleExtendBooking(booking), visible: !isCarWash },
-                          { label: 'Cancella', onClick: () => handleDeleteBooking(booking.id, 'booking') },
-                        ],
-                      },
-                      {
-                        title: 'Documenti',
-                        actions: [
-                          {
-                            label: hasContract ? 'Visualizza Contratto' : (generatingContract ? 'Generazione...' : 'Genera Contratto'),
-                            onClick: () => { if (booking.contract_url) { window.open(booking.contract_url, '_blank') } else { handleGenerateContract(booking) } },
-                            disabled: !hasContract && generatingContract,
-                          },
-                          { label: 'Invia Contratto', onClick: () => handleResendContract(booking), visible: hasContract },
-                          { label: generatingInvoice ? 'Generazione...' : 'Genera Fattura', onClick: () => handleGenerateInvoice(booking), disabled: generatingInvoice },
-                        ],
-                      },
-                      {
-                        title: 'Pagamenti',
-                        actions: [
-                          {
-                            label: booking.booking_details?.nexi_payment_link ? 'Rinvia Link Pagamento' : 'Genera Link Pagamento',
-                            onClick: () => handleResendPaymentLink(booking),
-                            visible: !isPaid && isNexiPayByLink(booking.payment_method),
-                          },
-                        ],
-                      },
-                      {
-                        title: 'Altro',
-                        actions: [
-                          {
-                            label: booking.booking_details?.auto_pronta_sent_at ? '✓ Auto Pronta inviata' : 'Auto Pronta',
-                            onClick: () => handleAutoPronta(booking),
-                            disabled: autoProntaSending || !!booking.booking_details?.auto_pronta_sent_at,
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            visible: booking.status !== 'cancelled' && !['car_wash', 'mechanical'].includes(String((booking as any).service_type || '').toLowerCase()),
-                          },
-                          { label: 'Danni & Penali', onClick: () => { setSelectedBookingForDanniPenali(booking); setDanniPenaliInitialTab('danni'); setDanniPenaliModalOpen(true) } },
-                        ],
-                      },
-                    ]
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const svcMd = String((booking as any).service_type || '').toLowerCase()
-                    const showAutoProntaMd = booking.status !== 'cancelled' && !['car_wash', 'mechanical'].includes(svcMd)
-                    const autoProntaDoneMd = !!booking.booking_details?.auto_pronta_sent_at
-                    return (
-                      <div className="flex items-center gap-2">
-                        {showAutoProntaMd && (
-                          <button
-                            onClick={() => handleAutoPronta(booking)}
-                            disabled={autoProntaSending || autoProntaDoneMd}
-                            title="Notifica WhatsApp al cliente: veicolo pronto al ritiro"
-                            className={`px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors disabled:opacity-60 ${
-                              autoProntaDoneMd
-                                ? 'bg-green-600/20 text-green-700 dark:text-green-400 cursor-default'
-                                : 'bg-green-600 hover:bg-green-700 text-white'
-                            }`}
-                          >
-                            {autoProntaDoneMd ? '✓ Pronta' : 'Auto Pronta'}
-                          </button>
-                        )}
-                        <GestisciMenu sections={sections} size="md" />
-                      </div>
-                    )
-                  })()}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Desktop Table View */}
-        <div className="hidden lg:block rounded-lg overflow-x-auto">
-          <div className="overflow-x-auto overflow-y-visible custom-scrollbar">
-            <table className="table-auto">
-              <thead className="sticky top-0 z-10">
-                <tr>
-                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Nome</th>
-                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap w-px">Stato</th>
-                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Telefono</th>
-                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap w-full">Car</th>
-                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Data Inizio</th>
-                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Data Fine</th>
-                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Pagamento</th>
-                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Totale</th>
-                  <th className="px-2 py-2.5 text-right text-sm font-semibold text-theme-text-secondary whitespace-nowrap w-px">Azioni</th>
-                </tr>
-              </thead>
-              <tbody>
-                {/* Display bookings from bookings table (single source of truth) */}
-                {bookings.filter(booking => {
-                  // 2026-06-01: filtro periodo prima della ricerca testuale.
-                  if (!bookingPassesDate(booking)) return false
-                  // Search filter
-                  if (!bookingSearchQuery) return true
-                  const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
-                  const cust = booking.booking_details?.customer || {}
-                  const nameParts = [
-                    cust.fullName, cust.full_name, cust.name,
-                    cust.first_name, cust.last_name,
-                    cust.firstName, cust.lastName,
-                    cust.nome, cust.cognome,
-                    booking.customer_name,
-                  ].filter(Boolean).join(' ')
-                  const customerName = nameParts.toLowerCase()
-                  const customerEmail = (booking.customer_email || cust.email || '').toLowerCase()
-                  const customerPhone = (booking.customer_phone || cust.phone || cust.telefono || '').toLowerCase()
-                  const vehicleName = (booking.vehicle_name || '').toLowerCase()
-                  const vehiclePlate = (booking.vehicle_plate || '').toLowerCase()
-                  const bookingId = String(booking.id || '').toLowerCase()
-                  const bookingCode = bookingId.substring(0, 8)
-                  const norm = (s: string) => s.replace(/[\s\-\+\(\)]/g, '')
-                  const normalisedWords = words.map(norm)
-                  const searchText = norm(`${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7${bookingCode}`)
-                  return normalisedWords.every(word => searchText.includes(word))
-                }).map((booking) => {
-                  const isCarWash = booking.service_type === 'car_wash'
-                  const isCancelled = booking.status === 'cancelled' || booking.status === 'annullata'
-                  const isCourtesy = booking.booking_details?.is_courtesy_block === true
-                  return (
-                    <tr
-                      key={`booking-${booking.id}`}
-                      className={`border-t border-theme-border cursor-pointer ${
-                        isCancelled
-                          ? 'bg-red-500/10 hover:bg-red-500/15 text-red-300'
-                          : 'hover:bg-theme-bg-tertiary/30'
-                      }`}
-                      title={isCancelled ? 'Prenotazione annullata' : undefined}
-                      onClick={() => setSelectedBooking(booking)}
-                    >
-                      <td className="px-2 py-2 text-sm text-theme-text-primary max-w-[220px]" title={booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}>
-                        <span className="block truncate">{booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}</span>
-                      </td>
-                      <td className="px-2 py-2 text-sm whitespace-nowrap w-px">
+            {/* Display bookings as cards on mobile */}
+            {bookingsVisibili.map((booking) => {
+              const isCarWash = booking.service_type === 'car_wash'
+              // 2026-06-04: riga "auto di cortesia" (shadow rental del Prime Wash).
+              // Non è un noleggio pagato: badge dedicato, niente "Pagato".
+              const isCourtesy = booking.booking_details?.is_courtesy_block === true
+              return (
+                <div
+                  key={`booking-card-${booking.id}`}
+                  className="rounded-lg p-4 cursor-pointer hover:bg-theme-text-primary/5 transition-colors border border-theme-border/30"
+                  onClick={() => setSelectedBooking(booking)}
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1">
+                      <div className="font-semibold text-theme-text-primary mb-1 flex items-center gap-1.5 flex-wrap">
+                        <span>{booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}</span>
                         <ClientStatusBadge
                           userId={booking.user_id}
                           email={booking.customer_email || booking.booking_details?.customer?.email}
                         />
-                      </td>
-                      <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
-                        {booking.customer_phone || booking.booking_details?.customer?.phone || '-'}
-                      </td>
-                      <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap w-full">
-                        {isCarWash ? (
-                          <span className="flex items-center gap-2">
-                            <span>{booking.service_name || 'Autolavaggio'}</span>
-                          </span>
-                        ) : (
-                          <div className="flex flex-col">
-                            <span className="flex items-center gap-2">
-                              <span>{booking.vehicle_name}</span>
-                              {isCourtesy && (
-                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30">
-                                  Cortesia
-                                </span>
-                              )}
+                      </div>
+                      <div className="text-sm text-theme-text-muted">{booking.customer_phone || booking.booking_details?.customer?.phone || '-'}</div>
+                    </div>
+                    {isCourtesy ? (
+                      <span className="px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap bg-sky-500/20 text-sky-300 border border-sky-500/40">
+                        AUTO DI CORTESIA
+                      </span>
+                    ) : (
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' ||
+                      booking.payment_status === 'paid' ||
+                      booking.payment_status === 'succeeded' ||
+                      (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
+                      ? 'bg-green-900 text-green-300'
+                      : booking.payment_status === 'partial'
+                      ? 'bg-amber-900 text-amber-300'
+                      : 'bg-red-900 text-red-300'
+                      }`}>
+                      {booking.payment_status === 'completed' ||
+                        booking.payment_status === 'paid' ||
+                        booking.payment_status === 'succeeded' ||
+                        (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
+                        ? <>Pagato{booking.payment_method && <span className="ml-1 opacity-70">· {booking.payment_method}</span>}</>
+                        : booking.payment_status === 'partial'
+                        ? `Parziale €${((booking.amount_paid || 0) / 100).toFixed(0)}`
+                        : 'Non Pagato'}
+                    </span>
+                    )}
+                  </div>
+
+                  <div className="mb-2">
+                    <div className="flex items-center gap-2 text-theme-text-primary">
+                      {isCarWash ? (
+                        <>
+                          <span className="text-sm">{booking.service_name || 'Autolavaggio'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-sm">{booking.vehicle_name}</span>
+                          {isCourtesy && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30">
+                              Cortesia
                             </span>
-                            {booking.vehicle_plate && (
-                              <span className="text-xs text-theme-text-muted">Targa: {booking.vehicle_plate}</span>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
-                        {(() => {
-                          // 2026-08-25: data e ora su due righe -- la colonna
-                          // occupava ~140px in linea e spingeva "Azioni" fuori
-                          // dallo schermo (bottone Gestisci tagliato).
-                          if (isCarWash) {
-                            if (!booking.appointment_date) return '-'
+                          )}
+                        </>
+                      )}
+                    </div>
+                    {!isCarWash && booking.vehicle_plate && (
+                      <div className="text-xs text-theme-text-muted mt-1">Targa: {booking.vehicle_plate}</div>
+                    )}
+                  </div>
+
+                  <div className="text-xs text-theme-text-muted mb-2">
+                    {isCarWash
+                      ? `${booking.appointment_date ? new Date(booking.appointment_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' }) : '-'}${booking.appointment_time ? ` alle ${booking.appointment_time}` : ''}`
+                      : `${booking.pickup_date ? new Date(typeof booking.pickup_date === 'number' ? booking.pickup_date * 1000 : booking.pickup_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome', hour12: false }) : '-'} → ${booking.dropoff_date ? new Date(typeof booking.dropoff_date === 'number' ? booking.dropoff_date * 1000 : booking.dropoff_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome', hour12: false }) : '-'}`
+                    }
+                  </div>
+
+                  <div className="flex justify-between items-center mt-3 gap-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="text-lg font-bold text-theme-text-primary">
+                      {canViewFinancials || userEmail === 'dubai.rent7.0srl@gmail.com' ? `€${(booking.price_total / 100).toFixed(2)}` : '***'}
+                    </div>
+                    {(() => {
+                      const isPaid = booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded'
+                      const hasContract = !!(booking.booking_details?.contract_generated_at || booking.contract_url)
+                      const sections: GestisciSection[] = [
+                        {
+                          title: 'Gestione',
+                          actions: [
+                            { label: 'Modifica', onClick: () => handleEditBooking(booking) },
+                            { label: 'Estendi', onClick: () => handleExtendBooking(booking), visible: !isCarWash },
+                            { label: 'Cancella', onClick: () => handleDeleteBooking(booking.id, 'booking') },
+                          ],
+                        },
+                        {
+                          title: 'Documenti',
+                          actions: [
+                            {
+                              label: hasContract ? 'Visualizza Contratto' : (generatingContract ? 'Generazione...' : 'Genera Contratto'),
+                              onClick: () => { if (booking.contract_url) { window.open(booking.contract_url, '_blank') } else { handleGenerateContract(booking) } },
+                              disabled: !hasContract && generatingContract,
+                            },
+                            { label: 'Invia Contratto', onClick: () => handleResendContract(booking), visible: hasContract },
+                            { label: generatingInvoice ? 'Generazione...' : 'Genera Fattura', onClick: () => handleGenerateInvoice(booking), disabled: generatingInvoice },
+                          ],
+                        },
+                        {
+                          title: 'Pagamenti',
+                          actions: [
+                            {
+                              label: booking.booking_details?.nexi_payment_link ? 'Rinvia Link Pagamento' : 'Genera Link Pagamento',
+                              onClick: () => handleResendPaymentLink(booking),
+                              visible: !isPaid && isNexiPayByLink(booking.payment_method),
+                            },
+                          ],
+                        },
+                        {
+                          title: 'Altro',
+                          actions: [
+                            {
+                              label: booking.booking_details?.auto_pronta_sent_at ? '✓ Auto Pronta inviata' : 'Auto Pronta',
+                              onClick: () => handleAutoPronta(booking),
+                              disabled: autoProntaSending || !!booking.booking_details?.auto_pronta_sent_at,
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                              visible: booking.status !== 'cancelled' && !['car_wash', 'mechanical'].includes(String((booking as any).service_type || '').toLowerCase()),
+                            },
+                            { label: 'Danni & Penali', onClick: () => { setSelectedBookingForDanniPenali(booking); setDanniPenaliInitialTab('danni'); setDanniPenaliModalOpen(true) } },
+                          ],
+                        },
+                      ]
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      const svcMd = String((booking as any).service_type || '').toLowerCase()
+                      const showAutoProntaMd = booking.status !== 'cancelled' && !['car_wash', 'mechanical'].includes(svcMd)
+                      const autoProntaDoneMd = !!booking.booking_details?.auto_pronta_sent_at
+                      return (
+                        <div className="flex items-center gap-2">
+                          {showAutoProntaMd && (
+                            <button
+                              onClick={() => handleAutoPronta(booking)}
+                              disabled={autoProntaSending || autoProntaDoneMd}
+                              title="Notifica WhatsApp al cliente: veicolo pronto al ritiro"
+                              className={`px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors disabled:opacity-60 ${
+                                autoProntaDoneMd
+                                  ? 'bg-green-600/20 text-green-700 dark:text-green-400 cursor-default'
+                                  : 'bg-green-600 hover:bg-green-700 text-white'
+                              }`}
+                            >
+                              {autoProntaDoneMd ? '✓ Pronta' : 'Auto Pronta'}
+                            </button>
+                          )}
+                          <GestisciMenu sections={sections} size="md" />
+                        </div>
+                      )
+                    })()}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden lg:block rounded-lg overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-visible custom-scrollbar">
+              <table className="table-auto">
+                <thead className="sticky top-0 z-10">
+                  <tr>
+                    <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Nome</th>
+                    <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap w-px">Stato</th>
+                    <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Telefono</th>
+                    <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap w-full">Car</th>
+                    <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Data Inizio</th>
+                    <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Data Fine</th>
+                    <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Pagamento</th>
+                    <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Totale</th>
+                    <th className="px-2 py-2.5 text-right text-sm font-semibold text-theme-text-secondary whitespace-nowrap w-px">Azioni</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Display bookings from bookings table (single source of truth) */}
+                  {bookingsVisibili.map((booking) => {
+                    const isCarWash = booking.service_type === 'car_wash'
+                    const isCancelled = booking.status === 'cancelled' || booking.status === 'annullata'
+                    const isCourtesy = booking.booking_details?.is_courtesy_block === true
+                    return (
+                      <tr
+                        key={`booking-${booking.id}`}
+                        className={`border-t border-theme-border cursor-pointer ${
+                          isCancelled
+                            ? 'bg-red-500/10 hover:bg-red-500/15 text-red-300'
+                            : 'hover:bg-theme-bg-tertiary/30'
+                        }`}
+                        title={isCancelled ? 'Prenotazione annullata' : undefined}
+                        onClick={() => setSelectedBooking(booking)}
+                      >
+                        <td className="px-2 py-2 text-sm text-theme-text-primary max-w-[220px]" title={booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}>
+                          <span className="block truncate">{booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}</span>
+                        </td>
+                        <td className="px-2 py-2 text-sm whitespace-nowrap w-px">
+                          <ClientStatusBadge
+                            userId={booking.user_id}
+                            email={booking.customer_email || booking.booking_details?.customer?.email}
+                          />
+                        </td>
+                        <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
+                          {booking.customer_phone || booking.booking_details?.customer?.phone || '-'}
+                        </td>
+                        <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap w-full">
+                          {isCarWash ? (
+                            <span className="flex items-center gap-2">
+                              <span>{booking.service_name || 'Autolavaggio'}</span>
+                            </span>
+                          ) : (
+                            <div className="flex flex-col">
+                              <span className="flex items-center gap-2">
+                                <span>{booking.vehicle_name}</span>
+                                {isCourtesy && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30">
+                                    Cortesia
+                                  </span>
+                                )}
+                              </span>
+                              {booking.vehicle_plate && (
+                                <span className="text-xs text-theme-text-muted">Targa: {booking.vehicle_plate}</span>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
+                          {(() => {
+                            // 2026-08-25: data e ora su due righe -- la colonna
+                            // occupava ~140px in linea e spingeva "Azioni" fuori
+                            // dallo schermo (bottone Gestisci tagliato).
+                            if (isCarWash) {
+                              if (!booking.appointment_date) return '-'
+                              return (
+                                <div className="flex flex-col leading-tight">
+                                  <span>{new Date(booking.appointment_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })}</span>
+                                  {booking.appointment_time && <span className="text-xs text-theme-text-muted">{booking.appointment_time}</span>}
+                                </div>
+                              )
+                            }
+                            if (!booking.pickup_date) return '-'
+                            const d = new Date(typeof booking.pickup_date === 'number' ? booking.pickup_date * 1000 : booking.pickup_date)
                             return (
                               <div className="flex flex-col leading-tight">
-                                <span>{new Date(booking.appointment_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })}</span>
-                                {booking.appointment_time && <span className="text-xs text-theme-text-muted">{booking.appointment_time}</span>}
+                                <span>{d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })}</span>
+                                <span className="text-xs text-theme-text-muted">{d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome', hour12: false })}</span>
                               </div>
                             )
-                          }
-                          if (!booking.pickup_date) return '-'
-                          const d = new Date(typeof booking.pickup_date === 'number' ? booking.pickup_date * 1000 : booking.pickup_date)
-                          return (
-                            <div className="flex flex-col leading-tight">
-                              <span>{d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })}</span>
-                              <span className="text-xs text-theme-text-muted">{d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome', hour12: false })}</span>
-                            </div>
-                          )
-                        })()}
-                      </td>
-                      <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
-                        {(() => {
-                          if (isCarWash) {
-                            if (!booking.appointment_date || !booking.appointment_time) return '-'
+                          })()}
+                        </td>
+                        <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
+                          {(() => {
+                            if (isCarWash) {
+                              if (!booking.appointment_date || !booking.appointment_time) return '-'
+                              return (
+                                <div className="flex flex-col leading-tight">
+                                  <span>{new Date(booking.appointment_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })}</span>
+                                  <span className="text-xs text-theme-text-muted">{calculateCarWashEndTime(booking.appointment_date, booking.appointment_time, booking.price_total)}</span>
+                                </div>
+                              )
+                            }
+                            if (!booking.dropoff_date) return '-'
+                            const d = new Date(typeof booking.dropoff_date === 'number' ? booking.dropoff_date * 1000 : booking.dropoff_date)
                             return (
                               <div className="flex flex-col leading-tight">
-                                <span>{new Date(booking.appointment_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })}</span>
-                                <span className="text-xs text-theme-text-muted">{calculateCarWashEndTime(booking.appointment_date, booking.appointment_time, booking.price_total)}</span>
+                                <span>{d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })}</span>
+                                <span className="text-xs text-theme-text-muted">{d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome', hour12: false })}</span>
                               </div>
                             )
-                          }
-                          if (!booking.dropoff_date) return '-'
-                          const d = new Date(typeof booking.dropoff_date === 'number' ? booking.dropoff_date * 1000 : booking.dropoff_date)
-                          return (
-                            <div className="flex flex-col leading-tight">
-                              <span>{d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })}</span>
-                              <span className="text-xs text-theme-text-muted">{d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome', hour12: false })}</span>
-                            </div>
-                          )
-                        })()}
-                      </td>
-                      <td className="px-2 py-2 text-sm whitespace-nowrap">
-                        {isCourtesy ? (
-                          <span className="px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap bg-sky-500/20 text-sky-300 border border-sky-500/40">
-                            AUTO DI CORTESIA
-                          </span>
-                        ) : (
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' ||
-                          booking.payment_status === 'paid' ||
-                          booking.payment_status === 'succeeded' ||
-                          (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
-                          ? 'bg-green-900 text-green-300'
-                          : booking.payment_status === 'partial'
-                          ? 'bg-amber-900 text-amber-300'
-                          : 'bg-red-900 text-red-300'
-                          }`}>
-                          {booking.payment_status === 'completed' ||
+                          })()}
+                        </td>
+                        <td className="px-2 py-2 text-sm whitespace-nowrap">
+                          {isCourtesy ? (
+                            <span className="px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap bg-sky-500/20 text-sky-300 border border-sky-500/40">
+                              AUTO DI CORTESIA
+                            </span>
+                          ) : (
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${booking.payment_status === 'completed' ||
                             booking.payment_status === 'paid' ||
                             booking.payment_status === 'succeeded' ||
                             (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
-                            ? 'Pagato'
+                            ? 'bg-green-900 text-green-300'
                             : booking.payment_status === 'partial'
-                            ? `Parziale €${((booking.amount_paid || 0) / 100).toFixed(0)}`
-                            : 'Non Pagato'}
-                        </span>
-                        )}
-                      </td>
-                      <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
-                        {canViewFinancials || userEmail === 'dubai.rent7.0srl@gmail.com' ? `€${(booking.price_total / 100).toFixed(2)}` : '***'}
-                      </td>
-                      <td className="px-2 py-2 text-sm w-px whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        {(() => {
-                          const isPaid = booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded'
-                          const sections: GestisciSection[] = [
-                            {
-                              title: 'Gestione',
-                              actions: [
-                                { label: 'Modifica', onClick: () => handleEditBooking(booking), visible: booking.status !== 'cancelled' },
-                                { label: 'Estendi', onClick: () => handleExtendBooking(booking), visible: booking.status !== 'cancelled' && !isCarWash },
-                                { label: 'Cancella', onClick: () => handleDeleteBooking(booking.id, 'booking'), visible: booking.status !== 'cancelled' },
-                              ],
-                            },
-                            {
-                              title: 'Documenti',
-                              actions: [
-                                {
-                                  label: booking.contract_url ? 'Visualizza Contratto' : (generatingContract ? 'Generazione...' : 'Genera Contratto'),
-                                  onClick: () => { if (booking.contract_url) { window.open(booking.contract_url, '_blank') } else { handleGenerateContract(booking) } },
-                                  disabled: !booking.contract_url && generatingContract,
-                                  visible: booking.status !== 'cancelled',
-                                },
-                                {
-                                  label: 'Invia Contratto',
-                                  onClick: () => handleResendContract(booking),
-                                  visible: booking.status !== 'cancelled' && !!booking.contract_url,
-                                },
-                                {
-                                  label: generatingInvoice ? 'Generazione...' : 'Genera Fattura',
-                                  onClick: () => handleGenerateInvoice(booking),
-                                  disabled: generatingInvoice,
-                                  visible: booking.status !== 'cancelled',
-                                },
-                              ],
-                            },
-                            {
-                              title: 'Pagamenti',
-                              actions: [
-                                {
-                                  label: booking.booking_details?.nexi_payment_link ? 'Rinvia Link Pagamento' : 'Genera Link Pagamento',
-                                  onClick: () => handleResendPaymentLink(booking),
-                                  visible: booking.status !== 'cancelled' && !isPaid && isNexiPayByLink(booking.payment_method),
-                                },
-                              ],
-                            },
-                            {
-                              title: 'Altro',
-                              actions: [
-                                {
-                                  label: booking.booking_details?.auto_pronta_sent_at ? '✓ Auto Pronta inviata' : 'Auto Pronta',
-                                  onClick: () => handleAutoPronta(booking),
-                                  disabled: autoProntaSending || !!booking.booking_details?.auto_pronta_sent_at,
-                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                  visible: booking.status !== 'cancelled' && !['car_wash', 'mechanical'].includes(String((booking as any).service_type || '').toLowerCase()),
-                                },
-                                {
-                                  label: 'Danni & Penali',
-                                  onClick: () => { setSelectedBookingForDanniPenali(booking); setDanniPenaliInitialTab('danni'); setDanniPenaliModalOpen(true) },
-                                },
-                              ],
-                            },
-                          ]
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          const svc = String((booking as any).service_type || '').toLowerCase()
-                          const showAutoPronta = booking.status !== 'cancelled' && !['car_wash', 'mechanical'].includes(svc)
-                          const autoProntaDone = !!booking.booking_details?.auto_pronta_sent_at
-                          return (
-                            <div className="flex items-center justify-end gap-1.5">
-                              {showAutoPronta && (
-                                <button
-                                  onClick={() => handleAutoPronta(booking)}
-                                  disabled={autoProntaSending || autoProntaDone}
-                                  title="Notifica WhatsApp al cliente: veicolo pronto al ritiro"
-                                  className={`px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors disabled:opacity-60 ${
-                                    autoProntaDone
-                                      ? 'bg-green-600/20 text-green-700 dark:text-green-400 cursor-default'
-                                      : 'bg-green-600 hover:bg-green-700 text-white'
-                                  }`}
-                                >
-                                  {autoProntaDone ? '✓ Pronta' : 'Pronta'}
-                                </button>
-                              )}
-                              <GestisciMenu sections={sections} size="sm" />
-                            </div>
-                          )
-                        })()}
-                      </td>
-                    </tr>
-                  )
-                })}
+                            ? 'bg-amber-900 text-amber-300'
+                            : 'bg-red-900 text-red-300'
+                            }`}>
+                            {booking.payment_status === 'completed' ||
+                              booking.payment_status === 'paid' ||
+                              booking.payment_status === 'succeeded' ||
+                              (booking.booking_details?.amountPaid && booking.booking_details.amountPaid >= booking.price_total)
+                              ? 'Pagato'
+                              : booking.payment_status === 'partial'
+                              ? `Parziale €${((booking.amount_paid || 0) / 100).toFixed(0)}`
+                              : 'Non Pagato'}
+                          </span>
+                          )}
+                        </td>
+                        <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
+                          {canViewFinancials || userEmail === 'dubai.rent7.0srl@gmail.com' ? `€${(booking.price_total / 100).toFixed(2)}` : '***'}
+                        </td>
+                        <td className="px-2 py-2 text-sm w-px whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          {(() => {
+                            const isPaid = booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded'
+                            const sections: GestisciSection[] = [
+                              {
+                                title: 'Gestione',
+                                actions: [
+                                  { label: 'Modifica', onClick: () => handleEditBooking(booking), visible: booking.status !== 'cancelled' },
+                                  { label: 'Estendi', onClick: () => handleExtendBooking(booking), visible: booking.status !== 'cancelled' && !isCarWash },
+                                  { label: 'Cancella', onClick: () => handleDeleteBooking(booking.id, 'booking'), visible: booking.status !== 'cancelled' },
+                                ],
+                              },
+                              {
+                                title: 'Documenti',
+                                actions: [
+                                  {
+                                    label: booking.contract_url ? 'Visualizza Contratto' : (generatingContract ? 'Generazione...' : 'Genera Contratto'),
+                                    onClick: () => { if (booking.contract_url) { window.open(booking.contract_url, '_blank') } else { handleGenerateContract(booking) } },
+                                    disabled: !booking.contract_url && generatingContract,
+                                    visible: booking.status !== 'cancelled',
+                                  },
+                                  {
+                                    label: 'Invia Contratto',
+                                    onClick: () => handleResendContract(booking),
+                                    visible: booking.status !== 'cancelled' && !!booking.contract_url,
+                                  },
+                                  {
+                                    label: generatingInvoice ? 'Generazione...' : 'Genera Fattura',
+                                    onClick: () => handleGenerateInvoice(booking),
+                                    disabled: generatingInvoice,
+                                    visible: booking.status !== 'cancelled',
+                                  },
+                                ],
+                              },
+                              {
+                                title: 'Pagamenti',
+                                actions: [
+                                  {
+                                    label: booking.booking_details?.nexi_payment_link ? 'Rinvia Link Pagamento' : 'Genera Link Pagamento',
+                                    onClick: () => handleResendPaymentLink(booking),
+                                    visible: booking.status !== 'cancelled' && !isPaid && isNexiPayByLink(booking.payment_method),
+                                  },
+                                ],
+                              },
+                              {
+                                title: 'Altro',
+                                actions: [
+                                  {
+                                    label: booking.booking_details?.auto_pronta_sent_at ? '✓ Auto Pronta inviata' : 'Auto Pronta',
+                                    onClick: () => handleAutoPronta(booking),
+                                    disabled: autoProntaSending || !!booking.booking_details?.auto_pronta_sent_at,
+                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                    visible: booking.status !== 'cancelled' && !['car_wash', 'mechanical'].includes(String((booking as any).service_type || '').toLowerCase()),
+                                  },
+                                  {
+                                    label: 'Danni & Penali',
+                                    onClick: () => { setSelectedBookingForDanniPenali(booking); setDanniPenaliInitialTab('danni'); setDanniPenaliModalOpen(true) },
+                                  },
+                                ],
+                              },
+                            ]
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const svc = String((booking as any).service_type || '').toLowerCase()
+                            const showAutoPronta = booking.status !== 'cancelled' && !['car_wash', 'mechanical'].includes(svc)
+                            const autoProntaDone = !!booking.booking_details?.auto_pronta_sent_at
+                            return (
+                              <div className="flex items-center justify-end gap-1.5">
+                                {showAutoPronta && (
+                                  <button
+                                    onClick={() => handleAutoPronta(booking)}
+                                    disabled={autoProntaSending || autoProntaDone}
+                                    title="Notifica WhatsApp al cliente: veicolo pronto al ritiro"
+                                    className={`px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors disabled:opacity-60 ${
+                                      autoProntaDone
+                                        ? 'bg-green-600/20 text-green-700 dark:text-green-400 cursor-default'
+                                        : 'bg-green-600 hover:bg-green-700 text-white'
+                                    }`}
+                                  >
+                                    {autoProntaDone ? '✓ Pronta' : 'Pronta'}
+                                  </button>
+                                )}
+                                <GestisciMenu sections={sections} size="sm" />
+                              </div>
+                            )
+                          })()}
+                        </td>
+                      </tr>
+                    )
+                  })}
 
-                {bookings.filter(booking => {
-                  // 2026-06-01: filtro periodo prima della ricerca testuale.
-                  if (!bookingPassesDate(booking)) return false
-                  // Search filter
-                  if (!bookingSearchQuery) return true
-                  const words = bookingSearchQuery.toLowerCase().split(/\s+/).filter(Boolean)
-                  const cust = booking.booking_details?.customer || {}
-                  const nameParts = [
-                    cust.fullName, cust.full_name, cust.name,
-                    cust.first_name, cust.last_name,
-                    cust.firstName, cust.lastName,
-                    cust.nome, cust.cognome,
-                    booking.customer_name,
-                  ].filter(Boolean).join(' ')
-                  const customerName = nameParts.toLowerCase()
-                  const customerEmail = (booking.customer_email || cust.email || '').toLowerCase()
-                  const customerPhone = (booking.customer_phone || cust.phone || cust.telefono || '').toLowerCase()
-                  const vehicleName = (booking.vehicle_name || '').toLowerCase()
-                  const vehiclePlate = (booking.vehicle_plate || '').toLowerCase()
-                  const bookingId = String(booking.id || '').toLowerCase()
-                  const bookingCode = bookingId.substring(0, 8)
-                  const norm = (s: string) => s.replace(/[\s\-\+\(\)]/g, '')
-                  const normalisedWords = words.map(norm)
-                  const searchText = norm(`${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7${bookingCode}`)
-                  return normalisedWords.every(word => searchText.includes(word))
-                }).length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-theme-text-muted">
-                        {bookingSearchQuery ? `Nessuna prenotazione trovata per "${bookingSearchQuery}"` : 'Nessuna prenotazione trovata'}
-                      </td>
-                    </tr>
-                  )}
-              </tbody>
-            </table>
+                  {bookingsVisibili.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="px-4 py-8 text-center text-theme-text-muted">
+                          {bookingSearchQuery ? `Nessuna prenotazione trovata per "${bookingSearchQuery}"` : 'Nessuna prenotazione trovata'}
+                        </td>
+                      </tr>
+                    )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+
+          </>
+        )}
 
         {/* Detail Modal - Mobile Optimized */}
         {selectedBooking && (
