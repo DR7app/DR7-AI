@@ -4,6 +4,7 @@ import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import Button from './Button'
 import OperatorProfileModal from './OperatorProfileModal'
+import { preparaAvatarJpeg, AvatarError, AVATAR_ACCEPT } from '../../../utils/avatarImage'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import {
     fetchPauseConfigOperatore,
@@ -81,19 +82,20 @@ function avatarTone(seed: string): string {
  * the parent can refresh.
  */
 async function uploadOperatoreAvatar(operatorId: string, file: File): Promise<string | null> {
-    if (!file.type.startsWith('image/')) {
-        toast.error('Carica un\'immagine (jpg, png, webp).')
+    // La foto viene ri-codificata in JPEG dal browser: vedi utils/avatarImage.
+    // Prima si caricava il file cosi' com'era e le foto iPhone (HEIC, o
+    // iCloud non ancora scaricate) fallivano con "no content provided".
+    let jpeg: Blob
+    try {
+        jpeg = await preparaAvatarJpeg(file)
+    } catch (err) {
+        toast.error(err instanceof AvatarError ? err.message : 'Foto non caricabile: riprova con un JPG.', { duration: 10000 })
         return null
     }
-    if (file.size > 2 * 1024 * 1024) {
-        toast.error('File troppo grande (max 2 MB).')
-        return null
-    }
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-    const path = `${operatorId}/${Date.now()}.${ext}`
+    const path = `${operatorId}/${Date.now()}.jpg`
     const { error: upErr } = await supabase.storage
         .from('operator-avatars')
-        .upload(path, file, { upsert: true, contentType: file.type })
+        .upload(path, jpeg, { upsert: true, contentType: 'image/jpeg' })
     if (upErr) {
         toast.error('Upload fallito: ' + upErr.message)
         return null
@@ -1042,7 +1044,7 @@ function DailyOperatorDetail({
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth={2} strokeLinecap="round" d="M3 9a2 2 0 012-2h2.5L9 5h6l1.5 2H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13" r="3" strokeWidth={2}/></svg>
                         <input
                             type="file"
-                            accept="image/png,image/jpeg,image/webp,image/gif"
+                            accept={AVATAR_ACCEPT}
                             className="hidden"
                             onChange={async (e) => {
                                 const file = e.target.files?.[0]
@@ -1448,7 +1450,7 @@ function AddOperatoreModal({ onClose, onSaved }: { onClose: () => void; onSaved:
                             {avatarFile ? 'Cambia foto' : 'Carica foto'}
                             <input
                                 type="file"
-                                accept="image/png,image/jpeg,image/webp,image/gif"
+                                accept={AVATAR_ACCEPT}
                                 className="hidden"
                                 onChange={e => handleAvatarPick(e.target.files?.[0] || null)}
                             />

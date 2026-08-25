@@ -14,6 +14,7 @@ import { useFatturaScartataCount } from '../../hooks/useFatturaScartataCount'
 import PlaceholderTab from './components/PlaceholderTab'
 import { useAdminRole } from '../../hooks/useAdminRole'
 import { clearAdminCache } from '../../utils/logAdminAction'
+import { preparaAvatarJpeg, AvatarError, AVATAR_ACCEPT } from '../../utils/avatarImage'
 import lazyWithRetry from '../../utils/lazyWithRetry'
 import SedePicker from '../../components/SedePicker'
 
@@ -272,8 +273,17 @@ export default function AdminDashboard() {
     const file = e.target.files?.[0]
     e.target.value = '' // stesso file due volte di fila: senza reset il change non riparte
     if (!file) return
-    if (!file.type.startsWith('image/')) { toast.error('Carica un\'immagine (jpg, png, webp).'); return }
-    if (file.size > 2 * 1024 * 1024) { toast.error('File troppo grande (max 2 MB).'); return }
+
+    // La foto viene ri-codificata in JPEG dal browser: vedi utils/avatarImage.
+    // Prima si caricava il file cosi' com'era e le foto iPhone (HEIC, o
+    // iCloud non ancora scaricate) fallivano con "no content provided".
+    let jpeg: Blob
+    try {
+      jpeg = await preparaAvatarJpeg(file)
+    } catch (err) {
+      toast.error(err instanceof AvatarError ? err.message : 'Foto non caricabile: riprova con un JPG.', { duration: 10000 })
+      return
+    }
 
     setAvatarSaving(true)
     try {
@@ -294,11 +304,10 @@ export default function AdminDashboard() {
         return
       }
 
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-      const path = `${opRow.id}/${Date.now()}.${ext}`
+      const path = `${opRow.id}/${Date.now()}.jpg`
       const { error: upErr } = await supabase.storage
         .from('operator-avatars')
-        .upload(path, file, { upsert: true, contentType: file.type })
+        .upload(path, jpeg, { upsert: true, contentType: 'image/jpeg' })
       if (upErr) { toast.error('Upload fallito: ' + upErr.message); return }
 
       const { data: pub } = supabase.storage.from('operator-avatars').getPublicUrl(path)
@@ -1083,7 +1092,7 @@ export default function AdminDashboard() {
                       <input
                         ref={avatarInputRef}
                         type="file"
-                        accept="image/*"
+                        accept={AVATAR_ACCEPT}
                         className="hidden"
                         onChange={handleAvatarFile}
                       />
