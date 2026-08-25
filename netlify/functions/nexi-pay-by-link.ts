@@ -16,7 +16,7 @@ const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1';
  * EXPIRATION RULES:
  * - Default for bookings: 1 hour (expirationHours=1)
  * - Configurable via expirationHours or expirationDays
- * - Nexi receives the EXACT expiration datetime (yyyy-MM-dd HH:mm:ss.0)
+ * - Nexi riceve la sola DATA di scadenza (yyyy-MM-dd), in paymentSession
  * - Rentora stores payment_link_sent_at and payment_link_expires_at (UTC ISO)
  * - The cancel job + callback both validate against payment_link_expires_at
  */
@@ -70,7 +70,7 @@ const handler: Handler = async (event) => {
         }
 
         // ─── Nexi expiration format ─────────────────────────────────────
-        // Nexi v2 paybylink accepts: "yyyy-MM-dd HH:mm:ss.0"
+        // Nexi v2 paybylink accetta la sola data: "yyyy-MM-dd"
         // Must be in Europe/Rome timezone for Nexi's interpretation
         // Nexi date-level expiry: must be at least tomorrow
         // Server-side callback enforces the actual 1-hour expiry
@@ -124,7 +124,17 @@ const handler: Handler = async (event) => {
                     contractType: 'MIT_UNSCHEDULED',
                 },
             },
-            expirationDate: nexiExpirationStr
+            // 25/08/2026: NIENTE `expirationDate` in fondo al payload.
+            // Lo schema documentato di POST /v2/orders/paybylink ha solo
+            // `order` e `paymentSession` alla radice: la data di scadenza vive
+            // dentro paymentSession (sopra), e basta. Il duplicato in radice
+            // era un campo fuori schema, e Nexi rispondeva 400 su un campo che
+            // noi non mandiamo affatto:
+            //   ERROR DURING PARSE FIELD creationTime VALUE 2026-08-25 08:39:03.6
+            //   - DATE DOES NOT RESPECT ANY SUPPORTED FORMAT: [2026-08-24 ...]
+            // cioe' il loro parser istanziava l'entita' PayByLink di radice e
+            // si rompeva sul `creationTime` che ci mette lui, con l'ora dentro,
+            // mentre il formato ammesso e' la sola data.
         };
 
         console.log('[nexi-pay-by-link] Payload:', JSON.stringify(payload));
@@ -154,10 +164,17 @@ const handler: Handler = async (event) => {
         }
 
         if (!response.ok) {
-            console.error('[nexi-pay-by-link] Nexi error:', responseData);
+            // Il corpo grezzo va nei log: `errors[0].description` da solo
+            // nasconde il campo che Nexi ha rifiutato, e senza quello un 400
+            // e' impossibile da diagnosticare a posteriori.
+            console.error('[nexi-pay-by-link] Nexi error:', response.status, JSON.stringify(responseData), 'correlationId:', correlationId, 'payload:', JSON.stringify(payload));
             return {
                 statusCode: response.status, headers,
-                body: JSON.stringify({ error: responseData.errors?.[0]?.description || 'Failed to create payment link' })
+                body: JSON.stringify({
+                    error: responseData.errors?.[0]?.description || 'Failed to create payment link',
+                    nexiCode: responseData.errors?.[0]?.code || null,
+                    correlationId,
+                })
             };
         }
 
