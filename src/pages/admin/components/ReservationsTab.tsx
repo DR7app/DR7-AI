@@ -4,6 +4,7 @@ import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/special
 import { isWithinOfficeHoursForDate, getOfficeMinuteRangesForDate } from '../../../utils/noleggioHours'
 import { supabase } from '../../../supabaseClient'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
+import { decidiAzioneContratto, type ContrattoAzione } from '../../../utils/contrattoModifiche'
 import { isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
 import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
 import {
@@ -1169,6 +1170,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     pickup:           !!a?.coefficient_pickup,
   })
   const [coeffFlags, setCoeffFlags] = useState<CoeffFlags>(buildCoeffFlags(undefined))
+  // Regole "modifica su contratto gia' firmato": rifirma o riconduzione, voce
+  // per voce. Scritte da Centralina Pro > Contratto & Modifiche. Fino al
+  // 2026-08-25 questa config veniva salvata ma NON letta da nessuno: ogni
+  // modifica riconduceva, anche il cambio veicolo impostato su "Rifirma".
+  const [contrattoRegole, setContrattoRegole] = useState<Record<string, ContrattoAzione> | null>(null)
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -1178,17 +1184,19 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         .eq('id', 'main')
         .maybeSingle()
       if (cancelled) return
-      const cfg = (data?.config as { deposits?: Record<string, unknown>; automations?: ProAutomations } | undefined) || {}
+      const cfg = (data?.config as { deposits?: Record<string, unknown>; automations?: ProAutomations; contratto_modifica?: Record<string, ContrattoAzione> } | undefined) || {}
       setProDeposits(cfg.deposits || null)
       setCoeffFlags(buildCoeffFlags(cfg.automations))
+      setContrattoRegole(cfg.contratto_modifica || null)
     })()
     const channel = supabase
       .channel('reservations-deposits')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config', filter: 'id=eq.main' }, (payload) => {
-        const cfg = (payload.new as { config?: { deposits?: Record<string, unknown>; automations?: ProAutomations } } | undefined)?.config
+        const cfg = (payload.new as { config?: { deposits?: Record<string, unknown>; automations?: ProAutomations; contratto_modifica?: Record<string, ContrattoAzione> } } | undefined)?.config
         if (cfg && typeof cfg === 'object') {
           setProDeposits(cfg.deposits || null)
           setCoeffFlags(buildCoeffFlags(cfg.automations))
+          setContrattoRegole(cfg.contratto_modifica || null)
         }
       })
       .subscribe()
@@ -7366,9 +7374,27 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       // (firma originale ristampata sulle nuove condizioni + invio WhatsApp del
       // contratto firmato) e il link di firma NON parte. Se non c'è nessuna firma
       // precedente, reconduct è inerte e resta il flusso normale (link di firma).
+      //
+      // 2026-08-25 FIX (direzione): la riconduzione NON e' piu' automatica su
+      // ogni modifica. Centralina Pro > Contratto & Modifiche decide voce per
+      // voce (veicolo, guidatore, garanti, assicurazioni... = Rifirma per
+      // default). Quella config veniva salvata ma non la leggeva nessuno:
+      // cambiando la VETTURA il cliente riceveva il contratto gia' firmato per
+      // un mezzo che non aveva mai accettato. Ora confrontiamo lo snapshot del
+      // form con i valori al Salva: se anche UNA sola voce toccata e' impostata
+      // su Rifirma, niente riconduzione → parte un nuovo link di firma.
+      const azioneContratto = editingId
+        ? decidiAzioneContratto(editFormSnapshotRef.current as Record<string, unknown> | null, formData, contrattoRegole)
+        : { voci: [], vociRifirma: [], rifirma: false }
+      const reconductThisSave = !!editingId && !azioneContratto.rifirma
+      if (editingId) {
+        logger.log('[Contratto] voci modificate:', azioneContratto.voci,
+          '| che impongono la rifirma:', azioneContratto.vociRifirma,
+          '→', reconductThisSave ? 'RICONDOTTO' : 'RIFIRMA')
+      }
       let contractReconducted = false
       try {
-        const genRes = await handleGenerateContract(insertedBooking, false, { reconduct: !!editingId })
+        const genRes = await handleGenerateContract(insertedBooking, false, { reconduct: reconductThisSave })
         contractReconducted = !!genRes?.reconducted
         logger.log('[Auto-Gen] ✅ Contract generated successfully', contractReconducted ? '(ricondotto — nessuna nuova firma)' : '')
       } catch (err) {
@@ -10982,9 +11008,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               <thead className="sticky top-0 z-10">
                 <tr>
                   <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Nome</th>
-                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Stato</th>
+                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap w-px">Stato</th>
                   <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Telefono</th>
-                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Car</th>
+                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap w-full">Car</th>
                   <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Data Inizio</th>
                   <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Data Fine</th>
                   <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Pagamento</th>
@@ -11034,10 +11060,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       title={isCancelled ? 'Prenotazione annullata' : undefined}
                       onClick={() => setSelectedBooking(booking)}
                     >
-                      <td className="px-2 py-2 text-sm text-theme-text-primary max-w-[160px]" title={booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}>
+                      <td className="px-2 py-2 text-sm text-theme-text-primary max-w-[220px]" title={booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}>
                         <span className="block truncate">{booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}</span>
                       </td>
-                      <td className="px-2 py-2 text-sm whitespace-nowrap">
+                      <td className="px-2 py-2 text-sm whitespace-nowrap w-px">
                         <ClientStatusBadge
                           userId={booking.user_id}
                           email={booking.customer_email || booking.booking_details?.customer?.email}
@@ -11046,7 +11072,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
                         {booking.customer_phone || booking.booking_details?.customer?.phone || '-'}
                       </td>
-                      <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
+                      <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap w-full">
                         {isCarWash ? (
                           <span className="flex items-center gap-2">
                             <span>{booking.service_name || 'Autolavaggio'}</span>
