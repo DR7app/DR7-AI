@@ -10978,18 +10978,18 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         {/* Desktop Table View */}
         <div className="hidden lg:block rounded-lg overflow-x-auto">
           <div className="overflow-x-auto overflow-y-visible custom-scrollbar">
-            <table className="w-full min-w-max">
+            <table className="w-full table-auto">
               <thead className="sticky top-0 z-10">
                 <tr>
-                  <th className="px-3 py-3 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Nome</th>
-                  <th className="px-3 py-3 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Stato</th>
-                  <th className="px-3 py-3 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Telefono</th>
-                  <th className="px-3 py-3 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Car</th>
-                  <th className="px-3 py-3 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Data Inizio</th>
-                  <th className="px-3 py-3 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Data Fine</th>
-                  <th className="px-3 py-3 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Pagamento</th>
-                  <th className="px-3 py-3 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Totale</th>
-                  <th className="px-3 py-3 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Azioni</th>
+                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Nome</th>
+                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Stato</th>
+                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Telefono</th>
+                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Car</th>
+                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Data Inizio</th>
+                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Data Fine</th>
+                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Pagamento</th>
+                  <th className="px-2 py-2.5 text-left text-sm font-semibold text-theme-text-secondary whitespace-nowrap">Totale</th>
+                  <th className="px-2 py-2.5 text-right text-sm font-semibold text-theme-text-secondary whitespace-nowrap w-px">Azioni</th>
                 </tr>
               </thead>
               <tbody>
@@ -11034,19 +11034,19 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       title={isCancelled ? 'Prenotazione annullata' : undefined}
                       onClick={() => setSelectedBooking(booking)}
                     >
-                      <td className="px-3 py-3 text-sm text-theme-text-primary max-w-[180px]" title={booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}>
-                        <span className="truncate">{booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}</span>
+                      <td className="px-2 py-2 text-sm text-theme-text-primary max-w-[160px]" title={booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}>
+                        <span className="block truncate">{booking.booking_details?.customer?.fullName || booking.customer_name || 'N/A'}</span>
                       </td>
-                      <td className="px-3 py-3 text-sm whitespace-nowrap">
+                      <td className="px-2 py-2 text-sm whitespace-nowrap">
                         <ClientStatusBadge
                           userId={booking.user_id}
                           email={booking.customer_email || booking.booking_details?.customer?.email}
                         />
                       </td>
-                      <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
+                      <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
                         {booking.customer_phone || booking.booking_details?.customer?.phone || '-'}
                       </td>
-                      <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
+                      <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
                         {isCarWash ? (
                           <span className="flex items-center gap-2">
                             <span>{booking.service_name || 'Autolavaggio'}</span>
@@ -11067,21 +11067,52 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                           </div>
                         )}
                       </td>
-                      <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
-                        {isCarWash
-                          ? (booking.appointment_date ? `${new Date(booking.appointment_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })} ${booking.appointment_time || ''}` : '-')
-                          : (booking.pickup_date ? new Date(typeof booking.pickup_date === 'number' ? booking.pickup_date * 1000 : booking.pickup_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome', hour12: false }) : '-')
-                        }
+                      <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
+                        {(() => {
+                          // 2026-08-25: data e ora su due righe -- la colonna
+                          // occupava ~140px in linea e spingeva "Azioni" fuori
+                          // dallo schermo (bottone Gestisci tagliato).
+                          if (isCarWash) {
+                            if (!booking.appointment_date) return '-'
+                            return (
+                              <div className="flex flex-col leading-tight">
+                                <span>{new Date(booking.appointment_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })}</span>
+                                {booking.appointment_time && <span className="text-xs text-theme-text-muted">{booking.appointment_time}</span>}
+                              </div>
+                            )
+                          }
+                          if (!booking.pickup_date) return '-'
+                          const d = new Date(typeof booking.pickup_date === 'number' ? booking.pickup_date * 1000 : booking.pickup_date)
+                          return (
+                            <div className="flex flex-col leading-tight">
+                              <span>{d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })}</span>
+                              <span className="text-xs text-theme-text-muted">{d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome', hour12: false })}</span>
+                            </div>
+                          )
+                        })()}
                       </td>
-                      <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
-                        {isCarWash
-                          ? (booking.appointment_date && booking.appointment_time
-                            ? `${new Date(booking.appointment_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })} ${calculateCarWashEndTime(booking.appointment_date, booking.appointment_time, booking.price_total)}`
-                            : '-')
-                          : (booking.dropoff_date ? new Date(typeof booking.dropoff_date === 'number' ? booking.dropoff_date * 1000 : booking.dropoff_date).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome', hour12: false }) : '-')
-                        }
+                      <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
+                        {(() => {
+                          if (isCarWash) {
+                            if (!booking.appointment_date || !booking.appointment_time) return '-'
+                            return (
+                              <div className="flex flex-col leading-tight">
+                                <span>{new Date(booking.appointment_date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })}</span>
+                                <span className="text-xs text-theme-text-muted">{calculateCarWashEndTime(booking.appointment_date, booking.appointment_time, booking.price_total)}</span>
+                              </div>
+                            )
+                          }
+                          if (!booking.dropoff_date) return '-'
+                          const d = new Date(typeof booking.dropoff_date === 'number' ? booking.dropoff_date * 1000 : booking.dropoff_date)
+                          return (
+                            <div className="flex flex-col leading-tight">
+                              <span>{d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })}</span>
+                              <span className="text-xs text-theme-text-muted">{d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome', hour12: false })}</span>
+                            </div>
+                          )
+                        })()}
                       </td>
-                      <td className="px-3 py-3 text-sm whitespace-nowrap">
+                      <td className="px-2 py-2 text-sm whitespace-nowrap">
                         {isCourtesy ? (
                           <span className="px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap bg-sky-500/20 text-sky-300 border border-sky-500/40">
                             AUTO DI CORTESIA
@@ -11107,10 +11138,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                         </span>
                         )}
                       </td>
-                      <td className="px-3 py-3 text-sm text-theme-text-primary whitespace-nowrap">
+                      <td className="px-2 py-2 text-sm text-theme-text-primary whitespace-nowrap">
                         {canViewFinancials || userEmail === 'dubai.rent7.0srl@gmail.com' ? `€${(booking.price_total / 100).toFixed(2)}` : '***'}
                       </td>
-                      <td className="px-3 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-2 py-2 text-sm w-px whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         {(() => {
                           const isPaid = booking.payment_status === 'paid' || booking.payment_status === 'completed' || booking.payment_status === 'succeeded'
                           const sections: GestisciSection[] = [
@@ -11176,19 +11207,19 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                           const showAutoPronta = booking.status !== 'cancelled' && !['car_wash', 'mechanical'].includes(svc)
                           const autoProntaDone = !!booking.booking_details?.auto_pronta_sent_at
                           return (
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center justify-end gap-1.5">
                               {showAutoPronta && (
                                 <button
                                   onClick={() => handleAutoPronta(booking)}
                                   disabled={autoProntaSending || autoProntaDone}
                                   title="Notifica WhatsApp al cliente: veicolo pronto al ritiro"
-                                  className={`px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors disabled:opacity-60 ${
+                                  className={`px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors disabled:opacity-60 ${
                                     autoProntaDone
                                       ? 'bg-green-600/20 text-green-700 dark:text-green-400 cursor-default'
                                       : 'bg-green-600 hover:bg-green-700 text-white'
                                   }`}
                                 >
-                                  {autoProntaDone ? '✓ Pronta' : 'Auto Pronta'}
+                                  {autoProntaDone ? '✓ Pronta' : 'Pronta'}
                                 </button>
                               )}
                               <GestisciMenu sections={sections} size="sm" />
