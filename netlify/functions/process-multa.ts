@@ -15,7 +15,6 @@ const PEC_HOST = 'sendm.cert.legalmail.it'
 const PEC_PORT = 465
 const PEC_USER = process.env.PEC_USER || 'Dubai.rent7.0srl@legalmail.it'
 const PEC_PASSWORD = process.env.PEC_PASSWORD || ''
-const PEC_FROM = 'Dubai.rent7.0srl@legalmail.it'
 const PEC_TO_DEFAULT = 'poliziamunicipale@comune.cagliari.legalmail.it'
 
 interface MultaData {
@@ -557,16 +556,54 @@ function formatDateIT(dateStr: string): string {
 
 // ── Send PEC ─────────────────────────────────────────────────────────────────
 
+/**
+ * Password della casella PEC mittente.
+ *
+ * 25/08/2026 — La PEC mittente si cambia da Centralina Pro, ma ogni casella ha
+ * la SUA password: cambiare indirizzo senza cambiare credenziali significa
+ * autenticarsi ancora sulla vecchia. La password non sta nella config (la
+ * leggerebbe qualunque admin): sta in `service_secrets`, come il token targa.
+ * Chiave: `pec_password:<indirizzo in minuscolo>`.
+ */
+async function loadPecPassword(mittente: string): Promise<string> {
+    const addr = mittente.trim().toLowerCase()
+    try {
+        const { data } = await supabase
+            .from('service_secrets')
+            .select('value')
+            .eq('key', `pec_password:${addr}`)
+            .maybeSingle()
+        const v = (data as { value?: string } | null)?.value
+        if (v && v.trim()) return v.trim()
+    } catch (e) {
+        console.warn('[process-multa] service_secrets non leggibile:', e instanceof Error ? e.message : e)
+    }
+    // La password d'ambiente vale SOLO per la casella d'ambiente: usarla per un
+    // altro indirizzo produrrebbe un errore di autenticazione incomprensibile.
+    if (addr === PEC_USER.trim().toLowerCase()) return PEC_PASSWORD
+    return ''
+}
+
 async function sendPEC(
     subject: string,
     body: string,
     attachments: Array<{ filename: string; content: Buffer; contentType: string }>,
     pecTo?: string,
     pecPassword?: string,
-    pecCc?: string[]
+    pecCc?: string[],
+    /** Casella mittente scelta in Centralina Pro > Gestione Multe. */
+    pecFrom?: string
 ): Promise<{ messageId: string; accepted: string[]; rejected: string[]; response: string }> {
-    const pass = pecPassword || PEC_PASSWORD
-    if (!pass) throw new Error('Password PEC non configurata. Aggiungi PEC_PASSWORD nelle variabili d\'ambiente Netlify.')
+    // Mittente: quello configurato, altrimenti la casella d'ambiente storica.
+    const from = (pecFrom || '').trim() || PEC_USER
+    const pass = pecPassword || await loadPecPassword(from)
+    if (!pass) {
+        throw new Error(
+            `Password mancante per la casella PEC ${from}. ` +
+            'Ogni casella ha la sua password: aggiungila in service_secrets con chiave ' +
+            `"pec_password:${from.toLowerCase()}" (oppure rimetti la PEC mittente precedente in Centralina Pro > Gestione Multe).`
+        )
+    }
 
     // Regola non negoziabile: nessun destinatario hardcoded. Se il chiamante non
     // passa un destinatario esplicito, l'invio si blocca (mai all'indirizzo
@@ -576,19 +613,21 @@ async function sendPEC(
         throw new Error('Destinatario PEC mancante: invio bloccato (nessun destinatario predefinito).')
     }
 
+    // Login e From devono coincidere: i provider PEC rifiutano un mittente
+    // diverso dalla casella autenticata.
     const transporter = nodemailer.createTransport({
         host: PEC_HOST,
         port: PEC_PORT,
         secure: true, // SSL
         auth: {
-            user: PEC_USER,
+            user: from,
             pass: pass,
         },
     })
 
     const cc = (pecCc || []).map(c => c.trim()).filter(c => /\S+@\S+\.\S+/.test(c))
     const info = await transporter.sendMail({
-        from: PEC_FROM,
+        from,
         to,
         ...(cc.length ? { cc } : {}),
         subject,
@@ -779,13 +818,18 @@ const handler: Handler = async (event) => {
 
                 console.log(`[process-multa] Sending PEC with ${attachments.length} attachments`)
 
+                // La PEC parte DALLA casella scelta in Centralina Pro: prima
+                // quel campo finiva solo stampato nella lettera e l'invio
+                // restava sulla casella scritta nel codice.
+                const cfgPec = await loadMulteConfig()
                 const result = await sendPEC(
                     subject,
                     letterText,
                     attachments,
                     req.pecTo,
                     req.pecPassword,
-                    req.pecCc
+                    req.pecCc,
+                    cfgPec.pec_mittente
                 )
 
                 return {

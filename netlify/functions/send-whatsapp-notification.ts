@@ -1,3 +1,4 @@
+import { getEmailFrom } from './utils/emailFrom';
 import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 import { getMessageTemplate, resolveKeyForContext } from './utils/messageTemplates';
@@ -26,7 +27,9 @@ function wrapAsEmailHtml(plainText: string): string {
 async function sendEmailViaResend(to: string, subject: string, html: string): Promise<{ ok: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return { ok: false, error: 'RESEND_API_KEY missing' };
-  const fromAddress = process.env.RESEND_FROM || 'DR7 <noreply@dr7.app>';
+  // Mittente scelto in Centralina Pro > Gestione PEC & Email (con ripiego
+  // sulla variabile d'ambiente e poi sul valore storico).
+  const fromAddress = await getEmailFrom('DR7 <noreply@dr7.app>');
   try {
     const resp = await fetch('https://api.resend.com/emails', {
       method: 'POST',

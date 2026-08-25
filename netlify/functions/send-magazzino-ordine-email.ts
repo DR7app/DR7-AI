@@ -2,6 +2,7 @@ import type { Handler } from '@netlify/functions'
 import nodemailer from 'nodemailer'
 import { getCorsOrigin } from './cors-headers'
 import { requireAuth } from './require-auth'
+import { getEmailFrom } from './utils/emailFrom'
 
 /**
  * Ordine di magazzino via EMAIL (24/08/2026).
@@ -21,7 +22,8 @@ import { requireAuth } from './require-auth'
 async function inviaConResend(to: string, subject: string, text: string, html: string): Promise<{ ok: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) return { ok: false, error: 'RESEND_API_KEY mancante' }
-  const from = process.env.RESEND_FROM || 'DR7 Magazzino <noreply@dr7.app>'
+  // Mittente scelto in Centralina Pro > Gestione PEC & Email.
+  const from = await getEmailFrom('DR7 Magazzino <noreply@dr7.app>')
   try {
     const resp = await fetch('https://api.resend.com/emails', {
       method: 'POST',

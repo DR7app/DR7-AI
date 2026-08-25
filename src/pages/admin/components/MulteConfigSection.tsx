@@ -54,7 +54,7 @@ const CAMPI: Array<{ k: keyof MulteConfigValues; label: string; hint?: string; w
   { k: 'rappresentante_legale', label: 'Rappresentante legale' },
   { k: 'telefono', label: 'Telefono' },
   { k: 'indirizzo', label: 'Indirizzo (sede)', hint: 'Compare in fondo alla lettera. Sovrascrivibile sulla singola multa.', wide: true },
-  { k: 'pec_mittente', label: 'PEC mittente', hint: 'La PEC stampata nella lettera come recapito dell\'azienda.', wide: true },
+  { k: 'pec_mittente', label: 'PEC mittente', hint: 'Casella da cui parte davvero la PEC (e recapito stampato nella lettera). Cambiandola serve la password della nuova casella: si imposta in Centralina Pro > Gestione PEC & Email.', wide: true },
   { k: 'destinatario_default', label: 'Destinatario di riserva', hint: 'Usato come proposta quando dal verbale non si ricava l\'ente. Puo\' essere una email normale: le multe estere non hanno PEC.', wide: true },
 ]
 

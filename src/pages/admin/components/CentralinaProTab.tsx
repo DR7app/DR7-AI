@@ -23,6 +23,7 @@ import { useVehicleAlarm } from '../../../contexts/VehicleAlarmContext'
 import CauzioneScadenzaConfig from './CauzioneScadenzaConfig'
 import DailyCalendarCategoriesConfig from './DailyCalendarCategoriesConfig'
 import MulteConfigSection from './MulteConfigSection'
+import GestioneMailPecSection from './GestioneMailPecSection'
 
 type FleetVehicle = {
   id: string
@@ -54,7 +55,7 @@ type VehicleRevenueTarget = {
 }
 
 type VistaAllarmi = 'aperti' | 'config'
-type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti' | 'allarmi' | 'contratto-modifica' | 'calendario-giornaliero' | 'gestione-multe'
+type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti' | 'allarmi' | 'contratto-modifica' | 'calendario-giornaliero' | 'gestione-multe' | 'gestione-mail-pec'
 
 // Days of the week for opening-hours configs (lavaggio, future noleggio).
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
@@ -104,6 +105,7 @@ export const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'p12', title: 'Orari' },
   { id: 'calendario-giornaliero', title: 'Calendario Giornaliero' },
   { id: 'gestione-multe', title: 'Gestione Multe' },
+  { id: 'gestione-mail-pec', title: 'Gestione PEC & Email' },
   { id: 'allarmi', title: 'Allarmi' },
   { id: 'catalogo', title: 'Catalogo' },
   { id: 'status-clienti', title: 'Status Clienti' },
@@ -1421,10 +1423,10 @@ const SECTIONS_HIDDEN_BY_BUSINESS: Partial<Record<BusinessId, SectionId[]>> = {
   // 2026-08-24: le corsie del Calendario Giornaliero sono un'impostazione
   // GLOBALE (riga 'main'), non per business: si mostra solo su Terra, altrimenti
   // sembrerebbe configurabile separatamente per Mare/Aria/Soggiorni/Lavaggio.
-  mare: ['p2', 'p3', 'calendario-giornaliero', 'gestione-multe'],       // Assicurazioni, Km & Sforo
-  aria: ['p2', 'p3', 'calendario-giornaliero', 'gestione-multe'],
-  soggiorni: ['p2', 'p3', 'calendario-giornaliero', 'gestione-multe'],
-  lavaggio: ['calendario-giornaliero', 'gestione-multe'],
+  mare: ['p2', 'p3', 'calendario-giornaliero', 'gestione-multe', 'gestione-mail-pec'],       // Assicurazioni, Km & Sforo
+  aria: ['p2', 'p3', 'calendario-giornaliero', 'gestione-multe', 'gestione-mail-pec'],
+  soggiorni: ['p2', 'p3', 'calendario-giornaliero', 'gestione-multe', 'gestione-mail-pec'],
+  lavaggio: ['calendario-giornaliero', 'gestione-multe', 'gestione-mail-pec'],
 }
 function sectionsForBusiness(id: BusinessId): { id: SectionId; title: string }[] {
   const hidden = new Set(SECTIONS_HIDDEN_BY_BUSINESS[id] || [])
@@ -2230,6 +2232,7 @@ export default function CentralinaProTab() {
             )}
             {section === 'calendario-giornaliero' && <DailyCalendarCategoriesConfig readOnly={isCauzioniViewOnly} />}
             {section === 'gestione-multe' && <MulteConfigSection readOnly={isCauzioniViewOnly} />}
+            {section === 'gestione-mail-pec' && <GestioneMailPecSection readOnly={isCauzioniViewOnly} />}
             {section === 'p5' && <ServiziSection servizi={servizi} setServizi={setServizi} fasce={fasce} categories={categories} />}
             {section === 'p6' && (
               <PrezzoDinamicoSection config={prezzoDinamico} setConfig={setPrezzoDinamico} categories={categories} />
