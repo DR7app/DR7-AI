@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useReportSpese } from '../../../hooks/useReportSpese'
+import ReportSpesePanel from './ReportSpesePanel'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 // 2026-06-06: calendario a griglia per intervalli arbitrari (random range),
@@ -197,6 +199,9 @@ function formatEUInput(raw: string): string {
 type FixedExpense = { label: string; amount: number }
 const sumFx = (list?: FixedExpense[]) => (list || []).reduce((a, e) => a + (Number(e.amount) || 0), 0)
 
+// Spese del business (ricorrenti + una tantum): si sommano ALLE spese fisse
+// per veicolo, non le sostituiscono — una rata auto non e' un affitto.
+// Vedi useReportSpese per la regola di calcolo sul periodo.
 function FixedExpensesEditor({ vehicleId, revenue, initial, onSave, saving, fmt }: {
   vehicleId: string
   revenue: number
@@ -524,6 +529,10 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
       .filter(([id]) => ids.has(id))
       .reduce((s, [, arr]) => s + sumFx(arr), 0)
   }, [fixedExpenses, vehicleData])
+  // Spese del BUSINESS sul periodo mostrato (affitto, stipendi, una tantum...).
+  // Sono un livello sopra le spese fisse per veicolo: le due si sommano.
+  const reportSpese = useReportSpese(business, customFrom, customTo)
+
   // Modifiche manuali al report (nuova funzione): override applicati alle righe
   // veicolo prima dei totali. Chiave riga = periodo|vehicleId (scope per periodo).
   const [overrides, setOverrides] = useState<LoadedOverrides | null>(null)
@@ -1629,6 +1638,18 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
           >
             {loading ? 'Caricamento...' : 'Aggiorna'}
           </button>
+
+          {/* Spese del business: ricorrenti + una tantum, sul periodo mostrato */}
+          <ReportSpesePanel
+            righe={reportSpese.righeNelPeriodo}
+            totali={reportSpese.totali}
+            saving={reportSpese.saving}
+            fmt={formatCurrency}
+            periodoLabel={`${isoToEU(customFrom)} → ${isoToEU(customTo)}`}
+            onCreate={reportSpese.create}
+            onUpdate={reportSpese.update}
+            onRemove={reportSpese.remove}
+          />
         </div>
       </div>
 
@@ -1701,13 +1722,25 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
                 <p className="text-[10px] text-cyan-400 mt-0.5">di cui {formatCurrency(vehicleData.totalAnticipatedRevenue || 0)} anticipato</p>
               )}
             </div>
-            {totalFixedExpenses > 0 && (
+            {(totalFixedExpenses > 0 || reportSpese.totali.totale > 0) && (() => {
+              // Margine = ricavo − spese fisse per veicolo − spese del business.
+              // Le due voci restano distinte nella didascalia cosi' si vede
+              // sempre da dove esce il numero.
+              const speseBiz = reportSpese.totali.totale
+              const speseTot = totalFixedExpenses + speseBiz
+              const margine = vehicleData.totalRevenue - speseTot
+              return (
               <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
                 <p className="text-xs text-theme-text-muted">Margine Netto</p>
-                <p className={`text-2xl font-bold ${(vehicleData.totalRevenue - totalFixedExpenses) >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(vehicleData.totalRevenue - totalFixedExpenses)}</p>
-                <p className="text-[10px] text-theme-text-muted mt-0.5">ricavo − {formatCurrency(totalFixedExpenses)} spese fisse</p>
+                <p className={`text-2xl font-bold ${margine >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(margine)}</p>
+                <p className="text-[10px] text-theme-text-muted mt-0.5">
+                  ricavo
+                  {totalFixedExpenses > 0 && <> − {formatCurrency(totalFixedExpenses)} spese fisse</>}
+                  {speseBiz > 0 && <> − {formatCurrency(speseBiz)} spese {businessLabel.toLowerCase()}</>}
+                </p>
               </div>
-            )}
+              )
+            })()}
             {/* Totale Complessivo = ricavo incassato + da saldare (riga rosso chiaro) */}
             {(vehicleData.totalDaSaldare || 0) > 0 && (
               <div className="bg-red-500/10 rounded-xl border border-red-500/30 p-4">
