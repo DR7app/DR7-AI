@@ -853,7 +853,14 @@ export default function AdminDashboard() {
         {/* Top Bar — segue il tema (light = white bg + dark text,
             dark = black bg + light text). Le classi text-white/border-white
             erano hardcoded per dark; ora usano i token tema-aware. */}
-        <header className="bg-theme-bg-primary border-b border-theme-border px-3 sm:px-8 py-3 sm:py-4 flex flex-wrap justify-between items-center gap-y-2 gap-x-3 sticky top-0 z-[60]" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
+        {/* 2026-08-25: l'header era z-[60], quindi passava SOPRA i modal del
+            gestionale (62 overlay stanno a z-50) e ne tagliava la testata: nel
+            profilo operatore spariva il nome, nelle schede piene la prima riga.
+            Ora sta a z-40 — sopra il contenuto della pagina, sotto i modal. La
+            sidebar (z-[70]) e il suo velo (z-[60]) restano sopra l'header, che
+            e' giusto: quando si apre il menu laterale deve coprire anche la
+            barra. */}
+        <header className="bg-theme-bg-primary border-b border-theme-border px-3 sm:px-8 py-3 sm:py-4 flex flex-wrap justify-between items-center gap-y-2 gap-x-3 sticky top-0 z-40" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
           <div className="flex items-center gap-3">
             {!hideSidebar && (
             <button
