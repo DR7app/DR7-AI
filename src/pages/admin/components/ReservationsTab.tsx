@@ -9,6 +9,7 @@ import { supabase } from '../../../supabaseClient'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import { decidiAzioneContratto, type ContrattoAzione } from '../../../utils/contrattoModifiche'
 import { businessRowForServiceType } from '../../../utils/businessConfigClient'
+import { mareFormSectionsOff } from './mareFormSections'
 import { isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
 import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
 import {
@@ -571,6 +572,12 @@ const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
  * OMESSO = Noleggio Terra, comportamento identico a prima. Terra e' il business
  * piu' usato: ogni differenza sta dentro un `if (serviceType !== 'rental')`.
  */
+/** Tipi di patente nautica ammessi (stessa lista della scheda cliente). */
+const PATENTE_NAUTICA_TIPI = ['Entro 12 miglia', 'Oltre 12 miglia', 'Senza limiti dalla costa']
+
+/** Oggi in Europa/Rome, formato yyyy-mm-dd: confronto scadenze patenti. */
+const todayRomeYmd = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' })
+
 /**
  * Chiave del messaggio di conferma "nuova prenotazione", per business.
  *
@@ -1065,6 +1072,16 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     // 2026-05-16 multi-select cumulativo: Map pkgId → qty. Quando
     // >= 1 entry > 0, i pacchetti si SOMMANO. Esclusivo con unlimited_km.
     km_packages: {} as Record<string, number>,
+    // ── Noleggio Mare ──────────────────────────────────────────────────
+    // 25/08/2026: skipper, patente nautica e passeggeri esistevano solo nella
+    // vecchia MareBookingModal, che dal 14/08 non e' piu' montata: erano spariti
+    // dal form senza che nessuno lo dicesse. Ripristinati qui con le STESSE
+    // chiavi in booking_details (con_skipper / patente_nautica / passengers),
+    // cosi' le prenotazioni salvate dalla vecchia modale si riaprono complete.
+    // Visibili solo su boat_rental: un'auto non ha uno skipper.
+    con_skipper: true,
+    patente_nautica: { tipo: '', numero: '', emessa_da: '', rilascio: '', scadenza: '' } as Record<string, string>,
+    passengers: [] as { name: string; phone: string }[],
     // Home Delivery & Pickup
     delivery_enabled: false,
     delivery_street: '',
@@ -1242,6 +1259,41 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   // riga del business del servizio, con fallback su 'main' voce per voce: chi
   // non ha configurato eredita l'azienda, chi ha configurato viene rispettato.
   const [contrattoRegole, setContrattoRegole] = useState<Record<string, ContrattoAzione> | null>(null)
+  // 25/08/2026: sezioni del form spente dagli Interruttori ON/OFF di QUESTO
+  // business (`booking_form_off` + le sezioni Centralina spente). Fino a oggi
+  // quegli interruttori scrivevano in `centralina_pro_config` e nessuno li
+  // leggeva: l'operatore spegneva "Servizi Experience" sul Mare e il blocco
+  // restava li'. Terra non li usa — il suo form non e' spegnibile a sezioni.
+  const [formOff, setFormOff] = useState<Set<string>>(() => new Set())
+  const sezioneForm = (id: string) => !formOff.has(id)
+  // Blocchi che esistono solo sull'acqua.
+  const isMare = serviceType === 'boat_rental'
+  // Patente nautica del CLIENTE, presa dall'anagrafica: serve nel caso "senza
+  // skipper", dove conduce lui e la patente non si ridigita nella prenotazione.
+  const [clienteNautica, setClienteNautica] = useState<{ numero: string; categoria: string; limite: string; abilitazione: string; scadenza: string } | null>(null)
+  useEffect(() => {
+    if (!isMare || !formData.customer_id) { setClienteNautica(null); return }
+    let annullato = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('customers_extended')
+        .select('numero_patente_nautica, categoria_patente_nautica, limite_patente_nautica, abilitazione_patente_nautica, scadenza_patente_nautica')
+        .eq('id', formData.customer_id)
+        .maybeSingle()
+      if (annullato) return
+      const r = data as Record<string, string | null> | null
+      // Senza numero non c'e' patente da mostrare: il resto sarebbe rumore.
+      setClienteNautica(r?.numero_patente_nautica ? {
+        numero: r.numero_patente_nautica || '',
+        categoria: r.categoria_patente_nautica || '',
+        limite: r.limite_patente_nautica || '',
+        abilitazione: r.abilitazione_patente_nautica || '',
+        scadenza: (r.scadenza_patente_nautica || '').slice(0, 10),
+      } : null)
+    })()
+    return () => { annullato = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMare, formData.customer_id])
   const configRowId = businessRowForServiceType(serviceType)
   useEffect(() => {
     let cancelled = false
@@ -1252,6 +1304,12 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       setProDeposits(scegli<Record<string, unknown>>(c => c.deposits))
       setCoeffFlags(buildCoeffFlags(scegli<ProAutomations>(c => c.automations) || undefined))
       setContrattoRegole(scegli<Record<string, ContrattoAzione>>(c => c.contratto_modifica))
+      // Gli interruttori del form vivono SOLO sulla riga del business: qui non
+      // c'e' fallback su `main`, altrimenti una sezione spenta su Terra
+      // sparirebbe anche da Mare e Aria.
+      setFormOff(isAltroBusiness
+        ? mareFormSectionsOff(business as Record<string, unknown> | null)
+        : new Set<string>())
     }
     const leggi = async () => {
       const ids = configRowId === 'main' ? ['main'] : [configRowId, 'main']
@@ -2611,7 +2669,19 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             return { rows: custResult.customers as any[], error: null as { message: string } | null }
           }
-          return { rows: null, error: { message: custResult.error } as { message: string } | null }
+          // 25/08/2026: se `?fields=picker` fallisce si richiede l'anagrafica
+          // intera invece di restare senza clienti. Qui dentro c'e' la ricerca
+          // cliente della prenotazione: senza queste righe restano solo i
+          // clienti gia' visti in una prenotazione passata, e un cliente
+          // appena creato non compare MAI.
+          console.error('[ReservationsTab] list-customers?fields=picker fallito, riprovo intero:', custResult?.error)
+          const fullResponse = await authFetch('/.netlify/functions/list-customers')
+          const fullResult = await fullResponse.json()
+          if (fullResponse.ok && fullResult.customers) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return { rows: fullResult.customers as any[], error: null as { message: string } | null }
+          }
+          return { rows: null, error: { message: fullResult?.error || custResult?.error } as { message: string } | null }
         } catch (e: unknown) {
           const errMsg = e instanceof Error ? e.message : String(e)
           return { rows: null, error: { message: errMsg } as { message: string } | null }
@@ -2810,7 +2880,11 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       const customersExtendedError: { message: string } | null = custOutcome.error
 
       if (customersExtendedError) {
+        // Silenzioso non va bene: senza anagrafica la ricerca cliente sembra
+        // funzionare ma mostra solo chi ha gia' prenotato, e l'operatore crede
+        // che il cliente non esista.
         console.error('Failed to load customers_extended:', customersExtendedError)
+        toast.error('Anagrafica clienti non caricata: la ricerca cliente e\' incompleta. Ricarica la pagina.')
       } else if (customersExtendedData) {
         logger.log('[ReservationsTab] Customers from customers_extended:', customersExtendedData.length)
 
@@ -8129,6 +8203,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       km_package_id: '',
       km_package_qty: 1,
       // Home Delivery & Pickup
+      // Noleggio Mare: skipper / patente nautica / passeggeri.
+      con_skipper: true,
+      patente_nautica: { tipo: '', numero: '', emessa_da: '', rilascio: '', scadenza: '' },
+      passengers: [],
       delivery_enabled: false,
       delivery_street: '',
       delivery_city: '',
@@ -9416,6 +9494,151 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             </div>
 
             {/* Second Driver Section */}
+            {/* ── Noleggio Mare: Conduzione, Patente Nautica, Passeggeri ──
+                25/08/2026: questi tre blocchi vivevano nella vecchia
+                MareBookingModal, che dal 14/08 non e' piu' montata da nessuna
+                parte — quindi erano semplicemente spariti dal form del Mare.
+                Rimessi qui con le STESSE chiavi in booking_details
+                (con_skipper / patente_nautica / passengers), cosi' le
+                prenotazioni salvate prima si riaprono complete. */}
+            {isMare && sezioneForm('conduzione') && (
+              <div className="md:col-span-2 p-4 rounded-lg border border-theme-border">
+                <h4 className="text-theme-text-primary font-semibold mb-3">Conduzione</h4>
+                <div className="flex gap-2">
+                  {([true, false] as const).map(v => (
+                    <button
+                      key={String(v)}
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, con_skipper: v }))}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${formData.con_skipper === v ? 'bg-dr7-gold text-white border-dr7-gold' : 'bg-theme-bg-tertiary text-theme-text-secondary border-theme-border hover:bg-theme-bg-hover'}`}
+                    >
+                      {v ? 'Con skipper' : 'Senza skipper'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {isMare && sezioneForm('patente') && !formData.con_skipper && (
+              <div className="md:col-span-2 p-4 rounded-lg border border-theme-border">
+                <h4 className="text-theme-text-primary font-semibold mb-2">Patente Nautica</h4>
+                <p className="text-xs text-theme-text-muted">
+                  Senza skipper conduce il cliente: la sua patente nautica è già in anagrafica, si gestisce dalla scheda cliente.
+                </p>
+                {clienteNautica && (
+                  <div className="mt-2 text-xs text-theme-text-secondary">
+                    <span className="font-semibold text-theme-text-primary font-mono">{clienteNautica.numero || '—'}</span>
+                    {[clienteNautica.categoria, clienteNautica.limite, clienteNautica.abilitazione].filter(Boolean).length > 0 && (
+                      <span> · {[clienteNautica.categoria, clienteNautica.limite, clienteNautica.abilitazione].filter(Boolean).join(' · ')}</span>
+                    )}
+                    {clienteNautica.scadenza && (
+                      <span className={clienteNautica.scadenza < todayRomeYmd() ? 'ml-2 text-red-500 dark:text-red-400 font-semibold' : 'ml-2'}>
+                        scade il {clienteNautica.scadenza.split('-').reverse().join('/')}
+                        {clienteNautica.scadenza < todayRomeYmd() && ' — SCADUTA'}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {formData.customer_id && !clienteNautica && (
+                  <p className="mt-2 text-xs text-theme-text-muted">Nessuna patente nautica in anagrafica per questo cliente.</p>
+                )}
+              </div>
+            )}
+
+            {isMare && sezioneForm('patente') && formData.con_skipper && (
+              <div className="md:col-span-2 p-4 rounded-lg border border-theme-border">
+                <h4 className="text-theme-text-primary font-semibold mb-3">Patente Nautica dello Skipper</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Select
+                    label="Tipo"
+                    value={formData.patente_nautica.tipo}
+                    onChange={(e) => setFormData(prev => ({ ...prev, patente_nautica: { ...prev.patente_nautica, tipo: e.target.value } }))}
+                    options={[{ value: '', label: '— seleziona —' }, ...PATENTE_NAUTICA_TIPI.map(t => ({ value: t, label: t }))]}
+                  />
+                  <Input
+                    label="Numero"
+                    value={formData.patente_nautica.numero}
+                    onChange={(e) => setFormData(prev => ({ ...prev, patente_nautica: { ...prev.patente_nautica, numero: e.target.value } }))}
+                  />
+                  <Input
+                    label="Emessa da"
+                    placeholder="Capitaneria / Motorizzazione"
+                    value={formData.patente_nautica.emessa_da}
+                    onChange={(e) => setFormData(prev => ({ ...prev, patente_nautica: { ...prev.patente_nautica, emessa_da: e.target.value } }))}
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      label="Rilascio"
+                      type="date"
+                      value={formData.patente_nautica.rilascio}
+                      onChange={(e) => setFormData(prev => ({ ...prev, patente_nautica: { ...prev.patente_nautica, rilascio: e.target.value } }))}
+                    />
+                    <Input
+                      label="Scadenza"
+                      type="date"
+                      value={formData.patente_nautica.scadenza}
+                      onChange={(e) => setFormData(prev => ({ ...prev, patente_nautica: { ...prev.patente_nautica, scadenza: e.target.value } }))}
+                    />
+                  </div>
+                </div>
+                {formData.patente_nautica.scadenza && formData.patente_nautica.scadenza < todayRomeYmd() && (
+                  <p className="mt-2 text-xs text-red-500 dark:text-red-400 font-semibold">
+                    Patente nautica scaduta il {formData.patente_nautica.scadenza.split('-').reverse().join('/')}.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {isMare && sezioneForm('passeggeri') && (
+              <div className="md:col-span-2 p-4 rounded-lg border border-theme-border">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-theme-text-primary font-semibold">Passeggeri</h4>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, passengers: [...prev.passengers, { name: '', phone: '' }] }))}
+                    className="text-xs text-dr7-gold font-semibold hover:underline"
+                  >
+                    + Aggiungi passeggero
+                  </button>
+                </div>
+                {formData.passengers.length === 0 ? (
+                  <p className="text-xs text-theme-text-muted">
+                    Nessun passeggero. Aggiungi nome e telefono di chi sale a bordo — servono solo per i messaggi, non creano un cliente in anagrafica.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {formData.passengers.map((pass, i) => (
+                      <div key={i} className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <Input
+                            placeholder={`Passeggero ${i + 1} — nome e cognome`}
+                            value={pass.name}
+                            onChange={(e) => setFormData(prev => ({ ...prev, passengers: prev.passengers.map((x, j) => j === i ? { ...x, name: e.target.value } : x) }))}
+                          />
+                        </div>
+                        <div className="w-[180px]">
+                          <Input
+                            placeholder="Telefono"
+                            value={pass.phone}
+                            onChange={(e) => setFormData(prev => ({ ...prev, passengers: prev.passengers.map((x, j) => j === i ? { ...x, phone: e.target.value } : x) }))}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, passengers: prev.passengers.filter((_, j) => j !== i) }))}
+                          className="text-red-500 dark:text-red-400 text-xl leading-none px-2 pb-2 shrink-0"
+                          title="Rimuovi passeggero"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {sezioneForm('secondo') && (
             <div className="md:col-span-2  p-4 rounded-lg border border-theme-border">
               <div className="flex items-center mb-4">
                 <input
@@ -9625,6 +9848,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 </div>
               )}
             </div>
+            )}
 
             {/* ─── Garante / Fideiussore Solidale (max 3) ───────────────
                 2026-05-29: progressive disclosure — niente form vuoti.
@@ -9636,6 +9860,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 I field name (guarantor_N_*) sono FROZEN per il PDF autofill
                 Adobe Acrobat — vedi tabella in fondo all'implementazione. */}
             {(() => {
+              // Interruttori ON/OFF: sezione Garante spenta per questo business.
+              if (!sezioneForm('garante')) return null
               // Italian suffix list — corrisponde al naming permanente Adobe Acrobat
               const GUARANTOR_SUFFIXES = [
                 'nome_cognome','codice_fiscale','sesso','indirizzo','cap','citta','provincia',
@@ -10555,6 +10781,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 </div>
               )}
               {/* Experience Services & DR7 Flex */}
+              {sezioneForm('servizi') && (
               <div className="md:col-span-2 p-4 rounded-lg border border-theme-border">
                 <h4 className="text-theme-text-primary font-semibold mb-3">Servizi Experience</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -10619,6 +10846,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 {/* DR7 FLEX rimosso come addon dedicato — ora è un servizio
                     in EXPERIENCE_SERVICES via Centralina Pro. */}
               </div>
+              )}
 
               <Input
                 label="Importo Totale (€)"

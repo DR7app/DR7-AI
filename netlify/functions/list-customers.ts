@@ -46,16 +46,23 @@ export const handler: Handler = async (event) => {
         // la riga intera ha 88 colonne e pesa 5,13 MB su 2059 clienti; queste
         // 17 pesano 0,65 MB. Stessi clienti, tutti, solo con meno campi.
         // Senza il parametro la risposta resta quella di prima, intera.
+        //
+        // 25/08/2026 (stesso giorno): questa lista conteneva
+        // `data_scadenza_patente` e `patente_data_rilascio`, che in
+        // `customers_extended` NON ESISTONO. PostgREST rifiuta l'intera query
+        // con 42703, quindi `?fields=picker` rispondeva 400 e la ricerca
+        // cliente del form prenotazione restava con i soli clienti ricavati
+        // dalle prenotazioni passate: un cliente appena creato non compariva
+        // mai. Le due date si leggono comunque da `metadata.patente`.
         const PICKER_FIELDS = [
             'id', 'tipo_cliente', 'nome', 'cognome', 'denominazione',
             'ragione_sociale', 'ente_ufficio', 'email', 'telefono',
             'numero_patente', 'note', 'created_at', 'updated_at',
-            'data_nascita', 'scadenza_patente', 'data_scadenza_patente',
-            'data_rilascio_patente', 'patente_data_rilascio', 'metadata',
+            'data_nascita', 'scadenza_patente',
+            'data_rilascio_patente', 'metadata',
         ].join(',');
-        const columns = event.queryStringParameters?.fields === 'picker'
-            ? PICKER_FIELDS
-            : '*';
+        const wantsPicker = event.queryStringParameters?.fields === 'picker';
+        const columns = wantsPicker ? PICKER_FIELDS : '*';
 
         // `id` come secondo criterio NON e' un dettaglio estetico: le pagine
         // sono richieste in parallelo, quindi sono query separate. Con il solo
@@ -65,14 +72,26 @@ export const handler: Handler = async (event) => {
         // dall'anagrafica, e con lei dalla ricerca cliente del form
         // prenotazione). Con un criterio univoco l'ordine e' lo stesso per
         // tutte le pagine e nessuna riga si perde.
+        let columnsInUse = columns;
         const page = (from: number, withCount: boolean) => (withCount
-            ? supabase.from('customers_extended').select(columns, { count: 'exact' })
-            : supabase.from('customers_extended').select(columns))
+            ? supabase.from('customers_extended').select(columnsInUse, { count: 'exact' })
+            : supabase.from('customers_extended').select(columnsInUse))
             .order('updated_at', { ascending: false })
             .order('id', { ascending: true })
             .range(from, from + PAGE_SIZE - 1);
 
-        const firstPage = await page(0, true);
+        let firstPage = await page(0, true);
+
+        // Rete di sicurezza: se l'elenco ridotto viene rifiutato (una colonna
+        // rinominata o rimossa), si rilegge la riga intera invece di lasciare
+        // le tab senza anagrafica. Meglio una risposta piu' pesante che un
+        // gestionale che non trova i clienti.
+        if (firstPage.error && wantsPicker) {
+            console.error('[list-customers] fields=picker rifiutato, ripiego su *:', firstPage.error);
+            columnsInUse = '*';
+            firstPage = await page(0, true);
+        }
+
         if (firstPage.error) {
             console.error('[list-customers] Error:', firstPage.error);
             throw firstPage.error;
