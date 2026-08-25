@@ -570,6 +570,27 @@ const isBookingForVehicle = (booking: any, vehicle: Vehicle) => {
  * OMESSO = Noleggio Terra, comportamento identico a prima. Terra e' il business
  * piu' usato: ogni differenza sta dentro un `if (serviceType !== 'rental')`.
  */
+/**
+ * Chiave del messaggio di conferma "nuova prenotazione", per business.
+ *
+ * 25/08/2026: questa tab serve anche Mare, Aria e Soggiorni, ma la conferma
+ * partiva sempre con `rental_new_customer` — il testo del Noleggio Terra. Se la
+ * direzione limitava quel template a "Solo Noleggio" (target_service_type), il
+ * cliente di una barca non riceveva NIENTE: il guard lato server lo scartava
+ * come service_type_mismatch, senza errore visibile in interfaccia.
+ *
+ * Le chiavi boat_/heli_/stay_new_customer esistono gia' nei Messaggi di
+ * Sistema Pro: qui si sceglie quella del business, niente di nuovo inventato.
+ */
+const CONFERMA_NUOVA_BY_SERVICE: Record<string, string> = {
+  boat_rental: 'boat_new_customer',
+  heli_rental: 'heli_new_customer',
+  stay_rental: 'stay_new_customer',
+}
+function confermaNuovaKey(serviceType?: string | null): string {
+  return CONFERMA_NUOVA_BY_SERVICE[String(serviceType || '')] || 'rental_new_customer'
+}
+
 export default function ReservationsTab({ initialData, onDataConsumed, viewMode = 'bookings', serviceType = 'rental' }: { initialData?: { vehicleId?: string; pickupDate?: Date; bookingId?: string; fromPreventivo?: Record<string, any> } | null; onDataConsumed?: () => void; viewMode?: 'bookings' | 'uscite'; serviceType?: string }) {
   // true quando la tab sta servendo Mare / Aria / Soggiorni: quei business
   // hanno un catalogo proprio (`noleggio_catalog`) al posto della flotta.
@@ -583,7 +604,12 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   // basta il testo passa a "disponibilita'", che vale per tutti.
   const assetLabels = USCITA_ASSET_LABELS[serviceType as keyof typeof USCITA_ASSET_LABELS] || USCITA_ASSET_LABELS.rental
   const { canViewFinancials } = useAdminRole()
-  const paymentMethods = usePaymentMethods()
+  // 25/08/2026: il dropdown "Metodo di pagamento" leggeva sempre la riga
+  // `main`. Su Mare/Aria/Soggiorni l'operatore configurava i metodi stando sul
+  // suo business (salvati davvero su `business_mare` & c.) e poi ritrovava
+  // quelli di Terra. `serviceType` sceglie la riga giusta, con fallback su
+  // `main` per chi non ha configurato nulla.
+  const paymentMethods = usePaymentMethods(serviceType)
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -1107,7 +1133,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
   // --- Centralina Config Overlay ---
   // Loads pricing from Supabase config. Falls back to hardcoded defaults.
-  const { config: rentalConfig } = useRentalConfig()
+  const { config: rentalConfig } = useRentalConfig(serviceType)
   const configOverlay = useMemo(() => buildConfigOverlay(rentalConfig), [rentalConfig])
 
   // ── Centralina Pro live read for No-Cauzione surcharge ────────────────
@@ -7353,7 +7379,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             // reinvio su edit, incluso un cambio orari materiale. Usa il template
             // da-saldare se resta un saldo, altrimenti la conferma noleggio.
             logger.log('[Save] Orari modificati — reinvio conferma con i nuovi orari.')
-            templateKey = isPending ? 'booking_confirmed_da_saldare' : 'rental_new_customer'
+            templateKey = isPending ? 'booking_confirmed_da_saldare' : confermaNuovaKey(serviceType)
           } else if (editingId && wasConfirmedAtLoad) {
             // Booking gia' stato confermato in precedenza — niente reinvio
             // conferma su questa modifica non-orari (da saldare -> paid,
@@ -7373,15 +7399,15 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             templateKey = confirmBooking ? 'booking_confirmed_da_saldare' : null
           } else if (confirmBooking) {
             // Prima conferma con pagamento gia' registrato.
-            templateKey = 'rental_new_customer'
+            templateKey = confermaNuovaKey(serviceType)
           } else if (editingId) {
             // Edit di booking gia' pagato ma MAI confermato in precedenza
             // (es. l'admin aveva creato senza spuntare Conferma e ora la
             // sta spuntando per la prima volta).
-            templateKey = 'rental_new_customer'
+            templateKey = confermaNuovaKey(serviceType)
           } else {
             // Nuova prenotazione gia' pagata (senza checkbox conferma).
-            templateKey = 'rental_new_customer'
+            templateKey = confermaNuovaKey(serviceType)
           }
 
           if (templateKey) {
@@ -7393,7 +7419,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                 customPhone: custPhone,
                 booking: {
                   id: insertedBooking?.id || editingId || null,
-                  service_type: (insertedBooking as { service_type?: string } | null)?.service_type || 'car_rental',
+                  service_type: (insertedBooking as { service_type?: string } | null)?.service_type || serviceType || 'rental',
                 },
                 templateKey: finalTemplateKey,
                 templateVars,
@@ -7434,7 +7460,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                   customPhone: custPhone,
                   booking: {
                     id: insertedBooking?.id || editingId || null,
-                    service_type: (insertedBooking as { service_type?: string } | null)?.service_type || 'car_rental',
+                    service_type: (insertedBooking as { service_type?: string } | null)?.service_type || serviceType || 'rental',
                   },
                   templateKey: finalMethodEvent,
                   templateVars,
@@ -8496,6 +8522,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         {selectedBookingForPenalty && (
           <PenaltyModal
             isOpen={penaltyModalOpen}
+            serviceType={serviceType}
             booking={{
               id: selectedBookingForPenalty.id,
               customer_name: selectedBookingForPenalty.customer_name || 'Cliente',
@@ -8522,6 +8549,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         {selectedBookingForDanni && (
           <DanniModal
             isOpen={danniModalOpen}
+            serviceType={serviceType}
             booking={{
               id: selectedBookingForDanni.id,
               customer_name: selectedBookingForDanni.customer_name || 'Cliente',
@@ -8548,6 +8576,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         {selectedBookingForDanniPenali && (
           <DanniPenaliModal
             isOpen={danniPenaliModalOpen}
+            serviceType={serviceType}
             initialTab={danniPenaliInitialTab}
             booking={{
               id: selectedBookingForDanniPenali.id,

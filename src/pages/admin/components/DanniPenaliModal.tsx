@@ -5,9 +5,12 @@ import { logAdminAction } from '../../../utils/logAdminAction'
 import { buildBookingContext } from '../../../utils/adminLogHelpers'
 import { authFetch } from '../../../utils/authFetch'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
+import { loadBusinessConfig } from '../../../utils/businessConfigClient'
 import { sanitizeMoney } from '../../../utils/money'
 
 interface DanniPenaliModalProps {
+    /** service_type della prenotazione: sceglie la riga di Centralina Pro. */
+    serviceType?: string
     isOpen: boolean
     booking: {
         id: string
@@ -49,9 +52,9 @@ interface PenaltyPreset {
 // configured, the modal shows an empty-state with a pointer back to
 // Centralina Pro.
 
-export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, onEditCustomer, initialTab = 'danni' }: DanniPenaliModalProps) {
+export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, onEditCustomer, initialTab = 'danni', serviceType }: DanniPenaliModalProps) {
     const submitLockRef = useRef(false)
-    const paymentMethods = usePaymentMethods()
+    const paymentMethods = usePaymentMethods(serviceType)
     const [activeTab, setActiveTab] = useState<'danni' | 'penali'>(initialTab)
     const [cart, setCart] = useState<CartItem[]>([])
     const [note, setNote] = useState('')
@@ -94,13 +97,16 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
         setCategoryLoading(true)
         ;(async () => {
             // 1. Centralina Pro penali + danni
+            // 25/08/2026: penali, danni e metodi di pagamento venivano letti
+            // sempre dalla riga `main`. Questa modale si apre anche dalla
+            // scheda di una prenotazione Mare/Aria/Soggiorni: il catalogo
+            // mostrato era quello del Noleggio Terra, e la notifica partiva con
+            // service_type 'car_rental' su una barca. `serviceType` porta qui
+            // il business della prenotazione; la riga di quel business vince,
+            // `main` resta il fallback per chi non ha configurato.
             try {
-                const { data } = await supabase
-                    .from('centralina_pro_config')
-                    .select('config')
-                    .eq('id', 'main')
-                    .maybeSingle()
-                const cfg = data?.config as { penali?: Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>>; danni?: Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>> } | undefined
+                const { business, main } = await loadBusinessConfig(serviceType)
+                const cfg = { penali: business?.penali ?? main?.penali, danni: business?.danni ?? main?.danni } as { penali?: Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>>; danni?: Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>> } | undefined
                 if (!cancelled && cfg) {
                     const PRO_TO_DB: Record<string, string> = { supercars: 'exotic', urban: 'urban', aziendali: 'aziendali' }
                     const mapList = (raw?: Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>>) => {
@@ -206,7 +212,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
             }
         })()
         return () => { cancelled = true }
-    }, [isOpen, booking])
+    }, [isOpen, booking, serviceType])
 
     const rawCategory = resolvedCategory ||
         booking.booking_details?.vehicle?.category ||
@@ -668,7 +674,7 @@ export default function DanniPenaliModal({ isOpen, booking, onClose, onSuccess, 
                                     body: JSON.stringify({
                                         customPhone: custPhone,
                                         templateKey: tplKey,
-                                        booking: { id: booking.id, service_type: 'car_rental' },
+                                        booking: { id: booking.id, service_type: serviceType || 'rental' },
                                         templateVars: {
                                             // Il template "Link pagamento penali e danni" usa {total}
                                             // per l'importo (non {amount}); il booking passato non ha

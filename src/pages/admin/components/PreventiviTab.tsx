@@ -555,7 +555,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
   const [combinedOtpTripped, setCombinedOtpTripped] = useState<TrippedCode[]>([])
 
   // Centralina config
-  const { config: rentalConfig } = useRentalConfig()
+  const { config: rentalConfig } = useRentalConfig(serviceType)
   const configOverlay = useMemo(() => buildConfigOverlay(rentalConfig), [rentalConfig])
 
   // 2026-07-18: rimosse le consegne preimpostate (aeroporti). Restano solo

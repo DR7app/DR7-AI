@@ -9,6 +9,7 @@ import { supabase } from '../supabaseClient'
 import type { RentalConfig } from '../types/rentalConfig'
 import { DEFAULT_RENTAL_CONFIG } from './rentalConfigDefaults'
 import { convertProToRentalConfig } from '../utils/convertProConfig'
+import { businessRowForServiceType } from '../utils/businessConfigClient'
 import type { ProSnapshot } from '../utils/convertProConfig'
 
 interface UseRentalConfigResult {
@@ -19,21 +20,51 @@ interface UseRentalConfigResult {
   saveConfig: (newConfig: RentalConfig, changedBy: string, section: string, description?: string) => Promise<boolean>
 }
 
-export function useRentalConfig(): UseRentalConfigResult {
+/**
+ * Snapshot del business sovrapposto a quello dell'azienda, voce per voce.
+ *
+ * Una chiave configurata sul business vince; una chiave assente — o una lista
+ * vuota, che e' una sezione mai compilata e non la scelta di non avere nulla —
+ * eredita `main`. Stessa regola di `loadBusinessList` in businessConfigClient.
+ */
+function fondiSnapshot(business: ProSnapshot | null, main: ProSnapshot | null): ProSnapshot | null {
+  if (!business) return main
+  if (!main) return business
+  const out: Record<string, unknown> = { ...(main as Record<string, unknown>) }
+  for (const [k, v] of Object.entries(business as Record<string, unknown>)) {
+    if (v === undefined || v === null) continue
+    if (Array.isArray(v) && v.length === 0) continue
+    out[k] = v
+  }
+  return out as ProSnapshot
+}
+
+/**
+ * @param serviceType service_type del business servito ('boat_rental',
+ *   'heli_rental', 'stay_rental', 'car_wash'…). Omesso = Noleggio Terra
+ *   (riga `main`), comportamento identico a prima.
+ *
+ * 25/08/2026: leggeva `id='main'` in fisso. Su una prenotazione Mare o Aria i
+ * Servizi Extra, l'Experience, il DR7 Flex e il costo di consegna uscivano
+ * quindi ai prezzi di Terra, e quanto configurato nella Centralina di quel
+ * business non si applicava mai.
+ */
+export function useRentalConfig(serviceType?: string | null): UseRentalConfigResult {
   const [config, setConfig] = useState<RentalConfig>(DEFAULT_RENTAL_CONFIG)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const rowId = businessRowForServiceType(serviceType)
 
   const fetchConfig = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
 
+      const ids = rowId === 'main' ? ['main'] : [rowId, 'main']
       const { data, error: fetchErr } = await supabase
         .from('centralina_pro_config')
-        .select('config')
-        .eq('id', 'main')
-        .maybeSingle()
+        .select('id, config')
+        .in('id', ids)
 
       if (fetchErr) {
         console.warn('[useRentalConfig] Pro fetch error, using defaults:', fetchErr.message)
@@ -42,8 +73,12 @@ export function useRentalConfig(): UseRentalConfigResult {
         return
       }
 
-      if (data?.config && typeof data.config === 'object') {
-        const proConfig = data.config as ProSnapshot
+      const righe = (data || []) as { id: string; config: ProSnapshot | null }[]
+      const main = righe.find(r => r.id === 'main')?.config || null
+      const business = rowId === 'main' ? null : (righe.find(r => r.id === rowId)?.config || null)
+      const proConfig = fondiSnapshot(business, main)
+
+      if (proConfig && typeof proConfig === 'object') {
         const converted = convertProToRentalConfig(proConfig)
         setConfig(converted)
       } else {
@@ -57,24 +92,25 @@ export function useRentalConfig(): UseRentalConfigResult {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [rowId])
 
   useEffect(() => {
     fetchConfig()
 
-    // Subscribe to real-time changes on centralina_pro_config
+    // Subscribe to real-time changes on centralina_pro_config.
+    // Le righe da seguire sono due (business + main) e il filtro ne accetta
+    // una sola: si ascolta la tabella e si rilegge, cosi' la precedenza
+    // business/main la ricostruisce fetchConfig e non questo callback.
     const channel = supabase
-      .channel('centralina-pro-changes')
+      .channel(`centralina-pro-changes-${rowId}`)
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config', filter: 'id=eq.main' },
+        { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config' },
         (payload) => {
-          console.log('[useRentalConfig] Pro config updated via realtime')
-          const newConfig = payload.new?.config as ProSnapshot
-          if (newConfig && typeof newConfig === 'object' && Object.keys(newConfig).length > 0) {
-            const converted = convertProToRentalConfig(newConfig)
-            setConfig(converted)
-          }
+          const id = (payload.new as { id?: string } | undefined)?.id
+          if (id !== 'main' && id !== rowId) return
+          console.log('[useRentalConfig] Pro config updated via realtime', id)
+          fetchConfig()
         }
       )
       .subscribe()
@@ -82,7 +118,7 @@ export function useRentalConfig(): UseRentalConfigResult {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [fetchConfig])
+  }, [fetchConfig, rowId])
 
   const saveConfig = useCallback(async (
     newConfig: RentalConfig,

@@ -5,9 +5,12 @@ import { logAdminAction } from '../../../utils/logAdminAction'
 import { buildBookingContext } from '../../../utils/adminLogHelpers'
 import { authFetch } from '../../../utils/authFetch'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
+import { loadBusinessConfig } from '../../../utils/businessConfigClient'
 import { sanitizeMoney } from '../../../utils/money'
 
 interface PenaltyModalProps {
+    /** service_type della prenotazione: sceglie la riga di Centralina Pro. */
+    serviceType?: string
     isOpen: boolean
     booking: {
         id: string
@@ -43,14 +46,14 @@ interface CartItem {
 // SUPERCAR_PENALTIES / URBAN_UTILITAIRE_PENALTIES arrays so a price change
 // in Centralina is reflected here without code edits.
 
-export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEditCustomer }: PenaltyModalProps) {
+export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEditCustomer, serviceType }: PenaltyModalProps) {
     const [cart, setCart] = useState<CartItem[]>([])
     const [customAmount, setCustomAmount] = useState('')
     const [customLabel, setCustomLabel] = useState('')
     const [note, setNote] = useState('')
     const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid' | 'nexi_pay_by_link'>('pending')
     const [paymentMethod, setPaymentMethod] = useState('Contanti')
-    const paymentMethods = usePaymentMethods()
+    const paymentMethods = usePaymentMethods(serviceType)
     const [isGenerating, setIsGenerating] = useState(false)
     const [error, setError] = useState('')
     // Final desired price — when set & < subtotal, the difference becomes a
@@ -65,13 +68,16 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
         let cancelled = false
         ;(async () => {
             // 1. Pro penali
+            // 25/08/2026: penali, danni e metodi di pagamento venivano letti
+            // sempre dalla riga `main`. Questa modale si apre anche dalla
+            // scheda di una prenotazione Mare/Aria/Soggiorni: il catalogo
+            // mostrato era quello del Noleggio Terra, e la notifica partiva con
+            // service_type 'car_rental' su una barca. `serviceType` porta qui
+            // il business della prenotazione; la riga di quel business vince,
+            // `main` resta il fallback per chi non ha configurato.
             try {
-                const { data } = await supabase
-                    .from('centralina_pro_config')
-                    .select('config')
-                    .eq('id', 'main')
-                    .maybeSingle()
-                const proPenali = data?.config?.penali as Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>> | undefined
+                const { business, main } = await loadBusinessConfig(serviceType)
+                const proPenali = ((business?.penali ?? main?.penali)) as Record<string, Array<{ id: string; label: string; amount: number; description?: string; enabled?: boolean }>> | undefined
                 if (!cancelled && proPenali) {
                     const PRO_TO_DB: Record<string, string> = { supercars: 'exotic', urban: 'urban', aziendali: 'aziendali' }
                     const out: Record<string, PenaltyItem[]> = {}
@@ -119,7 +125,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
             if (!cancelled) setResolvedCategory(cat)
         })()
         return () => { cancelled = true }
-    }, [isOpen, booking])
+    }, [isOpen, booking, serviceType])
 
     const vehicleCategory = resolvedCategory ||
         booking.booking_details?.vehicle?.category ||
@@ -375,7 +381,7 @@ export default function PenaltyModal({ isOpen, booking, onClose, onSuccess, onEd
                                     body: JSON.stringify({
                                         customPhone: custPhone,
                                         templateKey: 'pro_custom_link_pagamento_penali_e_danni_17',
-                                        booking: { id: booking.id, service_type: 'car_rental' },
+                                        booking: { id: booking.id, service_type: serviceType || 'rental' },
                                         templateVars: {
                                             '{customer_name}': custName || 'Cliente',
                                             '{nome}': (custName || 'Cliente').split(' ')[0],

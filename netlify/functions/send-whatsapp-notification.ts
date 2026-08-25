@@ -635,9 +635,19 @@ const handler: Handler = async (event) => {
       if (tpl && (tpl as { target_service_type?: string }).target_service_type && (tpl as { target_service_type?: string }).target_service_type !== 'all') {
         const tplSvc = String((tpl as { target_service_type?: string }).target_service_type).toLowerCase();
         const bookingSvc = String(booking?.service_type || 'rental').toLowerCase();
+        // 25/08/2026: questa normalizzazione era rimasta indietro rispetto a
+        // quella del path templateKey (riga ~245, fix del 10/08). Qui Mare,
+        // Aria e Soggiorni venivano ancora schiacciati su 'rental', quindi un
+        // template limitato a "Solo Mare" non matchava MAI la prenotazione di
+        // una barca e l'invio veniva saltato come service_type_mismatch —
+        // senza errore visibile, il cliente semplicemente non riceveva nulla.
+        // Le due copie del guard devono restare identiche.
         const normalised = bookingSvc === 'mechanical_service' ? 'mechanical'
           : bookingSvc === 'car_wash' ? 'car_wash'
           : bookingSvc === 'mechanical' ? 'mechanical'
+          : bookingSvc === 'boat_rental' ? 'boat_rental'
+          : bookingSvc === 'heli_rental' ? 'heli_rental'
+          : bookingSvc === 'stay_rental' ? 'stay_rental'
           : 'rental';
         const matches =
           tplSvc === normalised
