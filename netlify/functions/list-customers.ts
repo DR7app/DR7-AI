@@ -6,7 +6,7 @@ import { requireAuth } from './require-auth'
 export const handler: Handler = async (event) => {
     const headers = {
         'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         'Access-Control-Allow-Methods': 'GET, OPTIONS',
         'Content-Type': 'application/json'
     };
@@ -57,10 +57,19 @@ export const handler: Handler = async (event) => {
             ? PICKER_FIELDS
             : '*';
 
+        // `id` come secondo criterio NON e' un dettaglio estetico: le pagine
+        // sono richieste in parallelo, quindi sono query separate. Con il solo
+        // `updated_at` due clienti con lo stesso istante possono finire in
+        // ordine diverso da una pagina all'altra: uno viene restituito due
+        // volte e un altro NON viene restituito da nessuna pagina (sparisce
+        // dall'anagrafica, e con lei dalla ricerca cliente del form
+        // prenotazione). Con un criterio univoco l'ordine e' lo stesso per
+        // tutte le pagine e nessuna riga si perde.
         const page = (from: number, withCount: boolean) => (withCount
             ? supabase.from('customers_extended').select(columns, { count: 'exact' })
             : supabase.from('customers_extended').select(columns))
             .order('updated_at', { ascending: false })
+            .order('id', { ascending: true })
             .range(from, from + PAGE_SIZE - 1);
 
         const firstPage = await page(0, true);

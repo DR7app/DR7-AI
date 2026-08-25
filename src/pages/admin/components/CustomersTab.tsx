@@ -6,6 +6,7 @@ import Button from './Button'
 import NewClientModal from './NewClientModal'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
+import { invalidateCustomersCache } from '../../../utils/customersCache'
 import ReportClienteModal from './ReportClienteModal'
 import CustomerAddebitoButton from './CustomerAddebitoButton'
 import CardDeleteButton from './CardDeleteButton'
@@ -534,6 +535,7 @@ export default function CustomersTab() {
           })
           if (response.ok) {
             imported++
+            invalidateCustomersCache()
           } else {
             const err = await response.json()
             errors.push(`Riga ${i + 1}: ${err.error || 'Errore'}`)

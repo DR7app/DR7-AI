@@ -4,6 +4,7 @@ import { getResidenceStatus, getProvinciaByCity, getCAPByCity } from '../../../d
 import toast from 'react-hot-toast'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
+import { invalidateCustomersCache } from '../../../utils/customersCache'
 import CalcolaCFButton from '../../../components/CalcolaCFButton'
 import CompilaButton, { type ExtractedData, type DataConflict } from '../../../components/CompilaButton'
 import { validateIban, formatIbanGroups } from '../../../utils/ibanValidation'
@@ -623,6 +624,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
         }
 
         logger.log('✅ customers_extended updated successfully:', updateResult.customer)
+        // L'anagrafica in cache delle altre tab (es. ricerca cliente del form
+        // prenotazione) e' ora vecchia: la prossima apertura deve rileggere.
+        invalidateCustomersCache()
         resultData = updateResult.customer
         createdClientId = editingId
 
@@ -677,6 +681,9 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
         resultData = createResult.customer
         createdClientId = createResult.customer.id
+        // Cliente appena creato: senza questo non compariva nella ricerca
+        // cliente del form prenotazione finche' la cache non scadeva.
+        invalidateCustomersCache()
 
         // Also insert into basic 'customers' table for backward compatibility
         try {

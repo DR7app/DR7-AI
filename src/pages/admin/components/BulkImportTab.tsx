@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
 import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
+import { invalidateCustomersCache } from '../../../utils/customersCache'
 
 interface ExtractedData {
   nome?: string
@@ -529,6 +530,7 @@ export default function BulkImportTab() {
           })
           const result = await response.json()
           if (!response.ok) throw new Error(result.error || 'Update failed')
+          invalidateCustomersCache()
         } else {
           const response = await authFetch(`${FUNCTIONS_BASE}/.netlify/functions/save-customer`, {
             method: 'POST',
@@ -538,6 +540,7 @@ export default function BulkImportTab() {
           const result = await response.json()
           if (!response.ok) throw new Error(result.error || 'Insert failed')
           createdClientId = result.customer?.id
+          invalidateCustomersCache()
         }
 
         // Also insert/update basic customers table for backward compatibility

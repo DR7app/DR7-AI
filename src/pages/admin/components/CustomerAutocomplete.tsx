@@ -38,14 +38,22 @@ export default function CustomerAutocomplete({
     // Get selected customer
     const selectedCustomer = customers.find(c => c.id === selectedCustomerId)
 
-    // Filter customers based on search query
-    // Deduplicate customers by email (or name if no email) — keep first occurrence
+    // Filter customers based on search query.
+    //
+    // 2026-08-25: la deduplica era per EMAIL (o per NOME se manca l'email) e
+    // teneva la PRIMA riga incontrata. I clienti nuovi stanno in fondo alla
+    // lista, quindi un cliente appena aggiunto che condivideva l'email con un
+    // familiare — o solo il nome con un omonimo — spariva dalla ricerca: si
+    // creava la lead e poi non la si trovava per fare la prenotazione.
+    // Regola anagrafica (roadmap 19): due lead possono condividere telefono,
+    // email e nome e restano DISTINTE. Qui si deduplica solo per `id`, che e'
+    // l'unica vera identita' della riga.
     const deduped = (() => {
         const seen = new Set<string>()
         return customers.filter(c => {
-            const key = (c.email || c.full_name || c.id).toLowerCase().trim()
-            if (seen.has(key)) return false
-            seen.add(key)
+            if (!c?.id) return true
+            if (seen.has(c.id)) return false
+            seen.add(c.id)
             return true
         })
     })()
@@ -53,7 +61,9 @@ export default function CustomerAutocomplete({
     const filteredCustomers = deduped.filter(customer => {
         if (!searchQuery.trim()) return true
         const words = searchQuery.toLowerCase().split(/\s+/).filter(Boolean)
-        const name = customer.full_name.toLowerCase()
+        // `full_name` puo' arrivare nullo dalle righe legacy: senza il fallback
+        // la digitazione faceva crashare il form (lista cliente vuota).
+        const name = (customer.full_name || '').toLowerCase()
         const email = customer.email?.toLowerCase() || ''
         const phone = customer.phone || ''
         return words.every(word =>
@@ -66,7 +76,7 @@ export default function CustomerAutocomplete({
     // This ensures the name displays correctly when editing a booking
     useEffect(() => {
         if (selectedCustomer) {
-            setSearchQuery(selectedCustomer.full_name)
+            setSearchQuery(selectedCustomer.full_name || '')
         } else if (!isOpen) {
             // Only clear when dropdown is closed and no customer is selected
             setSearchQuery('')
@@ -85,7 +95,7 @@ export default function CustomerAutocomplete({
                 setIsOpen(false)
                 // Restore selected customer name if exists
                 if (selectedCustomer) {
-                    setSearchQuery(selectedCustomer.full_name)
+                    setSearchQuery(selectedCustomer.full_name || '')
                 }
             }
         }
@@ -125,7 +135,7 @@ export default function CustomerAutocomplete({
                 e.preventDefault()
                 setIsOpen(false)
                 if (selectedCustomer) {
-                    setSearchQuery(selectedCustomer.full_name)
+                    setSearchQuery(selectedCustomer.full_name || '')
                 }
                 break
         }
@@ -133,7 +143,7 @@ export default function CustomerAutocomplete({
 
     const selectCustomer = (customer: Customer) => {
         onSelectCustomer(customer.id)
-        setSearchQuery(customer.full_name)
+        setSearchQuery(customer.full_name || '')
         setIsOpen(false)
         setHighlightedIndex(0)
         if (showCardInfoOnSelect) {
@@ -147,7 +157,7 @@ export default function CustomerAutocomplete({
         setHighlightedIndex(0)
 
         // Clear selection if user is typing
-        if (selectedCustomerId && value !== selectedCustomer?.full_name) {
+        if (selectedCustomerId && value !== (selectedCustomer?.full_name || '')) {
             onSelectCustomer('')
         }
     }

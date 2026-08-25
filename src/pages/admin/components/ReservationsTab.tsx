@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { getSpecialPricing, calculateSpecialPrice } from '../../../utils/specialPricing'
 import { fetchAllRows } from '../../../utils/fetchAllRows'
 import { loadCached } from '../../../utils/dataCache'
+import { customerDisplayName } from '../../../utils/customerName'
 import { isWithinOfficeHoursForDate, getOfficeMinuteRangesForDate } from '../../../utils/noleggioHours'
 import { supabase } from '../../../supabaseClient'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
@@ -2815,15 +2816,12 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         customersExtendedData.forEach((c: any) => {
-          // Map to local Customer interface
-          let fullName = 'N/A'
-          if (c.tipo_cliente === 'azienda') {
-            fullName = c.denominazione || c.ragione_sociale || 'N/A'
-          } else if (c.tipo_cliente === 'persona_fisica') {
-            fullName = `${c.nome || ''} ${c.cognome || ''}`.trim() || 'N/A'
-          } else if (c.tipo_cliente === 'pubblica_amministrazione') {
-            fullName = c.ente_ufficio || 'N/A'
-          }
+          // Map to local Customer interface.
+          // 2026-08-25: il nome NON dipende piu' solo da `tipo_cliente`. Le
+          // righe con tipo nullo (registrazione sito, invito, import) finivano
+          // a "N/A" e il cliente restava introvabile cercandolo per nome, pur
+          // essendo in anagrafica. Vedi utils/customerName.ts.
+          const fullName = customerDisplayName(c)
 
           const mappedCustomer: Customer = {
             id: c.id,

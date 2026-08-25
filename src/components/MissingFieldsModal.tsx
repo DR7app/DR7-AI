@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { logger } from '../utils/logger'
 import { authFetch } from '../utils/authFetch'
+import { invalidateCustomersCache } from '../utils/customersCache'
 import EuropeanDateInput from './EuropeanDateInput'
 
 interface MissingFieldsModalProps {
@@ -163,6 +164,7 @@ export default function MissingFieldsModal({
 
             const result = await response.json()
             const data = result.customer
+            invalidateCustomersCache()
 
             toast.success('Dati aggiornati con successo!')
 

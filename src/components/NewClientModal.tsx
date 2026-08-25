@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient'
 import { getResidenceStatus, getProvinciaByCity } from '../data/sardegnaProvince'
 import toast from 'react-hot-toast'
 import { logger } from '../utils/logger'
+import { invalidateCustomersCache } from '../utils/customersCache'
 import CalcolaCFButton from './CalcolaCFButton'
 import EuropeanDateInput from './EuropeanDateInput'
 
@@ -489,6 +490,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
       }
       const saveJson = await saveRes.json()
       result = saveJson.customer || saveJson.data || saveJson
+      invalidateCustomersCache()
       toast.success(editingId ? 'Cliente aggiornato con successo!' : 'Cliente creato con successo!')
 
       if (onClientCreated && result) {
