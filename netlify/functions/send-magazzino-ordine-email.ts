@@ -8,8 +8,32 @@ import { requireAuth } from './require-auth'
  *
  * Il magazzino sapeva ordinare solo via WhatsApp (o aprendo un sito
  * e-commerce): un fornitore che lavora via email non era raggiungibile dal
- * gestionale. Stesso SMTP delle altre funzioni (info@dr7.app).
+ * gestionale.
+ *
+ * 25/08/2026 — L'invio rispondeva "Connect ETIMEDOUT": da una funzione
+ * serverless la connessione SMTP in uscita viene spesso bloccata e il tentativo
+ * muore in timeout, quindi l'ordine non partiva mai. Adesso si passa da Resend
+ * (HTTPS, la stessa strada delle altre email del gestionale) e l'SMTP resta
+ * solo come ripiego se la chiave Resend non e' configurata.
  */
+
+/** Invio via Resend (HTTPS): nessuna porta SMTP, nessun timeout in uscita. */
+async function inviaConResend(to: string, subject: string, text: string, html: string): Promise<{ ok: boolean; error?: string }> {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) return { ok: false, error: 'RESEND_API_KEY mancante' }
+  const from = process.env.RESEND_FROM || 'DR7 Magazzino <noreply@dr7.app>'
+  try {
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to: [to], subject, text, html }),
+    })
+    if (!resp.ok) return { ok: false, error: `Resend ${resp.status}: ${(await resp.text()).slice(0, 300)}` }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'errore Resend' }
+  }
+}
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.secureserver.net',
@@ -41,20 +65,36 @@ const handler: Handler = async (event) => {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Testo ordine mancante' }) }
     }
 
+    const subject = oggetto?.trim() || 'Ordine DR7 — Magazzino'
+    const html = `<pre style="font-family:system-ui,Segoe UI,Roboto,sans-serif;font-size:14px;white-space:pre-wrap">${
+      testo.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    }</pre>`
+
+    // 1) Resend. 2) Solo se manca la chiave, si prova l'SMTP storico.
+    const viaResend = await inviaConResend(dest, subject, testo, html)
+    if (viaResend.ok) {
+      return { statusCode: 200, headers, body: JSON.stringify({ success: true, to: dest, canale: 'resend' }) }
+    }
+    console.warn('[send-magazzino-ordine-email] Resend non disponibile:', viaResend.error)
+
     await transporter.sendMail({
       from: '"DR7 Magazzino" <info@dr7.app>',
       to: dest,
-      subject: oggetto?.trim() || 'Ordine DR7 — Magazzino',
+      subject,
       text: testo,
-      html: `<pre style="font-family:system-ui,Segoe UI,Roboto,sans-serif;font-size:14px;white-space:pre-wrap">${
-        testo.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      }</pre>`,
+      html,
     })
 
-    return { statusCode: 200, headers, body: JSON.stringify({ success: true, to: dest }) }
+    return { statusCode: 200, headers, body: JSON.stringify({ success: true, to: dest, canale: 'smtp' }) }
   } catch (e) {
     console.error('[send-magazzino-ordine-email]', e)
-    return { statusCode: 500, headers, body: JSON.stringify({ error: e instanceof Error ? e.message : 'Errore invio' }) }
+    const msg = e instanceof Error ? e.message : 'Errore invio'
+    // ETIMEDOUT/ECONNREFUSED su SMTP: dire "connessione fallita" non aiuta
+    // nessuno, il problema e' che manca la configurazione Resend.
+    const chiaro = /ETIMEDOUT|ECONNREFUSED|ESOCKET/i.test(msg)
+      ? 'Invio email non riuscito: la posta in uscita non risponde. Configura RESEND_API_KEY nelle variabili Netlify.'
+      : msg
+    return { statusCode: 500, headers, body: JSON.stringify({ error: chiaro }) }
   }
 }
 

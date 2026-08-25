@@ -146,7 +146,17 @@ export default function InventarioMagazzino({ business }: { business?: Business 
   // Invio ordine via WhatsApp a un numero digitato al volo (non solo fornitori).
   const [sendOrderId, setSendOrderId] = useState<string | null>(null)
   const [sendPhone, setSendPhone] = useState('')
-  const [sendCanale, setSendCanale] = useState<'whatsapp' | 'email'>('whatsapp')
+  // 2026-08-25: i due canali non si escludono piu'. Un fornitore puo' volere
+  // l'ordine su WhatsApp E per email (conferma scritta), quindi sono due
+  // interruttori indipendenti invece di una scelta secca.
+  const [sendWhatsapp, setSendWhatsapp] = useState(true)
+  const [sendEmailOn, setSendEmailOn] = useState(false)
+  const [sendEmailAddr, setSendEmailAddr] = useState('')
+  // Il testo dell'ordine si scrive qui, nella finestra d'invio: prima era
+  // costruito dal codice e mostrato in sola lettura, quindi non c'era modo di
+  // aggiungere una riga ("consegnare entro venerdi") prima di inviare.
+  const [sendTesto, setSendTesto] = useState('')
+  const [sendOggetto, setSendOggetto] = useState('')
 
   // ── Load ─────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -569,11 +579,108 @@ export default function InventarioMagazzino({ business }: { business?: Business 
     const a = articoli.find(x => x.id === o.articolo_id)
     const forn = o.fornitore_id ? fornitoreById.get(o.fornitore_id) : undefined
     const tipo: 'whatsapp' | 'email' = (a?.contatto_tipo as 'whatsapp' | 'email') || (o.canale === 'email' ? 'email' : 'whatsapp')
-    setSendCanale(tipo)
+    const contattoSalvato = a?.contatto_ordine || ''
+    const emailPrecompilata = tipo === 'email'
+      ? (contattoSalvato || forn?.email || '')
+      : (forn?.email || '')
+    const telPrecompilato = tipo === 'whatsapp'
+      ? (contattoSalvato || forn?.telefono || '')
+      : (forn?.telefono || '')
     setSendOrderId(o.id)
-    setSendPhone(tipo === 'email'
-      ? (a?.contatto_ordine || forn?.email || '')
-      : (a?.contatto_ordine || forn?.telefono || '').replace(/\D/g, ''))
+    setSendWhatsapp(tipo === 'whatsapp')
+    setSendEmailOn(tipo === 'email')
+    setSendPhone(String(telPrecompilato).replace(/\D/g, ''))
+    setSendEmailAddr(String(emailPrecompilata))
+    setSendTesto(testoOrdine(o))
+    setSendOggetto(`Ordine DR7 — ${a?.nome || 'Magazzino'}`)
+  }
+
+  /** Chiude la finestra d'invio e azzera i campi. */
+  function chiudiSend() {
+    setSendOrderId(null)
+    setSendPhone('')
+    setSendEmailAddr('')
+    setSendTesto('')
+    setSendOggetto('')
+  }
+
+  /**
+   * Invia l'ordine sui canali spuntati. L'ordine passa a "inviato" se ALMENO
+   * un canale e' andato a buon fine: se WhatsApp parte ed email no, la merce
+   * e' comunque stata ordinata e l'errore viene detto a parte.
+   */
+  async function inviaOrdine(o: Ordine) {
+    if (!sendWhatsapp && !sendEmailOn) { toast.error('Scegli almeno un canale'); return }
+    const testo = sendTesto.trim()
+    if (!testo) { toast.error('Il messaggio e\' vuoto'); return }
+    const tel = sendPhone.replace(/\D/g, '')
+    const email = sendEmailAddr.trim()
+    if (sendWhatsapp && tel.length < 8) { toast.error('Numero WhatsApp non valido'); return }
+    if (sendEmailOn && !/\S+@\S+\.\S+/.test(email)) { toast.error('Email non valida'); return }
+
+    setBusy(true)
+    const esiti: string[] = []
+    const errori: string[] = []
+    try {
+      if (sendWhatsapp) {
+        const r = await inviaWhatsAppRaw(tel, testo)
+        r.ok ? esiti.push('WhatsApp') : errori.push(`WhatsApp: ${r.error}`)
+      }
+      if (sendEmailOn) {
+        const r = await inviaEmailRaw(email, sendOggetto.trim() || 'Ordine DR7 — Magazzino', testo)
+        r.ok ? esiti.push('email') : errori.push(`Email: ${r.error}`)
+      }
+
+      if (esiti.length > 0) {
+        await supabase.from('inv_ordini').update({ stato: 'inviato', sent_at: new Date().toISOString() }).eq('id', o.id)
+        // Contatto memorizzato sull'articolo: il prossimo ordine parte gia'
+        // pronto. Con due canali si salva quello effettivamente usato, dando
+        // la precedenza all'email (e' il recapito piu' stabile).
+        const a = articoli.find(x => x.id === o.articolo_id)
+        const nuovoContatto = sendEmailOn && esiti.includes('email') ? email : (esiti.includes('WhatsApp') ? tel : null)
+        const nuovoTipo = sendEmailOn && esiti.includes('email') ? 'email' : 'whatsapp'
+        if (a && nuovoContatto && (a.contatto_ordine !== nuovoContatto || a.contatto_tipo !== nuovoTipo)) {
+          const { error: cErr } = await supabase.from('inv_articoli')
+            .update({ contatto_ordine: nuovoContatto, contatto_tipo: nuovoTipo }).eq('id', a.id)
+          if (!cErr) {
+            setArticoli(prev => prev.map(x => x.id === a.id
+              ? { ...x, contatto_ordine: nuovoContatto, contatto_tipo: nuovoTipo } : x))
+          }
+        }
+        toast.success(`Ordine inviato via ${esiti.join(' e ')}`)
+        if (errori.length > 0) toast.error(errori.join(' · '), { duration: 8000 })
+        chiudiSend()
+        await load()
+      } else {
+        toast.error(errori.join(' · ') || 'Invio fallito', { duration: 8000 })
+      }
+    } finally { setBusy(false) }
+  }
+
+  /** Invio WhatsApp puro: nessun effetto sull'ordine, ritorna solo l'esito. */
+  async function inviaWhatsAppRaw(phone: string, msg: string): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const res = await fetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customPhone: phone, customMessage: msg, type: 'Ordine Magazzino' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data?.success === false) return { ok: false, error: data?.error || `HTTP ${res.status}` }
+      return { ok: true }
+    } catch (e) { return { ok: false, error: (e as Error).message } }
+  }
+
+  /** Invio email puro: nessun effetto sull'ordine, ritorna solo l'esito. */
+  async function inviaEmailRaw(dest: string, oggetto: string, testo: string): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const res = await authFetch('/.netlify/functions/send-magazzino-ordine-email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: dest, oggetto, testo }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data?.success !== true) return { ok: false, error: data?.error || `HTTP ${res.status}` }
+      return { ok: true }
+    } catch (e) { return { ok: false, error: (e as Error).message } }
   }
 
   async function creaOrdineManuale(a: Articolo) {
@@ -773,48 +880,87 @@ export default function InventarioMagazzino({ business }: { business?: Business 
         if (!o) return null
         const a = articoloById.get(o.articolo_id)
         return (
-          <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4" onClick={() => { setSendOrderId(null); setSendPhone('') }}>
-            <div className="w-full max-w-md rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 z-[100] overflow-y-auto bg-black/60 flex items-start justify-center p-4" onClick={chiudiSend}>
+            <div className="my-4 w-full max-w-lg rounded-2xl border border-theme-border bg-theme-bg-secondary p-5 space-y-4" onClick={e => e.stopPropagation()}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-base font-bold text-theme-text-primary">Invia ordine</h3>
                   <p className="text-xs text-theme-text-muted">{a?.nome || o.articolo_id} · {num(o.quantita)} {a?.unita || ''}</p>
                 </div>
-                <button onClick={() => { setSendOrderId(null); setSendPhone('') }} className="text-theme-text-muted hover:text-theme-text-primary text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-full hover:bg-theme-bg-hover">&times;</button>
+                <button onClick={chiudiSend} className="text-theme-text-muted hover:text-theme-text-primary text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-full hover:bg-theme-bg-hover">&times;</button>
               </div>
 
-              <div className="flex items-center gap-2">
+              {/* Due interruttori indipendenti: si puo' mandare l'ordine solo
+                  su WhatsApp, solo per email, oppure su entrambi. */}
+              <div className="flex flex-wrap items-center gap-2">
                 <button
-                  onClick={() => { setSendCanale('whatsapp'); setSendPhone(p => p.includes('@') ? '' : p) }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${sendCanale === 'whatsapp' ? 'bg-green-600 text-white border-green-600' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary'}`}
-                >WhatsApp</button>
+                  onClick={() => setSendWhatsapp(v => !v)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${sendWhatsapp ? 'bg-green-600 text-white border-green-600' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary'}`}
+                >{sendWhatsapp ? '\u2713 ' : ''}WhatsApp</button>
                 <button
-                  onClick={() => { setSendCanale('email'); setSendPhone(p => p.includes('@') ? p : (a?.contatto_tipo === 'email' ? (a?.contatto_ordine || '') : '')) }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${sendCanale === 'email' ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary'}`}
-                >Email</button>
+                  onClick={() => setSendEmailOn(v => !v)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${sendEmailOn ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-secondary'}`}
+                >{sendEmailOn ? '\u2713 ' : ''}Email</button>
                 {a?.contatto_ordine && (
                   <span className="text-[10px] text-theme-text-muted truncate">salvato: {a.contatto_ordine}</span>
                 )}
               </div>
 
-              <input
-                type={sendCanale === 'email' ? 'email' : 'tel'}
-                value={sendPhone}
-                onChange={e => setSendPhone(e.target.value)}
-                placeholder={sendCanale === 'email' ? 'Email fornitore' : 'Numero WhatsApp (es. 39347...)'}
-                className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary"
-                autoFocus
-              />
+              {sendWhatsapp && (
+                <input
+                  type="tel"
+                  value={sendPhone}
+                  onChange={e => setSendPhone(e.target.value)}
+                  placeholder="Numero WhatsApp (es. 39347...)"
+                  className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary"
+                />
+              )}
 
-              <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap text-[11px] text-theme-text-secondary bg-theme-bg-tertiary/50 border border-theme-border rounded-lg p-3">{testoOrdine(o)}</pre>
+              {sendEmailOn && (
+                <div className="space-y-2">
+                  <input
+                    type="email"
+                    value={sendEmailAddr}
+                    onChange={e => setSendEmailAddr(e.target.value)}
+                    placeholder="Email fornitore"
+                    className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary"
+                  />
+                  <input
+                    type="text"
+                    value={sendOggetto}
+                    onChange={e => setSendOggetto(e.target.value)}
+                    placeholder="Oggetto dell'email"
+                    className="w-full px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary"
+                  />
+                </div>
+              )}
+
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-[10px] uppercase tracking-wider text-theme-text-muted">Messaggio dell'ordine</label>
+                  <button
+                    onClick={() => setSendTesto(testoOrdine(o))}
+                    className="text-[10px] text-theme-text-muted underline hover:text-theme-text-primary"
+                  >Ripristina testo</button>
+                </div>
+                <textarea
+                  value={sendTesto}
+                  onChange={e => setSendTesto(e.target.value)}
+                  rows={9}
+                  className="w-full resize-y rounded-lg border border-theme-border bg-theme-bg-tertiary px-3 py-2 text-[13px] leading-relaxed text-theme-text-primary"
+                />
+                <div className="mt-1 text-[10px] text-theme-text-muted">
+                  Lo stesso testo va su WhatsApp e nell'email. Modificalo prima di inviare: quello che leggi qui e' quello che riceve il fornitore.
+                </div>
+              </div>
 
               <div className="flex items-center justify-end gap-2">
-                <button onClick={() => { setSendOrderId(null); setSendPhone('') }} className="px-3 py-2 rounded-lg text-sm border border-theme-border text-theme-text-secondary">Annulla</button>
+                <button onClick={chiudiSend} className="px-3 py-2 rounded-lg text-sm border border-theme-border text-theme-text-secondary">Annulla</button>
                 <button
                   disabled={busy}
-                  onClick={() => sendCanale === 'email' ? inviaOrdineEmail(o, sendPhone) : inviaOrdineWhatsApp(o, sendPhone)}
+                  onClick={() => inviaOrdine(o)}
                   className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold disabled:opacity-50"
-                >{busy ? 'Invio…' : 'Invia ordine'}</button>
+                >{busy ? 'Invio…' : 'Ordina'}</button>
               </div>
             </div>
           </div>
