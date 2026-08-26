@@ -198,6 +198,97 @@ async function matchEnte(multa: MultaData): Promise<PecRecipient> {
     return { ...empty, candidates: scored.slice(0, 3) }
 }
 
+// ── Contratto di noleggio: si allega SEMPRE ────────────────────────
+// La comunicazione dati conducente vale quanto il contratto che la sostiene:
+// se per quel noleggio il contratto non esiste ancora lo si genera al volo
+// invece di spedire la PEC senza. La generazione parte SOLO quando non c'e'
+// nessun contratto collegato al booking, quindi non tocca mai firme apposte.
+async function generateContractForBooking(bookingId: string): Promise<string> {
+    const baseUrl = process.env.URL || process.env.DEPLOY_PRIME_URL || 'https://platform.dr7ai.com'
+    try {
+        const res = await fetch(`${baseUrl}/.netlify/functions/generate-contract`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookingId }),
+        })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const data: any = await res.json().catch(() => ({}))
+        if (!res.ok || data?.error || data?.skipped) {
+            console.warn(`[process-multa] generate-contract non ha prodotto il contratto per ${bookingId}:`, data?.error || data?.reason || res.status)
+            return ''
+        }
+        console.log(`[process-multa] Contratto generato automaticamente per ${bookingId}`)
+        return String(data?.url || '')
+    } catch (e) {
+        console.warn('[process-multa] generate-contract fallito:', e)
+        return ''
+    }
+}
+
+/**
+ * URL del contratto da allegare alla PEC. Ordine: contratto del booking
+ * (firmato > non firmato) > `bookings.contract_url` > generazione automatica >
+ * ricerca per nome nel bucket. La ricerca per nome resta per ultima perche' e'
+ * l'unica che puo' pescare il file di un omonimo: il contratto generato per
+ * QUEL booking e' sempre preferibile.
+ */
+async function resolveContractUrl(
+    bookingId: string,
+    bookingContractUrl: string | null | undefined,
+    nameParts: string[],
+): Promise<string> {
+    const { data: contractData } = await supabase
+        .from('contracts')
+        .select('signed_pdf_url, pdf_url')
+        .eq('booking_id', bookingId)
+        .maybeSingle()
+    if (contractData) {
+        const url = contractData.signed_pdf_url || contractData.pdf_url || ''
+        if (url) return url
+    }
+
+    if (bookingContractUrl) return bookingContractUrl
+
+    // Nessun contratto per questo noleggio: si genera adesso.
+    const generated = await generateContractForBooking(bookingId)
+    if (generated) return generated
+    // La generazione scrive anche su `contracts`: rileggi, cosi' si prende il
+    // PDF anche se la risposta non portava l'URL.
+    const { data: afterGen } = await supabase
+        .from('contracts')
+        .select('signed_pdf_url, pdf_url')
+        .eq('booking_id', bookingId)
+        .maybeSingle()
+    if (afterGen) {
+        const url = afterGen.signed_pdf_url || afterGen.pdf_url || ''
+        if (url) return url
+    }
+
+    // Ultima spiaggia: file nel bucket `contracts` che contiene il nome del
+    // cliente (contratto_Patrizio.pdf, contratto_Campagnola.pdf...).
+    const parts = nameParts.map(p => p.trim()).filter(Boolean)
+    if (parts.length === 0) return ''
+    for (const folder of ['filled', 'signed', '']) {
+        const { data: files } = await supabase.storage
+            .from('contracts')
+            .list(folder || undefined, { limit: 200, sortBy: { column: 'created_at', order: 'desc' } })
+        if (!files) continue
+        const contractFile = files.find(f => {
+            if (!f.name.endsWith('.pdf')) return false
+            const lower = f.name.toLowerCase()
+            return parts.some(part => lower.includes(part.toLowerCase()))
+        })
+        if (contractFile) {
+            const path = folder ? `${folder}/${contractFile.name}` : contractFile.name
+            const { data: signed } = await supabase.storage
+                .from('contracts')
+                .createSignedUrl(path, 86400)
+            if (signed?.signedUrl) return signed.signedUrl
+        }
+    }
+    return ''
+}
+
 // ── Find driver from booking ─────────────────────────────────────────────────
 
 async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: string): Promise<DriverData | null> {
@@ -328,55 +419,11 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
         nome = parts.slice(0, -1).join(' ')
     }
 
-    // Fetch contract PDF URL — check multiple sources
-    let contractUrl = ''
-
-    // 1. Check contracts DB table (signed first, then unsigned)
-    const { data: contractData } = await supabase
-        .from('contracts')
-        .select('signed_pdf_url, pdf_url')
-        .eq('booking_id', match.id)
-        .maybeSingle()
-    if (contractData) {
-        contractUrl = contractData.signed_pdf_url || contractData.pdf_url || ''
-    }
-
-    // 2. Fallback: check booking.contract_url
-    if (!contractUrl && match.contract_url) {
-        contractUrl = match.contract_url
-    }
-
-    // 3. Fallback: search contracts storage bucket for files matching customer name
-    //    Contracts are named like contratto_Patrizio.pdf or contratto_Campagnola.pdf
-    if (!contractUrl) {
-        const nameParts = (match.customer_name || '').trim().split(/\s+/).filter(Boolean)
-        // Also include nome/cognome from customers_extended
-        if (nome && !nameParts.includes(nome)) nameParts.push(nome)
-        if (cognome && !nameParts.includes(cognome)) nameParts.push(cognome)
-
-        if (nameParts.length > 0) {
-            for (const folder of ['filled', 'signed', '']) {
-                const { data: files } = await supabase.storage
-                    .from('contracts')
-                    .list(folder || undefined, { limit: 200, sortBy: { column: 'created_at', order: 'desc' } })
-                if (files) {
-                    const contractFile = files.find(f => {
-                        if (!f.name.endsWith('.pdf')) return false
-                        const lower = f.name.toLowerCase()
-                        return nameParts.some(part => lower.includes(part.toLowerCase()))
-                    })
-                    if (contractFile) {
-                        const path = folder ? `${folder}/${contractFile.name}` : contractFile.name
-                        const { data: signed } = await supabase.storage
-                            .from('contracts')
-                            .createSignedUrl(path, 86400)
-                        if (signed?.signedUrl) contractUrl = signed.signedUrl
-                        break
-                    }
-                }
-            }
-        }
-    }
+    // Contratto di noleggio da allegare: se manca viene generato adesso.
+    const contractNameParts = (match.customer_name || '').trim().split(/\s+/).filter(Boolean)
+    if (nome && !contractNameParts.includes(nome)) contractNameParts.push(nome)
+    if (cognome && !contractNameParts.includes(cognome)) contractNameParts.push(cognome)
+    const contractUrl = await resolveContractUrl(match.id, match.contract_url, contractNameParts)
     console.log(`[process-multa] Contract lookup: contractUrl=${contractUrl ? 'found' : 'not found'}`)
 
     // Fetch customer documents (patente, documento d'identita', tessera CF).
@@ -819,6 +866,16 @@ const handler: Handler = async (event) => {
                     return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Dati multa e conducente richiesti' }) }
                 }
 
+                // Il contratto deve partire INSIEME al verbale: si risolve
+                // prima della lettera, cosi' l'elenco degli allegati che la
+                // lettera dichiara e' quello che parte davvero.
+                if (!req.driverData.contract_url && req.driverData.booking_id) {
+                    const np = String(req.driverData.customer_name || '').trim().split(/\s+/).filter(Boolean)
+                    if (req.driverData.nome && !np.includes(req.driverData.nome)) np.push(req.driverData.nome)
+                    if (req.driverData.cognome && !np.includes(req.driverData.cognome)) np.push(req.driverData.cognome)
+                    req.driverData.contract_url = await resolveContractUrl(req.driverData.booking_id, null, np)
+                }
+
                 // Use user-edited letter if provided, otherwise auto-generate
                 const multeCfg = await loadMulteConfig()
                 const letterText = req.letterText
@@ -874,21 +931,41 @@ const handler: Handler = async (event) => {
                 // accertatore la chiede insieme alla patente, prima non partiva.
                 await attachDocs(req.driverData.codice_fiscale_urls, 'codice_fiscale')
 
-                // 4. Attach signed contract PDF
-                if (req.driverData.contract_url) {
+                // 4. Contratto di noleggio — allegato SEMPRE.
+                // L'URL arriva dalla schermata, ma non ci si ferma li': se
+                // manca (o non si scarica piu': i link firmati scadono, e la
+                // schermata puo' restare aperta per ore) il contratto viene
+                // ricercato e, se non esiste, generato adesso lato server.
+                const attachContract = async (url: string): Promise<boolean> => {
+                    if (!url) return false
                     try {
-                        const res = await fetch(req.driverData.contract_url)
-                        if (res.ok) {
-                            const buf = Buffer.from(await res.arrayBuffer())
-                            attachments.push({
-                                filename: `contratto_noleggio_${req.driverData.vehicle_plate}.pdf`,
-                                content: buf,
-                                contentType: 'application/pdf',
-                            })
-                        }
+                        const res = await fetch(url)
+                        if (!res.ok) return false
+                        const buf = Buffer.from(await res.arrayBuffer())
+                        attachments.push({
+                            filename: `contratto_noleggio_${driver.vehicle_plate}.pdf`,
+                            content: buf,
+                            contentType: 'application/pdf',
+                        })
+                        return true
                     } catch (e) {
                         console.warn('[process-multa] Failed to fetch contract:', e)
+                        return false
                     }
+                }
+                let contractAttached = await attachContract(driver.contract_url || '')
+                if (!contractAttached && driver.contract_url && driver.booking_id) {
+                    // Link scaduto o file sparito: si rifa' la risoluzione.
+                    const nameParts = String(driver.customer_name || '').trim().split(/\s+/).filter(Boolean)
+                    if (driver.nome && !nameParts.includes(driver.nome)) nameParts.push(driver.nome)
+                    if (driver.cognome && !nameParts.includes(driver.cognome)) nameParts.push(driver.cognome)
+                    const freshUrl = await resolveContractUrl(driver.booking_id, null, nameParts)
+                    if (freshUrl && freshUrl !== driver.contract_url) {
+                        contractAttached = await attachContract(freshUrl)
+                    }
+                }
+                if (!contractAttached) {
+                    console.warn(`[process-multa] PEC senza contratto per booking ${driver.booking_id || 'N/D'} — non e' stato possibile recuperarlo`)
                 }
 
                 console.log(`[process-multa] Sending PEC with ${attachments.length} attachments`)
@@ -922,6 +999,10 @@ const handler: Handler = async (event) => {
                         smtpResponse: result.response,
                         letterText,
                         attachmentCount: attachments.length,
+                        // Lo storico deve dire se il contratto e' partito
+                        // davvero, non se la schermata ne aveva l'URL.
+                        contractAttached,
+                        contractUrl: driver.contract_url || null,
                     }),
                 }
             }

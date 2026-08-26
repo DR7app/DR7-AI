@@ -300,7 +300,9 @@ export default function GestioneMulteTab({ business }: { business?: Business | s
                 pec_cc: ccList.length ? ccList : null,
                 allegati_count: data.attachmentCount || 0,
                 has_patente: (driverData.license_urls?.length || 0) > 0,
-                has_contratto: !!driverData.contract_url,
+                // Il contratto puo' essere generato al momento dell'invio:
+                // conta quello che il server ha davvero allegato.
+                has_contratto: data.contractAttached ?? !!driverData.contract_url,
                 has_documento_id: (driverData.id_urls?.length || 0) > 0,
                 pdf_filename: multaFile?.name || null,
             }).then(() => loadPecHistory())
@@ -700,7 +702,7 @@ export default function GestioneMulteTab({ business }: { business?: Business | s
                                             </span>
                                         ) : (
                                             <span className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-500/10 rounded text-xs text-yellow-400 border border-yellow-500/30">
-                                                Contratto non trovato
+                                                Contratto non trovato — generato all'invio
                                             </span>
                                         )}
                                     </div>
