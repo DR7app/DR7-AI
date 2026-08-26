@@ -399,6 +399,18 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
           )}
         </div>
 
+        {/* Errore classico: nel campo server si scrive il DOMINIO della casella
+            (pec.poste.it) invece del server di uscita (mail.postecert.it). Il
+            dominio ha solo record MX: come host SMTP non esiste proprio. */}
+        {pecSmtpHost.trim() && pecMittente.includes('@') &&
+          pecSmtpHost.trim().toLowerCase() === pecMittente.trim().toLowerCase().split('@')[1] && (
+          <p className="text-[11px] text-red-500">
+            <span className="font-mono">{pecSmtpHost.trim()}</span> e&apos; il dominio della casella, non il server di
+            uscita: l&apos;invio non trovera&apos; nessun server a quell&apos;indirizzo. Scegli il provider dalla tendina
+            (per Poste: <span className="font-mono">mail.postecert.it</span>) oppure lascia il campo vuoto.
+          </p>
+        )}
+
         {/* Il ripiego su Legalmail non deve essere silenzioso: una PEC Poste
             su dominio proprio finiva sul server di InfoCert e l'invio veniva
             rifiutato all'autenticazione, senza che nulla lo dicesse. */}
