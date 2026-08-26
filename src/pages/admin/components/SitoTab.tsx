@@ -748,7 +748,10 @@ export default function SitoTab() {
     const doSave = async () => {
         setSaving(true)
         try {
-            await savePersisted({ flotta, faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations, aviationMarine, dr7ClubPlan })
+            // Un pacchetto senza id il sito non lo mostra: l'id si completa qui.
+            const creditWalletToSave = normalizeCreditPackagesForSave(creditWallet)
+            if (JSON.stringify(creditWalletToSave) !== JSON.stringify(creditWallet)) setCreditWallet(creditWalletToSave)
+            await savePersisted({ flotta, faq, cancellazione, membership, home, about, footer, legal, careers, press, contact, mechanical, carwash, investitori, franchising, aviationQuote, checkEmail, jetSearchResults, confirmationSuccess, header, signUp, payment, paymentSuccess, booking, creditWallet: creditWalletToSave, token, firma, registrazioneCliente, bookingSearchBox, paymentCancel, locations, aviationMarine, dr7ClubPlan })
             setSavedFlotta(flotta)
             setSavedFaq(faq)
             setSavedCancellazione(cancellazione)
@@ -773,7 +776,7 @@ export default function SitoTab() {
             setSavedPayment(payment)
             setSavedPaymentSuccess(paymentSuccess)
             setSavedBooking(booking)
-            setSavedCreditWallet(creditWallet)
+            setSavedCreditWallet(creditWalletToSave)
             setSavedToken(token)
             setSavedFirma(firma)
             setSavedRegistrazioneCliente(registrazioneCliente)
@@ -4793,10 +4796,46 @@ function BookingEditor({ copy, setCopy }: { copy: BookingCopy; setCopy: (next: B
     )
 }
 
-// ─── Credit Wallet editor (marketing + checkout modal + errors) ────────────
-// Pacchetti (importi/bonus) NON sono modificabili qui — sono dati prodotto
-// (CREDIT_PACKAGES nel codice). Qui modifichi solo i testi marketing + chrome
-// del modale di checkout. Il template `{amount}` resta come segnaposto.
+/**
+ * Ripulisce i pacchetti prima di scriverli: id mancanti e serie in maiuscolo.
+ *
+ * Il sito scarta i pacchetti senza `id` (normalizeCreditPackages in
+ * Sito/utils/siteCopy.ts): un pacchetto aggiunto e salvato senza nome restava
+ * invisibile sulla pagina pubblica, senza che nulla lo dicesse dopo il
+ * salvataggio. Qui l'id mancante viene ricavato al momento del salvataggio —
+ * dal nome, altrimenti da serie + importo — e reso univoco.
+ */
+function slugifyPackageId(v: string): string {
+    return v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+}
+function normalizeCreditPackagesForSave(cw: CreditWalletCopy): CreditWalletCopy {
+    if (!Array.isArray(cw.packages) || cw.packages.length === 0) return cw
+    const used = new Set<string>()
+    const packages = cw.packages.map(p => {
+        // La serie e' un'etichetta stampata sulla card e sul filtro del sito:
+        // il campo in gestionale la mostra in maiuscolo, quindi va SALVATA in
+        // maiuscolo. Prima il maiuscolo era solo un effetto CSS e sul sito
+        // usciva "dr7 maxi" invece di "DR7 MAXI".
+        const series = (p.series || '').toUpperCase()
+        let id = (p.id || '').trim()
+        if (!id) {
+            id = slugifyPackageId(p.name || '')
+                || slugifyPackageId(`${p.series || 'pacchetto'} ${p.rechargeAmount || 0}`)
+        }
+        if (!id) id = 'pacchetto'
+        let unique = id
+        for (let n = 2; used.has(unique); n++) unique = `${id}-${n}`
+        used.add(unique)
+        return { ...p, id: unique, series }
+    })
+    return { ...cw, packages }
+}
+
+// ─── Credit Wallet editor (marketing + checkout modal + pacchetti) ─────────
+// Qui si modificano i testi marketing, il chrome del modale di checkout e i
+// pacchetti di ricarica (importi e bonus). Il template `{amount}` resta come
+// segnaposto.
 function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy: (next: CreditWalletCopy) => void }) {
     const update = <K extends keyof CreditWalletCopy>(key: K, value: CreditWalletCopy[K]) => setCopy({ ...copy, [key]: value })
 
@@ -4929,7 +4968,7 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
                     return (
                         <div key={i} className="border border-theme-border rounded-xl p-3 space-y-2 bg-theme-bg-secondary/40">
                             <div className="grid grid-cols-12 gap-2 items-center">
-                                <input type="text" list="cw-series-options" value={p.series} onChange={e => updatePkg(i, { series: e.target.value })} placeholder="SERIE" className={`col-span-4 ${inputCls} uppercase`} />
+                                <input type="text" list="cw-series-options" value={p.series} onChange={e => updatePkg(i, { series: e.target.value.toUpperCase() })} placeholder="SERIE" className={`col-span-4 ${inputCls} uppercase`} />
                                 <input type="text" value={p.name} onChange={e => updatePkg(i, { name: e.target.value, ...(p.id.trim() ? {} : { id: slugify(e.target.value) }) })} placeholder="Nome pacchetto" className={`col-span-4 ${inputCls}`} />
                                 <input type="text" value={p.id} onChange={e => updatePkg(i, { id: e.target.value })} placeholder="id" className={`col-span-3 ${inputCls} font-mono ${issue ? 'border-red-500' : ''}`} />
                                 <div className="col-span-1 flex justify-end">
