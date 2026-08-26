@@ -9,6 +9,7 @@ import { logger } from '../../../utils/logger'
 import { authFetch } from '../../../utils/authFetch'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { maskIban, validateIban } from '../../../utils/ibanValidation'
+import { logAdminAction } from '../../../utils/logAdminAction'
 
 interface Cauzione {
     id: string
@@ -65,6 +66,7 @@ export default function CauzioniTab() {
     const [stats, setStats] = useState({
         incassate: 0,
         in_cassa: 0,
+        bloccate: 0,
         da_incassare: 0,
         scadute: 0,
         a_rischio: 0,
@@ -72,6 +74,7 @@ export default function CauzioniTab() {
         totale_incassate: 0,
         totale_da_incassare: 0,
         totale_in_cassa: 0,
+        totale_bloccate: 0,
         totale_attive_amount: 0,
         totale_scadute_amount: 0,
         totale_rischio_amount: 0,
@@ -232,8 +235,15 @@ export default function CauzioniTab() {
         const incassateList = visible.filter(c => c.data_incasso)
         const daIncassareList = visible.filter(c => !c.data_incasso)
         const incassate = incassateList.length
-        const inCassaList = cauzioni.filter(c => c.stato === 'Bloccata')
+        // "In Cassa" = trattenuta E gia' incassata: i soldi sono davvero entrati.
+        // "Bloccata" senza incasso e' un'altra cosa: la cauzione resta ferma
+        // (tipicamente il cliente la lascia per un noleggio successivo), nessun
+        // incasso e nessun movimento di cassa. Contarla come in cassa gonfiava
+        // il totale con denaro mai preso.
+        const inCassaList = cauzioni.filter(c => c.stato === 'Bloccata' && !!c.data_incasso)
         const in_cassa = inCassaList.length
+        const bloccateList = cauzioni.filter(c => c.stato === 'Bloccata' && !c.data_incasso)
+        const bloccate = bloccateList.length
         const da_incassare = daIncassareList.length
         const scaduteList = visible.filter(c => c.is_overdue)
         const scadute = scaduteList.length
@@ -244,8 +254,11 @@ export default function CauzioniTab() {
         const totale_incassate = incassateList.reduce((sum, c) => sum + Number(c.importo), 0)
         const totale_da_incassare = daIncassareList.reduce((sum, c) => sum + Number(c.importo), 0)
         const totale_in_cassa = inCassaList.reduce((sum, c) => sum + Number(c.importo), 0)
-        const totale_attive = visible.length + in_cassa
-        const totale_attive_amount = visible.reduce((s, c) => s + Number(c.importo), 0) + totale_in_cassa
+        const totale_bloccate = bloccateList.reduce((sum, c) => sum + Number(c.importo), 0)
+        // Le bloccate restano denaro del cliente fermo presso DR7: contano fra
+        // le attive, altrimenti sparirebbero da ogni totale.
+        const totale_attive = visible.length + in_cassa + bloccate
+        const totale_attive_amount = visible.reduce((s, c) => s + Number(c.importo), 0) + totale_in_cassa + totale_bloccate
         const totale_scadute_amount = scaduteList.reduce((s, c) => s + Number(c.importo), 0)
         const totale_rischio_amount = rischioList.reduce((s, c) => s + Number(c.importo), 0)
 
@@ -280,7 +293,7 @@ export default function CauzioniTab() {
 
         // Top clienti per cauzioni ATTIVE (non chiuse).
         const clienteMap = new Map<string, { id: string; nome: string; count: number; amount: number }>()
-        const activeForRanking = [...visible, ...inCassaList]
+        const activeForRanking = [...visible, ...inCassaList, ...bloccateList]
         activeForRanking.forEach(c => {
             const id = c.cliente_id || 'unknown'
             const nome = c.cliente_nome || 'N/A'
@@ -292,9 +305,9 @@ export default function CauzioniTab() {
         const topClienti = Array.from(clienteMap.values()).sort((a, b) => b.amount - a.amount).slice(0, 4)
 
         setStats({
-            incassate, in_cassa, da_incassare, scadute, a_rischio,
+            incassate, in_cassa, bloccate, da_incassare, scadute, a_rischio,
             totale_attive,
-            totale_incassate, totale_da_incassare, totale_in_cassa,
+            totale_incassate, totale_da_incassare, totale_in_cassa, totale_bloccate,
             totale_attive_amount, totale_scadute_amount, totale_rischio_amount,
             byMonth, topClienti,
         })
@@ -1047,6 +1060,76 @@ export default function CauzioniTab() {
         setCassaCauzione(cauzione)
     }
 
+    /**
+     * BLOCCA: la cauzione resta ferma presso DR7 senza essere incassata e senza
+     * movimento di cassa. Caso reale: il cliente lascia la cauzione per un
+     * noleggio successivo invece di farsela restituire. Lo stato 'Bloccata' e'
+     * terminale per la scadenza (trigger auto_update_cauzione_status), quindi
+     * sparisce da "Da Restituire Oggi", dal promemoria staff e dai messaggi di
+     * scadenza al cliente — che e' esattamente lo scopo.
+     * NB: `data_incasso` NON viene toccato. E' quello a distinguere una cauzione
+     * bloccata (soldi mai presi) da una messa in cassa (incassata davvero).
+     */
+    const handleBlocca = async (cauzione: Cauzione) => {
+        const importoFmt = Number(cauzione.importo).toLocaleString('it-IT', { minimumFractionDigits: 2 })
+        const conferma = confirm(
+            `Bloccare la cauzione di EUR ${importoFmt} di ${cauzione.cliente_nome || 'questo cliente'}?\n\n` +
+            'La cauzione resta trattenuta: NON viene incassata e NON entra in cassa.\n' +
+            'Sparisce dai promemoria "da restituire" finche\' non la sblocchi.'
+        )
+        if (!conferma) return
+
+        const motivo = (prompt('Motivo del blocco (facoltativo)', 'Cauzione mantenuta per un noleggio successivo') || '').trim()
+        try {
+            const { error } = await supabase
+                .from('cauzioni')
+                .update({
+                    stato: 'Bloccata',
+                    note: motivo ? `Cauzione bloccata: ${motivo}` : 'Cauzione bloccata: trattenuta senza incasso',
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', cauzione.id)
+            if (error) throw error
+            logAdminAction('blocca_cauzione', 'cauzione', cauzione.id, {
+                customer: cauzione.cliente_nome,
+                importo: Number(cauzione.importo).toFixed(2),
+                motivo: motivo || undefined,
+            })
+            toast.success('Cauzione bloccata: nessun incasso, nessun promemoria')
+            fetchCauzioni()
+        } catch (error: unknown) {
+            const _errMsg = error instanceof Error ? error.message : String(error)
+            console.error('Error blocking cauzione:', error)
+            toast.error(`Errore: ${_errMsg}`)
+        }
+    }
+
+    /** Annulla il blocco: la cauzione torna in gioco e il termine riparte. */
+    const handleSbloccaBlocco = async (cauzione: Cauzione) => {
+        if (!confirm(`Togliere il blocco alla cauzione di ${cauzione.cliente_nome || 'questo cliente'}?\n\nTorna fra le cauzioni da gestire e riprende i promemoria di restituzione.`)) return
+        try {
+            const { error } = await supabase
+                .from('cauzioni')
+                .update({
+                    stato: 'Attiva',
+                    note: 'Blocco rimosso',
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', cauzione.id)
+            if (error) throw error
+            logAdminAction('sblocca_cauzione', 'cauzione', cauzione.id, {
+                customer: cauzione.cliente_nome,
+                importo: Number(cauzione.importo).toFixed(2),
+            })
+            toast.success('Blocco rimosso')
+            fetchCauzioni()
+        } catch (error: unknown) {
+            const _errMsg = error instanceof Error ? error.message : String(error)
+            console.error('Error unblocking cauzione:', error)
+            toast.error(`Errore: ${_errMsg}`)
+        }
+    }
+
     const handleRevertStato = async (cauzione: Cauzione, newStato: string) => {
         try {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1250,10 +1333,11 @@ export default function CauzioniTab() {
             </div>
 
             {/* 6 KPI Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-7 gap-3">
                 <CauzioneKpi label="Cauzioni Incassate" count={stats.incassate} amount={stats.totale_incassate} ring="#10B981"/>
                 <CauzioneKpi label="Da Incassare" count={stats.da_incassare} amount={stats.totale_da_incassare} ring="#F59E0B"/>
                 <CauzioneKpi label="In Cassa" count={stats.in_cassa} amount={stats.totale_in_cassa} ring="#EF4444"/>
+                <CauzioneKpi label="Bloccate" count={stats.bloccate} amount={stats.totale_bloccate} ring="#F97316"/>
                 <CauzioneKpi label="Totale Attive" count={stats.totale_attive} amount={stats.totale_attive_amount} ring="#A855F7"/>
                 <CauzioneKpi label="Scadute" count={stats.scadute} amount={stats.totale_scadute_amount} ring="#DC2626" urgent={stats.scadute > 0}/>
                 <CauzioneKpi label="A Rischio" count={stats.a_rischio} amount={stats.totale_rischio_amount} ring="#EAB308" urgent={stats.a_rischio > 0}/>
@@ -1324,7 +1408,11 @@ export default function CauzioniTab() {
                 // State-aware actions: only show what makes sense for each cauzione.
                 const rowActions = (c: Cauzione) => {
                     const isIncassata = !!c.data_incasso
-                    const isInCassa = c.stato === 'Bloccata'
+                    // In cassa = bloccata E incassata. Una cauzione bloccata
+                    // senza incasso e' solo trattenuta: i soldi non sono entrati.
+                    const isBloccata = c.stato === 'Bloccata'
+                    const isInCassa = isBloccata && isIncassata
+                    const isTrattenuta = isBloccata && !isIncassata
                     return (
                         <>
                             <button onClick={() => handleEdit(c)} className="px-3 py-1.5 bg-blue-600 text-white text-[11px] rounded-full hover:bg-blue-700 transition-colors">Modifica</button>
@@ -1354,6 +1442,30 @@ export default function CauzioniTab() {
                                     className="px-3 py-1.5 bg-indigo-600 text-white text-[11px] rounded-full hover:bg-indigo-700 transition-colors font-semibold"
                                 >
                                     SBLOCCA PRE-AUTH
+                                </button>
+                            )}
+                            {/* BLOCCA: la tengo ferma senza incassarla e senza
+                                cassa (es. il cliente la lascia per il noleggio
+                                successivo). Toglie i promemoria di restituzione. */}
+                            {/* Solo se NON e' gia' incassata: su una cauzione
+                                incassata il bottone giusto e' CASSA, che registra
+                                l'importo davvero entrato. */}
+                            {!isBloccata && !isIncassata && (
+                                <button
+                                    onClick={() => handleBlocca(c)}
+                                    title="Trattieni la cauzione senza incassarla: niente cassa, niente promemoria di restituzione."
+                                    className="px-3 py-1.5 bg-orange-600 text-white text-[11px] rounded-full hover:bg-orange-700 transition-colors font-semibold"
+                                >
+                                    BLOCCA
+                                </button>
+                            )}
+                            {isTrattenuta && (
+                                <button
+                                    onClick={() => handleSbloccaBlocco(c)}
+                                    title="Togli il blocco: la cauzione torna da gestire e riprende i promemoria."
+                                    className="px-3 py-1.5 bg-slate-600 text-white text-[11px] rounded-full hover:bg-slate-700 transition-colors"
+                                >
+                                    TOGLI BLOCCO
                                 </button>
                             )}
                             <button onClick={() => handleMarkRestituita(c)} className="px-3 py-1.5 bg-green-600 text-white text-[11px] rounded-full hover:bg-green-700 transition-colors">RESTITUITA</button>
@@ -2035,8 +2147,8 @@ function fmtMoney(n: number): string {
 
 // Big donut + breakdown delle cauzioni attive per stato.
 function RiepilogoDonut({ stats }: { stats: {
-    incassate: number; da_incassare: number; in_cassa: number; scadute: number;
-    totale_incassate: number; totale_da_incassare: number; totale_in_cassa: number;
+    incassate: number; da_incassare: number; in_cassa: number; bloccate: number; scadute: number;
+    totale_incassate: number; totale_da_incassare: number; totale_in_cassa: number; totale_bloccate: number;
     totale_attive_amount: number; totale_scadute_amount: number;
 } }) {
     const total = stats.totale_attive_amount + stats.totale_incassate + stats.totale_in_cassa + stats.totale_scadute_amount
@@ -2044,6 +2156,7 @@ function RiepilogoDonut({ stats }: { stats: {
         { label: 'Incassate',    value: stats.totale_incassate,     color: '#10B981' },
         { label: 'Da incassare', value: stats.totale_da_incassare,  color: '#F59E0B' },
         { label: 'In cassa',     value: stats.totale_in_cassa,      color: '#3B82F6' },
+        { label: 'Bloccate',     value: stats.totale_bloccate,      color: '#F97316' },
         { label: 'Scadute',      value: stats.totale_scadute_amount, color: '#EF4444' },
     ]
     const sum = segments.reduce((a, b) => a + b.value, 0) || 1
@@ -2137,7 +2250,7 @@ function ScadenzeProssime({ cauzioni }: { cauzioni: Cauzione[] }) {
 // Cauzioni scadute o in stato "danno" / "bloccata".
 function CauzioniARischio({ cauzioni, onCassa }: { cauzioni: Cauzione[]; onCassa: (c: Cauzione) => void }) {
     const rischio = cauzioni
-        .filter(c => c.is_overdue || c.stato === 'Bloccata' || c.stato === 'Danno')
+        .filter(c => c.is_overdue || (c.stato === 'Bloccata' && !!c.data_incasso) || c.stato === 'Danno')
         .sort((a, b) => (b.importo || 0) - (a.importo || 0))
         .slice(0, 4)
     return (
