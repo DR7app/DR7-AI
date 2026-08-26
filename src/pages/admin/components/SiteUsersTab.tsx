@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { Fragment, useState, useEffect, useMemo } from 'react'
 import { authFetch } from '../../../utils/authFetch'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 
@@ -9,16 +9,123 @@ interface SiteUser {
   email_confirmed_at: string | null
   last_sign_in_at: string | null
   balance: number
+  bonus_benvenuto: boolean
+  ha_scheda: boolean
+  // Anagrafica compilata in fase di registrazione
+  tipo_cliente: string
+  nazione: string
   nome: string
   cognome: string
-  azienda: string
   telefono: string
+  pec: string
+  codice_fiscale: string
+  sesso: string
+  data_nascita: string
+  citta_nascita: string
+  provincia_nascita: string
+  // Residenza
+  indirizzo: string
+  numero_civico: string
+  codice_postale: string
+  citta_residenza: string
+  provincia_residenza: string
+  // Azienda
+  denominazione: string
+  partita_iva: string
+  codice_destinatario: string
+  sede_operativa: string
+  rappresentante: string
+  rappresentante_cf: string
+  rappresentante_ruolo: string
+  // Pubblica amministrazione
+  ente_ufficio: string
+  codice_univoco: string
+  source: string
 }
 
 // Un iscritto azienda/PA non ha nome e cognome: il suo nome e' la ragione
 // sociale. Una sola regola per tabella, ricerca e ordinamento.
-const nomeVisibile = (u: { nome?: string; cognome?: string; azienda?: string }) =>
-  `${u.nome || ''} ${u.cognome || ''}`.trim() || (u.azienda || '').trim()
+const nomeVisibile = (u: { nome?: string; cognome?: string; denominazione?: string; ente_ufficio?: string }) =>
+  `${u.nome || ''} ${u.cognome || ''}`.trim()
+  || (u.denominazione || '').trim()
+  || (u.ente_ufficio || '').trim()
+
+const ETICHETTA_TIPO: Record<string, string> = {
+  persona_fisica: 'Persona fisica',
+  azienda: 'Azienda',
+  pubblica_amministrazione: 'Pubblica amministrazione',
+}
+
+const fmtData = (d: string) => {
+  if (!d) return ''
+  const t = new Date(d)
+  if (isNaN(t.getTime())) return d
+  return t.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' })
+}
+
+// Una riga della scheda: se il dato non c'e', la riga non si stampa.
+// Cosi' si vede a colpo d'occhio cosa manca davvero.
+function Dato({ etichetta, valore }: { etichetta: string; valore?: string }) {
+  if (!valore || !valore.trim()) return null
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">{etichetta}</div>
+      <div className="text-xs text-theme-text-primary font-medium break-words">{valore}</div>
+    </div>
+  )
+}
+
+function Scheda({ u }: { u: SiteUser }) {
+  const residenza = [
+    [u.indirizzo, u.numero_civico].filter(Boolean).join(' '),
+    [u.codice_postale, u.citta_residenza].filter(Boolean).join(' '),
+    u.provincia_residenza ? `(${u.provincia_residenza})` : '',
+    u.nazione,
+  ].filter(v => v && v.trim()).join(', ')
+
+  const nascita = [
+    fmtData(u.data_nascita),
+    [u.citta_nascita, u.provincia_nascita ? `(${u.provincia_nascita})` : ''].filter(Boolean).join(' '),
+  ].filter(v => v && v.trim()).join(' — ')
+
+  const vuota = !u.codice_fiscale && !u.telefono && !residenza && !u.denominazione && !u.ente_ufficio
+
+  return (
+    <div className="bg-theme-bg-tertiary/40 px-4 py-3 space-y-3">
+      {vuota && (
+        <p className="text-xs text-amber-300">
+          Nessun dato di registrazione salvato per questo iscritto
+          {u.ha_scheda ? '' : ' (scheda cliente mai creata)'}.
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2.5">
+        <Dato etichetta="Tipo cliente" valore={ETICHETTA_TIPO[u.tipo_cliente] || u.tipo_cliente} />
+        <Dato etichetta="Codice fiscale" valore={u.codice_fiscale} />
+        <Dato etichetta="Telefono" valore={u.telefono} />
+        <Dato etichetta="PEC" valore={u.pec} />
+
+        <Dato etichetta="Sesso" valore={u.sesso} />
+        <Dato etichetta="Nascita" valore={nascita} />
+        <div className="col-span-2"><Dato etichetta="Residenza" valore={residenza} /></div>
+
+        <Dato etichetta="Denominazione" valore={u.denominazione} />
+        <Dato etichetta="Partita IVA" valore={u.partita_iva} />
+        <Dato etichetta="Codice destinatario" valore={u.codice_destinatario} />
+        <Dato etichetta="Sede operativa" valore={u.sede_operativa} />
+
+        <Dato etichetta="Rappresentante" valore={u.rappresentante} />
+        <Dato etichetta="CF rappresentante" valore={u.rappresentante_cf} />
+        <Dato etichetta="Ruolo rappresentante" valore={u.rappresentante_ruolo} />
+
+        <Dato etichetta="Ente / Ufficio" valore={u.ente_ufficio} />
+        <Dato etichetta="Codice univoco" valore={u.codice_univoco} />
+
+        <Dato etichetta="Provenienza" valore={u.source} />
+      </div>
+    </div>
+  )
+}
 
 export default function SiteUsersTab() {
   const [users, setUsers] = useState<SiteUser[]>([])
@@ -26,6 +133,7 @@ export default function SiteUsersTab() {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortField, setSortField] = useState<'nome' | 'email' | 'created_at' | 'last_sign_in_at' | 'balance'>('created_at')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [apertoId, setApertoId] = useState<string | null>(null)
 
   const toggleSort = (field: typeof sortField) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -64,6 +172,10 @@ export default function SiteUsersTab() {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
     const nuoviMese = users.filter(u => new Date(u.created_at) >= monthStart).length
 
+    // Bonus benvenuto mai accreditato + schede senza i dati obbligatori
+    const senzaBonus = users.filter(u => !u.bonus_benvenuto).length
+    const schedaIncompleta = users.filter(u => !u.codice_fiscale && !u.partita_iva && !u.codice_univoco).length
+
     // Andamento iscrizioni — ultimi 30 giorni
     const day = 1000 * 60 * 60 * 24
     const today = new Date()
@@ -87,7 +199,7 @@ export default function SiteUsersTab() {
       .sort((a, b) => (b.balance || 0) - (a.balance || 0))
       .slice(0, 5)
 
-    return { total, verificati, nonVerificati, nuoviMese, totalCredit, trend, topCredito }
+    return { total, verificati, nonVerificati, nuoviMese, totalCredit, senzaBonus, schedaIncompleta, trend, topCredito }
   }, [users])
 
   const filtered = (searchQuery.trim()
@@ -97,7 +209,11 @@ export default function SiteUsersTab() {
           u.email?.toLowerCase().includes(q) ||
           u.nome?.toLowerCase().includes(q) ||
           u.cognome?.toLowerCase().includes(q) ||
-          u.azienda?.toLowerCase().includes(q) ||
+          u.denominazione?.toLowerCase().includes(q) ||
+          u.ente_ufficio?.toLowerCase().includes(q) ||
+          u.codice_fiscale?.toLowerCase().includes(q) ||
+          u.partita_iva?.toLowerCase().includes(q) ||
+          u.citta_residenza?.toLowerCase().includes(q) ||
           u.telefono?.includes(q)
         )
       })
@@ -158,12 +274,13 @@ export default function SiteUsersTab() {
       </div>
 
       {/* 5 KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         <KpiCard label="Iscritti Totali" value={stats.total} ring="#3B82F6"/>
         <KpiCard label="Verificati" value={stats.verificati} subtitle={`${stats.total > 0 ? Math.round((stats.verificati / stats.total) * 100) : 0}% del totale`} ring="#10B981"/>
         <KpiCard label="Non Verificati" value={stats.nonVerificati} subtitle={`${stats.total > 0 ? Math.round((stats.nonVerificati / stats.total) * 100) : 0}% del totale`} ring="#F59E0B"/>
         <KpiCard label="Nuovi Questo Mese" value={stats.nuoviMese} ring="#A855F7"/>
         <KpiCard label="Credito Totale" value={fmtEur(stats.totalCredit)} ring="#19C2D6"/>
+        <KpiCard label="Senza Bonus 10€" value={stats.senzaBonus} subtitle={`${stats.schedaIncompleta} schede incomplete`} ring="#EF4444"/>
       </div>
 
       {/* Search */}
@@ -175,7 +292,7 @@ export default function SiteUsersTab() {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Cerca per nome, email, telefono..."
+          placeholder="Cerca per nome, email, telefono, codice fiscale, citta..."
           className="w-full pl-9 pr-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded-full text-theme-text-primary placeholder-theme-text-muted text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
         />
       </div>
@@ -190,32 +307,58 @@ export default function SiteUsersTab() {
                   <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('nome')}>Nome{arrow('nome')}</th>
                   <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('email')}>Email{arrow('email')}</th>
                   <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider">Telefono</th>
+                  <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider">Codice fiscale</th>
+                  <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider">Residenza</th>
                   <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('created_at')}>Registrato{arrow('created_at')}</th>
                   <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('last_sign_in_at')}>Ultimo accesso{arrow('last_sign_in_at')}</th>
                   <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider">Verifica</th>
+                  <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider">Bonus 10€</th>
                   <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider text-right cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('balance')}>Credito{arrow('balance')}</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(u => {
                   const fullName = nomeVisibile(u) || '-'
+                  const aperto = apertoId === u.id
+                  const residenzaBreve = [u.citta_residenza, u.provincia_residenza ? `(${u.provincia_residenza})` : '']
+                    .filter(Boolean).join(' ')
                   return (
-                    <tr key={u.id} className="border-b border-theme-border/50 hover:bg-theme-bg-hover/30">
-                      <td className="py-2 px-3 text-theme-text-primary font-medium">{fullName}</td>
-                      <td className="py-2 px-3 text-theme-text-muted text-xs truncate max-w-[200px]">{u.email}</td>
-                      <td className="py-2 px-3 text-theme-text-muted text-xs"><NumeroTelefono valore={u.telefono} vuoto="-" /></td>
-                      <td className="py-2 px-3 text-theme-text-muted text-xs whitespace-nowrap">{fmtDate(u.created_at)}</td>
-                      <td className="py-2 px-3 text-theme-text-muted text-xs whitespace-nowrap">
-                        {u.last_sign_in_at ? fmtDate(u.last_sign_in_at) : '-'}
-                      </td>
-                      <td className="py-2 px-3">
-                        {u.email_confirmed_at
-                          ? <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 uppercase">Verificata</span>
-                          : <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/40 uppercase">Non verificata</span>
-                        }
-                      </td>
-                      <td className="py-2 px-3 text-right font-bold text-dr7-gold tabular-nums">{fmtEur(u.balance)}</td>
-                    </tr>
+                    <Fragment key={u.id}>
+                      <tr
+                        className="border-b border-theme-border/50 hover:bg-theme-bg-hover/30 cursor-pointer"
+                        onClick={() => setApertoId(aperto ? null : u.id)}
+                      >
+                        <td className="py-2 px-3 text-theme-text-primary font-medium">
+                          <span className="text-theme-text-muted mr-1.5">{aperto ? '▾' : '▸'}</span>{fullName}
+                        </td>
+                        <td className="py-2 px-3 text-theme-text-muted text-xs truncate max-w-[200px]">{u.email}</td>
+                        <td className="py-2 px-3 text-theme-text-muted text-xs"><NumeroTelefono valore={u.telefono} vuoto="-" /></td>
+                        <td className="py-2 px-3 text-theme-text-muted text-xs font-mono whitespace-nowrap">{u.codice_fiscale || u.partita_iva || '-'}</td>
+                        <td className="py-2 px-3 text-theme-text-muted text-xs truncate max-w-[160px]">{residenzaBreve || '-'}</td>
+                        <td className="py-2 px-3 text-theme-text-muted text-xs whitespace-nowrap">{fmtDate(u.created_at)}</td>
+                        <td className="py-2 px-3 text-theme-text-muted text-xs whitespace-nowrap">
+                          {u.last_sign_in_at ? fmtDate(u.last_sign_in_at) : '-'}
+                        </td>
+                        <td className="py-2 px-3">
+                          {u.email_confirmed_at
+                            ? <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 uppercase">Verificata</span>
+                            : <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/40 uppercase">Non verificata</span>
+                          }
+                        </td>
+                        <td className="py-2 px-3">
+                          {u.bonus_benvenuto
+                            ? <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 uppercase">Accreditato</span>
+                            : <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/15 text-red-300 border border-red-500/40 uppercase">Mancante</span>
+                          }
+                        </td>
+                        <td className="py-2 px-3 text-right font-bold text-dr7-gold tabular-nums">{fmtEur(u.balance)}</td>
+                      </tr>
+                      {aperto && (
+                        <tr className="border-b border-theme-border/50">
+                          <td colSpan={10} className="p-0"><Scheda u={u} /></td>
+                        </tr>
+                      )}
+                    </Fragment>
                   )
                 })}
               </tbody>

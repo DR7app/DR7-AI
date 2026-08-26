@@ -8,6 +8,41 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+type Meta = Record<string, any>
+
+// PostgREST tronca ogni richiesta a 1000 righe. Ogni tabella letta qui va
+// scorsa a blocchi, altrimenti gli iscritti oltre il millesimo restano senza
+// dati: e' esattamente il difetto che svuotava l'elenco.
+async function leggiTutto(tabella: string, colonne: string) {
+  const righe: any[] = []
+  const BLOCCO = 1000
+  for (let da = 0; ; da += BLOCCO) {
+    const { data, error } = await supabase
+      .from(tabella)
+      .select(colonne)
+      .range(da, da + BLOCCO - 1)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    righe.push(...data)
+    if (data.length < BLOCCO) break
+  }
+  return righe
+}
+
+// I dati della registrazione stanno SEMPRE nei metadati auth; la scheda
+// cliente e' una copia che puo' essere rimasta indietro. Quindi: prima la
+// scheda, poi i metadati (in entrambe le grafie usate dal sito).
+const valore = (...candidati: any[]): string => {
+  for (const c of candidati) {
+    const v = typeof c === 'string' ? c.trim() : c
+    if (v !== undefined && v !== null && v !== '') return String(v)
+  }
+  return ''
+}
+
+const nomeIntero = (m: Meta) =>
+  valore(m.full_name, m.fullName, m.name)
+
 export const handler: Handler = async (event) => {
   const headers = corsHeaders(event.headers.origin)
 
@@ -18,123 +53,83 @@ export const handler: Handler = async (event) => {
   if (authErr) return authErr
 
   try {
-    // Fetch all auth users with admin API
-    const allUsers: any[] = []
-    let page = 1
-    const perPage = 1000
-
-    while (true) {
-      const { data: { users }, error } = await supabase.auth.admin.listUsers({
-        page,
-        perPage,
-      })
+    // Utenti auth
+    const utenti: Array<{ id: string; email: string; created_at: string; email_confirmed_at: string | null; last_sign_in_at: string | null; meta: Meta }> = []
+    for (let page = 1; page <= 50; page++) {
+      const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 })
       if (error) throw error
-      if (!users || users.length === 0) break
-      allUsers.push(...users.map(u => ({
-        id: u.id,
-        email: u.email,
-        created_at: u.created_at,
-        email_confirmed_at: u.email_confirmed_at,
-        last_sign_in_at: u.last_sign_in_at,
-        // 26/08/2026: i metadati auth servono come rete di sicurezza per il
-        // nome (vedi sotto): chi si e' iscritto con Google, o la cui scheda
-        // non e' stata scritta, il nome ce l'ha SOLO qui.
-        meta: (u.user_metadata || {}) as Record<string, any>,
-      })))
-      if (users.length < perPage) break
-      page++
-    }
-
-    // Get credit balances
-    const { data: balances } = await supabase
-      .from('user_credit_balance')
-      .select('user_id, balance')
-
-    const balanceMap = new Map<string, number>()
-    if (balances) {
-      for (const b of balances) {
-        balanceMap.set(b.user_id, b.balance)
+      const lista = data?.users || []
+      if (lista.length === 0) break
+      for (const u of lista) {
+        utenti.push({
+          id: u.id,
+          email: u.email || '',
+          created_at: u.created_at,
+          email_confirmed_at: u.email_confirmed_at ?? null,
+          last_sign_in_at: u.last_sign_in_at ?? null,
+          meta: (u.user_metadata || {}) as Meta,
+        })
       }
+      if (lista.length < 1000) break
     }
 
-    // Get customer names from customers_extended.
-    // 26/08/2026: PostgREST tronca a 1000 righe. Senza paginazione tutti gli
-    // iscritti oltre i primi 1000 risultavano SENZA nome e cognome.
-    const customers: any[] = []
-    const CHUNK = 1000
-    // Colonne opzionali: se una manca su questo database, PostgREST rifiuta
-    // TUTTA la query e l'elenco resterebbe vuoto. Meglio perdere il nome del
-    // rappresentante che perdere l'intera lista degli iscritti.
-    const COLONNE_BASE = 'user_id, email, nome, cognome, telefono, denominazione, ragione_sociale, ente_ufficio'
-    let colonne = `${COLONNE_BASE}, rappresentante_nome, rappresentante_cognome`
-    for (let offset = 0; ; offset += CHUNK) {
-      let { data: pageRows, error: custErr } = await supabase
-        .from('customers_extended')
-        .select(colonne)
-        .order('id', { ascending: true })
-        .range(offset, offset + CHUNK - 1)
-      if (custErr && colonne !== COLONNE_BASE) {
-        console.warn('[list-site-users] colonne rappresentante assenti, ripiego:', custErr.message)
-        colonne = COLONNE_BASE
-        const retry = await supabase
-          .from('customers_extended')
-          .select(colonne)
-          .order('id', { ascending: true })
-          .range(offset, offset + CHUNK - 1)
-        pageRows = retry.data
-        custErr = retry.error
+    // Saldo wallet
+    const saldi = await leggiTutto('user_credit_balance', 'user_id, balance')
+    const saldoDi = new Map<string, number>()
+    for (const b of saldi) saldoDi.set(b.user_id, Number(b.balance) || 0)
+
+    // Bonus benvenuto: chi lo ha gia' ricevuto (reference_type = welcome_bonus)
+    const bonus = new Set<string>()
+    try {
+      const BLOCCO = 1000
+      for (let da = 0; ; da += BLOCCO) {
+        const { data, error } = await supabase
+          .from('credit_transactions')
+          .select('user_id')
+          .eq('reference_type', 'welcome_bonus')
+          .range(da, da + BLOCCO - 1)
+        if (error) throw error
+        if (!data || data.length === 0) break
+        for (const t of data) if (t.user_id) bonus.add(t.user_id)
+        if (data.length < BLOCCO) break
       }
-      if (custErr) throw custErr
-      if (!pageRows || pageRows.length === 0) break
-      customers.push(...pageRows)
-      if (pageRows.length < CHUNK) break
+    } catch (e: any) {
+      console.warn('[list-site-users] bonus non leggibile:', e.message)
     }
 
-    // Indice per user_id e, come riserva, per email normalizzata: le schede
-    // create prima del collegamento all'account hanno user_id NULL.
-    const custMap = new Map<string, any>()
-    const custByEmail = new Map<string, any>()
-    for (const c of customers) {
-      if (c.user_id) custMap.set(c.user_id, c)
+    // Schede cliente complete
+    const schede = await leggiTutto(
+      'customers_extended',
+      'user_id, email, tipo_cliente, nazione, nome, cognome, telefono, pec, codice_fiscale, ' +
+      'sesso, data_nascita, citta_nascita, provincia_nascita, ' +
+      'indirizzo, numero_civico, codice_postale, citta_residenza, provincia_residenza, ' +
+      'denominazione, ragione_sociale, partita_iva, codice_destinatario, sede_operativa, ' +
+      'rappresentante_nome, rappresentante_cognome, rappresentante_cf, rappresentante_ruolo, ' +
+      'ente_ufficio, codice_univoco, citta, source, created_at'
+    )
+    const schedaDi = new Map<string, any>()
+    const schedaPerEmail = new Map<string, any>()
+    for (const c of schede) {
+      if (c.user_id) schedaDi.set(c.user_id, c)
       const em = (c.email || '').trim().toLowerCase()
-      if (em && !custByEmail.has(em)) custByEmail.set(em, c)
+      if (em && !schedaPerEmail.has(em)) schedaPerEmail.set(em, c)
     }
 
-    // Nome preso dai metadati auth quando la scheda non ce l'ha:
-    // nome/cognome espliciti, altrimenti full_name/fullName/name spezzato.
-    const daMetadati = (meta: Record<string, any>) => {
-      const nome = (meta.nome || meta.first_name || meta.given_name || '').trim()
-      const cognome = (meta.cognome || meta.last_name || meta.family_name || '').trim()
-      if (nome || cognome) return { nome, cognome }
-      const intero = String(meta.full_name || meta.fullName || meta.name || '').trim()
-      if (!intero) return { nome: '', cognome: '' }
-      const parti = intero.split(/\s+/)
-      return { nome: parti[0], cognome: parti.slice(1).join(' ') }
-    }
+    const arricchiti = utenti.map(u => {
+      const em = (u.email || '').trim().toLowerCase()
+      const c = schedaDi.get(u.id) || (em ? schedaPerEmail.get(em) : null) || {}
+      const m = u.meta || {}
 
-    const enriched = allUsers.map(u => {
-      const email = (u.email || '').trim().toLowerCase()
-      const c = custMap.get(u.id) || (email ? custByEmail.get(email) : null)
-      let nome = (c?.nome || '').trim()
-      let cognome = (c?.cognome || '').trim()
+      let nome = valore(c.nome, m.nome)
+      let cognome = valore(c.cognome, m.cognome)
       if (!nome && !cognome) {
-        const m = daMetadati(u.meta || {})
-        nome = m.nome
-        cognome = m.cognome
+        const intero = nomeIntero(m)
+        if (intero) {
+          const parti = intero.split(/\s+/)
+          nome = parti[0]
+          cognome = parti.slice(1).join(' ')
+        }
       }
-      // Azienda registrata dal sito: la persona e' il rappresentante legale.
-      if (!nome && !cognome) {
-        nome = (c?.rappresentante_nome || u.meta?.rappresentanteNome || '').trim()
-        cognome = (c?.rappresentante_cognome || u.meta?.rappresentanteCognome || '').trim()
-      }
-      // Azienda / Pubblica Amministrazione: nome e cognome sono vuoti per
-      // costruzione, il nome vero e' la ragione sociale o l'ente.
-      // `company_name` e' la chiave scritta dall'iscrizione rapida del sito
-      // (AuthContext.signup): senza, le aziende arrivate da li' restavano
-      // senza nessun nome visibile.
-      const azienda = (c?.denominazione || c?.ragione_sociale || c?.ente_ufficio
-        || u.meta?.denominazione || u.meta?.enteUfficio || u.meta?.company_name
-        || u.meta?.ragione_sociale || '').trim()
 
       return {
         id: u.id,
@@ -142,18 +137,53 @@ export const handler: Handler = async (event) => {
         created_at: u.created_at,
         email_confirmed_at: u.email_confirmed_at,
         last_sign_in_at: u.last_sign_in_at,
-        balance: balanceMap.get(u.id) || 0,
+        balance: saldoDi.get(u.id) || 0,
+        bonus_benvenuto: bonus.has(u.id),
+        ha_scheda: !!c.user_id || !!c.email,
+
+        // Anagrafica
+        tipo_cliente: valore(c.tipo_cliente, m.tipoCliente),
+        nazione: valore(c.nazione, m.nazione),
         nome,
         cognome,
-        azienda,
-        telefono: (c?.telefono || u.meta?.telefono || u.meta?.phone || '').trim(),
+        telefono: valore(c.telefono, m.telefono, m.phone),
+        pec: valore(c.pec, m.pec),
+        codice_fiscale: valore(c.codice_fiscale, m.codiceFiscale, m.codice_fiscale),
+        sesso: valore(c.sesso, m.sesso),
+        data_nascita: valore(c.data_nascita, m.dataNascita, m.data_nascita),
+        citta_nascita: valore(c.citta_nascita, m.cittaNascita, m.citta_nascita),
+        provincia_nascita: valore(c.provincia_nascita, m.provinciaNascita, m.provincia_nascita),
+
+        // Residenza
+        indirizzo: valore(c.indirizzo, m.indirizzo),
+        numero_civico: valore(c.numero_civico, m.numeroCivico, m.numero_civico),
+        codice_postale: valore(c.codice_postale, m.codicePostale, m.codice_postale),
+        citta_residenza: valore(c.citta_residenza, m.cittaResidenza, m.citta_residenza, c.citta, m.citta),
+        provincia_residenza: valore(c.provincia_residenza, m.provinciaResidenza, m.provincia_residenza),
+
+        // Azienda
+        denominazione: valore(c.denominazione, c.ragione_sociale, m.denominazione),
+        partita_iva: valore(c.partita_iva, m.partitaIva, m.partita_iva),
+        codice_destinatario: valore(c.codice_destinatario, m.codiceDestinatario),
+        sede_operativa: valore(c.sede_operativa, m.sedeOperativa),
+        rappresentante: valore(
+          `${valore(c.rappresentante_nome, m.rappresentanteNome)} ${valore(c.rappresentante_cognome, m.rappresentanteCognome)}`.trim()
+        ),
+        rappresentante_cf: valore(c.rappresentante_cf, m.rappresentanteCF),
+        rappresentante_ruolo: valore(c.rappresentante_ruolo, m.rappresentanteRuolo),
+
+        // Pubblica amministrazione
+        ente_ufficio: valore(c.ente_ufficio, m.enteUfficio),
+        codice_univoco: valore(c.codice_univoco, m.codiceUnivoco),
+
+        source: valore(c.source, m.source),
       }
     })
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ success: true, users: enriched, total: enriched.length }),
+      body: JSON.stringify({ success: true, users: arricchiti, total: arricchiti.length }),
     }
   } catch (err: any) {
     console.error('[list-site-users] Error:', err)
