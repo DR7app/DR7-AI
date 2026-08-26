@@ -9,6 +9,11 @@
 // Email  -> centralina_pro_config.config.notifications.email_from
 // PEC    -> centralina_pro_config.config.multe_config.pec_mittente (stessa
 //           chiave usata dalle multe: un solo posto, non due che si smentiscono)
+//
+// 26/08/2026 — una casella PER BUSINESS: si legge e si scrive la riga del
+// business aperto (`main` = Terra, poi business_mare, business_aria,
+// business_soggiorni, business_lavaggio). Finche' un business non salva niente
+// eredita quella di Terra, lato interfaccia e lato invio.
 // Password PEC -> service_secrets, scritta dalla funzione save-pec-password.
 //           Non torna mai indietro al browser: si puo' solo sostituire.
 import { useEffect, useState } from 'react'
@@ -19,7 +24,7 @@ import { authFetch } from '../../../utils/authFetch'
 const INPUT = 'w-full min-w-0 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary'
 const EMAIL_FROM_DEFAULT = 'DR7 <noreply@dr7.app>'
 
-export default function GestioneMailPecSection({ readOnly = false }: { readOnly?: boolean }) {
+export default function GestioneMailPecSection({ readOnly = false, rowId = 'main' }: { readOnly?: boolean; rowId?: string }) {
   const [loading, setLoading] = useState(true)
   const [savingEmail, setSavingEmail] = useState(false)
   const [savingPec, setSavingPec] = useState(false)
@@ -40,11 +45,26 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
   const [pecTest, setPecTest] = useState<{ ok: boolean; msg: string } | null>(null)
   const [testingPec, setTestingPec] = useState(false)
 
+  // Ereditata da Terra finche' questo business non salva niente di suo: lo
+  // stesso criterio del server, che legge la riga del business e ricade su
+  // `main`. Senza questo, aprendo il Mare i campi sembravano azzerati.
+  const [ereditata, setEreditata] = useState(false)
+
   useEffect(() => {
+    setLoading(true)
     void (async () => {
       try {
-        const { data } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
-        const cfg = (data?.config as Record<string, unknown>) || {}
+        const ids = rowId === 'main' ? ['main'] : [rowId, 'main']
+        const { data } = await supabase.from('centralina_pro_config').select('id, config').in('id', ids)
+        const righe = (data || []) as { id: string; config: Record<string, unknown> }[]
+        const suo = (righe.find(r => r.id === rowId)?.config || {}) as Record<string, unknown>
+        const principale = (righe.find(r => r.id === 'main')?.config || {}) as Record<string, unknown>
+        const haRoba = (c: Record<string, unknown>) =>
+          !!((c.multe_config as Record<string, unknown> | undefined)?.pec_mittente ||
+             (c.notifications as Record<string, unknown> | undefined)?.email_from)
+        const proprio = rowId === 'main' || haRoba(suo)
+        setEreditata(!proprio)
+        const cfg = proprio ? suo : principale
         const notif = (cfg.notifications || {}) as Record<string, unknown>
         const multe = (cfg.multe_config || {}) as Record<string, unknown>
         setEmailFrom(String(notif.email_from || ''))
@@ -60,7 +80,7 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
         setLoading(false)
       }
     })()
-  }, [])
+  }, [rowId])
 
   /** Chiede al server se la casella ha una password registrata (mai quale). */
   async function caricaStatoPec(addr: string, host: string) {
@@ -135,19 +155,23 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
   }
 
   /** Scrive UNA chiave dentro il JSONB condiviso, rileggendolo prima. */
-  async function patchConfig(patch: (base: Record<string, unknown>) => Record<string, unknown>): Promise<boolean> {
-    const { data: fresh } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+  async function patchConfig(
+    patch: (base: Record<string, unknown>) => Record<string, unknown>,
+    /** Riga da scrivere: la PEC va su quella del business, il mittente email
+        resta su `main` finche' gli invii email non sanno di che business
+        sono (altrimenti sarebbe un campo salvato e mai applicato). */
+    target: string = rowId,
+  ): Promise<boolean> {
+    const rowId2 = target
+    const { data: fresh } = await supabase.from('centralina_pro_config').select('config').eq('id', rowId2).maybeSingle()
     const base = (fresh?.config as Record<string, unknown>) || {}
-    const { data, error } = await supabase
+    // upsert: la riga di un business mai configurato non esiste ancora, e con
+    // la sola UPDATE il salvataggio non toccava nessuna riga.
+    const { error } = await supabase
       .from('centralina_pro_config')
-      .update({ config: patch(base) })
-      .eq('id', 'main')
-      .select('id')
+      .upsert({ id: rowId2, config: patch(base) }, { onConflict: 'id' })
     if (error) { toast.error('Errore: ' + error.message); return false }
-    if (!data || data.length === 0) {
-      toast.error('Riga di configurazione non trovata (centralina_pro_config id=main).')
-      return false
-    }
+    if (rowId2 === rowId) setEreditata(false)
     return true
   }
 
@@ -164,7 +188,7 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
       const ok = await patchConfig(base => ({
         ...base,
         notifications: { ...((base.notifications as Record<string, unknown>) || {}), email_from: v || null },
-      }))
+      }), 'main')
       if (ok) toast.success(v ? 'Mittente email aggiornato' : 'Mittente email riportato al valore di sistema')
     } finally { setSavingEmail(false) }
   }
@@ -212,6 +236,12 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
 
   return (
     <div className="space-y-6">
+      {ereditata && (
+        <div className="rounded-lg border border-theme-border bg-theme-bg-tertiary px-3 py-2 text-[11px] leading-snug text-theme-text-secondary">
+          Questo business non ha ancora una casella sua: qui sotto vedi quella del Noleggio Terra, ed e' quella che parte.
+          Salvando, questo business avra' la sua PEC e il suo mittente email, indipendenti da Terra.
+        </div>
+      )}
       {/* ── EMAIL ─────────────────────────────────────────────────────────── */}
       <div className="rounded-xl border border-theme-border bg-theme-bg-secondary p-4 space-y-3">
         <div className="flex items-start justify-between gap-3">
@@ -219,6 +249,10 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
             <h3 className="text-sm font-bold text-theme-text-primary">Gestione Email</h3>
             <p className="mt-0.5 text-xs text-theme-text-muted">
               Indirizzo da cui parte la posta del gestionale: conferme, ordini di magazzino, promemoria.
+            </p>
+            <p className="mt-1 text-[11px] text-theme-text-muted">
+              Mittente unico per tutta l'azienda: vale per Terra, Mare, Aria, Soggiorni e Lavaggio.
+              La PEC qui sotto, invece, e' quella di questo business.
             </p>
           </div>
           {!readOnly && (

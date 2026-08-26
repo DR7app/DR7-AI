@@ -1414,24 +1414,19 @@ export const BUSINESSES: { id: BusinessId; label: string; row: string }[] = [
 // toggle (sezioni_off), quindi su ogni installazione nuova l'assicurazione
 // ricompariva sul Mare. Km & Sforo idem: una barca non fa chilometri.
 // Diverso da `sezioni_off`, che resta la scelta REVERSIBILE dell'operatore.
-const SECTIONS_HIDDEN_BY_BUSINESS: Partial<Record<BusinessId, SectionId[]>> = {
-  // 2026-08-13: Fiscale (p9) resta VISIBILE su ogni business — la centralina
-  // dev'essere uniforme (roadmap #16). Il problema non era l'interfaccia ma la
-  // lettura: le funzioni fattura leggevano solo la riga `main`, quindi le
-  // aliquote impostate su Mare/Aria/Soggiorni non venivano mai applicate.
-  // Corretto lato server: la fattura legge la riga del business della
-  // prenotazione, con fallback su `main` (netlify/functions/utils/businessConfig.ts).
-  // 2026-08-24: le corsie del Calendario Giornaliero sono un'impostazione
-  // GLOBALE (riga 'main'), non per business: si mostra solo su Terra, altrimenti
-  // sembrerebbe configurabile separatamente per Mare/Aria/Soggiorni/Lavaggio.
-  mare: ['p2', 'p3', 'calendario-giornaliero', 'gestione-multe', 'gestione-mail-pec'],       // Assicurazioni, Km & Sforo
-  aria: ['p2', 'p3', 'calendario-giornaliero', 'gestione-multe', 'gestione-mail-pec'],
-  soggiorni: ['p2', 'p3', 'calendario-giornaliero', 'gestione-multe', 'gestione-mail-pec'],
-  lavaggio: ['calendario-giornaliero', 'gestione-multe', 'gestione-mail-pec'],
-}
-function sectionsForBusiness(id: BusinessId): { id: SectionId; title: string }[] {
-  const hidden = new Set(SECTIONS_HIDDEN_BY_BUSINESS[id] || [])
-  return hidden.size ? SECTIONS.filter(s => !hidden.has(s.id)) : SECTIONS
+/**
+ * 26/08/2026 — ogni business mostra TUTTE le sezioni.
+ *
+ * Prima un elenco (SECTIONS_HIDDEN_BY_BUSINESS) le nascondeva: Gestione Multe
+ * e Gestione PEC & Email sparivano da Mare, Aria, Soggiorni e Lavaggio. La
+ * richiesta della direzione e' l'opposto: la centralina e' la stessa ovunque e
+ * si accende o si spegne sezione per sezione con il toggle ON/OFF, che vive
+ * nella riga del business (`sezioni_off`). Le sezioni realmente globali
+ * portano il GlobaleBadge, cosi' si vede subito che valgono per tutti.
+ */
+function sectionsForBusiness(_id: BusinessId): { id: SectionId; title: string }[] {
+  void _id
+  return SECTIONS
 }
 
 function businessRow(id: BusinessId): string {
@@ -1872,16 +1867,6 @@ export default function CentralinaProTab() {
       setBusinessId(newId)
       applyRemoteSnapshot(remote)
       setJustSaved(false)
-      // 26/08/2026 — la sezione aperta restava aperta anche quando il nuovo
-      // business non ce l'ha (SECTIONS_HIDDEN_BY_BUSINESS filtra SOLO l'elenco
-      // a sinistra, non il pannello a destra). Cosi' "Gestione PEC & Email",
-      // che e' globale e vive sulla riga `main`, restava in vista passando a
-      // Mare: sembrava la PEC del Mare, e cambiarla li' cambiava quella di
-      // Terra. Fuori dal suo business si torna alla prima sezione valida.
-      if (!isCauzioniViewOnly) {
-        const visibili = sectionsForBusiness(newId)
-        if (!visibili.some(s => s.id === section)) setSection(visibili[0]?.id || 'categorie-fascia')
-      }
     } finally {
       setSwitchingBusiness(false)
     }
@@ -2246,15 +2231,21 @@ export default function CentralinaProTab() {
                 </>
               )
             )}
-            {section === 'calendario-giornaliero' && <DailyCalendarCategoriesConfig readOnly={isCauzioniViewOnly} />}
-            {section === 'gestione-multe' && <MulteConfigSection readOnly={isCauzioniViewOnly} />}
-            {section === 'gestione-mail-pec' && (
+            {section === 'calendario-giornaliero' && (
               <>
-                {/* Una sola casella PEC e un solo mittente email per l'azienda:
-                    la sezione vive sulla riga `main` e si vede solo da Terra. */}
-                <GlobaleBadge cosa="La casella PEC e il mittente email" />
-                <GestioneMailPecSection readOnly={isCauzioniViewOnly} />
+                {/* Le corsie del Calendario Giornaliero restano una sola
+                    impostazione: il calendario e' uno. */}
+                <GlobaleBadge cosa="Le corsie del Calendario Giornaliero" />
+                <DailyCalendarCategoriesConfig readOnly={isCauzioniViewOnly} />
               </>
+            )}
+            {/* Multe e PEC: una configurazione PER BUSINESS (riga del business,
+                con eredita' da Terra finche' non si salva niente qui). */}
+            {section === 'gestione-multe' && (
+              <MulteConfigSection readOnly={isCauzioniViewOnly} rowId={businessRow(businessId)} />
+            )}
+            {section === 'gestione-mail-pec' && (
+              <GestioneMailPecSection readOnly={isCauzioniViewOnly} rowId={businessRow(businessId)} />
             )}
             {section === 'p5' && <ServiziSection servizi={servizi} setServizi={setServizi} fasce={fasce} categories={categories} />}
             {section === 'p6' && (

@@ -42,10 +42,20 @@ export const MULTE_CONFIG_DEFAULTS: MulteConfigValues = {
 }
 
 /** Lettura condivisa: la usa anche la tab Multe per precompilare l'override. */
-export async function loadMulteConfig(): Promise<MulteConfigValues> {
+/**
+ * Config multe del business richiesto. Ogni business ha la sua riga
+ * (`main` = Terra, `business_mare`, ...): la PEC e i dati azienda del Mare
+ * possono essere diversi da quelli di Terra. Finche' un business non salva
+ * niente eredita la riga `main`, cosi' chi non configura non resta scoperto.
+ */
+export async function loadMulteConfig(rowId: string = 'main'): Promise<MulteConfigValues> {
   try {
-    const { data } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
-    const cfg = ((data?.config as Record<string, unknown>) || {})[MULTE_CONFIG_KEY] as Partial<MulteConfigValues> | undefined
+    const ids = rowId === 'main' ? ['main'] : [rowId, 'main']
+    const { data } = await supabase.from('centralina_pro_config').select('id, config').in('id', ids)
+    const righe = (data || []) as { id: string; config: Record<string, unknown> }[]
+    const leggi = (id: string) =>
+      (righe.find(r => r.id === id)?.config || {})[MULTE_CONFIG_KEY] as Partial<MulteConfigValues> | undefined
+    const cfg = leggi(rowId) || (rowId === 'main' ? undefined : leggi('main'))
     return { ...MULTE_CONFIG_DEFAULTS, ...(cfg || {}) }
   } catch {
     return MULTE_CONFIG_DEFAULTS
@@ -62,17 +72,18 @@ const CAMPI: Array<{ k: keyof MulteConfigValues; label: string; hint?: string; w
   { k: 'destinatario_default', label: 'Destinatario di riserva', hint: 'Usato come proposta quando dal verbale non si ricava l\'ente. Puo\' essere una email normale: le multe estere non hanno PEC.', wide: true },
 ]
 
-export default function MulteConfigSection({ readOnly = false }: { readOnly?: boolean }) {
+export default function MulteConfigSection({ readOnly = false, rowId = 'main' }: { readOnly?: boolean; rowId?: string }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [v, setV] = useState<MulteConfigValues>(MULTE_CONFIG_DEFAULTS)
 
   useEffect(() => {
+    setLoading(true)
     void (async () => {
-      setV(await loadMulteConfig())
+      setV(await loadMulteConfig(rowId))
       setLoading(false)
     })()
-  }, [])
+  }, [rowId])
 
   async function save() {
     if (!v.ragione_sociale.trim()) { toast.error('La ragione sociale non puo\' restare vuota'); return }
@@ -80,23 +91,20 @@ export default function MulteConfigSection({ readOnly = false }: { readOnly?: bo
     try {
       // Rilettura fresca: `config` e' un JSONB condiviso (meteo, corsie
       // calendario, numeri direzione). Si fonde SOLO la chiave delle multe.
-      const { data: fresh } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+      const { data: fresh } = await supabase.from('centralina_pro_config').select('config').eq('id', rowId).maybeSingle()
       const base = (fresh?.config as Record<string, unknown>) || {}
       // Fusione anche DENTRO multe_config: la stessa chiave ospita
       // `pec_smtp_host` / `pec_smtp_port`, scritti da Gestione PEC & Email e
       // assenti da questo form. Sostituendo l'oggetto intero, salvare i dati
       // azienda cancellava il server SMTP della PEC.
       const multeBase = (base[MULTE_CONFIG_KEY] as Record<string, unknown>) || {}
-      const { data, error } = await supabase
+      // upsert: la riga di un business mai configurato non esiste ancora.
+      // Con la sola UPDATE il salvataggio non toccava nessuna riga e usciva
+      // "riga non trovata" al primo salvataggio su Mare/Aria/Soggiorni.
+      const { error } = await supabase
         .from('centralina_pro_config')
-        .update({ config: { ...base, [MULTE_CONFIG_KEY]: { ...multeBase, ...v } } })
-        .eq('id', 'main')
-        .select('id')
+        .upsert({ id: rowId, config: { ...base, [MULTE_CONFIG_KEY]: { ...multeBase, ...v } } }, { onConflict: 'id' })
       if (error) throw error
-      if (!data || data.length === 0) {
-        toast.error('Riga di configurazione non trovata (centralina_pro_config id=main).')
-        return
-      }
       toast.success('Dati multe aggiornati')
     } catch (e) {
       toast.error('Errore: ' + (e instanceof Error ? e.message : 'riprova'))

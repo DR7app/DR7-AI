@@ -1,4 +1,5 @@
 import { getCorsOrigin } from './cors-headers'
+import { businessRowForServiceType } from './utils/businessConfig'
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
@@ -567,11 +568,36 @@ const MULTE_CONFIG_FALLBACK: MulteConfig = {
     pec_mittente: '',
 }
 
-async function loadMulteConfig(): Promise<MulteConfig> {
+/**
+ * Riga di Centralina Pro della prenotazione a cui la multa e' agganciata.
+ * Le multe non sono solo del Noleggio Terra: PEC e dati azienda si configurano
+ * per business, quindi la lettera del Mare parte dalla casella del Mare.
+ */
+async function rigaBusinessDellaMulta(bookingId?: string | null): Promise<string> {
+    if (!bookingId) return 'main'
     try {
-        const { data } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
-        const cfg = ((data?.config as Record<string, unknown>) || {}).multe_config as Partial<MulteConfig> | undefined
-        if (!cfg) return MULTE_CONFIG_FALLBACK
+        const { data } = await supabase.from('bookings').select('service_type').eq('id', bookingId).maybeSingle()
+        return businessRowForServiceType(data?.service_type)
+    } catch {
+        return 'main'
+    }
+}
+
+/**
+ * Config multe del business indicato, con eredita' da `main` campo per campo:
+ * un business che ha impostato solo la PEC tiene i dati azienda dell'azienda.
+ */
+async function loadMulteConfig(rowId: string = 'main'): Promise<MulteConfig> {
+    try {
+        const ids = rowId === 'main' ? ['main'] : [rowId, 'main']
+        const { data } = await supabase.from('centralina_pro_config').select('id, config').in('id', ids)
+        const righe = (data || []) as { id: string; config: Record<string, unknown> }[]
+        const leggi = (id: string) =>
+            ((righe.find(r => r.id === id)?.config || {}).multe_config || {}) as Partial<MulteConfig>
+        const principale = leggi('main')
+        const suo = rowId === 'main' ? principale : leggi(rowId)
+        const cfg: Partial<MulteConfig> = { ...principale, ...suo }
+        if (!Object.keys(cfg).length) return MULTE_CONFIG_FALLBACK
         return {
             ragione_sociale: cfg.ragione_sociale?.trim() || MULTE_CONFIG_FALLBACK.ragione_sociale,
             piva: cfg.piva?.trim() || MULTE_CONFIG_FALLBACK.piva,
@@ -888,7 +914,7 @@ const handler: Handler = async (event) => {
                 }
 
                 // Use user-edited letter if provided, otherwise auto-generate
-                const multeCfg = await loadMulteConfig()
+                const multeCfg = await loadMulteConfig(await rigaBusinessDellaMulta(req.driverData.booking_id))
                 const letterText = req.letterText
                     || generateLetterText(req.multaData, req.driverData, multeCfg, req.aziendaOverride || {})
                 const subject = `Comunicazione dati conducente — Verbale n. ${req.multaData.numero_verbale || 'N/D'} — Targa ${req.driverData.vehicle_plate}`
@@ -984,7 +1010,7 @@ const handler: Handler = async (event) => {
                 // La PEC parte DALLA casella scelta in Centralina Pro: prima
                 // quel campo finiva solo stampato nella lettera e l'invio
                 // restava sulla casella scritta nel codice.
-                const cfgPec = await loadMulteConfig()
+                const cfgPec = await loadMulteConfig(await rigaBusinessDellaMulta(driver.booking_id))
                 const result = await sendPEC(
                     subject,
                     letterText,
@@ -1053,7 +1079,7 @@ const handler: Handler = async (event) => {
                 }
 
                 // Step 3: Generate letter (but don't send yet — return for review)
-                const letterText = generateLetterText(multaData, driver, await loadMulteConfig(), req.aziendaOverride || {})
+                const letterText = generateLetterText(multaData, driver, await loadMulteConfig(await rigaBusinessDellaMulta(driver.booking_id)), req.aziendaOverride || {})
 
                 // Step 4: propose PEC recipient (organo accertatore dinamico)
                 const pecRecipient = await matchEnte(multaData)

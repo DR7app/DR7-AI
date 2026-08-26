@@ -5,6 +5,7 @@ import Button from './Button'
 import { logger } from '../../../utils/logger'
 import { loadMulteConfig, MULTE_CONFIG_DEFAULTS, type MulteConfigValues } from './MulteConfigSection'
 import { bookingBelongsTo, toBusiness, BUSINESS_LABELS, BUSINESSES, type Business } from '../../../utils/businessScope'
+import { businessRowForServiceType } from '../../../utils/businessConfigClient'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 
 /**
@@ -56,12 +57,15 @@ export default function GestioneMulteTab({ business }: { business?: Business | s
     const [aziendaBase, setAziendaBase] = useState<MulteConfigValues>(MULTE_CONFIG_DEFAULTS)
     const [mostraAzienda, setMostraAzienda] = useState(false)
 
+    // Dati azienda e PEC della multa = quelli del business della tab: dal Mare
+    // la lettera parte con la ragione sociale e la casella del Mare, non con
+    // quelle del Noleggio Terra (che restano l'eredita' se il Mare non ne ha).
     useEffect(() => {
         void (async () => {
-            const cfg = await loadMulteConfig()
+            const cfg = await loadMulteConfig(businessRowForServiceType(biz))
             setAzienda(cfg); setAziendaBase(cfg)
         })()
-    }, [])
+    }, [biz])
 
     function looksLikePec(email: string): boolean {
         const e = (email || '').toLowerCase().trim()
