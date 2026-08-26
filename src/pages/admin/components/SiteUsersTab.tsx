@@ -158,7 +158,7 @@ export default function SiteUsersTab() {
     if (!window.confirm(
       ids.length === 1
         ? 'Accreditare 10 € di credito wallet a questo iscritto?'
-        : `Accreditare 10 € a ${ids.length} iscritti senza bonus? Totale ${euro} €.`
+        : `Accreditare 10 € a ${ids.length} iscritti senza bonus e con wallet a 0? Totale ${euro} €.`
     )) return
     setAccreditando(scope)
     setEsitoBonus('')
@@ -177,8 +177,14 @@ export default function SiteUsersTab() {
       if (data.gia_accreditati) parti.push(`${data.gia_accreditati} lo avevano gia'`)
       if (data.errori?.length) parti.push(`${data.errori.length} non riusciti`)
       setEsitoBonus(parti.join(' — '))
-      // Rilettura: la colonna Bonus e la KPI devono dire la verita' subito.
-      await loadUsers()
+      // 26/08/2026 — prima si rileggeva TUTTO l'elenco (decine di secondi per
+      // un accredito da 10 €). Il risultato e' noto: si aggiornano solo le
+      // righe accreditate, le altre restano dove sono.
+      const falliti = new Set<string>((data.errori || []).map((e: any) => e.user_id))
+      const toccati = new Set(ids.filter(id => !falliti.has(id)))
+      setUsers(prev => prev.map(u => toccati.has(u.id) && !u.bonus_benvenuto
+        ? { ...u, bonus_benvenuto: true, balance: (u.balance || 0) + 10 }
+        : u))
     } catch (e: any) {
       setEsitoBonus(e?.message || 'Errore di rete durante l\'accredito.')
     } finally {
@@ -224,6 +230,8 @@ export default function SiteUsersTab() {
 
     // Bonus benvenuto mai accreditato + schede senza i dati obbligatori
     const senzaBonus = users.filter(u => !u.bonus_benvenuto).length
+    // Accredito in blocco: solo i wallet a zero (gli altri si valutano a mano)
+    const senzaBonusAZero = users.filter(u => !u.bonus_benvenuto && (u.balance || 0) === 0).length
     const schedaIncompleta = users.filter(u => !u.codice_fiscale && !u.partita_iva && !u.codice_univoco).length
 
     // Andamento iscrizioni — ultimi 30 giorni
@@ -249,13 +257,18 @@ export default function SiteUsersTab() {
       .sort((a, b) => (b.balance || 0) - (a.balance || 0))
       .slice(0, 5)
 
-    return { total, verificati, nonVerificati, nuoviMese, totalCredit, senzaBonus, schedaIncompleta, trend, topCredito }
+    return { total, verificati, nonVerificati, nuoviMese, totalCredit, senzaBonus, senzaBonusAZero, schedaIncompleta, trend, topCredito }
   }, [users])
 
-  const filtered = (searchQuery.trim()
-    ? users.filter(u => {
-        const q = searchQuery.toLowerCase()
-        return (
+  // 26/08/2026 — questo blocco girava a OGNI render (anche solo aprendo una
+  // scheda o premendo un tasto nella ricerca): filtro + ordinamento su tutti
+  // gli iscritti, con una data da interpretare per ogni confronto. Ed era una
+  // `.sort()` sull'array di stato, quindi ordinava gli iscritti sul posto.
+  // Ora si ricalcola solo quando cambiano elenco, ricerca o ordinamento.
+  const filtered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    const base = q
+      ? users.filter(u => (
           u.email?.toLowerCase().includes(q) ||
           u.nome?.toLowerCase().includes(q) ||
           u.cognome?.toLowerCase().includes(q) ||
@@ -265,26 +278,27 @@ export default function SiteUsersTab() {
           u.partita_iva?.toLowerCase().includes(q) ||
           u.citta_residenza?.toLowerCase().includes(q) ||
           u.telefono?.includes(q)
-        )
-      })
-    : users
-  ).sort((a, b) => {
-    let va: any, vb: any
-    if (sortField === 'nome') {
-      va = nomeVisibile(a).toLowerCase(); vb = nomeVisibile(b).toLowerCase()
-      return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
-    }
-    if (sortField === 'email') {
-      va = (a.email || '').toLowerCase(); vb = (b.email || '').toLowerCase()
-      return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
-    }
-    if (sortField === 'balance') {
-      va = a.balance || 0; vb = b.balance || 0
-    } else {
-      va = new Date(a[sortField] || 0).getTime(); vb = new Date(b[sortField] || 0).getTime()
-    }
-    return sortDir === 'asc' ? va - vb : vb - va
-  })
+        ))
+      : users
+    // Copia: `users` e' lo stato, ordinarlo sul posto lo modificherebbe.
+    return [...base].sort((a, b) => {
+      let va: any, vb: any
+      if (sortField === 'nome') {
+        va = nomeVisibile(a).toLowerCase(); vb = nomeVisibile(b).toLowerCase()
+        return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+      }
+      if (sortField === 'email') {
+        va = (a.email || '').toLowerCase(); vb = (b.email || '').toLowerCase()
+        return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+      }
+      if (sortField === 'balance') {
+        va = a.balance || 0; vb = b.balance || 0
+      } else {
+        va = new Date(a[sortField] || 0).getTime(); vb = new Date(b[sortField] || 0).getTime()
+      }
+      return sortDir === 'asc' ? va - vb : vb - va
+    })
+  }, [users, searchQuery, sortField, sortDir])
 
   const fmtDate = (d: string) =>
     new Date(d).toLocaleString('it-IT', {
@@ -355,11 +369,16 @@ export default function SiteUsersTab() {
             modo di rimediare: il recupero si faceva a mano sul database. */}
         <KpiCard
           label="Senza Bonus 10€" value={stats.senzaBonus}
-          subtitle={`${stats.schedaIncompleta} schede incomplete`} ring="#EF4444"
-          azione={stats.senzaBonus > 0 ? {
-            testo: accreditando === 'tutti' ? 'Accredito…' : `Accredita ${stats.senzaBonus * 10} €`,
+          subtitle={`${stats.senzaBonusAZero} con wallet a 0 · ${stats.schedaIncompleta} schede incomplete`} ring="#EF4444"
+          // Solo chi ha il wallet a zero: chi ha gia' del credito lo ha
+          // ricevuto per altra via e si accredita a mano, riga per riga.
+          azione={stats.senzaBonusAZero > 0 ? {
+            testo: accreditando === 'tutti' ? 'Accredito…' : `Accredita ${stats.senzaBonusAZero * 10} € ai saldi a 0`,
             disabilitata: accreditando !== null,
-            onClick: () => accreditaBonus(users.filter(u => !u.bonus_benvenuto).map(u => u.id), 'tutti'),
+            onClick: () => accreditaBonus(
+              users.filter(u => !u.bonus_benvenuto && (u.balance || 0) === 0).map(u => u.id),
+              'tutti',
+            ),
           } : undefined}
         />
       </div>

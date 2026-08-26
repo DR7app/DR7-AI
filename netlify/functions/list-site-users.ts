@@ -65,6 +65,12 @@ const nomeIntero = (m: Meta) =>
 const UTENTI_PER_PAGINA = 200
 const PAGINE_MAX = 200
 const TENTATIVI = 3
+// 26/08/2026 — le pagine si leggevano una dopo l'altra: con qualche migliaio
+// di iscritti erano decine di chiamate in fila e la schermata restava a
+// caricare. L'API Auth dice gia' alla prima pagina quante ce ne sono, quindi
+// le altre si chiedono a gruppi. Sei alla volta: abbastanza per essere
+// veloce, poche abbastanza da non farsi limitare dall'API.
+const PAGINE_IN_PARALLELO = 6
 
 const attendi = (ms: number) => new Promise(r => setTimeout(r, ms))
 
@@ -88,21 +94,12 @@ export const handler: Handler = async (event) => {
   if (authErr) return authErr
 
   try {
-    // Utenti auth
+    // Utenti auth. Le tabelle qui sotto non dipendono dagli utenti: si leggono
+    // NELLO STESSO TEMPO invece che una dopo l'altra.
     const utenti: Array<{ id: string; email: string; created_at: string; email_confirmed_at: string | null; last_sign_in_at: string | null; meta: Meta }> = []
     let paginaMancante = 0
-    let falliteDiFila = 0
-    for (let page = 1; page <= PAGINE_MAX; page++) {
-      const lista = await utentiDellaPagina(page)
-      // Due pagine di fila irrecuperabili: l'API Auth non risponde, inutile
-      // insistere per duecento pagine. Si restituisce quello che si ha.
-      if (lista === null) {
-        paginaMancante++
-        if (++falliteDiFila >= 2) break
-        continue
-      }
-      falliteDiFila = 0
-      if (lista.length === 0) break
+
+    const aggiungi = (lista: any[]) => {
       for (const u of lista) {
         utenti.push({
           id: u.id,
@@ -113,34 +110,61 @@ export const handler: Handler = async (event) => {
           meta: (u.user_metadata || {}) as Meta,
         })
       }
-      if (lista.length < UTENTI_PER_PAGINA) break
-    }
-    if (paginaMancante > 0) {
-      console.warn(`[list-site-users] ${paginaMancante} pagine auth non lette dopo i tentativi`)
     }
 
-    // Saldo wallet
-    const saldi = await leggiTutto('user_credit_balance', 'user_id, balance')
-    const saldoDi = new Map<string, number>()
-    for (const b of saldi) saldoDi.set(b.user_id, Number(b.balance) || 0)
+    const leggiUtenti = async () => {
+      // Prima pagina da sola: dice quante pagine ci sono in tutto.
+      const { data: prima, error: erroreP1 } = await supabase.auth.admin.listUsers({ page: 1, perPage: UTENTI_PER_PAGINA })
+      if (erroreP1) {
+        const ripiego = await utentiDellaPagina(1)
+        if (!ripiego) throw erroreP1
+        aggiungi(ripiego)
+        return
+      }
+      aggiungi(prima?.users || [])
+      const ultima = Math.min(Number((prima as { lastPage?: number })?.lastPage) || 1, PAGINE_MAX)
+      if (ultima <= 1 || (prima?.users?.length || 0) < UTENTI_PER_PAGINA) return
+
+      // Le pagine restanti a gruppi. Una pagina persa dopo i tentativi non
+      // cancella le altre: meglio un elenco quasi completo che uno vuoto.
+      for (let da = 2; da <= ultima; da += PAGINE_IN_PARALLELO) {
+        const gruppo = []
+        for (let p = da; p < da + PAGINE_IN_PARALLELO && p <= ultima; p++) gruppo.push(p)
+        const risultati = await Promise.all(gruppo.map(p => utentiDellaPagina(p)))
+        for (const lista of risultati) {
+          if (lista === null) { paginaMancante++; continue }
+          aggiungi(lista)
+        }
+      }
+    }
+
+    const leggiSaldi = async () => {
+      const saldi = await leggiTutto('user_credit_balance', 'user_id, balance')
+      const m = new Map<string, number>()
+      for (const b of saldi) m.set(b.user_id, Number(b.balance) || 0)
+      return m
+    }
 
     // Bonus benvenuto: chi lo ha gia' ricevuto (reference_type = welcome_bonus)
-    const bonus = new Set<string>()
-    try {
-      const BLOCCO = 1000
-      for (let da = 0; ; da += BLOCCO) {
-        const { data, error } = await supabase
-          .from('credit_transactions')
-          .select('user_id')
-          .eq('reference_type', 'welcome_bonus')
-          .range(da, da + BLOCCO - 1)
-        if (error) throw error
-        if (!data || data.length === 0) break
-        for (const t of data) if (t.user_id) bonus.add(t.user_id)
-        if (data.length < BLOCCO) break
+    const leggiBonus = async () => {
+      const bonus = new Set<string>()
+      try {
+        const BLOCCO = 1000
+        for (let da = 0; ; da += BLOCCO) {
+          const { data, error } = await supabase
+            .from('credit_transactions')
+            .select('user_id')
+            .eq('reference_type', 'welcome_bonus')
+            .range(da, da + BLOCCO - 1)
+          if (error) throw error
+          if (!data || data.length === 0) break
+          for (const t of data) if (t.user_id) bonus.add(t.user_id)
+          if (data.length < BLOCCO) break
+        }
+      } catch (e: any) {
+        console.warn('[list-site-users] bonus non leggibile:', e.message)
       }
-    } catch (e: any) {
-      console.warn('[list-site-users] bonus non leggibile:', e.message)
+      return bonus
     }
 
     // Schede cliente complete
@@ -152,10 +176,21 @@ export const handler: Handler = async (event) => {
       'rappresentante_nome', 'rappresentante_cognome', 'rappresentante_cf', 'rappresentante_ruolo',
       'ente_ufficio', 'codice_univoco', 'citta', 'source', 'created_at',
     ]
-    const schede = await leggiTutto(
+    const leggiSchede = async () => leggiTutto(
       'customers_extended',
       (await colonneEsistenti('customers_extended', VOLUTE)).join(', ')
     )
+
+    // Le quattro letture partono insieme: la piu' lenta detta il tempo totale.
+    const [, saldoDi, bonus, schede] = await Promise.all([
+      leggiUtenti(),
+      leggiSaldi(),
+      leggiBonus(),
+      leggiSchede(),
+    ])
+    if (paginaMancante > 0) {
+      console.warn(`[list-site-users] ${paginaMancante} pagine auth non lette dopo i tentativi`)
+    }
     const schedaDi = new Map<string, any>()
     const schedaPerEmail = new Map<string, any>()
     for (const c of schede) {
