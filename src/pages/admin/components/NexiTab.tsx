@@ -36,6 +36,17 @@ interface NexiTransaction {
     customer_email: string
     contract_id?: string
     booking_id?: string
+    /**
+     * 26/08/2026: da dove arriva la riga. `nexi` = tabella nexi_transactions
+     * (link/addebiti/pre-auth creati dal gestionale), `wallet` = ricarica
+     * Credit Wallet, `prenotazione` = pagamento carta fatto DAL SITO
+     * (lavaggio, noleggio, tour...): quel flusso passa da nexi-callback.js
+     * che NON scrive nexi_transactions, quindi senza questo merge le
+     * transazioni del sito non comparivano affatto in questa pagina.
+     */
+    source?: 'nexi' | 'wallet' | 'prenotazione'
+    /** service_type della prenotazione collegata (per il filtro Servizio). */
+    service_type?: string
     booking?: {
         id: string
         vehicle_name: string
@@ -68,6 +79,22 @@ interface TokenizedCard {
     payments?: CardPayment[]
 }
 
+/**
+ * Etichetta leggibile del servizio di una prenotazione. Le chiavi seguono
+ * quelle usate in tutto il gestionale (car_wash / mechanical / rental / ...).
+ */
+function serviceLabel(serviceType: string): string {
+    const t = (serviceType || '').toLowerCase()
+    if (t === 'car_wash' || t === 'carwash') return 'Lavaggio'
+    if (t === 'mechanical_service' || t === 'mechanical' || t === 'meccanica') return 'Meccanica'
+    if (t === 'boat_rental') return 'Noleggio Mare'
+    if (t === 'heli_rental') return 'Noleggio Aria'
+    if (t === 'tour') return 'Tour'
+    if (t === 'stay' || t === 'soggiorno') return 'Soggiorno'
+    if (t === 'rental' || !t) return 'Noleggio'
+    return serviceType
+}
+
 export default function NexiTab() {
     const [transactions, setTransactions] = useState<NexiTransaction[]>([])
     const [loading, setLoading] = useState(true)
@@ -94,6 +121,9 @@ export default function NexiTab() {
     // 2026-06-01: filtro periodo Da/A — su created_at/updated_at.
     // Coexiste con il preset dateFilter (entrambi applicati).
     const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
+    // 26/08/2026: filtri della tabella transazioni — stato e origine.
+    const [statusFilter, setStatusFilter] = useState<'' | 'completed' | 'pending' | 'failed' | 'preauth'>('')
+    const [sourceFilter, setSourceFilter] = useState<'' | 'nexi' | 'wallet' | 'prenotazione'>('')
     const matchesDateRange = (iso: string | null | undefined): boolean => {
         if (!dateRange.from && !dateRange.to) return true
         if (!iso) return true
@@ -131,6 +161,12 @@ export default function NexiTab() {
         && matchesDate(c.updated_at)
         && matchesDateRange(c.updated_at)
     )
+    const matchesStatus = (status: string): boolean => {
+        if (!statusFilter) return true
+        if (statusFilter === 'preauth') return status.startsWith('preauth') || status === 'pending_preauth'
+        if (statusFilter === 'completed') return status === 'completed' || status === 'preauth_captured'
+        return status === statusFilter
+    }
     const filteredTransactions = transactions.filter(tx =>
         filterMatches(
             [tx.customer_email, tx.order_id, tx.description, tx.booking?.customer_name, tx.booking?.vehicle_name, tx.contract_id, tx.booking_id],
@@ -138,7 +174,17 @@ export default function NexiTab() {
         )
         && matchesDate(tx.created_at)
         && matchesDateRange(tx.created_at)
+        && matchesStatus(tx.status)
+        && (!sourceFilter || (tx.source || 'nexi') === sourceFilter)
     )
+    const transactionsTotalCents = filteredTransactions
+        .filter(tx => tx.status === 'completed' || tx.status === 'preauth_captured')
+        .reduce((sum, tx) => sum + (tx.amount_cents || 0), 0)
+    const filtersActive = !!(search || cardTypeFilter || dateFilter || dateRange.from || dateRange.to || statusFilter || sourceFilter)
+    const resetFilters = () => {
+        setSearch(''); setCardTypeFilter(''); setDateFilter('')
+        setDateRange({ from: '', to: '' }); setStatusFilter(''); setSourceFilter('')
+    }
 
     async function runBackfill() {
         // Two-step: dry run first to count, then ask for confirm before applying.
@@ -882,13 +928,84 @@ export default function NexiTab() {
                         status,
                         description: `Ricarica Wallet${who ? ' — ' + who : ''}${r.package_name ? ' · ' + r.package_name : ''}`,
                         customer_email: String(r.customer_email || ''),
+                        source: 'wallet',
+                        service_type: 'wallet',
                     } as NexiTransaction
                 })
             } catch (wErr) {
                 console.warn('[NexiTab] merge ricariche wallet fallito (non-bloccante):', wErr)
             }
 
-            const combined = [...nexiTx, ...walletTx].sort((a, b) =>
+            // 26/08/2026: includi i pagamenti CARTA fatti DAL SITO (lavaggio,
+            // noleggio, tour, meccanica...). Passano da Sito/nexi-callback.js
+            // che aggiorna solo `bookings` (nexi_order_id / nexi_payment_id) e
+            // NON scrive mai in nexi_transactions: senza questo merge un
+            // lavaggio pagato con carta non compariva in nessuna riga di
+            // questa pagina. Dedup per order_id contro le righe Nexi native.
+            let bookingTx: NexiTransaction[] = []
+            try {
+                // Paginato: PostgREST taglia a 1000 righe per richiesta e i
+                // pagamenti carta le superano. Senza range() le transazioni
+                // piu' vecchie sparirebbero in silenzio.
+                const bks: Record<string, unknown>[] = []
+                const PAGE = 1000
+                for (let page = 0; page < 20; page++) {
+                    const { data: chunk, error: bkErr } = await supabase
+                        .from('bookings')
+                        .select('id, created_at, payment_completed_at, nexi_order_id, nexi_payment_id, payment_status, payment_method, service_type, service_name, vehicle_name, customer_name, customer_email, price_total')
+                        .or('nexi_order_id.not.is.null,nexi_payment_id.not.is.null')
+                        .order('created_at', { ascending: false })
+                        .range(page * PAGE, page * PAGE + PAGE - 1)
+                    if (bkErr) throw bkErr
+                    if (!chunk || chunk.length === 0) break
+                    bks.push(...(chunk as Record<string, unknown>[]))
+                    if (chunk.length < PAGE) break
+                }
+                bookingTx = (bks || []).map((b: Record<string, unknown>) => {
+                    const ps = String(b.payment_status || '').toLowerCase()
+                    const status: NexiTransaction['status'] =
+                        ['succeeded', 'paid', 'completed'].includes(ps) ? 'completed'
+                        : ps === 'failed' ? 'failed'
+                        : ps === 'cancelled' ? 'cancelled' : 'pending'
+                    const svc = String(b.service_type || '')
+                    const label = String(b.service_name || b.vehicle_name || '').trim()
+                    return {
+                        id: `bk_${String(b.id)}`,
+                        created_at: String(b.payment_completed_at || b.created_at || ''),
+                        order_id: String(b.nexi_order_id || b.nexi_payment_id || ''),
+                        amount_cents: Math.round(Number(b.price_total || 0)),
+                        status,
+                        description: `${serviceLabel(svc)}${label ? ' — ' + label : ''}`,
+                        customer_email: String(b.customer_email || ''),
+                        booking_id: String(b.id),
+                        source: 'prenotazione',
+                        service_type: svc,
+                        booking: {
+                            id: String(b.id),
+                            vehicle_name: String(b.vehicle_name || b.service_name || ''),
+                            customer_name: String(b.customer_name || ''),
+                        },
+                    } as NexiTransaction
+                })
+            } catch (bErr) {
+                console.warn('[NexiTab] merge prenotazioni pagate con carta fallito (non-bloccante):', bErr)
+            }
+
+            const seenOrders = new Set(
+                nexiTx.map(t => String(t.order_id || '').trim().toLowerCase()).filter(Boolean)
+            )
+            const dedupedBookingTx = bookingTx.filter(t => {
+                const oid = String(t.order_id || '').trim().toLowerCase()
+                if (oid && seenOrders.has(oid)) return false
+                if (oid) seenOrders.add(oid)
+                return true
+            })
+
+            const combined = [
+                ...nexiTx.map(t => ({ ...t, source: t.source || ('nexi' as const) })),
+                ...walletTx,
+                ...dedupedBookingTx,
+            ].sort((a, b) =>
                 String(b.created_at || '').localeCompare(String(a.created_at || '')))
             setTransactions(combined)
         } catch (err: unknown) {
@@ -1034,48 +1151,16 @@ export default function NexiTab() {
 
     return (
         <div className="space-y-6">
+            {/* Header: titolo + azioni. I filtri stanno in una barra dedicata
+                sotto, cosi' la riga del titolo non va a capo su 3 righe. */}
             <div className="flex flex-wrap justify-between items-center gap-3">
-                <h2 className="text-2xl font-bold text-theme-text-primary">Transazioni Nexi</h2>
-                <div className="flex items-center gap-2 flex-wrap">
-                    <input
-                        type="search"
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        placeholder="Cerca per cliente, email, prenotazione, order ID, contratto…"
-                        className="px-3 py-2 text-sm bg-theme-text-primary/5 border border-theme-border/50 rounded-lg w-72 text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:border-dr7-gold"
-                    />
-                    {search && (
-                        <button onClick={() => setSearch('')}
-                            className="text-xs px-2 py-2 rounded text-theme-text-muted hover:text-theme-text-primary"
-                            title="Cancella ricerca">×</button>
-                    )}
-                    <select
-                        value={cardTypeFilter}
-                        onChange={e => setCardTypeFilter(e.target.value as typeof cardTypeFilter)}
-                        title="Filtra per tipo carta (carte tokenizzate)"
-                        className="px-3 py-2 text-sm bg-theme-text-primary/5 border border-theme-border/50 rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
-                    >
-                        <option value="">Tutti i tipi</option>
-                        <option value="credit">Credit</option>
-                        <option value="debit">Debit</option>
-                        <option value="prepaid">Prepaid</option>
-                        <option value="unknown">Sconosciuto</option>
-                    </select>
-                    <select
-                        value={dateFilter}
-                        onChange={e => setDateFilter(e.target.value as typeof dateFilter)}
-                        title="Filtra per data"
-                        className="px-3 py-2 text-sm bg-theme-text-primary/5 border border-theme-border/50 rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
-                    >
-                        <option value="">Tutte le date</option>
-                        <option value="7d">Ultimi 7 giorni</option>
-                        <option value="30d">Ultimi 30 giorni</option>
-                        <option value="90d">Ultimi 90 giorni</option>
-                        <option value="year">Ultimo anno</option>
-                    </select>
-                    {/* 2026-06-01: periodo Da/A custom (DD/MM/YYYY) accanto al preset */}
-                    <DateRangeFilter value={dateRange} onChange={setDateRange} showPresets={false} compact />
-
+                <div>
+                    <h2 className="text-2xl font-bold text-theme-text-primary">Transazioni Nexi</h2>
+                    <p className="text-xs text-theme-text-muted mt-0.5">
+                        Pagamenti carta di ogni provenienza: gestionale, sito (noleggi, lavaggi, tour) e ricariche wallet.
+                    </p>
+                </div>
+                <div className="flex items-center gap-2">
                     <button
                         onClick={openPreauthLinkModal}
                         className="px-3 py-2 text-sm rounded-lg bg-dr7-gold text-black hover:bg-dr7-gold/85 font-semibold transition-colors"
@@ -1084,7 +1169,7 @@ export default function NexiTab() {
                         + Link Pre-Autorizzazione
                     </button>
                     <button
-                        onClick={fetchTransactions}
+                        onClick={() => { fetchTransactions(); fetchTokenizedCards(); fetchAllAddebiti() }}
                         className="p-2 hover:bg-theme-text-primary/5 rounded-full transition-colors"
                         title="Aggiorna"
                     >
@@ -1094,6 +1179,249 @@ export default function NexiTab() {
                     </button>
                 </div>
             </div>
+
+            {/* Barra filtri — periodo, stato, origine, tipo carta. Il periodo
+                vale sia per le transazioni (created_at) sia per le carte
+                tokenizzate (updated_at). */}
+            <div className="bg-theme-text-primary/5 rounded-xl border border-theme-border/50 px-4 py-3 space-y-3">
+                <div className="flex flex-wrap items-end gap-3">
+                    <label className="flex flex-col gap-1 min-w-[260px] flex-1">
+                        <span className="text-[11px] uppercase tracking-wide text-theme-text-muted">Ricerca</span>
+                        <div className="relative">
+                            <input
+                                type="search"
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                placeholder="Cliente, email, prenotazione, order ID, contratto…"
+                                className="w-full px-3 py-2 text-sm bg-theme-bg-primary/40 border border-theme-border/50 rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:border-dr7-gold"
+                            />
+                            {search && (
+                                <button onClick={() => setSearch('')}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary"
+                                    title="Cancella ricerca">&times;</button>
+                            )}
+                        </div>
+                    </label>
+
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[11px] uppercase tracking-wide text-theme-text-muted">Periodo</span>
+                        <DateRangeFilter value={dateRange} onChange={setDateRange} showPresets={false} compact />
+                    </label>
+
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[11px] uppercase tracking-wide text-theme-text-muted">Preset</span>
+                        <select
+                            value={dateFilter}
+                            onChange={e => setDateFilter(e.target.value as typeof dateFilter)}
+                            className="px-3 py-2 text-sm bg-theme-bg-primary/40 border border-theme-border/50 rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                        >
+                            <option value="">Tutte le date</option>
+                            <option value="7d">Ultimi 7 giorni</option>
+                            <option value="30d">Ultimi 30 giorni</option>
+                            <option value="90d">Ultimi 90 giorni</option>
+                            <option value="year">Ultimo anno</option>
+                        </select>
+                    </label>
+
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[11px] uppercase tracking-wide text-theme-text-muted">Stato</span>
+                        <select
+                            value={statusFilter}
+                            onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}
+                            className="px-3 py-2 text-sm bg-theme-bg-primary/40 border border-theme-border/50 rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                        >
+                            <option value="">Tutti gli stati</option>
+                            <option value="completed">Incassati</option>
+                            <option value="pending">In attesa</option>
+                            <option value="preauth">Pre-autorizzazioni</option>
+                            <option value="failed">Falliti</option>
+                        </select>
+                    </label>
+
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[11px] uppercase tracking-wide text-theme-text-muted">Origine</span>
+                        <select
+                            value={sourceFilter}
+                            onChange={e => setSourceFilter(e.target.value as typeof sourceFilter)}
+                            title="Da dove arriva il pagamento"
+                            className="px-3 py-2 text-sm bg-theme-bg-primary/40 border border-theme-border/50 rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                        >
+                            <option value="">Tutte le origini</option>
+                            <option value="nexi">Gestionale (link/addebiti)</option>
+                            <option value="prenotazione">Sito — prenotazioni</option>
+                            <option value="wallet">Ricariche wallet</option>
+                        </select>
+                    </label>
+
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[11px] uppercase tracking-wide text-theme-text-muted">Tipo carta</span>
+                        <select
+                            value={cardTypeFilter}
+                            onChange={e => setCardTypeFilter(e.target.value as typeof cardTypeFilter)}
+                            title="Filtra le carte tokenizzate"
+                            className="px-3 py-2 text-sm bg-theme-bg-primary/40 border border-theme-border/50 rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                        >
+                            <option value="">Tutti i tipi</option>
+                            <option value="credit">Credito</option>
+                            <option value="debit">Debito</option>
+                            <option value="prepaid">Prepagata</option>
+                            <option value="unknown">Sconosciuto</option>
+                        </select>
+                    </label>
+
+                    {filtersActive && (
+                        <button
+                            onClick={resetFilters}
+                            className="px-3 py-2 text-sm rounded-lg bg-theme-bg-tertiary text-theme-text-secondary border border-theme-border hover:bg-theme-bg-hover"
+                        >
+                            Azzera filtri
+                        </button>
+                    )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-theme-text-muted border-t border-theme-border/40 pt-2">
+                    <span>
+                        <span className="text-theme-text-primary font-semibold">{filteredTransactions.length}</span>
+                        {filtersActive ? ` / ${transactions.length}` : ''} transazioni
+                    </span>
+                    <span>
+                        Incassato: <span className="text-emerald-400 font-semibold font-mono">{formatEUR(transactionsTotalCents)}</span>
+                    </span>
+                    <span>
+                        <span className="text-theme-text-primary font-semibold">{filteredCards.length}</span>
+                        {filtersActive ? ` / ${tokenizedCards.length}` : ''} carte salvate
+                    </span>
+                </div>
+            </div>
+
+            {/* Transazioni — sezione principale: e' il titolo della pagina,
+                sta in cima. Sotto: addebiti in corso e carte salvate. */}
+            {error && (
+                <div className="bg-red-900/50 border border-red-700 text-red-200 p-4 rounded-lg">
+                    {error}
+                </div>
+            )}
+
+            {loading ? (
+                <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-dr7-gold mx-auto mb-4"></div>
+                    <p className="text-theme-text-muted">Caricamento transazioni...</p>
+                </div>
+            ) : filteredTransactions.length === 0 ? (
+                <div className="text-center py-12 bg-theme-text-primary/5 rounded-xl border border-theme-border/50">
+                    <p className="text-theme-text-muted">
+                        {search ? `Nessuna transazione corrisponde a "${search}"` : 'Nessuna transazione trovata'}
+                    </p>
+                </div>
+            ) : (
+                <div className="bg-theme-text-primary/5 rounded-xl border border-theme-border/50 overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead className="bg-theme-bg-primary/20 text-xs uppercase text-theme-text-muted font-medium">
+                                <tr>
+                                    <th className="px-6 py-4">Data</th>
+                                    <th className="px-6 py-4">Origine</th>
+                                    <th className="px-6 py-4">Order ID</th>
+                                    <th className="px-6 py-4">Descrizione</th>
+                                    <th className="px-6 py-4">Importo</th>
+                                    <th className="px-6 py-4">Stato</th>
+                                    <th className="px-6 py-4">Cliente</th>
+                                    <th className="px-6 py-4">Azioni</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                                {filteredTransactions.map((tx) => (
+                                    <tr key={tx.id} className="hover:bg-theme-text-primary/5 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <div className="text-theme-text-primary font-mono text-sm">
+                                                {formatRomeDate(new Date(tx.created_at), { dateStyle: 'short', timeStyle: 'short' })}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {(() => {
+                                                const src = tx.source || 'nexi'
+                                                const cfg = src === 'prenotazione'
+                                                    ? { label: serviceLabel(tx.service_type || ''), cls: 'bg-blue-500/15 text-blue-400 border-blue-500/30' }
+                                                    : src === 'wallet'
+                                                    ? { label: 'Wallet', cls: 'bg-purple-500/15 text-purple-400 border-purple-500/30' }
+                                                    : { label: 'Gestionale', cls: 'bg-dr7-gold/10 text-dr7-gold border-dr7-gold/30' }
+                                                return (
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase whitespace-nowrap ${cfg.cls}`}>
+                                                        {cfg.label}
+                                                    </span>
+                                                )
+                                            })()}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="text-sm font-mono text-dr7-gold">{tx.order_id || '—'}</div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="text-sm text-theme-text-secondary">{tx.description}</div>
+                                            {tx.booking && (
+                                                <div className="text-xs text-theme-text-muted mt-1">
+                                                    Ref: {tx.booking.vehicle_name}
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="text-theme-text-primary font-mono font-bold">
+                                                {formatEUR(tx.amount_cents || 0)}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {getStatusBadge(tx.status)}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="text-sm text-theme-text-primary">
+                                                {tx.booking?.customer_name || 'N/A'}
+                                            </div>
+                                            <div className="text-xs text-theme-text-muted">{tx.customer_email}</div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {/* 2026-07-20: mostra Cattura/Annulla anche per 'pending_preauth'.
+                                                Sono pre-autorizzazioni completate su Nexi ma rimaste stuck in DR7
+                                                (callback non aggiornato). nexi-capture-preauth risolve da solo
+                                                l'operationId reale dall'orderId su Nexi, quindi la cattura
+                                                funziona lo stesso; se non c'e' un'AUTHORIZATION valida fallisce
+                                                senza addebitare. Cosi' si incassa DALL'ADMIN senza portale Nexi. */}
+                                            {/* 2026-07-20: incluso 'preauth_captured' — se DR7 aveva
+                                                marcato Catturato ma su Nexi e' ancora Preautorizzata (status
+                                                sballato), il bottone Cattura deve tornare. Ri-eseguire e'
+                                                sicuro: la cattura controlla Nexi e addebita solo se c'e' una
+                                                pre-auth AUTORIZZATA (niente doppio addebito). */}
+                                            {(tx.status === 'preauth_held' || tx.status === 'pending_preauth' || tx.status === 'preauth_captured' || tx.status === 'preauth_pending_refresh_confirm' || tx.status === 'preauth_refresh_failed') ? (
+                                                <div className="flex flex-col sm:flex-row gap-1.5">
+                                                    <button
+                                                        onClick={() => handleCapturePreauth(tx)}
+                                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 border border-emerald-700/50 whitespace-nowrap"
+                                                        title="Cattura i fondi pre-autorizzati (verifica l'operazione su Nexi e incassa)"
+                                                    >
+                                                        Cattura
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleVoidPreauth(tx)}
+                                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover border border-theme-border whitespace-nowrap"
+                                                        title="Sblocca i fondi senza addebitare"
+                                                    >
+                                                        Annulla
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    onClick={() => openAddebitoModal(tx)}
+                                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-700/50 transition-colors"
+                                                >
+                                                    Nuovo Addebito
+                                                </button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
 
             {/* Carte Tokenizzate */}
             <div className="bg-theme-text-primary/5 rounded-xl border border-theme-border/50 overflow-hidden">
@@ -1255,6 +1583,27 @@ export default function NexiTab() {
                                                 </button>
                                             )}
                                             {card.contract_id && (
+                                                /* 26/08/2026: Addebito era una barra rossa a tutta
+                                                   larghezza sotto ogni carta — occupava mezza pagina.
+                                                   Ora e' un bottone della stessa taglia degli altri e
+                                                   il form si apre in un modal (prop `compact`). */
+                                                <CustomerAddebitoButton
+                                                    compact
+                                                    cards={(card.email ? tokenizedCards.filter(tc => tc.email === card.email && tc.contract_id) : [card]).map(tc => ({
+                                                        contractId: tc.contract_id,
+                                                        maskedPan: tc.masked_pan || undefined,
+                                                        circuit: tc.circuit || undefined,
+                                                        cardType: tc.card_type || undefined,
+                                                        brand: tc.card_brand || undefined,
+                                                        isDefault: tc.is_default,
+                                                    }))}
+                                                    defaultContractId={card.contract_id}
+                                                    customerEmail={card.email}
+                                                    customerName={card.full_name}
+                                                    onDone={fetchAllAddebiti}
+                                                />
+                                            )}
+                                            {card.contract_id && (
                                                 <button
                                                     onClick={() => openPreauthModal(card)}
                                                     className="text-[11px] px-2 py-1 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 whitespace-nowrap"
@@ -1278,24 +1627,6 @@ export default function NexiTab() {
                                                 in caso serva per debug futuro. */}
                                         </div>
                                     </div>
-                                    {card.contract_id && (
-                                        <div className="mt-2">
-                                            <CustomerAddebitoButton
-                                                cards={(card.email ? tokenizedCards.filter(tc => tc.email === card.email && tc.contract_id) : [card]).map(tc => ({
-                                                    contractId: tc.contract_id,
-                                                    maskedPan: tc.masked_pan || undefined,
-                                                    circuit: tc.circuit || undefined,
-                                                    cardType: tc.card_type || undefined,
-                                                    brand: tc.card_brand || undefined,
-                                                    isDefault: tc.is_default,
-                                                }))}
-                                                defaultContractId={card.contract_id}
-                                                customerEmail={card.email}
-                                                customerName={card.full_name}
-                                                onDone={fetchAllAddebiti}
-                                            />
-                                        </div>
-                                    )}
                                     {isExpanded && hasHistory && (
                                         <div className="mt-3 pl-2 border-l-2 border-emerald-500/30 space-y-1.5">
                                             {payments.map((p, i) => (
@@ -1405,117 +1736,6 @@ export default function NexiTab() {
                                 </div>
                             )
                         })}
-                    </div>
-                </div>
-            )}
-
-            {error && (
-                <div className="bg-red-900/50 border border-red-700 text-red-200 p-4 rounded-lg">
-                    {error}
-                </div>
-            )}
-
-            {loading ? (
-                <div className="text-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-dr7-gold mx-auto mb-4"></div>
-                    <p className="text-theme-text-muted">Caricamento transazioni...</p>
-                </div>
-            ) : filteredTransactions.length === 0 ? (
-                <div className="text-center py-12 bg-theme-text-primary/5 rounded-xl border border-theme-border/50">
-                    <p className="text-theme-text-muted">
-                        {search ? `Nessuna transazione corrisponde a "${search}"` : 'Nessuna transazione trovata'}
-                    </p>
-                </div>
-            ) : (
-                <div className="bg-theme-text-primary/5 rounded-xl border border-theme-border/50 overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead className="bg-theme-bg-primary/20 text-xs uppercase text-theme-text-muted font-medium">
-                                <tr>
-                                    <th className="px-6 py-4">Data</th>
-                                    <th className="px-6 py-4">Order ID</th>
-                                    <th className="px-6 py-4">Descrizione</th>
-                                    <th className="px-6 py-4">Importo</th>
-                                    <th className="px-6 py-4">Stato</th>
-                                    <th className="px-6 py-4">Cliente</th>
-                                    <th className="px-6 py-4">Azioni</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-white/5">
-                                {filteredTransactions.map((tx) => (
-                                    <tr key={tx.id} className="hover:bg-theme-text-primary/5 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="text-theme-text-primary font-mono text-sm">
-                                                {formatRomeDate(new Date(tx.created_at), { dateStyle: 'short', timeStyle: 'short' })}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="text-sm font-mono text-dr7-gold">{tx.order_id}</div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="text-sm text-theme-text-secondary">{tx.description}</div>
-                                            {tx.booking && (
-                                                <div className="text-xs text-theme-text-muted mt-1">
-                                                    Ref: {tx.booking.vehicle_name}
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="text-theme-text-primary font-mono font-bold">
-                                                {formatEUR(tx.amount_cents || 0)}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {getStatusBadge(tx.status)}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="text-sm text-theme-text-primary">
-                                                {tx.booking?.customer_name || 'N/A'}
-                                            </div>
-                                            <div className="text-xs text-theme-text-muted">{tx.customer_email}</div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {/* 2026-07-20: mostra Cattura/Annulla anche per 'pending_preauth'.
-                                                Sono pre-autorizzazioni completate su Nexi ma rimaste stuck in DR7
-                                                (callback non aggiornato). nexi-capture-preauth risolve da solo
-                                                l'operationId reale dall'orderId su Nexi, quindi la cattura
-                                                funziona lo stesso; se non c'e' un'AUTHORIZATION valida fallisce
-                                                senza addebitare. Cosi' si incassa DALL'ADMIN senza portale Nexi. */}
-                                            {/* 2026-07-20: incluso 'preauth_captured' — se DR7 aveva
-                                                marcato Catturato ma su Nexi e' ancora Preautorizzata (status
-                                                sballato), il bottone Cattura deve tornare. Ri-eseguire e'
-                                                sicuro: la cattura controlla Nexi e addebita solo se c'e' una
-                                                pre-auth AUTORIZZATA (niente doppio addebito). */}
-                                            {(tx.status === 'preauth_held' || tx.status === 'pending_preauth' || tx.status === 'preauth_captured' || tx.status === 'preauth_pending_refresh_confirm' || tx.status === 'preauth_refresh_failed') ? (
-                                                <div className="flex flex-col sm:flex-row gap-1.5">
-                                                    <button
-                                                        onClick={() => handleCapturePreauth(tx)}
-                                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 border border-emerald-700/50 whitespace-nowrap"
-                                                        title="Cattura i fondi pre-autorizzati (verifica l'operazione su Nexi e incassa)"
-                                                    >
-                                                        Cattura
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleVoidPreauth(tx)}
-                                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-theme-bg-tertiary text-theme-text-secondary hover:bg-theme-bg-hover border border-theme-border whitespace-nowrap"
-                                                        title="Sblocca i fondi senza addebitare"
-                                                    >
-                                                        Annulla
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <button
-                                                    onClick={() => openAddebitoModal(tx)}
-                                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-700/50 transition-colors"
-                                                >
-                                                    Nuovo Addebito
-                                                </button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
                     </div>
                 </div>
             )}

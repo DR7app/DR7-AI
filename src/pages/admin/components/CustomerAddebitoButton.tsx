@@ -23,11 +23,19 @@ interface CustomerAddebitoButtonProps {
     defaultContractId?: string | null
     /** Start with the form already open (e.g. when rendered inside a modal). */
     autoOpen?: boolean
+    /**
+     * 26/08/2026: `compact` rende il controllo come PICCOLO bottone inline
+     * (stessa taglia di Pre-autorizza / Elimina) invece della barra a tutta
+     * larghezza, e apre il form in un modal sopra la lista. Serve nella tab
+     * Nexi, dove un blocco full-width per ogni carta rendeva la pagina
+     * illeggibile. Senza la prop il comportamento resta quello di prima.
+     */
+    compact?: boolean
     onDone?: () => void
 }
 
 export default function CustomerAddebitoButton({
-    cards, customerEmail, customerName, bookingId, defaultContractId, autoOpen, onDone,
+    cards, customerEmail, customerName, bookingId, defaultContractId, autoOpen, compact, onDone,
 }: CustomerAddebitoButtonProps) {
     const defaultCid = (defaultContractId && cards.some(c => c.contractId === defaultContractId))
         ? defaultContractId
@@ -111,9 +119,11 @@ export default function CustomerAddebitoButton({
                 type="button"
                 disabled
                 title="Nessuna carta salvata: il cliente deve prima pagare online (così la carta viene tokenizzata) per poter essere addebitato."
-                className="w-full px-3 py-2 rounded-lg text-sm font-semibold bg-theme-bg-tertiary text-theme-text-muted border border-theme-border cursor-not-allowed"
+                className={compact
+                    ? 'text-[11px] px-2 py-1 rounded bg-theme-bg-tertiary text-theme-text-muted border border-theme-border cursor-not-allowed whitespace-nowrap'
+                    : 'w-full px-3 py-2 rounded-lg text-sm font-semibold bg-theme-bg-tertiary text-theme-text-muted border border-theme-border cursor-not-allowed'}
             >
-                Addebito — nessuna carta salvata
+                {compact ? 'Addebito' : 'Addebito — nessuna carta salvata'}
             </button>
         )
     }
@@ -122,14 +132,17 @@ export default function CustomerAddebitoButton({
         return (
             <button
                 onClick={() => setOpen(true)}
-                className="w-full px-3 py-2 rounded-lg text-sm font-semibold bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-700/50 transition-colors"
+                title="Addebita la carta salvata del cliente"
+                className={compact
+                    ? 'text-[11px] px-2 py-1 rounded bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/25 whitespace-nowrap'
+                    : 'w-full px-3 py-2 rounded-lg text-sm font-semibold bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-700/50 transition-colors'}
             >
                 Addebito
             </button>
         )
     }
 
-    return (
+    const form = (
         <div className="rounded-lg border border-theme-border bg-theme-bg-secondary p-3 space-y-2">
             <div className="text-[11px] uppercase tracking-wide text-theme-text-muted">
                 Nuovo addebito — debito immediato
@@ -227,6 +240,27 @@ export default function CustomerAddebitoButton({
                 >
                     {sending ? 'Invio...' : 'Conferma addebito'}
                 </button>
+            </div>
+        </div>
+    )
+
+    if (!compact) return form
+
+    // In compact mode il form vive in un modal: la riga della carta resta
+    // alta una riga e il form non spinge in basso tutta la lista.
+    return (
+        <div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4"
+            onClick={() => { if (!sending) { setOpen(false); setAmount(''); setCausale('') } }}
+        >
+            <div
+                className="w-full sm:max-w-md max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-xl"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="px-3 pt-3 pb-1 bg-theme-bg-secondary rounded-t-2xl sm:rounded-t-xl border-x border-t border-theme-border text-sm font-bold text-theme-text-primary">
+                    Addebito — {customerName || customerEmail || 'cliente'}
+                </div>
+                {form}
             </div>
         </div>
     )
