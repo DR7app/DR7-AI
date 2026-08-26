@@ -1872,6 +1872,16 @@ export default function CentralinaProTab() {
       setBusinessId(newId)
       applyRemoteSnapshot(remote)
       setJustSaved(false)
+      // 26/08/2026 — la sezione aperta restava aperta anche quando il nuovo
+      // business non ce l'ha (SECTIONS_HIDDEN_BY_BUSINESS filtra SOLO l'elenco
+      // a sinistra, non il pannello a destra). Cosi' "Gestione PEC & Email",
+      // che e' globale e vive sulla riga `main`, restava in vista passando a
+      // Mare: sembrava la PEC del Mare, e cambiarla li' cambiava quella di
+      // Terra. Fuori dal suo business si torna alla prima sezione valida.
+      if (!isCauzioniViewOnly) {
+        const visibili = sectionsForBusiness(newId)
+        if (!visibili.some(s => s.id === section)) setSection(visibili[0]?.id || 'categorie-fascia')
+      }
     } finally {
       setSwitchingBusiness(false)
     }
@@ -2238,7 +2248,14 @@ export default function CentralinaProTab() {
             )}
             {section === 'calendario-giornaliero' && <DailyCalendarCategoriesConfig readOnly={isCauzioniViewOnly} />}
             {section === 'gestione-multe' && <MulteConfigSection readOnly={isCauzioniViewOnly} />}
-            {section === 'gestione-mail-pec' && <GestioneMailPecSection readOnly={isCauzioniViewOnly} />}
+            {section === 'gestione-mail-pec' && (
+              <>
+                {/* Una sola casella PEC e un solo mittente email per l'azienda:
+                    la sezione vive sulla riga `main` e si vede solo da Terra. */}
+                <GlobaleBadge cosa="La casella PEC e il mittente email" />
+                <GestioneMailPecSection readOnly={isCauzioniViewOnly} />
+              </>
+            )}
             {section === 'p5' && <ServiziSection servizi={servizi} setServizi={setServizi} fasce={fasce} categories={categories} />}
             {section === 'p6' && (
               <PrezzoDinamicoSection config={prezzoDinamico} setConfig={setPrezzoDinamico} categories={categories} />

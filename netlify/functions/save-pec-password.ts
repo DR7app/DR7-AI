@@ -15,6 +15,7 @@
  *   { mittente, password }              -> salva (password vuota = cancella)
  *   { action: 'status', mittente }      -> dice SE la password c'e' (mai quale)
  *   { action: 'test', mittente, password? } -> login vero sul server PEC
+ *   { action: 'providers' }             -> elenco provider per la tendina
  *
  * 26/08/2026 — Il campo password si svuota dopo il salvataggio (il valore non
  * torna mai al browser) e questo faceva sembrare che non avesse salvato nulla.
@@ -25,7 +26,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getCorsOrigin } from './cors-headers'
 import { requireAuth } from './require-auth'
 import nodemailer from 'nodemailer'
-import { pecHostFor, pecProviderFor, PEC_PORT } from './utils/pecServer'
+import { pecHostFor, pecProviderFor, pecDominioRiconosciuto, PEC_PROVIDERS, PEC_PORT } from './utils/pecServer'
 
 const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -44,6 +45,12 @@ const handler: Handler = async (event) => {
 
   try {
     const { mittente, password, action, host: hostOverride, port: portOverride } = JSON.parse(event.body || '{}') as { mittente?: string; password?: string; action?: string; host?: string; port?: number }
+    // Elenco provider: serve alla tendina di Centralina Pro e non ha bisogno
+    // di un indirizzo (si sceglie il provider PRIMA di sapere il server).
+    if (action === 'providers') {
+      return { statusCode: 200, headers, body: JSON.stringify({ success: true, providers: PEC_PROVIDERS }) }
+    }
+
     const addr = String(mittente || '').trim().toLowerCase()
     if (!/\S+@\S+\.\S+/.test(addr)) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Indirizzo PEC non valido' }) }
@@ -66,6 +73,10 @@ const handler: Handler = async (event) => {
           server_dedotto: pecHostFor(addr),
           porta: Number(portOverride) > 0 ? Number(portOverride) : PEC_PORT,
           provider: pecProviderFor(addr),
+          // Falso = il dominio non e' di un provider noto e il server dedotto
+          // e' solo un ripiego: senza questo avviso "PEC Poste su server
+          // Legalmail" sembrava una scelta del gestionale.
+          riconosciuto: pecDominioRiconosciuto(addr),
         }),
       }
     }

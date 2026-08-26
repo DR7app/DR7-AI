@@ -32,7 +32,11 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
   // Stato della password in cassaforte: il valore non torna mai al browser,
   // quindi senza questo riquadro il campo che si svuota sembrava un salvataggio
   // fallito. Qui si dice SE c'e', non quale.
-  const [pecStato, setPecStato] = useState<{ registrata: boolean; aggiornata_il: string | null; server: string } | null>(null)
+  const [pecStato, setPecStato] = useState<{ registrata: boolean; aggiornata_il: string | null; server: string; riconosciuto: boolean } | null>(null)
+  // Tendina dei provider: l'elenco arriva dal server (utils/pecServer.ts) cosi'
+  // gli hostname stanno in un posto solo. Chi ha la PEC su un dominio proprio
+  // sceglie il provider invece di andare a cercare il server SMTP.
+  const [providers, setProviders] = useState<Array<{ nome: string; host: string; porta: number }>>([])
   const [pecTest, setPecTest] = useState<{ ok: boolean; msg: string } | null>(null)
   const [testingPec, setTestingPec] = useState(false)
 
@@ -49,6 +53,7 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
         setPecSmtpHost(String(multe.pec_smtp_host || ''))
         setPecSmtpPort(multe.pec_smtp_port ? String(multe.pec_smtp_port) : '')
         if (addr) void caricaStatoPec(addr, String(multe.pec_smtp_host || ''))
+        void caricaProviders()
       } catch {
         /* la sezione resta usabile: i campi partono vuoti */
       } finally {
@@ -67,12 +72,32 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok && data?.success) {
-        setPecStato({ registrata: !!data.registrata, aggiornata_il: data.aggiornata_il || null, server: String(data.server || '') })
+        setPecStato({
+          registrata: !!data.registrata,
+          aggiornata_il: data.aggiornata_il || null,
+          server: String(data.server || ''),
+          riconosciuto: data.riconosciuto !== false,
+        })
       } else {
         setPecStato(null)
       }
     } catch {
       setPecStato(null)
+    }
+  }
+
+  /** Elenco provider PEC noti, per la tendina. */
+  async function caricaProviders() {
+    try {
+      const res = await authFetch('/.netlify/functions/save-pec-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'providers' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && Array.isArray(data?.providers)) setProviders(data.providers)
+    } catch {
+      /* senza tendina il server si scrive comunque a mano */
     }
   }
 
@@ -247,7 +272,11 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
               className={INPUT}
               value={pecMittente}
               onChange={e => setPecMittente(e.target.value)}
-              placeholder="nome@legalmail.it"
+              // Senza questo il riquadro del server restava quello della casella
+              // PRECEDENTE: si scriveva la PEC di Poste e sotto continuava a
+              // comparire Legalmail, come se il gestionale la ignorasse.
+              onBlur={e => { const a = e.target.value.trim(); if (/\S+@\S+\.\S+/.test(a)) void caricaStatoPec(a, pecSmtpHost.trim()) }}
+              placeholder="nome@pec.esempio.it"
               disabled={readOnly}
             />
           </div>
@@ -287,13 +316,41 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
         </div>
 
         <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
+          {/* La tendina esiste perche' il server si deduce dal DOMINIO: una PEC
+              Poste su dominio proprio non veniva riconosciuta e restava sul
+              server Legalmail di ripiego. Scegliendo il provider si scrive il
+              server giusto senza doverne conoscere l'hostname. */}
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-[10px] uppercase tracking-wider text-theme-text-muted">Provider della PEC</label>
+            <select
+              className={INPUT}
+              value={pecSmtpHost.trim() ? (providers.some(p => p.host === pecSmtpHost.trim()) ? pecSmtpHost.trim() : 'altro') : 'auto'}
+              onChange={e => {
+                const v = e.target.value
+                if (v === 'auto') { setPecSmtpHost(''); setPecSmtpPort('') }
+                else if (v === 'altro') { setPecSmtpHost(''); setPecSmtpPort('') }
+                else {
+                  const p = providers.find(x => x.host === v)
+                  setPecSmtpHost(v)
+                  setPecSmtpPort(String(p?.porta || 465))
+                }
+              }}
+              disabled={readOnly}
+            >
+              <option value="auto">Riconosci dal dominio della casella</option>
+              {providers.map(p => (
+                <option key={p.host} value={p.host}>{p.nome} — {p.host}</option>
+              ))}
+              <option value="altro">Altro provider (server a mano)</option>
+            </select>
+          </div>
           <div>
             <label className="mb-1 block text-[10px] uppercase tracking-wider text-theme-text-muted">Server SMTP della PEC</label>
             <input
               className={INPUT}
               value={pecSmtpHost}
               onChange={e => setPecSmtpHost(e.target.value)}
-              placeholder={pecStato?.server ? `${pecStato.server} (dedotto dal dominio)` : 'lascia vuoto: dedotto dal dominio'}
+              placeholder={pecStato?.server ? `${pecStato.server} (${pecStato.riconosciuto ? 'dedotto dal dominio' : 'ripiego: dominio non riconosciuto'})` : 'lascia vuoto: dedotto dal dominio'}
               disabled={readOnly}
             />
           </div>
@@ -310,7 +367,8 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
           </div>
           <p className="text-[11px] text-theme-text-muted sm:col-span-2">
             Vuoti: il server si ricava dal dominio della casella (Legalmail, Aruba, Postecert, Namirial, Register.it)
-            e la porta e&apos; 465. Si compilano quando il provider ne usa altri — e&apos; il campo da toccare quando il
+            e la porta e&apos; 465. Se la PEC sta su un dominio proprio il dominio non dice il provider: si sceglie
+            dalla tendina qui sopra. Si compilano quando il provider ne usa altri — e&apos; il campo da toccare quando il
             gestionale va a un&apos;altra azienda con un&apos;altra PEC. Porta 465 = TLS diretto, 587 e 25 = STARTTLS.
           </p>
         </div>
@@ -340,6 +398,18 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
             >{testingPec ? 'Prova in corso…' : 'Prova connessione'}</button>
           )}
         </div>
+
+        {/* Il ripiego su Legalmail non deve essere silenzioso: una PEC Poste
+            su dominio proprio finiva sul server di InfoCert e l'invio veniva
+            rifiutato all'autenticazione, senza che nulla lo dicesse. */}
+        {pecStato && !pecStato.riconosciuto && !pecSmtpHost.trim() && (
+          <p className="text-[11px] text-amber-500">
+            Il dominio di questa casella non e&apos; di un provider riconosciuto: il server resta
+            <span className="font-mono"> {pecStato.server}</span> per ripiego, ed e&apos; quasi certo che
+            l&apos;autenticazione venga rifiutata. Scegli il provider qui sopra — per una PEC di Poste e&apos;
+            Postecert (<span className="font-mono">mail.postecert.it</span>).
+          </p>
+        )}
 
         {pecTest && (
           <p className={`text-[11px] ${pecTest.ok ? 'text-green-500' : 'text-red-500'}`}>{pecTest.msg}</p>

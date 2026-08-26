@@ -37,3 +37,24 @@ export function pecProviderFor(mittente: string): string {
   const dominio = String(mittente || '').trim().toLowerCase().split('@')[1] || ''
   return PROVIDER_HOSTS.find(p => p.match.test(dominio))?.nome || 'provider sconosciuto (uso Legalmail)'
 }
+
+/**
+ * Il dominio e' di un provider noto? Se no il server resta Legalmail per
+ * ripiego, e chi configura deve saperlo: una PEC Poste su dominio proprio
+ * (dr7@pec.dr7.app) non si autentica mai sul server di InfoCert.
+ */
+export function pecDominioRiconosciuto(mittente: string): boolean {
+  const dominio = String(mittente || '').trim().toLowerCase().split('@')[1] || ''
+  return PROVIDER_HOSTS.some(p => p.match.test(dominio))
+}
+
+/**
+ * Elenco per la tendina di Centralina Pro: chi ha la PEC su un dominio proprio
+ * sceglie il provider invece di andare a cercare l'hostname del server SMTP.
+ * Una voce per provider (i domini alternativi puntano allo stesso server).
+ */
+export const PEC_PROVIDERS: Array<{ nome: string; host: string; porta: number }> =
+  PROVIDER_HOSTS.reduce((acc, p) => {
+    if (!acc.some(v => v.host === p.host)) acc.push({ nome: p.nome, host: p.host, porta: PEC_PORT })
+    return acc
+  }, [] as Array<{ nome: string; host: string; porta: number }>)
