@@ -13,7 +13,10 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "sito:gen": "node scripts/genSiteCopyDefaults.mjs",
+    "sito:check": "node scripts/genSiteCopyDefaults.mjs --check && node scripts/checkSitoSiteMap.mjs",
+    "sito:gaps": "node scripts/sitoGaps.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",

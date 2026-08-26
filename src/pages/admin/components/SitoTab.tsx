@@ -1,29 +1,151 @@
 /**
- * SitoTab — Admin "Sito" tab
+ * SitoTab — l'onglet "Sito" del gestionale.
  *
- * Lets the operator edit website-visible copy (FAQ, Cancellation,
- * Membership, Hero, etc.) without a developer or redeploy. Each
- * section persists to `centralina_pro_config.config.site_copy.*`
- * and the website reads it via `utils/siteCopy.ts` with a hardcoded
- * fallback for the legacy strings.
+ * Permette di modificare i testi visibili su dr7.app senza sviluppatore
+ * ne' redeploy: ogni sezione scrive in
+ * `centralina_pro_config.config.site_copy.*` e il sito li rilegge tramite
+ * `utils/siteCopy.ts`, con il testo di default come fallback.
  *
- * Access control:
- *   - Whitelist (no OTP):  valerio@dr7.app, ilenia@dr7.app
- *   - Everyone else:       OTP gate via LimitationOverrideModal
- *                          codes: `gestione_sito_access` (open tab),
- *                                 `gestione_sito_write`  (save changes)
+ * Struttura (rifatta il 26/08/2026):
+ *   - `sito/sitoSiteMap.ts`     l'alberatura REALE di dr7.app. Una voce
+ *                               della nav = una pagina del sito, alla sua
+ *                               URL vera. Le pagine senza editor restano
+ *                               elencate e marcate "Nel codice".
+ *   - `sito/siteCopyDefaults.ts` GENERATO da Sito/utils/siteCopy.ts. Prima
+ *                               i default erano ricopiati a mano qui e
+ *                               avevano derivato: 1063 campi su 1272 non
+ *                               corrispondevano piu' al sito, per lo piu'
+ *                               caselle vuote dove dr7.app mostra testo.
+ *                               Non ridichiarare quei valori in questo
+ *                               file: rigenerare con `npm run sito:gen`.
  *
- * Implemented sub-sections:
- *   - faq          (editable list of question/answer pairs)
- *   - cancellazione, membership, hero, chi-siamo, footer, legali
- *                   (placeholder shells — will be filled iteratively)
- */
-import { useEffect, useMemo, useRef, useState } from 'react'
+ * Controlli:  `npm run sito:check` verifica che i default siano allineati
+ * al sito e che ogni editor sia raggiungibile dalla nav (un editor non
+ * montato salva in DB senza che nessuno possa aprirlo).
+ *
+ * Accesso:
+ *   - `role:sito-direzione` in admins.permissions -> nessun OTP
+ *   - tutti gli altri -> OTP `gestione_sito_access` (apertura tab) e
+ *     `gestione_sito_write` (salvataggio)
+ */import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
+// Alberatura reale di dr7.app: una voce dell'onglet = una pagina del sito.
+import {
+    SITO_AREAS,
+    SITO_SCREENS,
+    SCREENS_BY_AREA,
+    MANAGED_COUNT,
+    TOTAL_COUNT,
+    publicUrl,
+    type SitoScreen,
+} from './sito/sitoSiteMap'
+// Schema + testi di default del sito: GENERATI da Sito/utils/siteCopy.ts
+// (node scripts/genSiteCopyDefaults.mjs). Non ridichiarare qui: ogni copia
+// manuale ricrea il disallineamento fra il gestionale e dr7.app.
+import type {
+    AboutCopy,
+    AboutFounder,
+    AirportItem,
+    AviationMarineCopy,
+    AviationMarineItem,
+    AviationMarineSpec,
+    AviationMarineSpecKey,
+    AviationQuoteCopy,
+    BilingualLocationItem,
+    BilingualParagraph,
+    BookingCopy,
+    BookingSearchBoxCopy,
+    CancellazioneBlock,
+    CancellazioneCopy,
+    CancellazioneSection,
+    CarWashCopy,
+    CareersCopy,
+    CareersJob,
+    CheckEmailCopy,
+    ConfirmationSuccessCopy,
+    ContactCopy,
+    CreditWalletCopy,
+    Dr7ClubPlanCopy,
+    FaqCopy,
+    FaqEntry,
+    FirmaCopy,
+    FlottaCopy,
+    FooterCopy,
+    FooterLink,
+    FooterSocialIcon,
+    FooterSocialLink,
+    FranchisingBenefit,
+    FranchisingBenefitIcon,
+    FranchisingCopy,
+    FranchisingExpansionIcon,
+    FranchisingExpansionLocation,
+    HeaderCopy,
+    HomeCategoryOverride,
+    HomeCopy,
+    HomeSlide,
+    InvestitoriCopy,
+    InvestitoriInfoItem,
+    InvestitoriStrength,
+    JetSearchResultsCopy,
+    LegalCopy,
+    LegalPageCopy,
+    LegalPageId,
+    LegalSection,
+    LocationsCopy,
+    MechanicalCopy,
+    MechanicalHowStep,
+    MembershipCopy,
+    MembershipRewardItem,
+    PaymentCancelCopy,
+    PaymentCopy,
+    PaymentSuccessCopy,
+    PressArticle,
+    PressCopy,
+    RegistrazioneClienteCopy,
+    SignUpCopy,
+    SimpleLocationItem,
+    SiteCopySnapshot,
+    TokenCopy,
+} from './sito/siteCopyDefaults'
+import {
+    INITIAL_ABOUT,
+    INITIAL_AVIATION_MARINE,
+    INITIAL_AVIATION_QUOTE,
+    INITIAL_BOOKING,
+    INITIAL_BOOKING_SEARCH_BOX,
+    INITIAL_CANCELLAZIONE,
+    INITIAL_CAREERS,
+    INITIAL_CARWASH,
+    INITIAL_CHECK_EMAIL,
+    INITIAL_CONFIRMATION_SUCCESS,
+    INITIAL_CONTACT,
+    INITIAL_CREDIT_WALLET,
+    INITIAL_DR7_CLUB_PLAN,
+    INITIAL_FAQ,
+    INITIAL_FIRMA,
+    INITIAL_FOOTER,
+    INITIAL_FRANCHISING,
+    INITIAL_HEADER,
+    INITIAL_HOME,
+    INITIAL_INVESTITORI,
+    INITIAL_JET_SEARCH,
+    INITIAL_LEGAL,
+    INITIAL_LOCATIONS,
+    INITIAL_MECHANICAL,
+    INITIAL_MEMBERSHIP,
+    INITIAL_PAYMENT,
+    INITIAL_PAYMENT_CANCEL,
+    INITIAL_PAYMENT_SUCCESS,
+    INITIAL_PRESS,
+    INITIAL_REGISTRAZIONE_CLIENTE,
+    INITIAL_SIGNUP,
+    INITIAL_TOKEN,
+} from './sito/siteCopyDefaults'
+
 
 // ─── Whitelist ───────────────────────────────────────────────────────────────
 // Strict: only direzione (Valerio + Ilenia) + developer (Ophe) can open the
@@ -31,299 +153,12 @@ import LimitationOverrideModal from '../../../components/LimitationOverrideModal
 // Whitelist Sito CMS write bypass: chi ha `role:sito-direzione` in admins.permissions
 // (failsafe valerio/ilenia/ophe). Per editare i testi senza OTP.
 
-// ─── Sections ────────────────────────────────────────────────────────────────
-type SectionId =
-    | 'faq'
-    | 'cancellazione'
-    | 'membership'
-    | 'hero'
-    | 'chi-siamo'
-    | 'footer'
-    | 'legali'
-    | 'careers'
-    | 'press'
-    | 'contatti'
-    | 'meccanica'
-    | 'lavaggio'
-    | 'investitori'
-    | 'franchising'
-    | 'aviation'
-    | 'check-email'
-    | 'jet-search'
-    | 'confirmation'
-    | 'header'
-    | 'signup'
-    | 'payment-success'
-    | 'booking'
-    | 'credit-wallet'
-    | 'token'
-    | 'firma'
-    | 'registrazione-cliente'
-    | 'booking-search-box'
-    | 'payment-cancel'
-    | 'locations'
-    | 'yacht-jet-heli'
-    | 'dr7-club-plan'
-    | 'flotta'
+// ─── Schermate del sito ──────────────────────────────────────────────────────
+// L'elenco non vive piu' qui: e' `sito/sitoSiteMap.ts`, ricavato dalle route
+// reali di dr7.app. Una sezione dell'onglet = una schermata del sito, alla
+// sua URL vera. `screen.editor` dice quale editor la gestisce (null = testi
+// ancora nel codice, e l'onglet lo dichiara invece di far finta di niente).
 
-type SectionCategoryId = 'chrome' | 'public' | 'auth' | 'booking' | 'legal'
-
-const SECTION_CATEGORIES: { id: SectionCategoryId; label: string; description: string }[] = [
-    { id: 'chrome', label: 'Chrome sito', description: 'Header, footer, popup di ricerca — appaiono su tutte le pagine.' },
-    { id: 'public', label: 'Pagine pubbliche', description: 'Home + pagine vetrina + servizi (no login richiesto).' },
-    { id: 'auth', label: 'Auth & Cliente', description: 'Registrazione account, link invito cliente, firma contratto.' },
-    { id: 'booking', label: 'Prenotazione & Pagamento', description: 'Form prenotazione, checkout, conferma, wallet.' },
-    { id: 'legal', label: 'Legale', description: 'Privacy, termini, cancellazione.' },
-]
-
-const SECTIONS: { id: SectionId; title: string; category: SectionCategoryId; ready: boolean }[] = [
-    // Chrome
-    { id: 'header', title: 'Header / Navigazione', category: 'chrome', ready: true },
-    { id: 'footer', title: 'Footer', category: 'chrome', ready: true },
-    { id: 'booking-search-box', title: 'Booking Search Box', category: 'chrome', ready: true },
-    { id: 'locations', title: 'Aeroporti & Luoghi', category: 'chrome', ready: true },
-    { id: 'yacht-jet-heli', title: 'Yacht / Jet / Heli', category: 'public', ready: true },
-    { id: 'dr7-club-plan', title: 'DR7 Club — Piano & Benefit', category: 'public', ready: true },
-    // Pagine pubbliche
-    { id: 'hero', title: 'Home / Hero', category: 'public', ready: true },
-    { id: 'flotta', title: 'Flotta (categorie visibili)', category: 'public', ready: true },
-    { id: 'chi-siamo', title: 'Chi Siamo', category: 'public', ready: true },
-    { id: 'faq', title: 'FAQ', category: 'public', ready: true },
-    { id: 'membership', title: 'Membership / DR7 Club', category: 'public', ready: true },
-    { id: 'meccanica', title: 'Servizi Meccanica', category: 'public', ready: true },
-    { id: 'lavaggio', title: 'Servizi Lavaggio', category: 'public', ready: true },
-    { id: 'investitori', title: 'Investitori', category: 'public', ready: true },
-    { id: 'franchising', title: 'Franchising', category: 'public', ready: true },
-    { id: 'careers', title: 'Careers', category: 'public', ready: true },
-    { id: 'press', title: 'Press', category: 'public', ready: true },
-    { id: 'contatti', title: 'Contatti', category: 'public', ready: true },
-    { id: 'token', title: 'DR7 Token (Coin/Up/APP)', category: 'public', ready: true },
-    // Auth & Cliente
-    { id: 'signup', title: 'Registrazione Cliente (Account)', category: 'auth', ready: true },
-    { id: 'registrazione-cliente', title: 'Registrazione Cliente (Invito)', category: 'auth', ready: true },
-    { id: 'check-email', title: 'Check Email', category: 'auth', ready: true },
-    { id: 'firma', title: 'Firma Contratto (OTP)', category: 'auth', ready: true },
-    // Prenotazione & Pagamento
-    { id: 'booking', title: 'Prenotazione (Yacht/Jet/Heli)', category: 'booking', ready: true },
-    { id: 'aviation', title: 'Aviation Quote', category: 'booking', ready: true },
-    { id: 'jet-search', title: 'Jet Search Results', category: 'booking', ready: true },
-    { id: 'payment-success', title: 'Pagamento Riuscito', category: 'booking', ready: true },
-    { id: 'payment-cancel', title: 'Pagamento Annullato', category: 'booking', ready: true },
-    { id: 'confirmation', title: 'Conferma Prenotazione', category: 'booking', ready: true },
-    { id: 'credit-wallet', title: 'Credit Wallet', category: 'booking', ready: true },
-    // Legale
-    { id: 'legali', title: 'Privacy & Termini', category: 'legal', ready: true },
-    { id: 'cancellazione', title: 'Cancellazione', category: 'legal', ready: true },
-]
-
-// ─── FAQ schema ──────────────────────────────────────────────────────────────
-interface FaqEntry {
-    id: string
-    question: string
-    answer: string
-}
-
-interface FaqCopy {
-    eyebrow_it: string
-    eyebrow_en: string
-    page_title_it: string
-    page_title_en: string
-    subtitle_it: string
-    subtitle_en: string
-    entries: FaqEntry[]
-}
-
-// ─── Cancellazione schema (mirror of website utils/siteCopy.ts) ─────────────
-type CancellazioneBlock =
-    | { type: 'p'; text_it: string; text_en: string }
-    | { type: 'p-bold'; text_it: string; text_en: string }
-    | { type: 'p-italic'; text_it: string; text_en: string }
-    | { type: 'ul'; items_it: string[]; items_en: string[]; tone?: 'default' | 'green' }
-
-interface CancellazioneSection {
-    id: string
-    variant: 'standard' | 'flex'
-    title_it: string
-    title_en: string
-    blocks: CancellazioneBlock[]
-}
-
-interface CancellazioneCopy {
-    page_title_it: string
-    page_title_en: string
-    sections: CancellazioneSection[]
-    contact_label_it: string
-    contact_label_en: string
-    contact_email: string
-    contact_address: string
-    last_updated_it: string
-    last_updated_en: string
-}
-
-// ─── Membership schema (mirror of website utils/siteCopy.ts) ───────────────
-interface MembershipRewardItem {
-    label_it: string
-    label_en: string
-    reward: string
-    note_it: string | null
-    note_en: string | null
-}
-
-interface MembershipCopy {
-    hero_eyebrow_it: string; hero_eyebrow_en: string
-    hero_title: string
-    hero_subtitle_it: string; hero_subtitle_en: string
-    hero_opener_it: string; hero_opener_en: string
-    pricing_card_title: string
-    pricing_billing_monthly_it: string; pricing_billing_monthly_en: string
-    pricing_billing_annual_it: string; pricing_billing_annual_en: string
-    pricing_billing_save_badge: string
-    pricing_cycle_month_it: string; pricing_cycle_month_en: string
-    pricing_cycle_year_it: string; pricing_cycle_year_en: string
-    pricing_savings_it: string; pricing_savings_en: string
-    pricing_cta_it: string; pricing_cta_en: string
-    pricing_cta_footnote_it: string; pricing_cta_footnote_en: string
-    elite_title: string
-    elite_subtitle_it: string; elite_subtitle_en: string
-    elite_intro_it: string; elite_intro_en: string
-    elite_sections: CancellazioneSection[]
-    elite_cta_title_it: string; elite_cta_title_en: string
-    elite_cta_text_it: string; elite_cta_text_en: string
-    elite_cta_logged_out_it: string; elite_cta_logged_out_en: string
-    elite_cta_logged_in_it: string; elite_cta_logged_in_en: string
-    reward_title_it: string; reward_title_en: string
-    reward_intro_it: string; reward_intro_en: string
-    reward_items: MembershipRewardItem[]
-    reward_footnote_it: string; reward_footnote_en: string
-}
-
-// ─── Home / Hero schema (mirror of website utils/siteCopy.ts) ──────────────
-interface HomeSlide {
-    id: string
-    video_src: string
-}
-
-interface HomeCategoryOverride {
-    id: string
-    display_title_it: string
-    display_title_en: string
-    image_src: string
-}
-
-interface HomeCopy {
-    seo_h1_it: string
-    seo_h1_en: string
-    hero_autoplay_seconds: number
-    hero_slides: HomeSlide[]
-    categories: HomeCategoryOverride[]
-}
-
-const INITIAL_HOME: HomeCopy = {
-    seo_h1_it: '',
-    seo_h1_en: '',
-    hero_autoplay_seconds: 8,
-    hero_slides: [],
-    categories: [],
-}
-
-// ─── Chi Siamo schema (mirror of website utils/siteCopy.ts) ────────────────
-interface AboutFounder {
-    id: string
-    name: string
-    role_it: string; role_en: string
-    photo_src: string
-    alt_it: string; alt_en: string
-}
-
-interface BilingualParagraph {
-    text_it: string
-    text_en: string
-}
-
-interface AboutCopy {
-    founders: AboutFounder[]
-    story_title_it: string; story_title_en: string
-    story_paragraphs: BilingualParagraph[]
-    story_outro_main_it: string; story_outro_main_en: string
-    story_outro_sub_it: string; story_outro_sub_en: string
-    story_signature: string
-}
-
-const INITIAL_ABOUT: AboutCopy = {
-    founders: [],
-    story_title_it: '', story_title_en: '',
-    story_paragraphs: [],
-    story_outro_main_it: '', story_outro_main_en: '',
-    story_outro_sub_it: '', story_outro_sub_en: '',
-    story_signature: '',
-}
-
-// ─── Footer schema (mirror of website utils/siteCopy.ts) ───────────────────
-type FooterSocialIcon = 'instagram' | 'tiktok' | 'facebook' | 'linkedin' | 'youtube' | 'x'
-
-interface FooterSocialLink {
-    id: string
-    label: string
-    href: string
-    icon: FooterSocialIcon
-}
-
-interface FooterLink {
-    id: string
-    label_it: string
-    label_en: string
-    to: string
-    external?: boolean
-}
-
-interface FooterCopy {
-    network_title: string
-    network_text_it: string; network_text_en: string
-    social_links: FooterSocialLink[]
-    reviews_title: string
-    reviews_text_it: string; reviews_text_en: string
-    contact_title: string
-    contact_whatsapp_number: string
-    contact_whatsapp_url: string
-    contact_company_name: string
-    contact_legal_address_it: string; contact_legal_address_en: string
-    contact_operative_address_it: string; contact_operative_address_en: string
-    contact_capitale_sociale_it: string; contact_capitale_sociale_en: string
-    contact_piva: string
-    contact_disclaimer_it: string; contact_disclaimer_en: string
-    division_links: FooterLink[]
-    corporate_links: FooterLink[]
-    legal_links: FooterLink[]
-    bottom_brand_line: string
-    bottom_copyright: string
-}
-
-// ─── Legal pages schema (mirror of website utils/siteCopy.ts) ──────────────
-type LegalPageId = 'privacy' | 'cookie' | 'rental_agreement' | 'terms'
-
-interface LegalSection {
-    id: string
-    heading_it: string
-    heading_en: string
-    blocks: CancellazioneBlock[]
-}
-
-interface LegalPageCopy {
-    id: LegalPageId
-    enabled: boolean
-    title_it: string
-    title_en: string
-    last_updated_dynamic: boolean
-    last_updated_label_it: string
-    last_updated_label_en: string
-    intro_blocks: CancellazioneBlock[]
-    sections: LegalSection[]
-    outro_blocks: CancellazioneBlock[]
-}
-
-interface LegalCopy {
-    pages: LegalPageCopy[]
-}
 
 const LEGAL_PAGE_DEFAULTS: Record<LegalPageId, { title_it: string; title_en: string }> = {
     privacy:          { title_it: 'Informativa sulla Privacy',     title_en: 'Privacy Policy' },
@@ -347,136 +182,6 @@ function emptyLegalPage(id: LegalPageId): LegalPageCopy {
     }
 }
 
-const INITIAL_LEGAL: LegalCopy = {
-    pages: (['privacy', 'cookie', 'rental_agreement', 'terms'] as LegalPageId[]).map(emptyLegalPage),
-}
-
-// ─── Confirmation Success (booking + email fallback) ──────────────────────
-interface ConfirmationSuccessCopy {
-    booking_title_it: string; booking_title_en: string
-    booking_subtitle_it: string; booking_subtitle_en: string
-    booking_summary_heading_it: string; booking_summary_heading_en: string
-    booking_cta_account_it: string; booking_cta_account_en: string
-    carwash_row_servizio_it: string; carwash_row_servizio_en: string
-    carwash_row_data_it: string; carwash_row_data_en: string
-    carwash_row_orario_it: string; carwash_row_orario_en: string
-    carwash_row_cliente_it: string; carwash_row_cliente_en: string
-    carwash_row_pagamento_it: string; carwash_row_pagamento_en: string
-    carwash_payment_online_it: string; carwash_payment_online_en: string
-    carwash_default_customer_it: string; carwash_default_customer_en: string
-    carwash_totale_pagato_it: string; carwash_totale_pagato_en: string
-    carwash_whatsapp_note_it: string; carwash_whatsapp_note_en: string
-    rental_row_veicolo_it: string; rental_row_veicolo_en: string
-    rental_row_ritiro_it: string; rental_row_ritiro_en: string
-    rental_row_riconsegna_it: string; rental_row_riconsegna_en: string
-    rental_row_luogo_it: string; rental_row_luogo_en: string
-    rental_row_pagamento_it: string; rental_row_pagamento_en: string
-    rental_time_connector_it: string; rental_time_connector_en: string
-    rental_payment_in_sede_it: string; rental_payment_in_sede_en: string
-    rental_payment_online_it: string; rental_payment_online_en: string
-    rental_totale_pagato_it: string; rental_totale_pagato_en: string
-    rental_totale_da_pagare_it: string; rental_totale_da_pagare_en: string
-    rental_agency_footnote_it: string; rental_agency_footnote_en: string
-    email_title_it: string; email_title_en: string
-    email_body_logged_in_it: string; email_body_logged_in_en: string
-    email_body_logged_out_it: string; email_body_logged_out_en: string
-    email_cta_logged_in_it: string; email_cta_logged_in_en: string
-    email_cta_logged_out_it: string; email_cta_logged_out_en: string
-}
-const INITIAL_CONFIRMATION_SUCCESS: ConfirmationSuccessCopy = {
-    booking_title_it: '', booking_title_en: '',
-    booking_subtitle_it: '', booking_subtitle_en: '',
-    booking_summary_heading_it: 'Riepilogo Prenotazione', booking_summary_heading_en: 'Booking Summary',
-    booking_cta_account_it: '', booking_cta_account_en: '',
-    carwash_row_servizio_it: '', carwash_row_servizio_en: '',
-    carwash_row_data_it: '', carwash_row_data_en: '',
-    carwash_row_orario_it: '', carwash_row_orario_en: '',
-    carwash_row_cliente_it: '', carwash_row_cliente_en: '',
-    carwash_row_pagamento_it: '', carwash_row_pagamento_en: '',
-    carwash_payment_online_it: '', carwash_payment_online_en: '',
-    carwash_default_customer_it: '', carwash_default_customer_en: '',
-    carwash_totale_pagato_it: '', carwash_totale_pagato_en: '',
-    carwash_whatsapp_note_it: '', carwash_whatsapp_note_en: '',
-    rental_row_veicolo_it: '', rental_row_veicolo_en: '',
-    rental_row_ritiro_it: '', rental_row_ritiro_en: '',
-    rental_row_riconsegna_it: '', rental_row_riconsegna_en: '',
-    rental_row_luogo_it: '', rental_row_luogo_en: '',
-    rental_row_pagamento_it: '', rental_row_pagamento_en: '',
-    rental_time_connector_it: 'alle', rental_time_connector_en: 'at',
-    rental_payment_in_sede_it: '', rental_payment_in_sede_en: '',
-    rental_payment_online_it: '', rental_payment_online_en: '',
-    rental_totale_pagato_it: '', rental_totale_pagato_en: '',
-    rental_totale_da_pagare_it: '', rental_totale_da_pagare_en: '',
-    rental_agency_footnote_it: '', rental_agency_footnote_en: '',
-    email_title_it: '', email_title_en: '',
-    email_body_logged_in_it: '', email_body_logged_in_en: '',
-    email_body_logged_out_it: '', email_body_logged_out_en: '',
-    email_cta_logged_in_it: '', email_cta_logged_in_en: '',
-    email_cta_logged_out_it: '', email_cta_logged_out_en: '',
-}
-
-// ─── Locations catalog (airports / pickup / marinas / heli points) ──────
-interface AirportItem { iata: string; name: string; city: string }
-interface BilingualLocationItem { id: string; label_it: string; label_en: string }
-interface SimpleLocationItem { id: string; name: string }
-interface LocationsCopy {
-    airports: AirportItem[]
-    pickup_locations: BilingualLocationItem[]
-    return_locations: BilingualLocationItem[]
-    yacht_marinas: BilingualLocationItem[]
-    heli_departure_points: SimpleLocationItem[]
-    heli_arrival_points: SimpleLocationItem[]
-}
-const INITIAL_LOCATIONS: LocationsCopy = {
-    airports: [],
-    pickup_locations: [],
-    return_locations: [],
-    yacht_marinas: [],
-    heli_departure_points: [],
-    heli_arrival_points: [],
-}
-
-// ─── Aviation/Marine catalog (yachts, jets, helis) ──────────────────────
-type AviationMarineSpecKey =
-    | 'passengers' | 'year' | 'type'
-    | 'range' | 'speed'
-    | 'guests' | 'length' | 'cabins'
-interface AviationMarineSpec { key: AviationMarineSpecKey; value: string }
-interface AviationMarineItem {
-    id: string
-    name: string
-    image: string
-    images?: string[]
-    price_per_day_eur?: number
-    pets_allowed?: boolean
-    smoking_allowed?: boolean
-    specs: AviationMarineSpec[]
-}
-interface AviationMarineCopy {
-    yachts: AviationMarineItem[]
-    jets: AviationMarineItem[]
-    helis: AviationMarineItem[]
-}
-const INITIAL_AVIATION_MARINE: AviationMarineCopy = { yachts: [], jets: [], helis: [] }
-
-// ─── DR7 Club plan (price + features) ───────────────────────────────────
-interface Dr7ClubPlanCopy {
-    id: string
-    name_it: string; name_en: string
-    monthly_eur: number
-    annually_eur: number
-    features_it: string[]
-    features_en: string[]
-}
-const INITIAL_DR7_CLUB_PLAN: Dr7ClubPlanCopy = {
-    id: 'dr7club',
-    name_it: 'DR7 Club', name_en: 'DR7 Club',
-    monthly_eur: 0,
-    annually_eur: 0,
-    features_it: [],
-    features_en: [],
-}
-
 const SPEC_KEY_LABEL: Record<AviationMarineSpecKey, string> = {
     passengers: 'Passeggeri',
     year: 'Anno',
@@ -488,1415 +193,11 @@ const SPEC_KEY_LABEL: Record<AviationMarineSpecKey, string> = {
     cabins: 'Cabine',
 }
 
-// ─── Payment Cancel page (post-Nexi cancel landing) ─────────────────────
-interface PaymentCancelCopy {
-    title_it: string; title_en: string
-    body_it: string; body_en: string
-    cta_home_it: string; cta_home_en: string
-    cta_retry_it: string; cta_retry_en: string
-}
-const INITIAL_PAYMENT_CANCEL: PaymentCancelCopy = {
-    title_it: '', title_en: '',
-    body_it: '', body_en: '',
-    cta_home_it: '', cta_home_en: '',
-    cta_retry_it: '', cta_retry_en: '',
-}
-
-// ─── BookingSearchBox component (Header drawer popup + Hero variant) ─────
-interface BookingSearchBoxCopy {
-    title_it: string; title_en: string
-    pickup_location_label_it: string; pickup_location_label_en: string
-    pickup_location_placeholder_it: string; pickup_location_placeholder_en: string
-    same_return_note_it: string; same_return_note_en: string
-    return_location_label_it: string; return_location_label_en: string
-    return_location_placeholder_it: string; return_location_placeholder_en: string
-    pickup_section_label_it: string; pickup_section_label_en: string
-    return_section_label_it: string; return_section_label_en: string
-    date_placeholder_it: string; date_placeholder_en: string
-    closed_message_it: string; closed_message_en: string
-    rate_warning_title_it: string; rate_warning_title_en: string
-    rate_warning_body_it: string; rate_warning_body_en: string
-    delivery_calc_loading_it: string; delivery_calc_loading_en: string
-    delivery_label_it: string; delivery_label_en: string
-    delivery_breakdown_consegna_it: string; delivery_breakdown_consegna_en: string
-    delivery_breakdown_riconsegna_it: string; delivery_breakdown_riconsegna_en: string
-    search_cta_it: string; search_cta_en: string
-    err_pickup_date_required_it: string; err_pickup_date_required_en: string
-    err_return_date_required_it: string; err_return_date_required_en: string
-    err_blocked_pickup_it: string; err_blocked_pickup_en: string
-    err_blocked_return_it: string; err_blocked_return_en: string
-    err_return_before_pickup_it: string; err_return_before_pickup_en: string
-    err_return_time_before_pickup_it: string; err_return_time_before_pickup_en: string
-}
-const INITIAL_BOOKING_SEARCH_BOX: BookingSearchBoxCopy = {
-    title_it: '', title_en: '',
-    pickup_location_label_it: '', pickup_location_label_en: '',
-    pickup_location_placeholder_it: '', pickup_location_placeholder_en: '',
-    same_return_note_it: '', same_return_note_en: '',
-    return_location_label_it: '', return_location_label_en: '',
-    return_location_placeholder_it: '', return_location_placeholder_en: '',
-    pickup_section_label_it: '', pickup_section_label_en: '',
-    return_section_label_it: '', return_section_label_en: '',
-    date_placeholder_it: '', date_placeholder_en: '',
-    closed_message_it: '', closed_message_en: '',
-    rate_warning_title_it: '', rate_warning_title_en: '',
-    rate_warning_body_it: '', rate_warning_body_en: '',
-    delivery_calc_loading_it: '', delivery_calc_loading_en: '',
-    delivery_label_it: '', delivery_label_en: '',
-    delivery_breakdown_consegna_it: '', delivery_breakdown_consegna_en: '',
-    delivery_breakdown_riconsegna_it: '', delivery_breakdown_riconsegna_en: '',
-    search_cta_it: '', search_cta_en: '',
-    err_pickup_date_required_it: '', err_pickup_date_required_en: '',
-    err_return_date_required_it: '', err_return_date_required_en: '',
-    err_blocked_pickup_it: '', err_blocked_pickup_en: '',
-    err_blocked_return_it: '', err_blocked_return_en: '',
-    err_return_before_pickup_it: '', err_return_before_pickup_en: '',
-    err_return_time_before_pickup_it: '', err_return_time_before_pickup_en: '',
-}
-
-// ─── Registrazione Cliente page (token-gated customer data form) ─────────
-interface RegistrazioneClienteCopy {
-    intro_title_it: string; intro_title_en: string
-    intro_subtitle_it: string; intro_subtitle_en: string
-    tipo_persona_fisica_it: string; tipo_persona_fisica_en: string
-    tipo_azienda_it: string; tipo_azienda_en: string
-    tipo_pa_it: string; tipo_pa_en: string
-    section_1_tipo_it: string; section_1_tipo_en: string
-    section_2_anagrafica_it: string; section_2_anagrafica_en: string
-    section_2_azienda_it: string; section_2_azienda_en: string
-    section_2_pa_it: string; section_2_pa_en: string
-    section_3_residenza_it: string; section_3_residenza_en: string
-    section_3_sede_it: string; section_3_sede_en: string
-    section_4_contatti_it: string; section_4_contatti_en: string
-    section_docs_it: string; section_docs_en: string
-    required_hint_it: string; required_hint_en: string
-    verifica_link_it: string; verifica_link_en: string
-    invalid_title_it: string; invalid_title_en: string
-    invalid_reason_expired_it: string; invalid_reason_expired_en: string
-    invalid_reason_used_it: string; invalid_reason_used_en: string
-    invalid_reason_revoked_it: string; invalid_reason_revoked_en: string
-    invalid_reason_fallback_it: string; invalid_reason_fallback_en: string
-    invalid_reason_incomplete_it: string; invalid_reason_incomplete_en: string
-    invalid_reason_validation_it: string; invalid_reason_validation_en: string
-    invalid_help_it: string; invalid_help_en: string
-    done_title_it: string; done_title_en: string
-    done_body_it: string; done_body_en: string
-    docs_intro_it: string; docs_intro_en: string
-    docs_label_identity_it: string; docs_label_identity_en: string
-    docs_label_license_it: string; docs_label_license_en: string
-    docs_label_codice_fiscale_it: string; docs_label_codice_fiscale_en: string
-    docs_chip_uploaded_it: string; docs_chip_uploaded_en: string
-    docs_chip_uploading_it: string; docs_chip_uploading_en: string
-    docs_chip_remove_it: string; docs_chip_remove_en: string
-    cta_submit_it: string; cta_submit_en: string
-    cta_submitting_it: string; cta_submitting_en: string
-    cta_skip_docs_it: string; cta_skip_docs_en: string
-    cta_upload_selected_it: string; cta_upload_selected_en: string
-    cta_finish_it: string; cta_finish_en: string
-    err_missing_prefix_it: string; err_missing_prefix_en: string
-    err_phone_invalid_it: string; err_phone_invalid_en: string
-    err_email_invalid_it: string; err_email_invalid_en: string
-    err_cf_length_it: string; err_cf_length_en: string
-    err_piva_length_it: string; err_piva_length_en: string
-    field_nome_it: string; field_nome_en: string
-    field_cognome_it: string; field_cognome_en: string
-    field_cf_label_it: string; field_cf_label_en: string
-    field_cf_placeholder: string
-    field_sesso_label_it: string; field_sesso_label_en: string
-    field_sesso_default_it: string; field_sesso_default_en: string
-    field_sesso_m_it: string; field_sesso_m_en: string
-    field_sesso_f_it: string; field_sesso_f_en: string
-    field_birth_date_it: string; field_birth_date_en: string
-    field_birth_city_it: string; field_birth_city_en: string
-    field_birth_city_placeholder_it: string; field_birth_city_placeholder_en: string
-    field_birth_province_it: string; field_birth_province_en: string
-    field_birth_province_placeholder_it: string; field_birth_province_placeholder_en: string
-    field_ragione_sociale_it: string; field_ragione_sociale_en: string
-    field_piva_it: string; field_piva_en: string
-    field_piva_placeholder_it: string; field_piva_placeholder_en: string
-    field_pec_no_sdi_it: string; field_pec_no_sdi_en: string
-    field_pec_placeholder: string
-    field_sdi_no_pec_it: string; field_sdi_no_pec_en: string
-    field_sdi_placeholder_it: string; field_sdi_placeholder_en: string
-    field_cf_rappresentante_it: string; field_cf_rappresentante_en: string
-    field_ente_ufficio_it: string; field_ente_ufficio_en: string
-    field_codice_univoco_it: string; field_codice_univoco_en: string
-    field_codice_univoco_placeholder_it: string; field_codice_univoco_placeholder_en: string
-    field_cf_ente_it: string; field_cf_ente_en: string
-    field_pec_simple_it: string; field_pec_simple_en: string
-    field_indirizzo_it: string; field_indirizzo_en: string
-    field_indirizzo_placeholder_it: string; field_indirizzo_placeholder_en: string
-    field_civico_it: string; field_civico_en: string
-    field_civico_placeholder_it: string; field_civico_placeholder_en: string
-    field_citta_it: string; field_citta_en: string
-    field_citta_placeholder_it: string; field_citta_placeholder_en: string
-    field_provincia_it: string; field_provincia_en: string
-    field_provincia_placeholder_it: string; field_provincia_placeholder_en: string
-    field_cap_it: string; field_cap_en: string
-    field_cap_placeholder_it: string; field_cap_placeholder_en: string
-    field_nazione_it: string; field_nazione_en: string
-    field_nazione_placeholder: string
-    field_telefono_it: string; field_telefono_en: string
-    field_telefono_placeholder: string
-    field_email_it: string; field_email_en: string
-    field_email_placeholder: string
-}
-const INITIAL_REGISTRAZIONE_CLIENTE: RegistrazioneClienteCopy = {
-    intro_title_it: '', intro_title_en: '',
-    intro_subtitle_it: '', intro_subtitle_en: '',
-    tipo_persona_fisica_it: '', tipo_persona_fisica_en: '',
-    tipo_azienda_it: '', tipo_azienda_en: '',
-    tipo_pa_it: '', tipo_pa_en: '',
-    section_1_tipo_it: '', section_1_tipo_en: '',
-    section_2_anagrafica_it: '', section_2_anagrafica_en: '',
-    section_2_azienda_it: '', section_2_azienda_en: '',
-    section_2_pa_it: '', section_2_pa_en: '',
-    section_3_residenza_it: '', section_3_residenza_en: '',
-    section_3_sede_it: '', section_3_sede_en: '',
-    section_4_contatti_it: '', section_4_contatti_en: '',
-    section_docs_it: '', section_docs_en: '',
-    required_hint_it: '', required_hint_en: '',
-    verifica_link_it: '', verifica_link_en: '',
-    invalid_title_it: '', invalid_title_en: '',
-    invalid_reason_expired_it: '', invalid_reason_expired_en: '',
-    invalid_reason_used_it: '', invalid_reason_used_en: '',
-    invalid_reason_revoked_it: '', invalid_reason_revoked_en: '',
-    invalid_reason_fallback_it: '', invalid_reason_fallback_en: '',
-    invalid_reason_incomplete_it: '', invalid_reason_incomplete_en: '',
-    invalid_reason_validation_it: '', invalid_reason_validation_en: '',
-    invalid_help_it: '', invalid_help_en: '',
-    done_title_it: '', done_title_en: '',
-    done_body_it: '', done_body_en: '',
-    docs_intro_it: '', docs_intro_en: '',
-    docs_label_identity_it: '', docs_label_identity_en: '',
-    docs_label_license_it: '', docs_label_license_en: '',
-    docs_label_codice_fiscale_it: '', docs_label_codice_fiscale_en: '',
-    docs_chip_uploaded_it: '', docs_chip_uploaded_en: '',
-    docs_chip_uploading_it: '', docs_chip_uploading_en: '',
-    docs_chip_remove_it: '', docs_chip_remove_en: '',
-    cta_submit_it: '', cta_submit_en: '',
-    cta_submitting_it: '', cta_submitting_en: '',
-    cta_skip_docs_it: '', cta_skip_docs_en: '',
-    cta_upload_selected_it: '', cta_upload_selected_en: '',
-    cta_finish_it: '', cta_finish_en: '',
-    err_missing_prefix_it: '', err_missing_prefix_en: '',
-    err_phone_invalid_it: '', err_phone_invalid_en: '',
-    err_email_invalid_it: '', err_email_invalid_en: '',
-    err_cf_length_it: '', err_cf_length_en: '',
-    err_piva_length_it: '', err_piva_length_en: '',
-    field_nome_it: '', field_nome_en: '',
-    field_cognome_it: '', field_cognome_en: '',
-    field_cf_label_it: '', field_cf_label_en: '',
-    field_cf_placeholder: '',
-    field_sesso_label_it: '', field_sesso_label_en: '',
-    field_sesso_default_it: '', field_sesso_default_en: '',
-    field_sesso_m_it: '', field_sesso_m_en: '',
-    field_sesso_f_it: '', field_sesso_f_en: '',
-    field_birth_date_it: '', field_birth_date_en: '',
-    field_birth_city_it: '', field_birth_city_en: '',
-    field_birth_city_placeholder_it: '', field_birth_city_placeholder_en: '',
-    field_birth_province_it: '', field_birth_province_en: '',
-    field_birth_province_placeholder_it: '', field_birth_province_placeholder_en: '',
-    field_ragione_sociale_it: '', field_ragione_sociale_en: '',
-    field_piva_it: '', field_piva_en: '',
-    field_piva_placeholder_it: '', field_piva_placeholder_en: '',
-    field_pec_no_sdi_it: '', field_pec_no_sdi_en: '',
-    field_pec_placeholder: '',
-    field_sdi_no_pec_it: '', field_sdi_no_pec_en: '',
-    field_sdi_placeholder_it: '', field_sdi_placeholder_en: '',
-    field_cf_rappresentante_it: '', field_cf_rappresentante_en: '',
-    field_ente_ufficio_it: '', field_ente_ufficio_en: '',
-    field_codice_univoco_it: '', field_codice_univoco_en: '',
-    field_codice_univoco_placeholder_it: '', field_codice_univoco_placeholder_en: '',
-    field_cf_ente_it: '', field_cf_ente_en: '',
-    field_pec_simple_it: '', field_pec_simple_en: '',
-    field_indirizzo_it: '', field_indirizzo_en: '',
-    field_indirizzo_placeholder_it: '', field_indirizzo_placeholder_en: '',
-    field_civico_it: '', field_civico_en: '',
-    field_civico_placeholder_it: '', field_civico_placeholder_en: '',
-    field_citta_it: '', field_citta_en: '',
-    field_citta_placeholder_it: '', field_citta_placeholder_en: '',
-    field_provincia_it: '', field_provincia_en: '',
-    field_provincia_placeholder_it: '', field_provincia_placeholder_en: '',
-    field_cap_it: '', field_cap_en: '',
-    field_cap_placeholder_it: '', field_cap_placeholder_en: '',
-    field_nazione_it: '', field_nazione_en: '',
-    field_nazione_placeholder: '',
-    field_telefono_it: '', field_telefono_en: '',
-    field_telefono_placeholder: '',
-    field_email_it: '', field_email_en: '',
-    field_email_placeholder: '',
-}
-
-// ─── Firma page (contract e-signature OTP flow) ──────────────────────────
-interface FirmaCopy {
-    header_pill_it: string; header_pill_en: string
-    expired_title_it: string; expired_title_en: string
-    expired_body_it: string; expired_body_en: string
-    error_title_it: string; error_title_en: string
-    pdf_section_title_it: string; pdf_section_title_en: string
-    pdf_pages_suffix_it: string; pdf_pages_suffix_en: string
-    pdf_page_overlay_template_it: string; pdf_page_overlay_template_en: string
-    pdf_page_alt_template_it: string; pdf_page_alt_template_en: string
-    pdf_iframe_title_it: string; pdf_iframe_title_en: string
-    pdf_loading_it: string; pdf_loading_en: string
-    contract_loading_it: string; contract_loading_en: string
-    contract_number_prefix_it: string; contract_number_prefix_en: string
-    label_cliente_it: string; label_cliente_en: string
-    label_veicolo_it: string; label_veicolo_en: string
-    label_ritiro_it: string; label_ritiro_en: string
-    label_riconsegna_it: string; label_riconsegna_en: string
-    na_fallback_it: string; na_fallback_en: string
-    otp_step1_title_it: string; otp_step1_title_en: string
-    otp_step1_body_template_it: string; otp_step1_body_template_en: string
-    otp_step1_cta_it: string; otp_step1_cta_en: string
-    otp_sending_it: string; otp_sending_en: string
-    otp_step2_title_it: string; otp_step2_title_en: string
-    otp_step2_body_template_it: string; otp_step2_body_template_en: string
-    otp_attempts_template_it: string; otp_attempts_template_en: string
-    otp_verify_cta_it: string; otp_verify_cta_en: string
-    otp_verifying_it: string; otp_verifying_en: string
-    otp_resend_it: string; otp_resend_en: string
-    signing_step_title_it: string; signing_step_title_en: string
-    signing_identity_verified_it: string; signing_identity_verified_en: string
-    signing_ack_template_1_it: string; signing_ack_template_1_en: string
-    signing_ack_template_2_it: string; signing_ack_template_2_en: string
-    signing_terms_checkbox_it: string; signing_terms_checkbox_en: string
-    signing_submit_cta_it: string; signing_submit_cta_en: string
-    signed_title_it: string; signed_title_en: string
-    signed_body_template_it: string; signed_body_template_en: string
-    signed_email_note_it: string; signed_email_note_en: string
-    signed_download_cta_it: string; signed_download_cta_en: string
-    err_load_fallback_it: string; err_load_fallback_en: string
-    err_load_contract_it: string; err_load_contract_en: string
-    err_send_otp_it: string; err_send_otp_en: string
-    err_incomplete_code_it: string; err_incomplete_code_en: string
-    err_verify_otp_it: string; err_verify_otp_en: string
-    err_terms_required_it: string; err_terms_required_en: string
-    err_signing_it: string; err_signing_en: string
-}
-const INITIAL_FIRMA: FirmaCopy = {
-    header_pill_it: '', header_pill_en: '',
-    expired_title_it: '', expired_title_en: '',
-    expired_body_it: '', expired_body_en: '',
-    error_title_it: '', error_title_en: '',
-    pdf_section_title_it: '', pdf_section_title_en: '',
-    pdf_pages_suffix_it: '', pdf_pages_suffix_en: '',
-    pdf_page_overlay_template_it: '', pdf_page_overlay_template_en: '',
-    pdf_page_alt_template_it: '', pdf_page_alt_template_en: '',
-    pdf_iframe_title_it: '', pdf_iframe_title_en: '',
-    pdf_loading_it: '', pdf_loading_en: '',
-    contract_loading_it: '', contract_loading_en: '',
-    contract_number_prefix_it: '', contract_number_prefix_en: '',
-    label_cliente_it: '', label_cliente_en: '',
-    label_veicolo_it: '', label_veicolo_en: '',
-    label_ritiro_it: '', label_ritiro_en: '',
-    label_riconsegna_it: '', label_riconsegna_en: '',
-    na_fallback_it: '', na_fallback_en: '',
-    otp_step1_title_it: '', otp_step1_title_en: '',
-    otp_step1_body_template_it: '', otp_step1_body_template_en: '',
-    otp_step1_cta_it: '', otp_step1_cta_en: '',
-    otp_sending_it: '', otp_sending_en: '',
-    otp_step2_title_it: '', otp_step2_title_en: '',
-    otp_step2_body_template_it: '', otp_step2_body_template_en: '',
-    otp_attempts_template_it: '', otp_attempts_template_en: '',
-    otp_verify_cta_it: '', otp_verify_cta_en: '',
-    otp_verifying_it: '', otp_verifying_en: '',
-    otp_resend_it: '', otp_resend_en: '',
-    signing_step_title_it: '', signing_step_title_en: '',
-    signing_identity_verified_it: '', signing_identity_verified_en: '',
-    signing_ack_template_1_it: '', signing_ack_template_1_en: '',
-    signing_ack_template_2_it: '', signing_ack_template_2_en: '',
-    signing_terms_checkbox_it: '', signing_terms_checkbox_en: '',
-    signing_submit_cta_it: '', signing_submit_cta_en: '',
-    signed_title_it: '', signed_title_en: '',
-    signed_body_template_it: '', signed_body_template_en: '',
-    signed_email_note_it: '', signed_email_note_en: '',
-    signed_download_cta_it: '', signed_download_cta_en: '',
-    err_load_fallback_it: '', err_load_fallback_en: '',
-    err_load_contract_it: '', err_load_contract_en: '',
-    err_send_otp_it: '', err_send_otp_en: '',
-    err_incomplete_code_it: '', err_incomplete_code_en: '',
-    err_verify_otp_it: '', err_verify_otp_en: '',
-    err_terms_required_it: '', err_terms_required_en: '',
-    err_signing_it: '', err_signing_en: '',
-}
-
-// ─── Token page (Coming Soon landing) ───────────────────────────────────
-interface TokenCopy {
-    hero_title_it: string; hero_title_en: string
-    hero_eyebrow_it: string; hero_eyebrow_en: string
-    body_message_it: string; body_message_en: string
-    cta_button_it: string; cta_button_en: string
-}
-const INITIAL_TOKEN: TokenCopy = {
-    hero_title_it: '', hero_title_en: '',
-    hero_eyebrow_it: '', hero_eyebrow_en: '',
-    body_message_it: '', body_message_en: '',
-    cta_button_it: '', cta_button_en: '',
-}
-
-// ─── Credit Wallet page (marketing + checkout modal + errors) ────────────
-interface CreditWalletCopy {
-    hero_title_eyebrow_it: string; hero_title_eyebrow_en: string
-    hero_subtitle_it: string; hero_subtitle_en: string
-    hero_intro_it: string; hero_intro_en: string
-    benefit_extra_title_it: string; benefit_extra_title_en: string
-    benefit_extra_body_it: string; benefit_extra_body_en: string
-    benefit_no_expiry_title_it: string; benefit_no_expiry_title_en: string
-    benefit_no_expiry_body_it: string; benefit_no_expiry_body_en: string
-    benefit_secure_title_it: string; benefit_secure_title_en: string
-    benefit_secure_body_it: string; benefit_secure_body_en: string
-    services_heading_it: string; services_heading_en: string
-    services_body_it: string; services_body_en: string
-    services_no_expiry_it: string; services_no_expiry_en: string
-    packages_section_label_it: string; packages_section_label_en: string
-    packages_filter_all_it: string; packages_filter_all_en: string
-    promo_line1_it: string; promo_line1_en: string
-    promo_line2_it: string; promo_line2_en: string
-    advantages_heading_it: string; advantages_heading_en: string
-    advantage_1_title_it: string; advantage_1_title_en: string
-    advantage_1_body_it: string; advantage_1_body_en: string
-    advantage_2_title_it: string; advantage_2_title_en: string
-    advantage_2_body_it: string; advantage_2_body_en: string
-    advantage_3_title_it: string; advantage_3_title_en: string
-    advantage_3_body_it: string; advantage_3_body_en: string
-    advantage_4_title_it: string; advantage_4_title_en: string
-    advantage_4_body_it: string; advantage_4_body_en: string
-    transparency_heading_it: string; transparency_heading_en: string
-    transparency_bullet_1_it: string; transparency_bullet_1_en: string
-    transparency_bullet_2_it: string; transparency_bullet_2_en: string
-    transparency_bullet_3_it: string; transparency_bullet_3_en: string
-    cta_title_it: string; cta_title_en: string
-    cta_subtitle_it: string; cta_subtitle_en: string
-    cta_button_it: string; cta_button_en: string
-    card_popular_badge_it: string; card_popular_badge_en: string
-    card_recharge_label_it: string; card_recharge_label_en: string
-    card_receive_label_it: string; card_receive_label_en: string
-    card_bonus_suffix_it: string; card_bonus_suffix_en: string
-    card_cta_it: string; card_cta_en: string
-    modal_title_it: string; modal_title_en: string
-    modal_recharge_label_it: string; modal_recharge_label_en: string
-    modal_bonus_label_it: string; modal_bonus_label_en: string
-    modal_receive_label_it: string; modal_receive_label_en: string
-    modal_payment_heading_it: string; modal_payment_heading_en: string
-    modal_payment_info_it: string; modal_payment_info_en: string
-    modal_payment_secure_it: string; modal_payment_secure_en: string
-    modal_cancel_it: string; modal_cancel_en: string
-    modal_pay_template_it: string; modal_pay_template_en: string
-    modal_processing_it: string; modal_processing_en: string
-    err_name_required_it: string; err_name_required_en: string
-    err_email_required_it: string; err_email_required_en: string
-    err_phone_invalid_it: string; err_phone_invalid_en: string
-    err_cf_invalid_it: string; err_cf_invalid_en: string
-    err_payment_not_ready_it: string; err_payment_not_ready_en: string
-    err_payment_failed_it: string; err_payment_failed_en: string
-}
-const INITIAL_CREDIT_WALLET: CreditWalletCopy = {
-    hero_title_eyebrow_it: '', hero_title_eyebrow_en: '',
-    hero_subtitle_it: '', hero_subtitle_en: '',
-    hero_intro_it: '', hero_intro_en: '',
-    benefit_extra_title_it: '', benefit_extra_title_en: '',
-    benefit_extra_body_it: '', benefit_extra_body_en: '',
-    benefit_no_expiry_title_it: '', benefit_no_expiry_title_en: '',
-    benefit_no_expiry_body_it: '', benefit_no_expiry_body_en: '',
-    benefit_secure_title_it: '', benefit_secure_title_en: '',
-    benefit_secure_body_it: '', benefit_secure_body_en: '',
-    services_heading_it: '', services_heading_en: '',
-    services_body_it: '', services_body_en: '',
-    services_no_expiry_it: '', services_no_expiry_en: '',
-    packages_section_label_it: '', packages_section_label_en: '',
-    packages_filter_all_it: '', packages_filter_all_en: '',
-    promo_line1_it: '', promo_line1_en: '',
-    promo_line2_it: '', promo_line2_en: '',
-    advantages_heading_it: '', advantages_heading_en: '',
-    advantage_1_title_it: '', advantage_1_title_en: '',
-    advantage_1_body_it: '', advantage_1_body_en: '',
-    advantage_2_title_it: '', advantage_2_title_en: '',
-    advantage_2_body_it: '', advantage_2_body_en: '',
-    advantage_3_title_it: '', advantage_3_title_en: '',
-    advantage_3_body_it: '', advantage_3_body_en: '',
-    advantage_4_title_it: '', advantage_4_title_en: '',
-    advantage_4_body_it: '', advantage_4_body_en: '',
-    transparency_heading_it: '', transparency_heading_en: '',
-    transparency_bullet_1_it: '', transparency_bullet_1_en: '',
-    transparency_bullet_2_it: '', transparency_bullet_2_en: '',
-    transparency_bullet_3_it: '', transparency_bullet_3_en: '',
-    cta_title_it: '', cta_title_en: '',
-    cta_subtitle_it: '', cta_subtitle_en: '',
-    cta_button_it: '', cta_button_en: '',
-    card_popular_badge_it: '', card_popular_badge_en: '',
-    card_recharge_label_it: '', card_recharge_label_en: '',
-    card_receive_label_it: '', card_receive_label_en: '',
-    card_bonus_suffix_it: '', card_bonus_suffix_en: '',
-    card_cta_it: '', card_cta_en: '',
-    modal_title_it: '', modal_title_en: '',
-    modal_recharge_label_it: '', modal_recharge_label_en: '',
-    modal_bonus_label_it: '', modal_bonus_label_en: '',
-    modal_receive_label_it: '', modal_receive_label_en: '',
-    modal_payment_heading_it: '', modal_payment_heading_en: '',
-    modal_payment_info_it: '', modal_payment_info_en: '',
-    modal_payment_secure_it: '', modal_payment_secure_en: '',
-    modal_cancel_it: '', modal_cancel_en: '',
-    modal_pay_template_it: '', modal_pay_template_en: '',
-    modal_processing_it: '', modal_processing_en: '',
-    err_name_required_it: '', err_name_required_en: '',
-    err_email_required_it: '', err_email_required_en: '',
-    err_phone_invalid_it: '', err_phone_invalid_en: '',
-    err_cf_invalid_it: '', err_cf_invalid_en: '',
-    err_payment_not_ready_it: '', err_payment_not_ready_en: '',
-    err_payment_failed_it: '', err_payment_failed_en: '',
-}
-
-// ─── Booking page (yacht/jet/heli auth gate + chrome + errors) ───────────
-interface BookingCopy {
-    loading_it: string; loading_en: string
-    auth_required_title_it: string; auth_required_title_en: string
-    auth_required_body_it: string; auth_required_body_en: string
-    auth_required_login_cta_it: string; auth_required_login_cta_en: string
-    auth_required_signup_cta_it: string; auth_required_signup_cta_en: string
-    booking_confirmed_title_it: string; booking_confirmed_title_en: string
-    booking_confirmed_body_it: string; booking_confirmed_body_en: string
-    booking_confirmed_cta_bookings_it: string; booking_confirmed_cta_bookings_en: string
-    inquiry_sent_cta_home_it: string; inquiry_sent_cta_home_en: string
-    quote_review_title_it: string; quote_review_title_en: string
-    quote_review_body_it: string; quote_review_body_en: string
-    select_option_default_it: string; select_option_default_en: string
-    payment_initializing_it: string; payment_initializing_en: string
-    item_not_found_it: string; item_not_found_en: string
-    err_payment_not_configured_it: string; err_payment_not_configured_en: string
-    err_payment_server_down_it: string; err_payment_server_down_en: string
-    err_payment_not_ready_it: string; err_payment_not_ready_en: string
-    err_category_unsupported_it: string; err_category_unsupported_en: string
-    err_save_failed_it: string; err_save_failed_en: string
-    err_unexpected_it: string; err_unexpected_en: string
-}
-const INITIAL_BOOKING: BookingCopy = {
-    loading_it: '', loading_en: '',
-    auth_required_title_it: '', auth_required_title_en: '',
-    auth_required_body_it: '', auth_required_body_en: '',
-    auth_required_login_cta_it: '', auth_required_login_cta_en: '',
-    auth_required_signup_cta_it: '', auth_required_signup_cta_en: '',
-    booking_confirmed_title_it: '', booking_confirmed_title_en: '',
-    booking_confirmed_body_it: '', booking_confirmed_body_en: '',
-    booking_confirmed_cta_bookings_it: '', booking_confirmed_cta_bookings_en: '',
-    inquiry_sent_cta_home_it: '', inquiry_sent_cta_home_en: '',
-    quote_review_title_it: '', quote_review_title_en: '',
-    quote_review_body_it: '', quote_review_body_en: '',
-    select_option_default_it: '', select_option_default_en: '',
-    payment_initializing_it: '', payment_initializing_en: '',
-    item_not_found_it: '', item_not_found_en: '',
-    err_payment_not_configured_it: '', err_payment_not_configured_en: '',
-    err_payment_server_down_it: '', err_payment_server_down_en: '',
-    err_payment_not_ready_it: '', err_payment_not_ready_en: '',
-    err_category_unsupported_it: '', err_category_unsupported_en: '',
-    err_save_failed_it: '', err_save_failed_en: '',
-    err_unexpected_it: '', err_unexpected_en: '',
-}
-
-// ─── Payment Success page (post-payment landing) ─────────────────────────
-interface PaymentSuccessCopy {
-    loading_title_it: string; loading_title_en: string
-    loading_subtitle_it: string; loading_subtitle_en: string
-    success_title_it: string; success_title_en: string
-    body_generic_it: string; body_generic_en: string
-    body_dr7_club_it: string; body_dr7_club_en: string
-    body_membership_template_it: string; body_membership_template_en: string
-    body_wallet_template_it: string; body_wallet_template_en: string
-    billing_cycle_monthly_it: string; billing_cycle_monthly_en: string
-    billing_cycle_annual_it: string; billing_cycle_annual_en: string
-    transaction_heading_it: string; transaction_heading_en: string
-    transaction_order_id_label_it: string; transaction_order_id_label_en: string
-    transaction_amount_label_it: string; transaction_amount_label_en: string
-    transaction_auth_code_label_it: string; transaction_auth_code_label_en: string
-    cta_home_it: string; cta_home_en: string
-    cta_whatsapp_it: string; cta_whatsapp_en: string
-    cta_membership_it: string; cta_membership_en: string
-    cta_wallet_it: string; cta_wallet_en: string
-    cta_bookings_it: string; cta_bookings_en: string
-    err_booking_create_it: string; err_booking_create_en: string
-    err_auth_it: string; err_auth_en: string
-    err_purchase_update_it: string; err_purchase_update_en: string
-    err_credit_add_it: string; err_credit_add_en: string
-    err_order_not_found_it: string; err_order_not_found_en: string
-    err_generic_it: string; err_generic_en: string
-}
-const INITIAL_PAYMENT_SUCCESS: PaymentSuccessCopy = {
-    loading_title_it: '', loading_title_en: '',
-    loading_subtitle_it: '', loading_subtitle_en: '',
-    success_title_it: '', success_title_en: '',
-    body_generic_it: '', body_generic_en: '',
-    body_dr7_club_it: '', body_dr7_club_en: '',
-    body_membership_template_it: '', body_membership_template_en: '',
-    body_wallet_template_it: '', body_wallet_template_en: '',
-    billing_cycle_monthly_it: '', billing_cycle_monthly_en: '',
-    billing_cycle_annual_it: '', billing_cycle_annual_en: '',
-    transaction_heading_it: '', transaction_heading_en: '',
-    transaction_order_id_label_it: '', transaction_order_id_label_en: '',
-    transaction_amount_label_it: '', transaction_amount_label_en: '',
-    transaction_auth_code_label_it: '', transaction_auth_code_label_en: '',
-    cta_home_it: '', cta_home_en: '',
-    cta_whatsapp_it: '', cta_whatsapp_en: '',
-    cta_membership_it: '', cta_membership_en: '',
-    cta_wallet_it: '', cta_wallet_en: '',
-    cta_bookings_it: '', cta_bookings_en: '',
-    err_booking_create_it: '', err_booking_create_en: '',
-    err_auth_it: '', err_auth_en: '',
-    err_purchase_update_it: '', err_purchase_update_en: '',
-    err_credit_add_it: '', err_credit_add_en: '',
-    err_order_not_found_it: '', err_order_not_found_en: '',
-    err_generic_it: '', err_generic_en: '',
-}
-
-// ─── Payment page (Nexi XPay wrapper) ────────────────────────────────────
-interface PaymentCopy {
-    subtitle_it: string; subtitle_en: string
-    loading_it: string; loading_en: string
-    ready_title_it: string; ready_title_en: string
-    ready_subtitle_it: string; ready_subtitle_en: string
-    ready_prepaid_warning_it: string; ready_prepaid_warning_en: string
-    checking_title_it: string; checking_title_en: string
-    checking_subtitle_it: string; checking_subtitle_en: string
-    blocked_title_it: string; blocked_title_en: string
-    blocked_default_message_it: string; blocked_default_message_en: string
-    blocked_help_it: string; blocked_help_en: string
-    blocked_retry_cta_it: string; blocked_retry_cta_en: string
-    success_title_it: string; success_title_en: string
-    success_redirect_it: string; success_redirect_en: string
-    cancelled_title_it: string; cancelled_title_en: string
-    cancelled_subtitle_it: string; cancelled_subtitle_en: string
-    cancelled_retry_cta_it: string; cancelled_retry_cta_en: string
-    error_title_it: string; error_title_en: string
-    error_invalid_link_it: string; error_invalid_link_en: string
-    error_sdk_load_it: string; error_sdk_load_en: string
-    error_sdk_unavailable_it: string; error_sdk_unavailable_en: string
-    error_sdk_init_it: string; error_sdk_init_en: string
-    error_check_card_it: string; error_check_card_en: string
-    error_payment_failed_it: string; error_payment_failed_en: string
-    footer_secure_note_it: string; footer_secure_note_en: string
-}
-const INITIAL_PAYMENT: PaymentCopy = {
-    subtitle_it: '', subtitle_en: '',
-    loading_it: '', loading_en: '',
-    ready_title_it: '', ready_title_en: '',
-    ready_subtitle_it: '', ready_subtitle_en: '',
-    ready_prepaid_warning_it: '', ready_prepaid_warning_en: '',
-    checking_title_it: '', checking_title_en: '',
-    checking_subtitle_it: '', checking_subtitle_en: '',
-    blocked_title_it: '', blocked_title_en: '',
-    blocked_default_message_it: '', blocked_default_message_en: '',
-    blocked_help_it: '', blocked_help_en: '',
-    blocked_retry_cta_it: '', blocked_retry_cta_en: '',
-    success_title_it: '', success_title_en: '',
-    success_redirect_it: '', success_redirect_en: '',
-    cancelled_title_it: '', cancelled_title_en: '',
-    cancelled_subtitle_it: '', cancelled_subtitle_en: '',
-    cancelled_retry_cta_it: '', cancelled_retry_cta_en: '',
-    error_title_it: '', error_title_en: '',
-    error_invalid_link_it: '', error_invalid_link_en: '',
-    error_sdk_load_it: '', error_sdk_load_en: '',
-    error_sdk_unavailable_it: '', error_sdk_unavailable_en: '',
-    error_sdk_init_it: '', error_sdk_init_en: '',
-    error_check_card_it: '', error_check_card_en: '',
-    error_payment_failed_it: '', error_payment_failed_en: '',
-    footer_secure_note_it: '', footer_secure_note_en: '',
-}
-
-// ─── SignUp (registrazione cliente) ──────────────────────────────────────
-interface SignUpCopy {
-    subtitle_it: string; subtitle_en: string
-    client_type_label_it: string; client_type_label_en: string
-    client_type_default_it: string; client_type_default_en: string
-    client_type_azienda_it: string; client_type_azienda_en: string
-    client_type_persona_it: string; client_type_persona_en: string
-    client_type_pa_it: string; client_type_pa_en: string
-    section_legal_rep_it: string; section_legal_rep_en: string
-    section_id_doc_it: string; section_id_doc_en: string
-    section_credentials_it: string; section_credentials_en: string
-    field_country_it: string; field_country_en: string
-    field_email_it: string; field_email_en: string
-    field_phone_it: string; field_phone_en: string
-    field_codice_fiscale_it: string; field_codice_fiscale_en: string
-    field_denominazione_it: string; field_denominazione_en: string
-    field_denominazione_placeholder_it: string; field_denominazione_placeholder_en: string
-    field_piva_it: string; field_piva_en: string
-    field_piva_placeholder: string
-    field_cf_placeholder: string
-    field_sede_legale_it: string; field_sede_legale_en: string
-    field_sede_legale_placeholder_it: string; field_sede_legale_placeholder_en: string
-    field_sede_operativa_it: string; field_sede_operativa_en: string
-    field_sede_operativa_placeholder_it: string; field_sede_operativa_placeholder_en: string
-    field_sdi_it: string; field_sdi_en: string
-    field_sdi_placeholder: string
-    field_email_aziendale_it: string; field_email_aziendale_en: string
-    field_email_aziendale_placeholder: string
-    field_phone_aziendale_it: string; field_phone_aziendale_en: string
-    field_nome_it: string; field_nome_en: string
-    field_cognome_it: string; field_cognome_en: string
-    field_ruolo_it: string; field_ruolo_en: string
-    field_ruolo_placeholder_it: string; field_ruolo_placeholder_en: string
-    field_doc_type_it: string; field_doc_type_en: string
-    field_doc_type_default_it: string; field_doc_type_default_en: string
-    field_doc_type_carta_it: string; field_doc_type_carta_en: string
-    field_doc_type_passaporto_it: string; field_doc_type_passaporto_en: string
-    field_doc_type_patente_it: string; field_doc_type_patente_en: string
-    field_doc_numero_it: string; field_doc_numero_en: string
-    field_doc_data_it: string; field_doc_data_en: string
-    field_doc_luogo_it: string; field_doc_luogo_en: string
-    field_nome_placeholder_it: string; field_nome_placeholder_en: string
-    field_cognome_placeholder_it: string; field_cognome_placeholder_en: string
-    field_cf_pf_placeholder: string
-    field_sesso_it: string; field_sesso_en: string
-    field_sesso_default_it: string; field_sesso_default_en: string
-    field_sesso_m_it: string; field_sesso_m_en: string
-    field_sesso_f_it: string; field_sesso_f_en: string
-    field_birth_date_it: string; field_birth_date_en: string
-    field_birth_city_it: string; field_birth_city_en: string
-    field_birth_province_it: string; field_birth_province_en: string
-    field_address_it: string; field_address_en: string
-    field_address_placeholder_it: string; field_address_placeholder_en: string
-    field_civico_it: string; field_civico_en: string
-    field_civico_placeholder: string
-    field_city_it: string; field_city_en: string
-    field_city_placeholder_it: string; field_city_placeholder_en: string
-    field_cap_it: string; field_cap_en: string
-    field_cap_placeholder: string
-    field_province_it: string; field_province_en: string
-    field_province_placeholder: string
-    field_email_placeholder: string
-    field_pec_it: string; field_pec_en: string
-    field_pec_placeholder: string
-    field_codice_univoco_it: string; field_codice_univoco_en: string
-    field_codice_univoco_placeholder: string
-    field_ente_it: string; field_ente_en: string
-    field_ente_placeholder_it: string; field_ente_placeholder_en: string
-    field_pa_city_placeholder_it: string; field_pa_city_placeholder_en: string
-    field_pa_email_placeholder: string
-    field_password_it: string; field_password_en: string
-    field_confirm_password_it: string; field_confirm_password_en: string
-    marketing_consent_it: string; marketing_consent_en: string
-    privacy_policy_link_it: string; privacy_policy_link_en: string
-    err_select_client_type_it: string; err_select_client_type_en: string
-    err_country_required_it: string; err_country_required_en: string
-    err_email_required_it: string; err_email_required_en: string
-    err_denominazione_required_it: string; err_denominazione_required_en: string
-    err_piva_required_it: string; err_piva_required_en: string
-    err_piva_invalid_it: string; err_piva_invalid_en: string
-    err_address_required_it: string; err_address_required_en: string
-    err_phone_required_it: string; err_phone_required_en: string
-    err_phone_invalid_it: string; err_phone_invalid_en: string
-    err_rep_nome_it: string; err_rep_nome_en: string
-    err_rep_cognome_it: string; err_rep_cognome_en: string
-    err_rep_cf_it: string; err_rep_cf_en: string
-    err_rep_ruolo_it: string; err_rep_ruolo_en: string
-    err_doc_type_it: string; err_doc_type_en: string
-    err_doc_numero_it: string; err_doc_numero_en: string
-    err_doc_data_it: string; err_doc_data_en: string
-    err_doc_luogo_it: string; err_doc_luogo_en: string
-    err_nome_required_it: string; err_nome_required_en: string
-    err_cognome_required_it: string; err_cognome_required_en: string
-    err_cf_invalid_it: string; err_cf_invalid_en: string
-    err_residenza_required_it: string; err_residenza_required_en: string
-    err_codice_univoco_required_it: string; err_codice_univoco_required_en: string
-    err_ente_required_it: string; err_ente_required_en: string
-    err_city_required_it: string; err_city_required_en: string
-    err_pa_address_required_it: string; err_pa_address_required_en: string
-}
-const INITIAL_SIGNUP: SignUpCopy = {
-    subtitle_it: '', subtitle_en: '',
-    client_type_label_it: '', client_type_label_en: '',
-    client_type_default_it: '', client_type_default_en: '',
-    client_type_azienda_it: '', client_type_azienda_en: '',
-    client_type_persona_it: '', client_type_persona_en: '',
-    client_type_pa_it: '', client_type_pa_en: '',
-    section_legal_rep_it: '', section_legal_rep_en: '',
-    section_id_doc_it: '', section_id_doc_en: '',
-    section_credentials_it: '', section_credentials_en: '',
-    field_country_it: '', field_country_en: '',
-    field_email_it: '', field_email_en: '',
-    field_phone_it: '', field_phone_en: '',
-    field_codice_fiscale_it: '', field_codice_fiscale_en: '',
-    field_denominazione_it: '', field_denominazione_en: '',
-    field_denominazione_placeholder_it: '', field_denominazione_placeholder_en: '',
-    field_piva_it: '', field_piva_en: '',
-    field_piva_placeholder: '',
-    field_cf_placeholder: '',
-    field_sede_legale_it: '', field_sede_legale_en: '',
-    field_sede_legale_placeholder_it: '', field_sede_legale_placeholder_en: '',
-    field_sede_operativa_it: '', field_sede_operativa_en: '',
-    field_sede_operativa_placeholder_it: '', field_sede_operativa_placeholder_en: '',
-    field_sdi_it: '', field_sdi_en: '',
-    field_sdi_placeholder: '',
-    field_email_aziendale_it: '', field_email_aziendale_en: '',
-    field_email_aziendale_placeholder: '',
-    field_phone_aziendale_it: '', field_phone_aziendale_en: '',
-    field_nome_it: '', field_nome_en: '',
-    field_cognome_it: '', field_cognome_en: '',
-    field_ruolo_it: '', field_ruolo_en: '',
-    field_ruolo_placeholder_it: '', field_ruolo_placeholder_en: '',
-    field_doc_type_it: '', field_doc_type_en: '',
-    field_doc_type_default_it: '', field_doc_type_default_en: '',
-    field_doc_type_carta_it: '', field_doc_type_carta_en: '',
-    field_doc_type_passaporto_it: '', field_doc_type_passaporto_en: '',
-    field_doc_type_patente_it: '', field_doc_type_patente_en: '',
-    field_doc_numero_it: '', field_doc_numero_en: '',
-    field_doc_data_it: '', field_doc_data_en: '',
-    field_doc_luogo_it: '', field_doc_luogo_en: '',
-    field_nome_placeholder_it: '', field_nome_placeholder_en: '',
-    field_cognome_placeholder_it: '', field_cognome_placeholder_en: '',
-    field_cf_pf_placeholder: '',
-    field_sesso_it: '', field_sesso_en: '',
-    field_sesso_default_it: '', field_sesso_default_en: '',
-    field_sesso_m_it: '', field_sesso_m_en: '',
-    field_sesso_f_it: '', field_sesso_f_en: '',
-    field_birth_date_it: '', field_birth_date_en: '',
-    field_birth_city_it: '', field_birth_city_en: '',
-    field_birth_province_it: '', field_birth_province_en: '',
-    field_address_it: '', field_address_en: '',
-    field_address_placeholder_it: '', field_address_placeholder_en: '',
-    field_civico_it: '', field_civico_en: '',
-    field_civico_placeholder: '',
-    field_city_it: '', field_city_en: '',
-    field_city_placeholder_it: '', field_city_placeholder_en: '',
-    field_cap_it: '', field_cap_en: '',
-    field_cap_placeholder: '',
-    field_province_it: '', field_province_en: '',
-    field_province_placeholder: '',
-    field_email_placeholder: '',
-    field_pec_it: '', field_pec_en: '',
-    field_pec_placeholder: '',
-    field_codice_univoco_it: '', field_codice_univoco_en: '',
-    field_codice_univoco_placeholder: '',
-    field_ente_it: '', field_ente_en: '',
-    field_ente_placeholder_it: '', field_ente_placeholder_en: '',
-    field_pa_city_placeholder_it: '', field_pa_city_placeholder_en: '',
-    field_pa_email_placeholder: '',
-    field_password_it: '', field_password_en: '',
-    field_confirm_password_it: '', field_confirm_password_en: '',
-    marketing_consent_it: '', marketing_consent_en: '',
-    privacy_policy_link_it: '', privacy_policy_link_en: '',
-    err_select_client_type_it: '', err_select_client_type_en: '',
-    err_country_required_it: '', err_country_required_en: '',
-    err_email_required_it: '', err_email_required_en: '',
-    err_denominazione_required_it: '', err_denominazione_required_en: '',
-    err_piva_required_it: '', err_piva_required_en: '',
-    err_piva_invalid_it: '', err_piva_invalid_en: '',
-    err_address_required_it: '', err_address_required_en: '',
-    err_phone_required_it: '', err_phone_required_en: '',
-    err_phone_invalid_it: '', err_phone_invalid_en: '',
-    err_rep_nome_it: '', err_rep_nome_en: '',
-    err_rep_cognome_it: '', err_rep_cognome_en: '',
-    err_rep_cf_it: '', err_rep_cf_en: '',
-    err_rep_ruolo_it: '', err_rep_ruolo_en: '',
-    err_doc_type_it: '', err_doc_type_en: '',
-    err_doc_numero_it: '', err_doc_numero_en: '',
-    err_doc_data_it: '', err_doc_data_en: '',
-    err_doc_luogo_it: '', err_doc_luogo_en: '',
-    err_nome_required_it: '', err_nome_required_en: '',
-    err_cognome_required_it: '', err_cognome_required_en: '',
-    err_cf_invalid_it: '', err_cf_invalid_en: '',
-    err_residenza_required_it: '', err_residenza_required_en: '',
-    err_codice_univoco_required_it: '', err_codice_univoco_required_en: '',
-    err_ente_required_it: '', err_ente_required_en: '',
-    err_city_required_it: '', err_city_required_en: '',
-    err_pa_address_required_it: '', err_pa_address_required_en: '',
-}
-
-// ─── Header (site chrome — top bar + slide-out drawer) ───────────────────
-// Brand vocabulary like "DR7 Club", "Aviation Division" stays hardcoded;
-// only localized chrome (CTAs, section headings, popup labels, aria) is
-// editable here.
-interface HeaderCopy {
-    logo_alt: string
-    open_menu_aria_it: string; open_menu_aria_en: string
-    close_menu_aria_it: string; close_menu_aria_en: string
-    explore_label_it: string; explore_label_en: string
-    credit_wallet_label_it: string; credit_wallet_label_en: string
-    drawer_book_cta_it: string; drawer_book_cta_en: string
-    flotta_label_it: string; flotta_label_en: string
-    servizi_heading_it: string; servizi_heading_en: string
-    esperienze_heading_it: string; esperienze_heading_en: string
-    prime_wash_heading_it: string; prime_wash_heading_en: string
-    business_heading_it: string; business_heading_en: string
-    digital_heading_it: string; digital_heading_en: string
-    contact_cta_it: string; contact_cta_en: string
-    // Menu principale (redesign): 9 voci, titolo + sottotitolo IT/EN.
-    menu_mobilita_title_it?: string; menu_mobilita_title_en?: string
-    menu_mobilita_sub_it?: string; menu_mobilita_sub_en?: string
-    menu_mare_title_it?: string; menu_mare_title_en?: string
-    menu_mare_sub_it?: string; menu_mare_sub_en?: string
-    menu_aria_title_it?: string; menu_aria_title_en?: string
-    menu_aria_sub_it?: string; menu_aria_sub_en?: string
-    menu_property_title_it?: string; menu_property_title_en?: string
-    menu_property_sub_it?: string; menu_property_sub_en?: string
-    menu_servizi_title_it?: string; menu_servizi_title_en?: string
-    menu_servizi_sub_it?: string; menu_servizi_sub_en?: string
-    menu_club_title_it?: string; menu_club_title_en?: string
-    menu_club_sub_it?: string; menu_club_sub_en?: string
-    menu_business_title_it?: string; menu_business_title_en?: string
-    menu_business_sub_it?: string; menu_business_sub_en?: string
-    menu_digital_title_it?: string; menu_digital_title_en?: string
-    menu_digital_sub_it?: string; menu_digital_sub_en?: string
-    menu_contatti_title_it?: string; menu_contatti_title_en?: string
-    menu_contatti_sub_it?: string; menu_contatti_sub_en?: string
-    popup_title_it: string; popup_title_en: string
-    popup_subtitle_it: string; popup_subtitle_en: string
-}
-const INITIAL_HEADER: HeaderCopy = {
-    logo_alt: '',
-    open_menu_aria_it: '', open_menu_aria_en: '',
-    close_menu_aria_it: '', close_menu_aria_en: '',
-    explore_label_it: '', explore_label_en: '',
-    credit_wallet_label_it: '', credit_wallet_label_en: '',
-    drawer_book_cta_it: '', drawer_book_cta_en: '',
-    flotta_label_it: '', flotta_label_en: '',
-    servizi_heading_it: '', servizi_heading_en: '',
-    esperienze_heading_it: '', esperienze_heading_en: '',
-    prime_wash_heading_it: '', prime_wash_heading_en: '',
-    business_heading_it: '', business_heading_en: '',
-    digital_heading_it: '', digital_heading_en: '',
-    contact_cta_it: '', contact_cta_en: '',
-    menu_mobilita_title_it: '', menu_mobilita_title_en: '',
-    menu_mobilita_sub_it: '', menu_mobilita_sub_en: '',
-    menu_mare_title_it: '', menu_mare_title_en: '',
-    menu_mare_sub_it: '', menu_mare_sub_en: '',
-    menu_aria_title_it: '', menu_aria_title_en: '',
-    menu_aria_sub_it: '', menu_aria_sub_en: '',
-    menu_property_title_it: '', menu_property_title_en: '',
-    menu_property_sub_it: '', menu_property_sub_en: '',
-    menu_servizi_title_it: '', menu_servizi_title_en: '',
-    menu_servizi_sub_it: '', menu_servizi_sub_en: '',
-    menu_club_title_it: '', menu_club_title_en: '',
-    menu_club_sub_it: '', menu_club_sub_en: '',
-    menu_business_title_it: '', menu_business_title_en: '',
-    menu_business_sub_it: '', menu_business_sub_en: '',
-    menu_digital_title_it: '', menu_digital_title_en: '',
-    menu_digital_sub_it: '', menu_digital_sub_en: '',
-    menu_contatti_title_it: '', menu_contatti_title_en: '',
-    menu_contatti_sub_it: '', menu_contatti_sub_en: '',
-    popup_title_it: '', popup_title_en: '',
-    popup_subtitle_it: '', popup_subtitle_en: '',
-}
-
-// ─── Check Email + Jet Search Results (small bilingual pages) ─────────────
-interface CheckEmailCopy {
-    title_it: string; title_en: string
-    body_it: string; body_en: string
-    back_link_it: string; back_link_en: string
-}
-const INITIAL_CHECK_EMAIL: CheckEmailCopy = {
-    title_it: '', title_en: '',
-    body_it: '', body_en: '',
-    back_link_it: '', back_link_en: '',
-}
-
-interface JetSearchResultsCopy {
-    title_it: string; title_en: string
-    subtitle_connector_it: string; subtitle_connector_en: string
-    passengers_suffix_it: string; passengers_suffix_en: string
-    modify_search_cta_it: string; modify_search_cta_en: string
-    airport_fallback: string
-    empty_title_it: string; empty_title_en: string
-    empty_body_it: string; empty_body_en: string
-}
-const INITIAL_JET_SEARCH: JetSearchResultsCopy = {
-    title_it: '', title_en: '',
-    subtitle_connector_it: '', subtitle_connector_en: '',
-    passengers_suffix_it: '', passengers_suffix_en: '',
-    modify_search_cta_it: '', modify_search_cta_en: '',
-    airport_fallback: 'N/A',
-    empty_title_it: '', empty_title_en: '',
-    empty_body_it: '', empty_body_en: '',
-}
-
-// ─── Aviation Quote Request (bilingual) ───────────────────────────────────
-interface AviationQuoteCopy {
-    loading_it: string; loading_en: string
-    auth_title_it: string; auth_title_en: string
-    auth_body_it: string; auth_body_en: string
-    auth_login_cta_it: string; auth_login_cta_en: string
-    auth_signup_cta_it: string; auth_signup_cta_en: string
-    service_label_jet: string
-    service_label_helicopter: string
-    header_title_template_it: string; header_title_template_en: string
-    header_subtitle_it: string; header_subtitle_en: string
-    section_customer_it: string; section_customer_en: string
-    section_flight_it: string; section_flight_en: string
-    field_name_label_it: string; field_name_label_en: string
-    field_name_placeholder_it: string; field_name_placeholder_en: string
-    field_email_label_it: string; field_email_label_en: string
-    field_email_placeholder_it: string; field_email_placeholder_en: string
-    field_phone_label_it: string; field_phone_label_en: string
-    field_phone_placeholder_it: string; field_phone_placeholder_en: string
-    field_departure_label_it: string; field_departure_label_en: string
-    field_departure_placeholder_it: string; field_departure_placeholder_en: string
-    field_arrival_label_it: string; field_arrival_label_en: string
-    field_arrival_placeholder_it: string; field_arrival_placeholder_en: string
-    field_departure_date_label_it: string; field_departure_date_label_en: string
-    field_return_date_label_it: string; field_return_date_label_en: string
-    field_passengers_label_it: string; field_passengers_label_en: string
-    field_notes_label_it: string; field_notes_label_en: string
-    field_notes_placeholder_it: string; field_notes_placeholder_en: string
-    submit_idle_it: string; submit_idle_en: string
-    submit_submitting_it: string; submit_submitting_en: string
-    disclaimer_it: string; disclaimer_en: string
-    alert_success_it: string; alert_success_en: string
-    alert_error_it: string; alert_error_en: string
-    whatsapp_phone: string
-}
-
-function emptyStrPair(): { it: string; en: string } { return { it: '', en: '' } }
-const INITIAL_AVIATION_QUOTE: AviationQuoteCopy = {
-    loading_it: 'Caricamento...', loading_en: 'Loading...',
-    auth_title_it: '', auth_title_en: '',
-    auth_body_it: '', auth_body_en: '',
-    auth_login_cta_it: 'Accedi', auth_login_cta_en: 'Login',
-    auth_signup_cta_it: 'Registrati', auth_signup_cta_en: 'Sign Up',
-    service_label_jet: 'Jet Privato', service_label_helicopter: 'Elicottero',
-    header_title_template_it: 'Richiedi Preventivo {service}', header_title_template_en: 'Request Quote {service}',
-    header_subtitle_it: '', header_subtitle_en: '',
-    section_customer_it: 'Dati Cliente', section_customer_en: 'Customer Details',
-    section_flight_it: 'Dettagli Viaggio', section_flight_en: 'Trip Details',
-    field_name_label_it: '', field_name_label_en: '',
-    field_name_placeholder_it: '', field_name_placeholder_en: '',
-    field_email_label_it: '', field_email_label_en: '',
-    field_email_placeholder_it: '', field_email_placeholder_en: '',
-    field_phone_label_it: '', field_phone_label_en: '',
-    field_phone_placeholder_it: '', field_phone_placeholder_en: '',
-    field_departure_label_it: '', field_departure_label_en: '',
-    field_departure_placeholder_it: '', field_departure_placeholder_en: '',
-    field_arrival_label_it: '', field_arrival_label_en: '',
-    field_arrival_placeholder_it: '', field_arrival_placeholder_en: '',
-    field_departure_date_label_it: '', field_departure_date_label_en: '',
-    field_return_date_label_it: '', field_return_date_label_en: '',
-    field_passengers_label_it: '', field_passengers_label_en: '',
-    field_notes_label_it: '', field_notes_label_en: '',
-    field_notes_placeholder_it: '', field_notes_placeholder_en: '',
-    submit_idle_it: '', submit_idle_en: '',
-    submit_submitting_it: '', submit_submitting_en: '',
-    disclaimer_it: '', disclaimer_en: '',
-    alert_success_it: '', alert_success_en: '',
-    alert_error_it: '', alert_error_en: '',
-    whatsapp_phone: '393457905205',
-}
-void emptyStrPair  // helper kept for future use
-
-// ─── Franchising (IT-only sales page) ──────────────────────────────────────
-type FranchisingExpansionIcon = 'square' | 'diamond' | 'lines'
-type FranchisingBenefitIcon = 'check' | 'shield' | 'star'
-interface FranchisingExpansionLocation { id: string; icon: FranchisingExpansionIcon; name: string; description: string }
-interface FranchisingBenefit { id: string; icon: FranchisingBenefitIcon; title: string; description: string }
-interface FranchisingCopy {
-    hero_h2: string
-    hero_p1: string
-    hero_p2: string
-    stats_heading: string
-    stats_lines: string[]
-    stats_footer_main: string
-    stats_footer_sub: string
-    expansion_heading: string
-    expansion_locations: FranchisingExpansionLocation[]
-    about_heading: string
-    about_paragraphs: string[]
-    benefits: FranchisingBenefit[]
-    cta_heading: string
-    cta_intro: string
-    cta_box_main: string
-    cta_box_sub: string
-    contact_heading: string
-    contact_intro: string
-    contact_email: string
-    footer_statement: string
-}
-const INITIAL_FRANCHISING: FranchisingCopy = {
-    hero_h2: '', hero_p1: '', hero_p2: '',
-    stats_heading: 'In soli 18 mesi di attività', stats_lines: [],
-    stats_footer_main: '', stats_footer_sub: '',
-    expansion_heading: 'Il Nostro Piano di Espansione', expansion_locations: [],
-    about_heading: '', about_paragraphs: [],
-    benefits: [],
-    cta_heading: '', cta_intro: '', cta_box_main: '', cta_box_sub: '',
-    contact_heading: '', contact_intro: '', contact_email: '',
-    footer_statement: '',
-}
-
-// ─── Investitori (IT-only sales page) ──────────────────────────────────────
-interface InvestitoriStrength { id: string; title: string; description: string }
-interface InvestitoriInfoItem { label: string; value: string }
-interface InvestitoriCopy {
-    hero_title: string
-    hero_subtitle: string
-    intro_paragraphs: string[]
-    opportunity_heading: string
-    opportunity_paragraphs: string[]
-    strength_heading: string
-    strength_points: InvestitoriStrength[]
-    cta_heading: string
-    cta_paragraphs: string[]
-    cta_button_label: string
-    cta_whatsapp_url: string
-    cta_email: string
-    info_heading: string
-    info_items: InvestitoriInfoItem[]
-    info_footnote: string
-    legal_heading: string
-    legal_paragraphs: string[]
-}
-const INITIAL_INVESTITORI: InvestitoriCopy = {
-    hero_title: 'SEZIONE INVESTITORI', hero_subtitle: 'Partecipa alla crescita del gruppo DR7',
-    intro_paragraphs: [],
-    opportunity_heading: 'Opportunità di partecipazione al capitale', opportunity_paragraphs: [],
-    strength_heading: 'Punti di forza', strength_points: [],
-    cta_heading: 'Modalità di adesione', cta_paragraphs: [],
-    cta_button_label: 'RICHIEDI ACCESSO INVESTITORI',
-    cta_whatsapp_url: '', cta_email: '',
-    info_heading: 'Informazioni sintetiche', info_items: [],
-    info_footnote: '',
-    legal_heading: 'Avvertenza legale', legal_paragraphs: [],
-}
-
-// ─── Car Wash chrome (mirror website utils/siteCopy.ts) ────────────────────
-interface CarWashCopy {
-    plate_label_it: string; plate_label_en: string
-    plate_helper_it: string; plate_helper_en: string
-    plate_placeholder_it: string; plate_placeholder_en: string
-    plate_search_it: string; plate_search_en: string
-    plate_searching_it: string; plate_searching_en: string
-    plate_manual_prompt_it: string; plate_manual_prompt_en: string
-    plate_change_it: string; plate_change_en: string
-    add_to_cart_it: string; add_to_cart_en: string
-    cart_title_it: string; cart_title_en: string
-    cart_empty_it: string; cart_empty_en: string
-    cart_remove_it: string; cart_remove_en: string
-    cart_total_it: string; cart_total_en: string
-    cart_checkout_it: string; cart_checkout_en: string
-    upsell_review_cart_it: string; upsell_review_cart_en: string
-    upsell_step1_title_it: string; upsell_step1_title_en: string
-    upsell_step1_text_it: string; upsell_step1_text_en: string
-    upsell_step2_title_it: string; upsell_step2_title_en: string
-    upsell_step2_text_it: string; upsell_step2_text_en: string
-    upsell_added_it: string; upsell_added_en: string
-    upsell_add_it: string; upsell_add_en: string
-}
-const INITIAL_CARWASH: CarWashCopy = {
-    plate_label_it: '', plate_label_en: '',
-    plate_helper_it: '', plate_helper_en: '',
-    plate_placeholder_it: '', plate_placeholder_en: '',
-    plate_search_it: '', plate_search_en: '',
-    plate_searching_it: '', plate_searching_en: '',
-    plate_manual_prompt_it: '', plate_manual_prompt_en: '',
-    plate_change_it: '', plate_change_en: '',
-    add_to_cart_it: '', add_to_cart_en: '',
-    cart_title_it: '', cart_title_en: '',
-    cart_empty_it: '', cart_empty_en: '',
-    cart_remove_it: '', cart_remove_en: '',
-    cart_total_it: '', cart_total_en: '',
-    cart_checkout_it: '', cart_checkout_en: '',
-    upsell_review_cart_it: '', upsell_review_cart_en: '',
-    upsell_step1_title_it: '', upsell_step1_title_en: '',
-    upsell_step1_text_it: '', upsell_step1_text_en: '',
-    upsell_step2_title_it: '', upsell_step2_title_en: '',
-    upsell_step2_text_it: '', upsell_step2_text_en: '',
-    upsell_added_it: '', upsell_added_en: '',
-    upsell_add_it: '', upsell_add_en: '',
-}
-
-// ─── Mechanical Services chrome (mirror website utils/siteCopy.ts) ────────
-//
-// IMPORTANT: il CATALOGO meccanica vive in tab dedicato "Catalogo Prime Wash"
-// (filtro MECCANICA). Qui editiamo SOLO il chrome della pagina:
-// hero, "Come Funziona", orari, label bottoni.
-interface MechanicalHowStep {
-    title_it: string; title_en: string
-    text_it: string; text_en: string
-}
-interface MechanicalCopy {
-    hero_title: string
-    hero_subtitle_it: string; hero_subtitle_en: string
-    hero_intro_it: string; hero_intro_en: string
-    book_now_label_it: string; book_now_label_en: string
-    how_heading_it: string; how_heading_en: string
-    how_steps: MechanicalHowStep[]
-    hours_heading_it: string; hours_heading_en: string
-    hours_main_it: string; hours_main_en: string
-    hours_sub_it: string; hours_sub_en: string
-}
-const INITIAL_MECHANICAL: MechanicalCopy = {
-    hero_title: 'DR7 RAPID SERVICE',
-    hero_subtitle_it: '', hero_subtitle_en: '',
-    hero_intro_it: '', hero_intro_en: '',
-    book_now_label_it: 'PRENOTA ORA', book_now_label_en: 'BOOK NOW',
-    how_heading_it: 'Come Funziona', how_heading_en: 'How It Works',
-    how_steps: [],
-    hours_heading_it: 'Orari di Apertura', hours_heading_en: 'Opening Hours',
-    hours_main_it: '', hours_main_en: '',
-    hours_sub_it: '', hours_sub_en: '',
-}
-
-// ─── Careers / Press / Contact schemas (mirror website utils/siteCopy.ts) ──
-interface CareersJob {
-    id: string
-    title_it: string; title_en: string
-    location_it: string; location_en: string
-    type_it: string; type_en: string
-    description_it: string; description_en: string
-}
-interface CareersCopy {
-    page_title_it: string; page_title_en: string
-    intro_it: string; intro_en: string
-    jobs_heading_it: string; jobs_heading_en: string
-    jobs: CareersJob[]
-    apply_heading_it: string; apply_heading_en: string
-    apply_text_it: string; apply_text_en: string
-    apply_email: string
-}
-const INITIAL_CAREERS: CareersCopy = {
-    page_title_it: 'Careers', page_title_en: 'Careers',
-    intro_it: '', intro_en: '',
-    jobs_heading_it: 'Posizioni Aperte', jobs_heading_en: 'Open Positions',
-    jobs: [],
-    apply_heading_it: 'Come Candidarsi', apply_heading_en: 'How to Apply',
-    apply_text_it: '', apply_text_en: '',
-    apply_email: '',
-}
-
-interface PressArticle {
-    id: string
-    title: string
-    publication: string
-    date: string
-    summary_it: string; summary_en: string
-    link: string
-}
-interface PressCopy {
-    page_title_it: string; page_title_en: string
-    subtitle_it: string; subtitle_en: string
-    inquiries_heading_it: string; inquiries_heading_en: string
-    inquiries_text_it: string; inquiries_text_en: string
-    inquiries_email_label_it: string; inquiries_email_label_en: string
-    inquiries_email: string
-    news_heading_it: string; news_heading_en: string
-    read_more_label_it: string; read_more_label_en: string
-    articles: PressArticle[]
-    releases_heading_it: string; releases_heading_en: string
-    releases_text_it: string; releases_text_en: string
-}
-const INITIAL_PRESS: PressCopy = {
-    page_title_it: 'Press', page_title_en: 'Press',
-    subtitle_it: '', subtitle_en: '',
-    inquiries_heading_it: 'Richieste Stampa', inquiries_heading_en: 'Media Inquiries',
-    inquiries_text_it: '', inquiries_text_en: '',
-    inquiries_email_label_it: 'Email:', inquiries_email_label_en: 'Email:',
-    inquiries_email: '',
-    news_heading_it: 'Sui Media', news_heading_en: 'In the News',
-    read_more_label_it: "Leggi l'articolo", read_more_label_en: 'Read full article',
-    articles: [],
-    releases_heading_it: 'Comunicati Stampa', releases_heading_en: 'Press Releases',
-    releases_text_it: '', releases_text_en: '',
-}
-
-interface ContactCopy {
-    page_title_it: string; page_title_en: string
-    subtitle_it: string; subtitle_en: string
-    phone_label_it: string; phone_label_en: string
-    phone_display: string
-    phone_tel_url: string
-    whatsapp_label_it: string; whatsapp_label_en: string
-    whatsapp_button_it: string; whatsapp_button_en: string
-    whatsapp_url: string
-    email_label_it: string; email_label_en: string
-    email_address: string
-    hours_label_it: string; hours_label_en: string
-    hours_lines_it: string[]; hours_lines_en: string[]
-    office_heading_it: string; office_heading_en: string
-    office_company_name: string
-    office_address_it: string; office_address_en: string
-    office_piva: string
-    map_title: string
-    map_iframe_url: string
-}
-const INITIAL_CONTACT: ContactCopy = {
-    page_title_it: 'Contattaci', page_title_en: 'Contact Us',
-    subtitle_it: '', subtitle_en: '',
-    phone_label_it: 'Telefono', phone_label_en: 'Phone',
-    phone_display: '', phone_tel_url: '',
-    whatsapp_label_it: 'WhatsApp', whatsapp_label_en: 'WhatsApp',
-    whatsapp_button_it: '', whatsapp_button_en: '',
-    whatsapp_url: '',
-    email_label_it: 'Email', email_label_en: 'Email',
-    email_address: '',
-    hours_label_it: 'Orari', hours_label_en: 'Hours',
-    hours_lines_it: [], hours_lines_en: [],
-    office_heading_it: 'Sede Operativa', office_heading_en: 'Operating Office',
-    office_company_name: '',
-    office_address_it: '', office_address_en: '',
-    office_piva: '',
-    map_title: '', map_iframe_url: '',
-}
-
-// Mirrors the website DEFAULT_FOOTER (utils/siteCopy.ts). Used as the seed
-// when no footer override is stored yet, so the editor shows the real live
-// values and saving never blanks the footer. Keep in sync with the website.
-const INITIAL_FOOTER: FooterCopy = {
-    network_title: 'Join the DR7 Network',
-    network_text_it: 'Entra nel nostro ecosistema globale e segui i nostri canali social per contenuti esclusivi e aggiornamenti dal mondo DR7 Cagliari.',
-    network_text_en: 'Join our global ecosystem and follow our social channels for exclusive content and updates from the DR7 Cagliari world.',
-    social_links: [
-        { id: 'ig', label: 'Instagram', href: 'https://www.instagram.com/dubai_rent_7.0_s_p_a_', icon: 'instagram' },
-        { id: 'tt', label: 'Tiktok',    href: 'https://www.tiktok.com/@dr7luxuryempire',           icon: 'tiktok' },
-    ],
-    reviews_title: 'A Global Standard of Excellence',
-    reviews_text_it: 'DR7 Cagliari mantiene un rating impeccabile di 5.0/5.0 su quasi 300 recensioni verificate, confermandosi un punto di riferimento nel settore della luxury mobility.',
-    reviews_text_en: 'DR7 Cagliari maintains a flawless 5.0/5.0 rating across nearly 300 verified reviews, confirming itself as a benchmark in the luxury mobility sector.',
-    contact_title: 'Contact',
-    contact_whatsapp_number: '+39 345 790 5205',
-    contact_whatsapp_url: 'https://wa.me/393457905205',
-    contact_company_name: 'DR7 S.p.A.',
-    contact_legal_address_it: 'Sede Legale: Via del Fangario 25, 09122 Cagliari (CA) – Italia',
-    contact_legal_address_en: 'Registered Office: Via del Fangario 25, 09122 Cagliari (CA) – Italy',
-    contact_operative_address_it: 'Sede Operativa: Viale Marconi 229, 09131 Cagliari (CA) – Italia',
-    contact_operative_address_en: 'Operating Office: Viale Marconi 229, 09131 Cagliari (CA) – Italy',
-    contact_capitale_sociale_it: 'Capitale Sociale: € 1.000.000 i.v.',
-    contact_capitale_sociale_en: 'Share Capital: € 1,000,000 fully paid',
-    contact_piva: 'P.IVA / C.F.: 04104640927',
-    contact_disclaimer_it: 'Società appartenente al progetto di sviluppo\nDR7 HOLDING S.p.A.',
-    contact_disclaimer_en: 'Company belonging to the development project of\nDR7 HOLDING S.p.A.',
-    division_links: [
-        { id: 'div-1', label_it: 'Supercar & Luxury Division', label_en: 'Supercar & Luxury Division', to: '/supercar-luxury' },
-        { id: 'div-2', label_it: 'Prime Wash',                  label_en: 'Prime Wash',                  to: '/prime-wash' },
-        { id: 'div-3', label_it: 'Contattaci',                  label_en: 'Contact us',                  to: '/contact' },
-    ],
-    corporate_links: [
-        { id: 'corp-1', label_it: 'Corporate Overview',      label_en: 'Corporate Overview',      to: '/about' },
-        { id: 'corp-2', label_it: 'Press & Media',           label_en: 'Press & Media',           to: '/press' },
-        { id: 'corp-3', label_it: 'Careers & Opportunities', label_en: 'Careers & Opportunities', to: '/careers' },
-    ],
-    legal_links: [
-        { id: 'leg-1', label_it: 'Termini di Servizio', label_en: 'Terms of Service',    to: '/terms' },
-        { id: 'leg-2', label_it: 'Cookie Policy',       label_en: 'Cookie Policy',       to: '/cookie-policy' },
-        { id: 'leg-3', label_it: 'Privacy Policy',      label_en: 'Privacy Policy',      to: '/privacy' },
-        { id: 'leg-4', label_it: 'Cancellation Policy', label_en: 'Cancellation Policy', to: '/cancellation-policy' },
-    ],
-    bottom_brand_line: 'DR7 Cagliari – Global Mobility & Luxury Lifestyle Group',
-    bottom_copyright: '© 2024 - 2026 DR7 Cagliari. All Rights Reserved.',
-}
-
-const INITIAL_MEMBERSHIP: MembershipCopy = {
-    hero_eyebrow_it: '', hero_eyebrow_en: '',
-    hero_title: 'DR7 CLUB',
-    hero_subtitle_it: '', hero_subtitle_en: '',
-    hero_opener_it: '', hero_opener_en: '',
-    pricing_card_title: 'DR7 CLUB',
-    pricing_billing_monthly_it: '', pricing_billing_monthly_en: '',
-    pricing_billing_annual_it: '', pricing_billing_annual_en: '',
-    pricing_billing_save_badge: '',
-    pricing_cycle_month_it: '', pricing_cycle_month_en: '',
-    pricing_cycle_year_it: '', pricing_cycle_year_en: '',
-    pricing_savings_it: '', pricing_savings_en: '',
-    pricing_cta_it: '', pricing_cta_en: '',
-    pricing_cta_footnote_it: '', pricing_cta_footnote_en: '',
-    elite_title: '',
-    elite_subtitle_it: '', elite_subtitle_en: '',
-    elite_intro_it: '', elite_intro_en: '',
-    elite_sections: [],
-    elite_cta_title_it: '', elite_cta_title_en: '',
-    elite_cta_text_it: '', elite_cta_text_en: '',
-    elite_cta_logged_out_it: '', elite_cta_logged_out_en: '',
-    elite_cta_logged_in_it: '', elite_cta_logged_in_en: '',
-    reward_title_it: '', reward_title_en: '',
-    reward_intro_it: '', reward_intro_en: '',
-    reward_items: [],
-    reward_footnote_it: '', reward_footnote_en: '',
-}
-
-const INITIAL_CANCELLAZIONE: CancellazioneCopy = {
-    page_title_it: 'Policy di Cancellazione e Modifica Prenotazioni',
-    page_title_en: 'Cancellation and Booking Modification Policy',
-    contact_label_it: 'Per assistenza o informazioni:',
-    contact_label_en: 'For assistance or information:',
-    contact_email: 'info@dr7.app',
-    contact_address: 'DR7 S.p.A. - Viale Marconi, 229, 09131 Cagliari CA',
-    last_updated_it: 'Ultimo aggiornamento: 10 aprile 2026',
-    last_updated_en: 'Last updated: April 10, 2026',
-    sections: [],  // Hydrated from DB; full default lives on website side.
-}
-
-// Italian translations of the legacy English FAQ on /faq.
-const INITIAL_FAQ_ENTRIES: FaqEntry[] = [
-    {
-        id: 'requisiti-noleggio',
-        question: 'Quali sono i requisiti per noleggiare un\'auto?',
-        answer: 'Il conducente deve avere almeno 25 anni, essere in possesso di una patente di guida valida e fornire prova di copertura assicurativa completa. Per tutti i noleggi e\' richiesta una cauzione.',
-    },
-    {
-        id: 'come-funziona-dr7-club',
-        question: 'Come funziona la membership DR7 Club?',
-        answer: 'La nostra membership esclusiva offre accesso a tariffe preferenziali, prenotazione prioritaria, servizio concierge 24/7 e inviti a eventi privati. Puoi scegliere fra fatturazione mensile o annuale su tre tier diversi.',
-    },
-    {
-        id: 'politica-cancellazione',
-        question: 'Qual e\' la politica di cancellazione?',
-        answer: 'Le politiche di cancellazione variano in base al servizio prenotato. Per i dettagli specifici, consulta il Contratto di Noleggio fornito al momento della conferma o contatta il nostro supporto.',
-    },
-    {
-        id: 'metodi-pagamento',
-        question: 'Quali metodi di pagamento accettate?',
-        answer: 'Accettiamo le principali carte di credito (Visa, MasterCard, American Express) e una selezione di criptovalute. Le opzioni di pagamento vengono presentate in fase di checkout.',
-    },
-]
-
-const INITIAL_FAQ: FaqCopy = {
-    eyebrow_it: 'DR7 · Supporto',
-    eyebrow_en: 'DR7 · Support',
-    page_title_it: 'Domande Frequenti',
-    page_title_en: 'Frequently Asked Questions',
-    subtitle_it: 'Le risposte alle domande piu’ frequenti su noleggio, membership e pagamenti.',
-    subtitle_en: 'Answers to the most common questions on rentals, membership, and payments.',
-    entries: INITIAL_FAQ_ENTRIES,
-}
-
-// ─── Persistence helpers ─────────────────────────────────────────────────────
-interface FlottaCopy {
-    // Empty array means "fallback to all categories from centralina_pro_config.categories".
-    visible_category_ids: string[]
-}
+// ─── Stato locale del tab ────────────────────────────────────────────────
+// Elenco vuoto = "mostra tutte le categorie di centralina_pro_config".
+// Resta qui perche' e' l'unica sezione senza equivalente nel sito: il sito
+// legge la lista, non ha un proprio default da generare.
 const INITIAL_FLOTTA: FlottaCopy = { visible_category_ids: [] }
-
-interface SiteCopySnapshot {
-    flotta?: FlottaCopy
-    faq?: FaqCopy | FaqEntry[]   // accept legacy raw-array shape too
-    cancellazione?: CancellazioneCopy
-    membership?: MembershipCopy
-    home?: HomeCopy
-    about?: AboutCopy
-    footer?: FooterCopy
-    legal?: LegalCopy
-    careers?: CareersCopy
-    press?: PressCopy
-    contact?: ContactCopy
-    mechanical?: MechanicalCopy
-    carwash?: CarWashCopy
-    investitori?: InvestitoriCopy
-    franchising?: FranchisingCopy
-    aviationQuote?: AviationQuoteCopy
-    checkEmail?: CheckEmailCopy
-    jetSearchResults?: JetSearchResultsCopy
-    confirmationSuccess?: ConfirmationSuccessCopy
-    header?: HeaderCopy
-    signUp?: SignUpCopy
-    payment?: PaymentCopy
-    paymentSuccess?: PaymentSuccessCopy
-    booking?: BookingCopy
-    creditWallet?: CreditWalletCopy
-    token?: TokenCopy
-    firma?: FirmaCopy
-    registrazioneCliente?: RegistrazioneClienteCopy
-    bookingSearchBox?: BookingSearchBoxCopy
-    paymentCancel?: PaymentCancelCopy
-    locations?: LocationsCopy
-    aviationMarine?: AviationMarineCopy
-    dr7ClubPlan?: Dr7ClubPlanCopy
-}
 
 interface CurrentState {
     flotta: FlottaCopy
@@ -1993,28 +294,32 @@ function WhatsAppTemplateNotice({ keys }: { keys: { key: string; label: string }
     )
 }
 
-// ─── Sidebar (grouped + searchable) ──────────────────────────────────────
-// Categories with collapsible groups. Auto-expands the group containing
-// the active section. Search input filters across all categories — when
-// search is active, groups expand to show matches and irrelevant ones hide.
-function SitoSidebar({ section, onSelect }: { section: SectionId; onSelect: (id: SectionId) => void }) {
+// ─── Navigazione: l'alberatura di dr7.app ────────────────────────────────
+// Le voci sono le schermate reali del sito, raggruppate come nel menu
+// ESPLORA e mostrate con la loro URL. Le schermate senza editor restano
+// visibili, marcate "Nel codice": l'elenco deve essere la fotografia del
+// sito, non solo la lista di cio' che sappiamo gia' modificare.
+function SitoSidebar({ screenId, onSelect }: { screenId: string; onSelect: (id: string) => void }) {
     const [query, setQuery] = useState('')
-    const [collapsed, setCollapsed] = useState<Record<SectionCategoryId, boolean>>({
-        chrome: false, public: false, auth: false, booking: false, legal: false,
-    })
-    const activeCategory = SECTIONS.find(s => s.id === section)?.category
+    const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+    const activeArea = SITO_SCREENS.find(s => s.id === screenId)?.area
     const q = query.trim().toLowerCase()
-    const filteredByCategory = SECTION_CATEGORIES.map(cat => {
-        const items = SECTIONS.filter(s => s.category === cat.id && (q === '' || s.title.toLowerCase().includes(q)))
-        return { cat, items }
-    }).filter(g => g.items.length > 0)
+    const groups = SCREENS_BY_AREA
+        .map(({ area, screens }) => ({
+            area,
+            screens: screens.filter(s =>
+                q === '' ||
+                s.label.toLowerCase().includes(q) ||
+                s.path.toLowerCase().includes(q)),
+        }))
+        .filter(g => g.screens.length > 0)
 
     return (
         <div className="bg-theme-bg-primary rounded-2xl p-3 border border-theme-border shadow-sm space-y-3">
             <div className="relative">
                 <input
                     type="search"
-                    placeholder="Cerca sezione…"
+                    placeholder="Cerca una pagina o una URL…"
                     value={query}
                     onChange={e => setQuery(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 rounded-xl text-[13px] bg-theme-bg-secondary border border-transparent focus:bg-theme-bg-primary focus:border-theme-border text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors"
@@ -2025,23 +330,27 @@ function SitoSidebar({ section, onSelect }: { section: SectionId; onSelect: (id:
                 </svg>
             </div>
 
-            {filteredByCategory.length === 0 && (
-                <p className="px-3 py-6 text-center text-[12px] text-theme-text-secondary">Nessuna sezione corrisponde.</p>
+            <p className="px-3 text-[11px] text-theme-text-secondary">
+                <strong className="text-theme-text-primary">{MANAGED_COUNT}</strong> schermate su {TOTAL_COUNT} modificabili da qui.
+            </p>
+
+            {groups.length === 0 && (
+                <p className="px-3 py-6 text-center text-[12px] text-theme-text-secondary">Nessuna pagina corrisponde.</p>
             )}
 
-            {filteredByCategory.map(({ cat, items }) => {
-                const isOpen = q !== '' || !collapsed[cat.id] || cat.id === activeCategory
+            {groups.map(({ area, screens }) => {
+                const isOpen = q !== '' || !collapsed[area.id] || area.id === activeArea
                 return (
-                    <div key={cat.id}>
+                    <div key={area.id}>
                         <button
                             type="button"
-                            onClick={() => q === '' && setCollapsed(s => ({ ...s, [cat.id]: !s[cat.id] }))}
+                            onClick={() => q === '' && setCollapsed(s => ({ ...s, [area.id]: !s[area.id] }))}
                             className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-theme-text-secondary hover:text-theme-text-primary"
-                            title={cat.description}
+                            title={area.description}
                         >
-                            <span>{cat.label}</span>
+                            <span>{area.label}</span>
                             <span className="flex items-center gap-1.5">
-                                <span className="text-[10px] font-semibold bg-theme-bg-secondary rounded-full px-1.5 py-0.5">{items.length}</span>
+                                <span className="text-[10px] font-semibold bg-theme-bg-secondary rounded-full px-1.5 py-0.5">{screens.length}</span>
                                 {q === '' && (
                                     <svg className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} viewBox="0 0 12 12" fill="currentColor"><path d="M6 8 1 3h10z" /></svg>
                                 )}
@@ -2049,24 +358,29 @@ function SitoSidebar({ section, onSelect }: { section: SectionId; onSelect: (id:
                         </button>
                         {isOpen && (
                             <ul className="space-y-0.5 mt-1">
-                                {items.map(s => {
-                                    const active = section === s.id
+                                {screens.map(s => {
+                                    const active = screenId === s.id
                                     return (
                                         <li key={s.id}>
                                             <button
                                                 onClick={() => onSelect(s.id)}
-                                                className={`w-full text-left px-3 py-2 rounded-xl text-[13px] font-medium transition-colors flex items-center gap-2 ${
+                                                className={`w-full text-left px-3 py-2 rounded-xl transition-colors ${
                                                     active
                                                         ? 'bg-blue-500 text-white shadow-sm'
                                                         : 'text-theme-text-primary hover:bg-theme-bg-secondary'
                                                 }`}
                                             >
-                                                <span className="flex-1">{s.title}</span>
-                                                {!s.ready && (
-                                                    <span className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
-                                                        active ? 'bg-white/20 text-white' : 'bg-amber-500/15 text-amber-700'
-                                                    }`}>Soon</span>
-                                                )}
+                                                <span className="flex items-center gap-2">
+                                                    <span className="flex-1 text-[13px] font-medium">{s.label}</span>
+                                                    {!s.editor && (
+                                                        <span className={`text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
+                                                            active ? 'bg-white/20 text-white' : 'bg-theme-bg-tertiary text-theme-text-secondary'
+                                                        }`}>Nel codice</span>
+                                                    )}
+                                                </span>
+                                                <span className={`block text-[10px] font-mono mt-0.5 truncate ${active ? 'text-white/70' : 'text-theme-text-muted'}`}>
+                                                    {s.path}
+                                                </span>
                                             </button>
                                         </li>
                                     )
@@ -2079,6 +393,64 @@ function SitoSidebar({ section, onSelect }: { section: SectionId; onSelect: (id:
         </div>
     )
 }
+
+// ─── Intestazione della schermata aperta ─────────────────────────────────
+// Dice all'operatore QUALE pagina di dr7.app sta modificando, con il link
+// per aprirla e confrontare prima di salvare.
+function ScreenHeader({ screen }: { screen: SitoScreen }) {
+    const area = SITO_AREAS.find(a => a.id === screen.area)
+    const url = publicUrl(screen)
+    return (
+        <div className="mb-6 pb-4 border-b border-theme-border">
+            <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                    <p className="text-[11px] uppercase tracking-[0.08em] font-bold text-theme-text-secondary">{area?.label}</p>
+                    <h2 className="text-[20px] font-semibold text-theme-text-primary mt-0.5">{screen.label}</h2>
+                    <p className="text-[12px] font-mono text-theme-text-muted mt-1">
+                        {url ? `dr7.app${screen.path}` : screen.path}
+                    </p>
+                    {screen.note && (
+                        <p className="text-[12px] text-theme-text-secondary mt-2 max-w-2xl">{screen.note}</p>
+                    )}
+                </div>
+                {url && (
+                    <a
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold bg-theme-bg-secondary hover:bg-theme-bg-tertiary text-theme-text-primary border border-theme-border"
+                    >
+                        Apri la pagina
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><path d="M15 3h6v6" /><path d="M10 14 21 3" /></svg>
+                    </a>
+                )}
+            </div>
+        </div>
+    )
+}
+
+// ─── Schermata non ancora gestita dal CMS ────────────────────────────────
+// Meglio dirlo che lasciare un pannello vuoto: l'operatore sa subito che
+// serve uno sviluppatore, e lo sviluppatore sa quale file aprire.
+function ScreenNotManaged({ screen }: { screen: SitoScreen }) {
+    return (
+        <div className="rounded-2xl border border-dashed border-theme-border p-8 text-center">
+            <div className="w-11 h-11 mx-auto mb-3 rounded-2xl bg-theme-bg-secondary text-theme-text-secondary flex items-center justify-center">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m16 18 6-6-6-6" /><path d="m8 6-6 6 6 6" /></svg>
+            </div>
+            <p className="text-[15px] font-semibold text-theme-text-primary">Testi ancora nel codice</p>
+            <p className="text-[13px] text-theme-text-secondary mt-1.5 max-w-md mx-auto">
+                Questa pagina esiste su dr7.app ma i suoi testi non sono ancora modificabili da qui.
+                Per cambiarli serve una modifica al sito.
+            </p>
+            <p className="mt-4 text-[12px] text-theme-text-muted">
+                File nel repo del sito:{' '}
+                <code className="bg-theme-bg-tertiary px-1.5 py-0.5 rounded font-mono text-theme-text-secondary">{screen.file}</code>
+            </p>
+        </div>
+    )
+}
+
 
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function SitoTab() {
@@ -2106,7 +478,11 @@ export default function SitoTab() {
     }, [override])
 
     // ─── Section navigation ──────────────────────────────────────────────────
-    const [section, setSection] = useState<SectionId>('faq')
+    // Si parte dalla Home, come il visitatore su dr7.app.
+    const [screenId, setScreenId] = useState<string>('hero')
+    const screen = SITO_SCREENS.find(s => s.id === screenId) ?? SITO_SCREENS[0]
+    // Piu' schermate possono condividere un editor (es. Yacht e Jet).
+    const section = screen.editor
 
     // ─── State (current + saved snapshots per section) ───────────────────────
     const [flotta, setFlotta] = useState<FlottaCopy>(INITIAL_FLOTTA)
@@ -2514,7 +890,9 @@ export default function SitoTab() {
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-[28px] font-semibold tracking-tight text-theme-text-primary">Sito</h1>
-                        <p className="text-[14px] text-theme-text-secondary mt-1">Modifica testi visibili sul sito senza intervento sviluppatore.</p>
+                        <p className="text-[14px] text-theme-text-secondary mt-1">
+                            Le pagine di dr7.app, nell'ordine in cui le trova un visitatore. {MANAGED_COUNT} su {TOTAL_COUNT} si modificano da qui.
+                        </p>
                     </div>
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -2526,18 +904,25 @@ export default function SitoTab() {
             {/* Body: side nav + content */}
             <div className="px-6 pt-6">
                 <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-6">
-                    {/* Side nav — grouped by category + searchable */}
+                    {/* Nav: l'alberatura di dr7.app, ricercabile */}
                     <aside>
                         <SitoSidebar
-                            section={section}
-                            onSelect={setSection}
+                            screenId={screenId}
+                            onSelect={setScreenId}
                         />
                     </aside>
 
-                    {/* Main content */}
+                    {/* Contenuto: intestazione della pagina + il suo editor */}
                     <main className="bg-theme-bg-primary rounded-2xl p-6 border border-theme-border shadow-sm min-h-[400px]">
+                        <ScreenHeader screen={screen} />
                         {!hydrated && (
                             <p className="text-sm text-theme-text-secondary">Caricamento dati…</p>
+                        )}
+                        {hydrated && !section && (
+                            <ScreenNotManaged screen={screen} />
+                        )}
+                        {hydrated && section === 'pagamento' && (
+                            <PaymentEditor copy={payment} setCopy={setPayment} />
                         )}
                         {hydrated && section === 'faq' && (
                             <FaqEditor copy={faq} setCopy={setFaq} />
@@ -4039,7 +2424,8 @@ function FooterEditor({
             {/* Network band */}
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Network (banda social)</h3>
-                <FieldText label="Titolo" value={copy.network_title} onChange={v => updateField('network_title', v)} />
+                <FieldText label="Titolo (IT)" value={copy.network_title_it ?? ''} onChange={v => updateField('network_title_it', v)} />
+                <FieldText label="Title (EN)" value={copy.network_title_en ?? ''} onChange={v => updateField('network_title_en', v)} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldTextArea label="Testo (IT)" value={copy.network_text_it} onChange={v => updateField('network_text_it', v)} />
                     <FieldTextArea label="Testo (EN)" value={copy.network_text_en} onChange={v => updateField('network_text_en', v)} />
@@ -4074,7 +2460,8 @@ function FooterEditor({
             {/* Reviews band */}
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Recensioni (banda)</h3>
-                <FieldText label="Titolo" value={copy.reviews_title} onChange={v => updateField('reviews_title', v)} />
+                <FieldText label="Titolo (IT)" value={copy.reviews_title_it ?? ''} onChange={v => updateField('reviews_title_it', v)} />
+                <FieldText label="Title (EN)" value={copy.reviews_title_en ?? ''} onChange={v => updateField('reviews_title_en', v)} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FieldTextArea label="Testo (IT)" value={copy.reviews_text_it} onChange={v => updateField('reviews_text_it', v)} />
                     <FieldTextArea label="Testo (EN)" value={copy.reviews_text_en} onChange={v => updateField('reviews_text_en', v)} />
@@ -4141,8 +2528,10 @@ function FooterEditor({
             {/* Bottom band */}
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Banda inferiore</h3>
-                <FieldText label="Riga brand (es. DR7 Cagliari – Global Mobility...)" value={copy.bottom_brand_line} onChange={v => updateField('bottom_brand_line', v)} />
-                <FieldText label="Copyright (es. © 2024 - 2026 DR7...)" value={copy.bottom_copyright} onChange={v => updateField('bottom_copyright', v)} />
+                <FieldText label="Riga brand (IT)" value={copy.bottom_brand_line_it ?? ''} onChange={v => updateField('bottom_brand_line_it', v)} />
+                <FieldText label="Brand line (EN)" value={copy.bottom_brand_line_en ?? ''} onChange={v => updateField('bottom_brand_line_en', v)} />
+                <FieldText label="Copyright (IT)" value={copy.bottom_copyright_it ?? ''} onChange={v => updateField('bottom_copyright_it', v)} />
+                <FieldText label="Copyright (EN)" value={copy.bottom_copyright_en ?? ''} onChange={v => updateField('bottom_copyright_en', v)} />
             </section>
         </div>
     )
@@ -4791,7 +3180,8 @@ function ContactEditor({ copy, setCopy }: { copy: ContactCopy; setCopy: (next: C
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Mappa</h3>
-                <FieldText label="Title (accessibilità)" value={copy.map_title} onChange={v => update('map_title', v)} />
+                <FieldText label="Title accessibilità (IT)" value={copy.map_title_it ?? ''} onChange={v => update('map_title_it', v)} />
+                <FieldText label="Title accessibility (EN)" value={copy.map_title_en ?? ''} onChange={v => update('map_title_en', v)} />
                 <FieldText label="URL iframe (OpenStreetMap embed)" value={copy.map_iframe_url} onChange={v => update('map_iframe_url', v)} />
                 {copy.map_iframe_url && (
                     <div className="rounded-xl overflow-hidden border border-theme-border">
@@ -5106,8 +3496,13 @@ function CarWashEditor({ copy, setCopy }: { copy: CarWashCopy; setCopy: (next: C
 // ─── Investitori editor (IT-only sales page) ───────────────────────────────
 function InvestitoriEditor({ copy, setCopy }: { copy: InvestitoriCopy; setCopy: (next: InvestitoriCopy) => void }) {
     const update = <K extends keyof InvestitoriCopy>(key: K, value: InvestitoriCopy[K]) => setCopy({ ...copy, [key]: value })
-    const updateParagraphList = (key: 'intro_paragraphs' | 'opportunity_paragraphs' | 'cta_paragraphs' | 'legal_paragraphs', value: string) => {
-        setCopy({ ...copy, [key]: value.split('\n\n').filter(s => s.trim().length > 0) })
+    type ParagraphList = 'intro_paragraphs' | 'opportunity_paragraphs' | 'cta_paragraphs' | 'legal_paragraphs'
+    // Il sito legge queste liste con bilingualList(), che preferisce
+    // `_it`/`_en`: scrivere il vecchio array unilingue non cambiava nulla.
+    const paragraphs = (key: ParagraphList, lang: 'it' | 'en'): string[] =>
+        (copy[`${key}_${lang}`] as string[] | undefined) ?? []
+    const updateParagraphList = (key: ParagraphList, lang: 'it' | 'en', value: string) => {
+        setCopy({ ...copy, [`${key}_${lang}`]: value.split('\n\n').filter(s => s.trim().length > 0) })
     }
     // strength_points
     const updateStrength = (idx: number, patch: Partial<InvestitoriStrength>) => {
@@ -5161,24 +3556,30 @@ function InvestitoriEditor({ copy, setCopy }: { copy: InvestitoriCopy; setCopy: 
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Hero</h3>
-                <FieldText label="Titolo" value={copy.hero_title} onChange={v => update('hero_title', v)} />
-                <FieldText label="Sottotitolo" value={copy.hero_subtitle} onChange={v => update('hero_subtitle', v)} />
+                <FieldText label="Titolo (IT)" value={copy.hero_title_it ?? ''} onChange={v => update('hero_title_it', v)} />
+                <FieldText label="Titolo (EN)" value={copy.hero_title_en ?? ''} onChange={v => update('hero_title_en', v)} />
+                <FieldText label="Sottotitolo (IT)" value={copy.hero_subtitle_it ?? ''} onChange={v => update('hero_subtitle_it', v)} />
+                <FieldText label="Sottotitolo (EN)" value={copy.hero_subtitle_en ?? ''} onChange={v => update('hero_subtitle_en', v)} />
             </section>
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Introduzione</h3>
-                <FieldTextArea label="Paragrafi (separati da riga vuota)" value={copy.intro_paragraphs.join('\n\n')} onChange={v => updateParagraphList('intro_paragraphs', v)} />
+                <FieldTextArea label="Paragrafi IT (separati da riga vuota)" value={paragraphs('intro_paragraphs', 'it').join('\n\n')} onChange={v => updateParagraphList('intro_paragraphs', 'it', v)} />
+                <FieldTextArea label="Paragraphs EN (blank line between)" value={paragraphs('intro_paragraphs', 'en').join('\n\n')} onChange={v => updateParagraphList('intro_paragraphs', 'en', v)} />
             </section>
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Opportunità di partecipazione</h3>
-                <FieldText label="Heading" value={copy.opportunity_heading} onChange={v => update('opportunity_heading', v)} />
-                <FieldTextArea label="Paragrafi (separati da riga vuota)" value={copy.opportunity_paragraphs.join('\n\n')} onChange={v => updateParagraphList('opportunity_paragraphs', v)} />
+                <FieldText label="Heading (IT)" value={copy.opportunity_heading_it ?? ''} onChange={v => update('opportunity_heading_it', v)} />
+                <FieldText label="Heading (EN)" value={copy.opportunity_heading_en ?? ''} onChange={v => update('opportunity_heading_en', v)} />
+                <FieldTextArea label="Paragrafi IT (separati da riga vuota)" value={paragraphs('opportunity_paragraphs', 'it').join('\n\n')} onChange={v => updateParagraphList('opportunity_paragraphs', 'it', v)} />
+                <FieldTextArea label="Paragraphs EN (blank line between)" value={paragraphs('opportunity_paragraphs', 'en').join('\n\n')} onChange={v => updateParagraphList('opportunity_paragraphs', 'en', v)} />
             </section>
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Punti di forza ({copy.strength_points.length})</h3>
-                <FieldText label="Heading" value={copy.strength_heading} onChange={v => update('strength_heading', v)} />
+                <FieldText label="Heading (IT)" value={copy.strength_heading_it ?? ''} onChange={v => update('strength_heading_it', v)} />
+                <FieldText label="Heading (EN)" value={copy.strength_heading_en ?? ''} onChange={v => update('strength_heading_en', v)} />
                 {copy.strength_points.map((s, i) => (
                     <div key={s.id} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] space-y-2">
                         <div className="flex items-center gap-2">
@@ -5199,16 +3600,20 @@ function InvestitoriEditor({ copy, setCopy }: { copy: InvestitoriCopy; setCopy: 
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">CTA — Modalità di adesione</h3>
-                <FieldText label="Heading" value={copy.cta_heading} onChange={v => update('cta_heading', v)} />
-                <FieldTextArea label="Paragrafi (separati da riga vuota)" value={copy.cta_paragraphs.join('\n\n')} onChange={v => updateParagraphList('cta_paragraphs', v)} />
-                <FieldText label="Etichetta bottone primario" value={copy.cta_button_label} onChange={v => update('cta_button_label', v)} />
+                <FieldText label="Heading (IT)" value={copy.cta_heading_it ?? ''} onChange={v => update('cta_heading_it', v)} />
+                <FieldText label="Heading (EN)" value={copy.cta_heading_en ?? ''} onChange={v => update('cta_heading_en', v)} />
+                <FieldTextArea label="Paragrafi IT (separati da riga vuota)" value={paragraphs('cta_paragraphs', 'it').join('\n\n')} onChange={v => updateParagraphList('cta_paragraphs', 'it', v)} />
+                <FieldTextArea label="Paragraphs EN (blank line between)" value={paragraphs('cta_paragraphs', 'en').join('\n\n')} onChange={v => updateParagraphList('cta_paragraphs', 'en', v)} />
+                <FieldText label="Etichetta bottone primario (IT)" value={copy.cta_button_label_it ?? ''} onChange={v => update('cta_button_label_it', v)} />
+                <FieldText label="Etichetta bottone primario (EN)" value={copy.cta_button_label_en ?? ''} onChange={v => update('cta_button_label_en', v)} />
                 <FieldText label="URL WhatsApp (con testo precompilato)" value={copy.cta_whatsapp_url} onChange={v => update('cta_whatsapp_url', v)} />
                 <FieldText label="Email investitori (bottone secondario)" value={copy.cta_email} onChange={v => update('cta_email', v)} />
             </section>
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Informazioni sintetiche ({copy.info_items.length})</h3>
-                <FieldText label="Heading" value={copy.info_heading} onChange={v => update('info_heading', v)} />
+                <FieldText label="Heading (IT)" value={copy.info_heading_it ?? ''} onChange={v => update('info_heading_it', v)} />
+                <FieldText label="Heading (EN)" value={copy.info_heading_en ?? ''} onChange={v => update('info_heading_en', v)} />
                 {copy.info_items.map((it, i) => (
                     <div key={i} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] grid grid-cols-1 md:grid-cols-[200px_1fr_auto] gap-2 items-center">
                         <input type="text" value={it.label} onChange={e => updateInfo(i, { label: e.target.value })} placeholder="Etichetta (es. Denominazione)" className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]" />
@@ -5224,13 +3629,16 @@ function InvestitoriEditor({ copy, setCopy }: { copy: InvestitoriCopy; setCopy: 
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     Aggiungi riga
                 </button>
-                <FieldTextArea label="Footnote sotto la tabella (corsivo)" value={copy.info_footnote} onChange={v => update('info_footnote', v)} />
+                <FieldTextArea label="Footnote sotto la tabella (corsivo) (IT)" value={copy.info_footnote_it ?? ''} onChange={v => update('info_footnote_it', v)} />
+                <FieldTextArea label="Footnote sotto la tabella (corsivo) (EN)" value={copy.info_footnote_en ?? ''} onChange={v => update('info_footnote_en', v)} />
             </section>
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Avvertenza legale (banda rossa)</h3>
-                <FieldText label="Heading" value={copy.legal_heading} onChange={v => update('legal_heading', v)} />
-                <FieldTextArea label="Paragrafi (separati da riga vuota)" value={copy.legal_paragraphs.join('\n\n')} onChange={v => updateParagraphList('legal_paragraphs', v)} />
+                <FieldText label="Heading (IT)" value={copy.legal_heading_it ?? ''} onChange={v => update('legal_heading_it', v)} />
+                <FieldText label="Heading (EN)" value={copy.legal_heading_en ?? ''} onChange={v => update('legal_heading_en', v)} />
+                <FieldTextArea label="Paragrafi IT (separati da riga vuota)" value={paragraphs('legal_paragraphs', 'it').join('\n\n')} onChange={v => updateParagraphList('legal_paragraphs', 'it', v)} />
+                <FieldTextArea label="Paragraphs EN (blank line between)" value={paragraphs('legal_paragraphs', 'en').join('\n\n')} onChange={v => updateParagraphList('legal_paragraphs', 'en', v)} />
             </section>
         </div>
     )
@@ -5243,9 +3651,13 @@ const FRANCHISING_BENEFIT_ICONS: FranchisingBenefitIcon[] = ['check', 'shield', 
 function FranchisingEditor({ copy, setCopy }: { copy: FranchisingCopy; setCopy: (next: FranchisingCopy) => void }) {
     const update = <K extends keyof FranchisingCopy>(key: K, value: FranchisingCopy[K]) => setCopy({ ...copy, [key]: value })
     // List helpers
-    const setStringList = (key: 'stats_lines' | 'about_paragraphs', v: string) => {
+    type StringList = 'stats_lines' | 'about_paragraphs'
+    // Stessa regola: il sito legge in bilingue, quindi si scrive `_it`/`_en`.
+    const stringList = (key: StringList, lang: 'it' | 'en'): string[] =>
+        (copy[`${key}_${lang}`] as string[] | undefined) ?? []
+    const setStringList = (key: StringList, lang: 'it' | 'en', v: string) => {
         const lines = key === 'stats_lines' ? v.split('\n').filter(s => s.length > 0) : v.split('\n\n').filter(s => s.trim().length > 0)
-        setCopy({ ...copy, [key]: lines })
+        setCopy({ ...copy, [`${key}_${lang}`]: lines })
     }
     // Expansion locations
     const updateLoc = (idx: number, patch: Partial<FranchisingExpansionLocation>) => {
@@ -5299,24 +3711,32 @@ function FranchisingEditor({ copy, setCopy }: { copy: FranchisingCopy; setCopy: 
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Hero</h3>
-                <FieldText label="Titolo (h2)" value={copy.hero_h2} onChange={v => update('hero_h2', v)} />
-                <FieldText label="Sottotitolo principale" value={copy.hero_p1} onChange={v => update('hero_p1', v)} />
-                <FieldTextArea label="Sottotitolo secondario (newline = a-capo)" value={copy.hero_p2} onChange={v => update('hero_p2', v)} />
+                <FieldText label="Titolo (h2) (IT)" value={copy.hero_h2_it ?? ''} onChange={v => update('hero_h2_it', v)} />
+                <FieldText label="Titolo (h2) (EN)" value={copy.hero_h2_en ?? ''} onChange={v => update('hero_h2_en', v)} />
+                <FieldText label="Sottotitolo principale (IT)" value={copy.hero_p1_it ?? ''} onChange={v => update('hero_p1_it', v)} />
+                <FieldText label="Sottotitolo principale (EN)" value={copy.hero_p1_en ?? ''} onChange={v => update('hero_p1_en', v)} />
+                <FieldTextArea label="Sottotitolo secondario (newline = a-capo) (IT)" value={copy.hero_p2_it ?? ''} onChange={v => update('hero_p2_it', v)} />
+                <FieldTextArea label="Sottotitolo secondario (newline = a-capo) (EN)" value={copy.hero_p2_en ?? ''} onChange={v => update('hero_p2_en', v)} />
             </section>
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Stats — In soli X mesi</h3>
-                <FieldText label="Heading" value={copy.stats_heading} onChange={v => update('stats_heading', v)} />
-                <FieldTextArea label='Righe stats (una per linea — usa "* xxx" per il pallino. Placeholder {reviewCount})' value={copy.stats_lines.join('\n')} onChange={v => setStringList('stats_lines', v)} />
+                <FieldText label="Heading (IT)" value={copy.stats_heading_it ?? ''} onChange={v => update('stats_heading_it', v)} />
+                <FieldText label="Heading (EN)" value={copy.stats_heading_en ?? ''} onChange={v => update('stats_heading_en', v)} />
+                <FieldTextArea label='Righe stats IT (una per linea — usa "* xxx" per il pallino. Placeholder {reviewCount})' value={stringList('stats_lines', 'it').join('\n')} onChange={v => setStringList('stats_lines', 'it', v)} />
+                <FieldTextArea label='Stats lines EN (one per line — "* xxx" for the bullet. Placeholder {reviewCount})' value={stringList('stats_lines', 'en').join('\n')} onChange={v => setStringList('stats_lines', 'en', v)} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldText label="Footer principale" value={copy.stats_footer_main} onChange={v => update('stats_footer_main', v)} />
-                    <FieldText label="Footer sotto-riga" value={copy.stats_footer_sub} onChange={v => update('stats_footer_sub', v)} />
+                    <FieldText label="Footer principale (IT)" value={copy.stats_footer_main_it ?? ''} onChange={v => update('stats_footer_main_it', v)} />
+                    <FieldText label="Footer principale (EN)" value={copy.stats_footer_main_en ?? ''} onChange={v => update('stats_footer_main_en', v)} />
+                    <FieldText label="Footer sotto-riga (IT)" value={copy.stats_footer_sub_it ?? ''} onChange={v => update('stats_footer_sub_it', v)} />
+                    <FieldText label="Footer sotto-riga (EN)" value={copy.stats_footer_sub_en ?? ''} onChange={v => update('stats_footer_sub_en', v)} />
                 </div>
             </section>
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Piano di Espansione ({copy.expansion_locations.length})</h3>
-                <FieldText label="Heading" value={copy.expansion_heading} onChange={v => update('expansion_heading', v)} />
+                <FieldText label="Heading (IT)" value={copy.expansion_heading_it ?? ''} onChange={v => update('expansion_heading_it', v)} />
+                <FieldText label="Heading (EN)" value={copy.expansion_heading_en ?? ''} onChange={v => update('expansion_heading_en', v)} />
                 {copy.expansion_locations.map((loc, i) => (
                     <div key={loc.id} className="border border-theme-border rounded-xl p-3 bg-[#fafafa] grid grid-cols-1 md:grid-cols-[120px_1fr_1fr_auto] gap-2 items-center">
                         <select value={loc.icon} onChange={e => updateLoc(i, { icon: e.target.value as FranchisingExpansionIcon })} className="bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]">
@@ -5339,8 +3759,10 @@ function FranchisingEditor({ copy, setCopy }: { copy: FranchisingCopy; setCopy: 
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">L'Impero DR7 (about)</h3>
-                <FieldText label="Heading" value={copy.about_heading} onChange={v => update('about_heading', v)} />
-                <FieldTextArea label="Paragrafi (separati da riga vuota)" value={copy.about_paragraphs.join('\n\n')} onChange={v => setStringList('about_paragraphs', v)} />
+                <FieldText label="Heading (IT)" value={copy.about_heading_it ?? ''} onChange={v => update('about_heading_it', v)} />
+                <FieldText label="Heading (EN)" value={copy.about_heading_en ?? ''} onChange={v => update('about_heading_en', v)} />
+                <FieldTextArea label="Paragrafi IT (separati da riga vuota)" value={stringList('about_paragraphs', 'it').join('\n\n')} onChange={v => setStringList('about_paragraphs', 'it', v)} />
+                <FieldTextArea label="Paragraphs EN (blank line between)" value={stringList('about_paragraphs', 'en').join('\n\n')} onChange={v => setStringList('about_paragraphs', 'en', v)} />
             </section>
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
@@ -5368,22 +3790,29 @@ function FranchisingEditor({ copy, setCopy }: { copy: FranchisingCopy; setCopy: 
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Call to Action</h3>
-                <FieldText label="Heading" value={copy.cta_heading} onChange={v => update('cta_heading', v)} />
-                <FieldText label="Intro" value={copy.cta_intro} onChange={v => update('cta_intro', v)} />
-                <FieldText label="Box riga principale" value={copy.cta_box_main} onChange={v => update('cta_box_main', v)} />
-                <FieldText label="Box riga secondaria" value={copy.cta_box_sub} onChange={v => update('cta_box_sub', v)} />
+                <FieldText label="Heading (IT)" value={copy.cta_heading_it ?? ''} onChange={v => update('cta_heading_it', v)} />
+                <FieldText label="Heading (EN)" value={copy.cta_heading_en ?? ''} onChange={v => update('cta_heading_en', v)} />
+                <FieldText label="Intro (IT)" value={copy.cta_intro_it ?? ''} onChange={v => update('cta_intro_it', v)} />
+                <FieldText label="Intro (EN)" value={copy.cta_intro_en ?? ''} onChange={v => update('cta_intro_en', v)} />
+                <FieldText label="Box riga principale (IT)" value={copy.cta_box_main_it ?? ''} onChange={v => update('cta_box_main_it', v)} />
+                <FieldText label="Box riga principale (EN)" value={copy.cta_box_main_en ?? ''} onChange={v => update('cta_box_main_en', v)} />
+                <FieldText label="Box riga secondaria (IT)" value={copy.cta_box_sub_it ?? ''} onChange={v => update('cta_box_sub_it', v)} />
+                <FieldText label="Box riga secondaria (EN)" value={copy.cta_box_sub_en ?? ''} onChange={v => update('cta_box_sub_en', v)} />
             </section>
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Contatti</h3>
-                <FieldText label="Heading" value={copy.contact_heading} onChange={v => update('contact_heading', v)} />
-                <FieldText label="Intro" value={copy.contact_intro} onChange={v => update('contact_intro', v)} />
+                <FieldText label="Heading (IT)" value={copy.contact_heading_it ?? ''} onChange={v => update('contact_heading_it', v)} />
+                <FieldText label="Heading (EN)" value={copy.contact_heading_en ?? ''} onChange={v => update('contact_heading_en', v)} />
+                <FieldText label="Intro (IT)" value={copy.contact_intro_it ?? ''} onChange={v => update('contact_intro_it', v)} />
+                <FieldText label="Intro (EN)" value={copy.contact_intro_en ?? ''} onChange={v => update('contact_intro_en', v)} />
                 <FieldText label="Email candidature" value={copy.contact_email} onChange={v => update('contact_email', v)} />
             </section>
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Footer statement</h3>
-                <FieldTextArea label="Statement (newline = a-capo)" value={copy.footer_statement} onChange={v => update('footer_statement', v)} />
+                <FieldTextArea label="Statement (newline = a-capo) (IT)" value={copy.footer_statement_it ?? ''} onChange={v => update('footer_statement_it', v)} />
+                <FieldTextArea label="Statement (newline = a-capo) (EN)" value={copy.footer_statement_en ?? ''} onChange={v => update('footer_statement_en', v)} />
             </section>
         </div>
     )
@@ -5978,6 +4407,10 @@ function SignUpEditor({ copy, setCopy }: { copy: SignUpCopy; setCopy: (next: Sig
                 <h3 className="text-[14px] font-semibold text-theme-text-primary">Messaggi di validazione</h3>
                 <p className="text-[12px] text-theme-text-secondary -mt-2">Mostrati inline accanto al campo invalido al momento del submit.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FieldText label='Voce vuota tendina tipo cliente (IT)' value={copy.client_type_default_it} onChange={v => update('client_type_default_it', v)} />
+                    <FieldText label='Client type placeholder (EN)' value={copy.client_type_default_en} onChange={v => update('client_type_default_en', v)} />
+                    <FieldText label='Voce vuota tendina tipo documento (IT)' value={copy.field_doc_type_default_it} onChange={v => update('field_doc_type_default_it', v)} />
+                    <FieldText label='Document type placeholder (EN)' value={copy.field_doc_type_default_en} onChange={v => update('field_doc_type_default_en', v)} />
                     <FieldText label="Tipo cliente obbligatorio (IT)" value={copy.err_select_client_type_it} onChange={v => update('err_select_client_type_it', v)} />
                     <FieldText label="Client type required (EN)" value={copy.err_select_client_type_en} onChange={v => update('err_select_client_type_en', v)} />
                     <FieldText label="Nazione obbligatorio (IT)" value={copy.err_country_required_it} onChange={v => update('err_country_required_it', v)} />
@@ -6018,6 +4451,14 @@ function SignUpEditor({ copy, setCopy }: { copy: SignUpCopy; setCopy: (next: Sig
                     <FieldText label="Last name required (EN)" value={copy.err_cognome_required_en} onChange={v => update('err_cognome_required_en', v)} />
                     <FieldText label="CF non valido (IT)" value={copy.err_cf_invalid_it} onChange={v => update('err_cf_invalid_it', v)} />
                     <FieldText label="Tax code invalid (EN)" value={copy.err_cf_invalid_en} onChange={v => update('err_cf_invalid_en', v)} />
+                    <FieldText label="CF obbligatorio (IT)" value={copy.err_cf_required_it} onChange={v => update('err_cf_required_it', v)} />
+                    <FieldText label="Tax code required (EN)" value={copy.err_cf_required_en} onChange={v => update('err_cf_required_en', v)} />
+                    <FieldText label="Numero civico obbligatorio (IT)" value={copy.err_civico_required_it} onChange={v => update('err_civico_required_it', v)} />
+                    <FieldText label="Street number required (EN)" value={copy.err_civico_required_en} onChange={v => update('err_civico_required_en', v)} />
+                    <FieldText label="CAP obbligatorio (IT)" value={copy.err_cap_required_it} onChange={v => update('err_cap_required_it', v)} />
+                    <FieldText label="Postal code required (EN)" value={copy.err_cap_required_en} onChange={v => update('err_cap_required_en', v)} />
+                    <FieldText label="Provincia obbligatoria (IT)" value={copy.err_province_required_it} onChange={v => update('err_province_required_it', v)} />
+                    <FieldText label="Province required (EN)" value={copy.err_province_required_en} onChange={v => update('err_province_required_en', v)} />
                     <FieldText label="Residenza obbligatoria (IT)" value={copy.err_residenza_required_it} onChange={v => update('err_residenza_required_it', v)} />
                     <FieldText label="Residence required (EN)" value={copy.err_residenza_required_en} onChange={v => update('err_residenza_required_en', v)} />
                     <FieldText label="Codice Univoco obbligatorio (IT)" value={copy.err_codice_univoco_required_it} onChange={v => update('err_codice_univoco_required_it', v)} />
@@ -6034,11 +4475,12 @@ function SignUpEditor({ copy, setCopy }: { copy: SignUpCopy; setCopy: (next: Sig
     )
 }
 
-// ─── Payment editor (Nexi XPay wrapper chrome) ─────────────────────────────
-// Exported so TS doesn't flag it as unused even when no in-file caller mounts
-// it yet (the editor is wired up in a follow-up commit).
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function PaymentEditor({ copy, setCopy }: { copy: PaymentCopy; setCopy: (next: PaymentCopy) => void }) {
+// ─── Editor pagina di pagamento (/pay, wrapper Nexi XPay) ────────────────
+// Era `export` con un eslint-disable per non farlo segnalare come inutile:
+// nessuna voce di menu lo montava, quindi i 48 campi finivano in DB senza
+// che nessuno potesse aprirli. Ora e' montato sulla schermata `pagamento`
+// e `npm run sito:check` impedisce che il caso si ripeta.
+function PaymentEditor({ copy, setCopy }: { copy: PaymentCopy; setCopy: (next: PaymentCopy) => void }) {
     const update = <K extends keyof PaymentCopy>(key: K, value: PaymentCopy[K]) => setCopy({ ...copy, [key]: value })
     return (
         <div className="space-y-6">
