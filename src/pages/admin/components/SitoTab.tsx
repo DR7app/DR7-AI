@@ -683,7 +683,9 @@ export default function SitoTab() {
                     // una lista propria.
                     const cw: CreditWalletCopy = {
                         ...remote.creditWallet,
-                        packages: remote.creditWallet.packages?.length ? remote.creditWallet.packages : INITIAL_CREDIT_WALLET.packages,
+                        packages: Array.isArray(remote.creditWallet.packages)
+                            ? remote.creditWallet.packages
+                            : INITIAL_CREDIT_WALLET.packages,
                     }
                     setCreditWallet(cw)
                     setSavedCreditWallet(cw)
@@ -4908,6 +4910,17 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
                     negli acquisti (<code className="text-[11px] bg-theme-bg-tertiary px-1 rounded">credit_wallet_purchases.package_id</code>):
                     rinominarne uno rompe lo storico, meglio aggiungere un pacchetto nuovo.
                 </p>
+                <p className="text-[12px] text-theme-text-secondary">
+                    Negli importi la virgola (o il punto) separa i <strong>centesimi</strong>, non le migliaia:
+                    mille euro si scrive <code className="text-[11px] bg-theme-bg-tertiary px-1 rounded">1000</code>,
+                    non <code className="text-[11px] bg-theme-bg-tertiary px-1 rounded">1.000</code>. L'anteprima sotto
+                    ogni riga mostra la card esattamente come la vede il cliente: se i numeri sono strani, e' li' che si vede.
+                </p>
+                {packages.length === 0 && (
+                    <p className="text-[12px] text-orange-500">
+                        Nessun pacchetto: salvando cosi', la pagina Credit Wallet del sito resta senza nulla da acquistare.
+                    </p>
+                )}
                 <datalist id="cw-series-options">
                     {seriesOptions.map(sv => <option key={sv} value={sv} />)}
                 </datalist>
@@ -4954,6 +4967,18 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
                                     </button>
                                 </div>
                             </div>
+                            <p className="text-[11px] text-theme-text-secondary">
+                                Card sul sito: <span className="font-semibold text-theme-text-primary">{p.series || '(serie)'} · {p.name || '(senza nome)'}</span>
+                                {' '}— Ricarichi <span className="font-semibold text-theme-text-primary">{euro(p.rechargeAmount)}</span>
+                                {' '}→ Ricevi <span className="font-semibold text-theme-text-primary">{euro(p.receivedAmount)}</span>
+                                {' '}(+{euro(p.bonusPercentage)}% Bonus {euro(p.bonus)})
+                            </p>
+                            {p.rechargeAmount > 0 && p.rechargeAmount < 10 && (
+                                <p className="text-[11px] text-orange-500">
+                                    Ricarica di soli € {euro(p.rechargeAmount)}: il punto e la virgola separano i centesimi,
+                                    non le migliaia. Per mille euro scrivi 1000.
+                                </p>
+                            )}
                             {issue && <p className="text-[11px] text-red-500">{issue} — il sito ignora i pacchetti senza id.</p>}
                         </div>
                     )
