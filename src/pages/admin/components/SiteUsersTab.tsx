@@ -198,47 +198,79 @@ export default function SiteUsersTab() {
   }
 
   /**
-   * Rimette nella scheda cliente i dati che il cliente aveva compilato in
-   * registrazione e che non erano mai stati salvati.
+   * Porta in Clienti tutti gli iscritti al sito.
    *
-   * Perche' servono due elenchi diversi: qui i dati si leggono anche dai
-   * metadati auth, nella tab Clienti solo dalla scheda. Finche' la scheda
-   * resta vuota, contratti, fatture e messaggi dicono "Gentile Cliente".
-   * La function scrive SOLO nei campi vuoti, quindi si puo' rilanciare.
+   * Per ognuno: se la scheda cliente non esiste la CREA, se esiste la
+   * completa con i dati che il cliente aveva gia' compilato in
+   * registrazione. Finche' la scheda resta vuota, contratti, fatture e
+   * messaggi dicono "Gentile Cliente".
+   *
+   * A blocchi: una sola chiamata per centinaia di iscritti supererebbe il
+   * tempo massimo della function e non ne salverebbe nemmeno uno. Se un
+   * blocco fallisce gli altri proseguono — meglio 90 schede su 102 che zero.
+   *
+   * Si riempiono solo i campi vuoti, quindi si puo' rilanciare senza danni.
    */
   async function recuperaAnagrafica(ids: string[]) {
     if (ids.length === 0) return
     if (!window.confirm(
-      `Recuperare i dati di registrazione di ${ids.length} ${ids.length === 1 ? 'iscritto' : 'iscritti'} e scriverli nella scheda cliente?\n\n`
-      + 'Vengono riempiti solo i campi vuoti: nessun dato gia\' presente viene modificato.'
+      `Portare ${ids.length} ${ids.length === 1 ? 'iscritto' : 'iscritti'} nella scheda clienti?\n\n`
+      + 'Le schede mancanti vengono create, quelle esistenti completate con i dati della registrazione. '
+      + 'Si riempiono solo i campi vuoti: nessun dato gia\' presente viene modificato.'
     )) return
+
     setRecuperando(true)
     setEsitoRecupero('')
+
+    const BLOCCO = 50
+    const totale = { create: 0, aggiornati: 0, collegate: 0, gia: 0, campi: 0, rifiutati: 0, falliti: 0 }
+    const campiRifiutati = new Set<string>()
+    let ultimoErrore = ''
+
     try {
-      const res = await authFetch('/.netlify/functions/recupera-anagrafica-iscritti', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userIds: ids }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || data?.success !== true) {
-        setEsitoRecupero(data?.error || `Recupero non riuscito (HTTP ${res.status}).`)
-        return
+      for (let da = 0; da < ids.length; da += BLOCCO) {
+        const blocco = ids.slice(da, da + BLOCCO)
+        setEsitoRecupero(`In corso: ${Math.min(da + blocco.length, ids.length)} di ${ids.length}…`)
+        try {
+          const res = await authFetch('/.netlify/functions/recupera-anagrafica-iscritti', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userIds: blocco }),
+          })
+          const data = await res.json().catch(() => ({}))
+          if (!res.ok || data?.success !== true) {
+            totale.falliti += blocco.length
+            ultimoErrore = data?.error || `HTTP ${res.status}`
+            continue
+          }
+          totale.create += data.create || 0
+          totale.aggiornati += data.aggiornati || 0
+          totale.collegate += data.collegate || 0
+          totale.gia += data.gia_complete || 0
+          totale.campi += data.campiScritti || 0
+          totale.rifiutati += data.campiRifiutati || 0
+          totale.falliti += (data.errori || []).length
+          for (const r of data.rifiutati || []) campiRifiutati.add(r.campo)
+        } catch (e: any) {
+          totale.falliti += blocco.length
+          ultimoErrore = e?.message || 'errore di rete'
+        }
       }
-      const parti = [`${data.aggiornati} schede completate`]
-      if (data.create) parti.push(`${data.create} schede create`)
-      parti.push(`${data.campiScritti} campi scritti`)
-      if (data.gia_complete) parti.push(`${data.gia_complete} erano gia' a posto`)
-      if (data.campiRifiutati) {
-        const quali = Array.from(new Set((data.rifiutati || []).map((r: any) => r.campo))).join(', ')
-        parti.push(`${data.campiRifiutati} campi rifiutati dal database${quali ? ` (${quali})` : ''}`)
+
+      const parti: string[] = []
+      if (totale.create) parti.push(`${totale.create} schede create`)
+      if (totale.aggiornati) parti.push(`${totale.aggiornati} schede completate`)
+      if (totale.collegate) parti.push(`${totale.collegate} agganciate all'account`)
+      parti.push(`${totale.campi} campi scritti`)
+      if (totale.gia) parti.push(`${totale.gia} erano gia' a posto`)
+      if (totale.rifiutati) {
+        const quali = Array.from(campiRifiutati).join(', ')
+        parti.push(`${totale.rifiutati} campi rifiutati dal database${quali ? ` (${quali})` : ''}`)
       }
-      if (data.errori?.length) parti.push(`${data.errori.length} schede non recuperate`)
+      if (totale.falliti) parti.push(`${totale.falliti} non riusciti${ultimoErrore ? ` (${ultimoErrore})` : ''}`)
       setEsitoRecupero(parti.join(' — '))
       // I dati sono cambiati sul database: si rilegge l'elenco.
       loadUsers()
-    } catch (e: any) {
-      setEsitoRecupero(e?.message || 'Errore di rete durante il recupero.')
     } finally {
       setRecuperando(false)
     }
@@ -288,6 +320,9 @@ export default function SiteUsersTab() {
     // Dati compilati alla registrazione ma mai arrivati nella scheda cliente:
     // e' la differenza fra questo elenco e la tab Clienti.
     const daRecuperare = users.filter(u => u.da_recuperare).length
+    // Iscritti che nella tab Clienti non compaiono proprio: la scheda non
+    // e' mai stata creata.
+    const senzaScheda = users.filter(u => !u.ha_scheda).length
 
     // Andamento iscrizioni — ultimi 30 giorni
     const day = 1000 * 60 * 60 * 24
@@ -312,7 +347,7 @@ export default function SiteUsersTab() {
       .sort((a, b) => (b.balance || 0) - (a.balance || 0))
       .slice(0, 5)
 
-    return { total, verificati, nonVerificati, nuoviMese, totalCredit, senzaBonus, senzaBonusAZero, schedaIncompleta, daRecuperare, trend, topCredito }
+    return { total, verificati, nonVerificati, nuoviMese, totalCredit, senzaBonus, senzaBonusAZero, schedaIncompleta, daRecuperare, senzaScheda, trend, topCredito }
   }, [users])
 
   // 26/08/2026 — questo blocco girava a OGNI render (anche solo aprendo una
@@ -415,7 +450,7 @@ export default function SiteUsersTab() {
 
       {esitoRecupero && (
         <div className="rounded-xl border border-theme-border bg-theme-bg-secondary px-4 py-3">
-          <p className="text-xs text-theme-text-secondary"><span className="font-semibold">Recupero anagrafica:</span> {esitoRecupero}</p>
+          <p className="text-xs text-theme-text-secondary"><span className="font-semibold">Iscritti in Clienti:</span> {esitoRecupero}</p>
         </div>
       )}
 
@@ -447,10 +482,13 @@ export default function SiteUsersTab() {
             metadati auth (che questo elenco legge) ma non nella scheda (che la
             tab Clienti legge). Da qui si rimettono al loro posto. */}
         <KpiCard
-          label="Dati da Recuperare" value={stats.daRecuperare}
-          subtitle="compilati in registrazione, mancanti nella scheda cliente" ring="#F97316"
+          label="Non in Clienti" value={stats.daRecuperare}
+          subtitle={stats.senzaScheda > 0
+            ? `${stats.senzaScheda} senza scheda · ${stats.daRecuperare - stats.senzaScheda} con scheda incompleta`
+            : 'schede incomplete rispetto alla registrazione'}
+          ring="#F97316"
           azione={stats.daRecuperare > 0 ? {
-            testo: recuperando ? 'Recupero…' : `Recupera ${stats.daRecuperare} schede`,
+            testo: recuperando ? 'In corso…' : `Porta ${stats.daRecuperare} iscritti in Clienti`,
             disabilitata: recuperando,
             onClick: () => recuperaAnagrafica(users.filter(u => u.da_recuperare).map(u => u.id)),
           } : undefined}
