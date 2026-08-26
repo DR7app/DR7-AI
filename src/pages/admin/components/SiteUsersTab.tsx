@@ -543,7 +543,15 @@ export default function SiteUsersTab() {
                         <td className="py-2 px-3 w-px whitespace-nowrap text-theme-text-primary font-medium">
                           <span className="text-theme-text-muted mr-1.5">{aperto ? '▾' : '▸'}</span>{fullName}
                         </td>
-                        <td className="py-2 px-3 w-full max-w-0 truncate text-theme-text-muted text-xs">{u.email}</td>
+                        <td className="py-2 px-3 w-full text-theme-text-muted text-xs">
+                          {/* 26/08/2026 — `max-w-0` faceva dichiarare a questa
+                              colonna una larghezza nulla: lo spazio avanzato
+                              andava tutto alla colonna Nome (un vuoto largo
+                              dopo il nome) e l'email si leggeva "chia...".
+                              Ora la larghezza in piu' la prende l'email, che
+                              e' il dato che serve leggere. */}
+                          <div className="truncate">{u.email}</div>
+                        </td>
                         <td className="py-2 px-3 text-theme-text-muted text-xs"><NumeroTelefono valore={u.telefono} vuoto="-" /></td>
                         <td className="py-2 px-3 text-theme-text-muted text-xs font-mono whitespace-nowrap">{u.codice_fiscale || u.partita_iva || '-'}</td>
                         <td className="py-2 px-3 text-theme-text-muted text-xs truncate max-w-[160px]">{residenzaBreve || '-'}</td>
