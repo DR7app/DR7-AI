@@ -163,7 +163,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   // 2026-06-01: filtro periodo Da/A su appointment_date.
   const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' })
   const [selectedBooking, setSelectedBooking] = useState<CarWashBooking | null>(null)
-  // 2026-05-29: stato per il pulsante "PRONTA" nel dettaglio booking.
+  // 2026-05-29: stato per il pulsante "Pronta" nel dettaglio booking.
   // Disabilita finche' WhatsApp + update DB sono in flight, ed evita doppio
   // send se direzione clicca due volte di fila.
   const [sendingReady, setSendingReady] = useState<string | null>(null)
@@ -223,9 +223,9 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
         })
         const waResult = await waResp.json().catch(() => ({}))
         if (!waResp.ok || waResult?.skipped) {
-          toast.error('Template "PRONTA / Lavaggio concluso" non configurato in Messaggi di Sistema Pro. Verifica: ATTIVO, body non vuoto, evento "service_ready_customer" tra eventi gestiti, Tipo servizio = Lavaggio & Meccanica.', { duration: 12000 })
+          toast.error('Template "Pronta / Lavaggio concluso" non configurato in Messaggi di Sistema Pro. Verifica: ATTIVO, body non vuoto, evento "service_ready_customer" tra eventi gestiti, Tipo servizio = Lavaggio & Meccanica.', { duration: 12000 })
         } else {
-          toast.success('WhatsApp PRONTA inviato al cliente')
+          toast.success('WhatsApp Pronta inviato al cliente')
         }
       } else {
         toast('Segnata pronta (nessun telefono cliente per WhatsApp)')
@@ -241,7 +241,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       loadData()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      logger.error('[PRONTA] failed:', msg)
+      logger.error('[Pronta] failed:', msg)
       toast.error('Errore: ' + msg)
     } finally {
       autoProntaLockRef.current.delete(booking.id)
@@ -1484,7 +1484,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
               >
                 Modifica Prenotazione
               </button>
-              {/* 2026-05-29: PRONTA — notifica WhatsApp al cliente che
+              {/* 2026-05-29: Pronta — notifica WhatsApp al cliente che
                   l'auto e' pronta per il ritiro + stamp auto_pronta_at nel
                   booking_details. Disabilitato durante l'invio + se gia'
                   inviato in passato (mostra "Già notificato"). */}
@@ -1506,7 +1506,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                           : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300'
                     }`}
                   >
-                    {alreadySent ? '✓ Cliente già notificato' : inFlight ? 'Invio in corso...' : 'PRONTA'}
+                    {alreadySent ? '✓ Cliente già notificato' : inFlight ? 'Invio in corso...' : 'Pronta'}
                   </button>
                 )
               })()}

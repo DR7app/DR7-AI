@@ -1622,7 +1622,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     }
   }
 
-  // PRONTA — one-shot per booking. Persistence: booking_details.auto_pronta_sent_at
+  // Pronta — one-shot per booking. Persistence: booking_details.auto_pronta_sent_at
   // (JSONB, no schema migration). Optimistic local Set keeps the UI greyed
   // istantaneamente prima del refetch.
   const [autoProntaSentIds, setAutoProntaSentIds] = useState<Set<string>>(new Set())
@@ -1653,7 +1653,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const svcType = (booking as unknown as { service_type?: string })?.service_type || 'car_wash'
 
     setAutoProntaSending(prev => { const next = new Set(prev); next.add(booking.id); return next })
-    const toastId = toast.loading('Invio notifica PRONTA al cliente...')
+    const toastId = toast.loading('Invio notifica Pronta al cliente...')
 
     try {
       // 1. Persist flag in DB so button stays greyed across reloads /
@@ -1692,9 +1692,9 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       })
       const waResult = await waResp.json().catch(() => ({}))
       if (!waResp.ok || waResult?.skipped) {
-        toast.error('Nessun template configurato in Messaggi di Sistema Pro per "PRONTA / Servizio finito" (Lavaggio & Meccanica). Verifica il template: ATTIVO, body non vuoto, evento "service_ready_customer" tra gli eventi gestiti, Tipo servizio = Lavaggio & Meccanica.', { id: toastId, duration: 12000 })
+        toast.error('Nessun template configurato in Messaggi di Sistema Pro per "Pronta / Servizio finito" (Lavaggio & Meccanica). Verifica il template: ATTIVO, body non vuoto, evento "service_ready_customer" tra gli eventi gestiti, Tipo servizio = Lavaggio & Meccanica.', { id: toastId, duration: 12000 })
       } else {
-        toast.success('WhatsApp PRONTA inviato al cliente', { id: toastId })
+        toast.success('WhatsApp Pronta inviato al cliente', { id: toastId })
       }
 
       // 3. Mark as sent locally (the DB flag already persisted above).
@@ -5418,7 +5418,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                               title: 'Altro',
                               actions: [
                                 {
-                                  label: sent ? '✓ PRONTA inviata' : sending ? 'Invio...' : 'PRONTA',
+                                  label: sent ? '✓ Pronta inviata' : sending ? 'Invio...' : 'Pronta',
                                   onClick: () => handleAutoPronta(booking),
                                   disabled: sent || sending,
                                   visible: booking.customer_name !== 'Lavaggio Rientro',
@@ -5584,7 +5584,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                             title: 'Altro',
                             actions: [
                               {
-                                label: sent ? '✓ PRONTA inviata' : sending ? 'Invio...' : 'PRONTA',
+                                label: sent ? '✓ Pronta inviata' : sending ? 'Invio...' : 'Pronta',
                                 onClick: () => handleAutoPronta(booking),
                                 disabled: sent || sending,
                                 visible: !isRientro,

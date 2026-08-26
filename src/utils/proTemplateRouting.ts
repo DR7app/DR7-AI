@@ -23,7 +23,7 @@ export const OLD_TO_PRO: Record<string, string> = {
   rental_modified: 'pro_promemoria_appuntamento',
   // Tour Elicottero/Barca (Noleggio Aria/Mare): conferma prenotazione tour
   tour_new_customer: 'pro_conferma_tour',
-  // PRONTA Noleggio (admin clicca "PRONTA" su prenotazione/calendario)
+  // Pronta Noleggio (admin clicca "Pronta" su prenotazione/calendario)
   rental_auto_pronta: 'pro_auto_pronta_noleggio',
   deposit_return_iban: 'pro_richiesta_iban',
 
@@ -132,7 +132,7 @@ export const OLD_TO_PRO: Record<string, string> = {
   // pro_custom_* key). LABEL_FALLBACKS keeps the legacy custom alive.
   website_booking_cancelled_customer: 'pro_annullamento_cliente',
 
-  // Prime Wash — servizio finito (bottone "PRONTA" su CarWashBookingsTab,
+  // Prime Wash — servizio finito (bottone "Pronta" su CarWashBookingsTab,
   // sia per Lavaggi che per Meccanica). Single event for both service types;
   // il resolver sceglie il template per service_type su template a Tipo
   // servizio = Prime Wash.
@@ -152,7 +152,7 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
   rental_new_admin: 'Alla creazione della prenotazione noleggio (admin)',
   rental_modified: 'Alla modifica della prenotazione noleggio',
   tour_new_customer: 'ARIA/MARE: alla creazione della prenotazione TOUR (al cliente) — dopo pagamento o spunta Conferma Prenotazione',
-  rental_auto_pronta: 'NOLEGGIO: PRONTA — mezzo pronto al ritiro (admin clicca "PRONTA" su prenotazione o calendario)',
+  rental_auto_pronta: 'NOLEGGIO: Pronta — mezzo pronto al ritiro (admin clicca "Pronta" su prenotazione o calendario)',
   deposit_return_iban: 'Quando si chiede l\'IBAN per il rimborso cauzione',
 
   // Lavaggio
@@ -269,8 +269,8 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
   on_extra_added: 'Servizio extra aggiunto a una prenotazione esistente',
   on_extension_requested: 'Cliente richiede estensione del noleggio',
 
-  // Prime Wash — PRONTA (admin clicca PRONTA su CarWashBookingsTab)
-  service_ready_customer: 'PRIME WASH: PRONTA / lavaggio concluso (admin clicca "PRONTA" sulla riga della prenotazione)',
+  // Prime Wash — Pronta (admin clicca Pronta su CarWashBookingsTab)
+  service_ready_customer: 'PRIME WASH: Pronta / lavaggio concluso (admin clicca "Pronta" sulla riga della prenotazione)',
   // ─────────────────────────────────────────────────────────────────────────
   // 2026-08-09 — Trigger aggiunti per coprire i business e le sezioni che non
   // avevano NESSUN evento (Mare, Aria, Soggiorni, Fatture, Multe, Scadenze
@@ -1409,7 +1409,7 @@ export const LABEL_FALLBACKS: Record<string, string[][]> = {
     ['incassi', 'promo'],
   ],
 
-  // Prime Wash — PRONTA / lavaggio concluso
+  // Prime Wash — Pronta / lavaggio concluso
   pro_auto_pronta: [
     ['lavaggio', 'conclus'],
     ['lavaggio', 'finit'],

@@ -46,7 +46,7 @@ export interface BookingLike {
  * Pronto", "Struttura Pronta"): lo stesso bottone si chiamava in quattro modi.
  */
 export function prontoLabel(_serviceType?: string | null): string {
-    return 'PRONTA'
+    return 'Pronta'
 }
 
 /** Trigger dei Messaggi di Sistema Pro per il "pronto", uno per business. */

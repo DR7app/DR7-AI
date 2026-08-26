@@ -38,10 +38,10 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  // "PRONTA": notifica WhatsApp al cliente che il mezzo è pronto al
-  // ritiro. Invia il template Pro agganciato all'evento "PRONTA" (Noleggio)
+  // "Pronta": notifica WhatsApp al cliente che il mezzo è pronto al
+  // ritiro. Invia il template Pro agganciato all'evento "Pronta" (Noleggio)
   // (legacy key rental_auto_pronta → resolver per handled_events/service_type).
-  // Stesso pattern del bottone PRONTA di Prime Wash (CarWashBookingsTab).
+  // Stesso pattern del bottone Pronta di Prime Wash (CarWashBookingsTab).
   async function handleAutoPronta() {
     if (autoProntaLock.current || autoProntaSending || autoProntaSent) return
     autoProntaLock.current = true
@@ -53,7 +53,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
     const svcType = booking.service_type || 'car_rental'
 
     setAutoProntaSending(true)
-    const toastId = toast.loading('Invio notifica PRONTA al cliente...')
+    const toastId = toast.loading('Invio notifica Pronta al cliente...')
     try {
       const waResp = await fetch('/.netlify/functions/send-whatsapp-notification', {
         method: 'POST',
@@ -76,7 +76,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
       })
       const waResult = await waResp.json().catch(() => ({}))
       if (!waResp.ok || waResult?.skipped) {
-        toast.error('Nessun template "PRONTA" (Noleggio) configurato in Messaggi di Sistema Pro. Verifica: template ATTIVO, body non vuoto, evento "PRONTA" tra gli eventi gestiti, Tipo servizio = Noleggio.', { id: toastId, duration: 12000 })
+        toast.error('Nessun template "Pronta" (Noleggio) configurato in Messaggi di Sistema Pro. Verifica: template ATTIVO, body non vuoto, evento "Pronta" tra gli eventi gestiti, Tipo servizio = Noleggio.', { id: toastId, duration: 12000 })
         return
       }
       // Persisti il flag solo dopo invio riuscito (così un fallimento non
@@ -85,7 +85,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
       const { error: updErr } = await supabase.from('bookings').update({ booking_details: newDetails }).eq('id', booking.id)
       if (updErr) logger.warn('[AutoPronta] flag persist failed:', updErr.message)
       setAutoProntaSent(true)
-      toast.success('WhatsApp PRONTA inviato al cliente', { id: toastId })
+      toast.success('WhatsApp Pronta inviato al cliente', { id: toastId })
     } catch (err: unknown) {
       toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)), { id: toastId })
     } finally {
@@ -477,7 +477,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
             )}
           </div>
 
-          {/* PRONTA — notifica WhatsApp al cliente che il mezzo è pronto.
+          {/* Pronta — notifica WhatsApp al cliente che il mezzo è pronto.
               Solo per noleggio (non lavaggio/meccanica, che hanno il loro bottone). */}
           {!['car_wash', 'mechanical'].includes(String(booking.service_type || '').toLowerCase()) && (
             <button
@@ -489,7 +489,7 @@ export default function BookingDetailsPanel({ booking, onClose, onEdit }: Bookin
                   : 'bg-green-600 hover:bg-green-700 text-white border-green-700'
               }`}
             >
-              {autoProntaSent ? '✓ Cliente notificato (PRONTA)' : autoProntaSending ? 'Invio in corso…' : 'PRONTA'}
+              {autoProntaSent ? '✓ Cliente notificato (Pronta)' : autoProntaSending ? 'Invio in corso…' : 'Pronta'}
             </button>
           )}
         </div>
