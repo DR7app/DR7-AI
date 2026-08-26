@@ -1752,6 +1752,11 @@ export default function CentralinaProTab() {
   const [deposits, setDeposits] = useState<DepositsConfig>(initialDeposits)
   // Regole "cosa fa una modifica al contratto gia' firmato" — vedi CONTRATTO_VOCI.
   const [contrattoRegole, setContrattoRegole] = useState<Record<string, ContrattoAzione>>(VOCI_DEFAULT)
+  // 26/08/2026: senza la copia "salvata", questa sezione restava fuori da
+  // TUTTO il meccanismo delle modifiche: la barra diceva "0 modifiche da
+  // salvare" anche dopo aver scelto Rifirma/Ricondotto, Annulla non la
+  // riportava indietro e cambiando business le scelte sparivano senza avviso.
+  const [savedContrattoRegole, setSavedContrattoRegole] = useState<Record<string, ContrattoAzione>>(VOCI_DEFAULT)
   const [servizi, setServizi] = useState<ServiziConfig>(initialServizi)
   const [prezzoDinamico, setPrezzoDinamico] = useState<PrezzoDinamicoConfig>(initialPrezzoDinamico)
   const [preventivi, setPreventivi] = useState<PreventiviConfig>(initialPreventivi)
@@ -1831,7 +1836,8 @@ export default function CentralinaProTab() {
     { const v = remote.lavaggio_hours ?? INITIAL_LAVAGGIO_HOURS; setLavaggioHours(v); setSavedLavaggioHours(v) }
     { const v = remote.noleggio_hours ?? INITIAL_NOLEGGIO_HOURS; setNoleggioHours(v); setSavedNoleggioHours(v) }
     { const so = Array.isArray(remote.sezioni_off) ? remote.sezioni_off : []; setSezioniOff(so); setSavedSezioniOff(so) }
-    { const cm = (remote.contratto_modifica && typeof remote.contratto_modifica === 'object') ? remote.contratto_modifica as Record<string, ContrattoAzione> : null; setContrattoRegole({ ...VOCI_DEFAULT, ...(cm || {}) }) }
+    { const cm = (remote.contratto_modifica && typeof remote.contratto_modifica === 'object') ? remote.contratto_modifica as Record<string, ContrattoAzione> : null
+      const v = { ...VOCI_DEFAULT, ...(cm || {}) }; setContrattoRegole(v); setSavedContrattoRegole(v) }
   }
 
   // (buildSnapshot e' stato rimosso il 2026-08-25: serviva SOLO a copiare Terra
@@ -1998,12 +2004,23 @@ export default function CentralinaProTab() {
       if (JSON.stringify([...sezioniOff].sort()) !== JSON.stringify([...savedSezioniOff].sort())) {
         out.push('Sezioni attive del business aggiornate')
       }
+      // Contratto & Modifiche: voce per voce, cosi' la barra dice DAVVERO cosa
+      // si sta per salvare ("Cambio veicolo: Ricondotto -> Rifirma").
+      {
+        const etichetta = (a: ContrattoAzione) => a === 'rifirma' ? 'Rifirma' : 'Ricondotto'
+        for (const v of VOCI) {
+          const prima = savedContrattoRegole[v.key] || VOCI_DEFAULT[v.key] || 'ricondotto'
+          const dopo = contrattoRegole[v.key] || VOCI_DEFAULT[v.key] || 'ricondotto'
+          if (prima !== dopo) out.push(`Contratto & Modifiche / ${v.label}: ${etichetta(prima)} -> ${etichetta(dopo)}`)
+        }
+      }
       return out
     },
     [
       categories, fasce, insurance, km, deposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7Club, automations, marketing, lavaggioHours, noleggioHours,
       savedCategories, savedFasce, savedInsurance, savedKm, savedDeposits, savedServizi, savedPrezzoDinamico, savedPreventivi, savedPenali, savedDanni, savedFiscal, savedDr7Club, savedAutomations, savedMarketing, savedLavaggioHours, savedNoleggioHours,
       sezioniOff, savedSezioniOff,
+      contrattoRegole, savedContrattoRegole,
     ]
   )
 
@@ -2039,6 +2056,7 @@ export default function CentralinaProTab() {
     setSavedLavaggioHours(lavaggioHours)
     setSavedNoleggioHours(noleggioHours)
     setSavedSezioniOff(sezioniOff)
+    setSavedContrattoRegole(contrattoRegole)
     savePersisted({ categories, fasce, insurance, km, deposits: cleanedDeposits, servizi, prezzoDinamico, preventivi, penali, danni, fiscal, dr7_club: dr7Club, automations, marketing, lavaggio_hours: lavaggioHours, noleggio_hours: noleggioHours, sezioni_off: sezioniOff, contratto_modifica: contrattoRegole }, businessRow(businessId))
     // Bust the payment-method cache so every dropdown across admin picks up
     // the new list on next mount, without page reload.
@@ -2078,6 +2096,7 @@ export default function CentralinaProTab() {
     setLavaggioHours(savedLavaggioHours)
     setNoleggioHours(savedNoleggioHours)
     setSezioniOff(savedSezioniOff)
+    setContrattoRegole(savedContrattoRegole)
   }
 
   // Attiva/disattiva una sezione per il business corrente (roadmap 17: ON/OFF).

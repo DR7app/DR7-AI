@@ -7,7 +7,7 @@ import { customerDisplayName } from '../../../utils/customerName'
 import { isWithinOfficeHoursForDate, getOfficeMinuteRangesForDate } from '../../../utils/noleggioHours'
 import { supabase } from '../../../supabaseClient'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
-import { decidiAzioneContratto, type ContrattoAzione } from '../../../utils/contrattoModifiche'
+import { decidiAzioneContratto, richiedeNuovaFirma, type ContrattoAzione } from '../../../utils/contrattoModifiche'
 import { businessRowForServiceType } from '../../../utils/businessConfigClient'
 import { mareFormSectionsOff } from './mareFormSections'
 import { isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
@@ -4773,10 +4773,41 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               // il backend ristampa la firma sul contratto con le NUOVE date e lo
               // invia via WhatsApp: niente nuovo link firma. Solo senza firma
               // precedente si invia il link (prima estensione su booking mai firmato).
+              // 2026-08-26: `reconduct: true` era FISSO qui. Centralina Pro >
+              // Contratto & Modifiche ha la voce "Estensione", ma questo flusso
+              // non la leggeva: impostarla su Rifirma non produceva niente e il
+              // cliente riceveva comunque il contratto gia' firmato sulle nuove
+              // date. Ora la scelta della direzione vale anche per l'estensione.
+              const rifirmaEstensione = richiedeNuovaFirma(['estensione'], contrattoRegole)
+              // Stessa traccia del flusso di modifica: senza il flag, un
+              // "Rinvia contratto" successivo (che passa reconduct fisso)
+              // riconcilierebbe comunque e la rifirma appena chiesta sparirebbe.
+              if (rifirmaEstensione) {
+                try {
+                  const { data: bRow } = await supabase
+                    .from('bookings').select('booking_details').eq('id', extendingBooking.id).maybeSingle()
+                  const bd = (bRow?.booking_details || {}) as Record<string, unknown>
+                  await supabase.from('bookings').update({
+                    booking_details: {
+                      ...bd,
+                      contratto_rifirma_richiesta: true,
+                      contratto_rifirma_voci: ['estensione'],
+                      contratto_rifirma_at: new Date().toISOString(),
+                    },
+                  }).eq('id', extendingBooking.id)
+                } catch (flagErr) {
+                  console.error('[handleConfirmExtend] flag rifirma non salvato:', flagErr)
+                }
+              }
               const contractRes = await authFetch('/.netlify/functions/generate-contract', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ bookingId: extendingBooking.id, reconduct: true, motivo: 'estensione' }),
+                body: JSON.stringify({
+                  bookingId: extendingBooking.id,
+                  reconduct: !rifirmaEstensione,
+                  ...(rifirmaEstensione ? { resign: true } : {}),
+                  motivo: 'estensione',
+                }),
               })
               if (contractRes.ok) {
                 const cd = await contractRes.json().catch(() => ({} as any))
@@ -4784,12 +4815,15 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                   logger.log('[handleConfirmExtend] Estensione ricondotta senza nuova firma — restamp:', cd?.signed)
                   toast.success('Contratto ricondotto per estensione — arriva già firmato, nessuna nuova firma richiesta')
                 } else {
-                  logger.log('[handleConfirmExtend] Nessuna firma precedente; invio link firma')
+                  logger.log('[handleConfirmExtend]', rifirmaEstensione
+                    ? 'Estensione impostata su Rifirma: link firma a tutti i firmatari'
+                    : 'Nessuna firma precedente; invio link firma')
                   await fetch('/.netlify/functions/signature-init', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ bookingId: extendingBooking.id }),
+                    body: JSON.stringify({ bookingId: extendingBooking.id, ...(rifirmaEstensione ? { resign: true } : {}) }),
                   })
+                  if (rifirmaEstensione) toast.success('Estensione: richiesta la firma di nuovo (impostazione Contratto & Modifiche)', { duration: 5000 })
                 }
               } else {
                 const errData = await contractRes.json().catch(() => ({}))
