@@ -28,6 +28,7 @@ import {
   type UscitaServizioExtra,
 } from '../../../utils/uscitaStraordinaria'
 import MoneyInput from '../../../components/MoneyInput'
+import { loadBusinessConfig } from '../../../utils/businessConfigClient'
 
 interface VehicleLite {
   id: string
@@ -213,13 +214,20 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, serv
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const { data } = await supabase
-        .from('centralina_pro_config')
-        .select('config')
-        .eq('id', 'main')
-        .maybeSingle()
+      // 2026-08-25: i luoghi si leggono dalla Centralina del BUSINESS
+      // dell'uscita. Una barca non parte da Viale Marconi: leggendo sempre
+      // `main`, Mare/Aria/Soggiorni mostravano i luoghi del Noleggio Terra e
+      // quelli configurati per il business non comparivano mai. Se il
+      // business non ha una sua lista, eredita quella d'azienda.
+      const { business: cfgBiz, main: cfgMain } = await loadBusinessConfig(serviceType)
       if (cancelled) return
-      const cfg = (data?.config as { pickup_locations?: Array<{ id: string; label: string; is_active?: boolean; fee?: number; km?: number }>; delivery?: { price_per_km?: number } } | null) || {}
+      type LuoghiCfg = { pickup_locations?: Array<{ id: string; label: string; is_active?: boolean; fee?: number; km?: number }>; delivery?: { price_per_km?: number } }
+      const biz = (cfgBiz || {}) as LuoghiCfg
+      const principale = (cfgMain || {}) as LuoghiCfg
+      const cfg: LuoghiCfg = {
+        pickup_locations: (biz.pickup_locations?.length ? biz.pickup_locations : principale.pickup_locations) || [],
+        delivery: biz.delivery ?? principale.delivery,
+      }
       const rate = Number(cfg.delivery?.price_per_km) || 0
       const list = (cfg.pickup_locations || [])
         .filter(p => p.is_active !== false)
@@ -231,7 +239,7 @@ export default function UscitaStraordinariaModal({ open, onClose, vehicles, serv
       setProLocations(list)
     })()
     return () => { cancelled = true }
-  }, [])
+  }, [serviceType])
 
   // LOCATIONS: stessa shape del Booking form. Built-ins + Pro + domicilio.
   const luogoOptionsFromPro = useMemo(() => [

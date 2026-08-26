@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 // che segue il locale OS). Affianca i campi testo europei esistenti.
 import CalendarRangePicker from '../../../components/admin/CalendarRangePicker'
 import { loadReportOverrides, applyOverrides, saveEditOverride, saveRemoveOverride, saveAddOverride, deleteOverrideByRow, deleteOverrideById, type LoadedOverrides } from '../../../utils/reportOverrides'
+import { loadBusinessConfig, businessRowForServiceType } from '../../../utils/businessConfigClient'
 
 interface ProCategory { id: string; label: string }
 
@@ -552,26 +553,33 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
   const [proCategories, setProCategories] = useState<ProCategory[]>([])
   useEffect(() => {
     let cancelled = false
+    // 2026-08-25: le categorie sono quelle del BUSINESS del report. Il
+    // Report Mare mostrava le categorie del Noleggio Terra (Urban, Supercars)
+    // al posto delle sue. Categorie non impostate sul business = si eredita
+    // l'elenco d'azienda.
     async function loadCategories() {
-      const { data } = await supabase
-        .from('centralina_pro_config')
-        .select('config')
-        .eq('id', 'main')
-        .maybeSingle()
+      const { business: cfgBiz, main: cfgMain } = await loadBusinessConfig(business)
       if (cancelled) return
-      const cfg = (data?.config as { categories?: ProCategory[] } | null) || null
-      setProCategories(Array.isArray(cfg?.categories) ? cfg.categories : [])
+      const dalBusiness = (cfgBiz as { categories?: ProCategory[] } | null)?.categories
+      const daMain = (cfgMain as { categories?: ProCategory[] } | null)?.categories
+      const lista = Array.isArray(dalBusiness) && dalBusiness.length > 0
+        ? dalBusiness
+        : (Array.isArray(daMain) ? daMain : [])
+      setProCategories(lista)
     }
     loadCategories()
     const channel = supabase
       .channel('reports-categories-sync')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config', filter: 'id=eq.main' }, (payload) => {
-        const cfg = (payload.new as { config?: { categories?: ProCategory[] } } | undefined)?.config
-        setProCategories(Array.isArray(cfg?.categories) ? cfg.categories : [])
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config' }, (payload) => {
+        const id = (payload.new as { id?: string } | undefined)?.id
+        if (id === 'main' || id === businessRowForServiceType(business)) void loadCategories()
       })
       .subscribe()
     return () => { cancelled = true; supabase.removeChannel(channel) }
-  }, [])
+    // `business` nelle dipendenze: passando da Report Mare a Report Aria si
+    // rileggono le categorie di quel business.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business])
 
   // Mappature derivate da proCategories. Manteniamo "-" come bucket
   // "Altro" per veicoli senza categoria assegnata.

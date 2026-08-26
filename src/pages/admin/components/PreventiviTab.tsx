@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
+import { loadBusinessConfig, businessRowForServiceType } from '../../../utils/businessConfigClient'
 import { appendPreventivoEvent } from '../../../utils/preventivoEvents'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
 import { buildConfigOverlay } from '../../../utils/configOverlay'
@@ -843,25 +844,32 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
         maggiorazione:    a.coefficient_maggiorazione !== false,
       })
     }
-    ;(async () => {
-      const { data } = await supabase
-        .from('centralina_pro_config')
-        .select('config')
-        .eq('id', 'main')
-        .maybeSingle()
+    // 2026-08-25: la Centralina ha una riga per business. Questa lettura
+    // chiedeva sempre `main`, quindi cauzioni, servizi, pacchetti km e
+    // coefficienti del Mare (o dell'Aria, o dei Soggiorni) si salvavano e non
+    // si applicavano MAI: il preventivo usava i numeri del Noleggio Terra.
+    // Le sezioni del business vincono, quelle non impostate ereditano da main.
+    const carica = async () => {
+      const { business, main } = await loadBusinessConfig(serviceType)
       if (cancelled) return
-      applyConfig(data?.config as Record<string, unknown> | undefined)
-    })()
+      const cfgMain = (main || {}) as Record<string, unknown>
+      const cfgBiz = (business || {}) as Record<string, unknown>
+      applyConfig({ ...cfgMain, ...cfgBiz })
+    }
+    void carica()
+    // Realtime su ENTRAMBE le righe: cambiando la config del business (o
+    // quella d'azienda da cui eredita) il preventivo aperto si aggiorna.
+    // Si rilegge invece di usare il payload, cosi' la fusione resta una sola.
     const channel = supabase
       .channel('preventivi-pro-config')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config', filter: 'id=eq.main' }, (payload) => {
-        const cfg = (payload.new as { config?: Record<string, unknown> } | undefined)?.config
-        if (cfg && typeof cfg === 'object') applyConfig(cfg)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'centralina_pro_config' }, (payload) => {
+        const id = (payload.new as { id?: string } | undefined)?.id
+        if (id === 'main' || id === businessRowForServiceType(serviceType)) void carica()
       })
       .subscribe()
     return () => { cancelled = true; supabase.removeChannel(channel) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [serviceType])
 
   // Map vehicle DB category → Pro km/deposits category key. Reused by
   // both the deposits lookup and the km-unlimited lookup so they stay in
