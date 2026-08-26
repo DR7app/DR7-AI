@@ -10,6 +10,19 @@ const supabase = createClient(
 
 type Meta = Record<string, any>
 
+// Una colonna inesistente fa rifiutare a PostgREST l'INTERA query: si
+// perderebbe tutto l'elenco per un campo accessorio. Quindi si chiedono solo
+// le colonne che questo database ha davvero.
+async function colonneEsistenti(tabella: string, volute: string[]): Promise<string[]> {
+  const { data, error } = await supabase.from(tabella).select('*').limit(1)
+  if (error || !data || data.length === 0) return volute
+  const presenti = new Set(Object.keys(data[0]))
+  const ok = volute.filter(c => presenti.has(c))
+  const mancanti = volute.filter(c => !presenti.has(c))
+  if (mancanti.length) console.warn(`[list-site-users] colonne assenti su ${tabella}:`, mancanti.join(', '))
+  return ok.length ? ok : volute
+}
+
 // PostgREST tronca ogni richiesta a 1000 righe. Ogni tabella letta qui va
 // scorsa a blocchi, altrimenti gli iscritti oltre il millesimo restano senza
 // dati: e' esattamente il difetto che svuotava l'elenco.
@@ -43,6 +56,28 @@ const valore = (...candidati: any[]): string => {
 const nomeIntero = (m: Meta) =>
   valore(m.full_name, m.fullName, m.name)
 
+// 26/08/2026 — L'elenco iscritti restava VUOTO: `listUsers({ perPage: 1000 })`
+// superava il tempo massimo dell'API Auth (504 AuthRetryableFetchError) e
+// l'errore azzerava tutta la lista. Cresciuto il numero di iscritti, mille
+// utenti in una sola richiesta non si leggono piu'.
+// Pagine piccole, tre tentativi con attesa crescente, e una pagina persa non
+// cancella le altre: meglio un elenco quasi completo che un elenco vuoto.
+const UTENTI_PER_PAGINA = 200
+const PAGINE_MAX = 200
+const TENTATIVI = 3
+
+const attendi = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+async function utentiDellaPagina(page: number): Promise<any[] | null> {
+  for (let tentativo = 1; tentativo <= TENTATIVI; tentativo++) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: UTENTI_PER_PAGINA })
+    if (!error) return data?.users || []
+    console.warn(`[list-site-users] pagina ${page}, tentativo ${tentativo}: ${error.message || error}`)
+    if (tentativo < TENTATIVI) await attendi(400 * tentativo)
+  }
+  return null
+}
+
 export const handler: Handler = async (event) => {
   const headers = corsHeaders(event.headers.origin)
 
@@ -55,10 +90,18 @@ export const handler: Handler = async (event) => {
   try {
     // Utenti auth
     const utenti: Array<{ id: string; email: string; created_at: string; email_confirmed_at: string | null; last_sign_in_at: string | null; meta: Meta }> = []
-    for (let page = 1; page <= 50; page++) {
-      const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 })
-      if (error) throw error
-      const lista = data?.users || []
+    let paginaMancante = 0
+    let falliteDiFila = 0
+    for (let page = 1; page <= PAGINE_MAX; page++) {
+      const lista = await utentiDellaPagina(page)
+      // Due pagine di fila irrecuperabili: l'API Auth non risponde, inutile
+      // insistere per duecento pagine. Si restituisce quello che si ha.
+      if (lista === null) {
+        paginaMancante++
+        if (++falliteDiFila >= 2) break
+        continue
+      }
+      falliteDiFila = 0
       if (lista.length === 0) break
       for (const u of lista) {
         utenti.push({
@@ -70,7 +113,10 @@ export const handler: Handler = async (event) => {
           meta: (u.user_metadata || {}) as Meta,
         })
       }
-      if (lista.length < 1000) break
+      if (lista.length < UTENTI_PER_PAGINA) break
+    }
+    if (paginaMancante > 0) {
+      console.warn(`[list-site-users] ${paginaMancante} pagine auth non lette dopo i tentativi`)
     }
 
     // Saldo wallet
@@ -98,14 +144,17 @@ export const handler: Handler = async (event) => {
     }
 
     // Schede cliente complete
+    const VOLUTE = [
+      'user_id', 'email', 'tipo_cliente', 'nazione', 'nome', 'cognome', 'telefono', 'pec',
+      'codice_fiscale', 'sesso', 'data_nascita', 'citta_nascita', 'provincia_nascita',
+      'indirizzo', 'numero_civico', 'codice_postale', 'citta_residenza', 'provincia_residenza',
+      'denominazione', 'ragione_sociale', 'partita_iva', 'codice_destinatario', 'sede_operativa',
+      'rappresentante_nome', 'rappresentante_cognome', 'rappresentante_cf', 'rappresentante_ruolo',
+      'ente_ufficio', 'codice_univoco', 'citta', 'source', 'created_at',
+    ]
     const schede = await leggiTutto(
       'customers_extended',
-      'user_id, email, tipo_cliente, nazione, nome, cognome, telefono, pec, codice_fiscale, ' +
-      'sesso, data_nascita, citta_nascita, provincia_nascita, ' +
-      'indirizzo, numero_civico, codice_postale, citta_residenza, provincia_residenza, ' +
-      'denominazione, ragione_sociale, partita_iva, codice_destinatario, sede_operativa, ' +
-      'rappresentante_nome, rappresentante_cognome, rappresentante_cf, rappresentante_ruolo, ' +
-      'ente_ufficio, codice_univoco, citta, source, created_at'
+      (await colonneEsistenti('customers_extended', VOLUTE)).join(', ')
     )
     const schedaDi = new Map<string, any>()
     const schedaPerEmail = new Map<string, any>()
@@ -120,8 +169,11 @@ export const handler: Handler = async (event) => {
       const c = schedaDi.get(u.id) || (em ? schedaPerEmail.get(em) : null) || {}
       const m = u.meta || {}
 
-      let nome = valore(c.nome, m.nome)
-      let cognome = valore(c.cognome, m.cognome)
+      // I provider OAuth scrivono first_name/last_name o given_name/family_name,
+      // l'iscrizione rapida del sito scrive full_name: senza queste chiavi
+      // quegli iscritti restavano senza nessun nome.
+      let nome = valore(c.nome, m.nome, m.first_name, m.given_name)
+      let cognome = valore(c.cognome, m.cognome, m.last_name, m.family_name)
       if (!nome && !cognome) {
         const intero = nomeIntero(m)
         if (intero) {
@@ -129,6 +181,11 @@ export const handler: Handler = async (event) => {
           nome = parti[0]
           cognome = parti.slice(1).join(' ')
         }
+      }
+      // Azienda iscritta dal sito: la persona e' il rappresentante legale.
+      if (!nome && !cognome) {
+        nome = valore(c.rappresentante_nome, m.rappresentanteNome)
+        cognome = valore(c.rappresentante_cognome, m.rappresentanteCognome)
       }
 
       return {
@@ -162,7 +219,7 @@ export const handler: Handler = async (event) => {
         provincia_residenza: valore(c.provincia_residenza, m.provinciaResidenza, m.provincia_residenza),
 
         // Azienda
-        denominazione: valore(c.denominazione, c.ragione_sociale, m.denominazione),
+        denominazione: valore(c.denominazione, c.ragione_sociale, m.denominazione, m.company_name),
         partita_iva: valore(c.partita_iva, m.partitaIva, m.partita_iva),
         codice_destinatario: valore(c.codice_destinatario, m.codiceDestinatario),
         sede_operativa: valore(c.sede_operativa, m.sedeOperativa),
