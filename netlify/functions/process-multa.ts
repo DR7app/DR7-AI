@@ -14,7 +14,10 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 // PEC SMTP configuration — il server si ricava dal dominio del mittente
 // (utils/pecServer.ts): una casella Aruba non si autentica sul server
 // Legalmail, e prima l'host era scritto in duro.
-const PEC_USER = process.env.PEC_USER || 'Dubai.rent7.0srl@legalmail.it'
+// Casella d'ambiente: esiste solo se il deploy la definisce. Nessun indirizzo
+// di fabbrica — un default scritto qui mandava le PEC dalla casella storica
+// invece che da quella salvata in Centralina Pro > Gestione PEC & Email.
+const PEC_USER = process.env.PEC_USER || ''
 const PEC_PASSWORD = process.env.PEC_PASSWORD || ''
 const PEC_TO_DEFAULT = 'poliziamunicipale@comune.cagliari.legalmail.it'
 
@@ -561,7 +564,7 @@ const MULTE_CONFIG_FALLBACK: MulteConfig = {
     rappresentante_legale: 'Campagnola Ilenia',
     indirizzo: 'Viale Marconi 229, Cagliari (CA)',
     telefono: '3472817258',
-    pec_mittente: 'Dubai.rent7.0srl@legalmail.it',
+    pec_mittente: '',
 }
 
 async function loadMulteConfig(): Promise<MulteConfig> {
@@ -684,7 +687,7 @@ async function loadPecPassword(mittente: string): Promise<string> {
     }
     // La password d'ambiente vale SOLO per la casella d'ambiente: usarla per un
     // altro indirizzo produrrebbe un errore di autenticazione incomprensibile.
-    if (addr === PEC_USER.trim().toLowerCase()) return PEC_PASSWORD
+    if (PEC_USER && addr === PEC_USER.trim().toLowerCase()) return PEC_PASSWORD
     return ''
 }
 
@@ -702,8 +705,16 @@ async function sendPEC(
     /** Porta configurata a mano; vuota = 465. */
     smtpPort?: number
 ): Promise<{ messageId: string; accepted: string[]; rejected: string[]; response: string }> {
-    // Mittente: quello configurato, altrimenti la casella d'ambiente storica.
+    // Mittente: quello configurato, altrimenti la casella d'ambiente se il
+    // deploy ne definisce una. Mai un indirizzo scritto nel codice: come per il
+    // destinatario, meglio fermarsi che partire dalla casella sbagliata.
     const from = (pecFrom || '').trim() || PEC_USER
+    if (!from || !/\S+@\S+\.\S+/.test(from)) {
+        throw new Error(
+            'PEC mittente non configurata: impostala in Centralina Pro > Gestione PEC & Email ' +
+            '(con la password della casella) prima di inviare.'
+        )
+    }
     const pass = pecPassword || await loadPecPassword(from)
     if (!pass) {
         throw new Error(

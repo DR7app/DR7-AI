@@ -33,7 +33,11 @@ export const MULTE_CONFIG_DEFAULTS: MulteConfigValues = {
   rappresentante_legale: 'Campagnola Ilenia',
   indirizzo: 'Viale Marconi 229, Cagliari (CA)',
   telefono: '3472817258',
-  pec_mittente: 'Dubai.rent7.0srl@legalmail.it',
+  // Nessuna PEC di fabbrica: la casella si imposta in Centralina Pro >
+  // Gestione PEC & Email. Un indirizzo di un provider preciso scritto qui
+  // finiva salvato in configurazione al primo Salva e prendeva il posto di
+  // quello dell'azienda.
+  pec_mittente: '',
   destinatario_default: '',
 }
 
@@ -78,9 +82,14 @@ export default function MulteConfigSection({ readOnly = false }: { readOnly?: bo
       // calendario, numeri direzione). Si fonde SOLO la chiave delle multe.
       const { data: fresh } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
       const base = (fresh?.config as Record<string, unknown>) || {}
+      // Fusione anche DENTRO multe_config: la stessa chiave ospita
+      // `pec_smtp_host` / `pec_smtp_port`, scritti da Gestione PEC & Email e
+      // assenti da questo form. Sostituendo l'oggetto intero, salvare i dati
+      // azienda cancellava il server SMTP della PEC.
+      const multeBase = (base[MULTE_CONFIG_KEY] as Record<string, unknown>) || {}
       const { data, error } = await supabase
         .from('centralina_pro_config')
-        .update({ config: { ...base, [MULTE_CONFIG_KEY]: v } })
+        .update({ config: { ...base, [MULTE_CONFIG_KEY]: { ...multeBase, ...v } } })
         .eq('id', 'main')
         .select('id')
       if (error) throw error
