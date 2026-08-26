@@ -3,6 +3,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 import nodemailer from 'nodemailer'
+import { pecHostFor, pecProviderFor, PEC_PORT } from './utils/pecServer'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!
@@ -10,9 +11,9 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-// PEC SMTP configuration — Aruba Legalmail
-const PEC_HOST = 'sendm.cert.legalmail.it'
-const PEC_PORT = 465
+// PEC SMTP configuration — il server si ricava dal dominio del mittente
+// (utils/pecServer.ts): una casella Aruba non si autentica sul server
+// Legalmail, e prima l'host era scritto in duro.
 const PEC_USER = process.env.PEC_USER || 'Dubai.rent7.0srl@legalmail.it'
 const PEC_PASSWORD = process.env.PEC_PASSWORD || ''
 const PEC_TO_DEFAULT = 'poliziamunicipale@comune.cagliari.legalmail.it'
@@ -69,6 +70,7 @@ interface DriverData {
     contract_url?: string
     license_urls?: string[]
     id_urls?: string[]
+    codice_fiscale_urls?: string[]
 }
 
 // ── Extract multa data from PDF using Claude ─────────────────────────────────
@@ -377,9 +379,23 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
     }
     console.log(`[process-multa] Contract lookup: contractUrl=${contractUrl ? 'found' : 'not found'}`)
 
-    // Fetch customer documents (driver license, ID) from storage
+    // Fetch customer documents (patente, documento d'identita', tessera CF).
+    // Fronte e retro sono file separati nello stesso bucket: si allegano tutti,
+    // perche' l'organo accertatore chiede sempre le due facciate.
     const licenseUrls: string[] = []
     const idUrls: string[] = []
+    const codiceFiscaleUrls: string[] = []
+
+    // La patente NAUTICA sta nel bucket `driver-licenses` ma non c'entra nulla
+    // con una multa stradale: si riconosce dal nome del file (stesso criterio
+    // di get-customer-documents) e non va allegata.
+    const isNautica = (name: string) => /^patente_nautica/i.test(String(name || ''))
+
+    const bucketList = (bucket: string): string[] | null =>
+        bucket === 'driver-licenses' ? licenseUrls
+        : bucket === 'codice-fiscale' ? codiceFiscaleUrls
+        : (bucket === 'driver-ids' || bucket === 'carta-identita' || bucket === 'customer-documents') ? idUrls
+        : null
 
     // Storage folder = customers_extended.id (same ID used by admin upload)
     // Try: customerExtendedId first, then booking.user_id as fallback
@@ -388,30 +404,52 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
     console.log(`[process-multa] Customer lookup: customerExtendedId=${customerExtendedId}, booking.user_id=${match.user_id}, storageUserId=${storageUserId}`)
 
     if (storageUserId) {
-        const BUCKETS = [
-            { name: 'driver-licenses', list: licenseUrls },
-            { name: 'driver-ids', list: idUrls },
-            { name: 'carta-identita', list: idUrls },
-            { name: 'customer-documents', list: idUrls },
-        ]
+        const seenFileNames = new Set<string>()
 
-        await Promise.all(BUCKETS.map(async ({ name, list }) => {
+        // 1. Documenti registrati in `user_documents`: il file puo' stare in una
+        //    cartella diversa da quella dell'id, quindi il path arriva da li'.
+        const { data: dbDocs } = await supabase
+            .from('user_documents')
+            .select('bucket, file_path, document_type')
+            .eq('user_id', storageUserId)
+
+        for (const doc of dbDocs || []) {
+            const bucket = (doc as { bucket?: string }).bucket || 'driver-ids'
+            const filePath = (doc as { file_path?: string }).file_path || ''
+            if (!filePath) continue
+            const fileName = filePath.split('/').pop() || ''
+            const list = bucketList(bucket)
+            if (!list) continue
+            if (isNautica(fileName) || isNautica((doc as { document_type?: string }).document_type || '')) continue
+            const { data: signed } = await supabase.storage.from(bucket).createSignedUrl(filePath, 86400)
+            if (signed?.signedUrl) { list.push(signed.signedUrl); seenFileNames.add(fileName) }
+        }
+
+        // 2. Sweep dei bucket: prende anche i file caricati senza riga in DB.
+        const BUCKETS = ['driver-licenses', 'driver-ids', 'carta-identita', 'customer-documents', 'codice-fiscale']
+
+        await Promise.all(BUCKETS.map(async (name) => {
+            const list = bucketList(name)
+            if (!list) return
             const { data: files } = await supabase.storage
                 .from(name)
-                .list(storageUserId, { limit: 10, sortBy: { column: 'created_at', order: 'desc' } })
+                .list(storageUserId, { limit: 100, sortBy: { column: 'created_at', order: 'desc' } })
 
             if (files) {
                 for (const file of files) {
                     if (!file.id || file.name.includes('.emptyFolderPlaceholder')) continue
+                    if (seenFileNames.has(file.name) || isNautica(file.name)) continue
                     const path = `${storageUserId}/${file.name}`
                     const { data: signed } = await supabase.storage
                         .from(name)
                         .createSignedUrl(path, 86400)
-                    if (signed?.signedUrl) list.push(signed.signedUrl)
+                    if (signed?.signedUrl) { list.push(signed.signedUrl); seenFileNames.add(file.name) }
                 }
             }
         }))
     }
+
+    console.log(`[process-multa] Documenti trovati: patente=${licenseUrls.length}, identita=${idUrls.length}, codice_fiscale=${codiceFiscaleUrls.length}`)
 
     return {
         booking_id: match.id,
@@ -436,6 +474,7 @@ async function findDriver(targa: string, dataInfrazione: string, oraInfrazione: 
         contract_url: contractUrl,
         license_urls: licenseUrls,
         id_urls: idUrls,
+        codice_fiscale_urls: codiceFiscaleUrls,
     }
 }
 
@@ -459,6 +498,14 @@ export interface MulteConfig {
     pec_mittente: string
     /** Destinatario proposto quando il verbale non permette di dedurlo. */
     destinatario_default?: string
+    /**
+     * Server SMTP della casella PEC. Vuoto = si ricava dal dominio
+     * (utils/pecServer.ts). Sta in config perche' il provider cambia da
+     * azienda ad azienda: indovinarlo dal dominio copre i casi noti, non tutti.
+     */
+    pec_smtp_host?: string
+    /** Porta SMTP. Vuota = 465 (SMTPS implicito, lo standard PEC). */
+    pec_smtp_port?: number
 }
 
 const MULTE_CONFIG_FALLBACK: MulteConfig = {
@@ -483,6 +530,8 @@ async function loadMulteConfig(): Promise<MulteConfig> {
             telefono: cfg.telefono?.trim() || MULTE_CONFIG_FALLBACK.telefono,
             pec_mittente: cfg.pec_mittente?.trim() || MULTE_CONFIG_FALLBACK.pec_mittente,
             destinatario_default: cfg.destinatario_default?.trim() || undefined,
+            pec_smtp_host: cfg.pec_smtp_host?.trim() || undefined,
+            pec_smtp_port: Number(cfg.pec_smtp_port) > 0 ? Number(cfg.pec_smtp_port) : undefined,
         }
     } catch (e) {
         console.error('[process-multa] loadMulteConfig failed, uso i valori storici:', e)
@@ -507,6 +556,16 @@ function generateLetterText(
             (multa as { comune?: string }).comune ? `di ${(multa as { comune?: string }).comune}` : '']
            .filter(Boolean).join(' ')
 
+    // Elenco allegati calcolato su quello che si allega davvero: prima era
+    // fisso e prometteva la patente anche quando in archivio non c'era.
+    const allegati = [
+        '- Copia del verbale ricevuto',
+        (driver.license_urls?.length ? '- Copia della patente di guida del conducente (fronte e retro)' : ''),
+        (driver.id_urls?.length ? '- Copia del documento d\'identita\' del conducente (fronte e retro)' : ''),
+        (driver.codice_fiscale_urls?.length ? '- Copia della tessera codice fiscale del conducente (fronte e retro)' : ''),
+        (driver.contract_url ? '- Copia del contratto di noleggio' : ''),
+    ].filter(Boolean).join('\n')
+
     const today = new Date()
     const formattedToday = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`
 
@@ -529,12 +588,10 @@ DATI DEL CONDUCENTE:
 DATI DEL NOLEGGIO:
 - Veicolo: ${driver.vehicle_name} — Targa: ${driver.vehicle_plate}
 - Periodo noleggio: dal ${formatDateIT(driver.pickup_date)} al ${formatDateIT(driver.dropoff_date)}
-- Contratto di noleggio: disponibile su richiesta
+- Contratto di noleggio: ${driver.contract_url ? 'in allegato' : 'disponibile su richiesta'}
 
 Si allegano alla presente:
-- Copia del verbale ricevuto
-- Copia della patente di guida del conducente
-- Copia del contratto di noleggio
+${allegati}
 
 Distinti saluti,
 
@@ -592,7 +649,11 @@ async function sendPEC(
     pecPassword?: string,
     pecCc?: string[],
     /** Casella mittente scelta in Centralina Pro > Gestione Multe. */
-    pecFrom?: string
+    pecFrom?: string,
+    /** Server SMTP configurato a mano; vuoto = dedotto dal dominio. */
+    smtpHost?: string,
+    /** Porta configurata a mano; vuota = 465. */
+    smtpPort?: number
 ): Promise<{ messageId: string; accepted: string[]; rejected: string[]; response: string }> {
     // Mittente: quello configurato, altrimenti la casella d'ambiente storica.
     const from = (pecFrom || '').trim() || PEC_USER
@@ -615,10 +676,14 @@ async function sendPEC(
 
     // Login e From devono coincidere: i provider PEC rifiutano un mittente
     // diverso dalla casella autenticata.
+    const host = (smtpHost || '').trim() || pecHostFor(from)
+    const port = Number(smtpPort) > 0 ? Number(smtpPort) : PEC_PORT
+    console.log(`[process-multa] PEC ${from} via ${host}:${port}`)
     const transporter = nodemailer.createTransport({
-        host: PEC_HOST,
-        port: PEC_PORT,
-        secure: true, // SSL
+        host,
+        port,
+        // 465 = TLS dall'inizio; 587/25 partono in chiaro e salgono con STARTTLS.
+        secure: port === 465,
         auth: {
             user: from,
             pass: pass,
@@ -626,7 +691,9 @@ async function sendPEC(
     })
 
     const cc = (pecCc || []).map(c => c.trim()).filter(c => /\S+@\S+\.\S+/.test(c))
-    const info = await transporter.sendMail({
+    let info
+    try {
+        info = await transporter.sendMail({
         from,
         to,
         ...(cc.length ? { cc } : {}),
@@ -637,7 +704,21 @@ async function sendPEC(
             content: a.content,
             contentType: a.contentType,
         })),
-    })
+        })
+    } catch (e) {
+        // "Invalid login" da solo non dice dove guardare: il colpevole e' quasi
+        // sempre la coppia casella/password, oppure il server del provider.
+        const msg = e instanceof Error ? e.message : String(e)
+        if (/auth|login|535|password/i.test(msg)) {
+            throw new Error(
+                `Autenticazione rifiutata dal server PEC per ${from} ` +
+                `(server ${host}, ${pecProviderFor(from)}). ` +
+                'Controlla la password in Centralina Pro > Gestione PEC & Email. ' +
+                `Dettaglio: ${msg}`
+            )
+        }
+        throw e
+    }
 
     // Il server SMTP puo' accettare il messaggio e rifiutare un destinatario:
     // senza questo controllo la schermata diceva "inviata" anche quando la PEC
@@ -745,8 +826,34 @@ const handler: Handler = async (event) => {
                 const subject = `Comunicazione dati conducente — Verbale n. ${req.multaData.numero_verbale || 'N/D'} — Targa ${req.driverData.vehicle_plate}`
 
                 const attachments: Array<{ filename: string; content: Buffer; contentType: string }> = []
+                const driver = req.driverData
 
-                console.log(`[process-multa] sendPec: license_urls=${req.driverData.license_urls?.length || 0}, id_urls=${req.driverData.id_urls?.length || 0}, contract_url=${req.driverData.contract_url ? 'yes' : 'no'}, pdfBase64=${req.pdfBase64 ? 'yes' : 'no'}`)
+                console.log(`[process-multa] sendPec: license_urls=${req.driverData.license_urls?.length || 0}, id_urls=${req.driverData.id_urls?.length || 0}, cf_urls=${req.driverData.codice_fiscale_urls?.length || 0}, contract_url=${req.driverData.contract_url ? 'yes' : 'no'}, pdfBase64=${req.pdfBase64 ? 'yes' : 'no'}`)
+
+                // Scarica un documento dallo storage e lo mette in allegato.
+                // Il nome del file distingue fronte e retro: se l'originale lo
+                // dice, si tiene quel suffisso, altrimenti si numera.
+                const attachDocs = async (urls: string[] | undefined, base: string) => {
+                    for (let i = 0; i < (urls?.length || 0); i++) {
+                        const url = urls![i]
+                        try {
+                            const res = await fetch(url)
+                            if (!res.ok) continue
+                            const buf = Buffer.from(await res.arrayBuffer())
+                            const ct = res.headers.get('content-type') || 'application/octet-stream'
+                            const ext = ct.includes('pdf') ? 'pdf' : ct.includes('png') ? 'png' : 'jpg'
+                            const src = decodeURIComponent(url.split('?')[0].split('/').pop() || '')
+                            const lato = /front|fronte/i.test(src) ? '_fronte' : /back|retro/i.test(src) ? '_retro' : (i > 0 ? `_${i + 1}` : '')
+                            attachments.push({
+                                filename: `${base}_${driver.cognome || 'conducente'}${lato}.${ext}`,
+                                content: buf,
+                                contentType: ct,
+                            })
+                        } catch (e) {
+                            console.warn(`[process-multa] Failed to fetch ${base}:`, e)
+                        }
+                    }
+                }
 
                 // 1. Attach original multa PDF
                 if (req.pdfBase64) {
@@ -757,47 +864,15 @@ const handler: Handler = async (event) => {
                     })
                 }
 
-                // 2. Attach driver's license from storage
-                if (req.driverData.license_urls && req.driverData.license_urls.length > 0) {
-                    for (let i = 0; i < req.driverData.license_urls.length; i++) {
-                        try {
-                            const res = await fetch(req.driverData.license_urls[i])
-                            if (res.ok) {
-                                const buf = Buffer.from(await res.arrayBuffer())
-                                const ct = res.headers.get('content-type') || 'application/octet-stream'
-                                const ext = ct.includes('pdf') ? 'pdf' : ct.includes('png') ? 'png' : 'jpg'
-                                attachments.push({
-                                    filename: `patente_${req.driverData.cognome || 'conducente'}${i > 0 ? `_${i + 1}` : ''}.${ext}`,
-                                    content: buf,
-                                    contentType: ct,
-                                })
-                            }
-                        } catch (e) {
-                            console.warn('[process-multa] Failed to fetch license:', e)
-                        }
-                    }
-                }
+                // 2. Patente di guida (fronte e retro)
+                await attachDocs(req.driverData.license_urls, 'patente')
 
-                // 3. Attach ID document from storage
-                if (req.driverData.id_urls && req.driverData.id_urls.length > 0) {
-                    for (let i = 0; i < req.driverData.id_urls.length; i++) {
-                        try {
-                            const res = await fetch(req.driverData.id_urls[i])
-                            if (res.ok) {
-                                const buf = Buffer.from(await res.arrayBuffer())
-                                const ct = res.headers.get('content-type') || 'application/octet-stream'
-                                const ext = ct.includes('pdf') ? 'pdf' : ct.includes('png') ? 'png' : 'jpg'
-                                attachments.push({
-                                    filename: `documento_identita_${req.driverData.cognome || 'conducente'}${i > 0 ? `_${i + 1}` : ''}.${ext}`,
-                                    content: buf,
-                                    contentType: ct,
-                                })
-                            }
-                        } catch (e) {
-                            console.warn('[process-multa] Failed to fetch ID:', e)
-                        }
-                    }
-                }
+                // 3. Documento d'identita' (fronte e retro)
+                await attachDocs(req.driverData.id_urls, 'documento_identita')
+
+                // 3-bis. Tessera codice fiscale (fronte e retro): l'organo
+                // accertatore la chiede insieme alla patente, prima non partiva.
+                await attachDocs(req.driverData.codice_fiscale_urls, 'codice_fiscale')
 
                 // 4. Attach signed contract PDF
                 if (req.driverData.contract_url) {
@@ -829,7 +904,9 @@ const handler: Handler = async (event) => {
                     req.pecTo,
                     req.pecPassword,
                     req.pecCc,
-                    cfgPec.pec_mittente
+                    cfgPec.pec_mittente,
+                    cfgPec.pec_smtp_host,
+                    cfgPec.pec_smtp_port
                 )
 
                 return {

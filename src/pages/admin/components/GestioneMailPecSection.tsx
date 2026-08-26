@@ -26,6 +26,15 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
   const [emailFrom, setEmailFrom] = useState('')
   const [pecMittente, setPecMittente] = useState('')
   const [pecPassword, setPecPassword] = useState('')
+  const [showPecPassword, setShowPecPassword] = useState(false)
+  const [pecSmtpHost, setPecSmtpHost] = useState('')
+  const [pecSmtpPort, setPecSmtpPort] = useState('')
+  // Stato della password in cassaforte: il valore non torna mai al browser,
+  // quindi senza questo riquadro il campo che si svuota sembrava un salvataggio
+  // fallito. Qui si dice SE c'e', non quale.
+  const [pecStato, setPecStato] = useState<{ registrata: boolean; aggiornata_il: string | null; server: string } | null>(null)
+  const [pecTest, setPecTest] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [testingPec, setTestingPec] = useState(false)
 
   useEffect(() => {
     void (async () => {
@@ -35,7 +44,11 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
         const notif = (cfg.notifications || {}) as Record<string, unknown>
         const multe = (cfg.multe_config || {}) as Record<string, unknown>
         setEmailFrom(String(notif.email_from || ''))
-        setPecMittente(String(multe.pec_mittente || ''))
+        const addr = String(multe.pec_mittente || '')
+        setPecMittente(addr)
+        setPecSmtpHost(String(multe.pec_smtp_host || ''))
+        setPecSmtpPort(multe.pec_smtp_port ? String(multe.pec_smtp_port) : '')
+        if (addr) void caricaStatoPec(addr, String(multe.pec_smtp_host || ''))
       } catch {
         /* la sezione resta usabile: i campi partono vuoti */
       } finally {
@@ -43,6 +56,58 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
       }
     })()
   }, [])
+
+  /** Chiede al server se la casella ha una password registrata (mai quale). */
+  async function caricaStatoPec(addr: string, host: string) {
+    try {
+      const res = await authFetch('/.netlify/functions/save-pec-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'status', mittente: addr, host }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data?.success) {
+        setPecStato({ registrata: !!data.registrata, aggiornata_il: data.aggiornata_il || null, server: String(data.server || '') })
+      } else {
+        setPecStato(null)
+      }
+    } catch {
+      setPecStato(null)
+    }
+  }
+
+  /** Login vero sul server PEC: la prova che le credenziali funzionano. */
+  async function provaConnessionePec() {
+    const addr = pecMittente.trim()
+    if (!/\S+@\S+\.\S+/.test(addr)) { toast.error('Indirizzo PEC non valido'); return }
+    setTestingPec(true)
+    setPecTest(null)
+    try {
+      const res = await authFetch('/.netlify/functions/save-pec-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // Se c'e' una password appena digitata si prova QUELLA: cosi' si
+        // verifica prima di salvare. Altrimenti si prova quella in cassaforte.
+        body: JSON.stringify({
+          action: 'test',
+          mittente: addr,
+          password: pecPassword,
+          host: pecSmtpHost.trim(),
+          port: Number(pecSmtpPort) > 0 ? Number(pecSmtpPort) : undefined,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (data?.success) {
+        setPecTest({ ok: true, msg: `Connessione riuscita su ${data.server}:${data.porta} (${data.provider}). Le credenziali funzionano.` })
+      } else {
+        setPecTest({ ok: false, msg: String(data?.error || `HTTP ${res.status}`) })
+      }
+    } catch (e) {
+      setPecTest({ ok: false, msg: e instanceof Error ? e.message : 'Errore di rete' })
+    } finally {
+      setTestingPec(false)
+    }
+  }
 
   /** Scrive UNA chiave dentro il JSONB condiviso, rileggendolo prima. */
   async function patchConfig(patch: (base: Record<string, unknown>) => Record<string, unknown>): Promise<boolean> {
@@ -86,7 +151,12 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
     try {
       const ok = await patchConfig(base => ({
         ...base,
-        multe_config: { ...((base.multe_config as Record<string, unknown>) || {}), pec_mittente: addr },
+        multe_config: {
+          ...((base.multe_config as Record<string, unknown>) || {}),
+          pec_mittente: addr,
+          pec_smtp_host: pecSmtpHost.trim() || null,
+          pec_smtp_port: Number(pecSmtpPort) > 0 ? Number(pecSmtpPort) : null,
+        },
       }))
       if (!ok) return
 
@@ -102,10 +172,14 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
           return
         }
         setPecPassword('')
+        setPecTest(null)
         toast.success('PEC mittente e password aggiornate')
       } else {
         toast.success('PEC mittente aggiornata')
       }
+      // Rilettura dal server: il riquadro verde qui sotto e' la prova che la
+      // password e' finita davvero in cassaforte.
+      await caricaStatoPec(addr, pecSmtpHost.trim())
     } finally { setSavingPec(false) }
   }
 
@@ -179,21 +253,103 @@ export default function GestioneMailPecSection({ readOnly = false }: { readOnly?
           </div>
           <div>
             <label className="mb-1 block text-[10px] uppercase tracking-wider text-theme-text-muted">Password della casella</label>
-            <input
-              className={INPUT}
-              type="password"
-              value={pecPassword}
-              onChange={e => setPecPassword(e.target.value)}
-              placeholder="•••••••• (lascia vuoto per non cambiarla)"
-              autoComplete="new-password"
-              disabled={readOnly}
-            />
+            <div className="relative">
+              <input
+                className={`${INPUT} pr-10`}
+                type={showPecPassword ? 'text' : 'password'}
+                value={pecPassword}
+                onChange={e => setPecPassword(e.target.value)}
+                placeholder="•••••••• (lascia vuoto per non cambiarla)"
+                autoComplete="new-password"
+                disabled={readOnly}
+              />
+              {/* L'occhio mostra solo quello che si sta digitando: la password
+                  gia' salvata resta in cassaforte e non torna mai al browser. */}
+              <button
+                type="button"
+                onClick={() => setShowPecPassword(s => !s)}
+                aria-label={showPecPassword ? 'Nascondi password' : 'Mostra password'}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+              >
+                {showPecPassword ? (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19M1 1l22 22" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
+        <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
+          <div>
+            <label className="mb-1 block text-[10px] uppercase tracking-wider text-theme-text-muted">Server SMTP della PEC</label>
+            <input
+              className={INPUT}
+              value={pecSmtpHost}
+              onChange={e => setPecSmtpHost(e.target.value)}
+              placeholder={pecStato?.server ? `${pecStato.server} (dedotto dal dominio)` : 'lascia vuoto: dedotto dal dominio'}
+              disabled={readOnly}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[10px] uppercase tracking-wider text-theme-text-muted">Porta</label>
+            <input
+              className={INPUT}
+              value={pecSmtpPort}
+              onChange={e => setPecSmtpPort(e.target.value.replace(/\D/g, ''))}
+              placeholder="465"
+              inputMode="numeric"
+              disabled={readOnly}
+            />
+          </div>
+          <p className="text-[11px] text-theme-text-muted sm:col-span-2">
+            Vuoti: il server si ricava dal dominio della casella (Legalmail, Aruba, Postecert, Namirial, Register.it)
+            e la porta e&apos; 465. Si compilano quando il provider ne usa altri — e&apos; il campo da toccare quando il
+            gestionale va a un&apos;altra azienda con un&apos;altra PEC. Porta 465 = TLS diretto, 587 e 25 = STARTTLS.
+          </p>
+        </div>
+
+        {/* Stato + prova: senza questi due il campo password che si svuota
+            sembrava un salvataggio andato a vuoto. */}
+        <div className="flex flex-wrap items-center gap-2">
+          {pecStato?.registrata ? (
+            <span className="inline-flex items-center gap-1 rounded border border-green-500/30 bg-green-500/10 px-2 py-1 text-[11px] text-green-500">
+              Password registrata per questa casella
+              {pecStato.aggiornata_il ? ` — ${new Date(pecStato.aggiornata_il).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}` : ''}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-500">
+              Nessuna password registrata per questa casella
+            </span>
+          )}
+          {pecStato?.server && (
+            <span className="inline-flex items-center gap-1 rounded border border-theme-border bg-theme-bg-tertiary px-2 py-1 font-mono text-[11px] text-theme-text-muted">
+              {pecStato.server}
+            </span>
+          )}
+          {!readOnly && (
+            <button
+              type="button" onClick={provaConnessionePec} disabled={testingPec}
+              className="h-8 rounded-lg border border-theme-border bg-theme-bg-tertiary px-3 text-[11px] font-semibold text-theme-text-primary transition-opacity hover:opacity-90 disabled:opacity-50"
+            >{testingPec ? 'Prova in corso…' : 'Prova connessione'}</button>
+          )}
+        </div>
+
+        {pecTest && (
+          <p className={`text-[11px] ${pecTest.ok ? 'text-green-500' : 'text-red-500'}`}>{pecTest.msg}</p>
+        )}
+
         <p className="text-[11px] text-theme-text-muted">
           Cambiando casella serve anche la sua password: il provider PEC rifiuta un mittente diverso da quello con cui ci si autentica.
-          La password viene conservata a parte, in cassaforte, e non viene mai rimostrata: si puo&apos; solo sostituire.
+          La password viene conservata a parte, in cassaforte, e non viene mai rimostrata: si puo&apos; solo sostituire —
+          per questo il campo torna vuoto dopo il salvataggio. La conferma che sia stata registrata e&apos; il riquadro
+          verde qui sopra, e &quot;Prova connessione&quot; fa il login vero sul server del provider.
         </p>
         <p className="text-[11px] text-theme-text-muted">
           Lo stesso indirizzo compare come recapito aziendale nella lettera. Il destinatario, invece, si ricava dal verbale

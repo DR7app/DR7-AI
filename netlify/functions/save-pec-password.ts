@@ -11,12 +11,21 @@
  * service-role key (stessa regola del token targa). Da qui si scrive soltanto:
  * il valore non torna mai indietro al browser.
  *
- * Body: { mittente: string, password: string }  (password vuota = cancella)
+ * Body:
+ *   { mittente, password }              -> salva (password vuota = cancella)
+ *   { action: 'status', mittente }      -> dice SE la password c'e' (mai quale)
+ *   { action: 'test', mittente, password? } -> login vero sul server PEC
+ *
+ * 26/08/2026 — Il campo password si svuota dopo il salvataggio (il valore non
+ * torna mai al browser) e questo faceva sembrare che non avesse salvato nulla.
+ * `status` serve proprio a quello: dire "password registrata" senza mostrarla.
  */
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { getCorsOrigin } from './cors-headers'
 import { requireAuth } from './require-auth'
+import nodemailer from 'nodemailer'
+import { pecHostFor, pecProviderFor, PEC_PORT } from './utils/pecServer'
 
 const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -34,13 +43,67 @@ const handler: Handler = async (event) => {
   if (auth.error) return auth.error
 
   try {
-    const { mittente, password } = JSON.parse(event.body || '{}') as { mittente?: string; password?: string }
+    const { mittente, password, action, host: hostOverride, port: portOverride } = JSON.parse(event.body || '{}') as { mittente?: string; password?: string; action?: string; host?: string; port?: number }
     const addr = String(mittente || '').trim().toLowerCase()
     if (!/\S+@\S+\.\S+/.test(addr)) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Indirizzo PEC non valido' }) }
     }
     const key = `pec_password:${addr}`
     const value = String(password ?? '')
+
+    // ── Stato: la password c'e' o no? Il valore non esce mai da qui. ────────
+    if (action === 'status') {
+      const { data: row } = await supabase.from('service_secrets').select('*').eq('key', key).maybeSingle()
+      const r = row as Record<string, unknown> | null
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: true,
+          registrata: !!r,
+          aggiornata_il: (r?.updated_at as string) || (r?.created_at as string) || null,
+          server: (hostOverride || '').trim() || pecHostFor(addr),
+          server_dedotto: pecHostFor(addr),
+          porta: Number(portOverride) > 0 ? Number(portOverride) : PEC_PORT,
+          provider: pecProviderFor(addr),
+        }),
+      }
+    }
+
+    // ── Prova di connessione: login vero, stesso server dell'invio multe. ───
+    if (action === 'test') {
+      let pass = value.trim()
+      if (!pass) {
+        const { data: row } = await supabase.from('service_secrets').select('value').eq('key', key).maybeSingle()
+        pass = String((row as { value?: string } | null)?.value || '').trim()
+      }
+      if (!pass) {
+        return { statusCode: 200, headers, body: JSON.stringify({ success: false, error: `Nessuna password registrata per ${addr}.` }) }
+      }
+      // Stesso server dell'invio vero: quello configurato, altrimenti dedotto.
+      const host = (hostOverride || '').trim() || pecHostFor(addr)
+      const port = Number(portOverride) > 0 ? Number(portOverride) : PEC_PORT
+      try {
+        const transporter = nodemailer.createTransport({ host, port, secure: port === 465, auth: { user: addr, pass } })
+        await transporter.verify()
+        return { statusCode: 200, headers, body: JSON.stringify({ success: true, server: host, porta: port, provider: pecProviderFor(addr) }) }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: false,
+            server: host,
+            porta: port,
+            provider: pecProviderFor(addr),
+            error: /auth|login|535|password/i.test(msg)
+              ? `Casella o password rifiutate da ${host}:${port}. ${msg}`
+              : `Il server ${host}:${port} non risponde come previsto. ${msg}`,
+          }),
+        }
+      }
+    }
 
     if (!value.trim()) {
       await supabase.from('service_secrets').delete().eq('key', key)
