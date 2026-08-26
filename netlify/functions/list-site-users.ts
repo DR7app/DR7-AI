@@ -62,12 +62,28 @@ export const handler: Handler = async (event) => {
     // iscritti oltre i primi 1000 risultavano SENZA nome e cognome.
     const customers: any[] = []
     const CHUNK = 1000
+    // Colonne opzionali: se una manca su questo database, PostgREST rifiuta
+    // TUTTA la query e l'elenco resterebbe vuoto. Meglio perdere il nome del
+    // rappresentante che perdere l'intera lista degli iscritti.
+    const COLONNE_BASE = 'user_id, email, nome, cognome, telefono, denominazione, ragione_sociale, ente_ufficio'
+    let colonne = `${COLONNE_BASE}, rappresentante_nome, rappresentante_cognome`
     for (let offset = 0; ; offset += CHUNK) {
-      const { data: pageRows, error: custErr } = await supabase
+      let { data: pageRows, error: custErr } = await supabase
         .from('customers_extended')
-        .select('user_id, email, nome, cognome, telefono, denominazione, ragione_sociale, ente_ufficio')
+        .select(colonne)
         .order('id', { ascending: true })
         .range(offset, offset + CHUNK - 1)
+      if (custErr && colonne !== COLONNE_BASE) {
+        console.warn('[list-site-users] colonne rappresentante assenti, ripiego:', custErr.message)
+        colonne = COLONNE_BASE
+        const retry = await supabase
+          .from('customers_extended')
+          .select(colonne)
+          .order('id', { ascending: true })
+          .range(offset, offset + CHUNK - 1)
+        pageRows = retry.data
+        custErr = retry.error
+      }
       if (custErr) throw custErr
       if (!pageRows || pageRows.length === 0) break
       customers.push(...pageRows)
@@ -87,8 +103,8 @@ export const handler: Handler = async (event) => {
     // Nome preso dai metadati auth quando la scheda non ce l'ha:
     // nome/cognome espliciti, altrimenti full_name/fullName/name spezzato.
     const daMetadati = (meta: Record<string, any>) => {
-      const nome = (meta.nome || '').trim()
-      const cognome = (meta.cognome || '').trim()
+      const nome = (meta.nome || meta.first_name || meta.given_name || '').trim()
+      const cognome = (meta.cognome || meta.last_name || meta.family_name || '').trim()
       if (nome || cognome) return { nome, cognome }
       const intero = String(meta.full_name || meta.fullName || meta.name || '').trim()
       if (!intero) return { nome: '', cognome: '' }
@@ -106,10 +122,19 @@ export const handler: Handler = async (event) => {
         nome = m.nome
         cognome = m.cognome
       }
+      // Azienda registrata dal sito: la persona e' il rappresentante legale.
+      if (!nome && !cognome) {
+        nome = (c?.rappresentante_nome || u.meta?.rappresentanteNome || '').trim()
+        cognome = (c?.rappresentante_cognome || u.meta?.rappresentanteCognome || '').trim()
+      }
       // Azienda / Pubblica Amministrazione: nome e cognome sono vuoti per
       // costruzione, il nome vero e' la ragione sociale o l'ente.
+      // `company_name` e' la chiave scritta dall'iscrizione rapida del sito
+      // (AuthContext.signup): senza, le aziende arrivate da li' restavano
+      // senza nessun nome visibile.
       const azienda = (c?.denominazione || c?.ragione_sociale || c?.ente_ufficio
-        || u.meta?.denominazione || u.meta?.enteUfficio || '').trim()
+        || u.meta?.denominazione || u.meta?.enteUfficio || u.meta?.company_name
+        || u.meta?.ragione_sociale || '').trim()
 
       return {
         id: u.id,
