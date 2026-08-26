@@ -11,8 +11,14 @@ interface SiteUser {
   balance: number
   nome: string
   cognome: string
+  azienda: string
   telefono: string
 }
+
+// Un iscritto azienda/PA non ha nome e cognome: il suo nome e' la ragione
+// sociale. Una sola regola per tabella, ricerca e ordinamento.
+const nomeVisibile = (u: { nome?: string; cognome?: string; azienda?: string }) =>
+  `${u.nome || ''} ${u.cognome || ''}`.trim() || (u.azienda || '').trim()
 
 export default function SiteUsersTab() {
   const [users, setUsers] = useState<SiteUser[]>([])
@@ -91,6 +97,7 @@ export default function SiteUsersTab() {
           u.email?.toLowerCase().includes(q) ||
           u.nome?.toLowerCase().includes(q) ||
           u.cognome?.toLowerCase().includes(q) ||
+          u.azienda?.toLowerCase().includes(q) ||
           u.telefono?.includes(q)
         )
       })
@@ -98,7 +105,7 @@ export default function SiteUsersTab() {
   ).sort((a, b) => {
     let va: any, vb: any
     if (sortField === 'nome') {
-      va = `${a.nome} ${a.cognome}`.toLowerCase(); vb = `${b.nome} ${b.cognome}`.toLowerCase()
+      va = nomeVisibile(a).toLowerCase(); vb = nomeVisibile(b).toLowerCase()
       return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
     }
     if (sortField === 'email') {
@@ -191,7 +198,7 @@ export default function SiteUsersTab() {
               </thead>
               <tbody>
                 {filtered.map(u => {
-                  const fullName = `${u.nome || ''} ${u.cognome || ''}`.trim() || '-'
+                  const fullName = nomeVisibile(u) || '-'
                   return (
                     <tr key={u.id} className="border-b border-theme-border/50 hover:bg-theme-bg-hover/30">
                       <td className="py-2 px-3 text-theme-text-primary font-medium">{fullName}</td>
@@ -248,7 +255,7 @@ export default function SiteUsersTab() {
               <div className="space-y-2">
                 {stats.topCredito.map((u, i) => {
                   const palette = ['bg-rose-500/20 text-rose-300 border-rose-500/40', 'bg-amber-500/20 text-amber-300 border-amber-500/40', 'bg-blue-500/20 text-blue-300 border-blue-500/40', 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40', 'bg-purple-500/20 text-purple-300 border-purple-500/40']
-                  const fullName = `${u.nome || ''} ${u.cognome || ''}`.trim() || u.email
+                  const fullName = nomeVisibile(u) || u.email
                   const initials = fullName.split(/\s+/).map(s => s[0] || '').join('').slice(0, 2).toUpperCase() || '?'
                   return (
                     <div key={u.id} className="flex items-center gap-2.5">

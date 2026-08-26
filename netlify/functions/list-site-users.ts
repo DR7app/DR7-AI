@@ -36,6 +36,10 @@ export const handler: Handler = async (event) => {
         created_at: u.created_at,
         email_confirmed_at: u.email_confirmed_at,
         last_sign_in_at: u.last_sign_in_at,
+        // 26/08/2026: i metadati auth servono come rete di sicurezza per il
+        // nome (vedi sotto): chi si e' iscritto con Google, o la cui scheda
+        // non e' stata scritta, il nome ce l'ha SOLO qui.
+        meta: (u.user_metadata || {}) as Record<string, any>,
       })))
       if (users.length < perPage) break
       page++
@@ -53,26 +57,73 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    // Get customer names from customers_extended
-    const { data: customers } = await supabase
-      .from('customers_extended')
-      .select('user_id, nome, cognome, telefono')
-      .not('user_id', 'is', null)
-
-    const custMap = new Map<string, any>()
-    if (customers) {
-      for (const c of customers) {
-        if (c.user_id) custMap.set(c.user_id, c)
-      }
+    // Get customer names from customers_extended.
+    // 26/08/2026: PostgREST tronca a 1000 righe. Senza paginazione tutti gli
+    // iscritti oltre i primi 1000 risultavano SENZA nome e cognome.
+    const customers: any[] = []
+    const CHUNK = 1000
+    for (let offset = 0; ; offset += CHUNK) {
+      const { data: pageRows, error: custErr } = await supabase
+        .from('customers_extended')
+        .select('user_id, email, nome, cognome, telefono, denominazione, ragione_sociale, ente_ufficio')
+        .order('id', { ascending: true })
+        .range(offset, offset + CHUNK - 1)
+      if (custErr) throw custErr
+      if (!pageRows || pageRows.length === 0) break
+      customers.push(...pageRows)
+      if (pageRows.length < CHUNK) break
     }
 
-    const enriched = allUsers.map(u => ({
-      ...u,
-      balance: balanceMap.get(u.id) || 0,
-      nome: custMap.get(u.id)?.nome || '',
-      cognome: custMap.get(u.id)?.cognome || '',
-      telefono: custMap.get(u.id)?.telefono || '',
-    }))
+    // Indice per user_id e, come riserva, per email normalizzata: le schede
+    // create prima del collegamento all'account hanno user_id NULL.
+    const custMap = new Map<string, any>()
+    const custByEmail = new Map<string, any>()
+    for (const c of customers) {
+      if (c.user_id) custMap.set(c.user_id, c)
+      const em = (c.email || '').trim().toLowerCase()
+      if (em && !custByEmail.has(em)) custByEmail.set(em, c)
+    }
+
+    // Nome preso dai metadati auth quando la scheda non ce l'ha:
+    // nome/cognome espliciti, altrimenti full_name/fullName/name spezzato.
+    const daMetadati = (meta: Record<string, any>) => {
+      const nome = (meta.nome || '').trim()
+      const cognome = (meta.cognome || '').trim()
+      if (nome || cognome) return { nome, cognome }
+      const intero = String(meta.full_name || meta.fullName || meta.name || '').trim()
+      if (!intero) return { nome: '', cognome: '' }
+      const parti = intero.split(/\s+/)
+      return { nome: parti[0], cognome: parti.slice(1).join(' ') }
+    }
+
+    const enriched = allUsers.map(u => {
+      const email = (u.email || '').trim().toLowerCase()
+      const c = custMap.get(u.id) || (email ? custByEmail.get(email) : null)
+      let nome = (c?.nome || '').trim()
+      let cognome = (c?.cognome || '').trim()
+      if (!nome && !cognome) {
+        const m = daMetadati(u.meta || {})
+        nome = m.nome
+        cognome = m.cognome
+      }
+      // Azienda / Pubblica Amministrazione: nome e cognome sono vuoti per
+      // costruzione, il nome vero e' la ragione sociale o l'ente.
+      const azienda = (c?.denominazione || c?.ragione_sociale || c?.ente_ufficio
+        || u.meta?.denominazione || u.meta?.enteUfficio || '').trim()
+
+      return {
+        id: u.id,
+        email: u.email,
+        created_at: u.created_at,
+        email_confirmed_at: u.email_confirmed_at,
+        last_sign_in_at: u.last_sign_in_at,
+        balance: balanceMap.get(u.id) || 0,
+        nome,
+        cognome,
+        azienda,
+        telefono: (c?.telefono || u.meta?.telefono || u.meta?.phone || '').trim(),
+      }
+    })
 
     return {
       statusCode: 200,
