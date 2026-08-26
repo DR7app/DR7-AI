@@ -82,6 +82,10 @@ interface SystemMessage {
 const LOOKBACK_MS = 30 * 60 * 1000;  // 30 min: forgive previous-cron failures
 const LOOKFORWARD_MS = 8 * 60 * 1000; // 8 min: small overlap with next cron run (15min interval)
 
+// Template posseduti da weather-alert-cron: questo cron non li tocca mai.
+// Vedi la guardia nel loop dei template per il perche'.
+const WEATHER_TEMPLATE_KEYS = new Set(['pro_allerta_meteo', 'pro_allerta_meteo_mare']);
+
 // Quiet hours (ora di Roma): NESSUN messaggio automatico esce tra le 22:00 e le
 // 07:00. Copre l'intero cron (template clienti + promemoria autista + rimborso
 // cauzioni). Prima le colonne quiet_hours_start/end esistevano ma non venivano
@@ -1294,6 +1298,21 @@ const cronHandler = async () => {
     for (const tpl of templates as SystemMessage[]) {
         // Gate: parte SOLO cio' che l'admin ha approvato per il cron.
         if (!(tpl as { cron_approved?: boolean }).cron_approved) continue;
+
+        // 2026-08-26 INCIDENT. L'Allerta Meteo NON appartiene a questo cron: la
+        // manda weather-alert-cron, solo quando il meteo reale lo richiede e una
+        // volta per episodio. Il difetto era che `cron_approved` e' il toggle
+        // "Cron ON" letto da ENTRAMBI i cron: accendendo l'allerta meteo si
+        // autorizzava anche lo scheduler a spedirla come un promemoria
+        // qualsiasi. Le due righe hanno trigger_event=before_dropoff, offset
+        // 24h, send_hour 9 e target_service_type 'all', quindi l'allerta partiva
+        // a OGNI cliente 24h prima della riconsegna, col sereno, e in doppia
+        // copia (Terra + Mare, entrambe su 'all'). Qui i due consumatori del
+        // flag si separano: per lo scheduler le chiavi meteo non esistono.
+        if (WEATHER_TEMPLATE_KEYS.has(String((tpl as { message_key?: string }).message_key || ''))) {
+            console.log(`[scheduled-msgs] Skipping ${tpl.message_key} — l'allerta meteo la manda weather-alert-cron, non lo scheduler`);
+            continue;
+        }
 
         // ── Programmazione ricorrente a calendario ────────────────────────
         // Va valutata PRIMA delle guardie legacy/event-driven: un template
