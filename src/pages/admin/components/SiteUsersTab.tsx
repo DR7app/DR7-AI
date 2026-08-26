@@ -11,6 +11,8 @@ interface SiteUser {
   balance: number
   bonus_benvenuto: boolean
   ha_scheda: boolean
+  // Dati compilati in registrazione ma mai finiti nella scheda cliente
+  da_recuperare: boolean
   // Anagrafica compilata in fase di registrazione
   tipo_cliente: string
   nazione: string
@@ -139,6 +141,9 @@ export default function SiteUsersTab() {
   // recupero di massa, altrimenti l'id dell'iscritto sulla singola riga.
   const [accreditando, setAccreditando] = useState<string | null>(null)
   const [esitoBonus, setEsitoBonus] = useState('')
+  // Recupero dell'anagrafica dai dati di registrazione (metadati auth).
+  const [recuperando, setRecuperando] = useState(false)
+  const [esitoRecupero, setEsitoRecupero] = useState('')
 
   const toggleSort = (field: typeof sortField) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -192,6 +197,53 @@ export default function SiteUsersTab() {
     }
   }
 
+  /**
+   * Rimette nella scheda cliente i dati che il cliente aveva compilato in
+   * registrazione e che non erano mai stati salvati.
+   *
+   * Perche' servono due elenchi diversi: qui i dati si leggono anche dai
+   * metadati auth, nella tab Clienti solo dalla scheda. Finche' la scheda
+   * resta vuota, contratti, fatture e messaggi dicono "Gentile Cliente".
+   * La function scrive SOLO nei campi vuoti, quindi si puo' rilanciare.
+   */
+  async function recuperaAnagrafica(ids: string[]) {
+    if (ids.length === 0) return
+    if (!window.confirm(
+      `Recuperare i dati di registrazione di ${ids.length} ${ids.length === 1 ? 'iscritto' : 'iscritti'} e scriverli nella scheda cliente?\n\n`
+      + 'Vengono riempiti solo i campi vuoti: nessun dato gia\' presente viene modificato.'
+    )) return
+    setRecuperando(true)
+    setEsitoRecupero('')
+    try {
+      const res = await authFetch('/.netlify/functions/recupera-anagrafica-iscritti', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userIds: ids }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data?.success !== true) {
+        setEsitoRecupero(data?.error || `Recupero non riuscito (HTTP ${res.status}).`)
+        return
+      }
+      const parti = [`${data.aggiornati} schede completate`]
+      if (data.create) parti.push(`${data.create} schede create`)
+      parti.push(`${data.campiScritti} campi scritti`)
+      if (data.gia_complete) parti.push(`${data.gia_complete} erano gia' a posto`)
+      if (data.campiRifiutati) {
+        const quali = Array.from(new Set((data.rifiutati || []).map((r: any) => r.campo))).join(', ')
+        parti.push(`${data.campiRifiutati} campi rifiutati dal database${quali ? ` (${quali})` : ''}`)
+      }
+      if (data.errori?.length) parti.push(`${data.errori.length} schede non recuperate`)
+      setEsitoRecupero(parti.join(' — '))
+      // I dati sono cambiati sul database: si rilegge l'elenco.
+      loadUsers()
+    } catch (e: any) {
+      setEsitoRecupero(e?.message || 'Errore di rete durante il recupero.')
+    } finally {
+      setRecuperando(false)
+    }
+  }
+
   async function loadUsers() {
     setLoading(true)
     setErrore('')
@@ -233,6 +285,9 @@ export default function SiteUsersTab() {
     // Accredito in blocco: solo i wallet a zero (gli altri si valutano a mano)
     const senzaBonusAZero = users.filter(u => !u.bonus_benvenuto && (u.balance || 0) === 0).length
     const schedaIncompleta = users.filter(u => !u.codice_fiscale && !u.partita_iva && !u.codice_univoco).length
+    // Dati compilati alla registrazione ma mai arrivati nella scheda cliente:
+    // e' la differenza fra questo elenco e la tab Clienti.
+    const daRecuperare = users.filter(u => u.da_recuperare).length
 
     // Andamento iscrizioni — ultimi 30 giorni
     const day = 1000 * 60 * 60 * 24
@@ -257,7 +312,7 @@ export default function SiteUsersTab() {
       .sort((a, b) => (b.balance || 0) - (a.balance || 0))
       .slice(0, 5)
 
-    return { total, verificati, nonVerificati, nuoviMese, totalCredit, senzaBonus, senzaBonusAZero, schedaIncompleta, trend, topCredito }
+    return { total, verificati, nonVerificati, nuoviMese, totalCredit, senzaBonus, senzaBonusAZero, schedaIncompleta, daRecuperare, trend, topCredito }
   }, [users])
 
   // 26/08/2026 — questo blocco girava a OGNI render (anche solo aprendo una
@@ -358,8 +413,14 @@ export default function SiteUsersTab() {
         </div>
       )}
 
+      {esitoRecupero && (
+        <div className="rounded-xl border border-theme-border bg-theme-bg-secondary px-4 py-3">
+          <p className="text-xs text-theme-text-secondary"><span className="font-semibold">Recupero anagrafica:</span> {esitoRecupero}</p>
+        </div>
+      )}
+
       {/* 5 KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-7 gap-3">
         <KpiCard label="Iscritti Totali" value={stats.total} ring="#3B82F6"/>
         <KpiCard label="Verificati" value={stats.verificati} subtitle={`${stats.total > 0 ? Math.round((stats.verificati / stats.total) * 100) : 0}% del totale`} ring="#10B981"/>
         <KpiCard label="Non Verificati" value={stats.nonVerificati} subtitle={`${stats.total > 0 ? Math.round((stats.nonVerificati / stats.total) * 100) : 0}% del totale`} ring="#F59E0B"/>
@@ -379,6 +440,19 @@ export default function SiteUsersTab() {
               users.filter(u => !u.bonus_benvenuto && (u.balance || 0) === 0).map(u => u.id),
               'tutti',
             ),
+          } : undefined}
+        />
+        {/* 26/08/2026 — la tab Clienti mostrava "Cliente" e due trattini per
+            gente che in registrazione aveva compilato tutto: i dati erano nei
+            metadati auth (che questo elenco legge) ma non nella scheda (che la
+            tab Clienti legge). Da qui si rimettono al loro posto. */}
+        <KpiCard
+          label="Dati da Recuperare" value={stats.daRecuperare}
+          subtitle="compilati in registrazione, mancanti nella scheda cliente" ring="#F97316"
+          azione={stats.daRecuperare > 0 ? {
+            testo: recuperando ? 'Recupero…' : `Recupera ${stats.daRecuperare} schede`,
+            disabilitata: recuperando,
+            onClick: () => recuperaAnagrafica(users.filter(u => u.da_recuperare).map(u => u.id)),
           } : undefined}
         />
       </div>

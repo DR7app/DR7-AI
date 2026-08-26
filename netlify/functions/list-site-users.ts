@@ -56,6 +56,32 @@ const valore = (...candidati: any[]): string => {
 const nomeIntero = (m: Meta) =>
   valore(m.full_name, m.fullName, m.name)
 
+// 26/08/2026 — La colonna "Iscritti al Sito" mostrava dati che nella tab
+// Clienti non c'erano: qui i metadati auth fanno da riserva, li' no. Questo
+// dice, iscritto per iscritto, se il dato esiste nei metadati ma NON e' stato
+// scritto nella scheda cliente: e' esattamente cio' che il pulsante di
+// recupero rimette a posto.
+const CAMPI_CONFRONTO: Array<[string, (m: Meta) => string]> = [
+  ['nome', m => valore(m.nome, m.first_name, m.given_name, nomeIntero(m))],
+  ['cognome', m => valore(m.cognome, m.last_name, m.family_name)],
+  ['telefono', m => valore(m.telefono, m.phone)],
+  ['codice_fiscale', m => valore(m.codiceFiscale, m.codice_fiscale)],
+  ['data_nascita', m => valore(m.dataNascita, m.data_nascita)],
+  ['indirizzo', m => valore(m.indirizzo)],
+  ['numero_civico', m => valore(m.numeroCivico, m.numero_civico)],
+  ['codice_postale', m => valore(m.codicePostale, m.codice_postale)],
+  ['citta_residenza', m => valore(m.cittaResidenza, m.citta_residenza)],
+  ['provincia_residenza', m => valore(m.provinciaResidenza, m.provincia_residenza)],
+  ['denominazione', m => valore(m.denominazione, m.company_name)],
+  ['partita_iva', m => valore(m.partitaIva, m.partita_iva)],
+  ['ente_ufficio', m => valore(m.enteUfficio)],
+]
+
+const schedaDaRecuperare = (c: Record<string, any>, m: Meta): boolean => {
+  if (!c || (!c.user_id && !c.email)) return true // scheda mai creata
+  return CAMPI_CONFRONTO.some(([colonna, daMeta]) => !valore(c[colonna]) && !!daMeta(m))
+}
+
 // 26/08/2026 — L'elenco iscritti restava VUOTO: `listUsers({ perPage: 1000 })`
 // superava il tempo massimo dell'API Auth (504 AuthRetryableFetchError) e
 // l'errore azzerava tutta la lista. Cresciuto il numero di iscritti, mille
@@ -232,6 +258,9 @@ export const handler: Handler = async (event) => {
         balance: saldoDi.get(u.id) || 0,
         bonus_benvenuto: bonus.has(u.id),
         ha_scheda: !!c.user_id || !!c.email,
+        // Il cliente ha compilato il dato in fase di registrazione ma nella
+        // scheda non c'e': recuperabile senza chiedergli nulla.
+        da_recuperare: schedaDaRecuperare(c, m),
 
         // Anagrafica
         tipo_cliente: valore(c.tipo_cliente, m.tipoCliente),
