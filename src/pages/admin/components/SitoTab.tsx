@@ -33,6 +33,7 @@ import { supabase } from '../../../supabaseClient'
 import { useAdminRole } from '../../../hooks/useAdminRole'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
+import MoneyInput from '../../../components/MoneyInput'
 // Alberatura reale di dr7.app: una voce dell'onglet = una pagina del sito.
 import {
     SITO_AREAS,
@@ -68,6 +69,7 @@ import type {
     CheckEmailCopy,
     ConfirmationSuccessCopy,
     ContactCopy,
+    CreditPackage,
     CreditWalletCopy,
     Dr7ClubPlanCopy,
     FaqCopy,
@@ -675,8 +677,16 @@ export default function SitoTab() {
                     setSavedBooking(remote.booking)
                 }
                 if (remote?.creditWallet && remote.creditWallet.hero_intro_it) {
-                    setCreditWallet(remote.creditWallet)
-                    setSavedCreditWallet(remote.creditWallet)
+                    // `packages` e' arrivato dopo: le righe salvate prima non ce
+                    // l'hanno e l'editor mostrerebbe zero pacchetti dove il sito
+                    // ne mostra nove. Si riparte dal seed finche' non se ne salva
+                    // una lista propria.
+                    const cw: CreditWalletCopy = {
+                        ...remote.creditWallet,
+                        packages: remote.creditWallet.packages?.length ? remote.creditWallet.packages : INITIAL_CREDIT_WALLET.packages,
+                    }
+                    setCreditWallet(cw)
+                    setSavedCreditWallet(cw)
                 }
                 if (remote?.firma && remote.firma.otp_step1_title_it) {
                     setFirma(remote.firma)
@@ -4787,12 +4797,52 @@ function BookingEditor({ copy, setCopy }: { copy: BookingCopy; setCopy: (next: B
 // del modale di checkout. Il template `{amount}` resta come segnaposto.
 function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy: (next: CreditWalletCopy) => void }) {
     const update = <K extends keyof CreditWalletCopy>(key: K, value: CreditWalletCopy[K]) => setCopy({ ...copy, [key]: value })
+
+    // ─── Pacchetti di ricarica ──────────────────────────────────────────
+    // L'admin scrive solo ricarica e bonus %: bonus in € e totale ricevuto
+    // sono ricalcolati qui, cosi' la card del sito non puo' mostrare tre
+    // numeri che non tornano fra loro.
+    const packages: CreditPackage[] = copy.packages ?? []
+    const round2 = (n: number) => Math.round(n * 100) / 100
+    const slugify = (v: string) => v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+    const setPackages = (next: CreditPackage[]) => setCopy({ ...copy, packages: next })
+    const derive = (p: CreditPackage, patch: Partial<CreditPackage>): CreditPackage => {
+        const merged = { ...p, ...patch }
+        const bonus = round2((merged.rechargeAmount || 0) * (merged.bonusPercentage || 0) / 100)
+        return { ...merged, bonus, receivedAmount: round2((merged.rechargeAmount || 0) + bonus) }
+    }
+    const updatePkg = (i: number, patch: Partial<CreditPackage>) =>
+        setPackages(packages.map((p, idx) => idx === i ? derive(p, patch) : p))
+    const addPkg = () => setPackages([...packages, derive({
+        id: '', series: packages[packages.length - 1]?.series ?? '', name: '',
+        rechargeAmount: 0, receivedAmount: 0, bonus: 0, bonusPercentage: 0,
+    }, {})])
+    const removePkg = (i: number) => setPackages(packages.filter((_, idx) => idx !== i))
+    const movePkg = (i: number, dir: -1 | 1) => {
+        const next = [...packages]; const j = i + dir
+        if (j < 0 || j >= next.length) return
+        ;[next[i], next[j]] = [next[j], next[i]]
+        setPackages(next)
+    }
+    // Il badge "PIÙ SCELTO" e' uno solo: sceglierne un altro spegne il precedente.
+    const togglePopular = (i: number) =>
+        setPackages(packages.map((p, idx) => ({ ...p, popular: idx === i ? !p.popular : false })))
+    const seriesOptions = packages.reduce<string[]>((acc, p) => p.series && !acc.includes(p.series) ? [...acc, p.series] : acc, [])
+    const euro = (n: number) => (n || 0).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+    const idIssue = (p: CreditPackage, i: number): string | null => {
+        if (!p.id.trim()) return 'id obbligatorio'
+        if (packages.some((o, idx) => idx !== i && o.id.trim() === p.id.trim())) return 'id duplicato'
+        return null
+    }
+
+    const inputCls = 'w-full bg-theme-bg-primary border border-theme-border rounded-md px-2 py-1.5 text-[13px]'
+
     return (
         <div className="space-y-6">
             <p className="text-[13px] text-theme-text-secondary">
-                Testi marketing + chrome del modale di acquisto crediti. Gli importi dei pacchetti restano nel
-                codice (CREDIT_PACKAGES). Il segnaposto {`{amount}`} nel bottone "Paga" del modale viene
-                sostituito a runtime con l'importo selezionato.
+                Testi marketing, pacchetti di ricarica e chrome del modale di acquisto crediti. Il segnaposto {`{amount}`}
+                nel bottone "Paga" del modale viene sostituito a runtime con l'importo selezionato.
             </p>
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
@@ -4845,6 +4895,70 @@ function CreditWalletEditor({ copy, setCopy }: { copy: CreditWalletCopy; setCopy
                     <FieldText label='Filtro "Tutti i Pacchetti" (IT)' value={copy.packages_filter_all_it} onChange={v => update('packages_filter_all_it', v)} />
                     <FieldText label='Filter "All Packages" (EN)' value={copy.packages_filter_all_en} onChange={v => update('packages_filter_all_en', v)} />
                 </div>
+            </section>
+
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                    <h3 className="text-[14px] font-semibold text-theme-text-primary">Pacchetti di ricarica ({packages.length})</h3>
+                </div>
+                <p className="text-[12px] text-theme-text-secondary">
+                    Scrivi ricarica e bonus %: bonus in € e totale ricevuto sono calcolati e mostrati qui sotto,
+                    identici a quelli della card sul sito. Le serie sono libere — il filtro in cima alla pagina
+                    elenca quelle usate dai pacchetti. Gli <code className="text-[11px] bg-theme-bg-tertiary px-1 rounded">id</code> finiscono
+                    negli acquisti (<code className="text-[11px] bg-theme-bg-tertiary px-1 rounded">credit_wallet_purchases.package_id</code>):
+                    rinominarne uno rompe lo storico, meglio aggiungere un pacchetto nuovo.
+                </p>
+                <datalist id="cw-series-options">
+                    {seriesOptions.map(sv => <option key={sv} value={sv} />)}
+                </datalist>
+                {packages.map((p, i) => {
+                    const issue = idIssue(p, i)
+                    return (
+                        <div key={i} className="border border-theme-border rounded-xl p-3 space-y-2 bg-theme-bg-secondary/40">
+                            <div className="grid grid-cols-12 gap-2 items-center">
+                                <input type="text" list="cw-series-options" value={p.series} onChange={e => updatePkg(i, { series: e.target.value })} placeholder="SERIE" className={`col-span-4 ${inputCls} uppercase`} />
+                                <input type="text" value={p.name} onChange={e => updatePkg(i, { name: e.target.value, ...(p.id.trim() ? {} : { id: slugify(e.target.value) }) })} placeholder="Nome pacchetto" className={`col-span-4 ${inputCls}`} />
+                                <input type="text" value={p.id} onChange={e => updatePkg(i, { id: e.target.value })} placeholder="id" className={`col-span-3 ${inputCls} font-mono ${issue ? 'border-red-500' : ''}`} />
+                                <div className="col-span-1 flex justify-end">
+                                    <div className="flex items-center gap-1">
+                                        <button type="button" onClick={() => movePkg(i, -1)} disabled={i === 0} className="w-7 h-7 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta su">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+                                        </button>
+                                        <button type="button" onClick={() => movePkg(i, 1)} disabled={i === packages.length - 1} className="w-7 h-7 rounded-md text-theme-text-secondary hover:bg-theme-bg-secondary disabled:opacity-30 flex items-center justify-center" title="Sposta giù">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                                        </button>
+                                        <button type="button" onClick={() => removePkg(i)} className="w-7 h-7 rounded-md text-red-500 hover:bg-red-500/10 flex items-center justify-center" title="Rimuovi">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-12 gap-2 items-center">
+                                <label className="col-span-3 flex items-center gap-2">
+                                    <span className="text-[11px] text-theme-text-secondary whitespace-nowrap">Ricarica €</span>
+                                    <MoneyInput value={p.rechargeAmount} onChange={v => updatePkg(i, { rechargeAmount: Number(v) || 0 })} className={inputCls} />
+                                </label>
+                                <label className="col-span-3 flex items-center gap-2">
+                                    <span className="text-[11px] text-theme-text-secondary whitespace-nowrap">Bonus %</span>
+                                    <MoneyInput value={p.bonusPercentage} onChange={v => updatePkg(i, { bonusPercentage: Number(v) || 0 })} min={0} max={100} className={inputCls} />
+                                </label>
+                                <div className="col-span-3 text-[12px] text-theme-text-secondary">
+                                    Bonus <span className="font-semibold text-theme-text-primary">€ {euro(p.bonus)}</span>
+                                </div>
+                                <div className="col-span-3 flex items-center justify-between gap-2">
+                                    <div className="text-[12px] text-theme-text-secondary">
+                                        Riceve <span className="font-semibold text-theme-text-primary">€ {euro(p.receivedAmount)}</span>
+                                    </div>
+                                    <button type="button" onClick={() => togglePopular(i)} title='Badge "PIÙ SCELTO"' className={`px-2 py-1 rounded-md text-[11px] font-semibold border ${p.popular ? 'bg-theme-text-primary text-theme-bg-primary border-theme-text-primary' : 'border-theme-border text-theme-text-secondary hover:bg-theme-bg-secondary'}`}>
+                                        PIÙ SCELTO
+                                    </button>
+                                </div>
+                            </div>
+                            {issue && <p className="text-[11px] text-red-500">{issue} — il sito ignora i pacchetti senza id.</p>}
+                        </div>
+                    )
+                })}
+                <button type="button" onClick={addPkg} className="w-full py-2 rounded-xl border-2 border-dashed border-theme-border text-[12px] font-medium text-theme-text-primary hover:bg-theme-bg-secondary hover:border-blue-500/40 transition-colors">+ Aggiungi pacchetto</button>
             </section>
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">

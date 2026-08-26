@@ -10,7 +10,7 @@
  * salvato in centralina_pro_config. Modificare questi valori a mano fa
  * ricomparire il disallineamento che questo file esiste per eliminare.
  *
- * Sezioni generate: 33 — interfacce: 66
+ * Sezioni generate: 33 — interfacce: 67
  */
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
@@ -541,10 +541,28 @@ export interface TokenCopy {
 }
 
 // ─── Credit Wallet page (recharge funnel + benefits + checkout modal) ────
-// CREDIT_PACKAGES array (amounts/bonuses) stays in code as product config —
-// only the marketing copy + checkout chrome is editable here. Brand vocab
-// "DR7", "DR7 Credit Wallet", "Nexi" stays hardcoded in the page template.
-// `{amount}` token in modal pay CTA resolved at render.
+// Marketing copy + checkout chrome + i pacchetti di ricarica (importi e
+// percentuali di bonus), tutto editabile da admin > Sito > Credit Wallet.
+// Brand vocab "DR7", "DR7 Credit Wallet", "Nexi" stays hardcoded in the
+// page template. `{amount}` token in modal pay CTA resolved at render.
+
+/**
+ * Un pacchetto di ricarica del Credit Wallet. `receivedAmount` e `bonus`
+ * sono derivati da `rechargeAmount` + `bonusPercentage` (l'editor admin li
+ * ricalcola a ogni modifica) ma restano persistiti perche' la pagina e le
+ * righe di `credit_wallet_purchases` li usano cosi' come sono.
+ */
+export interface CreditPackage {
+  id: string;
+  series: string;
+  name: string;
+  rechargeAmount: number;
+  receivedAmount: number;
+  bonus: number;
+  bonusPercentage: number;
+  popular?: boolean;
+}
+
 export interface CreditWalletCopy {
   // Hero
   hero_title_eyebrow_it: string; hero_title_eyebrow_en: string;
@@ -564,6 +582,8 @@ export interface CreditWalletCopy {
   // Package selection
   packages_section_label_it: string; packages_section_label_en: string;
   packages_filter_all_it: string; packages_filter_all_en: string;
+  // Pacchetti di ricarica (serie, importi, bonus %) — editabili da admin
+  packages: CreditPackage[];
   // Promo footer slogans
   promo_line1_it: string; promo_line1_en: string;
   promo_line2_it: string; promo_line2_en: string;
@@ -778,6 +798,7 @@ export interface SignUpCopy {
   field_birth_date_it: string; field_birth_date_en: string;
   field_birth_city_it: string; field_birth_city_en: string;
   field_birth_province_it: string; field_birth_province_en: string;
+  field_birth_province_placeholder_it: string; field_birth_province_placeholder_en: string;
   field_address_it: string; field_address_en: string;
   field_address_placeholder_it: string; field_address_placeholder_en: string;
   field_civico_it: string; field_civico_en: string;
@@ -830,6 +851,9 @@ export interface SignUpCopy {
   err_civico_required_it: string; err_civico_required_en: string;
   err_cap_required_it: string; err_cap_required_en: string;
   err_province_required_it: string; err_province_required_en: string;
+  err_sesso_required_it: string; err_sesso_required_en: string;
+  err_birth_city_required_it: string; err_birth_city_required_en: string;
+  err_birth_province_required_it: string; err_birth_province_required_en: string;
   err_codice_univoco_required_it: string; err_codice_univoco_required_en: string;
   err_ente_required_it: string; err_ente_required_en: string;
   err_city_required_it: string; err_city_required_en: string;
@@ -1607,7 +1631,7 @@ export const INITIAL_REGISTRAZIONE_CLIENTE: RegistrazioneClienteCopy = {
   field_birth_city_it: 'Luogo di Nascita', field_birth_city_en: 'Place of Birth',
   field_birth_city_placeholder_it: 'es. Cagliari, Torino…', field_birth_city_placeholder_en: 'e.g. Cagliari, Turin…',
   field_birth_province_it: 'Provincia di Nascita', field_birth_province_en: 'Province of Birth',
-  field_birth_province_placeholder_it: 'es. CA, TO, MI…', field_birth_province_placeholder_en: 'e.g. CA, TO, MI…',
+  field_birth_province_placeholder_it: 'CA (EE se nato all\'estero)', field_birth_province_placeholder_en: 'CA (EE if born abroad)',
   // Azienda
   field_ragione_sociale_it: 'Ragione Sociale', field_ragione_sociale_en: 'Company Name',
   field_piva_it: 'P.IVA', field_piva_en: 'VAT Number',
@@ -1801,6 +1825,19 @@ export const INITIAL_CREDIT_WALLET: CreditWalletCopy = {
   err_payment_not_ready_en: 'Payment system is not ready.',
   err_payment_failed_it: 'Elaborazione del pagamento fallita.',
   err_payment_failed_en: 'Payment processing failed.',
+  // Seed dei pacchetti: identico a quello che il sito mostrava quando gli
+  // importi erano hardcoded in CreditWalletPage.tsx (CREDIT_PACKAGES).
+  packages: [
+    { id: 'starter-50',   series: 'STARTER SERIES', name: 'Starter 50',      rechargeAmount: 50,   receivedAmount: 60,     bonus: 10,     bonusPercentage: 20 },
+    { id: 'starter-100',  series: 'STARTER SERIES', name: 'Starter 100',     rechargeAmount: 100,  receivedAmount: 120,    bonus: 20,     bonusPercentage: 20 },
+    { id: 'booster-200',  series: 'BOOSTER SERIES', name: 'Booster 200',     rechargeAmount: 200,  receivedAmount: 240,    bonus: 40,     bonusPercentage: 20 },
+    { id: 'booster-300',  series: 'BOOSTER SERIES', name: 'Booster 300',     rechargeAmount: 300,  receivedAmount: 369,    bonus: 69,     bonusPercentage: 23, popular: true },
+    { id: 'power-500',    series: 'POWER SERIES',   name: 'Power 500',       rechargeAmount: 500,  receivedAmount: 625,    bonus: 125,    bonusPercentage: 25 },
+    { id: 'power-750',    series: 'POWER SERIES',   name: 'Power 750',       rechargeAmount: 750,  receivedAmount: 952.50, bonus: 202.50, bonusPercentage: 27 },
+    { id: 'premium-1000', series: 'PREMIUM SERIES', name: 'Premium 1.000',   rechargeAmount: 1000, receivedAmount: 1290,   bonus: 290,    bonusPercentage: 29 },
+    { id: 'premium-2000', series: 'PREMIUM SERIES', name: 'Premium 2.000',   rechargeAmount: 2000, receivedAmount: 2620,   bonus: 620,    bonusPercentage: 31 },
+    { id: 'elite-5000',   series: 'ELITE SERIES',   name: 'Elite 5.000',     rechargeAmount: 5000, receivedAmount: 6650,   bonus: 1650,   bonusPercentage: 33 },
+  ],
 };
 
 // ─── Default Booking seed (yacht/jet/heli auth gate + chrome + errors) ───
@@ -1967,6 +2004,7 @@ export const INITIAL_SIGNUP: SignUpCopy = {
   field_birth_date_it: 'Data di Nascita', field_birth_date_en: 'Date of Birth',
   field_birth_city_it: 'Città di Nascita', field_birth_city_en: 'Place of Birth',
   field_birth_province_it: 'Provincia di Nascita', field_birth_province_en: 'Province of Birth',
+  field_birth_province_placeholder_it: 'CA (EE se nato all\'estero)', field_birth_province_placeholder_en: 'CA (EE if born abroad)',
   field_address_it: 'Indirizzo (Residenza)', field_address_en: 'Address (Residence)',
   field_address_placeholder_it: 'Via Roma', field_address_placeholder_en: 'Via Roma',
   field_civico_it: 'Numero Civico', field_civico_en: 'Street Number',
@@ -2016,6 +2054,9 @@ export const INITIAL_SIGNUP: SignUpCopy = {
   err_civico_required_it: 'Numero civico è obbligatorio', err_civico_required_en: 'Street number is required',
   err_cap_required_it: 'CAP è obbligatorio', err_cap_required_en: 'Postal code is required',
   err_province_required_it: 'Provincia è obbligatoria', err_province_required_en: 'Province is required',
+  err_sesso_required_it: 'Sesso è obbligatorio', err_sesso_required_en: 'Gender is required',
+  err_birth_city_required_it: 'Città di Nascita è obbligatoria', err_birth_city_required_en: 'Place of birth is required',
+  err_birth_province_required_it: 'Provincia di Nascita è obbligatoria (EE se nato all\'estero)', err_birth_province_required_en: 'Province of birth is required (EE if born abroad)',
   err_codice_univoco_required_it: 'Codice Univoco è obbligatorio', err_codice_univoco_required_en: 'Unique code is required',
   err_ente_required_it: 'Ente o Ufficio è obbligatorio', err_ente_required_en: 'Agency or office is required',
   err_city_required_it: 'Città è obbligatorio', err_city_required_en: 'City is required',
