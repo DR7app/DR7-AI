@@ -134,6 +134,11 @@ export default function SiteUsersTab() {
   const [sortField, setSortField] = useState<'nome' | 'email' | 'created_at' | 'last_sign_in_at' | 'balance'>('created_at')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [apertoId, setApertoId] = useState<string | null>(null)
+  const [errore, setErrore] = useState('')
+  // Accredito dei 10€ di benvenuto: `null` = nessuno in corso, 'tutti' =
+  // recupero di massa, altrimenti l'id dell'iscritto sulla singola riga.
+  const [accreditando, setAccreditando] = useState<string | null>(null)
+  const [esitoBonus, setEsitoBonus] = useState('')
 
   const toggleSort = (field: typeof sortField) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -143,8 +148,47 @@ export default function SiteUsersTab() {
 
   useEffect(() => { loadUsers() }, [])
 
+  /**
+   * Accredita i 10€ di benvenuto a chi non li ha mai ricevuti.
+   * La RPC dietro la function e' idempotente: chi li ha gia' non li riprende.
+   */
+  async function accreditaBonus(ids: string[], scope: string) {
+    if (ids.length === 0) return
+    const euro = ids.length * 10
+    if (!window.confirm(
+      ids.length === 1
+        ? 'Accreditare 10 € di credito wallet a questo iscritto?'
+        : `Accreditare 10 € a ${ids.length} iscritti senza bonus? Totale ${euro} €.`
+    )) return
+    setAccreditando(scope)
+    setEsitoBonus('')
+    try {
+      const res = await authFetch('/.netlify/functions/grant-welcome-bonus', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userIds: ids }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data?.success !== true) {
+        setEsitoBonus(data?.error || `Accredito non riuscito (HTTP ${res.status}).`)
+        return
+      }
+      const parti = [`${data.accreditati} accreditati (${data.euro} €)`]
+      if (data.gia_accreditati) parti.push(`${data.gia_accreditati} lo avevano gia'`)
+      if (data.errori?.length) parti.push(`${data.errori.length} non riusciti`)
+      setEsitoBonus(parti.join(' — '))
+      // Rilettura: la colonna Bonus e la KPI devono dire la verita' subito.
+      await loadUsers()
+    } catch (e: any) {
+      setEsitoBonus(e?.message || 'Errore di rete durante l\'accredito.')
+    } finally {
+      setAccreditando(null)
+    }
+  }
+
   async function loadUsers() {
     setLoading(true)
+    setErrore('')
     try {
       const res = await authFetch('/.netlify/functions/list-site-users')
       const data = await res.json()
@@ -152,9 +196,15 @@ export default function SiteUsersTab() {
         setUsers(data.users.sort((a: SiteUser, b: SiteUser) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         ))
+      } else {
+        // 26/08/2026: prima l'errore veniva ignorato e la tabella restava
+        // vuota. Un elenco vuoto sembrava "iscritti cancellati": va detto
+        // chiaramente che e' la lettura ad essere fallita.
+        setErrore(data.error || 'Impossibile leggere l\'elenco degli iscritti.')
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to load site users:', e)
+      setErrore(e?.message || 'Impossibile leggere l\'elenco degli iscritti.')
     } finally {
       setLoading(false)
     }
@@ -273,6 +323,27 @@ export default function SiteUsersTab() {
         </div>
       </div>
 
+      {errore && (
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3">
+          <p className="text-xs text-red-200">
+            <span className="font-semibold">Elenco non caricato.</span> Nessun iscritto e' stato cancellato:
+            la lettura e' fallita ({errore}). Riprova.
+          </p>
+          <button
+            onClick={loadUsers}
+            className="shrink-0 px-3 py-1 rounded-full border border-red-500/40 text-[11px] font-semibold text-red-200 hover:bg-red-500/20"
+          >
+            Riprova
+          </button>
+        </div>
+      )}
+
+      {esitoBonus && (
+        <div className="rounded-xl border border-theme-border bg-theme-bg-secondary px-4 py-3">
+          <p className="text-xs text-theme-text-secondary"><span className="font-semibold">Bonus benvenuto:</span> {esitoBonus}</p>
+        </div>
+      )}
+
       {/* 5 KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         <KpiCard label="Iscritti Totali" value={stats.total} ring="#3B82F6"/>
@@ -280,7 +351,17 @@ export default function SiteUsersTab() {
         <KpiCard label="Non Verificati" value={stats.nonVerificati} subtitle={`${stats.total > 0 ? Math.round((stats.nonVerificati / stats.total) * 100) : 0}% del totale`} ring="#F59E0B"/>
         <KpiCard label="Nuovi Questo Mese" value={stats.nuoviMese} ring="#A855F7"/>
         <KpiCard label="Credito Totale" value={fmtEur(stats.totalCredit)} ring="#19C2D6"/>
-        <KpiCard label="Senza Bonus 10€" value={stats.senzaBonus} subtitle={`${stats.schedaIncompleta} schede incomplete`} ring="#EF4444"/>
+        {/* 26/08/2026 — la carta diceva quanti erano senza bonus ma non dava
+            modo di rimediare: il recupero si faceva a mano sul database. */}
+        <KpiCard
+          label="Senza Bonus 10€" value={stats.senzaBonus}
+          subtitle={`${stats.schedaIncompleta} schede incomplete`} ring="#EF4444"
+          azione={stats.senzaBonus > 0 ? {
+            testo: accreditando === 'tutti' ? 'Accredito…' : `Accredita ${stats.senzaBonus * 10} €`,
+            disabilitata: accreditando !== null,
+            onClick: () => accreditaBonus(users.filter(u => !u.bonus_benvenuto).map(u => u.id), 'tutti'),
+          } : undefined}
+        />
       </div>
 
       {/* Search */}
@@ -304,8 +385,8 @@ export default function SiteUsersTab() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-theme-border bg-theme-bg-tertiary/40 text-left">
-                  <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('nome')}>Nome{arrow('nome')}</th>
-                  <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('email')}>Email{arrow('email')}</th>
+                  <th className="py-2.5 px-3 w-px whitespace-nowrap text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('nome')}>Nome{arrow('nome')}</th>
+                  <th className="py-2.5 px-3 w-full text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider cursor-pointer select-none hover:text-theme-text-primary" onClick={() => toggleSort('email')}>Email{arrow('email')}</th>
                   <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider">Telefono</th>
                   <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider">Codice fiscale</th>
                   <th className="py-2.5 px-3 text-[10px] font-semibold text-theme-text-muted uppercase tracking-wider">Residenza</th>
@@ -328,10 +409,10 @@ export default function SiteUsersTab() {
                         className="border-b border-theme-border/50 hover:bg-theme-bg-hover/30 cursor-pointer"
                         onClick={() => setApertoId(aperto ? null : u.id)}
                       >
-                        <td className="py-2 px-3 text-theme-text-primary font-medium">
+                        <td className="py-2 px-3 w-px whitespace-nowrap text-theme-text-primary font-medium">
                           <span className="text-theme-text-muted mr-1.5">{aperto ? '▾' : '▸'}</span>{fullName}
                         </td>
-                        <td className="py-2 px-3 text-theme-text-muted text-xs truncate max-w-[200px]">{u.email}</td>
+                        <td className="py-2 px-3 w-full max-w-0 truncate text-theme-text-muted text-xs">{u.email}</td>
                         <td className="py-2 px-3 text-theme-text-muted text-xs"><NumeroTelefono valore={u.telefono} vuoto="-" /></td>
                         <td className="py-2 px-3 text-theme-text-muted text-xs font-mono whitespace-nowrap">{u.codice_fiscale || u.partita_iva || '-'}</td>
                         <td className="py-2 px-3 text-theme-text-muted text-xs truncate max-w-[160px]">{residenzaBreve || '-'}</td>
@@ -348,7 +429,17 @@ export default function SiteUsersTab() {
                         <td className="py-2 px-3">
                           {u.bonus_benvenuto
                             ? <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 uppercase">Accreditato</span>
-                            : <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/15 text-red-300 border border-red-500/40 uppercase">Mancante</span>
+                            : (
+                              // Il clic non deve aprire/chiudere la scheda della riga.
+                              <button
+                                onClick={e => { e.stopPropagation(); accreditaBonus([u.id], u.id) }}
+                                disabled={accreditando !== null}
+                                title="Accredita i 10 € di benvenuto"
+                                className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/15 text-red-300 border border-red-500/40 uppercase hover:bg-red-500/30 disabled:opacity-50"
+                              >
+                                {accreditando === u.id ? 'Accredito…' : 'Accredita 10 €'}
+                              </button>
+                            )
                           }
                         </td>
                         <td className="py-2 px-3 text-right font-bold text-dr7-gold tabular-nums">{fmtEur(u.balance)}</td>
@@ -420,7 +511,10 @@ export default function SiteUsersTab() {
   )
 }
 
-function KpiCard({ label, value, subtitle, ring }: { label: string; value: number | string; subtitle?: string; ring: string }) {
+function KpiCard({ label, value, subtitle, ring, azione }: {
+  label: string; value: number | string; subtitle?: string; ring: string
+  azione?: { testo: string; onClick: () => void; disabilitata?: boolean }
+}) {
   return (
     <div className="relative overflow-hidden rounded-2xl border bg-theme-bg-secondary p-4" style={{ borderColor: `${ring}33` }}>
       <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full blur-2xl pointer-events-none" style={{ background: `${ring}22` }}/>
@@ -428,6 +522,16 @@ function KpiCard({ label, value, subtitle, ring }: { label: string; value: numbe
         <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: `${ring}cc` }}>{label}</div>
         <div className="text-2xl lg:text-3xl font-bold mt-2 tabular-nums" style={{ color: ring }}>{value}</div>
         {subtitle && <div className="text-[11px] text-theme-text-muted mt-1 truncate">{subtitle}</div>}
+        {azione && (
+          <button
+            onClick={azione.onClick}
+            disabled={azione.disabilitata}
+            className="mt-2 w-full rounded-lg border px-2 py-1 text-[11px] font-semibold transition-opacity hover:opacity-80 disabled:opacity-50"
+            style={{ borderColor: `${ring}66`, color: ring, background: `${ring}18` }}
+          >
+            {azione.testo}
+          </button>
+        )}
       </div>
     </div>
   )
