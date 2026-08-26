@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { SECTIONS, BUSINESSES, type BusinessId } from './CentralinaProTab'
-import { MARE_FORM_SECTIONS, BOOKING_FORM_OFF_KEY, CENTRALINA_SECTION_BY_FORM_SECTION } from './mareFormSections'
+import { MARE_FORM_SECTIONS, FORM_SECTIONS_SOLO_MARE, BOOKING_FORM_OFF_KEY, CENTRALINA_SECTION_BY_FORM_SECTION } from './mareFormSections'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Cfg = Record<string, any>
@@ -18,6 +18,10 @@ type BookingMode = 'preventivo' | 'bookable'
 // Business i cui servizi passano dalla pagina pubblica preventivo/prenotabile
 // (NoleggioServicePage). Terra (wizard auto) e Lavaggio non hanno questa modalita'.
 const MODE_BUSINESSES: BusinessId[] = ['mare', 'aria', 'soggiorni']
+// Business la cui "Nuova prenotazione" e' ReservationsTab con il proprio
+// serviceType: sono gli unici in cui gli interruttori del form hanno effetto.
+// Terra non c'e' di proposito — il suo form resta quello di sempre.
+const FORM_BUSINESSES: BusinessId[] = ['mare', 'aria', 'soggiorni']
 
 export default function InterruttoriTab() {
   const [loading, setLoading] = useState(true)
@@ -27,10 +31,9 @@ export default function InterruttoriTab() {
   const [off, setOff] = useState<Record<BusinessId, Set<string>>>(() => ({} as Record<BusinessId, Set<string>>))
   // modalita' sito per business (default 'bookable' = comportamento attuale)
   const [modes, setModes] = useState<Record<BusinessId, BookingMode>>(() => ({} as Record<BusinessId, BookingMode>))
-  // Sezioni del FORM di prenotazione spente (oggi solo Noleggio Mare, che ha la
-  // modale completa allineata al Noleggio Terra). Chiave separata da
+  // Sezioni del FORM di prenotazione spente, per business. Chiave separata da
   // `sezioni_off` perche' riguarda il form, non la configurazione Centralina.
-  const [formOff, setFormOff] = useState<Set<string>>(new Set())
+  const [formOff, setFormOff] = useState<Record<string, Set<string>>>({})
   const [saving, setSaving] = useState<string | null>(null)
 
   useEffect(() => {
@@ -49,8 +52,12 @@ export default function InterruttoriTab() {
         offMap[b.id] = new Set(arr)
         modeMap[b.id] = cfg.booking_mode === 'preventivo' ? 'preventivo' : 'bookable'
       }
-      const mareCfg = cfgByRow['business_mare'] || {}
-      setFormOff(new Set(Array.isArray(mareCfg[BOOKING_FORM_OFF_KEY]) ? (mareCfg[BOOKING_FORM_OFF_KEY] as string[]) : []))
+      const formOffMap: Record<string, Set<string>> = {}
+      for (const b of BUSINESSES) {
+        const cfg = cfgByRow[b.row] || {}
+        formOffMap[b.id] = new Set(Array.isArray(cfg[BOOKING_FORM_OFF_KEY]) ? (cfg[BOOKING_FORM_OFF_KEY] as string[]) : [])
+      }
+      setFormOff(formOffMap)
       setConfigs(cfgByRow)
       setOff(offMap)
       setModes(modeMap)
@@ -119,17 +126,17 @@ export default function InterruttoriTab() {
     }
   }
 
-  // Accende/spegne una sezione della modale di prenotazione Noleggio Mare.
-  async function toggleForm(sectionId: string) {
-    const cur = formOff
+  // Accende/spegne una sezione del form "Nuova prenotazione" di quel business.
+  async function toggleForm(business: BusinessId, sectionId: string) {
+    const cur = formOff[business] || new Set<string>()
     const next = new Set(cur)
     const wasOff = next.has(sectionId)
     if (wasOff) next.delete(sectionId); else next.add(sectionId)
-    setFormOff(next)
-    setSaving(`mare:form:${sectionId}`)
-    const error = await writeConfig('mare', { [BOOKING_FORM_OFF_KEY]: Array.from(next) })
+    setFormOff(prev => ({ ...prev, [business]: next }))
+    setSaving(`${business}:form:${sectionId}`)
+    const error = await writeConfig(business, { [BOOKING_FORM_OFF_KEY]: Array.from(next) })
     setSaving(null)
-    if (error) { setFormOff(cur); toast.error('Salvataggio fallito: ' + error.message) }
+    if (error) { setFormOff(prev => ({ ...prev, [business]: cur })); toast.error('Salvataggio fallito: ' + error.message) }
     else toast.success(wasOff ? 'Sezione attivata nel form' : 'Sezione nascosta dal form')
   }
 
@@ -205,27 +212,29 @@ export default function InterruttoriTab() {
                   })}
                 </div>
 
-                {/* Sezioni della modale "Nuova prenotazione" — solo Noleggio Mare,
-                    che usa la modale completa allineata al Noleggio Terra.
-                    Cliente, Barca, Date/Orari, Riepilogo e Pagamento non sono
-                    spegnibili: senza quelli non esiste una prenotazione. */}
-                {b.id === 'mare' && (
+                {/* Sezioni del form "Nuova prenotazione" di Mare, Aria e
+                    Soggiorni (ReservationsTab con il loro serviceType).
+                    Cliente, Mezzo, Date/Orari, Luoghi, Riepilogo e Pagamento
+                    non sono spegnibili: senza quelli non esiste una
+                    prenotazione. Skipper, patente nautica e passeggeri sono
+                    sezioni d'acqua e restano al solo Noleggio Mare. */}
+                {FORM_BUSINESSES.includes(b.id) && (
                   <div className="border-t-2 border-theme-border">
                     <div className="px-4 py-3 bg-theme-bg-tertiary/40">
                       <p className="text-sm font-semibold text-theme-text-primary">Form prenotazione</p>
                       <p className="text-[11px] text-theme-text-muted mt-0.5">
-                        Quali blocchi vedi quando apri <em>+ Nuova prenotazione</em>. Km/Sforo e Assicurazioni non ci sono: su una barca non si applicano.
+                        Quali blocchi vedi quando apri <em>+ Nuova prenotazione</em>. Km/Sforo e Assicurazioni non ci sono: non si applicano a questi business.
                       </p>
                     </div>
                     <div className="divide-y divide-theme-border">
-                      {MARE_FORM_SECTIONS.map(s => {
+                      {MARE_FORM_SECTIONS.filter(s => b.id === 'mare' || !FORM_SECTIONS_SOLO_MARE.has(s.id)).map(s => {
                         // Sezione Centralina che pilota questo blocco: se e' OFF
                         // qui sopra, il blocco e' spento anche nel form e
                         // l'interruttore non puo' riaccenderlo.
                         const parent = CENTRALINA_SECTION_BY_FORM_SECTION[s.id]
                         const forcedOff = !!parent && offSet.has(parent.id)
-                        const isOff = formOff.has(s.id) || forcedOff
-                        const busy = saving === `mare:form:${s.id}`
+                        const isOff = (formOff[b.id] || new Set<string>()).has(s.id) || forcedOff
+                        const busy = saving === `${b.id}:form:${s.id}`
                         return (
                           <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
                             <div className="min-w-0">
@@ -239,7 +248,7 @@ export default function InterruttoriTab() {
                               aria-checked={!isOff}
                               disabled={busy || forcedOff}
                               title={forcedOff ? `Riaccendi «${parent!.title}» qui sopra per usarla nel form` : undefined}
-                              onClick={() => toggleForm(s.id)}
+                              onClick={() => toggleForm(b.id, s.id)}
                               className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${isOff ? 'bg-theme-bg-tertiary border border-theme-border' : 'bg-emerald-500'}`}
                             >
                               <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${isOff ? 'translate-x-1' : 'translate-x-[18px]'}`} />
