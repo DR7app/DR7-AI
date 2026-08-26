@@ -40,14 +40,13 @@ export interface BookingLike {
     booking_details?: Record<string, any> | null
 }
 
-/** Etichetta del "pronto al ritiro" per business: e' la parola che vede l'operatore. */
-export function prontoLabel(serviceType?: string | null): string {
-    switch (String(serviceType || '').toLowerCase()) {
-        case 'boat_rental': return 'Mezzo Pronto'
-        case 'heli_rental': return 'Velivolo Pronto'
-        case 'stay_rental': return 'Struttura Pronta'
-        default: return 'Auto Pronta'
-    }
+/**
+ * Etichetta del "pronto al ritiro": una parola sola, uguale per ogni business.
+ * Prima cambiava per servizio ("Auto Pronta", "Mezzo Pronto", "Velivolo
+ * Pronto", "Struttura Pronta"): lo stesso bottone si chiamava in quattro modi.
+ */
+export function prontoLabel(_serviceType?: string | null): string {
+    return 'PRONTA'
 }
 
 /** Trigger dei Messaggi di Sistema Pro per il "pronto", uno per business. */

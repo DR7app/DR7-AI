@@ -3515,16 +3515,16 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     }
   }
 
-  // "Auto Pronta": notifica WhatsApp al cliente che il veicolo è pronto al
-  // ritiro. Invia il template Pro agganciato all'evento "Auto pronta Noleggio"
+  // "PRONTA": notifica WhatsApp al cliente che il mezzo è pronto al
+  // ritiro. Invia il template Pro agganciato all'evento "PRONTA" (Noleggio)
   // (legacy key rental_auto_pronta). Stesso pattern di Prime Wash.
   async function handleAutoPronta(booking: Booking) {
     // Synchronous lock keyed by booking — state guards are async and let a
     // fast double-click through, sending the WhatsApp twice.
     if (autoProntaLockRef.current.has(booking.id) || autoProntaSending) return
-    if (booking.booking_details?.auto_pronta_sent_at) { toast('Guidatori già notificati (Auto Pronta)'); return }
+    if (booking.booking_details?.auto_pronta_sent_at) { toast('Guidatori già notificati (PRONTA)'); return }
 
-    // 2026-06-12: l'Auto Pronta va a TUTTI i guidatori del noleggio (cliente
+    // 2026-06-12: il PRONTA va a TUTTI i guidatori del noleggio (cliente
     // principale + secondo guidatore), CIASCUNO col proprio nome. Il CORPO del
     // messaggio arriva SEMPRE dal template Pro 'rental_auto_pronta' (Messaggi di
     // Sistema Pro) — nessun testo hardcoded: cambiano solo le variabili (nome).
@@ -3555,7 +3555,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     const svcType = (booking as any).service_type || 'car_rental'
 
     setAutoProntaSending(true)
-    const toastId = toast.loading(`Invio AUTO PRONTA a ${recipients.length} guidatore/i...`)
+    const toastId = toast.loading(`Invio PRONTA a ${recipients.length} guidatore/i...`)
     try {
       let sent = 0
       let failed = 0
@@ -3585,17 +3585,17 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         else failed++
       }
       if (templateMissing) {
-        toast.error('Nessun template "Auto pronta Noleggio" configurato in Messaggi di Sistema Pro. Verifica: template ATTIVO, body non vuoto, evento "Auto pronta Noleggio" tra gli eventi gestiti, Tipo servizio = Noleggio.', { id: toastId, duration: 12000 })
+        toast.error('Nessun template "PRONTA" (Noleggio) configurato in Messaggi di Sistema Pro. Verifica: template ATTIVO, body non vuoto, evento "PRONTA" tra gli eventi gestiti, Tipo servizio = Noleggio.', { id: toastId, duration: 12000 })
         return
       }
       if (sent === 0) {
-        toast.error('Invio AUTO PRONTA fallito per tutti i guidatori', { id: toastId })
+        toast.error('Invio PRONTA fallito per tutti i guidatori', { id: toastId })
         return
       }
       const newDetails = { ...(booking.booking_details || {}), auto_pronta_sent_at: new Date().toISOString() }
       await supabase.from('bookings').update({ booking_details: newDetails }).eq('id', booking.id)
       setSelectedBooking(prev => (prev && prev.id === booking.id ? { ...prev, booking_details: newDetails } as Booking : prev))
-      toast.success(`WhatsApp AUTO PRONTA inviato a ${sent} guidatore/i${failed ? ` (${failed} falliti)` : ''}`, { id: toastId })
+      toast.success(`WhatsApp PRONTA inviato a ${sent} guidatore/i${failed ? ` (${failed} falliti)` : ''}`, { id: toastId })
       logAdminAction('auto_pronta_sent', 'booking', booking.id, buildBookingContext(booking))
     } catch (err: unknown) {
       toast.error('Errore: ' + (err instanceof Error ? err.message : String(err)), { id: toastId })
@@ -11371,7 +11371,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                           title: 'Altro',
                           actions: [
                             {
-                              label: booking.booking_details?.auto_pronta_sent_at ? '✓ Auto Pronta inviata' : 'Auto Pronta',
+                              label: booking.booking_details?.auto_pronta_sent_at ? '✓ PRONTA inviata' : 'PRONTA',
                               onClick: () => handleAutoPronta(booking),
                               disabled: autoProntaSending || !!booking.booking_details?.auto_pronta_sent_at,
                               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -11391,14 +11391,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                             <button
                               onClick={() => handleAutoPronta(booking)}
                               disabled={autoProntaSending || autoProntaDoneMd}
-                              title="Notifica WhatsApp al cliente: veicolo pronto al ritiro"
+                              title="Notifica WhatsApp al cliente: mezzo pronto al ritiro"
                               className={`px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors disabled:opacity-60 ${
                                 autoProntaDoneMd
                                   ? 'bg-green-600/20 text-green-700 dark:text-green-400 cursor-default'
                                   : 'bg-green-600 hover:bg-green-700 text-white'
                               }`}
                             >
-                              {autoProntaDoneMd ? '✓ Pronta' : 'Auto Pronta'}
+                              {autoProntaDoneMd ? '✓ PRONTA' : 'PRONTA'}
                             </button>
                           )}
                           <GestisciMenu sections={sections} size="md" />
@@ -11600,7 +11600,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                                 title: 'Altro',
                                 actions: [
                                   {
-                                    label: booking.booking_details?.auto_pronta_sent_at ? '✓ Auto Pronta inviata' : 'Auto Pronta',
+                                    label: booking.booking_details?.auto_pronta_sent_at ? '✓ PRONTA inviata' : 'PRONTA',
                                     onClick: () => handleAutoPronta(booking),
                                     disabled: autoProntaSending || !!booking.booking_details?.auto_pronta_sent_at,
                                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -11623,14 +11623,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                                   <button
                                     onClick={() => handleAutoPronta(booking)}
                                     disabled={autoProntaSending || autoProntaDone}
-                                    title="Notifica WhatsApp al cliente: veicolo pronto al ritiro"
+                                    title="Notifica WhatsApp al cliente: mezzo pronto al ritiro"
                                     className={`px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors disabled:opacity-60 ${
                                       autoProntaDone
                                         ? 'bg-green-600/20 text-green-700 dark:text-green-400 cursor-default'
                                         : 'bg-green-600 hover:bg-green-700 text-white'
                                     }`}
                                   >
-                                    {autoProntaDone ? '✓ Pronta' : 'Pronta'}
+                                    {autoProntaDone ? '✓ PRONTA' : 'PRONTA'}
                                   </button>
                                 )}
                                 <GestisciMenu sections={sections} size="sm" />
@@ -11913,7 +11913,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                           : 'bg-green-600 hover:bg-green-700 text-white'
                       }`}
                     >
-                      {selectedBooking.booking_details?.auto_pronta_sent_at ? '✓ Auto Pronta inviata' : autoProntaSending ? 'Invio…' : 'Auto Pronta'}
+                      {selectedBooking.booking_details?.auto_pronta_sent_at ? '✓ PRONTA inviata' : autoProntaSending ? 'Invio…' : 'PRONTA'}
                     </button>
                   )}
                   {/* Pre-Auth Cauzione disabled — Nexi capture not reliable via API */}
