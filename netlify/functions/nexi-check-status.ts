@@ -1,6 +1,7 @@
 import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { parseNexiOrder } from './utils/nexiOrderStatus';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -127,24 +128,25 @@ const handler: Handler = async (event) => {
             };
         }
 
-        // Extract status from Nexi response
-        const orderStatus = responseData.orderStatus?.lastOperationType || 'UNKNOWN';
-        const lastOperation = responseData.orderStatus?.lastOperation || {};
-        const operationResult = lastOperation.operationResult || 'UNKNOWN';
-        const operationId = lastOperation.operationId || null;
-        const operationAmount = lastOperation.operationAmount ? Number(lastOperation.operationAmount) / 100 : null;
+        // Esito reale letto da orderStatus + operations[]: `orderStatus.lastOperation`
+        // NON esiste nella risposta di GET /orders/{orderId} (vedi nexiOrderStatus.ts).
+        const esito = parseNexiOrder(responseData);
+        const orderStatus = esito.lastOperationType;
+        const operationResult = esito.operationResult;
+        const operationId = esito.operationId;
+        const operationAmount = esito.amount != null ? esito.amount / 100 : null;
 
         // Map to our status
         let status: string;
-        if (operationResult === 'AUTHORIZED' && orderStatus === 'AUTHORIZATION') {
-            status = 'preauthorized'; // Held, not captured
-        } else if (operationResult === 'EXECUTED' && orderStatus === 'CAPTURE') {
+        if (esito.capturedAmount > 0) {
             status = 'captured'; // Captured/charged
-        } else if (operationResult === 'EXECUTED' && orderStatus === 'VOID') {
-            status = 'voided'; // Cancelled/released
-        } else if (operationResult === 'EXECUTED' && orderStatus === 'REFUND') {
+        } else if (operationResult === 'REFUNDED') {
             status = 'refunded';
-        } else if (operationResult === 'DECLINED' || operationResult === 'DENIED') {
+        } else if (operationResult === 'VOIDED') {
+            status = 'voided'; // Cancelled/released
+        } else if (operationResult === 'AUTHORIZED') {
+            status = 'preauthorized'; // Held, not captured
+        } else if (operationResult === 'DECLINED' || operationResult === 'DENIED' || operationResult === 'DENIED_BY_RISK') {
             status = 'declined';
         } else if (operationResult === 'PENDING') {
             status = 'pending';

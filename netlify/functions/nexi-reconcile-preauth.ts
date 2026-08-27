@@ -22,7 +22,10 @@ const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1'
 const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
 // Stati "in sospeso" che vanno riverificati contro Nexi.
-const STATI_DA_VERIFICARE = ['pending_preauth', 'preauth_held', 'preauth_pending_link']
+// 'failed' incluso dal 27/08/2026: il callback leggeva un campo inesistente
+// (orderStatus.lastOperation) e marcava RIFIUTATE pre-autorizzazioni riuscite.
+// Vanno riverificate contro Nexi per rimettere a posto le cauzioni.
+const STATI_DA_VERIFICARE = ['pending_preauth', 'preauth_held', 'preauth_pending_link', 'failed']
 
 type Esito = {
     order_id: string
@@ -134,6 +137,7 @@ export const handler: Handler = async (event) => {
                         nexi_operation_id: operationId,
                         stato: 'Attiva',
                         metodo: 'preautorizzazione',
+                        note: `Preautorizzazione completata (fondi bloccati) - OpId: ${operationId} - ${motivo} - riconciliata con Nexi il ${new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}`,
                         updated_at: new Date().toISOString()
                     }).eq('id', cauzioneId)
                 }

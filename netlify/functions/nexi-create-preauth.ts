@@ -3,6 +3,7 @@ import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { requireAuth } from './require-auth'
 import { nexiCallWithRecurrenceFallback } from './utils/nexiTokenizationFallback';
+import { adminBaseUrl, successUrl, cancelUrl } from './utils/paymentReturnUrls';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -53,7 +54,9 @@ const handler: Handler = async (event) => {
         // Convert amount to cents
         const amountCents = Math.round(amount * 100);
 
-        const siteUrl = process.env.URL || 'https://platform.dr7ai.com';
+        // Il cliente atterra sul SITO, mai sul gestionale; il callback
+        // server-to-server resta su questo dominio.
+        const adminUrl = adminBaseUrl();
 
         // Calculate expiration: use hours if specified, otherwise 7 days
         const expirationDate = new Date();
@@ -90,9 +93,9 @@ const handler: Handler = async (event) => {
                 language: 'ita',
                 expirationDate: expirationDateStr,
                 expirationTime: expirationDate.toISOString(),
-                resultUrl: `${siteUrl}/admin?cauzione=${cauzioneId}&status=success`,
-                cancelUrl: `${siteUrl}/admin?cauzione=${cauzioneId}&status=cancelled`,
-                notificationUrl: `${siteUrl}/.netlify/functions/nexi-preauth-callback`,
+                resultUrl: successUrl(orderId, 'cauzione'),
+                cancelUrl: cancelUrl(orderId, 'cauzione'),
+                notificationUrl: `${adminUrl}/.netlify/functions/nexi-preauth-callback`,
                 // Tokenize the card during preauth so the cauzione capture
                 // (or any later MIT charge: sforo, danni) doesn't need the
                 // card again from the customer.

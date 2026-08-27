@@ -3,6 +3,7 @@ import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { applyTokenizedCardUpdate } from './utils/nexiCards';
 import { triggerSystemMessageEvent } from './utils/triggerSystemMessageEvent';
+import { fetchNexiOrderOutcome } from './utils/nexiOrderStatus';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -10,7 +11,6 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Sempre NEXI_API_KEY: NEXI_API_KEY_EXPLICIT restituisce 401 sull'API XPay.
 const NEXI_API_KEY = process.env.NEXI_API_KEY!;
-const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1';
 
 // Esiti Nexi che NON sono una preautorizzazione riuscita.
 const FAILURE_RESULTS = new Set([
@@ -18,47 +18,6 @@ const FAILURE_RESULTS = new Set([
     'FAILED', 'CANCELED', 'CANCELLED', 'VOIDED', 'REFUNDED', 'PENDING',
     'AUTHORIZATION_REQUESTED', 'UNKNOWN'
 ]);
-
-/**
- * Interroga Nexi per l'esito REALE dell'ordine. La notifica in arrivo non e'
- * autenticata (chiunque puo' POSTare su questa URL) e puo' riferirsi a un
- * tentativo diverso da quello finale: l'unica fonte di verita' e' l'API.
- * Ritorna null se la chiamata non e' andata a buon fine.
- */
-async function fetchNexiOrderOutcome(orderId: string): Promise<{ operationResult: string; lastOperationType: string; operationId: string | null; authorizationCode: string | null; contractId: string | null; amount: number | null } | null> {
-    if (!NEXI_API_KEY) {
-        console.error('[nexi-preauth-callback] NEXI_API_KEY mancante: impossibile verificare l\'ordine');
-        return null;
-    }
-    try {
-        const correlationId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-            const r = Math.random() * 16 | 0;
-            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-        });
-        const res = await fetch(`${NEXI_BASE_URL}/orders/${orderId}`, {
-            method: 'GET',
-            headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': correlationId }
-        });
-        const text = await res.text();
-        if (!res.ok) {
-            console.error('[nexi-preauth-callback] Verifica ordine fallita:', res.status, text.substring(0, 300));
-            return null;
-        }
-        const data = JSON.parse(text);
-        const lastOp = data.orderStatus?.lastOperation || {};
-        return {
-            operationResult: String(lastOp.operationResult || 'UNKNOWN').toUpperCase(),
-            lastOperationType: String(data.orderStatus?.lastOperationType || lastOp.operationType || 'UNKNOWN').toUpperCase(),
-            operationId: lastOp.operationId || null,
-            authorizationCode: lastOp.additionalData?.authorizationCode || null,
-            contractId: lastOp.additionalData?.contractId || null,
-            amount: lastOp.operationAmount != null ? Number(lastOp.operationAmount) : null
-        };
-    } catch (err) {
-        console.error('[nexi-preauth-callback] Errore verifica ordine:', err);
-        return null;
-    }
-}
 
 const handler: Handler = async (event) => {
     const headers = {
@@ -173,7 +132,7 @@ const handler: Handler = async (event) => {
         // ESITO REALE: la notifica non e' autenticata e puo' arrivare per un
         // tentativo intermedio. Chiediamo sempre a Nexi qual e' l'ultimo stato
         // dell'ordine e usiamo QUELLO. Il payload serve solo da fallback.
-        const verified = await fetchNexiOrderOutcome(orderId);
+        const verified = await fetchNexiOrderOutcome(orderId, NEXI_API_KEY, 'nexi-preauth-callback');
         if (verified) {
             console.log('[nexi-preauth-callback] Verifica Nexi:', JSON.stringify(verified));
         } else {
@@ -193,6 +152,18 @@ const handler: Handler = async (event) => {
                 statusCode: 503,
                 headers,
                 body: JSON.stringify({ success: false, error: 'Verifica Nexi non disponibile, riprovare' })
+            };
+        }
+
+        // Ordine senza nessuna operazione: il cliente non ha (ancora) pagato,
+        // oppure Nexi non ha ancora registrato il tentativo. Esito non deciso:
+        // non scriviamo niente e facciamo ripetere la notifica.
+        if (verified.operationCount === 0 && verified.operationResult === 'UNKNOWN') {
+            console.warn('[nexi-preauth-callback] Ordine senza operazioni su Nexi:', orderId, '— nessuna scrittura');
+            return {
+                statusCode: 503,
+                headers,
+                body: JSON.stringify({ success: false, error: 'Esito non ancora disponibile su Nexi' })
             };
         }
 

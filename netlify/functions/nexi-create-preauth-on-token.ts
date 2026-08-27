@@ -2,6 +2,7 @@ import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { getCorsOrigin } from './cors-headers'
 import { requireAuth } from './require-auth'
+import { adminBaseUrl, successUrl, cancelUrl } from './utils/paymentReturnUrls';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -52,7 +53,8 @@ const handler: Handler = async (event) => {
 
         const orderId = `PT${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.slice(0, 18)
         const amountCents = Math.round(amount * 100)
-        const siteUrl = process.env.URL || 'https://platform.dr7ai.com'
+        // Come sopra: esito al cliente sul sito, notifica sull'admin.
+        const adminUrl = adminBaseUrl()
 
         // Link scade in expirationHours (default 24h) per pagamento;
         // l'auth hold poi resta secondo le regole del circuito carte.
@@ -78,9 +80,9 @@ const handler: Handler = async (event) => {
                 language: 'ita',
                 expirationDate: toRomeDate(expirationDate),
                 expirationTime: expirationDate.toISOString(),
-                resultUrl: `${siteUrl}/admin?preauth=${orderId}&status=success`,
-                cancelUrl: `${siteUrl}/admin?preauth=${orderId}&status=cancelled`,
-                notificationUrl: `${siteUrl}/.netlify/functions/nexi-preauth-callback`,
+                resultUrl: successUrl(orderId, 'cauzione'),
+                cancelUrl: cancelUrl(orderId, 'cauzione'),
+                notificationUrl: `${adminUrl}/.netlify/functions/nexi-preauth-callback`,
                 // CHIAVE: usa il contractId esistente. Nexi mostra la carta
                 // mascherata al cliente che conferma in 1 click (SCA se
                 // richiesto), senza reinserire dati carta.

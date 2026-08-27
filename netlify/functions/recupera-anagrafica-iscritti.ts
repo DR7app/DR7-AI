@@ -31,7 +31,12 @@
  * Scrive sull'anagrafica dei clienti, quindi non basta essere autenticati:
  * chi chiama dev'essere un operatore presente in `admins`.
  *
- * Body: { userIds: string[] }  -> massimo 50 per chiamata.
+ * Si chiama da DUE tab, che cosi' smettono di vedere due verita' diverse:
+ *  - "Iscritti al Sito" passa `userIds` (gli account del sito);
+ *  - "Lead / Clienti" passa `customerIds` (le schede incomplete): la function
+ *    risale da sola all'account e ai suoi dati.
+ *
+ * Body: { userIds?: string[], customerIds?: string[] }  -> massimo 50 in tutto.
  */
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
@@ -135,6 +140,67 @@ function anagraficaDaiMetadati(m: Meta): Record<string, string> {
   return campi
 }
 
+/**
+ * 26/08/2026 — Seconda sorgente: i dati compilati nei FORM DI PRENOTAZIONE del
+ * sito. Fino ad oggi finivano solo dentro `bookings.booking_details.customer`
+ * e non risalivano mai alla scheda: chi si iscriveva e comprava un lavaggio
+ * compariva in Clienti senza telefono ne' codice fiscale, anche se quei campi
+ * li aveva scritti al momento di pagare. Qui si legge la prenotazione piu'
+ * recente e si riempiono i buchi lasciati dai metadati.
+ */
+function anagraficaDallePrenotazioni(rows: Array<Record<string, any>>): Record<string, string> {
+  const campi: Record<string, string> = {}
+  // Dalla piu' recente alla piu' vecchia: la prima che valorizza un campo vince.
+  for (const r of rows) {
+    const c = (r?.booking_details?.customer || {}) as Record<string, any>
+    const g = (r?.booking_details?.guest || r?.booking_details?.driver || {}) as Record<string, any>
+    const metti = (colonna: string, ...valori: any[]) => {
+      if (campi[colonna]) return
+      const v = testo(...valori)
+      if (v) campi[colonna] = v
+    }
+
+    if (!campi.nome && !campi.cognome) {
+      const intero = testo(c.fullName, c.full_name, c.nome && c.cognome ? `${c.nome} ${c.cognome}` : '', g.fullName, r.customer_name)
+      const nomeSolo = testo(c.nome, c.firstName, c.first_name, g.nome)
+      const cognomeSolo = testo(c.cognome, c.lastName, c.last_name, g.cognome)
+      if (nomeSolo || cognomeSolo) {
+        if (nomeSolo) campi.nome = nomeSolo
+        if (cognomeSolo) campi.cognome = cognomeSolo
+      } else if (intero) {
+        const parti = intero.split(/\s+/)
+        campi.nome = parti[0]
+        campi.cognome = parti.slice(1).join(' ')
+      }
+    }
+
+    metti('telefono', c.phone, c.telefono, g.phone, r.customer_phone)
+    metti('codice_fiscale', c.codiceFiscale, c.codice_fiscale, g.codiceFiscale)
+    metti('indirizzo', c.indirizzo, c.address, c.via)
+    metti('numero_civico', c.numeroCivico, c.numero_civico, c.civico)
+    metti('codice_postale', c.codicePostale, c.codice_postale, c.cap)
+    metti('citta_residenza', c.cittaResidenza, c.citta_residenza, c.citta, c.city)
+    metti('provincia_residenza', c.provinciaResidenza, c.provincia_residenza, c.provincia)
+    metti('data_nascita', dataValida(testo(c.dataNascita, c.data_nascita, c.birthDate)))
+    metti('citta_nascita', c.cittaNascita, c.citta_nascita)
+    metti('provincia_nascita', c.provinciaNascita, c.provincia_nascita)
+    metti('nazione', c.nazione, c.country)
+    metti('denominazione', c.denominazione, c.ragioneSociale, c.company_name)
+    metti('partita_iva', c.partitaIva, c.partita_iva, c.vat)
+    metti('pec', c.pec)
+    metti('codice_destinatario', c.codiceDestinatario, c.codice_destinatario, c.sdi)
+    metti('numero_patente', c.numeroPatente, c.numero_patente, c.licenseNumber)
+    metti('tipo_patente', c.tipoPatente, c.tipo_patente)
+    metti('patente_emessa_da', c.patenteEmessaDa, c.patente_emessa_da)
+    metti('patente_data_rilascio', dataValida(testo(c.patenteDataRilascio, c.patente_data_rilascio)))
+    metti('patente_scadenza', dataValida(testo(c.patenteScadenza, c.patente_scadenza, c.licenseExpiry)))
+  }
+
+  if (campi.codice_fiscale) campi.codice_fiscale = campi.codice_fiscale.toUpperCase()
+  for (const k of Object.keys(campi)) if (!campi[k]) delete campi[k]
+  return campi
+}
+
 // Tutti i nomi di colonna che questa function sa scrivere.
 const CANDIDATE = Object.keys(anagraficaDaiMetadati({
   nome: 'x', cognome: 'x', telefono: 'x', pec: 'x', codiceFiscale: 'x', sesso: 'x',
@@ -188,31 +254,71 @@ const handler: Handler = async (event) => {
   }
 
   try {
-    const { userIds } = JSON.parse(event.body || '{}') as { userIds?: string[] }
+    const { userIds, customerIds } = JSON.parse(event.body || '{}') as { userIds?: string[]; customerIds?: string[] }
     const ids = Array.from(new Set((userIds || []).map(v => String(v || '').trim()).filter(Boolean)))
-    if (ids.length === 0) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Nessun iscritto indicato.' }) }
+    const schedaIds = Array.from(new Set((customerIds || []).map(v => String(v || '').trim()).filter(Boolean)))
+    if (ids.length === 0 && schedaIds.length === 0) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Nessuna scheda indicata.' }) }
     }
-    if (ids.length > MAX_PER_CHIAMATA) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: `Troppi iscritti in una sola volta (massimo ${MAX_PER_CHIAMATA}).` }) }
+    if (ids.length + schedaIds.length > MAX_PER_CHIAMATA) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: `Troppe schede in una sola volta (massimo ${MAX_PER_CHIAMATA}).` }) }
     }
 
-    // 1. Metadati auth degli iscritti indicati.
-    const utenti: Array<{ id: string; email: string; meta: Meta }> = []
     const errori: Array<{ email: string; errore: string }> = []
+
+    // 1a. Chiamata dalla tab Lead/Clienti: si parte dalle SCHEDE. Se la scheda
+    //     e' gia' legata a un account si recupera anche dai metadati auth;
+    //     se non lo e', restano comunque le prenotazioni (letta per email).
+    const schedeIndicate: Array<{ id: string; user_id: string | null; email: string }> = []
+    if (schedaIds.length) {
+      const { data: righe, error: schErr } = await supabase
+        .from('customers_extended')
+        .select('id, user_id, email')
+        .in('id', schedaIds)
+      if (schErr) throw schErr
+      for (const r of (righe || []) as any[]) {
+        schedeIndicate.push({ id: String(r.id), user_id: r.user_id ? String(r.user_id) : null, email: String(r.email || '').trim() })
+      }
+      for (const r of schedeIndicate) if (r.user_id && !ids.includes(r.user_id)) ids.push(r.user_id)
+    }
+
+    // 1b. Metadati auth degli account coinvolti.
+    const utenti: Array<{ id: string | null; email: string; meta: Meta; schedaId?: string }> = []
+    const metaDi = new Map<string, { email: string; meta: Meta }>()
     for (let da = 0; da < ids.length; da += IN_PARALLELO) {
       const gruppo = ids.slice(da, da + IN_PARALLELO)
       const letti = await Promise.all(gruppo.map(id => supabase.auth.admin.getUserById(id)))
       letti.forEach(({ data, error }, i) => {
         if (error || !data?.user) {
-          errori.push({ email: gruppo[i], errore: error?.message || 'Iscritto non trovato' })
+          errori.push({ email: gruppo[i], errore: error?.message || 'Account non trovato' })
           return
         }
-        utenti.push({
-          id: data.user.id,
+        metaDi.set(data.user.id, {
           email: String(data.user.email || '').trim(),
           meta: (data.user.user_metadata || {}) as Meta,
         })
+      })
+    }
+
+    // Soggetti da trattare: gli iscritti richiesti + le schede richieste
+    // (senza doppioni quando la stessa persona arriva da entrambe le tab).
+    const visti = new Set<string>()
+    for (const id of (userIds || []).map(v => String(v || '').trim()).filter(Boolean)) {
+      const m = metaDi.get(id)
+      if (!m || visti.has(`u:${id}`)) continue
+      visti.add(`u:${id}`)
+      utenti.push({ id, email: m.email, meta: m.meta })
+    }
+    for (const sch of schedeIndicate) {
+      const chiave = sch.user_id ? `u:${sch.user_id}` : `s:${sch.id}`
+      if (visti.has(chiave)) continue
+      visti.add(chiave)
+      const m = sch.user_id ? metaDi.get(sch.user_id) : null
+      utenti.push({
+        id: sch.user_id,
+        email: m?.email || sch.email,
+        meta: m?.meta || {},
+        schedaId: sch.id,
       })
     }
 
@@ -224,13 +330,45 @@ const handler: Handler = async (event) => {
     const selezione = ['id', 'user_id', 'email', ...scrivibili].join(', ')
     const emails = utenti.map(u => u.email.toLowerCase()).filter(Boolean)
 
-    const [perId, perMail] = await Promise.all([
-      supabase.from('customers_extended').select(selezione).in('user_id', utenti.map(u => u.id)),
+    const [perId, perMail, prenId, prenMail] = await Promise.all([
+      supabase.from('customers_extended').select(selezione).in('user_id', utenti.map(u => u.id).filter(Boolean) as string[]),
       emails.length
         ? supabase.from('customers_extended').select(selezione).in('email', emails)
         : Promise.resolve({ data: [], error: null } as any),
+      // Prenotazioni dell'iscritto: seconda sorgente dell'anagrafica.
+      supabase.from('bookings')
+        .select('user_id, customer_email, customer_name, customer_phone, booking_details, created_at')
+        .in('user_id', utenti.map(u => u.id).filter(Boolean) as string[])
+        .order('created_at', { ascending: false })
+        .limit(500),
+      emails.length
+        ? supabase.from('bookings')
+            .select('user_id, customer_email, customer_name, customer_phone, booking_details, created_at')
+            .in('customer_email', emails)
+            .order('created_at', { ascending: false })
+            .limit(500)
+        : Promise.resolve({ data: [], error: null } as any),
     ])
     if (perId.error) throw perId.error
+
+    // Le prenotazioni sono una riserva: se la lettura fallisce si va avanti
+    // coi soli metadati, non si perde tutto il recupero.
+    if (prenId.error) console.warn('[recupera-anagrafica] prenotazioni per account non lette:', prenId.error.message)
+    if (prenMail.error) console.warn('[recupera-anagrafica] prenotazioni per email non lette:', prenMail.error.message)
+    const prenotazioniDi = new Map<string, Array<Record<string, any>>>()
+    const prenotazioniPerEmail = new Map<string, Array<Record<string, any>>>()
+    for (const b of ((prenId.data || []) as any[])) {
+      const k = String(b.user_id || '')
+      if (!k) continue
+      if (!prenotazioniDi.has(k)) prenotazioniDi.set(k, [])
+      prenotazioniDi.get(k)!.push(b)
+    }
+    for (const b of ((prenMail.data || []) as any[])) {
+      const k = String(b.customer_email || '').trim().toLowerCase()
+      if (!k) continue
+      if (!prenotazioniPerEmail.has(k)) prenotazioniPerEmail.set(k, [])
+      prenotazioniPerEmail.get(k)!.push(b)
+    }
 
     const schedaDi = new Map<string, any>()
     const schedaPerEmail = new Map<string, any>()
@@ -238,6 +376,17 @@ const handler: Handler = async (event) => {
     for (const s of (perMail.data || []) as any[]) {
       const em = String(s.email || '').trim().toLowerCase()
       if (em && !schedaPerEmail.has(em)) schedaPerEmail.set(em, s)
+    }
+
+    // Le schede arrivate per id dalla tab Lead: si rileggono per intero cosi'
+    // il confronto "campo vuoto" usa la riga vera, non solo id/user_id/email.
+    const schedaIndicataPerId = new Map<string, any>()
+    if (schedeIndicate.length) {
+      const { data: complete } = await supabase
+        .from('customers_extended')
+        .select(selezione)
+        .in('id', schedeIndicate.map(s2 => s2.id))
+      for (const r of ((complete || []) as any[])) schedaIndicataPerId.set(String(r.id), r)
     }
 
     let aggiornati = 0        // schede esistenti completate
@@ -248,17 +397,38 @@ const handler: Handler = async (event) => {
     let campiRifiutati = 0
     const rifiutati: Array<{ email: string; campo: string; errore: string }> = []
 
+    let daPrenotazione = 0    // campi recuperati dai form di prenotazione
+
     for (const u of utenti) {
       const daiMetadati = anagraficaDaiMetadati(u.meta)
-      const scheda = schedaDi.get(u.id) || (u.email ? schedaPerEmail.get(u.email.toLowerCase()) : null)
+      const scheda = (u.schedaId ? schedaIndicataPerId.get(u.schedaId) : null)
+        || (u.id ? schedaDi.get(u.id) : null)
+        || (u.email ? schedaPerEmail.get(u.email.toLowerCase()) : null)
+
+      // I metadati dell'iscrizione vengono prima; quello che manca lo
+      // completano i dati compilati nelle prenotazioni.
+      const prenotazioni = [
+        ...(u.id ? (prenotazioniDi.get(u.id) || []) : []),
+        ...(u.email ? (prenotazioniPerEmail.get(u.email.toLowerCase()) || []) : []),
+      ]
+      const dallePrenotazioni = prenotazioni.length ? anagraficaDallePrenotazioni(prenotazioni) : {}
 
       // Solo i campi VUOTI nella scheda: nessuna sovrascrittura di dati buoni.
       const patch: Record<string, any> = {}
       for (const campo of scrivibili) {
-        const valore = daiMetadati[campo]
+        const daMeta = daiMetadati[campo]
+        const daPren = dallePrenotazioni[campo]
+        const valore = daMeta || daPren
         if (!valore) continue
         if (scheda && !vuoto(scheda[campo])) continue
         patch[campo] = valore
+        if (!daMeta && daPren) daPrenotazione++
+      }
+      // Il tipo cliente non arriva mai dal form di prenotazione: se la scheda
+      // nasce solo da li' resterebbe senza, e senza tipo la lead non e'
+      // leggibile da contratto, fattura e dedup.
+      if (!patch.tipo_cliente && scrivibili.includes('tipo_cliente') && (!scheda || vuoto(scheda.tipo_cliente))) {
+        patch.tipo_cliente = (patch.partita_iva || patch.denominazione) ? 'azienda' : 'persona_fisica'
       }
 
       // ------------------------------------------------------------------
@@ -266,7 +436,7 @@ const handler: Handler = async (event) => {
       // la tab Clienti, per i contratti, per le fatture e per i messaggi.
       // ------------------------------------------------------------------
       if (!scheda) {
-        const base: Record<string, any> = { user_id: u.id, email: u.email, source: 'website', ...patch }
+        const base: Record<string, any> = { ...(u.id ? { user_id: u.id } : {}), email: u.email, source: 'website', ...patch }
         const { error: insErr } = await supabase.from('customers_extended').insert(base)
         if (!insErr) {
           create++
@@ -275,11 +445,11 @@ const handler: Handler = async (event) => {
         }
         // Riprova con la sola anagrafica essenziale: meglio una scheda
         // minima che nessuna scheda.
-        const minimo: Record<string, any> = { user_id: u.id, email: u.email, source: 'website' }
+        const minimo: Record<string, any> = { ...(u.id ? { user_id: u.id } : {}), email: u.email, source: 'website' }
         for (const c of ESSENZIALI) if (patch[c]) minimo[c] = patch[c]
         const { error: insErr2 } = await supabase.from('customers_extended').insert(minimo)
         if (insErr2) {
-          errori.push({ email: u.email || u.id, errore: insErr2.message })
+          errori.push({ email: u.email || u.id || '', errore: insErr2.message })
           continue
         }
         const scritti = Object.keys(minimo).length - 3
@@ -291,7 +461,7 @@ const handler: Handler = async (event) => {
 
       // La scheda esisteva ma non era legata all'account: si aggancia, cosi'
       // il wallet e le prenotazioni del sito trovano la persona giusta.
-      if (!scheda.user_id) {
+      if (!scheda.user_id && u.id) {
         const { error: linkErr } = await supabase
           .from('customers_extended')
           .update({ user_id: u.id })
@@ -326,7 +496,7 @@ const handler: Handler = async (event) => {
           .eq('id', scheda.id)
         if (e1) {
           campiRifiutati++
-          rifiutati.push({ email: u.email || u.id, campo, errore: e1.message })
+          rifiutati.push({ email: u.email || u.id || '', campo, errore: e1.message })
         } else {
           scrittiQui++
         }
@@ -335,7 +505,7 @@ const handler: Handler = async (event) => {
         aggiornati++
         campiScritti += scrittiQui
       } else {
-        errori.push({ email: u.email || u.id, errore: updErr.message })
+        errori.push({ email: u.email || u.id || '', errore: updErr.message })
       }
     }
 
@@ -351,6 +521,9 @@ const handler: Handler = async (event) => {
         gia_complete,
         campiScritti,
         campiRifiutati,
+        // Quanti campi sono stati salvati grazie ai form di prenotazione:
+        // e' la differenza rispetto al recupero dai soli metadati.
+        daPrenotazione,
         // Solo i primi: servono a capire QUALE campo il database rifiuta,
         // non a elencare tutti gli iscritti.
         rifiutati: rifiutati.slice(0, 20),

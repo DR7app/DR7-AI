@@ -2,6 +2,7 @@ import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { nexiCallWithRecurrenceFallback } from './utils/nexiTokenizationFallback';
+import { adminBaseUrl, successUrl, cancelUrl } from './utils/paymentReturnUrls';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -110,9 +111,9 @@ const handler: Handler = async (event) => {
                 amount: amountCents.toString(),
                 language: 'ita',
                 expirationDate: nexiExpirationStr,
-                resultUrl: `${process.env.URL || 'https://platform.dr7ai.com'}/payment-success?order=${orderId}`,
-                cancelUrl: `${process.env.URL || 'https://platform.dr7ai.com'}/payment-cancelled?order=${orderId}`,
-                notificationUrl: `${process.env.URL || 'https://platform.dr7ai.com'}/.netlify/functions/nexi-payment-callback`,
+                resultUrl: successUrl(orderId),
+                cancelUrl: cancelUrl(orderId),
+                notificationUrl: `${adminBaseUrl()}/.netlify/functions/nexi-payment-callback`,
                 // Tokenize the card on every successful pay-by-link payment
                 // so that future merchant-initiated charges (sforo, danni,
                 // addebiti) can run against the same card without asking
