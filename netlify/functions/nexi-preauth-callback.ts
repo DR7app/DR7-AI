@@ -147,9 +147,10 @@ const handler: Handler = async (event) => {
         const expiresAt = txn?.metadata?.expires_at;
         if (expiresAt && new Date() > new Date(expiresAt)) {
             console.log(`[nexi-preauth-callback] REJECTED — link expired at ${expiresAt}, payment arrived at ${new Date().toISOString()}`);
+            // NON azzerare qui nexi_transaction_id: una notifica tardiva o
+            // duplicata su un ordine gia' autorizzato cancellerebbe una
+            // pre-auth valida. La pulizia avviene solo su esito verificato.
             await supabase.from('cauzioni').update({
-                nexi_transaction_id: null,
-                nexi_operation_id: null,
                 note: `Pagamento rifiutato — link scaduto (scadenza: ${expiresAt})`,
                 updated_at: new Date().toISOString()
             }).eq('id', cauzione.id);
@@ -172,15 +173,32 @@ const handler: Handler = async (event) => {
         if (verified) {
             console.log('[nexi-preauth-callback] Verifica Nexi:', JSON.stringify(verified));
         } else {
-            console.warn('[nexi-preauth-callback] Verifica Nexi non disponibile: uso il payload della notifica (fail-closed)');
+            // Senza risposta da Nexi l'esito e' ignoto. Non tocchiamo nulla:
+            // marcare "rifiutata" una pre-auth magari buona (azzerando i
+            // riferimenti) sarebbe peggio del bug di partenza. Il 503 fa
+            // ripetere la notifica a Nexi.
+            console.error('[nexi-preauth-callback] Verifica Nexi FALLITA per', orderId, '— nessuna scrittura, la notifica verra\' ripetuta');
+            await supabase.from('nexi_transactions').update({
+                metadata: {
+                    ...(txn?.metadata || {}),
+                    ultima_verifica_fallita: new Date().toISOString(),
+                    payload_notifica_result: result || null,
+                }
+            }).eq('order_id', orderId);
+            return {
+                statusCode: 503,
+                headers,
+                body: JSON.stringify({ success: false, error: 'Verifica Nexi non disponibile, riprovare' })
+            };
         }
 
-        const effectiveResult = String(verified?.operationResult || result || '').toUpperCase();
-        const effectiveOperationType = verified?.lastOperationType || '';
-        const effectiveOperationId = verified?.operationId || operationId || transactionId || null;
-        const effectiveAuthCode = verified?.authorizationCode || authorizationCode || null;
-        const effectiveContractId = verified?.contractId || contractId || null;
-        const effectiveAmount = verified?.amount != null ? verified.amount : (amount != null ? Number(amount) : null);
+        // Fonte di verita' = Nexi. Il payload copre solo i campi che l'API non ritorna.
+        const effectiveResult = String(verified.operationResult || '').toUpperCase();
+        const effectiveOperationType = verified.lastOperationType || '';
+        const effectiveOperationId = verified.operationId || operationId || transactionId || null;
+        const effectiveAuthCode = verified.authorizationCode || authorizationCode || null;
+        const effectiveContractId = verified.contractId || contractId || null;
+        const effectiveAmount = verified.amount != null ? verified.amount : (amount != null ? Number(amount) : null);
         const amountStr = effectiveAmount != null ? (Number(effectiveAmount) / 100).toFixed(2) : '?';
 
         // AUTHORIZED = fondi bloccati (preauth corretta). EXECUTED = fondi
