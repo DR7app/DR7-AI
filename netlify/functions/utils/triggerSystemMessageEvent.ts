@@ -13,11 +13,32 @@
  *   await triggerSystemMessageEvent({ bookingId, event: 'on_booking' })
  */
 import { createClient } from '@supabase/supabase-js'
+import { createHash } from 'crypto'
+
+// system_message_send_log.booking_id e' UUID: le entita' con id testuale (es.
+// l'orderId "MIT-..." di una pre-autorizzazione) facevano fallire SIA la select
+// SIA l'insert di dedup, quindi il messaggio poteva ripartire a ogni retry.
+// Stessa soluzione del cron: UUID v5 deterministico dalla chiave testuale.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const DEDUP_NAMESPACE = 'b7c1f0de-3a54-4c2f-9a1e-5d6c8f2b4a70'
+
+function dedupKey(entityId: string): string {
+    if (UUID_RE.test(entityId)) return entityId
+    const hash = createHash('sha1')
+        .update(Buffer.from(DEDUP_NAMESPACE.replace(/-/g, ''), 'hex'))
+        .update(entityId, 'utf8')
+        .digest()
+    const b = Buffer.from(hash.subarray(0, 16))
+    b[6] = (b[6] & 0x0f) | 0x50 // versione 5
+    b[8] = (b[8] & 0x3f) | 0x80 // variante RFC 4122
+    const h = b.toString('hex')
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
+}
 
 type TriggerEvent =
     | 'on_booking' | 'on_payment' | 'on_signature' | 'on_extension'
     | 'on_cauzione_created' | 'on_cauzione_collected' | 'on_cauzione_refunded'
-    | 'on_cauzione_partial_capture'
+    | 'on_cauzione_partial_capture' | 'on_cauzione_preauthorized'
     | 'on_first_booking' | 'before_birthday'
     | 'on_doc_uploaded' | 'on_doc_verified'
     | 'on_payment_failed' | 'on_payment_link_expired'
@@ -628,7 +649,7 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
     //    saranno gestiti dal cron, non qui.
     const { data: templates } = await supabase
         .from('system_messages')
-        .select('id, message_key, label, trigger_offset_hours, target_status, target_category, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end, target_membership_tier, target_min_prev_bookings, target_max_prev_bookings, target_rental_duration_min, target_rental_duration_max, target_customer_tags, target_residency, target_age_min, target_age_max, target_pickup_hour_min, target_pickup_hour_max, target_source_channel, target_province, target_min_lifetime_value, target_has_unpaid_invoices, target_used_promo_before, target_extension_count_min, target_extension_count_max, handled_events')
+        .select('id, message_key, label, trigger_offset_hours, target_status, target_category, target_service_type, target_with_deposit, target_plate, target_payment_method, target_amount_min, target_amount_max, target_days_of_week, quiet_hours_start, quiet_hours_end, target_membership_tier, target_min_prev_bookings, target_max_prev_bookings, target_rental_duration_min, target_rental_duration_max, target_customer_tags, target_residency, target_age_min, target_age_max, target_pickup_hour_min, target_pickup_hour_max, target_source_channel, target_province, target_min_lifetime_value, target_has_unpaid_invoices, target_used_promo_before, target_extension_count_min, target_extension_count_max, handled_events, recipient_mode')
         .eq('is_automatic', true)
         .eq('is_enabled', true)
         .eq('trigger_event', event)
@@ -658,13 +679,37 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
             if (String(cat).toLowerCase() !== String(tpl.target_category).toLowerCase()) continue
         }
 
+        // 3-bis. Destinatario. send-whatsapp-notification NON ricava piu' il
+        // telefono dalla booking (hardening 13/05): senza customPhone risponde
+        // "skipped" E QUI VENIVA COMUNQUE SCRITTA LA RIGA DI LOG, che blocca
+        // anche il cron (stesso dedup template+entita'). Risultato: gli eventi
+        // immediati (cauzione, documenti, ...) non arrivavano a nessuno.
+        // Ora: numero esplicito del chiamante, altrimenti quello del cliente
+        // quando il template e' indirizzato al cliente.
+        const mode = String(tpl.recipient_mode || 'customer').trim() || 'customer'
+        const customerPhone = String(
+            booking.customer_phone || booking.booking_details?.customer?.phone || '',
+        ).trim()
+        const phoneToUse = recipientPhone || (mode === 'customer' ? customerPhone : '')
+        if (!phoneToUse) {
+            // Nessun numero utilizzabile qui (es. template verso staff/ruoli
+            // admin, che il cron sa risolvere): si esce SENZA loggare, cosi'
+            // il cron puo' ancora inviarlo.
+            skipped++
+            continue
+        }
+
         // 4. Dedup: gia' inviato?
-        const { data: existing } = await supabase
+        const logKey = dedupKey(String(booking.id))
+        const { data: existing, error: dedupErr } = await supabase
             .from('system_message_send_log')
             .select('id')
             .eq('system_message_id', tpl.id)
-            .eq('booking_id', booking.id)
+            .eq('booking_id', logKey)
             .maybeSingle()
+        // Fail-closed come il cron: se il dedup non e' verificabile non si
+        // invia, meglio un messaggio in meno che lo stesso a ripetizione.
+        if (dedupErr) { errors++; continue }
         if (existing?.id) { skipped++; continue }
 
         // 5. Invia via send-whatsapp-notification
@@ -675,7 +720,7 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
                 body: JSON.stringify({
                     booking,
                     messageKey: tpl.message_key,
-                    ...(recipientPhone ? { customPhone: recipientPhone } : {}),
+                    customPhone: phoneToUse,
                 }),
             })
             const ok = res.ok
@@ -685,8 +730,8 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
 
             await supabase.from('system_message_send_log').insert({
                 system_message_id: tpl.id,
-                booking_id: booking.id,
-                customer_phone: booking.customer_phone,
+                booking_id: logKey,
+                customer_phone: phoneToUse,
                 status: ok ? (resp?.skipped ? 'skipped' : 'sent') : 'error',
                 error: ok ? null : `HTTP ${res.status}`,
             })
@@ -703,8 +748,8 @@ export async function triggerSystemMessageEvent({ bookingId, event, maxOffsetHou
             try {
                 await supabase.from('system_message_send_log').insert({
                     system_message_id: tpl.id,
-                    booking_id: booking.id,
-                    customer_phone: booking.customer_phone,
+                    booking_id: logKey,
+                    customer_phone: phoneToUse,
                     status: 'error',
                     error: msg.slice(0, 500),
                 })

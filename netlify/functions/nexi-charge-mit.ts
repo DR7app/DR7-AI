@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import { requireAuth } from './require-auth'
 import { applyTokenizedCardUpdate } from './utils/nexiCards'
+import { triggerSystemMessageEvent } from './utils/triggerSystemMessageEvent'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -328,6 +329,69 @@ const handler: Handler = async (event) => {
                     rawResponse: responseData,
                 })
             };
+        }
+
+        // Pre-autorizzazione riuscita (fondi bloccati, nessun addebito): fa
+        // partire l'evento Messaggi di Sistema Pro `on_cauzione_preauthorized`
+        // ("Cauzione pre-autorizzata"). Vale per il blocco fondi silenzioso
+        // fatto dall'admin sulla carta tokenizzata (tab Nexi): il cliente
+        // riceve lo stesso avviso del percorso con link.
+        // Non bloccante e con dedup per orderId: un errore non fa fallire la
+        // pre-autorizzazione, che a questo punto e' gia' andata a buon fine.
+        if (isPreauth && isSuccess && !wronglyCharged) {
+            try {
+                let cust: { nome?: string; cognome?: string; ragione_sociale?: string; email?: string; telefono?: string } | null = null
+                if (customerId) {
+                    const { data } = await supabase
+                        .from('customers_extended')
+                        .select('nome, cognome, ragione_sociale, email, telefono')
+                        .eq('id', customerId)
+                        .maybeSingle()
+                    cust = data
+                }
+                if (!cust && customerEmail) {
+                    // ilike + limit(1): email case-insensitive e nessun errore
+                    // quando due schede condividono lo stesso indirizzo.
+                    const { data } = await supabase
+                        .from('customers_extended')
+                        .select('nome, cognome, ragione_sociale, email, telefono')
+                        .ilike('email', String(customerEmail).trim())
+                        .order('updated_at', { ascending: false })
+                        .limit(1)
+                    cust = data?.[0] || null
+                }
+                const phone = String(cust?.telefono || '').trim()
+                if (!phone) {
+                    console.warn('[nexi-charge-mit] Nessun telefono cliente: evento on_cauzione_preauthorized non inviato')
+                } else {
+                    const custName = cust?.ragione_sociale
+                        || `${cust?.nome || ''} ${cust?.cognome || ''}`.trim()
+                        || customerName
+                        || 'Cliente'
+                    await triggerSystemMessageEvent({
+                        bookingId: orderId,
+                        event: 'on_cauzione_preauthorized',
+                        recipientPhone: phone,
+                        syntheticBooking: {
+                            id: orderId,
+                            customer_name: custName,
+                            customer_email: cust?.email || customerEmail || null,
+                            customer_phone: phone,
+                            deposit_amount: amount,
+                            booking_details: { deposit: amount, depositOption: 'standard' },
+                            payment_method: 'card',
+                            // status 'active': il filtro di default dei template
+                            // e' target_status = confirmed,active.
+                            status: 'active',
+                            payment_status: 'preauth',
+                            price_total: amountCents,
+                            description: description || '',
+                        },
+                    })
+                }
+            } catch (evErr) {
+                console.error('[nexi-charge-mit] Evento on_cauzione_preauthorized fallito (non bloccante):', evErr)
+            }
         }
 
         return {

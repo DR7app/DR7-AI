@@ -123,6 +123,7 @@ const TRIGGER_LABELS: Record<string, string> = {
     'on_cauzione_created': 'Nuova cauzione creata',
     'on_cauzione_due': 'Cauzione in scadenza',
     'on_cauzione_overdue': 'Cauzione scaduta',
+    'on_cauzione_preauthorized': 'Cauzione pre-autorizzata',
     'on_cauzione_collected': 'Cauzione incassata',
     'on_cauzione_partial_capture': 'Cauzione incassata parziale',
     'on_cauzione_refunded': 'Cauzione restituita',
@@ -262,6 +263,8 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; area: 
       'cauzione_veicolo_created',
       'cauzione_veicolo_returned',
       'cauzione_garante_notification',
+      // 2026-08-27: pre-autorizzazione riuscita (fondi bloccati sulla carta).
+      'cauzione_preauth_completed',
     ],
   },
   // ── ANNULLAMENTO ────────────────────────────────────────────────────────
@@ -1871,6 +1874,7 @@ const TRIGGER_DESCRIPTIONS: Record<string, string> = {
     'on_cauzione_created': 'Quando viene aperta una nuova cauzione (in CauzioniTab). Offset 0 = subito.',
     'on_cauzione_due': 'Quando manca poco alla scadenza_cauzione (offset = giorni prima della scadenza).',
     'on_cauzione_overdue': 'Quando la cauzione e\' scaduta (data passata) e non ancora chiusa.',
+    'on_cauzione_preauthorized': 'Parte SUBITO quando la pre-autorizzazione va a buon fine e i fondi vengono BLOCCATI sulla carta del cliente (senza addebito): sia quando il cliente completa il link di pre-autorizzazione, sia quando l\'admin blocca i fondi dal tab Nexi su una carta tokenizzata. Variabili: {nome}, {importo}/{total}, {vehicle_name}, {targa}.',
     'on_cauzione_collected': 'Quando admin segna la cauzione come incassata.',
     'on_cauzione_refunded': 'Quando admin segna la cauzione come restituita al cliente.',
     'on_first_booking': 'Solo alla PRIMA prenotazione di un cliente nuovo. Perfetto per messaggio di benvenuto.',
@@ -2725,6 +2729,10 @@ export default function MessaggiSistemaProTab() {
     const [customVarsList, setCustomVarsList] = useState<Array<{
         id: string; key: string; value: string; description: string | null; is_enabled: boolean
     }>>([])
+    // 2026-08-27: barra di ricerca sulle variabili custom. La lista cresce
+    // (indirizzi, promo, orari...) e senza filtro trovare {chiave} a occhio
+    // diventa impossibile: stesso comportamento della ricerca template.
+    const [customVarSearch, setCustomVarSearch] = useState('')
     const [newCustomVarKey, setNewCustomVarKey] = useState('')
     const [newCustomVarValue, setNewCustomVarValue] = useState('')
     const [newCustomVarDescription, setNewCustomVarDescription] = useState('')
@@ -4001,6 +4009,23 @@ export default function MessaggiSistemaProTab() {
                             </div>
                         </div>
 
+                        {/* Barra di ricerca variabili (2026-08-27) */}
+                        <div className="relative">
+                            <input
+                                type="text"
+                                value={customVarSearch}
+                                onChange={e => setCustomVarSearch(e.target.value)}
+                                placeholder="Cerca una variabile (chiave, valore o nota)..."
+                                className="w-full pl-9 pr-9 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-sm placeholder:text-theme-text-muted"
+                            />
+                            <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+                            </svg>
+                            {customVarSearch && (
+                                <button type="button" onClick={() => setCustomVarSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary text-sm">×</button>
+                            )}
+                        </div>
+
                         {/* New variable form */}
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-2 p-3 rounded-lg bg-theme-bg-tertiary border border-theme-border">
                             <div className="md:col-span-3">
@@ -4040,13 +4065,30 @@ export default function MessaggiSistemaProTab() {
                         </div>
 
                         {/* Existing variables list */}
-                        {customVarsList.length === 0 ? (
+                        {(() => {
+                            const q = customVarSearch.trim().toLowerCase()
+                            const visibleVars = q
+                                ? customVarsList.filter(v =>
+                                    v.key.toLowerCase().includes(q)
+                                    || (v.value || '').toLowerCase().includes(q)
+                                    || (v.description || '').toLowerCase().includes(q))
+                                : customVarsList
+                            return customVarsList.length === 0 ? (
                             <div className="text-center py-6 text-theme-text-muted text-sm">
                                 Nessuna variabile definita. Aggiungine una sopra.
                             </div>
+                        ) : visibleVars.length === 0 ? (
+                            <div className="text-center py-6 text-theme-text-muted text-sm">
+                                Nessuna variabile trovata per "{customVarSearch}".
+                            </div>
                         ) : (
                             <div className="space-y-2">
-                                {customVarsList.map(v => (
+                                {q && (
+                                    <div className="text-[11px] text-theme-text-muted">
+                                        {visibleVars.length} di {customVarsList.length} variabili
+                                    </div>
+                                )}
+                                {visibleVars.map(v => (
                                     <div key={v.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 p-2 rounded-lg bg-theme-bg-tertiary border border-theme-border items-center">
                                         <div className="md:col-span-3 font-mono text-sm text-emerald-300">
                                             {`{${v.key}}`}
@@ -4083,7 +4125,8 @@ export default function MessaggiSistemaProTab() {
                                     </div>
                                 ))}
                             </div>
-                        )}
+                        )
+                        })()}
 
                         <p className="text-[11px] text-theme-text-muted">
                             Suggerimento: i template editor mostrano le variabili sopra come placeholder. La sostituzione avviene a send-time — modifica il valore qui e tutti i template si aggiornano subito.

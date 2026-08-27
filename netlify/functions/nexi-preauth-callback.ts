@@ -2,6 +2,7 @@ import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { applyTokenizedCardUpdate } from './utils/nexiCards';
+import { triggerSystemMessageEvent } from './utils/triggerSystemMessageEvent';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -122,9 +123,12 @@ const handler: Handler = async (event) => {
         }
 
         // Find cauzione by nexi_order_id
+        // 2026-08-27: si caricano anche cliente/importo/veicolo perche' su
+        // pre-autorizzazione riuscita parte il messaggio Pro al cliente
+        // (evento `cauzione_preauth_completed`).
         const { data: cauzione, error: findError } = await supabase
             .from('cauzioni')
-            .select('id')
+            .select('id, cliente_id, veicolo_id, importo, nexi_transaction_id, riferimento_contratto_id')
             .eq('nexi_order_id', orderId)
             .single();
 
@@ -268,6 +272,100 @@ const handler: Handler = async (event) => {
         }
 
         console.log('Cauzione updated successfully:', cauzione.id, '- txStatus:', txStatus);
+
+        // ── Pre-autorizzazione EFFETTUATA: messaggio Pro al cliente ────────
+        // Evento `cauzione_preauth_completed` (gruppo Cauzioni in Messaggi di
+        // Sistema Pro). Se nessun template lo gestisce, il resolver salta
+        // l'invio: niente testo hardcoded.
+        // Idempotenza: Nexi puo' ripetere la notifica; se la cauzione portava
+        // gia' questo operationId il messaggio e' partito al primo giro.
+        const alreadyProcessed = !!cauzione.nexi_transaction_id
+            && String(cauzione.nexi_transaction_id) === String(effectiveOperationId || '');
+        if (isPreauthorized && !alreadyProcessed) {
+            try {
+                const { data: cust } = await supabase
+                    .from('customers_extended')
+                    .select('nome, cognome, ragione_sociale, telefono, email')
+                    .eq('id', cauzione.cliente_id)
+                    .maybeSingle();
+                const phone = (cust?.telefono || '').trim();
+                if (!phone) {
+                    console.warn('[nexi-preauth-callback] Nessun telefono cliente: messaggio pre-autorizzazione non inviato');
+                } else {
+                    const custName = (cust?.ragione_sociale || `${cust?.nome || ''} ${cust?.cognome || ''}`.trim() || 'Cliente');
+                    let veicolo: { display_name?: string; plate?: string } | null = null;
+                    if (cauzione.veicolo_id) {
+                        const { data: v } = await supabase
+                            .from('vehicles')
+                            .select('display_name, plate')
+                            .eq('id', cauzione.veicolo_id)
+                            .maybeSingle();
+                        veicolo = v;
+                    }
+                    const importoStr = Number(cauzione.importo || 0).toFixed(2);
+                    const baseUrl = process.env.URL || 'https://platform.dr7ai.com';
+                    await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            customPhone: phone,
+                            templateKey: 'cauzione_preauth_completed',
+                            booking: { service_type: 'rental' },
+                            templateVars: {
+                                '{nome}': custName.split(' ')[0] || 'Cliente',
+                                '{nome cliente}': custName,
+                                '{nome_cliente}': custName,
+                                '{cliente}': custName,
+                                '{customer_name}': custName,
+                                '{amount}': importoStr,
+                                '{importo}': importoStr,
+                                '{total}': importoStr,
+                                '{vehicle_name}': veicolo?.display_name || '',
+                                '{targa}': veicolo?.plate || '',
+                                '{data}': new Date().toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
+                            },
+                        }),
+                    });
+                    console.log('[nexi-preauth-callback] Messaggio cauzione_preauth_completed inviato a', phone);
+
+                    // Evento Messaggi di Sistema Pro `on_cauzione_preauthorized`
+                    // ("Cauzione pre-autorizzata"): fa partire i template che
+                    // l'admin ha collegato all'evento nella tab. Passa il numero
+                    // del cliente perche' il sender scarta gli invii senza
+                    // destinatario esplicito. Dedup per cauzione via
+                    // system_message_send_log.
+                    try {
+                        await triggerSystemMessageEvent({
+                            bookingId: cauzione.id,
+                            event: 'on_cauzione_preauthorized',
+                            recipientPhone: phone,
+                            syntheticBooking: {
+                                id: cauzione.id,
+                                customer_name: custName,
+                                customer_email: cust?.email || null,
+                                customer_phone: phone,
+                                vehicle_name: veicolo?.display_name || '',
+                                vehicle_plate: veicolo?.plate || '',
+                                deposit_amount: Number(cauzione.importo || 0),
+                                booking_details: { deposit: Number(cauzione.importo || 0), depositOption: 'standard' },
+                                payment_method: 'card',
+                                // status 'active': il filtro di default dei
+                                // template e' target_status = confirmed,active.
+                                // Con lo stato reale della cauzione (es.
+                                // 'da_incassare') il messaggio verrebbe scartato.
+                                status: 'active',
+                                payment_status: 'preauth',
+                                price_total: Math.round(Number(cauzione.importo || 0) * 100),
+                            },
+                        });
+                    } catch (evErr) {
+                        console.error('[nexi-preauth-callback] Evento on_cauzione_preauthorized fallito (non bloccante):', evErr);
+                    }
+                }
+            } catch (msgErr) {
+                console.error('[nexi-preauth-callback] Invio messaggio pre-autorizzazione fallito (non bloccante):', msgErr);
+            }
+        }
 
         // Allinea SEMPRE nexi_transactions all'esito reale. Senza questo la riga
         // resta 'pending_preauth' (mostrata "Pre-autorizzato" nel tab Nexi)
