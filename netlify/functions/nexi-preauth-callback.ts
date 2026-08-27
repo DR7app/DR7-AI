@@ -7,6 +7,58 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+// Sempre NEXI_API_KEY: NEXI_API_KEY_EXPLICIT restituisce 401 sull'API XPay.
+const NEXI_API_KEY = process.env.NEXI_API_KEY!;
+const NEXI_BASE_URL = 'https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1';
+
+// Esiti Nexi che NON sono una preautorizzazione riuscita.
+const FAILURE_RESULTS = new Set([
+    'DECLINED', 'DENIED_BY_RISK', 'THREEDS_FAILED', 'THREEDS_VALIDATED',
+    'FAILED', 'CANCELED', 'CANCELLED', 'VOIDED', 'REFUNDED', 'PENDING',
+    'AUTHORIZATION_REQUESTED', 'UNKNOWN'
+]);
+
+/**
+ * Interroga Nexi per l'esito REALE dell'ordine. La notifica in arrivo non e'
+ * autenticata (chiunque puo' POSTare su questa URL) e puo' riferirsi a un
+ * tentativo diverso da quello finale: l'unica fonte di verita' e' l'API.
+ * Ritorna null se la chiamata non e' andata a buon fine.
+ */
+async function fetchNexiOrderOutcome(orderId: string): Promise<{ operationResult: string; lastOperationType: string; operationId: string | null; authorizationCode: string | null; contractId: string | null; amount: number | null } | null> {
+    if (!NEXI_API_KEY) {
+        console.error('[nexi-preauth-callback] NEXI_API_KEY mancante: impossibile verificare l\'ordine');
+        return null;
+    }
+    try {
+        const correlationId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = Math.random() * 16 | 0;
+            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+        });
+        const res = await fetch(`${NEXI_BASE_URL}/orders/${orderId}`, {
+            method: 'GET',
+            headers: { 'X-Api-Key': NEXI_API_KEY, 'Correlation-Id': correlationId }
+        });
+        const text = await res.text();
+        if (!res.ok) {
+            console.error('[nexi-preauth-callback] Verifica ordine fallita:', res.status, text.substring(0, 300));
+            return null;
+        }
+        const data = JSON.parse(text);
+        const lastOp = data.orderStatus?.lastOperation || {};
+        return {
+            operationResult: String(lastOp.operationResult || 'UNKNOWN').toUpperCase(),
+            lastOperationType: String(data.orderStatus?.lastOperationType || lastOp.operationType || 'UNKNOWN').toUpperCase(),
+            operationId: lastOp.operationId || null,
+            authorizationCode: lastOp.additionalData?.authorizationCode || null,
+            contractId: lastOp.additionalData?.contractId || null,
+            amount: lastOp.operationAmount != null ? Number(lastOp.operationAmount) : null
+        };
+    } catch (err) {
+        console.error('[nexi-preauth-callback] Errore verifica ordine:', err);
+        return null;
+    }
+}
+
 const handler: Handler = async (event) => {
     const headers = {
         'Access-Control-Allow-Origin': getCorsOrigin(event.headers.origin),
@@ -96,6 +148,8 @@ const handler: Handler = async (event) => {
         if (expiresAt && new Date() > new Date(expiresAt)) {
             console.log(`[nexi-preauth-callback] REJECTED — link expired at ${expiresAt}, payment arrived at ${new Date().toISOString()}`);
             await supabase.from('cauzioni').update({
+                nexi_transaction_id: null,
+                nexi_operation_id: null,
                 note: `Pagamento rifiutato — link scaduto (scadenza: ${expiresAt})`,
                 updated_at: new Date().toISOString()
             }).eq('id', cauzione.id);
@@ -111,39 +165,74 @@ const handler: Handler = async (event) => {
             };
         }
 
-        // Update cauzione based on result
-        // AUTHORIZED = funds held (correct for preauth), EXECUTED = funds charged (wrong for preauth)
-        const isPreauthorized = result === 'AUTHORIZED' || (resultCode === '00' && result !== 'EXECUTED');
-        const wasCharged = result === 'EXECUTED' || result === 'OK';
+        // ESITO REALE: la notifica non e' autenticata e puo' arrivare per un
+        // tentativo intermedio. Chiediamo sempre a Nexi qual e' l'ultimo stato
+        // dell'ordine e usiamo QUELLO. Il payload serve solo da fallback.
+        const verified = await fetchNexiOrderOutcome(orderId);
+        if (verified) {
+            console.log('[nexi-preauth-callback] Verifica Nexi:', JSON.stringify(verified));
+        } else {
+            console.warn('[nexi-preauth-callback] Verifica Nexi non disponibile: uso il payload della notifica (fail-closed)');
+        }
+
+        const effectiveResult = String(verified?.operationResult || result || '').toUpperCase();
+        const effectiveOperationType = verified?.lastOperationType || '';
+        const effectiveOperationId = verified?.operationId || operationId || transactionId || null;
+        const effectiveAuthCode = verified?.authorizationCode || authorizationCode || null;
+        const effectiveContractId = verified?.contractId || contractId || null;
+        const effectiveAmount = verified?.amount != null ? verified.amount : (amount != null ? Number(amount) : null);
+        const amountStr = effectiveAmount != null ? (Number(effectiveAmount) / 100).toFixed(2) : '?';
+
+        // AUTHORIZED = fondi bloccati (preauth corretta). EXECUTED = fondi
+        // incassati (endpoint sbagliato, ma i soldi sono usciti davvero).
+        // Qualsiasi altro esito e' un FALLIMENTO: mai marcare pre-autorizzata.
+        const isFailure = !effectiveResult || FAILURE_RESULTS.has(effectiveResult);
+        const isPreauthorized = !isFailure && effectiveResult === 'AUTHORIZED';
+        const wasCharged = !isFailure && (effectiveResult === 'EXECUTED' || effectiveResult === 'OK');
+        // Esito sconosciuto e non riconosciuto: trattato come fallimento.
+        const isUnknown = !isFailure && !isPreauthorized && !wasCharged;
 
         const updateData: any = {
             updated_at: new Date().toISOString()
         };
 
+        // Stato della riga in nexi_transactions, allineato all'esito reale.
+        let txStatus: string;
+
         if (isPreauthorized) {
-            // Correct: funds are HELD, not charged
-            updateData.nexi_transaction_id = operationId || transactionId;
-            updateData.nexi_operation_id = operationId;
-            if (contractId) {
-                updateData.nexi_contract_id = contractId;
+            // Corretto: fondi BLOCCATI, non incassati
+            updateData.nexi_transaction_id = effectiveOperationId;
+            updateData.nexi_operation_id = effectiveOperationId;
+            if (effectiveContractId) {
+                updateData.nexi_contract_id = effectiveContractId;
             }
             updateData.stato = 'Attiva'; // Pre-authorized and ready for SBLOCCA or INCASSA
             updateData.metodo = 'preautorizzazione'; // 2026-07-18: badge mostra "Pre-autorizzata" (pre-auth completata)
-            updateData.note = `Preautorizzazione completata (fondi bloccati) - OpId: ${operationId || 'N/A'} - Auth: ${authorizationCode || 'N/A'}${contractId ? ` - Carta registrata (${contractId})` : ''} - Importo: €${amount ? (Number(amount) / 100).toFixed(2) : '?'}`;
-            console.log('[nexi-preauth-callback] PREAUTH SUCCESS — operationId:', operationId, 'transactionId:', transactionId, 'authCode:', authorizationCode);
+            updateData.note = `Preautorizzazione completata (fondi bloccati) - OpId: ${effectiveOperationId || 'N/A'} - Auth: ${effectiveAuthCode || 'N/A'}${effectiveContractId ? ` - Carta registrata (${effectiveContractId})` : ''} - Importo: €${amountStr}`;
+            txStatus = 'preauth_held';
+            console.log('[nexi-preauth-callback] PREAUTH SUCCESS — operationId:', effectiveOperationId, 'authCode:', effectiveAuthCode);
         } else if (wasCharged) {
             // WARNING: funds were CHARGED instead of held — this means the endpoint did PAY not PREAUTH
-            updateData.nexi_transaction_id = operationId || transactionId;
-            updateData.nexi_operation_id = operationId;
-            if (contractId) {
-                updateData.nexi_contract_id = contractId;
+            updateData.nexi_transaction_id = effectiveOperationId;
+            updateData.nexi_operation_id = effectiveOperationId;
+            if (effectiveContractId) {
+                updateData.nexi_contract_id = effectiveContractId;
             }
             updateData.stato = 'Incassata'; // Mark as charged since money was taken
-            updateData.note = `ATTENZIONE: Importo INCASSATO (non bloccato) - Result: ${result} - OpId: ${operationId || 'N/A'} - Auth: ${authorizationCode || 'N/A'} - €${amount ? (Number(amount) / 100).toFixed(2) : '?'}`;
-            console.log('[nexi-preauth-callback] WARNING: CHARGED instead of PREAUTH — result:', result, 'operationId:', operationId);
+            updateData.note = `ATTENZIONE: Importo INCASSATO (non bloccato) - Result: ${effectiveResult} - OpId: ${effectiveOperationId || 'N/A'} - Auth: ${effectiveAuthCode || 'N/A'} - €${amountStr}`;
+            txStatus = 'preauth_wrongly_charged';
+            console.log('[nexi-preauth-callback] WARNING: CHARGED instead of PREAUTH — result:', effectiveResult, 'operationId:', effectiveOperationId);
         } else {
-            updateData.note = `Preautorizzazione fallita - ${result || resultCode}`;
-            console.log('[nexi-preauth-callback] FAILED — result:', result, 'resultCode:', resultCode);
+            // FALLIMENTO (rifiutata, 3DS fallito, annullata, esito ignoto...).
+            // BUG 2026-08-27: prima si scriveva solo la nota, lasciando
+            // nexi_transaction_id + metodo='preautorizzazione' -> il gestionale
+            // continuava a mostrare "Pre-autorizzata" su una carta RIFIUTATA.
+            // Ora ripuliamo i riferimenti Nexi: nessun fondo e' bloccato.
+            updateData.nexi_transaction_id = null;
+            updateData.nexi_operation_id = null;
+            updateData.note = `Preautorizzazione RIFIUTATA - Esito: ${effectiveResult || resultCode || 'sconosciuto'}${effectiveOperationType ? ` (${effectiveOperationType})` : ''} - Importo: €${amountStr} - ${new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}`;
+            txStatus = 'failed';
+            console.log('[nexi-preauth-callback] FAILED — result:', effectiveResult, 'resultCode:', resultCode, 'unknownResult:', isUnknown);
         }
 
         const { error: updateError } = await supabase
@@ -160,10 +249,33 @@ const handler: Handler = async (event) => {
             };
         }
 
-        console.log('Cauzione updated successfully:', cauzione.id);
+        console.log('Cauzione updated successfully:', cauzione.id, '- txStatus:', txStatus);
+
+        // Allinea SEMPRE nexi_transactions all'esito reale. Senza questo la riga
+        // resta 'pending_preauth' (mostrata "Pre-autorizzato" nel tab Nexi)
+        // anche quando la carta e' stata rifiutata.
+        const { error: txUpdateError } = await supabase
+            .from('nexi_transactions')
+            .update({
+                status: txStatus,
+                metadata: {
+                    ...(txn?.metadata || {}),
+                    operation_result: effectiveResult || null,
+                    operation_type: effectiveOperationType || null,
+                    operation_id: effectiveOperationId,
+                    authorization_code: effectiveAuthCode,
+                    verified_with_nexi: !!verified,
+                    callback_processed_at: new Date().toISOString()
+                }
+            })
+            .eq('order_id', orderId);
+
+        if (txUpdateError) {
+            console.error('[nexi-preauth-callback] Errore aggiornamento nexi_transactions:', txUpdateError);
+        }
 
         // Save contractId to customer for future MIT charges
-        if ((isPreauthorized || wasCharged) && contractId) {
+        if ((isPreauthorized || wasCharged) && effectiveContractId) {
             try {
                 // Get booking from cauzione to find customer
                 const { data: cauzioneFull } = await supabase
@@ -188,21 +300,21 @@ const handler: Handler = async (event) => {
                             const { data: cust } = await supabase.from('customers_extended').select('id, metadata').eq('id', custId).maybeSingle();
                             if (cust) {
                                 await supabase.from('customers_extended').update({
-                                    metadata: applyTokenizedCardUpdate(cust.metadata, { nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() }),
+                                    metadata: applyTokenizedCardUpdate(cust.metadata, { nexi_contract_id: effectiveContractId, nexi_contract_updated: new Date().toISOString() }),
                                     updated_at: new Date().toISOString()
                                 }).eq('id', cust.id);
                                 saved = true;
-                                console.log(`[nexi-preauth-callback] Saved contractId ${contractId} on customer ${cust.id}`);
+                                console.log(`[nexi-preauth-callback] Saved contractId ${effectiveContractId} on customer ${cust.id}`);
                             }
                         }
                         if (!saved && custEmail) {
                             const { data: custByEmail } = await supabase.from('customers_extended').select('id, metadata').eq('email', custEmail).maybeSingle();
                             if (custByEmail) {
                                 await supabase.from('customers_extended').update({
-                                    metadata: applyTokenizedCardUpdate(custByEmail.metadata, { nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() }),
+                                    metadata: applyTokenizedCardUpdate(custByEmail.metadata, { nexi_contract_id: effectiveContractId, nexi_contract_updated: new Date().toISOString() }),
                                     updated_at: new Date().toISOString()
                                 }).eq('id', custByEmail.id);
-                                console.log(`[nexi-preauth-callback] Saved contractId ${contractId} on customer ${custByEmail.id} (by email)`);
+                                console.log(`[nexi-preauth-callback] Saved contractId ${effectiveContractId} on customer ${custByEmail.id} (by email)`);
                             }
                         }
                     }
