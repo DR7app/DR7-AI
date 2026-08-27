@@ -968,36 +968,21 @@ export default function ReportPreventiviTab() {
           {/* ===== CONVERSIONE ===== */}
           {activeSection === 'conversione' && (
             <div className="space-y-6">
-              {/* Funnel visualization */}
-              <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
-                <h3 className="text-sm font-semibold text-theme-text-primary mb-4">Funnel di Conversione</h3>
-                <div className="space-y-3">
-                  {[
-                    { label: 'Creato', count: conversione.funnel.total, color: 'from-dr7-gold to-[#2a8a7e]' },
-                    { label: 'Inviato (WhatsApp)', count: conversione.funnel.sent, color: 'from-[#2a8a7e] to-[#1f6b61]' },
-                    { label: 'Con Cliente', count: conversione.funnel.withClient, color: 'from-[#1f6b61] to-[#155249]' },
-                    { label: 'Convertito', count: conversione.funnel.converted, color: 'from-green-600 to-green-800' },
-                  ].map((phase, i) => {
-                    const pct = conversione.funnel.total > 0
-                      ? Math.round((phase.count / conversione.funnel.total) * 100)
-                      : 0
-                    return (
-                      <div key={i} className="flex items-center gap-3">
-                        <div className="w-28 text-right text-xs text-theme-text-muted shrink-0">{phase.label}</div>
-                        <div className="flex-1 bg-theme-bg-primary/50 rounded-full h-7 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full bg-gradient-to-r ${phase.color} flex items-center justify-end pr-2 transition-all duration-500`}
-                            style={{ width: `${Math.max(pct, 2)}%` }}
-                          >
-                            <span className="text-white text-xs font-bold whitespace-nowrap">{pct}%</span>
-                          </div>
-                        </div>
-                        <div className="w-10 text-xs text-theme-text-muted shrink-0">{phase.count}</div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
+              {/* Funnel — 2026-08-27 (richiesta direzione): tabella, non barre. */}
+              <ReportTable
+                title="Funnel di Conversione"
+                headers={['Fase', 'Preventivi', '% sul creato']}
+                rows={[
+                  { label: 'Creato', count: conversione.funnel.total },
+                  { label: 'Inviato (WhatsApp)', count: conversione.funnel.sent },
+                  { label: 'Con Cliente', count: conversione.funnel.withClient },
+                  { label: 'Convertito', count: conversione.funnel.converted },
+                ].map(phase => [
+                  phase.label,
+                  String(phase.count),
+                  conversione.funnel.total > 0 ? `${Math.round((phase.count / conversione.funnel.total) * 100)}%` : '0%',
+                ])}
+              />
 
               <ReportTable
                 title="Conversione per Veicolo"
@@ -1060,36 +1045,20 @@ export default function ReportPreventiviTab() {
                 <StatCard label="Senza Cliente" value={perdite.noCustomer} color="text-purple-400" />
               </div>
 
-              {/* Motivo Stimato Abbandono */}
+              {/* Motivo Stimato Abbandono — tabella, non barre. */}
               {perdite.motivoList.length > 0 && (
-                <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
-                  <h3 className="text-sm font-semibold text-theme-text-primary mb-4">Motivo Stimato Abbandono</h3>
-                  <div className="space-y-3">
-                    {(() => {
-                      const maxCount = Math.max(...perdite.motivoList.map(([, c]) => c), 1)
-                      return perdite.motivoList.map(([motivo, count]) => {
-                        const pct = Math.round((count / maxCount) * 100)
-                        return (
-                          <div key={motivo} className="flex items-center gap-3">
-                            <div className="w-52 text-right text-xs text-theme-text-muted shrink-0 hidden md:block">{motivo}</div>
-                            <div className="flex-1">
-                              <p className="text-xs text-theme-text-muted mb-1 md:hidden">{motivo}</p>
-                              <div className="bg-theme-bg-primary/50 rounded-full h-5 overflow-hidden">
-                                <div
-                                  className="h-full rounded-full bg-gradient-to-r from-red-600 to-red-800 flex items-center justify-end pr-2"
-                                  style={{ width: `${Math.max(pct, 4)}%` }}
-                                >
-                                  <span className="text-white text-[10px] font-bold">{count}</span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="w-8 text-xs text-theme-text-muted shrink-0">{count}</div>
-                          </div>
-                        )
-                      })
-                    })()}
-                  </div>
-                </div>
+                <ReportTable
+                  title="Motivo Stimato Abbandono"
+                  headers={['Motivo', 'Preventivi', '% sul totale']}
+                  rows={(() => {
+                    const tot = perdite.motivoList.reduce((s2, [, c]) => s2 + c, 0)
+                    return perdite.motivoList.map(([motivo, count]) => [
+                      motivo,
+                      String(count),
+                      tot > 0 ? `${Math.round((count / tot) * 100)}%` : '0%',
+                    ])
+                  })()}
+                />
               )}
 
               {/* Stato Attuale Non-Convertiti — periodo */}

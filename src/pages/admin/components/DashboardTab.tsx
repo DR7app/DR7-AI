@@ -85,6 +85,10 @@ interface DashboardData {
   }
 }
 
+// 2026-08-27 (richiesta direzione): gli importi in € vanno SEMPRE al centesimo
+// (fmtDec). `fmt` resta per i conteggi — clienti, prenotazioni, fatture.
+// Arrotondando all'euro il Totale Complessivo del Dashboard non coincideva con
+// quello del Report Terra e sembrava un numero diverso.
 function fmt(n: number): string {
   return n.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
@@ -666,18 +670,18 @@ export default function DashboardTab() {
           <div>
             <SectionHeader title="Dashboard Proprietario / Investitore" subtitle="La situazione della tua azienda in uno sguardo" />
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              <KpiCard title="Fatturato" value={`\u20AC ${fmt(fatturato)}`} trend={d.revenue.changePercent} trendDirection="up-good" tone="gold" />
+              <KpiCard title="Fatturato" value={`\u20AC ${fmtDec(fatturato)}`} trend={d.revenue.changePercent} trendDirection="up-good" tone="gold" />
               {mr && (
                 <KpiCard
-                  title="Totale Complessivo Noleggio"
-                  value={`\u20AC ${fmt(noleggioComplessivo)}`}
-                  sub={noleggioDaSaldare > 0 ? `di cui \u20AC ${fmt(noleggioDaSaldare)} da saldare` : 'come Report Terra'}
+                  title="Totale Complessivo Noleggio Terra"
+                  value={`\u20AC ${fmtDec(noleggioComplessivo)}`}
+                  sub={noleggioDaSaldare > 0 ? `di cui \u20AC ${fmtDec(noleggioDaSaldare)} da saldare \u00B7 = Report Terra` : '= Report Terra'}
                 />
               )}
-              <KpiCard title="Incassato Reale" value={`\u20AC ${fmt(incassato)}`} sub={`${incassatoPct}% del fatturato`} />
+              <KpiCard title="Incassato Reale" value={`\u20AC ${fmtDec(incassato)}`} sub={`${incassatoPct}% del fatturato`} />
               <KpiCard title="Costi Totali" value={`\u20AC ${fmtDec(costiTotali)}`} sub={`${costiCount} fatture`} tone="red" />
-              <KpiCard title="Margine Operativo" value={`\u20AC ${fmt(margine)}`} sub={`${marginePct}% del fatturato`} tone={margine >= 0 ? 'green' : 'red'} />
-              <KpiCard title="Utile Netto Stimato" value={`\u20AC ${fmt(utileNetto)}`} trend={d.revenue.changePercent} trendDirection="up-good" sub="dopo tasse ~33%" />
+              <KpiCard title="Margine Operativo" value={`\u20AC ${fmtDec(margine)}`} sub={`${marginePct}% del fatturato`} tone={margine >= 0 ? 'green' : 'red'} />
+              <KpiCard title="Utile Netto Stimato" value={`\u20AC ${fmtDec(utileNetto)}`} trend={d.revenue.changePercent} trendDirection="up-good" sub="dopo tasse ~33%" />
             </div>
           </div>
         )
@@ -772,6 +776,21 @@ export default function DashboardTab() {
                       <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted text-xs">€ {fmtDec(mr.noleggio.ricavoAnticipato ?? 0)}</td>
                     </ReportRow>
                   )}
+                  {(mr.noleggio.daSaldare ?? 0) > 0 && (
+                    <ReportRow>
+                      <td className="px-4 py-2 pl-8 text-theme-text-muted text-xs">da saldare</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-red-500 text-xs">€ {fmtDec(mr.noleggio.daSaldare ?? 0)}</td>
+                    </ReportRow>
+                  )}
+                  {/* 2026-08-27 (richiesta direzione): la cifra da confrontare con la
+                      card "Totale Complessivo" del Report Terra, al centesimo. Le
+                      righe sotto sommano TUTTE le attivita' e sono un altro numero. */}
+                  <ReportRow>
+                    <td className="px-4 py-2 pl-8 font-semibold text-theme-text-primary text-xs">Totale Complessivo Noleggio Terra</td>
+                    <td className="px-4 py-2 text-right tabular-nums font-semibold text-theme-text-primary text-xs">
+                      € {fmtDec(mr.noleggio.totaleComplessivo ?? (noleggioRicavo + (mr.noleggio.daSaldare ?? 0)))}
+                    </td>
+                  </ReportRow>
                   <ReportRow>
                     <td className="px-4 py-2 text-theme-text-primary">Noleggio Mare</td>
                     <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">€ {fmtDec(mare)}</td>
@@ -798,13 +817,13 @@ export default function DashboardTab() {
                   </ReportRow>
                   {daSaldareTot > 0 && (
                     <ReportRow>
-                      <td className="px-4 py-2 text-theme-text-primary">Da saldare</td>
+                      <td className="px-4 py-2 text-theme-text-primary">Da saldare (tutte le attività)</td>
                       <td className="px-4 py-2 text-right tabular-nums text-red-500">€ {fmtDec(daSaldareTot)}</td>
                     </ReportRow>
                   )}
                   {daSaldareTot > 0 && (
                     <ReportRow>
-                      <td className="px-4 py-2 font-semibold text-theme-text-primary">Totale Complessivo</td>
+                      <td className="px-4 py-2 font-semibold text-theme-text-primary">Totale Complessivo (tutte le attività)</td>
                       <td className="px-4 py-2 text-right tabular-nums font-semibold text-theme-text-primary">€ {fmtDec(entrate + daSaldareTot)}</td>
                     </ReportRow>
                   )}
@@ -1264,7 +1283,7 @@ export default function DashboardTab() {
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
           <StatCard
             label="Danni Questo Mese"
-            value={`\u20AC ${fmt(d.damages.danniAmount)}`}
+            value={`\u20AC ${fmtDec(d.damages.danniAmount)}`}
             sub={`${d.damages.danniCount} sinistri aperti`}
             trend={d.damages.changePercent}
             trendInvert
@@ -1272,17 +1291,17 @@ export default function DashboardTab() {
           />
           <StatCard
             label="Insoluti"
-            value={`\u20AC ${fmt(d.damages.insoluti)}`}
+            value={`\u20AC ${fmtDec(d.damages.insoluti)}`}
             sub={`${d.damages.insolutiCount} pagamenti in ritardo`}
             accent="orange"
           />
           {d.damages.previousDanniAmount > 0 && (
-            <StatCard label="Danni Mese Precedente" value={`\u20AC ${fmt(d.damages.previousDanniAmount)}`} accent="default" />
+            <StatCard label="Danni Mese Precedente" value={`\u20AC ${fmtDec(d.damages.previousDanniAmount)}`} accent="default" />
           )}
         </div>
         {d.damages.insoluti > 0 && (
           <AlertBox type="danger">
-            {'\u20AC'} {fmt(d.damages.insoluti)} di insoluti da recuperare ({d.damages.insolutiCount} voci in attesa di pagamento)
+            {'\u20AC'} {fmtDec(d.damages.insoluti)} di insoluti da recuperare ({d.damages.insolutiCount} voci in attesa di pagamento)
           </AlertBox>
         )}
       </div>
@@ -1386,34 +1405,34 @@ export default function DashboardTab() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
           <StatCard
             label="Totale Fatturato Periodo"
-            value={`\u20AC ${fmt(d.revenue.currentMonth)}`}
+            value={`\u20AC ${fmtDec(d.revenue.currentMonth)}`}
             sub={`Incassato + da incassare (tutte le prenotazioni valide di ${periodLabel})`}
             accent="gold"
           />
           <StatCard
             label="Periodo precedente"
-            value={`\u20AC ${fmt(d.revenue.previousMonth)}`}
+            value={`\u20AC ${fmtDec(d.revenue.previousMonth)}`}
             trend={d.revenue.changePercent}
             accent="default"
           />
         </div>
         <div className="grid grid-cols-3 gap-3 mb-3">
-          <StatCard label="Incassato" value={`\u20AC ${fmt(d.cashFlow.incassato)}`} sub="Cassa effettiva" accent="green" />
-          <StatCard label="Da Incassare" value={`\u20AC ${fmt(d.cashFlow.daIncassare)}`} sub="Pending / da saldare" accent="orange" />
-          <StatCard label="Scaduti" value={`\u20AC ${fmt(d.cashFlow.insolutiScaduti)}`} sub="Non pagati oltre scadenza" accent="red" />
+          <StatCard label="Incassato" value={`\u20AC ${fmtDec(d.cashFlow.incassato)}`} sub="Cassa effettiva" accent="green" />
+          <StatCard label="Da Incassare" value={`\u20AC ${fmtDec(d.cashFlow.daIncassare)}`} sub="Pending / da saldare" accent="orange" />
+          <StatCard label="Scaduti" value={`\u20AC ${fmtDec(d.cashFlow.insolutiScaduti)}`} sub="Non pagati oltre scadenza" accent="red" />
         </div>
 
         {/* Visibility on what's intentionally NOT in fatturato */}
         <div className="grid grid-cols-2 gap-3 mb-3">
           <StatCard
             label="Annullate del periodo"
-            value={`\u20AC ${fmt(d.revenue.cancelledRentalsTotal || 0)}`}
+            value={`\u20AC ${fmtDec(d.revenue.cancelledRentalsTotal || 0)}`}
             sub={`${d.revenue.cancelledRentalsCount || 0} prenotazioni cancellate (non in fatturato)`}
             accent="red"
           />
           <StatCard
             label="Lavaggi del periodo"
-            value={`\u20AC ${fmt(d.revenue.washTotal || 0)}`}
+            value={`\u20AC ${fmtDec(d.revenue.washTotal || 0)}`}
             sub={`${d.revenue.washCount || 0} lavaggi (rendiconto separato)`}
             accent="blue"
           />
@@ -1421,7 +1440,7 @@ export default function DashboardTab() {
         {/* Distribuzione — 2026-08-27: tabella come sul Report Terra,
             niente barra impilata. */}
         {cashTotal > 0 && (
-          <ReportCard title="Distribuzione" right={`Totale: € ${fmt(cashTotal)}`}>
+          <ReportCard title="Distribuzione" right={`Totale: € ${fmtDec(cashTotal)}`}>
             <ReportTable
               head={
                 <>
@@ -1433,24 +1452,24 @@ export default function DashboardTab() {
               foot={
                 <ReportTotalRow>
                   <td className="px-4 py-2">Totale</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-dr7-gold">€ {fmt(cashTotal)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-dr7-gold">€ {fmtDec(cashTotal)}</td>
                   <td className="px-4 py-2 text-right tabular-nums">100%</td>
                 </ReportTotalRow>
               }
             >
               <ReportRow>
                 <td className="px-4 py-2 text-theme-text-primary">Incassato</td>
-                <td className="px-4 py-2 text-right tabular-nums text-green-500">€ {fmt(d.cashFlow.incassato)}</td>
+                <td className="px-4 py-2 text-right tabular-nums text-green-500">€ {fmtDec(d.cashFlow.incassato)}</td>
                 <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted">{Math.round((d.cashFlow.incassato / cashTotal) * 100)}%</td>
               </ReportRow>
               <ReportRow>
                 <td className="px-4 py-2 text-theme-text-primary">Da incassare</td>
-                <td className="px-4 py-2 text-right tabular-nums text-yellow-400">€ {fmt(d.cashFlow.daIncassare)}</td>
+                <td className="px-4 py-2 text-right tabular-nums text-yellow-400">€ {fmtDec(d.cashFlow.daIncassare)}</td>
                 <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted">{Math.round((d.cashFlow.daIncassare / cashTotal) * 100)}%</td>
               </ReportRow>
               <ReportRow>
                 <td className="px-4 py-2 text-theme-text-primary">Scaduti</td>
-                <td className="px-4 py-2 text-right tabular-nums text-red-500">€ {fmt(d.cashFlow.insolutiScaduti)}</td>
+                <td className="px-4 py-2 text-right tabular-nums text-red-500">€ {fmtDec(d.cashFlow.insolutiScaduti)}</td>
                 <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted">{Math.round((d.cashFlow.insolutiScaduti / cashTotal) * 100)}%</td>
               </ReportRow>
             </ReportTable>
@@ -1623,8 +1642,8 @@ export default function DashboardTab() {
               {d && (
                 <StatCard
                   label="Margine Operativo"
-                  value={`\u20AC ${fmt(Math.round(d.revenue.currentMonth - supplierData.grandTotal))}`}
-                  sub={`Fatturato \u20AC ${fmt(d.revenue.currentMonth)} - Costi \u20AC ${fmt(Math.round(supplierData.grandTotal))}`}
+                  value={`\u20AC ${fmtDec(d.revenue.currentMonth - supplierData.grandTotal)}`}
+                  sub={`Fatturato \u20AC ${fmtDec(d.revenue.currentMonth)} - Costi \u20AC ${fmtDec(supplierData.grandTotal)}`}
                   accent={d.revenue.currentMonth - supplierData.grandTotal > 0 ? 'green' : 'red'}
                 />
               )}

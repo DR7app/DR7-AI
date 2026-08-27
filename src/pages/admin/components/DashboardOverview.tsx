@@ -65,7 +65,9 @@ interface KpiPayload {
 interface TopVehicle { name: string; plate: string; bookings: number; image_url?: string | null }
 
 const fmtInt = (n: number) => new Intl.NumberFormat('it-IT').format(Math.round(n))
-const fmtEur = (n: number) => new Intl.NumberFormat('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(n))
+// 2026-08-27: importi al centesimo, come sul Report. Arrotondare all'euro
+// faceva sembrare diversi due numeri identici.
+const fmtEur = (n: number) => new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 // fmtPct rimosso 2026-05-23: era dichiarato ma mai usato, blocca tsc strict.
 
 interface KpiCardProps {
