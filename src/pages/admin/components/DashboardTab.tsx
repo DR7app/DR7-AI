@@ -1,7 +1,28 @@
 import { useState, useEffect, useCallback } from 'react'
+import { ReportCard, ReportTable, ReportRow, ReportTotalRow } from './ReportUI'
 import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
 import DashboardOverview from './DashboardOverview'
+
+/**
+ * Le stesse cifre che il Report Noleggio mostra in cima.
+ * 2026-08-27 (richiesta direzione): il Dashboard leggeva solo `ricavoTotale` e
+ * restava sempre sotto al Report, che somma anche l'anticipato e il da saldare.
+ */
+interface BusinessReport {
+  /** Incassato del periodo: noleggio + penali + danni. */
+  ricavoTotale: number
+  /** Gia' incassato ma riferito a noleggi futuri. */
+  ricavoAnticipato?: number
+  /** Ancora da incassare. */
+  daSaldare?: number
+  /** Card "Ricavo TOTALE" del Report: incassato + anticipato. */
+  ricavoConAnticipato?: number
+  /** Card "Totale Complessivo" del Report: incassato + anticipato + da saldare. */
+  totaleComplessivo?: number
+  prenotazioniCount: number
+  canonical: boolean
+}
 
 interface DashboardData {
   period: { month: string; daysInMonth: number; daysElapsed: number }
@@ -39,10 +60,10 @@ interface DashboardData {
   }
   monthlyReports?: {
     /** 2026-08-24: Mare, Aria e Soggiorni mancavano del tutto dalle Entrate. */
-    mare?: { ricavoTotale: number; prenotazioniCount: number; canonical: boolean }
-    aria?: { ricavoTotale: number; prenotazioniCount: number; canonical: boolean }
-    soggiorni?: { ricavoTotale: number; prenotazioniCount: number; canonical: boolean }
-    noleggio: { ricavoTotale: number; ricavoMesePrev: number; ricavoChangePercent: number; prenotazioniCount: number; prenotazioniAnnullateCount: number; prenotazioniAnnullateValue: number; link: string; ricavoNoleggioPuro?: number | null; ricavoPenali?: number | null; ricavoDanni?: number | null }
+    mare?: BusinessReport
+    aria?: BusinessReport
+    soggiorni?: BusinessReport
+    noleggio: BusinessReport & { ricavoMesePrev: number; ricavoChangePercent: number; prenotazioniAnnullateCount: number; prenotazioniAnnullateValue: number; link: string; ricavoNoleggioPuro?: number | null; ricavoPenali?: number | null; ricavoDanni?: number | null }
     lavaggio: { ricavoTotale: number; count: number; link: string }
     clienti: { nuoviMese: number; attiviMese: number; totale: number; changePercent: number; link: string }
     penaliDanni: { danniTotale: number; danniCount: number; insolutiTotale: number; insolutiCount: number; link: string }
@@ -73,20 +94,6 @@ function fmtDec(n: number): string {
 }
 
 // SVG circular gauge
-function CircularGauge({ value, size = 120, strokeWidth = 10, color = '#19C2D6' }: { value: number; size?: number; strokeWidth?: number; color?: string }) {
-  const radius = (size - strokeWidth) / 2
-  const circumference = 2 * Math.PI * radius
-  const offset = circumference - (Math.min(value, 100) / 100) * circumference
-  return (
-    <svg width={size} height={size} className="transform -rotate-90">
-      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={strokeWidth} />
-      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={color} strokeWidth={strokeWidth}
-        strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round"
-        className="transition-all duration-1000 ease-out" />
-    </svg>
-  )
-}
-
 // Trend indicator
 function Trend({ value, suffix = '%', invert = false, size = 'sm' }: { value: number; suffix?: string; invert?: boolean; size?: 'sm' | 'lg' }) {
   if (value === 0) return <span className="text-theme-text-muted text-xs">--</span>
@@ -106,7 +113,7 @@ function Trend({ value, suffix = '%', invert = false, size = 'sm' }: { value: nu
 function SectionHeader({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div className="mb-4 mt-2">
-      <h3 className="text-base font-bold text-theme-text-primary tracking-wide uppercase">{title}</h3>
+      <h3 className="text-base font-bold text-theme-text-primary">{title}</h3>
       <p className="text-xs text-theme-text-muted mt-0.5">{subtitle}</p>
     </div>
   )
@@ -130,20 +137,20 @@ function AlertBox({ type, children }: { type: 'warning' | 'danger' | 'success' |
 }
 
 // Stat card inside sections
-function StatCard({ label, value, sub, trend, trendSuffix, trendInvert, accent, border }: {
+function StatCard({ label, value, sub, trend, trendSuffix, trendInvert, accent }: {
   label: string; value: string; sub?: string; trend?: number; trendSuffix?: string; trendInvert?: boolean
-  accent?: 'gold' | 'green' | 'red' | 'orange' | 'blue' | 'default'; border?: boolean
+  accent?: 'gold' | 'green' | 'red' | 'orange' | 'blue' | 'default'
 }) {
   const accentColors: Record<string, string> = {
-    gold: 'text-[#19C2D6]', green: 'text-emerald-400', red: 'text-red-400',
-    orange: 'text-amber-400', blue: 'text-blue-400', default: 'text-theme-text-primary'
+    gold: 'text-dr7-gold', green: 'text-green-500', red: 'text-red-500',
+    orange: 'text-yellow-400', blue: 'text-theme-text-primary', default: 'text-theme-text-primary'
   }
   const valueColor = accentColors[accent || 'default']
   return (
-    <div className={`bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-4 ${border ? 'border border-theme-border' : 'border border-white/5'}`}>
-      <p className="text-[10px] uppercase tracking-widest text-theme-text-muted font-semibold mb-2">{label}</p>
-      <p className={`text-2xl font-bold ${valueColor} leading-tight`}>{value}</p>
-      {sub && <p className="text-xs text-theme-text-muted mt-1">{sub}</p>}
+    <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+      <p className="text-xs text-theme-text-muted">{label}</p>
+      <p className={`text-2xl font-bold ${valueColor}`}>{value}</p>
+      {sub && <p className="text-[10px] text-theme-text-muted mt-0.5">{sub}</p>}
       {trend !== undefined && (
         <div className="mt-2">
           <Trend value={trend} suffix={trendSuffix} invert={trendInvert} />
@@ -440,7 +447,7 @@ export default function DashboardTab() {
 
   if (error) {
     return (
-      <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-8 text-center max-w-md mx-auto mt-12">
+      <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-8 text-center max-w-md mx-auto mt-12">
         <p className="text-red-400 font-medium text-lg mb-2">Errore nel caricamento</p>
         <p className="text-theme-text-muted text-sm mb-4">{error}</p>
         <button onClick={() => fetchDashboard({ force: true })} className="px-6 py-2.5 bg-[#19C2D6] text-black rounded-xl text-sm font-bold hover:bg-[#0A8FA3] transition-colors">
@@ -591,9 +598,17 @@ export default function DashboardTab() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const primeWash = (d as any).primeWash as { revenue?: number; bySource?: { lavaggi?: number; meccanica?: number } } | undefined
         const meccanica = primeWash?.bySource?.meccanica ?? 0
+        // 2026-08-27 (richiesta direzione): il Fatturato prende dal Noleggio la
+        // stessa cifra della card "Ricavo TOTALE" del Report Terra, cioe'
+        // incassato PIU' anticipato. Prima si fermava all'incassato e il
+        // Dashboard restava sotto al Report senza spiegazione.
+        const noleggioRicavo = mr ? (mr.noleggio.ricavoConAnticipato ?? mr.noleggio.ricavoTotale) : 0
         const fatturato = mr
-          ? mr.noleggio.ricavoTotale + mr.lavaggio.ricavoTotale + meccanica
+          ? noleggioRicavo + mr.lavaggio.ricavoTotale + meccanica
           : d.revenue.currentMonth
+        // Totale Complessivo del Noleggio = incassato + anticipato + da saldare.
+        const noleggioDaSaldare = mr?.noleggio.daSaldare ?? 0
+        const noleggioComplessivo = mr ? (mr.noleggio.totaleComplessivo ?? noleggioRicavo + noleggioDaSaldare) : 0
         const incassato = d.revenue.incassato
         // If Fatturato came from canonical reports, recompute incassato % from it
         // so the sub-text matches what's shown.
@@ -612,12 +627,14 @@ export default function DashboardTab() {
         const TAX_RATE = 0.33
         const utileNetto = Math.round(margine * (1 - TAX_RATE) * 100) / 100
 
-        const KpiCard = ({ title, value, trend, sub, trendDirection }: {
+        // Scheda in stile Report Terra: etichetta piccola, numero grande, nota.
+        const KpiCard = ({ title, value, trend, sub, trendDirection, tone }: {
           title: string
           value: string
           trend?: number | null
           sub?: string
           trendDirection?: 'up-good' | 'down-good'
+          tone?: 'gold' | 'green' | 'red'
         }) => {
           let tColor = 'text-theme-text-muted'
           let arrow = ''
@@ -628,15 +645,18 @@ export default function DashboardTab() {
             arrow = positive ? '\u25B2' : '\u25BC'
           }
           const trendStr = typeof trend === 'number' ? `${arrow} ${Math.abs(trend).toFixed(1)}%` : ''
+          const valueCls = tone === 'gold' ? 'text-dr7-gold' : tone === 'green' ? 'text-green-500' : tone === 'red' ? 'text-red-500' : 'text-theme-text-primary'
+          const borderCls = tone === 'gold' ? 'border-dr7-gold/30' : 'border-theme-border'
           return (
-            <div className="bg-theme-bg-secondary rounded-2xl p-5 border border-theme-border shadow-sm flex flex-col gap-2 min-h-[130px]">
-              <p className="text-[12px] font-semibold text-theme-text-secondary tracking-tight">{title}</p>
-              <p className="text-[26px] font-bold text-theme-text-primary tracking-tight leading-tight">{value}</p>
+            <div className={`bg-theme-bg-secondary/50 rounded-xl border ${borderCls} p-4`}>
+              <p className="text-xs text-theme-text-muted">{title}</p>
+              <p className={`text-2xl font-bold ${valueCls}`}>{value}</p>
               {(trendStr || sub) && (
-                <div className="flex items-baseline gap-2 mt-auto flex-wrap">
-                  {trendStr && <span className={`text-xs font-semibold ${tColor}`}>{trendStr}</span>}
-                  {sub && <span className="text-[11px] text-theme-text-muted">{sub}</span>}
-                </div>
+                <p className="text-[10px] mt-0.5">
+                  {trendStr && <span className={`font-semibold ${tColor}`}>{trendStr}</span>}
+                  {trendStr && sub && ' · '}
+                  {sub && <span className="text-theme-text-muted">{sub}</span>}
+                </p>
               )}
             </div>
           )
@@ -645,11 +665,18 @@ export default function DashboardTab() {
         return (
           <div>
             <SectionHeader title="Dashboard Proprietario / Investitore" subtitle="La situazione della tua azienda in uno sguardo" />
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              <KpiCard title="Fatturato" value={`\u20AC ${fmt(fatturato)}`} trend={d.revenue.changePercent} trendDirection="up-good" />
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <KpiCard title="Fatturato" value={`\u20AC ${fmt(fatturato)}`} trend={d.revenue.changePercent} trendDirection="up-good" tone="gold" />
+              {mr && (
+                <KpiCard
+                  title="Totale Complessivo Noleggio"
+                  value={`\u20AC ${fmt(noleggioComplessivo)}`}
+                  sub={noleggioDaSaldare > 0 ? `di cui \u20AC ${fmt(noleggioDaSaldare)} da saldare` : 'come Report Terra'}
+                />
+              )}
               <KpiCard title="Incassato Reale" value={`\u20AC ${fmt(incassato)}`} sub={`${incassatoPct}% del fatturato`} />
-              <KpiCard title="Costi Totali" value={`\u20AC ${fmtDec(costiTotali)}`} sub={`${costiCount} fatture`} />
-              <KpiCard title="Margine Operativo" value={`\u20AC ${fmt(margine)}`} sub={`${marginePct}% del fatturato`} />
+              <KpiCard title="Costi Totali" value={`\u20AC ${fmtDec(costiTotali)}`} sub={`${costiCount} fatture`} tone="red" />
+              <KpiCard title="Margine Operativo" value={`\u20AC ${fmt(margine)}`} sub={`${marginePct}% del fatturato`} tone={margine >= 0 ? 'green' : 'red'} />
               <KpiCard title="Utile Netto Stimato" value={`\u20AC ${fmt(utileNetto)}`} trend={d.revenue.changePercent} trendDirection="up-good" sub="dopo tasse ~33%" />
             </div>
           </div>
@@ -668,16 +695,27 @@ export default function DashboardTab() {
         // 2026-08-24: Mare, Aria e Soggiorni entrano nelle Entrate. Prima il
         // Dashboard chiedeva a monthly-report solo il Noleggio Terra, quindi i
         // loro incassi non comparivano da nessuna parte.
-        const mare = mr.mare?.ricavoTotale ?? 0
-        const aria = mr.aria?.ricavoTotale ?? 0
-        const soggiorni = mr.soggiorni?.ricavoTotale ?? 0
+        // 2026-08-27 (richiesta direzione): da ogni business si prende la stessa
+        // cifra della card "Ricavo TOTALE" del Report (incassato + anticipato).
+        // Il "da saldare" resta fuori dalle Entrate e si mostra a parte, come
+        // fa il Report Terra con il Totale Complessivo.
+        const ricavoDi = (b?: BusinessReport) => b ? (b.ricavoConAnticipato ?? b.ricavoTotale) : 0
+        const noleggioRicavo = ricavoDi(mr.noleggio)
+        const mare = ricavoDi(mr.mare)
+        const aria = ricavoDi(mr.aria)
+        const soggiorni = ricavoDi(mr.soggiorni)
+        const daSaldareTot =
+          (mr.noleggio.daSaldare ?? 0) +
+          (mr.mare?.daSaldare ?? 0) +
+          (mr.aria?.daSaldare ?? 0) +
+          (mr.soggiorni?.daSaldare ?? 0)
         const businessScollegati = [
           mr.mare && !mr.mare.canonical ? 'Mare' : null,
           mr.aria && !mr.aria.canonical ? 'Aria' : null,
           mr.soggiorni && !mr.soggiorni.canonical ? 'Soggiorni' : null,
         ].filter(Boolean) as string[]
         const entrate =
-          mr.noleggio.ricavoTotale +
+          noleggioRicavo +
           mare + aria + soggiorni +
           mr.lavaggio.ricavoTotale +
           meccanica
@@ -689,72 +727,166 @@ export default function DashboardTab() {
           <div>
             <SectionHeader title="Sintesi del Periodo" subtitle={`Tutte le attività del periodo in un colpo d'occhio · ${periodLabel}`} />
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-              {/* Entrate */}
-              <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-emerald-500/20">
-                <p className="text-[10px] uppercase tracking-widest text-emerald-300 font-semibold mb-2">Entrate (totali attività)</p>
-                <p className="text-3xl font-bold text-emerald-400 leading-tight">€ {fmtDec(entrate)}</p>
-                <div className="mt-3 space-y-1 text-xs text-theme-text-muted">
-                  <div className="flex justify-between"><span>Noleggio Terra</span><span className="text-theme-text-primary">€ {fmtDec(mr.noleggio.ricavoTotale)}</span></div>
-                  <div className="flex justify-between"><span>Noleggio Mare</span><span className="text-theme-text-primary">€ {fmtDec(mare)}</span></div>
-                  <div className="flex justify-between"><span>Noleggio Aria</span><span className="text-theme-text-primary">€ {fmtDec(aria)}</span></div>
-                  <div className="flex justify-between"><span>Soggiorni</span><span className="text-theme-text-primary">€ {fmtDec(soggiorni)}</span></div>
-                  <div className="flex justify-between"><span>Lavaggi</span><span className="text-theme-text-primary">€ {fmtDec(mr.lavaggio.ricavoTotale)}</span></div>
-                  <div className="flex justify-between"><span>Meccanica</span><span className="text-theme-text-primary">€ {fmtDec(meccanica)}</span></div>
-                  {/* Come nel Report Noleggio: dentro il Noleggio Terra si
-                      vede quanto e' noleggio puro e quanto sono penali e danni. */}
-                  {mr.noleggio.ricavoNoleggioPuro != null ? (
+              {/* Entrate — 2026-08-27 (richiesta direzione): stessa forma del
+                  Report Terra (tabella) e stesse cifre: dal Noleggio si prende
+                  il Ricavo TOTALE (incassato + anticipato) e si mostra a parte
+                  il Totale Complessivo con il da saldare. */}
+              <ReportCard title="Entrate (totali attività)" right={`€ ${fmtDec(entrate)}`}>
+                <ReportTable
+                  head={
                     <>
-                      <div className="flex justify-between text-[10px] text-theme-text-muted/80 pl-3"><span>di cui noleggio</span><span>€ {fmtDec(mr.noleggio.ricavoNoleggioPuro)}</span></div>
-                      <div className="flex justify-between text-[10px] text-theme-text-muted/80 pl-3"><span>di cui penali</span><span>€ {fmtDec(mr.noleggio.ricavoPenali ?? 0)}</span></div>
-                      <div className="flex justify-between text-[10px] text-theme-text-muted/80 pl-3"><span>di cui danni</span><span>€ {fmtDec(mr.noleggio.ricavoDanni ?? 0)}</span></div>
+                      <th className="text-left px-4 py-3">Attività</th>
+                      <th className="text-right px-4 py-3">Ricavo</th>
                     </>
-                  ) : (
-                    <div className="flex justify-between text-[10px] text-theme-text-muted/80"><span>(di cui Penali+Danni nel Noleggio)</span><span>€ {fmtDec(insolutiTot + danniTot)}</span></div>
+                  }
+                  foot={
+                    <ReportTotalRow>
+                      <td className="px-4 py-2">Totale Entrate</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-dr7-gold">€ {fmtDec(entrate)}</td>
+                    </ReportTotalRow>
+                  }
+                >
+                  <ReportRow>
+                    <td className="px-4 py-2 text-theme-text-primary">Noleggio Terra</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">€ {fmtDec(noleggioRicavo)}</td>
+                  </ReportRow>
+                  {mr.noleggio.ricavoNoleggioPuro != null && (
+                    <>
+                      <ReportRow>
+                        <td className="px-4 py-2 pl-8 text-theme-text-muted text-xs">di cui noleggio</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted text-xs">€ {fmtDec(mr.noleggio.ricavoNoleggioPuro)}</td>
+                      </ReportRow>
+                      <ReportRow>
+                        <td className="px-4 py-2 pl-8 text-theme-text-muted text-xs">di cui penali</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted text-xs">€ {fmtDec(mr.noleggio.ricavoPenali ?? 0)}</td>
+                      </ReportRow>
+                      <ReportRow>
+                        <td className="px-4 py-2 pl-8 text-theme-text-muted text-xs">di cui danni</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted text-xs">€ {fmtDec(mr.noleggio.ricavoDanni ?? 0)}</td>
+                      </ReportRow>
+                    </>
                   )}
-                  <div className="flex justify-between pt-1 border-t border-emerald-500/20 mt-1">
-                    <span>Incassato</span><span className="text-emerald-300">€ {fmtDec(d.revenue.incassato)}</span>
-                  </div>
-                  {businessScollegati.length > 0 && (
-                    <div className="text-[10px] text-amber-400 pt-1">
-                      {businessScollegati.join(', ')}: report non raggiungibile, quei ricavi non sono nel totale.
-                    </div>
+                  {(mr.noleggio.ricavoAnticipato ?? 0) > 0 && (
+                    <ReportRow>
+                      <td className="px-4 py-2 pl-8 text-theme-text-muted text-xs">di cui anticipato</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted text-xs">€ {fmtDec(mr.noleggio.ricavoAnticipato ?? 0)}</td>
+                    </ReportRow>
                   )}
-                </div>
-              </div>
+                  <ReportRow>
+                    <td className="px-4 py-2 text-theme-text-primary">Noleggio Mare</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">€ {fmtDec(mare)}</td>
+                  </ReportRow>
+                  <ReportRow>
+                    <td className="px-4 py-2 text-theme-text-primary">Noleggio Aria</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">€ {fmtDec(aria)}</td>
+                  </ReportRow>
+                  <ReportRow>
+                    <td className="px-4 py-2 text-theme-text-primary">Soggiorni</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">€ {fmtDec(soggiorni)}</td>
+                  </ReportRow>
+                  <ReportRow>
+                    <td className="px-4 py-2 text-theme-text-primary">Lavaggi</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">€ {fmtDec(mr.lavaggio.ricavoTotale)}</td>
+                  </ReportRow>
+                  <ReportRow>
+                    <td className="px-4 py-2 text-theme-text-primary">Meccanica</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">€ {fmtDec(meccanica)}</td>
+                  </ReportRow>
+                  <ReportRow>
+                    <td className="px-4 py-2 text-theme-text-primary">Incassato</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-green-500">€ {fmtDec(d.revenue.incassato)}</td>
+                  </ReportRow>
+                  {daSaldareTot > 0 && (
+                    <ReportRow>
+                      <td className="px-4 py-2 text-theme-text-primary">Da saldare</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-red-500">€ {fmtDec(daSaldareTot)}</td>
+                    </ReportRow>
+                  )}
+                  {daSaldareTot > 0 && (
+                    <ReportRow>
+                      <td className="px-4 py-2 font-semibold text-theme-text-primary">Totale Complessivo</td>
+                      <td className="px-4 py-2 text-right tabular-nums font-semibold text-theme-text-primary">€ {fmtDec(entrate + daSaldareTot)}</td>
+                    </ReportRow>
+                  )}
+                </ReportTable>
+                {businessScollegati.length > 0 && (
+                  <p className="px-4 py-3 text-xs text-yellow-400 border-t border-theme-border">
+                    {businessScollegati.join(', ')}: report non raggiungibile, quei ricavi non sono nel totale.
+                  </p>
+                )}
+              </ReportCard>
+
               {/* Uscite */}
-              <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-red-500/20">
-                <p className="text-[10px] uppercase tracking-widest text-red-300 font-semibold mb-2">Uscite</p>
-                <p className="text-3xl font-bold text-red-400 leading-tight">€ {fmtDec(uscitePagate)}</p>
-                <div className="mt-3 space-y-1 text-xs text-theme-text-muted">
-                  <div className="flex justify-between"><span>Pagato fornitori</span><span className="text-theme-text-primary">€ {fmtDec(mr.fornitori.pagatoMese)}</span></div>
-                  <div className="flex justify-between"><span>Da pagare</span><span className="text-amber-300">€ {fmtDec(mr.fornitori.daPagare)}</span></div>
-                  <div className="flex justify-between"><span>Scaduto</span><span className={mr.fornitori.scaduto > 0 ? 'text-red-300' : 'text-theme-text-primary'}>€ {fmtDec(mr.fornitori.scaduto)}</span></div>
-                  <div className="flex justify-between pt-1 border-t border-red-500/20 mt-1">
-                    <span>Alert aperti</span><span className={mr.fornitori.alertsOpen > 0 ? 'text-amber-300' : 'text-theme-text-primary'}>{mr.fornitori.alertsOpen}</span>
-                  </div>
-                </div>
-              </div>
+              <ReportCard title="Uscite" right={`€ ${fmtDec(uscitePagate)}`}>
+                <ReportTable
+                  head={
+                    <>
+                      <th className="text-left px-4 py-3">Voce</th>
+                      <th className="text-right px-4 py-3">Importo</th>
+                    </>
+                  }
+                  foot={
+                    <ReportTotalRow>
+                      <td className="px-4 py-2">Pagato nel periodo</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-red-500">€ {fmtDec(uscitePagate)}</td>
+                    </ReportTotalRow>
+                  }
+                >
+                  <ReportRow>
+                    <td className="px-4 py-2 text-theme-text-primary">Pagato fornitori</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">€ {fmtDec(mr.fornitori.pagatoMese)}</td>
+                  </ReportRow>
+                  <ReportRow>
+                    <td className="px-4 py-2 text-theme-text-primary">Da pagare</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-yellow-400">€ {fmtDec(mr.fornitori.daPagare)}</td>
+                  </ReportRow>
+                  <ReportRow>
+                    <td className="px-4 py-2 text-theme-text-primary">Scaduto</td>
+                    <td className={`px-4 py-2 text-right tabular-nums ${mr.fornitori.scaduto > 0 ? 'text-red-500' : 'text-theme-text-primary'}`}>€ {fmtDec(mr.fornitori.scaduto)}</td>
+                  </ReportRow>
+                  <ReportRow>
+                    <td className="px-4 py-2 text-theme-text-primary">Alert aperti</td>
+                    <td className={`px-4 py-2 text-right tabular-nums ${mr.fornitori.alertsOpen > 0 ? 'text-yellow-400' : 'text-theme-text-primary'}`}>{mr.fornitori.alertsOpen}</td>
+                  </ReportRow>
+                </ReportTable>
+              </ReportCard>
+
               {/* Cash netto */}
-              <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-[#19C2D6]/20">
-                <p className="text-[10px] uppercase tracking-widest text-[#19C2D6] font-semibold mb-2">Cash Netto</p>
-                <p className={`text-3xl font-bold leading-tight ${cashNetto >= 0 ? 'text-[#19C2D6]' : 'text-red-400'}`}>€ {fmtDec(cashNetto)}</p>
-                <p className="text-xs text-theme-text-muted mt-1">Entrate − Uscite (cash flow)</p>
-                <div className="mt-3 space-y-1 text-xs text-theme-text-muted">
-                  <div className="flex justify-between"><span>Fatturato</span><span className="text-theme-text-primary">€ {fmtDec(d.revenue.currentMonth)}</span></div>
-                  <div className="flex justify-between"><span>Costi totali</span><span className="text-theme-text-primary">€ {fmtDec(uscitePagate)}</span></div>
-                  <div className="flex justify-between"><span>Margine</span><span className="text-theme-text-primary">€ {fmtDec(d.revenue.currentMonth - uscitePagate)}</span></div>
-                  <div className="flex justify-between pt-1 border-t border-[#19C2D6]/20 mt-1">
-                    <span>vs mese scorso</span>
-                    <Trend value={d.revenue.changePercent} size="sm" />
-                  </div>
-                </div>
-              </div>
+              <ReportCard title="Cash Netto" right="Entrate − Uscite">
+                <ReportTable
+                  head={
+                    <>
+                      <th className="text-left px-4 py-3">Voce</th>
+                      <th className="text-right px-4 py-3">Importo</th>
+                    </>
+                  }
+                  foot={
+                    <ReportTotalRow>
+                      <td className="px-4 py-2">Cash Netto</td>
+                      <td className={`px-4 py-2 text-right tabular-nums ${cashNetto >= 0 ? 'text-green-500' : 'text-red-500'}`}>€ {fmtDec(cashNetto)}</td>
+                    </ReportTotalRow>
+                  }
+                >
+                  <ReportRow>
+                    <td className="px-4 py-2 text-theme-text-primary">Entrate</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">€ {fmtDec(entrate)}</td>
+                  </ReportRow>
+                  <ReportRow>
+                    <td className="px-4 py-2 text-theme-text-primary">Costi totali</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">€ {fmtDec(uscitePagate)}</td>
+                  </ReportRow>
+                  <ReportRow>
+                    <td className="px-4 py-2 text-theme-text-primary">vs periodo precedente</td>
+                    <td className="px-4 py-2 text-right"><Trend value={d.revenue.changePercent} size="sm" /></td>
+                  </ReportRow>
+                </ReportTable>
+              </ReportCard>
             </div>
 
             {/* Second row — operations / customers / risks */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3">
               {/* Operatività */}
-              <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-blue-500/20">
+              <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
                 <p className="text-[10px] uppercase tracking-widest text-blue-300 font-semibold mb-2">Operatività</p>
                 <p className="text-3xl font-bold text-blue-400 leading-tight">{d.fleet.occupationRate}%</p>
                 <p className="text-xs text-theme-text-muted mt-1">Occupazione flotta</p>
@@ -762,14 +894,14 @@ export default function DashboardTab() {
                   <div className="flex justify-between"><span>Prenotazioni</span><span className="text-theme-text-primary">{mr.noleggio.prenotazioniCount}</span></div>
                   <div className="flex justify-between"><span>Annullate</span><span className={mr.noleggio.prenotazioniAnnullateCount > 0 ? 'text-amber-300' : 'text-theme-text-primary'}>{mr.noleggio.prenotazioniAnnullateCount} (€ {fmtDec(mr.noleggio.prenotazioniAnnullateValue)})</span></div>
                   <div className="flex justify-between"><span>Lavaggi</span><span className="text-theme-text-primary">{mr.lavaggio.count}</span></div>
-                  <div className="flex justify-between pt-1 border-t border-blue-500/20 mt-1">
+                  <div className="flex justify-between pt-1 border-t border-theme-border mt-1">
                     <span>Conversion bookings</span><span className="text-theme-text-primary">{d.bookings.conversionRate}%</span>
                   </div>
                 </div>
               </div>
 
               {/* Clienti & Preventivi */}
-              <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-purple-500/20">
+              <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
                 <p className="text-[10px] uppercase tracking-widest text-purple-300 font-semibold mb-2">Clienti</p>
                 <p className="text-3xl font-bold text-purple-400 leading-tight">+{mr.clienti.nuoviMese}</p>
                 <p className="text-xs text-theme-text-muted mt-1">Nuovi clienti nel periodo</p>
@@ -777,7 +909,7 @@ export default function DashboardTab() {
                   <div className="flex justify-between"><span>Attivi nel periodo</span><span className="text-theme-text-primary">{mr.clienti.attiviMese}</span></div>
                   <div className="flex justify-between"><span>Totale clienti</span><span className="text-theme-text-primary">{fmt(mr.clienti.totale)}</span></div>
                   <div className="flex justify-between"><span>Preventivi</span><span className="text-theme-text-primary">{mr.preventivi.total}</span></div>
-                  <div className="flex justify-between pt-1 border-t border-purple-500/20 mt-1">
+                  <div className="flex justify-between pt-1 border-t border-theme-border mt-1">
                     <span>Conversion preventivi</span>
                     <span className={mr.preventivi.conversionRate >= 50 ? 'text-emerald-300' : 'text-amber-300'}>{mr.preventivi.conversionRate}%</span>
                   </div>
@@ -785,7 +917,7 @@ export default function DashboardTab() {
               </div>
 
               {/* Rischi & Alert */}
-              <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-amber-500/20">
+              <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
                 <p className="text-[10px] uppercase tracking-widest text-amber-300 font-semibold mb-2">Rischi & Alert</p>
                 <p className={`text-3xl font-bold leading-tight ${(insolutiTot + danniTot + mr.fornitori.scaduto) > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>€ {fmtDec(insolutiTot + danniTot + mr.fornitori.scaduto)}</p>
                 <p className="text-xs text-theme-text-muted mt-1">Insoluti + Danni + Scaduto fornitori</p>
@@ -793,7 +925,7 @@ export default function DashboardTab() {
                   <div className="flex justify-between"><span>Insoluti</span><span className={insolutiTot > 0 ? 'text-amber-300' : 'text-theme-text-primary'}>€ {fmtDec(insolutiTot)} ({mr.penaliDanni.insolutiCount})</span></div>
                   <div className="flex justify-between"><span>Danni</span><span className={danniTot > 0 ? 'text-red-300' : 'text-theme-text-primary'}>€ {fmtDec(danniTot)} ({mr.penaliDanni.danniCount})</span></div>
                   <div className="flex justify-between"><span>Scaduto fornitori</span><span className={mr.fornitori.scaduto > 0 ? 'text-red-300' : 'text-theme-text-primary'}>€ {fmtDec(mr.fornitori.scaduto)}</span></div>
-                  <div className="flex justify-between pt-1 border-t border-amber-500/20 mt-1">
+                  <div className="flex justify-between pt-1 border-t border-theme-border mt-1">
                     <span>Anomalie aperte</span><span className={mr.fornitori.alertsOpen > 0 ? 'text-amber-300' : 'text-theme-text-primary'}>{mr.fornitori.alertsOpen}</span>
                   </div>
                 </div>
@@ -826,7 +958,7 @@ export default function DashboardTab() {
             {/* 2. DOMANDA + 3. CONVERSIONE side-by-side */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
               {/* DOMANDA */}
-              <div className="bg-theme-bg-secondary/60 rounded-xl p-5 border border-blue-500/20">
+              <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
                 <h4 className="text-sm font-bold text-blue-300 uppercase tracking-wide mb-3">Domanda</h4>
                 <div className="space-y-3 text-sm">
                   <div>
@@ -855,7 +987,7 @@ export default function DashboardTab() {
               </div>
 
               {/* CONVERSIONE */}
-              <div className="bg-theme-bg-secondary/60 rounded-xl p-5 border border-emerald-500/20">
+              <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
                 <h4 className="text-sm font-bold text-emerald-300 uppercase tracking-wide mb-3">Conversione</h4>
                 <div className="space-y-3 text-sm">
                   <div>
@@ -895,7 +1027,7 @@ export default function DashboardTab() {
             </div>
 
             {/* 4. PERDITE */}
-            <div className="bg-theme-bg-secondary/60 rounded-xl p-5 border border-red-500/20 mt-3">
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4 mt-3">
               <h4 className="text-sm font-bold text-red-300 uppercase tracking-wide mb-3">Perdite — preventivi non convertiti</h4>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 text-xs">
                 {/* Top non convertiti */}
@@ -954,91 +1086,100 @@ export default function DashboardTab() {
       {/* ========== OCCUPAZIONE FLOTTA ========== */}
       <div>
         <SectionHeader title="Occupazione Flotta" subtitle="Stai sfruttando bene le tue auto?" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {/* Gauge + counts */}
-          <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-white/5 flex flex-col items-center">
-            <div className="relative">
-              <CircularGauge value={d.fleet.occupationRate} size={130} strokeWidth={12} />
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-3xl font-bold text-[#19C2D6]">{d.fleet.occupationRate}%</span>
-                <span className="text-[10px] text-theme-text-muted uppercase tracking-wider">Occupazione</span>
-              </div>
-            </div>
-            <div className="flex gap-6 mt-4">
-              <div className="text-center">
-                <p className="text-xl font-bold text-emerald-400">{d.fleet.rentedNow}</p>
-                <p className="text-[9px] uppercase tracking-wider text-theme-text-muted">Veicoli Noleggiati</p>
-              </div>
-              <div className="text-center">
-                <p className="text-xl font-bold text-amber-400">{d.fleet.idleNow}</p>
-                <p className="text-[9px] uppercase tracking-wider text-theme-text-muted">Veicoli Fermi</p>
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Occupazione — 2026-08-27: numeri e tabella, niente lancetta ne' barre. */}
+          <ReportCard title="Occupazione" right={`${d.fleet.occupationRate}%`}>
+            <ReportTable
+              head={
+                <>
+                  <th className="text-left px-4 py-3">Stato</th>
+                  <th className="text-right px-4 py-3">Veicoli</th>
+                </>
+              }
+              foot={
+                <ReportTotalRow>
+                  <td className="px-4 py-2">Totale flotta</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{d.fleet.rentedNow + d.fleet.idleNow}</td>
+                </ReportTotalRow>
+              }
+            >
+              <ReportRow>
+                <td className="px-4 py-2 text-theme-text-primary">Noleggiati</td>
+                <td className="px-4 py-2 text-right tabular-nums text-green-500">{d.fleet.rentedNow}</td>
+              </ReportRow>
+              <ReportRow>
+                <td className="px-4 py-2 text-theme-text-primary">Fermi</td>
+                <td className="px-4 py-2 text-right tabular-nums text-yellow-400">{d.fleet.idleNow}</td>
+              </ReportRow>
+            </ReportTable>
+          </ReportCard>
 
-          {/* Comparison */}
-          <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-white/5">
-            <p className="text-[10px] uppercase tracking-widest text-theme-text-muted font-semibold mb-3">Confronto periodo precedente</p>
-            <div className="flex gap-4 mb-4">
-              <div>
-                <Trend value={d.fleet.changePercent} suffix="%" size="lg" />
-                <p className="text-[10px] text-theme-text-muted mt-1">Occupazione</p>
-              </div>
-            </div>
-            <div className="space-y-2 mt-4">
-              <div className="flex justify-between text-xs">
-                <span className="text-theme-text-muted">Mese corrente</span>
-                <span className="text-theme-text-primary font-medium">{d.fleet.occupationRate}%</span>
-              </div>
-              <div className="h-2 rounded-full bg-white/5 overflow-hidden">
-                <div className="h-full bg-[#19C2D6] rounded-full transition-all duration-1000" style={{ width: `${d.fleet.occupationRate}%` }} />
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-theme-text-muted">Periodo precedente</span>
-                <span className="text-theme-text-primary font-medium">{d.fleet.previousRate}%</span>
-              </div>
-              <div className="h-2 rounded-full bg-white/5 overflow-hidden">
-                <div className="h-full bg-white/20 rounded-full transition-all duration-1000" style={{ width: `${d.fleet.previousRate}%` }} />
-              </div>
-            </div>
-          </div>
+          {/* Confronto */}
+          <ReportCard title="Confronto Periodo Precedente">
+            <ReportTable
+              head={
+                <>
+                  <th className="text-left px-4 py-3">Periodo</th>
+                  <th className="text-right px-4 py-3">Occupazione</th>
+                </>
+              }
+              foot={
+                <ReportTotalRow>
+                  <td className="px-4 py-2">Variazione</td>
+                  <td className="px-4 py-2 text-right"><Trend value={d.fleet.changePercent} suffix="%" /></td>
+                </ReportTotalRow>
+              }
+            >
+              <ReportRow>
+                <td className="px-4 py-2 text-theme-text-primary">Periodo corrente</td>
+                <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{d.fleet.occupationRate}%</td>
+              </ReportRow>
+              <ReportRow>
+                <td className="px-4 py-2 text-theme-text-primary">Periodo precedente</td>
+                <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{d.fleet.previousRate}%</td>
+              </ReportRow>
+            </ReportTable>
+          </ReportCard>
 
-          {/* Alerts */}
-          <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-white/5">
-            <p className="text-[10px] uppercase tracking-widest text-theme-text-muted font-semibold mb-3">Attenzione</p>
-            {d.fleet.vehiclesIdleLong.length > 0 ? (
-              <>
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 mb-3">
-                  <p className="text-amber-300 text-xs font-semibold">{d.fleet.vehiclesIdleLong.length} veicoli fermi da oltre 10 giorni</p>
-                </div>
-                <div className="space-y-2 max-h-[140px] overflow-y-auto">
-                  {d.fleet.vehiclesIdleLong.map((v, i) => (
-                    <div key={i} className="flex justify-between items-center text-xs bg-white/[0.03] rounded-lg px-3 py-2">
-                      <div>
-                        <span className="text-theme-text-primary font-medium">{v.name}</span>
-                        <span className="text-theme-text-muted ml-1.5">{v.plate}</span>
-                      </div>
-                      <span className="text-red-400 font-bold">{v.idleDays}g</span>
-                    </div>
-                  ))}
-                </div>
-              </>
+          {/* Veicoli fermi da tempo */}
+          <ReportCard
+            title="Attenzione"
+            right={d.fleet.vehiclesIdleLong.length > 0 ? `${d.fleet.vehiclesIdleLong.length} fermi da oltre 10 giorni` : 'tutti attivi'}
+          >
+            {d.fleet.vehiclesIdleLong.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm text-theme-text-muted">Tutti i veicoli attivi</div>
             ) : (
-              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
-                <p className="text-emerald-300 text-xs font-semibold">Tutti i veicoli attivi</p>
+              <div className="max-h-56 overflow-y-auto">
+                <ReportTable
+                  head={
+                    <>
+                      <th className="text-left px-4 py-3">Veicolo</th>
+                      <th className="text-left px-4 py-3">Targa</th>
+                      <th className="text-right px-4 py-3">Fermo da</th>
+                    </>
+                  }
+                >
+                  {d.fleet.vehiclesIdleLong.map((v, i) => (
+                    <ReportRow key={i}>
+                      <td className="px-4 py-2 text-theme-text-primary">{v.name}</td>
+                      <td className="px-4 py-2 text-theme-text-muted">{v.plate}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-red-500">{v.idleDays}g</td>
+                    </ReportRow>
+                  ))}
+                </ReportTable>
               </div>
             )}
-          </div>
+          </ReportCard>
         </div>
       </div>
 
       {/* ========== RICAVO MEDIO + PRENOTAZIONI (side by side) ========== */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* RICAVO MEDIO PER VEICOLO */}
-        <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-white/5">
+        <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
           <p className="text-[10px] uppercase tracking-widest text-theme-text-muted font-semibold mb-3">Ricavo Medio per Veicolo</p>
           <div className="flex items-baseline gap-2 mb-1">
-            <span className="text-3xl font-bold text-[#19C2D6]">{'\u20AC'} {fmtDec(d.revenuePerVehicle.avgPerDay)}</span>
+            <span className="text-3xl font-bold text-dr7-gold">{'\u20AC'} {fmtDec(d.revenuePerVehicle.avgPerDay)}</span>
             <span className="text-sm text-theme-text-muted">/giorno</span>
           </div>
           <div className="mb-4">
@@ -1051,9 +1192,9 @@ export default function DashboardTab() {
               <p className="text-[10px] uppercase tracking-wider text-theme-text-muted mb-2 font-semibold">Top Performer</p>
               <div className="space-y-1.5">
                 {d.revenuePerVehicle.topPerformers.map((v, i) => (
-                  <div key={i} className="flex items-center justify-between bg-white/[0.03] rounded-lg px-3 py-2">
+                  <div key={i} className="flex items-center justify-between bg-theme-bg-tertiary/30 rounded-lg px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${i === 0 ? 'bg-[#19C2D6] text-black' : 'bg-white/10 text-theme-text-muted'}`}>
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${i === 0 ? 'bg-dr7-gold text-white' : 'bg-theme-bg-tertiary text-theme-text-muted'}`}>
                         {i + 1}
                       </span>
                       <span className="text-sm text-theme-text-primary">{v.name}</span>
@@ -1073,10 +1214,10 @@ export default function DashboardTab() {
         </div>
 
         {/* PRENOTAZIONI */}
-        <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-5 border border-white/5">
+        <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
           <p className="text-[10px] uppercase tracking-widest text-theme-text-muted font-semibold mb-3">Prenotazioni</p>
           <div className="flex items-baseline gap-2 mb-1">
-            <span className="text-3xl font-bold text-[#19C2D6]">{d.bookings.total}</span>
+            <span className="text-3xl font-bold text-dr7-gold">{d.bookings.total}</span>
           </div>
           <div className="mb-5">
             <Trend value={d.bookings.changePercent} />
@@ -1098,14 +1239,11 @@ export default function DashboardTab() {
             </div>
           </div>
 
-          <div className="bg-white/[0.03] rounded-xl px-4 py-3 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-theme-text-muted">Tasso di conversione</p>
-              <p className="text-lg font-bold text-[#19C2D6]">{d.bookings.conversionRate}% <span className="text-xs font-normal text-theme-text-muted">({conversionLabel})</span></p>
-            </div>
-            <div className="w-20 h-2 rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${d.bookings.conversionRate}%` }} />
-            </div>
+          <div className="bg-theme-bg-tertiary/30 rounded-xl border border-theme-border px-4 py-3 flex items-center justify-between">
+            <p className="text-xs text-theme-text-muted">Tasso di conversione</p>
+            <p className="text-lg font-bold text-theme-text-primary tabular-nums">
+              {d.bookings.conversionRate}% <span className="text-xs font-normal text-theme-text-muted">({conversionLabel})</span>
+            </p>
           </div>
         </div>
       </div>
@@ -1114,9 +1252,9 @@ export default function DashboardTab() {
       <div>
         <SectionHeader title="Clienti" subtitle="La salute del tuo business" />
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-          <StatCard label="Nuovi Clienti" value={String(d.customers.newThisMonth)} trend={d.customers.changePercent} accent="gold" border />
-          <StatCard label="Clienti Attivi" value={fmt(d.customers.activeThisMonth)} accent="default" border />
-          <StatCard label="Totale Clienti" value={fmt(d.customers.totalCustomers)} accent="default" border />
+          <StatCard label="Nuovi Clienti" value={String(d.customers.newThisMonth)} trend={d.customers.changePercent} accent="gold" />
+          <StatCard label="Clienti Attivi" value={fmt(d.customers.activeThisMonth)} accent="default" />
+          <StatCard label="Totale Clienti" value={fmt(d.customers.totalCustomers)} accent="default" />
         </div>
       </div>
 
@@ -1131,17 +1269,15 @@ export default function DashboardTab() {
             trend={d.damages.changePercent}
             trendInvert
             accent="red"
-            border
           />
           <StatCard
             label="Insoluti"
             value={`\u20AC ${fmt(d.damages.insoluti)}`}
             sub={`${d.damages.insolutiCount} pagamenti in ritardo`}
             accent="orange"
-            border
           />
           {d.damages.previousDanniAmount > 0 && (
-            <StatCard label="Danni Mese Precedente" value={`\u20AC ${fmt(d.damages.previousDanniAmount)}`} accent="default" border />
+            <StatCard label="Danni Mese Precedente" value={`\u20AC ${fmt(d.damages.previousDanniAmount)}`} accent="default" />
           )}
         </div>
         {d.damages.insoluti > 0 && (
@@ -1159,20 +1295,20 @@ export default function DashboardTab() {
             {/* NOLEGGIO */}
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: d.monthlyReports!.noleggio.link } }))}
-              className="text-left bg-theme-bg-secondary/60 rounded-2xl p-4 border border-theme-border hover:border-[#19C2D6]/40 transition-colors group"
+              className="text-left bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4 hover:bg-theme-bg-tertiary/30C2D6]/40 transition-colors group"
             >
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs uppercase tracking-widest text-theme-text-muted font-semibold">Noleggio</p>
-                <span className="text-theme-text-muted text-xs group-hover:text-[#19C2D6]">Apri →</span>
+                <span className="text-theme-text-muted text-xs group-hover:text-dr7-gold">Apri →</span>
               </div>
-              <p className="text-2xl font-bold text-[#19C2D6]">€ {fmtDec(d.monthlyReports.noleggio.ricavoTotale)}</p>
+              <p className="text-2xl font-bold text-dr7-gold">€ {fmtDec(d.monthlyReports.noleggio.ricavoTotale)}</p>
               <p className="text-xs text-theme-text-muted mt-1">{d.monthlyReports.noleggio.prenotazioniCount} prenotazioni · {d.monthlyReports.noleggio.prenotazioniAnnullateCount} annullate (€ {fmtDec(d.monthlyReports.noleggio.prenotazioniAnnullateValue)})</p>
             </button>
 
             {/* LAVAGGIO */}
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: d.monthlyReports!.lavaggio.link } }))}
-              className="text-left bg-theme-bg-secondary/60 rounded-2xl p-4 border border-theme-border hover:border-blue-400/40 transition-colors group"
+              className="text-left bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4 hover:bg-theme-bg-tertiary/30 transition-colors group"
             >
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs uppercase tracking-widest text-theme-text-muted font-semibold">Lavaggio</p>
@@ -1185,7 +1321,7 @@ export default function DashboardTab() {
             {/* CLIENTI */}
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: d.monthlyReports!.clienti.link } }))}
-              className="text-left bg-theme-bg-secondary/60 rounded-2xl p-4 border border-theme-border hover:border-emerald-400/40 transition-colors group"
+              className="text-left bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4 hover:bg-theme-bg-tertiary/30 transition-colors group"
             >
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs uppercase tracking-widest text-theme-text-muted font-semibold">Clienti</p>
@@ -1198,7 +1334,7 @@ export default function DashboardTab() {
             {/* PENALI & DANNI */}
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: d.monthlyReports!.penaliDanni.link } }))}
-              className="text-left bg-theme-bg-secondary/60 rounded-2xl p-4 border border-theme-border hover:border-red-400/40 transition-colors group"
+              className="text-left bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4 hover:bg-theme-bg-tertiary/30 transition-colors group"
             >
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs uppercase tracking-widest text-theme-text-muted font-semibold">Penali & Danni</p>
@@ -1211,7 +1347,7 @@ export default function DashboardTab() {
             {/* PREVENTIVI */}
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: d.monthlyReports!.preventivi.link } }))}
-              className="text-left bg-theme-bg-secondary/60 rounded-2xl p-4 border border-theme-border hover:border-amber-400/40 transition-colors group"
+              className="text-left bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4 hover:bg-theme-bg-tertiary/30 transition-colors group"
             >
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs uppercase tracking-widest text-theme-text-muted font-semibold">Preventivi</p>
@@ -1227,7 +1363,7 @@ export default function DashboardTab() {
             {/* FORNITORI */}
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('admin:navigate-tab', { detail: { tab: d.monthlyReports!.fornitori.link } }))}
-              className="text-left bg-theme-bg-secondary/60 rounded-2xl p-4 border border-theme-border hover:border-purple-400/40 transition-colors group"
+              className="text-left bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4 hover:bg-theme-bg-tertiary/30 transition-colors group"
             >
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs uppercase tracking-widest text-theme-text-muted font-semibold">Fornitori</p>
@@ -1253,20 +1389,18 @@ export default function DashboardTab() {
             value={`\u20AC ${fmt(d.revenue.currentMonth)}`}
             sub={`Incassato + da incassare (tutte le prenotazioni valide di ${periodLabel})`}
             accent="gold"
-            border
           />
           <StatCard
             label="Periodo precedente"
             value={`\u20AC ${fmt(d.revenue.previousMonth)}`}
             trend={d.revenue.changePercent}
             accent="default"
-            border
           />
         </div>
         <div className="grid grid-cols-3 gap-3 mb-3">
-          <StatCard label="Incassato" value={`\u20AC ${fmt(d.cashFlow.incassato)}`} sub="Cassa effettiva" accent="green" border />
-          <StatCard label="Da Incassare" value={`\u20AC ${fmt(d.cashFlow.daIncassare)}`} sub="Pending / da saldare" accent="orange" border />
-          <StatCard label="Scaduti" value={`\u20AC ${fmt(d.cashFlow.insolutiScaduti)}`} sub="Non pagati oltre scadenza" accent="red" border />
+          <StatCard label="Incassato" value={`\u20AC ${fmt(d.cashFlow.incassato)}`} sub="Cassa effettiva" accent="green" />
+          <StatCard label="Da Incassare" value={`\u20AC ${fmt(d.cashFlow.daIncassare)}`} sub="Pending / da saldare" accent="orange" />
+          <StatCard label="Scaduti" value={`\u20AC ${fmt(d.cashFlow.insolutiScaduti)}`} sub="Non pagati oltre scadenza" accent="red" />
         </div>
 
         {/* Visibility on what's intentionally NOT in fatturato */}
@@ -1276,42 +1410,51 @@ export default function DashboardTab() {
             value={`\u20AC ${fmt(d.revenue.cancelledRentalsTotal || 0)}`}
             sub={`${d.revenue.cancelledRentalsCount || 0} prenotazioni cancellate (non in fatturato)`}
             accent="red"
-            border
           />
           <StatCard
             label="Lavaggi del periodo"
             value={`\u20AC ${fmt(d.revenue.washTotal || 0)}`}
             sub={`${d.revenue.washCount || 0} lavaggi (rendiconto separato)`}
             accent="blue"
-            border
           />
         </div>
-        {/* Visual progress bar */}
+        {/* Distribuzione — 2026-08-27: tabella come sul Report Terra,
+            niente barra impilata. */}
         {cashTotal > 0 && (
-          <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-xl p-4 border border-white/5">
-            <div className="flex justify-between text-[10px] text-theme-text-muted uppercase tracking-wider mb-2">
-              <span>Distribuzione</span>
-              <span>Totale: {'\u20AC'} {fmt(cashTotal)}</span>
-            </div>
-            <div className="h-4 rounded-full overflow-hidden bg-white/5 flex">
-              <div className="bg-emerald-500 h-full transition-all duration-700 relative group" style={{ width: `${Math.round((d.cashFlow.incassato / cashTotal) * 100)}%` }}>
-                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white opacity-0 group-hover:opacity-100">{Math.round((d.cashFlow.incassato / cashTotal) * 100)}%</span>
-              </div>
-              <div className="bg-amber-500 h-full transition-all duration-700" style={{ width: `${Math.round((d.cashFlow.daIncassare / cashTotal) * 100)}%` }} />
-              <div className="bg-red-500 h-full transition-all duration-700" style={{ width: `${Math.round((d.cashFlow.insolutiScaduti / cashTotal) * 100)}%` }} />
-            </div>
-            <div className="flex gap-4 mt-2">
-              <div className="flex items-center gap-1.5 text-[10px] text-theme-text-muted">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Incassato
-              </div>
-              <div className="flex items-center gap-1.5 text-[10px] text-theme-text-muted">
-                <div className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Da incassare
-              </div>
-              <div className="flex items-center gap-1.5 text-[10px] text-theme-text-muted">
-                <div className="w-2.5 h-2.5 rounded-full bg-red-500" /> Scaduti
-              </div>
-            </div>
-          </div>
+          <ReportCard title="Distribuzione" right={`Totale: € ${fmt(cashTotal)}`}>
+            <ReportTable
+              head={
+                <>
+                  <th className="text-left px-4 py-3">Voce</th>
+                  <th className="text-right px-4 py-3">Importo</th>
+                  <th className="text-right px-4 py-3">%</th>
+                </>
+              }
+              foot={
+                <ReportTotalRow>
+                  <td className="px-4 py-2">Totale</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-dr7-gold">€ {fmt(cashTotal)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">100%</td>
+                </ReportTotalRow>
+              }
+            >
+              <ReportRow>
+                <td className="px-4 py-2 text-theme-text-primary">Incassato</td>
+                <td className="px-4 py-2 text-right tabular-nums text-green-500">€ {fmt(d.cashFlow.incassato)}</td>
+                <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted">{Math.round((d.cashFlow.incassato / cashTotal) * 100)}%</td>
+              </ReportRow>
+              <ReportRow>
+                <td className="px-4 py-2 text-theme-text-primary">Da incassare</td>
+                <td className="px-4 py-2 text-right tabular-nums text-yellow-400">€ {fmt(d.cashFlow.daIncassare)}</td>
+                <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted">{Math.round((d.cashFlow.daIncassare / cashTotal) * 100)}%</td>
+              </ReportRow>
+              <ReportRow>
+                <td className="px-4 py-2 text-theme-text-primary">Scaduti</td>
+                <td className="px-4 py-2 text-right tabular-nums text-red-500">€ {fmt(d.cashFlow.insolutiScaduti)}</td>
+                <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted">{Math.round((d.cashFlow.insolutiScaduti / cashTotal) * 100)}%</td>
+              </ReportRow>
+            </ReportTable>
+          </ReportCard>
         )}
       </div>
 
@@ -1334,24 +1477,24 @@ export default function DashboardTab() {
           <div>
             <SectionHeader title="Fornitori — Cash Flow" subtitle="Pagamenti effettivi dal modulo Fornitori (data_pagamento)" />
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              <div className="bg-theme-bg-secondary/60 rounded-2xl p-4 border border-white/5">
+              <div className="bg-theme-bg-secondary/60 rounded-xl p-4 border border-theme-border">
                 <p className="text-xs text-theme-text-muted uppercase tracking-wide">Pagato nel periodo</p>
                 <p className="text-xl font-semibold text-theme-text-primary mt-1">€ {fmtDec(fcf.pagatoMese)}</p>
                 <p className="text-xs text-theme-text-muted mt-1">
                   {fcf.invoicePaidCount} fatture · {trend >= 0 ? '+' : ''}{trend}% vs mese prec.
                 </p>
               </div>
-              <div className="bg-theme-bg-secondary/60 rounded-2xl p-4 border border-white/5">
+              <div className="bg-theme-bg-secondary/60 rounded-xl p-4 border border-theme-border">
                 <p className="text-xs text-theme-text-muted uppercase tracking-wide">Da Pagare</p>
                 <p className="text-xl font-semibold text-amber-400 mt-1">€ {fmtDec(fcf.daPagare)}</p>
                 <p className="text-xs text-theme-text-muted mt-1">{fcf.daPagareCount} fatture aperte</p>
               </div>
-              <div className="bg-theme-bg-secondary/60 rounded-2xl p-4 border border-white/5">
+              <div className="bg-theme-bg-secondary/60 rounded-xl p-4 border border-theme-border">
                 <p className="text-xs text-theme-text-muted uppercase tracking-wide">Scaduto</p>
                 <p className={`text-xl font-semibold mt-1 ${fcf.scaduto > 0 ? 'text-red-400' : 'text-theme-text-primary'}`}>€ {fmtDec(fcf.scaduto)}</p>
                 <p className="text-xs text-theme-text-muted mt-1">{fcf.scadutoCount} fatture scadute</p>
               </div>
-              <div className="bg-theme-bg-secondary/60 rounded-2xl p-4 border border-white/5">
+              <div className="bg-theme-bg-secondary/60 rounded-xl p-4 border border-theme-border">
                 <p className="text-xs text-theme-text-muted uppercase tracking-wide">Margine Netto Cash</p>
                 <p className="text-xl font-semibold text-emerald-400 mt-1">€ {fmtDec(margineNetto)}</p>
                 <p className="text-xs text-theme-text-muted mt-1">Fatturato − Pagato</p>
@@ -1359,7 +1502,7 @@ export default function DashboardTab() {
               <button
                 type="button"
                 onClick={() => setShowAlertDetails(v => !v)}
-                className="bg-theme-bg-secondary/60 rounded-2xl p-4 border border-white/5 text-left hover:border-amber-500/30 transition-colors"
+                className="bg-theme-bg-secondary/60 rounded-xl p-4 border border-theme-border text-left hover:border-amber-500/30 transition-colors"
                 title="Clicca per vedere i dettagli degli alert"
               >
                 <p className="text-xs text-theme-text-muted uppercase tracking-wide flex items-center justify-between">
@@ -1373,7 +1516,7 @@ export default function DashboardTab() {
 
             {/* Alert details panel — opens below the FORNITORI grid */}
             {showAlertDetails && (
-              <div className="mt-3 bg-amber-500/5 border border-amber-500/30 rounded-2xl p-4">
+              <div className="mt-3 bg-amber-500/5 border border-amber-500/30 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-sm font-semibold text-amber-300">Dettaglio Alert Fornitori</p>
                   <button
@@ -1420,7 +1563,7 @@ export default function DashboardTab() {
             {(fcf.bySupplier.length > 0 || fcf.byCategoria.length > 0) && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
                 {fcf.bySupplier.length > 0 && (
-                  <div className="bg-theme-bg-secondary/60 rounded-2xl p-4 border border-white/5">
+                  <div className="bg-theme-bg-secondary/60 rounded-xl p-4 border border-theme-border">
                     <p className="text-xs text-theme-text-muted uppercase tracking-wide mb-2">Top Fornitori (pagato nel periodo)</p>
                     <div className="space-y-1.5">
                       {fcf.bySupplier.slice(0, 5).map((s, i) => (
@@ -1433,7 +1576,7 @@ export default function DashboardTab() {
                   </div>
                 )}
                 {fcf.byCategoria.length > 0 && (
-                  <div className="bg-theme-bg-secondary/60 rounded-2xl p-4 border border-white/5">
+                  <div className="bg-theme-bg-secondary/60 rounded-xl p-4 border border-theme-border">
                     <p className="text-xs text-theme-text-muted uppercase tracking-wide mb-2">Spesa per Categoria</p>
                     <div className="space-y-1.5">
                       {fcf.byCategoria.map((c, i) => (
@@ -1456,7 +1599,7 @@ export default function DashboardTab() {
         <SectionHeader title="Fatture SDI Ricevute" subtitle="Fatture passive ricevute via Aruba SDI (riconciliazione)" />
 
         {supplierLoading && (
-          <div className="bg-theme-bg-secondary/60 rounded-2xl p-6 border border-white/5 text-center">
+          <div className="bg-theme-bg-secondary/60 rounded-xl p-6 border border-theme-border text-center">
             <p className="text-theme-text-muted text-sm">Caricamento fatture fornitori...</p>
           </div>
         )}
@@ -1470,14 +1613,12 @@ export default function DashboardTab() {
                 value={`\u20AC ${fmtDec(supplierData.grandTotal)}`}
                 sub={`${supplierData.totalCount} fatture ricevute`}
                 accent="red"
-                border
               />
               <StatCard
                 label="Fornitori Attivi"
                 value={String(Object.keys(supplierData.supplierTotals).length)}
                 sub={`su 9 monitorati`}
                 accent="default"
-                border
               />
               {d && (
                 <StatCard
@@ -1485,16 +1626,15 @@ export default function DashboardTab() {
                   value={`\u20AC ${fmt(Math.round(d.revenue.currentMonth - supplierData.grandTotal))}`}
                   sub={`Fatturato \u20AC ${fmt(d.revenue.currentMonth)} - Costi \u20AC ${fmt(Math.round(supplierData.grandTotal))}`}
                   accent={d.revenue.currentMonth - supplierData.grandTotal > 0 ? 'green' : 'red'}
-                  border
                 />
               )}
             </div>
 
             {/* Supplier breakdown table */}
-            <div className="bg-theme-bg-secondary/60 backdrop-blur-sm rounded-2xl border border-white/5 overflow-hidden">
+            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border overflow-hidden">
               <button
                 onClick={() => setSupplierExpanded(!supplierExpanded)}
-                className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
+                className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-theme-bg-tertiary/30 transition-colors"
               >
                 <span className="text-sm font-semibold text-theme-text-primary uppercase tracking-wide">Dettaglio per Fornitore</span>
                 <svg className={`w-4 h-4 text-theme-text-muted transition-transform ${supplierExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1503,14 +1643,14 @@ export default function DashboardTab() {
               </button>
 
               {supplierExpanded && (
-                <div className="border-t border-white/5">
+                <div className="border-t border-theme-border">
                   {Object.entries(supplierData.supplierTotals)
                     .sort(([, a], [, b]) => b.total - a.total)
                     .map(([supplier, info]) => (
-                      <div key={supplier} className="border-b border-white/5 last:border-b-0">
+                      <div key={supplier} className="border-b border-theme-border last:border-b-0">
                         <button
                           onClick={() => setSupplierDetailOpen(supplierDetailOpen === supplier ? null : supplier)}
-                          className="w-full px-5 py-3 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
+                          className="w-full px-5 py-3 flex items-center justify-between hover:bg-theme-bg-tertiary/30 transition-colors"
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             <div className="w-8 h-8 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center flex-shrink-0">
@@ -1533,7 +1673,7 @@ export default function DashboardTab() {
                               .filter(inv => inv.sender === supplier)
                               // eslint-disable-next-line @typescript-eslint/no-explicit-any
                               .map((inv: any, idx: number) => (
-                                <div key={inv.id || idx} className="flex items-center justify-between bg-white/[0.02] rounded-lg px-3 py-2">
+                                <div key={inv.id || idx} className="flex items-center justify-between bg-theme-bg-tertiary/30 rounded-lg px-3 py-2">
                                   <div className="flex items-center gap-3 min-w-0">
                                     <span className="text-xs text-theme-text-muted w-20 flex-shrink-0">
                                       {inv.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString('it-IT') : '—'}
@@ -1562,7 +1702,7 @@ export default function DashboardTab() {
         )}
 
         {!supplierLoading && supplierError && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-6 text-center">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6 text-center">
             <p className="text-red-400 font-medium text-sm mb-1">Errore caricamento fatture fornitori</p>
             <p className="text-theme-text-muted text-xs">{supplierError}</p>
             <button onClick={() => fetchSupplierCosts(dateFrom, dateTo)} className="mt-3 px-4 py-1.5 bg-[#19C2D6] text-black rounded-lg text-xs font-bold hover:bg-[#0A8FA3] transition-colors">
@@ -1573,17 +1713,15 @@ export default function DashboardTab() {
       </div>
 
       {/* ========== STATO DI SALUTE ========== */}
-      <div className="bg-gradient-to-r from-theme-bg-secondary/80 to-theme-bg-secondary/40 backdrop-blur-sm rounded-2xl p-6 border border-white/5">
-        <div className="flex flex-col sm:flex-row items-center gap-6">
-          <div className="relative flex-shrink-0">
-            <CircularGauge value={health.score} size={100} strokeWidth={8} color={health.color} />
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-2xl font-bold" style={{ color: health.color }}>{health.score}%</span>
-              <span className="text-[9px] uppercase tracking-wider text-theme-text-muted">{health.label}</span>
-            </div>
+      <div className="bg-theme-bg-secondary/50 rounded-xl p-6 border border-theme-border">
+        <div className="flex flex-col sm:flex-row items-start gap-6">
+          <div className="shrink-0">
+            <p className="text-xs text-theme-text-muted">Stato di salute</p>
+            <p className="text-3xl font-bold tabular-nums" style={{ color: health.color }}>{health.score}%</p>
+            <p className="text-[10px] uppercase tracking-wider text-theme-text-muted mt-0.5">{health.label}</p>
           </div>
-          <div className="text-center sm:text-left">
-            <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wide mb-1">Stato di Salute Azienda</h3>
+          <div>
+            <h3 className="text-sm font-semibold text-theme-text-primary mb-1">Stato di Salute Azienda</h3>
             <p className="text-xs text-theme-text-muted leading-relaxed">
               {health.score >= 80 && 'Crescita positiva, margini sotto controllo, operativit\u00E0 solida.'}
               {health.score >= 60 && health.score < 80 && 'Andamento buono con margini di miglioramento. Monitora occupazione flotta e incasso.'}
@@ -1593,7 +1731,6 @@ export default function DashboardTab() {
           </div>
         </div>
       </div>
-
     </div>
   )
 }

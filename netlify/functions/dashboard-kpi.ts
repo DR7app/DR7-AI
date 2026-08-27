@@ -1,5 +1,6 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { adjustVehicleReport, adjustWashReport, type OverrideIndex } from '../../src/utils/reportTotals'
 import { requireAuth } from './require-auth'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
@@ -1273,21 +1274,27 @@ export const handler: Handler = async (event) => {
     // solo Noleggio Terra. Mare, Aria e Soggiorni non entravano MAI nelle
     // Entrate: mancavano all'appello interi business. Ora si chiede un report
     // per ciascuno, con la stessa funzione del Report Noleggio.
+    // 2026-08-27: si chiedeva sempre il MESE INTERO anche quando il Dashboard
+    // era su una plage piu' stretta ("ultimi 7 giorni"), quindi il Noleggio non
+    // corrispondeva mai al periodo scelto. Ora si passa la stessa finestra, con
+    // gli stessi parametri from/to che usa il Report Noleggio.
+    const rangeQS = `from=${monthStartISO}&to=${monthEndISO}`
+
     const altriBusiness = ['boat_rental', 'heli_rental', 'stay_rental'] as const
     const chiediBusiness = (biz: string) => safe(`monthly-report:${biz}`, async () => {
-      const r = await fetch(`${reportOrigin}/.netlify/functions/monthly-report?type=vehicles&month=${month}&business=${biz}`, {
+      const r = await fetch(`${reportOrigin}/.netlify/functions/monthly-report?type=vehicles&${rangeQS}&business=${biz}`, {
         headers: { Authorization: authHeader },
       })
       if (!r.ok) {
         console.warn(`[dashboard-kpi] monthly-report:${biz} returned ${r.status}`)
         return null
       }
-      return await r.json() as { totalRevenue?: number; totalBookingsFound?: number }
+      return await r.json() as { totalRevenue?: number; totalBookingsFound?: number; vehicles?: unknown[] }
     }, null as null | Record<string, unknown>)
 
     const [noleggioCanonical, lavaggioCanonical, mareCanonical, ariaCanonical, soggiorniCanonical] = await Promise.all([
       safe('monthly-report:vehicles', async () => {
-        const r = await fetch(`${reportOrigin}/.netlify/functions/monthly-report?type=vehicles&month=${month}`, {
+        const r = await fetch(`${reportOrigin}/.netlify/functions/monthly-report?type=vehicles&${rangeQS}`, {
           headers: { Authorization: authHeader },
         })
         if (!r.ok) {
@@ -1299,12 +1306,15 @@ export const handler: Handler = async (event) => {
           totalRentalRevenue?: number
           totalPenaltyRevenue?: number
           totalDanniRevenue?: number
+          totalAnticipatedRevenue?: number
+          totalDaSaldare?: number
           vehicleCount?: number
           totalBookingsFound?: number
+          vehicles?: unknown[]
         }
       }, null as null | Record<string, unknown>),
       safe('monthly-report:washes', async () => {
-        const r = await fetch(`${reportOrigin}/.netlify/functions/monthly-report?type=washes&month=${month}`, {
+        const r = await fetch(`${reportOrigin}/.netlify/functions/monthly-report?type=washes&${rangeQS}`, {
           headers: { Authorization: authHeader },
         })
         if (!r.ok) {
@@ -1316,60 +1326,146 @@ export const handler: Handler = async (event) => {
           billableWashesCount?: number
           avgWashesPerDay?: number
           internalWashesCount?: number
+          byType?: unknown[]
         }
       }, null as null | Record<string, unknown>),
       ...altriBusiness.map(chiediBusiness),
     ])
 
+    // 2026-08-27 (richiesta direzione): il Dashboard mostrava un Noleggio Terra
+    // piu' basso del Report Terra. Ora legge le stesse voci — anticipato e da
+    // saldare — e applica le stesse correzioni manuali, con la matematica
+    // condivisa di utils/reportTotals.ts. Vedi anche il commento la' sopra.
+    const caricaOverrides = async (reportType: string): Promise<OverrideIndex> => {
+      const vuoto: OverrideIndex = { removed: new Set(), edits: new Map(), added: [], notesByRow: new Map() }
+      try {
+        const { data, error } = await supabase
+          .from('report_overrides')
+          .select('*')
+          .eq('report_type', reportType)
+          .order('created_at', { ascending: true })
+        if (error || !data) return vuoto
+        const idx: OverrideIndex = { removed: new Set(), edits: new Map(), added: [], notesByRow: new Map() }
+        for (const o of data as Array<Record<string, unknown>>) {
+          const rowKey = String(o.row_key || '')
+          if (o.note) idx.notesByRow.set(rowKey, String(o.note))
+          if (o.action === 'remove') idx.removed.add(rowKey)
+          else if (o.action === 'edit' && o.field != null && o.value_num != null) idx.edits.set(`${rowKey}::${String(o.field)}`, Number(o.value_num))
+          else if (o.action === 'add') idx.added.push({ id: String(o.id), row: o.value_json || {}, note: o.note ? String(o.note) : null })
+        }
+        return idx
+      } catch (e) {
+        console.warn('[dashboard-kpi] report_overrides non leggibili:', e)
+        return vuoto
+      }
+    }
+
+    const [ovTerra, ovMare, ovAria, ovStay, ovLavaggio] = await Promise.all([
+      caricaOverrides('noleggio'),
+      caricaOverrides('noleggio_boat_rental'),
+      caricaOverrides('noleggio_heli_rental'),
+      caricaOverrides('noleggio_stay_rental'),
+      caricaOverrides('lavaggio'),
+    ])
+
+    // La chiave di periodo degli override e' il MESE, la stessa che usa il
+    // Report (`customFrom.slice(0,7)`); qui `month` e' gia' YYYY-MM.
+    const totaliNoleggio = (r: Record<string, unknown> | null, ov: OverrideIndex) => {
+      const righe = Array.isArray(r?.vehicles) ? (r!.vehicles as unknown[]) : null
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (righe) return adjustVehicleReport(righe as any[], ov, month).totals
+      // Endpoint raggiunto ma senza righe (o non raggiunto): si resta sui
+      // totali cosi' come sono, meglio di azzerare un business.
+      const n = (k: string) => (r?.[k] !== undefined ? Number(r[k]) : 0)
+      const totalRevenue = n('totalRevenue')
+      const anticipato = n('totalAnticipatedRevenue')
+      const daSaldare = n('totalDaSaldare')
+      return {
+        totalRentalRevenue: n('totalRentalRevenue'),
+        totalPenaltyRevenue: n('totalPenaltyRevenue'),
+        totalDanniRevenue: n('totalDanniRevenue'),
+        totalDaSaldare: daSaldare,
+        totalAnticipatedRevenue: anticipato,
+        totalRevenue,
+        ricavoTotale: Math.round((totalRevenue + anticipato) * 100) / 100,
+        totaleComplessivo: Math.round((totalRevenue + anticipato + daSaldare) * 100) / 100,
+      }
+    }
+
     // Un business senza prenotazioni nel periodo torna 0: e' un dato, non un
     // errore. Se invece la chiamata fallisce restiamo su null e il Dashboard
     // lo segnala invece di far sparire il business dai totali.
-    const perBusiness = (r: Record<string, unknown> | null) => ({
-      ricavoTotale: r?.totalRevenue !== undefined ? Number(r.totalRevenue) : 0,
-      prenotazioniCount: r?.totalBookingsFound !== undefined ? Number(r.totalBookingsFound) : 0,
-      canonical: !!r,
-    })
+    const perBusiness = (r: Record<string, unknown> | null, ov: OverrideIndex) => {
+      const t = totaliNoleggio(r, ov)
+      return {
+        // `ricavoTotale` resta il ricavo incassato (noleggio + penali + danni),
+        // come prima: chi lo somma non cambia comportamento.
+        ricavoTotale: r ? t.totalRevenue : 0,
+        ricavoAnticipato: r ? t.totalAnticipatedRevenue : 0,
+        daSaldare: r ? t.totalDaSaldare : 0,
+        // Le due cifre delle card del Report Noleggio.
+        ricavoConAnticipato: r ? t.ricavoTotale : 0,
+        totaleComplessivo: r ? t.totaleComplessivo : 0,
+        prenotazioniCount: r?.totalBookingsFound !== undefined ? Number(r.totalBookingsFound) : 0,
+        canonical: !!r,
+      }
+    }
 
     const monthlyReports = {
-      mare: perBusiness(mareCanonical as Record<string, unknown> | null),
-      aria: perBusiness(ariaCanonical as Record<string, unknown> | null),
-      soggiorni: perBusiness(soggiorniCanonical as Record<string, unknown> | null),
-      noleggio: {
+      mare: perBusiness(mareCanonical as Record<string, unknown> | null, ovMare),
+      aria: perBusiness(ariaCanonical as Record<string, unknown> | null, ovAria),
+      soggiorni: perBusiness(soggiorniCanonical as Record<string, unknown> | null, ovStay),
+      noleggio: (() => {
         // Canonical revenue from monthly-report endpoint (same numbers
         // ReportsTab shows). Falls back to local computation if endpoint
         // unreachable.
-        ricavoTotale: noleggioCanonical?.totalRevenue !== undefined
-          ? Number(noleggioCanonical.totalRevenue)
-          : response.revenue.currentMonth,
-        ricavoMesePrev: response.revenue.previousMonth,
-        ricavoChangePercent: response.revenue.changePercent,
-        prenotazioniCount: noleggioCanonical?.totalBookingsFound !== undefined
-          ? Number(noleggioCanonical.totalBookingsFound)
-          : confirmedBookings + pendingBookings,
-        prenotazioniAnnullateCount: response.revenue.cancelledRentalsCount,
-        prenotazioniAnnullateValue: response.revenue.cancelledRentalsTotal,
-        // Scomposizione come nel Report Noleggio: quanto e' noleggio puro e
-        // quanto sono penali e danni dentro lo stesso totale.
-        ricavoNoleggioPuro: noleggioCanonical?.totalRentalRevenue !== undefined
-          ? Number(noleggioCanonical.totalRentalRevenue) : null,
-        ricavoPenali: noleggioCanonical?.totalPenaltyRevenue !== undefined
-          ? Number(noleggioCanonical.totalPenaltyRevenue) : null,
-        ricavoDanni: noleggioCanonical?.totalDanniRevenue !== undefined
-          ? Number(noleggioCanonical.totalDanniRevenue) : null,
-        link: 'reports',
-        canonical: !!noleggioCanonical,
-      },
-      lavaggio: {
-        // Canonical wash revenue + count from monthly-report?type=washes
-        ricavoTotale: lavaggioCanonical?.washRevenue !== undefined
-          ? Number(lavaggioCanonical.washRevenue)
-          : response.revenue.washTotal,
-        count: lavaggioCanonical?.billableWashesCount !== undefined
-          ? Number(lavaggioCanonical.billableWashesCount)
-          : response.revenue.washCount,
-        link: 'report-lavaggio',
-        canonical: !!lavaggioCanonical,
-      },
+        const t = totaliNoleggio(noleggioCanonical as Record<string, unknown> | null, ovTerra)
+        return {
+          ricavoTotale: noleggioCanonical ? t.totalRevenue : response.revenue.currentMonth,
+          // 2026-08-27: le due cifre che il Report Terra mostra in cima e che
+          // il Dashboard non aveva mai avuto. Senza queste il Dashboard era
+          // sempre piu' basso del Report e sembrava sbagliato.
+          ricavoAnticipato: noleggioCanonical ? t.totalAnticipatedRevenue : 0,
+          daSaldare: noleggioCanonical ? t.totalDaSaldare : 0,
+          ricavoConAnticipato: noleggioCanonical ? t.ricavoTotale : response.revenue.currentMonth,
+          totaleComplessivo: noleggioCanonical ? t.totaleComplessivo : response.revenue.currentMonth,
+          ricavoMesePrev: response.revenue.previousMonth,
+          ricavoChangePercent: response.revenue.changePercent,
+          prenotazioniCount: noleggioCanonical?.totalBookingsFound !== undefined
+            ? Number(noleggioCanonical.totalBookingsFound)
+            : confirmedBookings + pendingBookings,
+          prenotazioniAnnullateCount: response.revenue.cancelledRentalsCount,
+          prenotazioniAnnullateValue: response.revenue.cancelledRentalsTotal,
+          // Scomposizione come nel Report Noleggio: quanto e' noleggio puro e
+          // quanto sono penali e danni dentro lo stesso totale.
+          ricavoNoleggioPuro: noleggioCanonical ? t.totalRentalRevenue : null,
+          ricavoPenali: noleggioCanonical ? t.totalPenaltyRevenue : null,
+          ricavoDanni: noleggioCanonical ? t.totalDanniRevenue : null,
+          link: 'reports',
+          canonical: !!noleggioCanonical,
+        }
+      })(),
+      lavaggio: (() => {
+        // Canonical wash revenue + count from monthly-report?type=washes, con
+        // le stesse correzioni manuali applicate dal Report Lavaggio.
+        const righe = Array.isArray(lavaggioCanonical?.byType) ? (lavaggioCanonical!.byType as unknown[]) : null
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const adj = righe ? adjustWashReport(righe as any[], ovLavaggio, month) : null
+        return {
+          ricavoTotale: adj
+            ? adj.washRevenue
+            : lavaggioCanonical?.washRevenue !== undefined
+              ? Number(lavaggioCanonical.washRevenue)
+              : response.revenue.washTotal,
+          count: adj
+            ? adj.billableWashesCount
+            : lavaggioCanonical?.billableWashesCount !== undefined
+              ? Number(lavaggioCanonical.billableWashesCount)
+              : response.revenue.washCount,
+          link: 'report-lavaggio',
+          canonical: !!lavaggioCanonical,
+        }
+      })(),
       clienti: {
         nuoviMese: response.customers.newThisMonth,
         attiviMese: response.customers.activeThisMonth,

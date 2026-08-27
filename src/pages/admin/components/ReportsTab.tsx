@@ -7,8 +7,9 @@ import toast from 'react-hot-toast'
 // reso da noi quindi sempre in italiano dd/mm/yyyy (no <input type="date">
 // che segue il locale OS). Affianca i campi testo europei esistenti.
 import CalendarRangePicker from '../../../components/admin/CalendarRangePicker'
-import { loadReportOverrides, applyOverrides, saveEditOverride, saveRemoveOverride, saveAddOverride, deleteOverrideByRow, deleteOverrideById, type LoadedOverrides } from '../../../utils/reportOverrides'
+import { loadReportOverrides, saveEditOverride, saveRemoveOverride, saveAddOverride, deleteOverrideByRow, deleteOverrideById, type LoadedOverrides } from '../../../utils/reportOverrides'
 import { loadBusinessConfig, businessRowForServiceType } from '../../../utils/businessConfigClient'
+import { adjustVehicleReport, adjustWashReport, periodKeyOf } from '../../../utils/reportTotals'
 
 interface ProCategory { id: string; label: string }
 
@@ -624,111 +625,31 @@ export default function ReportsTab({ business = 'rental', businessLabel = 'Noleg
       if (activeReport === 'vehicles') {
         // Applica gli override manuali PRIMA dei totali: correzioni, rimozioni e
         // aggiunte a mano entrano nel calcolo (KPI, summary, tabella).
+        // 2026-08-27: la matematica vive in utils/reportTotals.ts, condivisa con
+        // dashboard-kpi. Prima era solo qui e il Dashboard mostrava altri numeri.
         const ov = await loadReportOverrides(overrideScope)
         // Chiave MENSILE, non la plage esatta: vedi handleSaveRowEdit.
-        const periodKey = String(customFrom || '').slice(0, 7) || 'all'
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const baseVehicles = (data.vehicles || []) as any[]
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let adjusted = applyOverrides(baseVehicles, ov, (v: any) => `${periodKey}|${v.vehicleId}`)
-        // Correzioni PER CLIENTE (riga di prenotazione dentro il veicolo).
-        //
-        // Si applica il DELTA, non il ricalcolo: i totali del veicolo arrivano
-        // dal backend con formule loro (il noleggio e' prorata di quanto
-        // INCASSATO sui giorni del mese, non del `total_price` mostrato in
-        // riga). Risommare le righe darebbe numeri diversi da oggi anche senza
-        // nessuna correzione. Sommando invece la sola differenza introdotta
-        // dalla modifica, un report senza correzioni resta identico a prima e
-        // una correzione si propaga al veicolo, alla categoria e ai KPI.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const quotaMese = (b: any): number => {
-          const tot = Number(b?.total_price) || 0
-          const gg = Number(b?.billable_days) || 0
-          if (gg <= 0) return tot
-          return (tot / gg) * Math.min(Number(b?.days_in_month) || 0, gg)
-        }
-        adjusted = adjusted.map((v) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const base = Array.isArray((v as any).bookings) ? (v as any).bookings as any[] : []
-          if (base.length === 0) return v
-          let dRental = 0, dPen = 0, dDan = 0, dSaldo = 0
-          const bookings = base.map((b) => {
-            const bKey = `${periodKey}|b|${b.booking_id}`
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const copy: any = { ...b }
-            let touched = false
-            for (const f of BOOKING_EDIT_FIELDS) {
-              const e = ov.edits.get(`${bKey}::${f.key}`)
-              if (e != null) { copy[f.key] = e; touched = true }
-            }
-            if (!touched) return b
-            dRental += quotaMese(copy) - quotaMese(b)
-            dPen += (Number(copy.penalty_amount) || 0) - (Number(b.penalty_amount) || 0)
-            dDan += (Number(copy.danni_amount) || 0) - (Number(b.danni_amount) || 0)
-            dSaldo += (Number(copy.da_saldare) || 0) - (Number(b.da_saldare) || 0)
-            copy._overrideNote = ov.notesByRow.get(bKey) || null
-            copy._edited = true
-            return copy
-          })
-          // Una correzione fatta a mano sul veicolo vince su quella per
-          // cliente: se la direzione ha scritto il totale del veicolo, non
-          // glielo si sposta sotto i piedi.
-          const fissato = (campo: string) => ov.edits.has(`${periodKey}|${v.vehicleId}::${campo}`)
-          return {
-            ...v,
-            bookings,
-            rentalRevenue: fissato('rentalRevenue') ? v.rentalRevenue : (Number(v.rentalRevenue) || 0) + dRental,
-            penaltyRevenue: fissato('penaltyRevenue') ? v.penaltyRevenue : (Number(v.penaltyRevenue) || 0) + dPen,
-            danniRevenue: fissato('danniRevenue') ? v.danniRevenue : (Number(v.danniRevenue) || 0) + dDan,
-            daSaldareRevenue: fissato('daSaldareRevenue') ? v.daSaldareRevenue : (Number(v.daSaldareRevenue) || 0) + dSaldo,
-          }
-        })
-        // Ricalcola totalRevenue = noleggio + penali + danni dopo eventuali edit
-        // (a meno che totalRevenue sia stato sovrascritto direttamente).
-        adjusted = adjusted.map((v) => {
-          const totOverridden = ov.edits.has(`${periodKey}|${v.vehicleId}::totalRevenue`)
-          const totalRevenue = totOverridden ? Number(v.totalRevenue) || 0
-            : (Number(v.rentalRevenue) || 0) + (Number(v.penaltyRevenue) || 0) + (Number(v.danniRevenue) || 0)
-          return { ...v, totalRevenue }
-        })
-        // Le righe aggiunte a mano valgono solo per il periodo in cui sono state create.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        adjusted = adjusted.filter((v: any) => !v._isManual || v.period === periodKey)
-        // I totali in cima sono somme delle righe: vanno risommati sulle righe
-        // CORRETTE. Prima restavano quelli del backend, quindi una correzione si
-        // vedeva nella tabella e nel totale di categoria ma non nelle card KPI,
-        // che continuavano a mostrare il valore originale.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const somma = (campo: string) => Math.round(adjusted.reduce((t: number, v: any) => t + (Number(v[campo]) || 0), 0) * 100) / 100
+        const pKey = periodKeyOf(customFrom)
+        const { vehicles, totals } = adjustVehicleReport((data.vehicles || []), ov, pKey)
         setOverrides(ov)
         setVehicleData({
           ...data,
-          vehicles: adjusted,
-          totalRentalRevenue: somma('rentalRevenue'),
-          totalPenaltyRevenue: somma('penaltyRevenue'),
-          totalDanniRevenue: somma('danniRevenue'),
-          totalDaSaldare: somma('daSaldareRevenue'),
-          totalRevenue: somma('totalRevenue'),
-          totalAnticipatedRevenue: somma('anticipatedRevenue'),
+          vehicles,
+          totalRentalRevenue: totals.totalRentalRevenue,
+          totalPenaltyRevenue: totals.totalPenaltyRevenue,
+          totalDanniRevenue: totals.totalDanniRevenue,
+          totalDaSaldare: totals.totalDaSaldare,
+          totalRevenue: totals.totalRevenue,
+          totalAnticipatedRevenue: totals.totalAnticipatedRevenue,
         })
       } else if (activeReport === 'washes') {
         // Override manuali anche sul report Lavaggi: correggi ricavo/quantita' per
-        // tipo, rimuovi o aggiungi un tipo. I totali (ricavo, conteggio) si
-        // ricalcolano sulle righe corrette. Chiave = `${periodKey}|${type}`.
+        // tipo, rimuovi o aggiungi un tipo. I totali si ricalcolano sulle righe
+        // corrette. Chiave = `${periodKey}|${type}`.
         const ov = await loadReportOverrides('lavaggio')
-        // Stessa chiave mensile usata in handleSaveRowEdit: vedi il commento
-        // esteso piu' avanti sul perche' la plage esatta non funzionava.
-        const periodKey = String(customFrom || '').slice(0, 7) || 'all'
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const baseTypes = ((data.byType || []) as any[])
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let adjTypes = applyOverrides(baseTypes, ov, (t: any) => `${periodKey}|${t.type}`)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        adjTypes = adjTypes.filter((t: any) => !t._isManual || t.period === periodKey)
-        const washRevenue = adjTypes.reduce((s, t) => s + (Number(t.revenue) || 0), 0)
-        const billableWashesCount = adjTypes.reduce((s, t) => s + (Number(t.count) || 0), 0)
+        const adj = adjustWashReport((data.byType || []), ov, periodKeyOf(customFrom))
         setOverrides(ov)
-        setWashData({ ...data, byType: adjTypes, washRevenue, billableWashesCount })
+        setWashData({ ...data, byType: adj.byType, washRevenue: adj.washRevenue, billableWashesCount: adj.billableWashesCount })
       } else {
         setCauzioniData(data)
       }
