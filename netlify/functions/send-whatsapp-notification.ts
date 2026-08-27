@@ -325,7 +325,14 @@ const handler: Handler = async (event) => {
             // {autista} = primo nome dell'autista assegnato a ritiro/riconsegna.
             autista: (() => {
               const bd = booking.booking_details || {};
-              const names = [bd.autista_ritiro?.full_name, bd.autista_riconsegna?.full_name, bd.autista?.full_name]
+              // 2026-08-27: piu' autisti per tratto (autisti_ritiro/_riconsegna).
+              // Le chiavi singole restano come mirror del primo autista, quindi
+              // qui uniamo array e singoli e deduplichiamo per nome.
+              const autArr = (v: any) => Array.isArray(v) ? v : (v ? [v] : []);
+              const names = [
+                ...autArr(bd.autisti_ritiro), ...autArr(bd.autisti_riconsegna),
+                bd.autista_ritiro, bd.autista_riconsegna, bd.autista,
+              ].filter(Boolean).map((a: any) => a?.full_name)
                 .filter(Boolean)
                 .map((n: string) => String(n).split(' ')[0]);
               return [...new Set(names)].join(' / ');

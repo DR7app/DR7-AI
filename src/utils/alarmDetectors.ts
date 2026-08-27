@@ -328,7 +328,13 @@ const pickup_missing: Detector = (cfg, ctx, arg) => {
             cosa = 'Indirizzo di consegna non compilato'
         } else if (arg === 'autista') {
             if (!fuoriSede) continue
-            manca = !primo(d, ['autista_ritiro', 'autistaRitiro', 'autista_id', 'autistaId'])
+            // 2026-08-27: multi-autista. `autisti_ritiro` e' un ARRAY e un array
+            // vuoto e' truthy: primo() lo darebbe per assegnato. Contiamo gli
+            // elementi, poi ricadiamo sulle chiavi singole storiche.
+            const _autArr = d.autisti_ritiro
+            manca = Array.isArray(_autArr)
+                ? _autArr.length === 0
+                : !primo(d, ['autista_ritiro', 'autistaRitiro', 'autista_id', 'autistaId'])
             cosa = 'Consegna fuori sede senza autista assegnato'
         } else if (arg === 'operatore') {
             manca = !primo(d, ['operatore', 'operatore_id', 'operatoreId', 'operatore_nome'])

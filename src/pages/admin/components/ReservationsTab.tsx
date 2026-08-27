@@ -264,6 +264,9 @@ function getInsuranceOptions(vehicle?: Vehicle, tier?: DriverTier, overlay?: Ret
 }
 // Risposta di /.netlify/functions/weather-now (2026-08-22). Stessa lettura
 // Open-Meteo usata dal cron automatico: badge e cron non possono divergere.
+/** Autista assegnabile a un tratto fuori sede (cliente taggato metadata.role='autista'). */
+type AutistaRef = { id: string; full_name: string; phone: string }
+
 interface MeteoSnapshot {
   rain: boolean
   windGustKmh: number
@@ -631,15 +634,20 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   const [editUscitaGroupId, setEditUscitaGroupId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingOriginalPaymentStatus, setEditingOriginalPaymentStatus] = useState<string | null>(null) // Track if payment changed from unpaid → paid
-  // Autisti (consegna/ritiro fuori sede): si puo' assegnare un autista DIVERSO
-  // per il luogo di RITIRO (consegna al cliente) e per il luogo di RICONSEGNA
-  // (ritiro dal cliente). Se almeno uno e' assegnato, la prenotazione si
-  // conferma SENZA contratto e gli autisti ricevono l'avviso. La lista arriva
-  // da /autisti (clienti taggati metadata.role='autista').
-  const [autisti, setAutisti] = useState<{ id: string; full_name: string; phone: string }[]>([])
+  // Autisti (consegna/ritiro fuori sede): si possono assegnare PIU' autisti per
+  // il luogo di RITIRO (consegna al cliente) e PIU' autisti per il luogo di
+  // RICONSEGNA (ritiro dal cliente), liste indipendenti. Se ce n'e' almeno uno,
+  // la prenotazione si conferma SENZA contratto e OGNI autista assegnato riceve
+  // l'avviso. La lista arriva da /autisti (clienti taggati metadata.role='autista').
+  //
+  // 2026-08-27: prima era UN SOLO autista per tratto (due <select> singoli).
+  // Le uscite straordinarie gestivano gia' piu' autisti (uscita.autista_ids[]),
+  // il noleggio no: con due persone che portano la vettura fuori sede il secondo
+  // non riceveva nessun incarico.
+  const [autisti, setAutisti] = useState<AutistaRef[]>([])
   const [autistiLoading, setAutistiLoading] = useState(false)
-  const [autistaRitiro, setAutistaRitiro] = useState<{ id: string; full_name: string; phone: string } | null>(null)
-  const [autistaRiconsegna, setAutistaRiconsegna] = useState<{ id: string; full_name: string; phone: string } | null>(null)
+  const [autistiRitiro, setAutistiRitiro] = useState<AutistaRef[]>([])
+  const [autistiRiconsegna, setAutistiRiconsegna] = useState<AutistaRef[]>([])
   const [showAllVehicles, setShowAllVehicles] = useState(false) // Admin override to show all vehicles
 
   // Limitation Override (OTP-based director approval)
@@ -4448,8 +4456,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const _bdAut = (booking as any).booking_details || {}
-    setAutistaRitiro((_bdAut.autista_ritiro as { id: string; full_name: string; phone: string } | null) || (_bdAut.autista as { id: string; full_name: string; phone: string } | null) || null)
-    setAutistaRiconsegna((_bdAut.autista_riconsegna as { id: string; full_name: string; phone: string } | null) || null)
+    // 2026-08-27: le prenotazioni salvate PRIMA del multi-autista hanno il
+    // singolo oggetto `autista_ritiro`/`autista_riconsegna` (o il vecchissimo
+    // `autista`). Senza questo fallback, riaprendo una prenotazione storica
+    // l'autista sparirebbe dal form e verrebbe cancellato al salvataggio.
+    const _normAut = (v: unknown): AutistaRef[] =>
+      Array.isArray(v) ? (v.filter(Boolean) as AutistaRef[]) : (v ? [v as AutistaRef] : [])
+    setAutistiRitiro(_normAut(_bdAut.autisti_ritiro ?? _bdAut.autista_ritiro ?? _bdAut.autista))
+    setAutistiRiconsegna(_normAut(_bdAut.autisti_riconsegna ?? _bdAut.autista_riconsegna))
     setEditingOriginalPaymentStatus(booking.payment_status || 'pending')
     setConfirmBooking(booking.booking_details?.manually_confirmed === true)
     setShowForm(true)
@@ -6623,10 +6637,17 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           dropoffLocation: formData.dropoff_location,
           amountPaid: eurToCents(formData.amount_paid), // Store amount paid in cents
           source: 'admin_manual',
-          // Autista assegnato (consegna/ritiro fuori sede). Se presente, la
-          // prenotazione e' confermata SENZA contratto.
-          autista_ritiro: autistaRitiro || null,
-          autista_riconsegna: autistaRiconsegna || null,
+          // Autisti assegnati (consegna/ritiro fuori sede). Se ce n'e' almeno
+          // uno, la prenotazione e' confermata SENZA contratto.
+          autisti_ritiro: autistiRitiro,
+          autisti_riconsegna: autistiRiconsegna,
+          // 2026-08-27: mirror del PRIMO autista sulle chiavi singole storiche.
+          // Le leggono il detector allarmi "Consegna fuori sede senza autista"
+          // (utils/alarmDetectors.ts) e la variabile {autista} lato server
+          // (send-whatsapp-notification.ts): senza mirror, ogni prenotazione
+          // nuova risulterebbe SENZA autista per l'allarme.
+          autista_ritiro: autistiRitiro[0] || null,
+          autista_riconsegna: autistiRiconsegna[0] || null,
           // Driver Tier
           driver_tier: customerTier?.tier || null,
           driver_age: customerTier?.driverAge || null,
@@ -7363,7 +7384,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
             // {autista} = nome/i (solo primo nome) dell'autista assegnato a
             // ritiro/riconsegna, cosi' il cliente sa chi gli consegna/ritira.
             '{autista}': (() => {
-              const names = [autistaRitiro?.full_name, autistaRiconsegna?.full_name]
+              const names = [...autistiRitiro, ...autistiRiconsegna]
+                .map(a => a?.full_name)
                 .filter(Boolean)
                 .map(n => String(n).split(' ')[0])
               return [...new Set(names)].join(' / ')
@@ -7670,7 +7692,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       // Il CONTRATTO va SEMPRE generato per il CLIENTE, anche quando c'e' un
       // autista. L'autista NON firma alcun contratto (riceve solo l'avviso del
       // suo incarico, sotto), ma il cliente firma normalmente.
-      const hasAnyAutista = !!(autistaRitiro || autistaRiconsegna)
+      const hasAnyAutista = autistiRitiro.length > 0 || autistiRiconsegna.length > 0
       // 2026-08-02 FIX (direzione): MODIFICA di una prenotazione GIA' FIRMATA =
       // stessa logica dell'ESTENSIONE → RICONDUZIONE, non nuova firma. Prima la
       // rigenerazione al salvataggio partiva SENZA reconduct: generate-contract
@@ -7750,8 +7772,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
           if (!groups[aut.id]) groups[aut.id] = { aut, legs: [] }
           groups[aut.id].legs.push(leg)
         }
-        addLeg(autistaRitiro, { label: 'RITIRO (consegna al cliente)', luogo: pickupLocationLabel, quando: `${itDate(formData.pickup_date)}${formData.pickup_time ? ' alle ' + formData.pickup_time : ''}`.trim() })
-        addLeg(autistaRiconsegna, { label: 'RICONSEGNA (ritiro dal cliente)', luogo: dropoffLocationLabel, quando: `${itDate(formData.return_date)}${formData.return_time ? ' alle ' + formData.return_time : ''}`.trim() })
+        // Un messaggio per OGNI autista assegnato. Chi copre entrambi i tratti
+        // resta raggruppato su un solo messaggio (groups e' per aut.id).
+        for (const a of autistiRitiro) addLeg(a, { label: 'RITIRO (consegna al cliente)', luogo: pickupLocationLabel, quando: `${itDate(formData.pickup_date)}${formData.pickup_time ? ' alle ' + formData.pickup_time : ''}`.trim() })
+        for (const a of autistiRiconsegna) addLeg(a, { label: 'RICONSEGNA (ritiro dal cliente)', luogo: dropoffLocationLabel, quando: `${itDate(formData.return_date)}${formData.return_time ? ' alle ' + formData.return_time : ''}`.trim() })
         // 2026-06-13: il messaggio autista NON e' piu' hardcoded. Arriva SEMPRE
         // dal template Pro "Notifica Autista — Uscita Straordinaria" (lo STESSO
         // della Uscita Straordinaria, come richiesto dalla direzione). Lookup per
@@ -8176,8 +8200,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
   function resetForm() {
     setCustomerTier(null)
-    setAutistaRitiro(null)
-    setAutistaRiconsegna(null)
+    setAutistiRitiro([])
+    setAutistiRiconsegna([])
     editFormSnapshotRef.current = null
     setTotalLock(false)
     // 2026-05-18: pulizia stato OTP residuo per evitare auto-resume su
@@ -9437,8 +9461,8 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
               {(formData.pickup_location !== 'dr7_office' || formData.dropoff_location !== 'dr7_office') && (
                 <div className="md:col-span-2 p-3 rounded-lg border border-dr7-gold/40 bg-dr7-gold/5 space-y-3">
                   <div>
-                    <p className="text-sm font-semibold text-dr7-gold">Autista (consegna/ritiro fuori sede)</p>
-                    <p className="text-[11px] text-theme-text-muted">Assegna un autista per ogni tratto fuori sede (puo' essere diverso). Con almeno un autista la prenotazione si conferma SENZA contratto e l'autista riceve l'avviso.</p>
+                    <p className="text-sm font-semibold text-dr7-gold">Autisti (consegna/ritiro fuori sede)</p>
+                    <p className="text-[11px] text-theme-text-muted">Assegna UNO O PIU' autisti per ogni tratto fuori sede (le due liste sono indipendenti). Con almeno un autista la prenotazione si conferma SENZA contratto e OGNI autista assegnato riceve il suo incarico.</p>
                   </div>
 
                   {autistiLoading && <p className="text-xs text-theme-text-muted">Caricamento autisti...</p>}
@@ -9450,28 +9474,61 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {formData.pickup_location !== 'dr7_office' && (
                         <div>
-                          <label className="text-[11px] text-theme-text-muted">Autista RITIRO (consegna al cliente)</label>
+                          <label className="text-[11px] text-theme-text-muted">Autisti RITIRO (consegna al cliente)</label>
+                          {/* Stesso schema delle Uscite Straordinarie: il select
+                              AGGIUNGE (mostra solo chi non e' gia' in lista) e
+                              ogni autista scelto ha la sua riga con la × per
+                              toglierlo. Il select resta su value="" per tornare
+                              subito al placeholder dopo l'aggiunta. */}
                           <select
                             className="w-full mt-1 px-2 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
-                            value={autistaRitiro?.id || ''}
-                            onChange={(e) => setAutistaRitiro(autisti.find(a => a.id === e.target.value) || null)}
+                            value=""
+                            onChange={(e) => {
+                              const a = autisti.find(x => x.id === e.target.value)
+                              if (a) setAutistiRitiro(prev => prev.some(p => p.id === a.id) ? prev : [...prev, a])
+                            }}
                           >
-                            <option value="">— Nessun autista —</option>
-                            {autisti.map(a => <option key={a.id} value={a.id}>{a.full_name}{a.phone ? ` · ${a.phone}` : ''}</option>)}
+                            <option value="">+ Aggiungi autista…</option>
+                            {autisti.filter(a => !autistiRitiro.some(p => p.id === a.id)).map(a => <option key={a.id} value={a.id}>{a.full_name}{a.phone ? ` · ${a.phone}` : ''}</option>)}
                           </select>
+                          {autistiRitiro.length > 0 && (
+                            <div className="mt-2 space-y-1.5">
+                              {autistiRitiro.map(a => (
+                                <div key={a.id} className="flex items-center gap-2 rounded-md bg-theme-bg-tertiary/40 border border-theme-border px-2 py-1.5">
+                                  <span className="flex-1 min-w-0 truncate text-xs text-theme-text-primary">{a.full_name}{a.phone ? ` · ${a.phone}` : ' · (no tel.)'}</span>
+                                  <button type="button" title="Rimuovi autista" onClick={() => setAutistiRitiro(prev => prev.filter(p => p.id !== a.id))}
+                                    className="shrink-0 px-1 text-base leading-none text-red-500 hover:text-red-400">×</button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
                       {formData.dropoff_location !== 'dr7_office' && (
                         <div>
-                          <label className="text-[11px] text-theme-text-muted">Autista RICONSEGNA (ritiro dal cliente)</label>
+                          <label className="text-[11px] text-theme-text-muted">Autisti RICONSEGNA (ritiro dal cliente)</label>
                           <select
                             className="w-full mt-1 px-2 py-1.5 rounded-md bg-theme-bg-primary border border-theme-border text-theme-text-primary text-sm focus:outline-none focus:border-dr7-gold"
-                            value={autistaRiconsegna?.id || ''}
-                            onChange={(e) => setAutistaRiconsegna(autisti.find(a => a.id === e.target.value) || null)}
+                            value=""
+                            onChange={(e) => {
+                              const a = autisti.find(x => x.id === e.target.value)
+                              if (a) setAutistiRiconsegna(prev => prev.some(p => p.id === a.id) ? prev : [...prev, a])
+                            }}
                           >
-                            <option value="">— Nessun autista —</option>
-                            {autisti.map(a => <option key={a.id} value={a.id}>{a.full_name}{a.phone ? ` · ${a.phone}` : ''}</option>)}
+                            <option value="">+ Aggiungi autista…</option>
+                            {autisti.filter(a => !autistiRiconsegna.some(p => p.id === a.id)).map(a => <option key={a.id} value={a.id}>{a.full_name}{a.phone ? ` · ${a.phone}` : ''}</option>)}
                           </select>
+                          {autistiRiconsegna.length > 0 && (
+                            <div className="mt-2 space-y-1.5">
+                              {autistiRiconsegna.map(a => (
+                                <div key={a.id} className="flex items-center gap-2 rounded-md bg-theme-bg-tertiary/40 border border-theme-border px-2 py-1.5">
+                                  <span className="flex-1 min-w-0 truncate text-xs text-theme-text-primary">{a.full_name}{a.phone ? ` · ${a.phone}` : ' · (no tel.)'}</span>
+                                  <button type="button" title="Rimuovi autista" onClick={() => setAutistiRiconsegna(prev => prev.filter(p => p.id !== a.id))}
+                                    className="shrink-0 px-1 text-base leading-none text-red-500 hover:text-red-400">×</button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
