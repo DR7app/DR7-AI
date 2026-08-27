@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { ResponsiveContainer, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, FunnelChart, Funnel, LabelList } from 'recharts'
+import { ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty } from './ReportUI'
 import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
 
@@ -68,65 +68,38 @@ const fmtInt = (n: number) => new Intl.NumberFormat('it-IT').format(Math.round(n
 const fmtEur = (n: number) => new Intl.NumberFormat('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(n))
 // fmtPct rimosso 2026-05-23: era dichiarato ma mai usato, blocca tsc strict.
 
-const CHANNEL_COLORS = ['#E1306C', '#4285F4', '#1877F2', '#000000', '#25D366', '#9CA3AF']
-
 interface KpiCardProps {
   label: string
   value: string
   delta?: number | null
-  spark?: number[]
-  accent: 'cyan' | 'emerald' | 'amber' | 'violet' | 'rose' | 'sky'
-  icon: React.ReactNode
   sub?: string
+  tone?: 'gold' | 'green' | 'red'
 }
 
-const ACCENT_BG: Record<KpiCardProps['accent'], string> = {
-  cyan: 'bg-cyan-500/15 text-cyan-400',
-  emerald: 'bg-emerald-500/15 text-emerald-400',
-  amber: 'bg-amber-500/15 text-amber-400',
-  violet: 'bg-violet-500/15 text-violet-400',
-  rose: 'bg-rose-500/15 text-rose-400',
-  sky: 'bg-sky-500/15 text-sky-400',
-}
-const ACCENT_LINE: Record<KpiCardProps['accent'], string> = {
-  cyan: '#22d3ee', emerald: '#10b981', amber: '#f59e0b', violet: '#8b5cf6', rose: '#f43f5e', sky: '#0ea5e9',
-}
-
-function KpiCard({ label, value, delta, spark, accent, icon, sub }: KpiCardProps) {
+/**
+ * 2026-08-27 (richiesta direzione): stessa scheda del Report Terra —
+ * etichetta piccola, numero grande, nota. Niente icona colorata ne'
+ * sparkline: i grafici sono usciti da tutti i Report.
+ */
+function KpiCard({ label, value, delta, sub, tone }: KpiCardProps) {
   const trendColor = typeof delta === 'number'
-    ? (delta >= 0 ? 'text-emerald-400' : 'text-rose-400')
+    ? (delta >= 0 ? 'text-green-500' : 'text-red-500')
     : 'text-theme-text-muted'
-  const arrow = typeof delta === 'number' ? (delta >= 0 ? '▲' : '▼') : ''
-  const sparkData = (spark || []).map((v, i) => ({ i, v }))
+  const arrow = typeof delta === 'number' ? (delta >= 0 ? '\u25B2' : '\u25BC') : ''
+  const valueCls = tone === 'gold' ? 'text-dr7-gold' : tone === 'green' ? 'text-green-500' : tone === 'red' ? 'text-red-500' : 'text-theme-text-primary'
+  const borderCls = tone === 'gold' ? 'border-dr7-gold/30' : 'border-theme-border'
   return (
-    <div className="relative rounded-2xl border border-theme-border bg-theme-bg-secondary p-4 overflow-hidden">
-      <div className="flex items-start justify-between gap-3">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${ACCENT_BG[accent]}`}>
-          {icon}
-        </div>
-        {typeof delta === 'number' && (
-          <span className={`text-[11px] font-bold tabular-nums ${trendColor}`}>
-            {arrow} {Math.abs(delta).toFixed(1)}%
-          </span>
-        )}
-      </div>
-      <p className="text-[11px] uppercase tracking-wider text-theme-text-muted mt-3">{label}</p>
-      <p className="text-2xl font-bold text-theme-text-primary tracking-tight mt-1">{value}</p>
-      {sub && <p className="text-[10px] text-theme-text-muted mt-0.5">{sub}</p>}
-      {sparkData.length > 0 && (
-        <div className="h-10 mt-2 -mx-1">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={sparkData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-              <defs>
-                <linearGradient id={`spark-${accent}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={ACCENT_LINE[accent]} stopOpacity={0.5} />
-                  <stop offset="100%" stopColor={ACCENT_LINE[accent]} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <Area type="monotone" dataKey="v" stroke={ACCENT_LINE[accent]} strokeWidth={2} fill={`url(#spark-${accent})`} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+    <div className={`bg-theme-bg-secondary/50 rounded-xl border ${borderCls} p-4`}>
+      <p className="text-xs text-theme-text-muted">{label}</p>
+      <p className={`text-2xl font-bold ${valueCls}`}>{value}</p>
+      {(sub || typeof delta === 'number') && (
+        <p className="text-[10px] mt-0.5">
+          {typeof delta === 'number' && (
+            <span className={`font-semibold ${trendColor}`}>{arrow} {Math.abs(delta).toFixed(1)}%</span>
+          )}
+          {typeof delta === 'number' && sub && ' \u00B7 '}
+          {sub && <span className="text-theme-text-muted">{sub}</span>}
+        </p>
       )}
     </div>
   )
@@ -200,17 +173,6 @@ export default function DashboardOverview({ dateFrom, dateTo }: { dateFrom: stri
     return () => { cancelled = true }
   }, [dateFrom, dateTo, gaRange])
 
-  // Build sparkline series for each KPI from GA traffic
-  const visitsSpark = useMemo(() => (ga?.traffic || []).slice(-14).map(p => p.total), [ga])
-  const revenueSpark = useMemo(() => {
-    // Approximate per-day revenue split — use total / days as flat baseline plus a noise from traffic shape
-    if (!kpi || !ga?.traffic?.length) return []
-    const trafficSum = ga.traffic.reduce((s, p) => s + p.total, 0)
-    if (!trafficSum) return []
-    const total = kpi.revenue.currentMonth
-    return ga.traffic.slice(-14).map(p => Math.round((p.total / trafficSum) * total))
-  }, [kpi, ga])
-
   // Conversion rate — preferiamo preventivo->prenotazione (dato pulito che
   // l'admin controlla) sulla raw visit->booking (sporcata da bot/scraper GA).
   // Se mancano i preventivi, fall-back su GA visits / bookings.
@@ -241,210 +203,202 @@ export default function DashboardOverview({ dateFrom, dateTo }: { dateFrom: stri
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Header — date range is controlled by the dashboard date pickers (single control) */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-theme-text-primary tracking-tight">Dashboard Overview</h2>
-          <p className="text-sm text-theme-text-muted">Panoramica generale delle performance</p>
+          <h2 className="text-2xl font-bold text-theme-text-primary">Dashboard Overview</h2>
+          <p className="text-xs text-theme-text-muted mt-1">Panoramica generale delle performance</p>
         </div>
       </div>
 
       {/* TOP KPI STRIP */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <KpiCard
           label="Visitatori"
           value={ga?.configured ? fmtInt(visits) : '—'}
           delta={ga?.kpis?.delta_visits}
-          spark={visitsSpark}
-          accent="cyan"
-          icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M17 20h5v-2a4 4 0 0 0-4-4M9 20H4v-2a4 4 0 0 1 4-4M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/></svg>}
         />
         <KpiCard
           label="Conversion Rate"
           value={`${conversionPct.toFixed(2)}%`}
           sub={conversionSource}
           delta={null}
-          spark={visitsSpark.map(v => v > 0 ? (kpi?.bookings.total || 0) / v * 100 : 0)}
-          accent="emerald"
-          icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M13 7h8m0 0v8m0-8L11 17l-4-4-6 6"/></svg>}
         />
         <KpiCard
           label="Fatturato"
           value={`€ ${fmtEur(kpi?.revenue.currentMonth || 0)}`}
           delta={kpi?.revenue.changePercent}
-          spark={revenueSpark}
-          accent="amber"
-          icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 8c-2.2 0-4 1.3-4 3s1.8 3 4 3 4 1.3 4 3-1.8 3-4 3m0-12V4m0 16v2m-6-6h12"/></svg>}
+          tone="gold"
         />
         <KpiCard
           label="Lead Generati"
           value={fmtInt(kpi?.bookings.total || 0)}
           delta={kpi?.bookings.changePercent}
-          spark={visitsSpark}
-          accent="violet"
-          icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2-12H7a2 2 0 0 0-2 2v16l3-3h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/></svg>}
         />
-        <KpiCard
-          label="Utenti Wallet"
-          value={fmtInt(walletUsers)}
-          delta={null}
-          accent="sky"
-          icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4M3 5v14a2 2 0 0 0 2 2h16v-5M16 12a2 2 0 1 0 4 0 2 2 0 0 0-4 0z"/></svg>}
-        />
-        <KpiCard
-          label="Member DR7 Club"
-          value={fmtInt(clubMembers)}
-          delta={null}
-          accent="rose"
-          icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.27 5.82 22 7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>}
-        />
+        <KpiCard label="Utenti Wallet" value={fmtInt(walletUsers)} delta={null} />
+        <KpiCard label="Member DR7 Club" value={fmtInt(clubMembers)} delta={null} />
       </div>
 
-      {/* SECOND ROW: traffic chart + channels donut + realtime */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        {/* Traffic over time */}
-        <div className="lg:col-span-2 rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold text-theme-text-primary">Traffico nel tempo</p>
-            <p className="text-xs text-theme-text-muted">{trafficData.length} giorni</p>
-          </div>
+      {/* SECOND ROW: traffico + canali */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <ReportCard title="Traffico nel tempo" right={`${trafficData.length} giorni`} className="lg:col-span-2">
           {trafficData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={trafficData} margin={{ top: 6, right: 12, bottom: 0, left: -10 }}>
-                <defs>
-                  <linearGradient id="traffic-area" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.5} />
-                    <stop offset="100%" stopColor="#22d3ee" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="day" stroke="#9ca3af" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                <YAxis stroke="#9ca3af" tick={{ fontSize: 10 }} />
-                <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#fff' }} />
-                <Area type="monotone" dataKey="total" stroke="#22d3ee" strokeWidth={2} fill="url(#traffic-area)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[220px] flex items-center justify-center text-theme-text-muted text-sm">
-              {ga?.configured ? 'Nessun dato traffico' : 'Configura Google Analytics per vedere il traffico'}
-            </div>
-          )}
-        </div>
-
-        {/* Channels donut */}
-        <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
-          <p className="text-sm font-semibold text-theme-text-primary mb-3">Canali di traffico</p>
-          {channelData.length > 0 ? (
-            <>
-              <div className="relative h-[180px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={channelData} dataKey="value" innerRadius={50} outerRadius={75} paddingAngle={2}>
-                      {channelData.map((_, i) => (
-                        <Cell key={i} fill={CHANNEL_COLORS[i % CHANNEL_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#fff' }} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <p className="text-lg font-bold text-theme-text-primary tabular-nums">{fmtInt(totalChannels)}</p>
-                  <p className="text-[10px] uppercase tracking-wider text-theme-text-muted">Totale</p>
-                </div>
-              </div>
-              <div className="mt-2 space-y-1 text-xs">
-                {channelData.map((c, i) => (
-                  <div key={c.name} className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-theme-text-secondary">
-                      <span className="w-2 h-2 rounded-full" style={{ background: CHANNEL_COLORS[i % CHANNEL_COLORS.length] }} />
-                      {c.name}
-                    </span>
-                    <span className="text-theme-text-muted tabular-nums">{((c.value / totalChannels) * 100).toFixed(1)}%</span>
-                  </div>
+            <div className="max-h-80 overflow-y-auto">
+              <ReportTable
+                head={
+                  <>
+                    <th className="text-left px-4 py-3">Giorno</th>
+                    <th className="text-right px-4 py-3">Visite</th>
+                  </>
+                }
+                foot={
+                  <ReportTotalRow>
+                    <td className="px-4 py-2">Totale</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{fmtInt(trafficData.reduce((s, d) => s + (Number(d.total) || 0), 0))}</td>
+                  </ReportTotalRow>
+                }
+              >
+                {trafficData.map(d => (
+                  <ReportRow key={String(d.day)}>
+                    <td className="px-4 py-2 text-theme-text-primary tabular-nums">{d.day}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtInt(Number(d.total) || 0)}</td>
+                  </ReportRow>
                 ))}
-              </div>
-            </>
-          ) : (
-            <div className="h-[220px] flex items-center justify-center text-theme-text-muted text-sm">
-              {ga?.configured ? 'Nessun dato canali' : 'Setup GA richiesto'}
+              </ReportTable>
             </div>
+          ) : (
+            <ReportEmpty message={ga?.configured ? 'Nessun dato traffico' : 'Configura Google Analytics per vedere il traffico'} />
           )}
-        </div>
+        </ReportCard>
+
+        <ReportCard title="Canali di traffico" right={`${fmtInt(totalChannels)} sessioni`}>
+          {channelData.length > 0 ? (
+            <ReportTable
+              head={
+                <>
+                  <th className="text-left px-4 py-3">Canale</th>
+                  <th className="text-right px-4 py-3">Sessioni</th>
+                  <th className="text-right px-4 py-3">%</th>
+                </>
+              }
+              foot={
+                <ReportTotalRow>
+                  <td className="px-4 py-2">Totale</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{fmtInt(totalChannels)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">100%</td>
+                </ReportTotalRow>
+              }
+            >
+              {channelData.map(c => (
+                <ReportRow key={c.name}>
+                  <td className="px-4 py-2 text-theme-text-primary">{c.name}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtInt(c.value)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted">
+                    {totalChannels > 0 ? `${((c.value / totalChannels) * 100).toFixed(1)}%` : '-'}
+                  </td>
+                </ReportRow>
+              ))}
+            </ReportTable>
+          ) : (
+            <ReportEmpty message={ga?.configured ? 'Nessun dato canali' : 'Setup GA richiesto'} />
+          )}
+        </ReportCard>
       </div>
 
-      {/* THIRD ROW: funnel + realtime active users + top vehicles */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        {/* Funnel */}
-        <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
-          <p className="text-sm font-semibold text-theme-text-primary mb-3">Funnel di Conversione</p>
+      {/* THIRD ROW: funnel + tempo reale + top auto */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <ReportCard title="Funnel di Conversione">
           {funnelData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <FunnelChart>
-                <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#fff' }} />
-                <Funnel dataKey="value" data={funnelData} isAnimationActive>
-                  <LabelList position="right" fill="#e5e7eb" fontSize={11} dataKey="stage" />
-                  {funnelData.map((_, i) => (
-                    <Cell key={i} fill={['#fbbf24','#f59e0b','#ec4899','#a855f7','#6366f1'][i % 5]} />
-                  ))}
-                </Funnel>
-              </FunnelChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[220px] flex items-center justify-center text-theme-text-muted text-sm">Nessun funnel disponibile</div>
-          )}
-        </div>
-
-        {/* Realtime active users */}
-        <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold text-theme-text-primary">Utenti attivi in tempo reale</p>
-            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-emerald-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Live
-            </span>
-          </div>
-          <p className="text-4xl font-bold text-emerald-400 tabular-nums mb-3">{fmtInt(ga?.realtime?.activeUsers || 0)}</p>
-          <p className="text-xs text-theme-text-muted mb-3">Utenti attivi ora</p>
-          <ResponsiveContainer width="100%" height={120}>
-            <BarChart data={[
-              { label: 'Pageviews 30m', value: ga?.realtime?.pageviews30m || 0 },
-              { label: 'Eventi 30m', value: ga?.realtime?.events30m || 0 },
-              { label: 'Conversioni 30m', value: ga?.realtime?.conversions30m || 0 },
-            ]} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-              <XAxis dataKey="label" stroke="#9ca3af" tick={{ fontSize: 9 }} interval={0} />
-              <YAxis stroke="#9ca3af" tick={{ fontSize: 9 }} />
-              <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#fff' }} />
-              <Bar dataKey="value" fill="#22d3ee" radius={[4,4,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Top vehicles */}
-        <div className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4">
-          <p className="text-sm font-semibold text-theme-text-primary mb-3">Top Auto Più Prenotate</p>
-          {topVehicles.length > 0 ? (
-            <ul className="space-y-2">
-              {topVehicles.map(v => (
-                <li key={v.plate + v.name} className="flex items-center justify-between gap-3 p-2 rounded-lg bg-theme-bg-tertiary/50 border border-theme-border/60">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-theme-text-primary truncate">{v.name}</p>
-                    <p className="text-[10px] text-theme-text-muted">{v.plate || 'targa N/A'}</p>
-                  </div>
-                  <span className="shrink-0 text-xs font-bold tabular-nums text-dr7-gold bg-dr7-gold/15 px-2 py-1 rounded-md">
-                    {v.bookings} prenotaz.
-                  </span>
-                </li>
+            <ReportTable
+              head={
+                <>
+                  <th className="text-left px-4 py-3">Fase</th>
+                  <th className="text-right px-4 py-3">Utenti</th>
+                  <th className="text-right px-4 py-3">%</th>
+                </>
+              }
+              foot={
+                <ReportTotalRow>
+                  <td className="px-4 py-2">Conversione</td>
+                  <td className="px-4 py-2" />
+                  <td className="px-4 py-2 text-right tabular-nums text-green-500">
+                    {funnelData[0]?.value ? `${((funnelData[funnelData.length - 1].value / funnelData[0].value) * 100).toFixed(2)}%` : '—'}
+                  </td>
+                </ReportTotalRow>
+              }
+            >
+              {funnelData.map(f => (
+                <ReportRow key={f.stage}>
+                  <td className="px-4 py-2 text-theme-text-primary">{f.stage}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtInt(f.value)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted">
+                    {funnelData[0]?.value ? `${((f.value / funnelData[0].value) * 100).toFixed(1)}%` : '-'}
+                  </td>
+                </ReportRow>
               ))}
-            </ul>
+            </ReportTable>
           ) : (
-            <p className="text-sm text-theme-text-muted">Nessuna prenotazione negli ultimi 30 giorni</p>
+            <ReportEmpty message="Nessun funnel disponibile" />
           )}
-        </div>
+        </ReportCard>
+
+        <ReportCard title="Utenti attivi in tempo reale" right="ultimi 30 minuti">
+          <ReportTable
+            head={
+              <>
+                <th className="text-left px-4 py-3">Voce</th>
+                <th className="text-right px-4 py-3">Valore</th>
+              </>
+            }
+          >
+            <ReportRow>
+              <td className="px-4 py-2 text-theme-text-primary">Utenti attivi ora</td>
+              <td className="px-4 py-2 text-right tabular-nums font-bold text-theme-text-primary">{fmtInt(ga?.realtime?.activeUsers || 0)}</td>
+            </ReportRow>
+            <ReportRow>
+              <td className="px-4 py-2 text-theme-text-primary">Pagine viste (30m)</td>
+              <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtInt(ga?.realtime?.pageviews30m || 0)}</td>
+            </ReportRow>
+            <ReportRow>
+              <td className="px-4 py-2 text-theme-text-primary">Eventi (30m)</td>
+              <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtInt(ga?.realtime?.events30m || 0)}</td>
+            </ReportRow>
+            <ReportRow>
+              <td className="px-4 py-2 text-theme-text-primary">Conversioni (30m)</td>
+              <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtInt(ga?.realtime?.conversions30m || 0)}</td>
+            </ReportRow>
+          </ReportTable>
+        </ReportCard>
+
+        <ReportCard title="Top Auto Più Prenotate">
+          {topVehicles.length > 0 ? (
+            <ReportTable
+              head={
+                <>
+                  <th className="text-left px-4 py-3">Veicolo</th>
+                  <th className="text-left px-4 py-3">Targa</th>
+                  <th className="text-right px-4 py-3">Prenotazioni</th>
+                </>
+              }
+            >
+              {topVehicles.map(v => (
+                <ReportRow key={v.plate + v.name}>
+                  <td className="px-4 py-2 text-theme-text-primary">{v.name}</td>
+                  <td className="px-4 py-2 text-theme-text-muted">{v.plate || 'targa N/A'}</td>
+                  <td className="px-4 py-2 text-right tabular-nums font-semibold text-dr7-gold">{v.bookings}</td>
+                </ReportRow>
+              ))}
+            </ReportTable>
+          ) : (
+            <ReportEmpty message="Nessuna prenotazione negli ultimi 30 giorni" />
+          )}
+        </ReportCard>
       </div>
 
       {/* GA setup banner if not configured */}
       {ga && !ga.configured && (
-        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-300">
+        <div className="rounded-xl border border-yellow-500/40 bg-yellow-500/10 p-4 text-sm text-yellow-400">
           <strong>Google Analytics non configurato.</strong> Imposta <code>GA4_PROPERTY_ID</code> e
           il service account in Netlify per visualizzare Visitatori, Canali, Conversion Rate.
         </div>
