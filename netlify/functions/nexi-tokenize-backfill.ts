@@ -136,13 +136,15 @@ export const handler: Handler = async (event) => {
                 cust = await matchByPhone(b.customer_phone)
             }
             if (!cust && b?.customer_email) {
-                const { data: c } = await supabase.from('customers_extended').select('id, metadata').ilike('email', b.customer_email).maybeSingle()
-                if (c) cust = c
+                // limit(1): con due schede sulla stessa email maybeSingle() da'
+                // errore e il cliente risultava "non trovato".
+                const { data: rows } = await supabase.from('customers_extended').select('id, metadata').ilike('email', b.customer_email).order('updated_at', { ascending: false }).limit(1)
+                if (rows?.[0]) cust = rows[0]
             }
         }
         if (!cust && email) {
-            const { data: c } = await supabase.from('customers_extended').select('id, metadata').ilike('email', email).maybeSingle()
-            if (c) cust = c
+            const { data: rows } = await supabase.from('customers_extended').select('id, metadata').ilike('email', email).order('updated_at', { ascending: false }).limit(1)
+            if (rows?.[0]) cust = rows[0]
         }
 
         // No customer match isn't fatal — we still want the PAN to land on

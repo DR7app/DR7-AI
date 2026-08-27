@@ -484,7 +484,17 @@ const handler: Handler = async (event) => {
                 if (contractId) {
                     const custEmail = (booking.customer_email || transaction.customer_email || '').toLowerCase().trim();
                     if (custEmail) {
-                        const { data: custByEmail } = await supabase.from('customers_extended').select('id, metadata').eq('email', custEmail).maybeSingle();
+                        // ilike + limit(1): l'email era confrontata con eq (case
+                        // sensitive) e maybeSingle() ANDAVA IN ERRORE quando due
+                        // schede condividono la stessa email -> la carta non
+                        // veniva mai salvata sul cliente (caso Chiara Loy).
+                        const { data: byEmailRows } = await supabase
+                            .from('customers_extended')
+                            .select('id, metadata')
+                            .ilike('email', custEmail)
+                            .order('updated_at', { ascending: false })
+                            .limit(1);
+                        const custByEmail = byEmailRows?.[0];
                         if (custByEmail) {
                             await supabase.from('customers_extended').update({
                                 metadata: applyTokenizedCardUpdate(custByEmail.metadata, { nexi_contract_id: contractId, nexi_contract_updated: new Date().toISOString() }),
@@ -1240,11 +1250,16 @@ const handler: Handler = async (event) => {
 
                     // Fallback 2: lookup by email (case-insensitive)
                     if (!savedOnCustomer && custEmail) {
-                        const { data: custByEmail } = await supabase
+                        // limit(1) invece di maybeSingle(): con due schede sulla
+                        // stessa email maybeSingle() restituisce errore e la carta
+                        // restava solo nel tab Nexi.
+                        const { data: emailRows } = await supabase
                             .from('customers_extended')
                             .select('id, metadata')
                             .ilike('email', custEmail)
-                            .maybeSingle();
+                            .order('updated_at', { ascending: false })
+                            .limit(1);
+                        const custByEmail = emailRows?.[0];
                         if (custByEmail) {
                             await supabase.from('customers_extended').update({
                                 metadata: applyTokenizedCardUpdate(custByEmail.metadata, metadataUpdate),

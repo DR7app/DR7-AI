@@ -64,6 +64,10 @@ interface CardPayment {
 
 interface TokenizedCard {
     id: string
+    // null = la carta vive solo nelle transazioni Nexi e non e' su nessuna
+    // scheda cliente (la fiche dice "Non tokenizzata"). Il badge la segnala e
+    // "Porta le carte nelle schede" la collega.
+    customer_id?: string | null
     full_name: string
     email: string
     phone: string
@@ -104,6 +108,7 @@ export default function NexiTab() {
     const [tokenizedCards, setTokenizedCards] = useState<TokenizedCard[]>([])
     const [cardsLoading, setCardsLoading] = useState(true)
     const [backfillRunning, setBackfillRunning] = useState(false)
+    const [attachRunning, setAttachRunning] = useState(false)
     // Which card row has its payment history expanded. Only one at a time
     // to keep the panel compact; clicking the same card again collapses.
     const [expandedCardId, setExpandedCardId] = useState<string | null>(null)
@@ -155,6 +160,9 @@ export default function NexiTab() {
         const d = new Date(iso)
         return Number.isFinite(d.getTime()) && d >= dateCutoff
     }
+    // Carte visibili nel tab ma su NESSUNA scheda cliente: sono quelle che
+    // fanno dire alla fiche "Non tokenizzata" pur avendo il cliente pagato.
+    const cardsNotInCustomer = tokenizedCards.filter(c => !c.customer_id).length
     const filteredCards = tokenizedCards.filter(c =>
         filterMatches([c.full_name, c.email, c.phone, c.masked_pan, c.contract_id], search)
         && matchesCardType(c.card_type)
@@ -249,6 +257,66 @@ export default function NexiTab() {
             toast.error('Errore: ' + (err.message || String(err)))
         } finally {
             setBackfillRunning(false)
+        }
+    }
+
+    // Porta nelle schede clienti TUTTE le carte tokenizzate che oggi vivono
+    // solo nel tab (nessuna scheda le ha in metadata.nexi_cards). Senza questo
+    // la fiche cliente dice "Non tokenizzata" anche se il cliente ha pagato con
+    // carta salvata: niente addebito, niente noleggio senza cauzione.
+    // Due passaggi come il backfill: dry run per contare, poi conferma.
+    async function runAttachToCustomers() {
+        setAttachRunning(true)
+        const toastId = toast.loading('Controllo carte non presenti nelle schede...')
+        const call = async (body: Record<string, unknown>) => {
+            const res = await authFetch('/.netlify/functions/nexi-attach-cards-to-customers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            })
+            const raw = await res.text()
+            let data: Record<string, unknown> = {}
+            try { data = JSON.parse(raw) as Record<string, unknown> } catch {
+                const snippet = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200)
+                throw new Error(`Risposta HTTP ${res.status}, non JSON. "${snippet || '(vuota)'}"`)
+            }
+            if (!res.ok) throw new Error((data as { error?: string }).error || `HTTP ${res.status}`)
+            return data
+        }
+        try {
+            const dry = await call({ dryRun: true, createMissing: true })
+            toast.dismiss(toastId)
+            const daCollegare = Number(dry.da_collegare || 0)
+            const daCreare = Number(dry.da_creare || 0)
+            const giaOk = Number(dry.gia_in_scheda || 0)
+            if (daCollegare === 0) {
+                toast(`Tutte le carte sono gia' nelle schede clienti (${giaOk}).`, { icon: 'ℹ️', duration: 5000 })
+                return
+            }
+            const nonRisolte = Number(dry.senza_scheda || 0)
+            const suEsistenti = daCollegare - daCreare - nonRisolte
+            const ok = confirm(
+                `${daCollegare} carte non sono in nessuna scheda cliente.\n\n` +
+                `- ${suEsistenti} verranno aggiunte a schede esistenti (match per id prenotazione o email)\n` +
+                `- ${daCreare} non hanno una scheda: ne verra' creata una nuova\n` +
+                `${nonRisolte ? `- ${nonRisolte} senza email ne' nome: restano da collegare a mano\n` : ''}` +
+                `\n` +
+                `Le carte gia' presenti non vengono toccate e la carta predefinita non cambia.\n\nProcedere?`
+            )
+            if (!ok) return
+            const applyToast = toast.loading(`Collegamento di ${daCollegare} carte...`)
+            const applied = await call({ dryRun: false, createMissing: true })
+            toast.dismiss(applyToast)
+            const collegate = Number(applied.collegate || 0)
+            const create = Number(applied.schede_create || 0)
+            const senza = Number(applied.senza_scheda || 0)
+            toast.success(`${collegate} carte collegate, ${create} schede create${senza ? `, ${senza} non risolte` : ''}`)
+            await fetchTokenizedCards()
+        } catch (err: any) {
+            toast.dismiss(toastId)
+            toast.error('Errore: ' + (err.message || String(err)))
+        } finally {
+            setAttachRunning(false)
         }
     }
 
@@ -519,6 +587,7 @@ export default function NexiTab() {
             // First recover any missing PANs (so the BIN becomes visible),
             // THEN auto-classify credit/debit/prepaid from the BIN/Nexi.
             await autoSyncMissingPans()
+            await autoAttachToCustomers()
             await autoResolveCardTypes()
         })
     }, [])
@@ -786,6 +855,30 @@ export default function NexiTab() {
         } catch (err) {
             // Silent — manual "Recupera" button stays available as a fallback.
             console.warn('[NexiTab] Auto-sync missing PANs failed:', err)
+        }
+    }
+
+    // 27/08/2026: ogni carta tokenizzata deve stare nella scheda cliente, non
+    // solo qui nel tab (caso Chiara Loy: pagamento tokenizzato visibile in Nexi,
+    // fiche cliente "Non tokenizzata"). All'apertura del tab le carte orfane
+    // vengono collegate da sole alle schede esistenti (match per id
+    // prenotazione o email). La creazione di schede NUOVE resta manuale, dietro
+    // il bottone "Porta le carte nelle schede": non si creano lead in automatico.
+    async function autoAttachToCustomers() {
+        try {
+            const res = await authFetch('/.netlify/functions/nexi-attach-cards-to-customers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dryRun: false, createMissing: false }),
+            })
+            if (!res.ok) return
+            const data = await res.json().catch(() => ({}))
+            if ((data?.collegate || 0) > 0) {
+                await fetchTokenizedCards()
+            }
+        } catch (err) {
+            // Silent — il bottone manuale resta la via di recupero.
+            console.warn('[NexiTab] Auto-attach carte alle schede fallito:', err)
         }
     }
 
@@ -1440,6 +1533,14 @@ export default function NexiTab() {
                             {backfillRunning ? 'Recupero...' : '↻ Recupera carte mancanti'}
                         </button>
                         <button
+                            onClick={runAttachToCustomers}
+                            disabled={attachRunning}
+                            className="text-xs px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-50"
+                            title="Salva nelle schede clienti tutte le carte tokenizzate che oggi esistono solo qui nel tab Nexi"
+                        >
+                            {attachRunning ? 'Collegamento...' : `Porta le carte nelle schede${cardsNotInCustomer > 0 ? ` (${cardsNotInCustomer})` : ''}`}
+                        </button>
+                        <button
                             onClick={runBulkOrphanCleanup}
                             disabled={bulkCleanupRunning}
                             className="text-xs px-3 py-1 rounded-full bg-red-500/15 text-red-400 hover:bg-red-500/25 disabled:opacity-50"
@@ -1559,6 +1660,14 @@ export default function NexiTab() {
                                                         </select>
                                                     )
                                                 })()}
+                                                {!card.customer_id && (
+                                                    <span
+                                                        className="px-2 py-0.5 rounded text-[10px] font-bold border uppercase bg-amber-500/15 text-amber-400 border-amber-500/40"
+                                                        title="Questa carta non e' su nessuna scheda cliente: usa 'Porta le carte nelle schede'"
+                                                    >
+                                                        Non in scheda cliente
+                                                    </span>
+                                                )}
                                             </div>
                                             <div className="text-xs text-theme-text-muted mt-0.5">
                                                 {card.email}{card.phone ? ` · ${card.phone}` : ''}

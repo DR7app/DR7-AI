@@ -28,6 +28,11 @@ interface CardPayment {
 
 interface TokenizedCard {
     id: string
+    // Scheda cliente su cui la carta e' salvata. null = la carta esiste solo
+    // nelle transazioni Nexi e NON e' su nessuna scheda: il tab la mostra ma
+    // la fiche cliente dice "Non tokenizzata" (caso Chiara Loy 27/08/2026).
+    // Il tab la segnala e il bottone "Porta le carte nelle schede" la collega.
+    customer_id: string | null
     full_name: string
     email: string
     phone: string
@@ -78,6 +83,7 @@ const handler: Handler = async (event) => {
             const fullName = [c.nome, c.cognome].filter(Boolean).join(' ') || ''
             return listCards(meta).map(card => ({
                 id: `${String(c.id || '')}:${card.contractId}`,
+                customer_id: String(c.id || '') || null,
                 full_name: fullName,
                 email: String(c.email || ''),
                 phone: String(c.telefono || ''),
@@ -120,6 +126,7 @@ const handler: Handler = async (event) => {
                 knownContractIds.add(cid)
                 cards.push({
                     id: `tx:${tx.id}`,
+                    customer_id: null,
                     full_name: String(meta.customer_name || booking.customer_name || String(tx.customer_email || '').split('@')[0] || 'Cliente'),
                     email: String(tx.customer_email || ''),
                     phone: String(booking.customer_phone || ''),
