@@ -7,6 +7,7 @@ import { authFetch } from '../../../utils/authFetch'
 import CustomerAddebitoButton from './CustomerAddebitoButton'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import MoneyInput from '../../../components/MoneyInput'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 interface PendingAddebito {
     id: string
@@ -2165,13 +2166,15 @@ export default function NexiTab() {
                                     </label>
                                     <label className="block">
                                         <span className="text-xs text-theme-text-muted">Telefono (WhatsApp)</span>
-                                        <input
-                                            type="tel"
-                                            value={preauthLinkCustomerPhone}
-                                            onChange={e => setPreauthLinkCustomerPhone(e.target.value)}
-                                            placeholder="+39 333 1234567"
-                                            className="w-full mt-1 px-3 py-2 text-sm bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
-                                        />
+                                        <div className="mt-1">
+                                            <TelefonoConPrefisso
+                                                value={preauthLinkCustomerPhone}
+                                                onChange={setPreauthLinkCustomerPhone}
+                                                className="flex-1 min-w-0 px-3 py-2 text-sm bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                                                selectClassName="w-[104px] shrink-0 px-2 py-2 text-sm bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary"
+                                                mostraAnteprima={false}
+                                            />
+                                        </div>
                                     </label>
                                 </div>
 

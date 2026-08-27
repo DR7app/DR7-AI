@@ -9709,6 +9709,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                         </div>
                         <div className="w-[180px]">
                           <Input
+                            type="tel"
                             placeholder="Telefono"
                             value={pass.phone}
                             onChange={(e) => setFormData(prev => ({ ...prev, passengers: prev.passengers.map((x, j) => j === i ? { ...x, phone: e.target.value } : x) }))}
@@ -10510,7 +10511,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                             <Input label="Data di Nascita" type="date" value={formData.garante_birth_date} onChange={(e) => setFormData(prev => ({ ...prev, garante_birth_date: e.target.value }))} />
                             <Input label="Luogo di Nascita" value={formData.garante_birth_place} onChange={(e) => setFormData(prev => ({ ...prev, garante_birth_place: e.target.value }))} />
                             <Input label="Provincia di Nascita" value={formData.garante_birth_provincia} onChange={(e) => setFormData(prev => ({ ...prev, garante_birth_provincia: e.target.value.toUpperCase() }))} maxLength={2} />
-                            <Input label="Telefono" value={formData.garante_phone} onChange={(e) => setFormData(prev => ({ ...prev, garante_phone: e.target.value }))} />
+                            <Input label="Telefono" type="tel" value={formData.garante_phone} onChange={(e) => setFormData(prev => ({ ...prev, garante_phone: e.target.value }))} />
                             <Input label="Email" type="email" value={formData.garante_email} onChange={(e) => setFormData(prev => ({ ...prev, garante_email: e.target.value }))} />
                           </div>
                         ) : (

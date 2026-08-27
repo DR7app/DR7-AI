@@ -21,6 +21,7 @@ import { OTP_ACTION_CATALOG, type OtpAction } from '../../../utils/otpActionCata
 import { authFetch } from '../../../utils/authFetch'
 import { OTP_CONTEXT_FIELDS, OTP_OPERATORS, type OtpCondition, type OtpOperator, type ContextFieldDef } from '../../../utils/otpConditionEngine'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 interface OtpRow {
     id: string
@@ -1063,13 +1064,16 @@ function OtpRecipientField() {
 
             <div>
                 <label className="block text-[12px] font-medium text-theme-text-secondary mb-1">WhatsApp admin (notifiche operative)</label>
-                <input
-                    type="tel"
-                    value={adminPhone}
-                    onChange={e => setAdminPhone(e.target.value)}
-                    placeholder={loading ? 'Caricamento…' : 'es. 393457905205'}
+                {/* 2026-08-27: il numero si compone con la bandiera, ma resta
+                    SALVATO a sole cifre senza "+", il formato che il validatore
+                    qui sotto e i cron si aspettano. */}
+                <TelefonoConPrefisso
+                    value={adminPhone ? `+${adminPhone}` : ''}
+                    onChange={v => setAdminPhone(v.replace(/\D/g, ''))}
                     disabled={loading}
-                    className={`w-full bg-theme-bg-primary border rounded-md px-3 py-2 text-[13px] font-mono ${!validAdminPhone && adminPhone ? 'border-red-500' : 'border-theme-border'}`}
+                    placeholder={loading ? 'Caricamento…' : 'es. 3457905205'}
+                    className={`flex-1 min-w-0 bg-theme-bg-primary border rounded-md px-3 py-2 text-[13px] font-mono ${!validAdminPhone && adminPhone ? 'border-red-500' : 'border-theme-border'}`}
+                    selectClassName="w-[104px] shrink-0 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-2 text-[13px]"
                 />
                 {!validAdminPhone && adminPhone && (
                     <p className="text-[11px] text-red-500 mt-1">Solo cifre (9-15), formato internazionale senza +.</p>
@@ -1082,13 +1086,13 @@ function OtpRecipientField() {
 
             <div>
                 <label className="block text-[12px] font-medium text-theme-text-secondary mb-1">WhatsApp direzione (alert preventivi)</label>
-                <input
-                    type="tel"
-                    value={bossPhone}
-                    onChange={e => setBossPhone(e.target.value)}
-                    placeholder={loading ? 'Caricamento…' : 'es. 393472817258'}
+                <TelefonoConPrefisso
+                    value={bossPhone ? `+${bossPhone}` : ''}
+                    onChange={v => setBossPhone(v.replace(/\D/g, ''))}
                     disabled={loading}
-                    className={`w-full bg-theme-bg-primary border rounded-md px-3 py-2 text-[13px] font-mono ${!validBossPhone && bossPhone ? 'border-red-500' : 'border-theme-border'}`}
+                    placeholder={loading ? 'Caricamento…' : 'es. 3472817258'}
+                    className={`flex-1 min-w-0 bg-theme-bg-primary border rounded-md px-3 py-2 text-[13px] font-mono ${!validBossPhone && bossPhone ? 'border-red-500' : 'border-theme-border'}`}
+                    selectClassName="w-[104px] shrink-0 bg-theme-bg-primary border border-theme-border rounded-md px-2 py-2 text-[13px]"
                 />
                 {!validBossPhone && bossPhone && (
                     <p className="text-[11px] text-red-500 mt-1">Solo cifre (9-15), formato internazionale senza +.</p>

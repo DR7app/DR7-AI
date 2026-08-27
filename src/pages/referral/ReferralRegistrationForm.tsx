@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import OtpInput from './OtpInput'
 import NumeroTelefono from '../../components/NumeroTelefono'
+import TelefonoConPrefisso from '../../components/TelefonoConPrefisso'
 
 interface ReferralRegistrationFormProps {
   onRegistered: (data: { participant_id: string; referral_code: string; balance_cents: number }) => void
@@ -148,13 +149,11 @@ export default function ReferralRegistrationForm({ onRegistered, initialReferral
 
           <div>
             <label className="block text-sm text-gray-400 mb-1">Telefono WhatsApp *</label>
-            <input
-              type="tel"
+            <TelefonoConPrefisso
               value={telefono}
-              onChange={(e) => setTelefono(e.target.value)}
-              className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:border-[#19C2D6] focus:ring-1 focus:ring-[#19C2D6] outline-none"
-              placeholder="+39 345 123 4567"
-              required
+              onChange={setTelefono}
+              className="flex-1 min-w-0 px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:border-[#19C2D6] focus:ring-1 focus:ring-[#19C2D6] outline-none"
+              selectClassName="w-[104px] shrink-0 px-2 py-3 bg-white/5 border border-white/20 rounded-xl text-white"
             />
           </div>
 

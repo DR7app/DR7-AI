@@ -267,7 +267,7 @@ export default function FornitoreForm({ fornitore, onClose, onSaved }: Props) {
                             onChange={e => setData({ ...data, piva: e.target.value })} placeholder="01234567890" />
                         <Input label="Referente" value={data.referente}
                             onChange={e => setData({ ...data, referente: e.target.value })} placeholder="Nome cognome" />
-                        <Input label="Telefono" value={data.telefono}
+                        <Input label="Telefono" type="tel" value={data.telefono}
                             onChange={e => setData({ ...data, telefono: e.target.value })} />
                         <Input label="Email" type="email" value={data.email}
                             onChange={e => setData({ ...data, email: e.target.value })} />

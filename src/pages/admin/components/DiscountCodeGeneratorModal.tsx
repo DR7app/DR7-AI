@@ -3,6 +3,7 @@ import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 interface CustomerOption {
     id: string
@@ -501,12 +502,12 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
                             </div>
                             <div>
                                 <label className="block text-xs text-theme-text-muted mb-1">Telefono cliente</label>
-                                <input
-                                    type="tel"
+                                <TelefonoConPrefisso
                                     value={formData.customer_phone}
-                                    onChange={(e) => updateField('customer_phone', e.target.value)}
-                                    placeholder="es. +39 345 790 5205"
-                                    className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                                    onChange={(v) => updateField('customer_phone', v)}
+                                    className="flex-1 min-w-0 px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                                    selectClassName="w-[104px] shrink-0 px-2 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
+                                    mostraAnteprima={false}
                                 />
                             </div>
                         </div>

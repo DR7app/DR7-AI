@@ -6,6 +6,7 @@ import { getProKeyEventTriggers, EVENT_DESCRIPTIONS, suggestEventsForTemplate, P
 const EVENT_LABELS_IT = EVENT_DESCRIPTIONS
 import toast from 'react-hot-toast'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 interface SystemMessage {
     id: string
@@ -5826,13 +5827,16 @@ export default function MessaggiSistemaProTab() {
                                                                     })}
                                                                 </select>
                                                                 <div className="flex gap-2">
-                                                                    <input
-                                                                        type="tel"
-                                                                        value={testPhones[template.id] || ''}
-                                                                        onChange={e => setTestPhones(prev => ({ ...prev, [template.id]: e.target.value }))}
-                                                                        placeholder="Numero di telefono del destinatario"
-                                                                        className="flex-1 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
-                                                                    />
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <TelefonoConPrefisso
+                                                                            value={testPhones[template.id] || ''}
+                                                                            onChange={v => setTestPhones(prev => ({ ...prev, [template.id]: v }))}
+                                                                            placeholder="Numero del destinatario"
+                                                                            className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
+                                                                            selectClassName="w-[96px] shrink-0 px-1.5 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs"
+                                                                            mostraAnteprima={false}
+                                                                        />
+                                                                    </div>
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => handleTestSend(template)}

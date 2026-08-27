@@ -5,6 +5,7 @@ import { authFetch } from '../../../utils/authFetch'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 interface Contract {
   id: string
@@ -577,11 +578,12 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
               </div>
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-2">Telefono</label>
-                <input
-                  type="tel"
+                <TelefonoConPrefisso
                   value={formData.customer_phone}
-                  onChange={(e) => setFormData({ ...formData, customer_phone: e.target.value })}
-                  className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
+                  onChange={(v) => setFormData({ ...formData, customer_phone: v })}
+                  className="flex-1 min-w-0 bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
+                  selectClassName="w-[104px] shrink-0 bg-theme-bg-tertiary border border-theme-border rounded px-2 py-2 text-theme-text-primary"
+                  mostraAnteprima={false}
                 />
               </div>
               <div>

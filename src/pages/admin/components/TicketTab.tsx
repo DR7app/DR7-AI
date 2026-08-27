@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 // ── Tipi ────────────────────────────────────────────────────────────────────
 interface TicketRecipient {
@@ -289,7 +290,10 @@ export default function TicketTab() {
                             </div>
                             <div>
                                 <label className="block text-sm font-semibold text-theme-text-primary mb-1.5">Telefono di riferimento <span className="text-theme-text-muted font-normal">(facoltativo)</span></label>
-                                <input type="text" value={form.telefono_riferimento} onChange={e => setForm({ ...form, telefono_riferimento: e.target.value })} placeholder="+39 347 9876543" className="w-full px-4 py-2.5 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-cyan-500" />
+                                <TelefonoConPrefisso value={form.telefono_riferimento} onChange={v => setForm({ ...form, telefono_riferimento: v })}
+                                    className="flex-1 min-w-0 px-4 py-2.5 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-cyan-500"
+                                    selectClassName="w-[104px] shrink-0 px-2 py-2.5 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary"
+                                    mostraAnteprima={false} />
                             </div>
                         </div>
 

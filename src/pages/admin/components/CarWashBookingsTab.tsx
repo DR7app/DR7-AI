@@ -27,6 +27,7 @@ import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 const ROME_TZ = 'Europe/Rome'
 
@@ -5661,11 +5662,12 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-theme-text-secondary mb-2">Telefono</label>
-                    <input
-                      type="tel"
+                    <TelefonoConPrefisso
                       value={editingBooking.customer_phone || ''}
-                      onChange={(e) => setEditingBooking({ ...editingBooking, customer_phone: e.target.value })}
-                      className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
+                      onChange={(v) => setEditingBooking({ ...editingBooking, customer_phone: v })}
+                      className="flex-1 min-w-0 px-3 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
+                      selectClassName="w-[104px] shrink-0 px-2 py-2 bg-theme-bg-tertiary border border-theme-border-light rounded text-theme-text-primary"
+                      mostraAnteprima={false}
                     />
                   </div>
                 </div>

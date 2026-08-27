@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react'
 import EMTNAuthorizationModal from './emtn/EMTNAuthorizationModal'
 import EMTNEventReportModal, { type ReportPrefill } from './emtn/EMTNEventReportModal'
 import { authFetch } from '../../../utils/authFetch'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 interface DamageEvent {
     kind: 'danno' | 'penale'
@@ -637,6 +638,10 @@ function AutorizzazioneClienteCard({ defaultEmail, defaultPhone, onOpenModal, au
     onOpenModal: () => void
     authorized: boolean
 }) {
+    // 2026-08-27: il campo WhatsApp era `defaultValue` (non controllato): ora
+    // usa la tendina col prefisso, quindi gli serve uno stato locale. Resta,
+    // come prima, l'anteprima del contatto — l'invio vero passa dal modale.
+    const [phone, setPhone] = useState(defaultPhone)
     return (
         <section className="rounded-2xl border border-theme-border bg-theme-bg-secondary p-4 flex flex-col">
             <div className="flex items-center justify-between mb-1">
@@ -661,11 +666,12 @@ function AutorizzazioneClienteCard({ defaultEmail, defaultPhone, onOpenModal, au
                 </div>
                 <div>
                     <label className="block text-[10px] uppercase tracking-wider text-theme-text-muted mb-1">WhatsApp (opzionale)</label>
-                    <input
-                        type="tel"
-                        defaultValue={defaultPhone}
-                        placeholder="+39 ..."
-                        className="w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    <TelefonoConPrefisso
+                        value={phone}
+                        onChange={setPhone}
+                        className="flex-1 min-w-0 bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                        selectClassName="w-[100px] shrink-0 bg-theme-bg-primary border border-theme-border rounded-lg px-2 py-2 text-sm text-theme-text-primary"
+                        mostraAnteprima={false}
                     />
                 </div>
             </div>

@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
 import MoneyInput from '../../../components/MoneyInput'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 /**
  * Promo Incassi.
@@ -224,12 +225,11 @@ export default function PromoIncassiTab() {
                     {draftMode === 'pilot' && (
                         <div>
                             <label className="block text-sm font-semibold text-theme-text-primary mb-2">Numero pilota</label>
-                            <input
-                                type="tel"
+                            <TelefonoConPrefisso
                                 value={draftPhone}
-                                onChange={(e) => setDraftPhone(e.target.value)}
-                                placeholder="es. +39 347 281 7258"
-                                className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                                onChange={setDraftPhone}
+                                className="flex-1 min-w-0 px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                                selectClassName="w-[104px] shrink-0 px-2 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
                             />
                         </div>
                     )}
@@ -300,12 +300,11 @@ export default function PromoIncassiTab() {
                     <label className="block text-sm font-semibold text-theme-text-primary mb-2">
                         Numero di test
                     </label>
-                    <input
-                        type="tel"
+                    <TelefonoConPrefisso
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        placeholder="es. +39 345 790 5205"
-                        className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                        onChange={setPhone}
+                        className="flex-1 min-w-0 px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                        selectClassName="w-[104px] shrink-0 px-2 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
                     />
                 </div>
 

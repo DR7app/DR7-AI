@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import EuropeanDateInput from '../components/EuropeanDateInput'
+import TelefonoConPrefisso from '../components/TelefonoConPrefisso'
 
 interface InviteState {
     valid: boolean | null
@@ -345,7 +346,16 @@ function Field({ label, value, onChange, type = 'text', required, maxLength, min
     return (
         <label className="block">
             <span className="text-xs font-medium text-gray-700">{label}</span>
-            {type === 'date' ? (
+            {/* 2026-08-27: il telefono si compone col prefisso internazionale
+                scelto dalla bandiera — vedi components/TelefonoConPrefisso. */}
+            {type === 'tel' ? (
+                <TelefonoConPrefisso
+                    value={value}
+                    onChange={onChange}
+                    className={`flex-1 min-w-0 ${inputClass}`}
+                    selectClassName={`w-[104px] shrink-0 ${inputClass}`}
+                />
+            ) : type === 'date' ? (
                 <EuropeanDateInput
                     value={value}
                     onChange={onChange}

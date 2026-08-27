@@ -15,6 +15,7 @@ import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import { INPUT_CLS, eur, eurToCents, centsToEur } from './noleggioFormBits'
 import CalendarTab from './CalendarTab'
 import ReservationsTab from './ReservationsTab'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 // Stati pagamento standard DR7 (come Noleggio auto / Car Wash): la label è
 // quella mostrata, il value è il payment_status salvato sul booking.
@@ -596,7 +597,8 @@ function PreventiviView({ serviceType, labels }: { serviceType: NoleggioServiceT
           <LeadPicker initialQuery={form.customer_name} onPick={(name, phone) => setForm(f => ({ ...f, customer_name: name || f.customer_name, customer_phone: phone || f.customer_phone }))} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input className={INPUT_CLS} placeholder="Cliente" value={form.customer_name} onChange={e => setForm({ ...form, customer_name: e.target.value })} />
-            <input className={INPUT_CLS} placeholder="Telefono (WhatsApp)" value={form.customer_phone} onChange={e => setForm({ ...form, customer_phone: e.target.value })} />
+            <TelefonoConPrefisso className={`flex-1 min-w-0 ${INPUT_CLS}`} selectClassName={`w-[104px] shrink-0 ${INPUT_CLS}`} mostraAnteprima={false}
+              placeholder="Telefono (WhatsApp)" value={form.customer_phone} onChange={v => setForm({ ...form, customer_phone: v })} />
             {/* 2026-08-24: il mezzo si SCEGLIE dal catalogo. Prima era un campo
                 libero e bisognava riscrivere il nome di un elicottero gia'
                 inserito. Resta la voce "altro" per i casi fuori catalogo. */}
@@ -1384,7 +1386,8 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                       <LeadPicker onPick={(name, phone) => setCust({ name: name || cust.name, phone: phone || cust.phone })} />
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <input className={INPUT_CLS} placeholder="Nome cliente (contatto)" value={cust.name} onChange={e => setCust({ ...cust, name: e.target.value })} />
-                        <input className={INPUT_CLS} placeholder="Telefono" value={cust.phone} onChange={e => setCust({ ...cust, phone: e.target.value })} />
+                        <TelefonoConPrefisso className={`flex-1 min-w-0 ${INPUT_CLS}`} selectClassName={`w-[104px] shrink-0 ${INPUT_CLS}`} mostraAnteprima={false}
+                          placeholder="Telefono" value={cust.phone} onChange={v => setCust({ ...cust, phone: v })} />
                       </div>
                       {/* Nome del passeggero per OGNI posto (sempre visibile).
                           Vuoto = usa il nome del contatto qui sopra. */}
@@ -1402,12 +1405,16 @@ function ToursView({ serviceType, labels }: { serviceType: NoleggioServiceType; 
                                 onPick={(name, phone) => { setSeatNames(m => ({ ...m, [s.id]: name })); setSeatPhones(m => ({ ...m, [s.id]: phone || '' })) }}
                               />
                             </div>
-                            <input
-                              className={INPUT_CLS + ' sm:max-w-[150px]'}
-                              placeholder="Telefono passeggero"
-                              value={seatPhones[s.id] || ''}
-                              onChange={e => setSeatPhones(m => ({ ...m, [s.id]: e.target.value }))}
-                            />
+                            <div className="w-full sm:max-w-[250px]">
+                              <TelefonoConPrefisso
+                                className={`flex-1 min-w-0 ${INPUT_CLS}`}
+                                selectClassName={`w-[96px] shrink-0 ${INPUT_CLS}`}
+                                mostraAnteprima={false}
+                                placeholder="Telefono passeggero"
+                                value={seatPhones[s.id] || ''}
+                                onChange={v => setSeatPhones(m => ({ ...m, [s.id]: v }))}
+                              />
+                            </div>
                           </div>
                         ))}
                       </div>

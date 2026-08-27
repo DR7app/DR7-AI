@@ -7,6 +7,7 @@ import Button from './Button'
 import Input from './Input'
 import { logger } from '../../../utils/logger'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1393,13 +1394,17 @@ export default function CargosTab() {
 
                                     {alertNumbers.map((n, i) => (
                                         <div key={i} className="flex items-center gap-2">
-                                            <input
-                                                type="tel"
-                                                value={n}
-                                                onChange={e => setAlertNumbers(prev => prev.map((x, j) => j === i ? e.target.value : x))}
-                                                placeholder="es. 393472817258 (senza +)"
-                                                className="flex-1 px-2 py-1.5 rounded-md bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs font-mono"
-                                            />
+                                            {/* Salvato a sole cifre senza "+", come prima. */}
+                                            <div className="flex-1 min-w-0">
+                                                <TelefonoConPrefisso
+                                                    value={n ? `+${n}` : ''}
+                                                    onChange={v => setAlertNumbers(prev => prev.map((x, j) => j === i ? v.replace(/\D/g, '') : x))}
+                                                    placeholder="es. 3472817258"
+                                                    className="flex-1 min-w-0 px-2 py-1.5 rounded-md bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs font-mono"
+                                                    selectClassName="w-[92px] shrink-0 px-1.5 py-1.5 rounded-md bg-theme-bg-tertiary border border-theme-border text-theme-text-primary text-xs"
+                                                    mostraAnteprima={false}
+                                                />
+                                            </div>
                                             {alertNumbers.length > 1 && (
                                                 <button
                                                     onClick={() => setAlertNumbers(prev => prev.filter((_, j) => j !== i))}

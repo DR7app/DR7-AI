@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 // La funzione /autisti (mapRow) restituisce { id, full_name, phone }.
 // 2026-08: il frontend leggeva nome/cognome/telefono (che NON arrivano) e
@@ -84,7 +85,8 @@ export default function AutistiConfigSection() {
         <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 items-center">
           <input value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} placeholder="Nome" className={inputCls} />
           <input value={form.cognome} onChange={e => setForm({ ...form, cognome: e.target.value })} placeholder="Cognome" className={inputCls} />
-          <input value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} placeholder="Telefono" className={inputCls} />
+          <TelefonoConPrefisso value={form.telefono} onChange={v => setForm({ ...form, telefono: v })} placeholder="Telefono"
+            className={`flex-1 min-w-0 ${inputCls}`} selectClassName={`w-[104px] shrink-0 ${inputCls}`} mostraAnteprima={false} />
           <button onClick={addAutista} disabled={busy} className="shrink-0 whitespace-nowrap px-4 py-2 rounded-lg bg-[#007aff] hover:bg-[#0071eb] text-white text-sm font-semibold disabled:opacity-50">Aggiungi</button>
         </div>
       </div>

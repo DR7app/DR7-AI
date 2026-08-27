@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 type SubTab = 'documenti' | 'marketing'
 
@@ -597,13 +598,12 @@ function DocumentiSubTab() {
                     placeholder="Email *"
                     className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
                   />
-                  <input
-                    type="tel"
-                    inputMode="tel"
+                  <TelefonoConPrefisso
                     value={s.phone}
-                    onChange={(e) => updateSigner(idx, { phone: e.target.value })}
-                    placeholder="+39 3XX XXX XXXX *"
-                    className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
+                    onChange={(v) => updateSigner(idx, { phone: v })}
+                    className="flex-1 min-w-0 bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
+                    selectClassName="w-[104px] shrink-0 bg-theme-bg-tertiary border border-theme-border rounded px-2 py-2 text-theme-text-primary text-sm"
+                    mostraAnteprima={false}
                   />
                 </div>
               </div>

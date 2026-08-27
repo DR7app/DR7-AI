@@ -32,6 +32,7 @@ import {
   INPUT_CLS, rentalDaysBetween, addDaysYmd, toRomeIso,
   eurToCents, centsToEur, eur,
 } from './noleggioFormBits'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 /* ────────────────────────────────── Tipi ────────────────────────────────── */
 export interface MareAsset {
@@ -830,7 +831,7 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
                   <input className={INPUT_CLS} placeholder="Nome e cognome" value={customerName} onChange={e => setCustomerName(e.target.value)} />
                 </Field>
                 <Field label="Telefono">
-                  <input className={INPUT_CLS} placeholder="Telefono" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} />
+  <TelefonoConPrefisso className={`flex-1 min-w-0 ${INPUT_CLS}`} selectClassName={`w-[104px] shrink-0 ${INPUT_CLS}`} mostraAnteprima={false} placeholder="Telefono" value={customerPhone} onChange={setCustomerPhone} />
                 </Field>
                 <Field label="Email">
                   <input className={INPUT_CLS} placeholder="Email" value={customerEmail} onChange={e => setCustomerEmail(e.target.value)} />
@@ -1009,8 +1010,11 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
                       <div key={i} className="flex gap-2 items-center">
                         <input className={INPUT_CLS} placeholder={`Passeggero ${i + 1} — nome e cognome`} value={p.name}
                           onChange={e => setPassengers(arr => arr.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
-                        <input className={`${INPUT_CLS} max-w-[180px]`} placeholder="Telefono" value={p.phone}
-                          onChange={e => setPassengers(arr => arr.map((x, j) => j === i ? { ...x, phone: e.target.value } : x))} />
+                        <div className="max-w-[260px] w-full">
+                          <TelefonoConPrefisso className={`flex-1 min-w-0 ${INPUT_CLS}`} selectClassName={`w-[96px] shrink-0 ${INPUT_CLS}`} mostraAnteprima={false}
+                            placeholder="Telefono" value={p.phone}
+                            onChange={v => setPassengers(arr => arr.map((x, j) => j === i ? { ...x, phone: v } : x))} />
+                        </div>
                         <button type="button" onClick={() => setPassengers(arr => arr.filter((_, j) => j !== i))} className="text-red-400 text-xl leading-none px-1 shrink-0" title="Rimuovi">×</button>
                       </div>
                     ))}
@@ -1030,7 +1034,7 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="Nome"><input className={INPUT_CLS} value={secondo.nome} onChange={e => setSecondo({ ...secondo, nome: e.target.value })} /></Field>
                   <Field label="Cognome"><input className={INPUT_CLS} value={secondo.cognome} onChange={e => setSecondo({ ...secondo, cognome: e.target.value })} /></Field>
-                  <Field label="Telefono"><input className={INPUT_CLS} value={secondo.telefono} onChange={e => setSecondo({ ...secondo, telefono: e.target.value })} /></Field>
+                  <Field label="Telefono"><TelefonoConPrefisso className={`flex-1 min-w-0 ${INPUT_CLS}`} selectClassName={`w-[104px] shrink-0 ${INPUT_CLS}`} mostraAnteprima={false} value={secondo.telefono} onChange={v => setSecondo({ ...secondo, telefono: v })} /></Field>
                   <Field label="Email"><input className={INPUT_CLS} value={secondo.email} onChange={e => setSecondo({ ...secondo, email: e.target.value })} /></Field>
                   <Field label="Codice Fiscale"><input className={INPUT_CLS} value={secondo.codice_fiscale} onChange={e => setSecondo({ ...secondo, codice_fiscale: e.target.value.toUpperCase() })} /></Field>
                   <div className="grid grid-cols-2 gap-3">
@@ -1061,7 +1065,7 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <Field label="Nome e Cognome"><input className={INPUT_CLS} value={g.nome_cognome} onChange={e => setGuarantors(arr => arr.map((x, j) => j === i ? { ...x, nome_cognome: e.target.value } : x))} /></Field>
                           <Field label="Codice Fiscale"><input className={INPUT_CLS} value={g.codice_fiscale} onChange={e => setGuarantors(arr => arr.map((x, j) => j === i ? { ...x, codice_fiscale: e.target.value.toUpperCase() } : x))} /></Field>
-                          <Field label="Telefono"><input className={INPUT_CLS} value={g.telefono} onChange={e => setGuarantors(arr => arr.map((x, j) => j === i ? { ...x, telefono: e.target.value } : x))} /></Field>
+                          <Field label="Telefono"><TelefonoConPrefisso className={`flex-1 min-w-0 ${INPUT_CLS}`} selectClassName={`w-[104px] shrink-0 ${INPUT_CLS}`} mostraAnteprima={false} value={g.telefono} onChange={v => setGuarantors(arr => arr.map((x, j) => j === i ? { ...x, telefono: v } : x))} /></Field>
                           <Field label="Email"><input className={INPUT_CLS} value={g.email} onChange={e => setGuarantors(arr => arr.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} /></Field>
                           <Field label="Indirizzo"><input className={INPUT_CLS} value={g.indirizzo} onChange={e => setGuarantors(arr => arr.map((x, j) => j === i ? { ...x, indirizzo: e.target.value } : x))} /></Field>
                           <div className="grid grid-cols-2 gap-3">

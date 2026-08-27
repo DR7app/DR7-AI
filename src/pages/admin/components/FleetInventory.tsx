@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 interface Vehicle {
     id: string
@@ -1005,12 +1006,12 @@ export default function FleetInventory() {
                                             </div>
                                             <div>
                                                 <label className="block text-xs text-theme-text-muted mb-1">Tel. Fornitore (WhatsApp)</label>
-                                                <input
-                                                    type="tel"
+                                                <TelefonoConPrefisso
                                                     value={editForm.oil_supplier_phone || ''}
-                                                    onChange={(e) => setEditForm(prev => ({ ...prev, oil_supplier_phone: e.target.value }))}
-                                                    placeholder="es. 3331234567"
-                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    onChange={(v) => setEditForm(prev => ({ ...prev, oil_supplier_phone: v }))}
+                                                    className="flex-1 min-w-0 bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    selectClassName="w-[100px] shrink-0 bg-theme-bg-tertiary text-theme-text-primary rounded px-2 py-2 text-sm border border-theme-border"
+                                                    mostraAnteprima={false}
                                                 />
                                             </div>
                                             <div>
@@ -1052,12 +1053,12 @@ export default function FleetInventory() {
                                             </div>
                                             <div>
                                                 <label className="block text-xs text-theme-text-muted mb-1">Tel. Fornitore (WhatsApp)</label>
-                                                <input
-                                                    type="tel"
+                                                <TelefonoConPrefisso
                                                     value={editForm.pastiglie_ant_supplier_phone || ''}
-                                                    onChange={(e) => setEditForm(prev => ({ ...prev, pastiglie_ant_supplier_phone: e.target.value }))}
-                                                    placeholder="es. 3331234567"
-                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    onChange={(v) => setEditForm(prev => ({ ...prev, pastiglie_ant_supplier_phone: v }))}
+                                                    className="flex-1 min-w-0 bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    selectClassName="w-[100px] shrink-0 bg-theme-bg-tertiary text-theme-text-primary rounded px-2 py-2 text-sm border border-theme-border"
+                                                    mostraAnteprima={false}
                                                 />
                                             </div>
                                             <div>
@@ -1099,12 +1100,12 @@ export default function FleetInventory() {
                                             </div>
                                             <div>
                                                 <label className="block text-xs text-theme-text-muted mb-1">Tel. Fornitore (WhatsApp)</label>
-                                                <input
-                                                    type="tel"
+                                                <TelefonoConPrefisso
                                                     value={editForm.pastiglie_post_supplier_phone || ''}
-                                                    onChange={(e) => setEditForm(prev => ({ ...prev, pastiglie_post_supplier_phone: e.target.value }))}
-                                                    placeholder="es. 3331234567"
-                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    onChange={(v) => setEditForm(prev => ({ ...prev, pastiglie_post_supplier_phone: v }))}
+                                                    className="flex-1 min-w-0 bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    selectClassName="w-[100px] shrink-0 bg-theme-bg-tertiary text-theme-text-primary rounded px-2 py-2 text-sm border border-theme-border"
+                                                    mostraAnteprima={false}
                                                 />
                                             </div>
                                             <div>
@@ -1146,12 +1147,12 @@ export default function FleetInventory() {
                                             </div>
                                             <div>
                                                 <label className="block text-xs text-theme-text-muted mb-1">Tel. Fornitore (WhatsApp)</label>
-                                                <input
-                                                    type="tel"
+                                                <TelefonoConPrefisso
                                                     value={editForm.sensori_ant_supplier_phone || ''}
-                                                    onChange={(e) => setEditForm(prev => ({ ...prev, sensori_ant_supplier_phone: e.target.value }))}
-                                                    placeholder="es. 3331234567"
-                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    onChange={(v) => setEditForm(prev => ({ ...prev, sensori_ant_supplier_phone: v }))}
+                                                    className="flex-1 min-w-0 bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    selectClassName="w-[100px] shrink-0 bg-theme-bg-tertiary text-theme-text-primary rounded px-2 py-2 text-sm border border-theme-border"
+                                                    mostraAnteprima={false}
                                                 />
                                             </div>
                                             <div>
@@ -1193,12 +1194,12 @@ export default function FleetInventory() {
                                             </div>
                                             <div>
                                                 <label className="block text-xs text-theme-text-muted mb-1">Tel. Fornitore (WhatsApp)</label>
-                                                <input
-                                                    type="tel"
+                                                <TelefonoConPrefisso
                                                     value={editForm.sensori_post_supplier_phone || ''}
-                                                    onChange={(e) => setEditForm(prev => ({ ...prev, sensori_post_supplier_phone: e.target.value }))}
-                                                    placeholder="es. 3331234567"
-                                                    className="w-full bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    onChange={(v) => setEditForm(prev => ({ ...prev, sensori_post_supplier_phone: v }))}
+                                                    className="flex-1 min-w-0 bg-theme-bg-tertiary text-theme-text-primary rounded px-3 py-2 text-sm border border-theme-border"
+                                                    selectClassName="w-[100px] shrink-0 bg-theme-bg-tertiary text-theme-text-primary rounded px-2 py-2 text-sm border border-theme-border"
+                                                    mostraAnteprima={false}
                                                 />
                                             </div>
                                             <div>
@@ -1631,12 +1632,11 @@ function FornitoriManagementPanel({ fornitori, onChanged }: { fornitori: FleetFo
             </div>
             <div>
               <label className="block text-xs font-medium text-theme-text-secondary mb-1">Numero WhatsApp *</label>
-              <input
-                type="text"
+              <TelefonoConPrefisso
                 value={editing.telefono}
-                onChange={e => setEditing({ ...editing, telefono: e.target.value })}
-                placeholder="Es. +39 349 1234567"
-                className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary"
+                onChange={v => setEditing({ ...editing, telefono: v })}
+                className="flex-1 min-w-0 bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-sm text-theme-text-primary"
+                selectClassName="w-[104px] shrink-0 bg-theme-bg-tertiary border border-theme-border rounded px-2 py-2 text-sm text-theme-text-primary"
               />
             </div>
           </div>

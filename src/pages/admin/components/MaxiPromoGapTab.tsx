@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 /**
  * Maxi Promo Gap Marketing — dashboard.
@@ -434,9 +435,9 @@ export default function MaxiPromoGapTab() {
                         </div>
                         {draftMode === 'pilot' && (
                             <div className="mt-3">
-                                <input type="tel" value={draftPhone} onChange={e => setDraftPhone(e.target.value)}
-                                    placeholder="+39 347 281 7258"
-                                    className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded text-xs text-theme-text-primary" />
+                                <TelefonoConPrefisso value={draftPhone} onChange={setDraftPhone}
+                                    className="flex-1 min-w-0 px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded text-xs text-theme-text-primary"
+                                    selectClassName="w-[96px] shrink-0 px-1.5 py-2 bg-theme-bg-tertiary border border-theme-border rounded text-xs text-theme-text-primary" />
                             </div>
                         )}
                         <button onClick={saveSettings} disabled={savingSettings}
@@ -470,9 +471,11 @@ Prenota ora — 1 giorno di esperienza in DR7.`}
                     <div className="bg-theme-bg-secondary rounded-lg border border-theme-border p-4">
                         <h3 className="text-sm font-semibold text-theme-text-primary mb-2">Test Rapido</h3>
                         <p className="text-[10px] text-theme-text-muted mb-2">Numero per ricevere un test ora</p>
-                        <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
-                            placeholder="+39 345 790 5205"
-                            className="w-full px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded text-xs text-theme-text-primary mb-2" />
+                        <div className="mb-2">
+                            <TelefonoConPrefisso value={phone} onChange={setPhone}
+                                className="flex-1 min-w-0 px-3 py-2 bg-theme-bg-tertiary border border-theme-border rounded text-xs text-theme-text-primary"
+                                selectClassName="w-[96px] shrink-0 px-1.5 py-2 bg-theme-bg-tertiary border border-theme-border rounded text-xs text-theme-text-primary" />
+                        </div>
                         <button onClick={runTestSend} disabled={loading}
                             className="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-semibold text-xs disabled:opacity-50">
                             {loading ? 'Invio…' : '↗ Invia Test'}

@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 // Static accent palette mirrored on the screenshot — keeps each panel
 // visually distinct without inventing data.
@@ -1093,12 +1094,11 @@ export default function CodiciScontoTab() {
                             )}
 
                             {sendTarget === 'numero' && (
-                                <input
-                                    type="tel"
+                                <TelefonoConPrefisso
                                     value={sendManualPhone}
-                                    onChange={(e) => setSendManualPhone(e.target.value)}
-                                    placeholder="es. +39 345 790 5205"
-                                    className="w-full px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                                    onChange={setSendManualPhone}
+                                    className="flex-1 min-w-0 px-4 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors"
+                                    selectClassName="w-[104px] shrink-0 px-2 py-3 bg-theme-bg-tertiary border border-theme-border rounded-lg text-theme-text-primary focus:outline-none focus:border-dr7-gold"
                                 />
                             )}
                         </div>

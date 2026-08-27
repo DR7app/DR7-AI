@@ -10,6 +10,7 @@ import CompilaButton, { type ExtractedData, type DataConflict } from '../../../c
 import { validateIban, formatIbanGroups } from '../../../utils/ibanValidation'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -1166,9 +1167,10 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
               <div className="space-y-3">
                 <div>
                   <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Telefono</label>
-                  <input type="tel" value={formData.telefono} onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                    placeholder="+39 333 123 4567"
-                    className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                  <TelefonoConPrefisso value={formData.telefono} onChange={(v) => setFormData({ ...formData, telefono: v })}
+                    className="flex-1 min-w-0 bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
+                    selectClassName="w-[104px] shrink-0 bg-theme-bg-tertiary border border-theme-border rounded-lg px-2 py-2 text-sm text-theme-text-primary"
+                    mostraAnteprima={false} />
                 </div>
                 <div>
                   <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Email</label>

@@ -1,5 +1,6 @@
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
+import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string
@@ -37,6 +38,40 @@ export default function Input({ label, className = '', ...props }: InputProps) {
           id={props.id}
           title={props.title}
           className={`${BASE_CLASS} ${className}`}
+        />
+      </div>
+    )
+  }
+
+  // 2026-08-27 (direzione): OGNI campo telefono ha il prefisso internazionale
+  // con la bandiera. Scritto a mano il numero parte e non arriva: Green API
+  // tiene solo le cifre, quindi "347..." senza prefisso, "0039..." o un numero
+  // estero digitato all'italiana risultano consegnati e non lo sono. Qui, come
+  // gia' per le date e per gli importi, la scelta e' UNA SOLA e vive nel
+  // componente Input: cosi' ogni <Input type="tel"> del gestionale prende la
+  // tendina con la bandiera senza doverla ricablare form per form.
+  if (props.type === 'tel') {
+    const onChange = props.onChange
+    return (
+      <div>
+        {label && (
+          <label className="block text-sm font-medium text-theme-text-primary mb-2">
+            {label}
+          </label>
+        )}
+        <TelefonoConPrefisso
+          value={typeof props.value === 'string' ? props.value : ''}
+          onChange={(v) => onChange?.({
+            target: { value: v, name: props.name ?? '' },
+            currentTarget: { value: v, name: props.name ?? '' },
+          } as React.ChangeEvent<HTMLInputElement>)}
+          placeholder={props.placeholder}
+          disabled={props.disabled}
+          className={`${BASE_CLASS} flex-1 min-w-0 ${className}`}
+          selectClassName={`${BASE_CLASS} w-[104px] shrink-0 px-2`}
+          // Anteprima spenta nei form: qui l'Input sta quasi sempre dentro una
+          // griglia a due colonne e la riga di aiuto sfalserebbe le altre voci.
+          mostraAnteprima={false}
         />
       </div>
     )

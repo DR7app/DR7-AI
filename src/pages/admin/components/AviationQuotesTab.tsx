@@ -265,6 +265,7 @@ export default function AviationQuotesTab() {
               />
               <Input
                 label="Telefono"
+                type="tel"
                 required
                 value={formData.customer_phone}
                 onChange={(e) => setFormData({ ...formData, customer_phone: e.target.value })}

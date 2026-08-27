@@ -8,6 +8,7 @@
 import { useState, useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { authFetch } from '../../../../utils/authFetch'
+import TelefonoConPrefisso from '../../../../components/TelefonoConPrefisso'
 
 interface Props {
     open: boolean
@@ -138,9 +139,10 @@ export default function EMTNAuthorizationModal({
                             </div>
                             <div>
                                 <label className="block text-[11px] text-theme-text-muted mb-1">WhatsApp</label>
-                                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
-                                    placeholder="+39 ..."
-                                    className="w-full bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold/40" />
+                                <TelefonoConPrefisso value={phone} onChange={setPhone}
+                                    className="flex-1 min-w-0 bg-theme-bg-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-muted focus:outline-none focus:ring-2 focus:ring-dr7-gold/40"
+                                    selectClassName="w-[104px] shrink-0 bg-theme-bg-primary border border-theme-border rounded-lg px-2 py-2 text-sm text-theme-text-primary"
+                                    mostraAnteprima={false} />
                             </div>
                         </div>
                     )}

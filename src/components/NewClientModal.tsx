@@ -6,6 +6,7 @@ import { logger } from '../utils/logger'
 import { invalidateCustomersCache } from '../utils/customersCache'
 import CalcolaCFButton from './CalcolaCFButton'
 import EuropeanDateInput from './EuropeanDateInput'
+import TelefonoConPrefisso from '../components/TelefonoConPrefisso'
 
 interface NewClientModalProps {
   isOpen: boolean
@@ -702,7 +703,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     type="text"
                     value={formData.nome}
                     onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                    className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="flex-1 min-w-0 px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   {errors.nome && <p className="text-red-500 text-xs mt-1">{errors.nome}</p>}
                 </div>
@@ -1331,12 +1332,12 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                   Telefono *
                 </label>
-                <input
-                  type="tel"
+                <TelefonoConPrefisso
                   value={formData.telefono}
-                  onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                  onChange={(v) => setFormData({ ...formData, telefono: v })}
                   className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="+39 320 1234567"
+                  selectClassName="w-[104px] shrink-0 px-2 py-2 border border-theme-border rounded-lg"
+                  mostraAnteprima={false}
                 />
                 {errors.telefono && <p className="text-red-500 text-xs mt-1">{errors.telefono}</p>}
               </div>
