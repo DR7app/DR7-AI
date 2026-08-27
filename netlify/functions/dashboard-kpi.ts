@@ -37,6 +37,28 @@ function daysBetween(startISO: string, endISO: string): number {
   return Math.round((isoUTCMs(endISO) - isoUTCMs(startISO)) / 86400000) + 1
 }
 
+/**
+ * PostgREST restituisce al massimo 1000 righe per richiesta. Oltre quella
+ * soglia i risultati venivano troncati IN SILENZIO — nessun errore, solo
+ * totali piu' bassi del reale. Con ~200 prenotazioni al mese non si vede;
+ * appena un mese supera le 1000 righe il Dashboard inizia a sottostimare.
+ */
+const PAGINA = 1000
+
+async function tutteLeRighe(
+  costruisci: (da: number, a: number) => PromiseLike<{ data: unknown[] | null; error: unknown }>,
+): Promise<{ data: any[]; error: any }> {
+  const righe: any[] = []
+  for (let da = 0; ; da += PAGINA) {
+    const { data, error } = await costruisci(da, da + PAGINA - 1)
+    if (error) return { data: righe, error }
+    if (!data || data.length === 0) break
+    righe.push(...(data as any[]))
+    if (data.length < PAGINA) break
+  }
+  return { data: righe, error: null }
+}
+
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'GET') {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) }
@@ -119,34 +141,39 @@ export const handler: Handler = async (event) => {
       // 2. Current month bookings — OVERLAP logic, matches Report Noleggio:
       // include any booking active during the month, even if it picked up
       // before. Test plate filter applied client-side after fetch.
-      supabase.from('bookings')
+      tutteLeRighe((da, a) => supabase.from('bookings')
         .select('id, vehicle_id, vehicle_name, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, payment_status, payment_method, customer_name, customer_email, appointment_date, created_at')
         .lte('pickup_date', monthEndISO + 'T23:59:59')
         .gte('dropoff_date', monthStartISO + 'T00:00:00')
-        .neq('customer_email', 'admin@dr7.app'),
+        .neq('customer_email', 'admin@dr7.app')
+        .range(da, a)),
       // 3. Previous month bookings (same overlap logic)
-      supabase.from('bookings')
+      tutteLeRighe((da, a) => supabase.from('bookings')
         .select('id, vehicle_id, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, payment_status, customer_name, customer_email, appointment_date, created_at')
         .lte('pickup_date', prevMonthEndISO + 'T23:59:59')
         .gte('dropoff_date', prevMonthStartISO + 'T00:00:00')
-        .neq('customer_email', 'admin@dr7.app'),
+        .neq('customer_email', 'admin@dr7.app')
+        .range(da, a)),
       // 4. Customers — only fetch this month + previous month for the new/returning
       // calculation; total count comes from a separate exact-count query below.
       // (PostgREST caps array selects at 1000 rows.)
-      supabase.from('customers_extended')
+      tutteLeRighe((da, a) => supabase.from('customers_extended')
         .select('id, created_at, nome, cognome')
         .gte('created_at', prevMonthStartISO + 'T00:00:00')
-        .lte('created_at', monthEndISO + 'T23:59:59'),
+        .lte('created_at', monthEndISO + 'T23:59:59')
+        .range(da, a)),
       // 5. Cauzioni for current month
-      supabase.from('cauzioni')
+      tutteLeRighe((da, a) => supabase.from('cauzioni')
         .select('id, importo, stato, metodo, updated_at')
         .gte('updated_at', monthStartISO + 'T00:00:00')
-        .lte('updated_at', monthEndISO + 'T23:59:59'),
+        .lte('updated_at', monthEndISO + 'T23:59:59')
+        .range(da, a)),
       // 6. Fatture for cash flow
-      supabase.from('fatture')
+      tutteLeRighe((da, a) => supabase.from('fatture')
         .select('id, importo_totale, stato, data_emissione, booking_id')
         .gte('data_emissione', monthStartISO)
         .lte('data_emissione', monthEndISO)
+        .range(da, a))
     ])
 
     if (vehiclesRes.error) throw vehiclesRes.error
@@ -170,13 +197,14 @@ export const handler: Handler = async (event) => {
     const fatture = fattureRes.data || []
 
     // Also fetch bookings that started BEFORE this month but overlap (still active)
-    const { data: overlapBookings } = await supabase
+    const { data: overlapBookings } = await tutteLeRighe((da, a) => supabase
       .from('bookings')
       .select('id, vehicle_id, vehicle_plate, pickup_date, dropoff_date, price_total, status, service_type, booking_details, payment_status')
       .lt('pickup_date', monthStartISO + 'T00:00:00')
       .gte('dropoff_date', monthStartISO + 'T00:00:00')
       .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active'])
       .not('vehicle_plate', 'in', '("TEST000","TEST002")')
+      .range(da, a))
 
     // Filter rental bookings helper
     const filterRentals = (bookings: any[]) => bookings.filter(b => {

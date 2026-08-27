@@ -1261,7 +1261,10 @@ async function generateWashReport(
     .eq('service_type', 'car_wash')
     .gte('appointment_date', monthStartISO + 'T00:00:00')
     .lte('appointment_date', monthEndISO + 'T23:59:59')
-    .in('status', ['confirmed', 'confermata', 'completed', 'in_corso'])
+    // 'completata' (italiano) mancava: ogni lavaggio chiuso spariva dal
+    // fatturato del report lavaggio. Gli stati validi esistono in inglese E
+    // in italiano — vanno elencati entrambi.
+    .in('status', ['confirmed', 'confermata', 'completed', 'completata', 'in_corso', 'active'])
     // Test plate filter — must allow NULL plates (website-booked carwashes
     // don't set vehicle_plate). SQL NOT IN excludes NULL silently, so we
     // wrap with an OR clause that explicitly accepts IS NULL.

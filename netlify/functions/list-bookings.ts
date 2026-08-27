@@ -2,6 +2,7 @@ import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { requireAuth } from './require-auth'
+import { rispostaJson } from './utils/rispostaCompressa'
 
 export const handler: Handler = async (event) => {
     const headers = {
@@ -113,16 +114,13 @@ export const handler: Handler = async (event) => {
         console.log(`[list-bookings] Total bookings fetched: ${allBookings.length}` +
             (windowFrom || windowTo ? ` (window ${windowFrom} -> ${windowTo})` : ' (full table)'));
 
-        return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({
-                success: true,
-                count: allBookings.length,
-                window: windowFrom || windowTo ? { from: windowFrom, to: windowTo } : null,
-                bookings: allBookings
-            })
-        };
+        // Oltre i 6 MB Netlify risponde 502: la risposta va compressa.
+        return rispostaJson({
+            success: true,
+            count: allBookings.length,
+            window: windowFrom || windowTo ? { from: windowFrom, to: windowTo } : null,
+            bookings: allBookings
+        }, headers, true);
 
     } catch (error: any) {
         console.error('[list-bookings] Error:', error);

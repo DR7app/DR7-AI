@@ -2,6 +2,7 @@ import { getCorsOrigin } from './cors-headers'
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { requireAuth } from './require-auth'
+import { rispostaJson } from './utils/rispostaCompressa'
 
 export const handler: Handler = async (event) => {
     const headers = {
@@ -127,14 +128,9 @@ export const handler: Handler = async (event) => {
 
         console.log(`[list-customers] Total customers fetched: ${allCustomers.length}`);
 
-        return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({
-                success: true,
-                customers: allCustomers
-            })
-        };
+        // Oltre i 6 MB Netlify risponde 502 ResponseSizeTooLarge e la tab
+        // resta vuota senza errore visibile: la risposta va compressa.
+        return rispostaJson({ success: true, customers: allCustomers }, headers, true);
 
     } catch (error: any) {
         console.error('[list-customers] Error:', error);
