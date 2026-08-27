@@ -48,6 +48,14 @@ interface NexiTransaction {
     source?: 'nexi' | 'wallet' | 'prenotazione'
     /** service_type della prenotazione collegata (per il filtro Servizio). */
     service_type?: string
+    /** metadata della riga nexi_transactions: contiene cauzione_id e
+     *  customer_name per i link/pre-auth creati dal gestionale. */
+    metadata?: Record<string, unknown> | null
+    /** 27/08/2026: nome cliente risolto quando la riga NON e' legata a una
+     *  prenotazione (cauzioni, pre-autorizzazioni, addebiti). Prima la
+     *  colonna CLIENTE leggeva solo booking.customer_name e mostrava N/A su
+     *  clienti che erano regolarmente in anagrafica. */
+    customer_name?: string
     booking?: {
         id: string
         vehicle_name: string
@@ -178,7 +186,7 @@ export default function NexiTab() {
     }
     const filteredTransactions = transactions.filter(tx =>
         filterMatches(
-            [tx.customer_email, tx.order_id, tx.description, tx.booking?.customer_name, tx.booking?.vehicle_name, tx.contract_id, tx.booking_id],
+            [tx.customer_email, tx.order_id, tx.description, tx.booking?.customer_name, tx.customer_name, tx.booking?.vehicle_name, tx.contract_id, tx.booking_id],
             search,
         )
         && matchesDate(tx.created_at)
@@ -984,6 +992,89 @@ export default function NexiTab() {
         }
     }
 
+    /**
+     * 27/08/2026: la colonna CLIENTE leggeva SOLO `booking.customer_name`.
+     * Le righe di cauzione / pre-autorizzazione / addebito non hanno una
+     * prenotazione collegata, quindi mostravano "N/A" anche per clienti
+     * presenti in anagrafica.
+     *
+     * Ordine di risoluzione (mai per NOME, come da regola anagrafica):
+     *   1. prenotazione collegata
+     *   2. cauzione collegata (metadata.cauzione_id -> cliente_id) — la fonte
+     *      autorevole
+     *   3. customers_extended per EMAIL, case-insensitive (ilike): con .eq
+     *      un'email salvata con maiuscole diverse non matcha
+     *   4. metadata.customer_name scritto alla creazione del link
+     */
+    async function resolveCustomerNames(txs: NexiTransaction[]): Promise<NexiTransaction[]> {
+        const nomeDa = (c: Record<string, unknown> | null | undefined): string => {
+            if (!c) return ''
+            const rag = String(c.ragione_sociale || c.denominazione || '').trim()
+            if (rag) return rag
+            return `${String(c.nome || '')} ${String(c.cognome || '')}`.trim()
+        }
+
+        const daRisolvere = txs.filter(t => !t.booking?.customer_name && !t.customer_name)
+        if (daRisolvere.length === 0) return txs
+
+        // --- 2. per cauzione_id -------------------------------------------
+        const perCauzione = new Map<string, string>()
+        const cauzioneIds = Array.from(new Set(
+            daRisolvere
+                .map(t => String((t.metadata as Record<string, unknown> | null)?.cauzione_id || '').trim())
+                .filter(Boolean)
+        ))
+        if (cauzioneIds.length > 0) {
+            try {
+                const { data: cauz } = await supabase
+                    .from('cauzioni')
+                    .select('id, customers_extended!cliente_id(nome, cognome, denominazione, ragione_sociale)')
+                    .in('id', cauzioneIds)
+                for (const c of (cauz || []) as Record<string, unknown>[]) {
+                    const nome = nomeDa(c.customers_extended as Record<string, unknown>)
+                    if (nome) perCauzione.set(String(c.id), nome)
+                }
+            } catch (e) {
+                console.warn('[NexiTab] lookup cliente per cauzione fallito (non-bloccante):', e)
+            }
+        }
+
+        // --- 3. per email (case-insensitive, a blocchi) --------------------
+        const perEmail = new Map<string, string>()
+        const emails = Array.from(new Set(
+            daRisolvere
+                .filter(t => !perCauzione.has(String((t.metadata as Record<string, unknown> | null)?.cauzione_id || '')))
+                .map(t => String(t.customer_email || '').trim().toLowerCase())
+                .filter(e => e.includes('@'))
+        ))
+        for (let i = 0; i < emails.length; i += 40) {
+            const chunk = emails.slice(i, i + 40)
+            try {
+                const { data: custs } = await supabase
+                    .from('customers_extended')
+                    .select('email, nome, cognome, denominazione, ragione_sociale')
+                    .or(chunk.map(e => `email.ilike.${e}`).join(','))
+                for (const c of (custs || []) as Record<string, unknown>[]) {
+                    const nome = nomeDa(c)
+                    const mail = String(c.email || '').trim().toLowerCase()
+                    if (nome && mail) perEmail.set(mail, nome)
+                }
+            } catch (e) {
+                console.warn('[NexiTab] lookup cliente per email fallito (non-bloccante):', e)
+            }
+        }
+
+        return txs.map(t => {
+            if (t.booking?.customer_name || t.customer_name) return t
+            const meta = (t.metadata as Record<string, unknown> | null) || {}
+            const daCauzione = perCauzione.get(String(meta.cauzione_id || ''))
+            const daMail = perEmail.get(String(t.customer_email || '').trim().toLowerCase())
+            const daMeta = String(meta.customer_name || '').trim()
+            const nome = daCauzione || daMail || daMeta
+            return nome ? { ...t, customer_name: nome } : t
+        })
+    }
+
     async function fetchTransactions() {
         try {
             setLoading(true)
@@ -1101,7 +1192,7 @@ export default function NexiTab() {
                 ...dedupedBookingTx,
             ].sort((a, b) =>
                 String(b.created_at || '').localeCompare(String(a.created_at || '')))
-            setTransactions(combined)
+            setTransactions(await resolveCustomerNames(combined))
         } catch (err: unknown) {
           const _errMsg = err instanceof Error ? err.message : String(err)
             setError(_errMsg)
@@ -1216,11 +1307,11 @@ export default function NexiTab() {
                 body: JSON.stringify({
                     transactionId: addebitoTx.id,
                     bookingId: addebitoTx.booking_id || addebitoTx.booking?.id || null,
-                    customerName: addebitoTx.booking?.customer_name || '',
+                    customerName: addebitoTx.booking?.customer_name || addebitoTx.customer_name || '',
                     customerEmail: addebitoTx.customer_email,
                     contractNumber: addebitoTx.booking_id?.substring(0, 8)?.toUpperCase() || addebitoTx.order_id,
                     amount: addebitoAmount,
-                    causale: `Addebito - ${addebitoTx.booking?.customer_name || addebitoTx.customer_email}`,
+                    causale: `Addebito - ${addebitoTx.booking?.customer_name || addebitoTx.customer_name || addebitoTx.customer_email}`,
                     contractId: addebitoTx.contract_id || null,
                     recurring: addebitoRecurring,
                     intervalHours: addebitoRecurring ? parseInt(addebitoIntervalHours) : null,
@@ -1467,7 +1558,7 @@ export default function NexiTab() {
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="text-sm text-theme-text-primary">
-                                                {tx.booking?.customer_name || 'N/A'}
+                                                {tx.booking?.customer_name || tx.customer_name || 'N/A'}
                                             </div>
                                             <div className="text-xs text-theme-text-muted">{tx.customer_email}</div>
                                         </td>
@@ -1861,7 +1952,7 @@ export default function NexiTab() {
                     <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 sm:p-6 space-y-4">
                         <h3 className="text-lg font-bold text-theme-text-primary">Nuovo Addebito</h3>
                         <div className="text-sm text-theme-text-secondary">
-                            <p><strong>Cliente:</strong> {addebitoTx.booking?.customer_name || 'N/A'}</p>
+                            <p><strong>Cliente:</strong> {addebitoTx.booking?.customer_name || addebitoTx.customer_name || 'N/A'}</p>
                             <p><strong>Email:</strong> {addebitoTx.customer_email}</p>
                             {addebitoTx.contract_id && (
                                 <p><strong>Contract ID Nexi:</strong> <span className="font-mono text-xs">{addebitoTx.contract_id}</span></p>
