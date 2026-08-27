@@ -383,15 +383,62 @@ export default function CauzioniTab() {
      * il synthetic booking col cliente reale e dispatcha ai template Pro
      * con quel trigger_event configurato. Non blocca il flusso UI.
      */
-    const fireCauzioneEvent = async (cauzioneId: string, event: string) => {
+    const fireCauzioneEvent = async (cauzioneId: string, event: string): Promise<number> => {
         try {
-            await fetch('/.netlify/functions/trigger-system-event', {
+            const res = await fetch('/.netlify/functions/trigger-system-event', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ event, entityType: 'cauzione', entityId: cauzioneId }),
             })
+            // 2026-08-27: il chiamante deve poter sapere se un template e'
+            // partito davvero, per non mandare due volte lo stesso messaggio
+            // quando lo stesso template e' collegato anche per evento.
+            const j = await res.json().catch(() => ({}))
+            return Number(j?.sent || 0)
         } catch (e) {
             console.warn(`[CauzioniTab] ${event} trigger failed (non-blocking):`, e)
+            return 0
+        }
+    }
+
+    /**
+     * 2026-08-27: messaggio "cauzione incassata" instradato per EVENTO
+     * (`cauzione_incassata` nella lista eventi di Messaggi di Sistema Pro),
+     * cosi' UN SOLO template puo' coprire sia il tasto INCASSA sia la
+     * pre-autorizzazione completata dal link (`cauzione_preauth_completed`).
+     * Se nessun template dichiara l'evento, il resolver salta l'invio: niente
+     * testo hardcoded e nessun messaggio a sorpresa.
+     */
+    const sendCauzioneIncassataMessage = async (cauzione: Cauzione) => {
+        const phone = (cauzione.cliente_telefono || '').trim()
+        if (!phone) { console.warn('[CauzioniTab] Cauzione incassata: nessun telefono cliente'); return }
+        try {
+            const customerName = cauzione.cliente_nome || 'Cliente'
+            const amountStr = Number(cauzione.importo).toFixed(2)
+            await fetch('/.netlify/functions/send-whatsapp-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    customPhone: phone,
+                    templateKey: 'cauzione_incassata',
+                    booking: { service_type: 'rental' },
+                    templateVars: {
+                        '{nome}': customerName.split(' ')[0] || 'Cliente',
+                        '{nome cliente}': customerName,
+                        '{nome_cliente}': customerName,
+                        '{cliente}': customerName,
+                        '{customer_name}': customerName,
+                        '{amount}': amountStr,
+                        '{importo}': amountStr,
+                        '{total}': amountStr,
+                        '{vehicle_name}': cauzione.veicolo_modello || '',
+                        '{targa}': cauzione.veicolo_targa || '',
+                        '{data}': new Date().toLocaleDateString('it-IT'),
+                    },
+                }),
+            })
+        } catch (e) {
+            console.warn('[CauzioniTab] sendCauzioneIncassataMessage fallito (non-blocking):', e)
         }
     }
 
@@ -1026,7 +1073,12 @@ export default function CauzioniTab() {
 
             if (error) throw error
             toast.success('Cauzione segnata come incassata')
-            fireCauzioneEvent(cauzione.id, 'on_cauzione_collected')
+            // Il messaggio al cliente parte una volta sola: se un template e'
+            // gia' partito col trigger "Cauzione incassata", non si rimanda
+            // per evento.
+            fireCauzioneEvent(cauzione.id, 'on_cauzione_collected').then(sent => {
+                if (!sent) sendCauzioneIncassataMessage(cauzione)
+            })
             sendIbanRequest(cauzione) // chiedi l'IBAN per il rimborso alla riconsegna
             fetchCauzioni()
         } catch (error: unknown) {

@@ -265,6 +265,9 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; area: 
       'cauzione_garante_notification',
       // 2026-08-27: pre-autorizzazione riuscita (fondi bloccati sulla carta).
       'cauzione_preauth_completed',
+      // 2026-08-27: tasto INCASSA in tab Cauzioni. Spuntando tutti e due gli
+      // eventi, lo stesso template copre link pre-auth e incasso manuale.
+      'cauzione_incassata',
     ],
   },
   // ── ANNULLAMENTO ────────────────────────────────────────────────────────

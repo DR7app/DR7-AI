@@ -230,6 +230,13 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
   cauzione_veicolo_returned: 'Cauzione veicolo restituita al cliente (fine noleggio)',
   // Promemoria garante: il garante riceve il riassunto della cauzione veicolo
   cauzione_garante_notification: 'Notifica al GARANTE della cauzione veicolo (terzo intestatario)',
+  // 2026-08-27: pre-autorizzazione ANDATA A BUON FINE (fondi bloccati sulla
+  // carta, non incassati). Fire da nexi-preauth-callback quando Nexi
+  // risponde AUTHORIZED: il cliente riceve la conferma del blocco.
+  cauzione_preauth_completed: 'Pre-autorizzazione cauzione effettuata: fondi BLOCCATI sulla carta (callback Nexi)',
+  // 2026-08-27: stesso messaggio anche dal tasto INCASSA in tab Cauzioni, cosi'
+  // un solo template puo' coprire entrambi i momenti (link pre-auth + incasso).
+  cauzione_incassata: 'Cauzione incassata dal tasto INCASSA (tab Cauzioni)',
 
   // No Cauzione / Sconti preventivi
   no_cauzione_approved: 'Approvazione "No Cauzione": invio link pagamento al cliente',

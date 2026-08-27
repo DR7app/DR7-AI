@@ -304,38 +304,16 @@ const handler: Handler = async (event) => {
                     }
                     const importoStr = Number(cauzione.importo || 0).toFixed(2);
                     const baseUrl = process.env.URL || 'https://platform.dr7ai.com';
-                    await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            customPhone: phone,
-                            templateKey: 'cauzione_preauth_completed',
-                            booking: { service_type: 'rental' },
-                            templateVars: {
-                                '{nome}': custName.split(' ')[0] || 'Cliente',
-                                '{nome cliente}': custName,
-                                '{nome_cliente}': custName,
-                                '{cliente}': custName,
-                                '{customer_name}': custName,
-                                '{amount}': importoStr,
-                                '{importo}': importoStr,
-                                '{total}': importoStr,
-                                '{vehicle_name}': veicolo?.display_name || '',
-                                '{targa}': veicolo?.plate || '',
-                                '{data}': new Date().toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
-                            },
-                        }),
-                    });
-                    console.log('[nexi-preauth-callback] Messaggio cauzione_preauth_completed inviato a', phone);
 
-                    // Evento Messaggi di Sistema Pro `on_cauzione_preauthorized`
+                    // 1) Evento Messaggi di Sistema Pro `on_cauzione_preauthorized`
                     // ("Cauzione pre-autorizzata"): fa partire i template che
-                    // l'admin ha collegato all'evento nella tab. Passa il numero
-                    // del cliente perche' il sender scarta gli invii senza
-                    // destinatario esplicito. Dedup per cauzione via
-                    // system_message_send_log.
+                    // l'admin ha collegato all'evento nella tendina Evento.
+                    // Passa il numero del cliente perche' il sender scarta gli
+                    // invii senza destinatario esplicito. Dedup per cauzione
+                    // via system_message_send_log.
+                    let inviatiDaEvento = 0;
                     try {
-                        await triggerSystemMessageEvent({
+                        const evRes = await triggerSystemMessageEvent({
                             bookingId: cauzione.id,
                             event: 'on_cauzione_preauthorized',
                             recipientPhone: phone,
@@ -358,8 +336,42 @@ const handler: Handler = async (event) => {
                                 price_total: Math.round(Number(cauzione.importo || 0) * 100),
                             },
                         });
+                        inviatiDaEvento = evRes?.sent || 0;
                     } catch (evErr) {
                         console.error('[nexi-preauth-callback] Evento on_cauzione_preauthorized fallito (non bloccante):', evErr);
+                    }
+
+                    // 2) Routing per evento `cauzione_preauth_completed` (la
+                    // spunta nella lista eventi del template). Parte SOLO se
+                    // il trigger sopra non ha gia' mandato niente: altrimenti
+                    // lo stesso template, collegato in tutti e due i modi,
+                    // manderebbe due WhatsApp al cliente.
+                    if (inviatiDaEvento > 0) {
+                        console.log(`[nexi-preauth-callback] Pre-autorizzazione: ${inviatiDaEvento} messaggio/i inviati dall'evento on_cauzione_preauthorized — routing cauzione_preauth_completed saltato`);
+                    } else {
+                        await fetch(`${baseUrl}/.netlify/functions/send-whatsapp-notification`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                customPhone: phone,
+                                templateKey: 'cauzione_preauth_completed',
+                                booking: { service_type: 'rental' },
+                                templateVars: {
+                                    '{nome}': custName.split(' ')[0] || 'Cliente',
+                                    '{nome cliente}': custName,
+                                    '{nome_cliente}': custName,
+                                    '{cliente}': custName,
+                                    '{customer_name}': custName,
+                                    '{amount}': importoStr,
+                                    '{importo}': importoStr,
+                                    '{total}': importoStr,
+                                    '{vehicle_name}': veicolo?.display_name || '',
+                                    '{targa}': veicolo?.plate || '',
+                                    '{data}': new Date().toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }),
+                                },
+                            }),
+                        });
+                        console.log('[nexi-preauth-callback] Messaggio cauzione_preauth_completed inviato a', phone);
                     }
                 }
             } catch (msgErr) {
