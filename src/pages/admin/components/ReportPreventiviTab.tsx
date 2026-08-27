@@ -1,8 +1,4 @@
 import { useState, useMemo, useEffect } from 'react'
-import {
-  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip,
-} from 'recharts'
-import { useTheme } from '../../../contexts/ThemeContext'
 import { supabase } from '../../../supabaseClient'
 
 // Palette verificata (sei controlli, chiaro e scuro). L'esito tiene sempre lo
@@ -166,8 +162,6 @@ function Trend({ current, previous, format = 'number' }: { current: number; prev
 }
 
 export default function ReportPreventiviTab() {
-  const { theme } = useTheme()
-  const isDark = theme === 'dark'
   const now = new Date()
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
@@ -874,87 +868,37 @@ export default function ReportPreventiviTab() {
                 />
               </div>
 
-              {/* Grafici */}
+              {/* Esito e perdite — 2026-08-27 (richiesta direzione): stessa
+                  forma del Report Terra, tabelle e non grafici. */}
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
-                  <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider mb-1">Esito preventivi</h3>
-                  <p className="text-[11px] text-theme-text-muted mb-3">Valore per esito — totale {formatCurrency(overview.totalValue)}</p>
-                  {esitoMix.length === 0 ? (
-                    <div className="h-[220px] flex items-center justify-center text-sm text-theme-text-muted">Nessun preventivo nel periodo</div>
-                  ) : (
-                    <div className="flex flex-col sm:flex-row items-center gap-4">
-                      <div className="w-full sm:w-1/2 h-[220px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={esitoMix}
-                              dataKey="value"
-                              cx="50%" cy="50%"
-                              innerRadius="58%"
-                              outerRadius="92%"
-                              paddingAngle={2}
-                              strokeWidth={2}
-                              stroke={isDark ? '#09090b' : '#ffffff'}
-                            >
-                              {esitoMix.map(r => <Cell key={r.name} fill={r.color} />)}
-                            </Pie>
-                            <Tooltip
-                              formatter={(v: unknown) => formatCurrency(Number(v) || 0)}
-                              contentStyle={{
-                                background: isDark ? '#09090b' : '#ffffff',
-                                border: '1px solid rgba(120,120,120,0.35)',
-                                borderRadius: 8,
-                                fontSize: 12,
-                                color: isDark ? '#fff' : '#18181b',
-                              }}
-                            />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
-                      <ul className="w-full sm:w-1/2 space-y-1.5">
-                        {esitoMix.map(r => (
-                          <li key={r.name} className="flex items-center justify-between text-xs">
-                            <span className="flex items-center gap-2 text-theme-text-secondary">
-                              <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: r.color }} />
-                              {r.name}
-                              <span className="text-theme-text-muted">({r.count})</span>
-                            </span>
-                            <span className="text-theme-text-primary font-semibold tabular-nums">{formatCurrency(r.value)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
+                {esitoMix.length === 0 ? (
+                  <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border px-4 py-8 text-center text-sm text-theme-text-muted">
+                    Nessun preventivo nel periodo
+                  </div>
+                ) : (
+                  <ReportTable
+                    title={`Esito preventivi — totale ${formatCurrency(overview.totalValue)}`}
+                    headers={['Esito', 'Preventivi', 'Valore', '% del Totale']}
+                    rows={esitoMix.map(r => [
+                      r.name,
+                      String(r.count),
+                      formatCurrency(r.value),
+                      overview.totalValue > 0 ? `${Math.round((r.value / overview.totalValue) * 100)}%` : '0%',
+                    ])}
+                  />
+                )}
 
-                <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
-                  <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider mb-1">Valore perso per veicolo</h3>
-                  <p className="text-[11px] text-theme-text-muted mb-3">Primi 8 — preventivi rifiutati o scaduti</p>
-                  {perditeChart.length === 0 ? (
-                    <div className="h-[220px] flex items-center justify-center text-sm text-theme-text-muted">Nessuna perdita nel periodo</div>
-                  ) : (
-                    <div style={{ height: Math.max(220, perditeChart.length * 30) }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={perditeChart} layout="vertical" margin={{ top: 4, right: 12, left: 4, bottom: 0 }}>
-                          <XAxis type="number" tick={{ fontSize: 11, fill: isDark ? '#a1a1aa' : '#71717a' }} axisLine={false} tickLine={false} />
-                          <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11, fill: isDark ? '#a1a1aa' : '#71717a' }} axisLine={false} tickLine={false} />
-                          <Tooltip
-                            cursor={{ fill: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)' }}
-                            formatter={(v: unknown) => formatCurrency(Number(v) || 0)}
-                            contentStyle={{
-                              background: isDark ? '#09090b' : '#ffffff',
-                              border: '1px solid rgba(120,120,120,0.35)',
-                              borderRadius: 8,
-                              fontSize: 12,
-                              color: isDark ? '#fff' : '#18181b',
-                            }}
-                          />
-                          <Bar dataKey="value" fill={ESITO_COLORS.rifiutati} radius={[0, 4, 4, 0]} barSize={14} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                </div>
+                {perditeChart.length === 0 ? (
+                  <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border px-4 py-8 text-center text-sm text-theme-text-muted">
+                    Nessuna perdita nel periodo
+                  </div>
+                ) : (
+                  <ReportTable
+                    title="Valore perso per veicolo — primi 8 (rifiutati o scaduti)"
+                    headers={['Veicolo', 'Valore Perso']}
+                    rows={perditeChart.map(r => [r.name, formatCurrency(r.value)])}
+                  />
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">

@@ -1,11 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import {
-  ResponsiveContainer,
-  AreaChart, Area,
-  BarChart, Bar,
-  PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-} from 'recharts'
+import { ReportTable, ReportRow, ReportTotalRow, ReportEmpty } from './ReportUI'
 import DateRangePicker, { resolveDateRange, isInRange, type DateRangeValue } from '../../../components/admin/DateRangePicker'
 import toast from 'react-hot-toast'
 // #38 Modifica manuale del report: correggi/rimuovi/aggiungi voci. Gli override
@@ -409,7 +403,7 @@ export default function ReportPenaliDanniTab() {
           <button
             onClick={fetchReports}
             disabled={loading}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-white text-theme-text-primary text-sm font-semibold rounded-full border border-theme-border hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-theme-bg-tertiary text-theme-text-primary text-sm font-semibold rounded-full border border-theme-border hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -429,7 +423,7 @@ export default function ReportPenaliDanniTab() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{error}</div>
+        <div className="bg-red-500/20 border border-red-500 text-red-300 px-4 py-3 rounded-lg text-sm">{error}</div>
       )}
 
       {/* ── KPI cards (7) ─────────────────────────────────────────────── */}
@@ -443,65 +437,81 @@ export default function ReportPenaliDanniTab() {
         <KpiCard label="Penali Lavaggio" value={fmtEur(kpi.penaliLavaggio)} accent="orange" sub="Lavaggio & Meccanica" />
       </div>
 
-      {/* ── Row 2: charts + Azioni Rapide sidebar ────────────────────── */}
+      {/* ── Row 2: andamento + ripartizione + Azioni Rapide ──────────────
+          2026-08-27 (richiesta direzione): stessa forma del Report Terra —
+          tabelle, non grafici. Gli stessi numeri, nessun dato tolto. */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-        {/* Andamento (col-span 2) */}
-        <Card title="Andamento Danni e Penali" subtitle="Trend per periodo selezionato" className="xl:col-span-2 min-h-[300px]">
+        <Card title="Andamento Danni e Penali" subtitle="Trend per periodo selezionato" className="xl:col-span-2" flush>
           {trendData.length === 0 ? (
-            <EmptyChart message="Nessun dato per il periodo" />
+            <ReportEmpty message="Nessun dato per il periodo" />
           ) : (
-            <ResponsiveContainer width="100%" height={250}>
-              <AreaChart data={trendData}>
-                <defs>
-                  <linearGradient id="gDanni" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={COLORS.rose} stopOpacity={0.35} />
-                    <stop offset="95%" stopColor={COLORS.rose} stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="gPenali" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={COLORS.orange} stopOpacity={0.35} />
-                    <stop offset="95%" stopColor={COLORS.orange} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#71717a' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#71717a' }} axisLine={false} tickLine={false} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v) => fmtEur2(Number(v))} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Area type="monotone" dataKey="danni" name="Danni" stroke={COLORS.rose} fill="url(#gDanni)" strokeWidth={2} />
-                <Area type="monotone" dataKey="penali" name="Penali" stroke={COLORS.orange} fill="url(#gPenali)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </Card>
-
-        {/* Ripartizione donut */}
-        <Card title="Ripartizione Danni vs Penali" subtitle="Volumi correnti" className="min-h-[300px]">
-          {kpi.contenziosoTot === 0 ? (
-            <EmptyChart message="Nessun dato" />
-          ) : (
-            <div className="relative">
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie data={ripartizioneData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} dataKey="value" stroke="none">
-                    {ripartizioneData.map((d, i) => <Cell key={i} fill={d.fill} />)}
-                  </Pie>
-                  <Tooltip formatter={(v) => fmtEur(Number(v))} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <div className="text-[11px] uppercase tracking-wide text-theme-text-muted">Totale</div>
-                <div className="text-lg font-bold text-theme-text-primary">{fmtEur(kpi.contenziosoTot)}</div>
-              </div>
-              <div className="flex justify-center gap-4 mt-2 text-xs">
-                <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: COLORS.rose }} /> Danni {fmtEur(kpi.danniTot)}</span>
-                <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: COLORS.orange }} /> Penali {fmtEur(kpi.penaliTot)}</span>
-              </div>
+            <div className="max-h-72 overflow-y-auto">
+              <ReportTable
+                head={
+                  <>
+                    <th className="text-left px-4 py-3">Periodo</th>
+                    <th className="text-right px-4 py-3">Danni</th>
+                    <th className="text-right px-4 py-3">Penali</th>
+                    <th className="text-right px-4 py-3">Totale</th>
+                  </>
+                }
+                foot={
+                  <ReportTotalRow>
+                    <td className="px-4 py-2">Totale</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{fmtEur(trendData.reduce((s, t) => s + t.danni, 0))}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{fmtEur(trendData.reduce((s, t) => s + t.penali, 0))}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-dr7-gold">{fmtEur(trendData.reduce((s, t) => s + t.totale, 0))}</td>
+                  </ReportTotalRow>
+                }
+              >
+                {trendData.map(t => (
+                  <ReportRow key={t.month}>
+                    <td className="px-4 py-2 text-theme-text-primary">{t.month}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtEur(t.danni)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtEur(t.penali)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums font-semibold text-theme-text-primary">{fmtEur(t.totale)}</td>
+                  </ReportRow>
+                ))}
+              </ReportTable>
             </div>
           )}
         </Card>
 
+        <Card title="Ripartizione Danni vs Penali" subtitle="Volumi correnti" flush>
+          {kpi.contenziosoTot === 0 ? (
+            <ReportEmpty message="Nessun dato" />
+          ) : (
+            <ReportTable
+              head={
+                <>
+                  <th className="text-left px-4 py-3">Tipo</th>
+                  <th className="text-right px-4 py-3">Importo</th>
+                  <th className="text-right px-4 py-3">%</th>
+                </>
+              }
+              foot={
+                <ReportTotalRow>
+                  <td className="px-4 py-2">Totale</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-dr7-gold">{fmtEur(kpi.contenziosoTot)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">100%</td>
+                </ReportTotalRow>
+              }
+            >
+              {ripartizioneData.map(r => (
+                <ReportRow key={r.name}>
+                  <td className="px-4 py-2 text-theme-text-primary">{r.name}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtEur(r.value)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted">
+                    {kpi.contenziosoTot > 0 ? `${Math.round((r.value / kpi.contenziosoTot) * 100)}%` : '-'}
+                  </td>
+                </ReportRow>
+              ))}
+            </ReportTable>
+          )}
+        </Card>
+
         {/* Azioni Rapide */}
-        <Card title="Azioni Rapide" className="min-h-[300px]">
+        <Card title="Azioni Rapide">
           <div className="space-y-1.5">
             {[
               { icon: '⊕', label: 'Nuova Segnalazione', tab: 'gestione-danni' },
@@ -528,77 +538,99 @@ export default function ReportPenaliDanniTab() {
         </Card>
       </div>
 
-      {/* ── Row 3: per tipologia + stato pratiche ────────────────────── */}
+      {/* ── Row 3: per tipologia + stato pratiche + allerte ───────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-        <Card title="Danni e Penali per Tipologia" subtitle="Distribuzione importi per causa" className="xl:col-span-2">
+        <Card title="Danni e Penali per Tipologia" subtitle="Distribuzione importi per causa" className="xl:col-span-2" flush>
           {tipologiaData.length === 0 ? (
-            <EmptyChart message="Nessun dato" />
+            <ReportEmpty message="Nessun dato" />
           ) : (
-            <ResponsiveContainer width="100%" height={Math.max(220, tipologiaData.length * 32)}>
-              <BarChart data={tipologiaData} layout="vertical" margin={{ left: 10, right: 30 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11, fill: '#71717a' }} axisLine={false} tickLine={false} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#374151' }} axisLine={false} tickLine={false} width={150} />
-                <Tooltip formatter={(v) => fmtEur2(Number(v))} />
-                <Bar dataKey="value" radius={[0, 6, 6, 0]} fill={COLORS.gold} />
-              </BarChart>
-            </ResponsiveContainer>
+            <ReportTable
+              head={
+                <>
+                  <th className="text-left px-4 py-3">Tipologia</th>
+                  <th className="text-right px-4 py-3">Importo</th>
+                  <th className="text-right px-4 py-3">%</th>
+                </>
+              }
+              foot={
+                <ReportTotalRow>
+                  <td className="px-4 py-2">Totale</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-dr7-gold">{fmtEur(tipologiaData.reduce((s, t) => s + t.value, 0))}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">100%</td>
+                </ReportTotalRow>
+              }
+            >
+              {tipologiaData.map(t => {
+                const tot = tipologiaData.reduce((s, x) => s + x.value, 0)
+                return (
+                  <ReportRow key={t.name}>
+                    <td className="px-4 py-2 text-theme-text-primary">{t.name}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtEur(t.value)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted">{tot > 0 ? `${Math.round((t.value / tot) * 100)}%` : '-'}</td>
+                  </ReportRow>
+                )
+              })}
+            </ReportTable>
           )}
         </Card>
 
-        <Card title="Stato Pratiche" subtitle="Aperte / risolte / annullate">
+        <Card title="Stato Pratiche" subtitle="Aperte / risolte / annullate" flush>
           {statoData.length === 0 ? (
-            <EmptyChart message="Nessun dato" />
+            <ReportEmpty message="Nessun dato" />
           ) : (
-            <div>
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie data={statoData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" stroke="none">
-                    {statoData.map((d, i) => <Cell key={i} fill={d.fill} />)}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="space-y-1 mt-2">
-                {statoData.map(s => (
-                  <div key={s.name} className="flex items-center justify-between text-xs">
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full" style={{ background: s.fill }} />
-                      {s.name}
-                    </span>
-                    <span className="font-semibold text-theme-text-primary">{s.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <ReportTable
+              head={
+                <>
+                  <th className="text-left px-4 py-3">Stato</th>
+                  <th className="text-right px-4 py-3">Pratiche</th>
+                </>
+              }
+              foot={
+                <ReportTotalRow>
+                  <td className="px-4 py-2">Totale</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{statoData.reduce((s, x) => s + x.value, 0)}</td>
+                </ReportTotalRow>
+              }
+            >
+              {statoData.map(s => (
+                <ReportRow key={s.name}>
+                  <td className="px-4 py-2 text-theme-text-primary">{s.name}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{s.value}</td>
+                </ReportRow>
+              ))}
+            </ReportTable>
           )}
         </Card>
 
-        <Card title="Allerte Critiche" subtitle={`${allerte.length} pratiche da gestire`}>
+        <Card title="Allerte Critiche" subtitle={`${allerte.length} pratiche da gestire`} flush>
           {allerte.length === 0 ? (
-            <div className="text-xs text-theme-text-muted py-6 text-center">Nessuna allerta attiva</div>
+            <ReportEmpty message="Nessuna allerta attiva" />
           ) : (
-            <div className="space-y-2">
-              {allerte.map(a => (
-                <div key={a.id} className={`p-2.5 rounded-lg border-l-4 ${
-                  a.severity === 'high' ? 'bg-rose-50 border-rose-500'
-                  : a.severity === 'medium' ? 'bg-amber-50 border-amber-500'
-                  : 'bg-sky-50 border-sky-500'
-                }`}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-semibold text-theme-text-primary truncate">{a.customerName || 'Cliente sconosciuto'}</div>
-                      <div className="text-[11px] text-theme-text-secondary truncate">{a.category} · {a.vehiclePlate}</div>
-                      <div className="text-[11px] text-theme-text-muted">{a.daysOld}g in sospeso</div>
-                    </div>
-                    <span className="text-sm font-bold text-theme-text-primary whitespace-nowrap">{fmtEur(a.amount)}</span>
-                  </div>
-                </div>
-              ))}
+            <div className="max-h-72 overflow-y-auto">
+              <ReportTable
+                head={
+                  <>
+                    <th className="text-left px-4 py-3">Cliente</th>
+                    <th className="text-left px-4 py-3">Pratica</th>
+                    <th className="text-center px-4 py-3">Giorni</th>
+                    <th className="text-right px-4 py-3">Importo</th>
+                  </>
+                }
+              >
+                {allerte.map(a => (
+                  <ReportRow key={a.id}>
+                    <td className="px-4 py-2 text-theme-text-primary">{a.customerName || 'Cliente sconosciuto'}</td>
+                    <td className="px-4 py-2 text-theme-text-secondary">{a.category} · {a.vehiclePlate}</td>
+                    <td className={`px-4 py-2 text-center tabular-nums ${a.severity === 'high' ? 'text-red-500 font-semibold' : a.severity === 'medium' ? 'text-yellow-400' : 'text-theme-text-muted'}`}>{a.daysOld}g</td>
+                    <td className="px-4 py-2 text-right tabular-nums font-semibold text-theme-text-primary">{fmtEur(a.amount)}</td>
+                  </ReportRow>
+                ))}
+              </ReportTable>
             </div>
           )}
         </Card>
       </div>
+
 
       {/* ── Row 4: Top clienti + Dettaglio table ─────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
@@ -744,134 +776,185 @@ export default function ReportPenaliDanniTab() {
         </Card>
 
         {/* Top clienti */}
-        <Card title="Top Clienti Danni & Penali" subtitle="Per importo totale">
+        <Card title="Top Clienti Danni & Penali" subtitle="Per importo totale" flush>
           {topClienti.length === 0 ? (
-            <div className="text-xs text-theme-text-muted py-6 text-center">Nessun cliente</div>
+            <ReportEmpty message="Nessun cliente" />
           ) : (
-            <div className="space-y-2">
+            <ReportTable
+              head={
+                <>
+                  <th className="text-left px-4 py-3">#</th>
+                  <th className="text-left px-4 py-3">Cliente</th>
+                  <th className="text-center px-4 py-3">Pratiche</th>
+                  <th className="text-right px-4 py-3">Importo</th>
+                </>
+              }
+            >
               {topClienti.map((c, i) => (
-                <div key={c.name} className="flex items-center gap-2.5 py-1.5 border-b border-theme-border last:border-0">
-                  <span className="text-[11px] font-bold text-theme-text-muted w-4">{i + 1}.</span>
-                  <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-semibold ${avatarColor(c.name)}`}>{initials(c.name)}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm text-theme-text-primary truncate">{c.name}</div>
-                    <div className="text-[10px] text-theme-text-muted">{c.count} pratiche</div>
-                  </div>
-                  <span className="text-sm font-semibold text-dr7-gold whitespace-nowrap">{fmtEur(c.total)}</span>
-                </div>
+                <ReportRow key={c.name}>
+                  <td className="px-4 py-2 tabular-nums text-theme-text-muted">{i + 1}</td>
+                  <td className="px-4 py-2 text-theme-text-primary">{c.name}</td>
+                  <td className="px-4 py-2 text-center tabular-nums text-theme-text-primary">{c.count}</td>
+                  <td className="px-4 py-2 text-right tabular-nums font-semibold text-dr7-gold">{fmtEur(c.total)}</td>
+                </ReportRow>
               ))}
-            </div>
+            </ReportTable>
           )}
         </Card>
       </div>
 
-      {/* ── Row 5: Impatto + Per veicolo + Confronto + Previsioni + Cause ─ */}
+
+      {/* ── Row 5: Impatto + Per veicolo + Confronto ──────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-        <Card title="Impatto Economico" subtitle="Contenzioso totale">
-          <div className="flex flex-col items-center justify-center py-2">
-            <div className="text-[11px] uppercase tracking-wide text-theme-text-muted">Totale</div>
-            <div className="text-3xl font-bold text-theme-text-primary">{fmtEur(kpi.contenziosoTot)}</div>
-            <div className="text-[11px] text-theme-text-muted mt-1">{filteredEntries.length} pratiche nel periodo</div>
-          </div>
-          {kpi.contenziosoTot > 0 && (
-            <div className="mt-3">
-              <div className="h-2 rounded-full overflow-hidden flex bg-theme-bg-tertiary">
-                <div className="bg-rose-400" style={{ width: `${(kpi.danniTot / kpi.contenziosoTot) * 100}%` }} />
-                <div className="bg-orange-400" style={{ width: `${(kpi.penaliTot / kpi.contenziosoTot) * 100}%` }} />
-              </div>
-              <div className="flex justify-between text-[10px] text-theme-text-muted mt-1.5">
-                <span>Danni {Math.round((kpi.danniTot / kpi.contenziosoTot) * 100)}%</span>
-                <span>Penali {Math.round((kpi.penaliTot / kpi.contenziosoTot) * 100)}%</span>
-              </div>
-            </div>
-          )}
+        <Card title="Impatto Economico" subtitle="Contenzioso totale" flush>
+          <ReportTable
+            head={
+              <>
+                <th className="text-left px-4 py-3">Voce</th>
+                <th className="text-right px-4 py-3">Importo</th>
+                <th className="text-right px-4 py-3">%</th>
+              </>
+            }
+            foot={
+              <ReportTotalRow>
+                <td className="px-4 py-2">Totale</td>
+                <td className="px-4 py-2 text-right tabular-nums text-dr7-gold">{fmtEur(kpi.contenziosoTot)}</td>
+                <td className="px-4 py-2 text-right tabular-nums">{filteredEntries.length} pratiche</td>
+              </ReportTotalRow>
+            }
+          >
+            <ReportRow>
+              <td className="px-4 py-2 text-theme-text-primary">Danni</td>
+              <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtEur(kpi.danniTot)}</td>
+              <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted">
+                {kpi.contenziosoTot > 0 ? `${Math.round((kpi.danniTot / kpi.contenziosoTot) * 100)}%` : '-'}
+              </td>
+            </ReportRow>
+            <ReportRow>
+              <td className="px-4 py-2 text-theme-text-primary">Penali</td>
+              <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtEur(kpi.penaliTot)}</td>
+              <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted">
+                {kpi.contenziosoTot > 0 ? `${Math.round((kpi.penaliTot / kpi.contenziosoTot) * 100)}%` : '-'}
+              </td>
+            </ReportRow>
+          </ReportTable>
         </Card>
 
-        <Card title="Danni e Penali per Veicolo" subtitle="Top 10 per importo" className="xl:col-span-2">
+        <Card title="Danni e Penali per Veicolo" subtitle="Top 10 per importo" className="xl:col-span-2" flush>
           {perVeicolo.length === 0 ? (
-            <EmptyChart message="Nessun veicolo" />
+            <ReportEmpty message="Nessun veicolo" />
           ) : (
-            <ResponsiveContainer width="100%" height={Math.max(220, perVeicolo.length * 26)}>
-              <BarChart data={perVeicolo} layout="vertical" margin={{ left: 10, right: 30 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11, fill: '#71717a' }} axisLine={false} tickLine={false} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#374151' }} axisLine={false} tickLine={false} width={140} />
-                <Tooltip formatter={(v) => fmtEur2(Number(v))} />
-                <Bar dataKey="value" radius={[0, 4, 4, 0]} fill={COLORS.gold} />
-              </BarChart>
-            </ResponsiveContainer>
+            <ReportTable
+              head={
+                <>
+                  <th className="text-left px-4 py-3">Veicolo</th>
+                  <th className="text-right px-4 py-3">Importo</th>
+                </>
+              }
+              foot={
+                <ReportTotalRow>
+                  <td className="px-4 py-2">Totale</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-dr7-gold">{fmtEur(perVeicolo.reduce((s, v) => s + v.value, 0))}</td>
+                </ReportTotalRow>
+              }
+            >
+              {perVeicolo.map(v => (
+                <ReportRow key={v.name}>
+                  <td className="px-4 py-2 text-theme-text-primary">{v.name}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtEur(v.value)}</td>
+                </ReportRow>
+              ))}
+            </ReportTable>
           )}
         </Card>
 
-        <Card title="Confronto Periodo" subtitle="vs periodo precedente">
+        <Card title="Confronto Periodo" subtitle="vs periodo precedente" flush>
           {!confronto ? (
-            <div className="text-xs text-theme-text-muted py-6 text-center">Imposta un range per confronto</div>
+            <ReportEmpty message="Imposta un range per confronto" />
           ) : (
-            <div className="space-y-3">
+            <ReportTable
+              head={
+                <>
+                  <th className="text-left px-4 py-3">Voce</th>
+                  <th className="text-right px-4 py-3">Periodo</th>
+                  <th className="text-right px-4 py-3">Variazione</th>
+                </>
+              }
+            >
               <ConfrontoRow label="Danni" cur={confronto.danni.current} pct={confronto.danni.pct} />
               <ConfrontoRow label="Penali" cur={confronto.penali.current} pct={confronto.penali.pct} />
               <ConfrontoRow label="Totale" cur={confronto.totale.current} pct={confronto.totale.pct} bold />
-            </div>
+            </ReportTable>
           )}
         </Card>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <Card title="Previsioni" subtitle="Proiezione prossimi 30 giorni (base ultimi 30g)">
-          <div className="space-y-2">
-            <div className="flex justify-between items-baseline py-2 border-b border-theme-border">
-              <span className="text-sm text-theme-text-secondary">Danni Previsti</span>
-              <span className="text-base font-semibold text-rose-600">{fmtEur(previsioni.danni)}</span>
-            </div>
-            <div className="flex justify-between items-baseline py-2 border-b border-theme-border">
-              <span className="text-sm text-theme-text-secondary">Penali Previste</span>
-              <span className="text-base font-semibold text-orange-600">{fmtEur(previsioni.penali)}</span>
-            </div>
-            <div className="flex justify-between items-baseline py-2 border-b border-theme-border">
-              <span className="text-sm text-theme-text-secondary">Totale Previsto</span>
-              <span className="text-base font-bold text-dr7-gold">{fmtEur(previsioni.totale)}</span>
-            </div>
-            <div className="flex justify-between items-baseline py-2">
-              <span className="text-sm text-theme-text-secondary">Importo Medio</span>
-              <span className="text-base font-semibold text-theme-text-primary">{fmtEur(previsioni.importoMedio)}</span>
-            </div>
-          </div>
+        <Card title="Previsioni" subtitle="Proiezione prossimi 30 giorni (base ultimi 30g)" flush>
+          <ReportTable
+            head={
+              <>
+                <th className="text-left px-4 py-3">Voce</th>
+                <th className="text-right px-4 py-3">Importo</th>
+              </>
+            }
+            foot={
+              <ReportTotalRow>
+                <td className="px-4 py-2">Totale Previsto</td>
+                <td className="px-4 py-2 text-right tabular-nums text-dr7-gold">{fmtEur(previsioni.totale)}</td>
+              </ReportTotalRow>
+            }
+          >
+            <ReportRow>
+              <td className="px-4 py-2 text-theme-text-primary">Danni Previsti</td>
+              <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtEur(previsioni.danni)}</td>
+            </ReportRow>
+            <ReportRow>
+              <td className="px-4 py-2 text-theme-text-primary">Penali Previste</td>
+              <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtEur(previsioni.penali)}</td>
+            </ReportRow>
+            <ReportRow>
+              <td className="px-4 py-2 text-theme-text-primary">Importo Medio</td>
+              <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtEur(previsioni.importoMedio)}</td>
+            </ReportRow>
+          </ReportTable>
         </Card>
 
-        <Card title="Principali Cause di Danni e Penali" subtitle="Top 6 categorie" className="xl:col-span-2">
+        <Card title="Principali Cause di Danni e Penali" subtitle="Top 6 categorie" className="xl:col-span-2" flush>
           {causeData.length === 0 ? (
-            <EmptyChart message="Nessuna causa registrata" />
+            <ReportEmpty message="Nessuna causa registrata" />
           ) : (
-            <div className="flex flex-col lg:flex-row items-center gap-4">
-              <div className="relative w-full lg:w-1/2">
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie data={causeData} cx="50%" cy="50%" innerRadius={50} outerRadius={85} dataKey="value" stroke="none">
-                      {causeData.map((d, i) => <Cell key={i} fill={d.fill} />)}
-                    </Pie>
-                    <Tooltip formatter={(v) => fmtEur2(Number(v))} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <div className="text-[11px] uppercase tracking-wide text-theme-text-muted">Totale</div>
-                  <div className="text-base font-bold text-theme-text-primary">{fmtEur(causeData.reduce((s, c) => s + c.value, 0))}</div>
-                </div>
-              </div>
-              <div className="flex-1 w-full space-y-1.5">
-                {causeData.map(c => (
-                  <div key={c.name} className="flex items-center justify-between gap-3 py-1 border-b border-theme-border last:border-0">
-                    <span className="inline-flex items-center gap-2 text-xs text-theme-text-primary">
-                      <span className="w-2 h-2 rounded-full" style={{ background: c.fill }} />
-                      {c.name}
-                    </span>
-                    <span className="text-xs font-semibold text-dr7-gold whitespace-nowrap">{fmtEur(c.value)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <ReportTable
+              head={
+                <>
+                  <th className="text-left px-4 py-3">Causa</th>
+                  <th className="text-right px-4 py-3">Importo</th>
+                  <th className="text-right px-4 py-3">%</th>
+                </>
+              }
+              foot={
+                <ReportTotalRow>
+                  <td className="px-4 py-2">Totale</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-dr7-gold">{fmtEur(causeData.reduce((s, c) => s + c.value, 0))}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">100%</td>
+                </ReportTotalRow>
+              }
+            >
+              {causeData.map(c => {
+                const tot = causeData.reduce((s, x) => s + x.value, 0)
+                return (
+                  <ReportRow key={c.name}>
+                    <td className="px-4 py-2 text-theme-text-primary">{c.name}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtEur(c.value)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted">{tot > 0 ? `${Math.round((c.value / tot) * 100)}%` : '-'}</td>
+                  </ReportRow>
+                )
+              })}
+            </ReportTable>
           )}
         </Card>
       </div>
+
 
       {/* ── Footer with timestamp ─────────────────────────────────────── */}
       <div className="flex items-center justify-between text-[11px] text-theme-text-muted pt-2">
@@ -896,23 +979,25 @@ export default function ReportPenaliDanniTab() {
 }
 
 // ─── Reusable subcomponents ──────────────────────────────────────────────────
-function Card({ title, subtitle, headerRight, children, className = '' }: {
+function Card({ title, subtitle, headerRight, children, className = '', flush = false }: {
   title: string
   subtitle?: string
   headerRight?: React.ReactNode
   children: React.ReactNode
   className?: string
+  /** Contenuto tabellare: niente padding interno, come su Report Terra. */
+  flush?: boolean
 }) {
   return (
-    <div className={`bg-theme-bg-primary border border-theme-border rounded-2xl p-5 shadow-sm ${className}`}>
-      <div className="flex items-start justify-between gap-3 mb-3">
+    <div className={`bg-theme-bg-secondary/50 border border-theme-border rounded-xl overflow-hidden ${className}`}>
+      <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-theme-border">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-theme-text-primary">{title}</h3>
           {subtitle && <p className="text-[11px] text-theme-text-muted mt-0.5">{subtitle}</p>}
         </div>
         {headerRight}
       </div>
-      {children}
+      {flush ? children : <div className="p-4">{children}</div>}
     </div>
   )
 }
@@ -924,36 +1009,27 @@ function KpiCard({ label, value, sub, accent, big }: {
   accent: 'rose' | 'orange' | 'gold'
   big?: boolean
 }) {
-  const dotCls = accent === 'rose' ? 'bg-rose-500' : accent === 'orange' ? 'bg-orange-500' : 'bg-dr7-gold'
+  // 2026-08-27: stessa scheda del Report Terra. L'accento resta solo come
+  // bordo del riquadro, senza pallini colorati.
+  const borderCls = big || accent === 'gold' ? 'border-dr7-gold/30' : 'border-theme-border'
   return (
-    <div className={`bg-theme-bg-primary border ${big ? 'border-dr7-gold/40 ring-1 ring-dr7-gold/10' : 'border-theme-border'} rounded-2xl p-4 shadow-sm`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className={`w-2 h-2 rounded-full ${dotCls}`} />
-        <span className="text-[10px] uppercase tracking-wide font-medium text-theme-text-secondary">{label}</span>
-      </div>
-      <p className={`${big ? 'text-2xl' : 'text-xl'} font-bold text-theme-text-primary tracking-tight tabular-nums`}>{value}</p>
-      {sub && <p className="text-[10px] text-theme-text-muted mt-1 truncate">{sub}</p>}
+    <div className={`bg-theme-bg-secondary/50 border ${borderCls} rounded-xl p-4`}>
+      <p className="text-xs text-theme-text-muted">{label}</p>
+      <p className={`text-2xl font-bold tabular-nums ${big || accent === 'gold' ? 'text-dr7-gold' : 'text-theme-text-primary'}`}>{value}</p>
+      {sub && <p className="text-[10px] text-theme-text-muted mt-0.5 truncate">{sub}</p>}
     </div>
   )
-}
-
-function EmptyChart({ message }: { message: string }) {
-  return <div className="flex items-center justify-center h-[220px] text-xs text-theme-text-muted">{message}</div>
 }
 
 function ConfrontoRow({ label, cur, pct, bold }: { label: string; cur: number; pct: number | null; bold?: boolean }) {
   const positive = pct !== null && pct >= 0
   return (
-    <div className={`flex items-center justify-between py-1.5 border-b border-theme-border last:border-0 ${bold ? 'font-semibold' : ''}`}>
-      <span className="text-sm text-theme-text-secondary">{label}</span>
-      <div className="text-right">
-        <div className={`text-sm ${bold ? 'text-dr7-gold font-bold' : 'text-theme-text-primary'}`}>{fmtEur(cur)}</div>
-        {pct !== null && (
-          <div className={`text-[10px] font-medium ${positive ? 'text-rose-600' : 'text-emerald-600'}`}>
-            {positive ? '▲' : '▼'} {Math.abs(pct).toFixed(1)}%
-          </div>
-        )}
-      </div>
-    </div>
+    <ReportRow>
+      <td className={`px-4 py-2 text-theme-text-primary ${bold ? 'font-bold' : ''}`}>{label}</td>
+      <td className={`px-4 py-2 text-right tabular-nums ${bold ? 'font-bold text-dr7-gold' : 'text-theme-text-primary'}`}>{fmtEur(cur)}</td>
+      <td className={`px-4 py-2 text-right tabular-nums ${pct === null ? 'text-theme-text-muted' : positive ? 'text-red-500' : 'text-green-500'}`}>
+        {pct === null ? '—' : `${positive ? '+' : '−'} ${Math.abs(pct).toFixed(1)}%`}
+      </td>
+    </ReportRow>
   )
 }

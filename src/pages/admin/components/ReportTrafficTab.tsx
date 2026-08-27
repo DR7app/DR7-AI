@@ -2,11 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { authFetch } from '../../../utils/authFetch'
 import { supabase } from '../../../supabaseClient'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
-import {
-  LineChart, Line,
-  PieChart, Pie, Cell,
-  XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
-} from 'recharts'
+import { ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty } from './ReportUI'
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Real data only. Backed by /.netlify/functions/ga-report which queries
@@ -67,58 +63,24 @@ const RANGES = [
 ] as const
 type RangeKey = typeof RANGES[number]['key']
 
-const CHANNEL_COLORS: Record<string, string> = {
-  'Organic Search':       '#10b981',
-  'Direct':               '#06b6d4',
-  'Referral':             '#f59e0b',
-  'Organic Social':       '#ec4899',
-  'Paid Search':          '#a855f7',
-  'Paid Social':          '#a855f7',
-  'Display':              '#a855f7',
-  'Email':                '#3b82f6',
-  'Organic Video':        '#ef4444',
-  'Unassigned':           '#64748b',
-}
-const colorFor = (name: string) => CHANNEL_COLORS[name] || '#94a3b8'
-
 const fmtInt = (v: number) => v.toLocaleString('it-IT')
 const fmtEur = (v: number) => `€${v.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`
 const deltaCls = (d: number) => d > 0 ? 'text-emerald-400' : d < 0 ? 'text-red-400' : 'text-theme-text-muted'
 const deltaStr = (d: number) => d === 0 ? '—' : `${d > 0 ? '+' : ''}${d.toFixed(1)}%`
 
-function Card({ title, right, children, className = '' }: { title: string; right?: React.ReactNode; children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`bg-theme-bg-secondary/70 border border-theme-border rounded-xl p-4 flex flex-col ${className}`}>
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-theme-text-primary uppercase tracking-wider">{title}</h3>
-        {right}
-      </div>
-      <div className="flex-1 min-h-0">{children}</div>
-    </div>
-  )
-}
-
-function KpiTile({ label, value, delta, sub, valueClass = 'text-theme-text-primary', format = 'int' }: {
-  label: string; value: number | string; delta?: number; sub?: string; valueClass?: string; format?: 'int' | 'eur'
+function KpiTile({ label, value, delta, sub, format = 'int' }: {
+  label: string; value: number | string; delta?: number; sub?: string; format?: 'int' | 'eur'
 }) {
   const isString = typeof value === 'string'
   return (
-    <div className="bg-theme-bg-secondary/70 border border-theme-border rounded-xl p-3 flex flex-col gap-1 min-w-0">
-      <div className="text-[10px] uppercase tracking-wider text-theme-text-muted truncate">{label}</div>
-      <div className={`text-xl font-bold ${valueClass} tabular-nums`}>
+    <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
+      <p className="text-xs text-theme-text-muted">{label}</p>
+      <p className="text-2xl font-bold text-theme-text-primary tabular-nums">
         {isString ? value : (format === 'eur' ? fmtEur(value as number) : fmtInt(value as number))}
-      </div>
-      <div className={`text-[11px] font-medium ${delta != null ? deltaCls(delta) : 'text-theme-text-muted'}`}>
+      </p>
+      <p className={`text-[10px] mt-0.5 ${delta != null && !sub ? deltaCls(delta) : 'text-theme-text-muted'}`}>
         {sub ? sub : (delta != null ? deltaStr(delta) : '—')}
-      </div>
-    </div>
-  )
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="flex items-center justify-center text-[11px] text-theme-text-muted/70 italic h-full min-h-[80px]">
-      {message}
+      </p>
     </div>
   )
 }
@@ -245,10 +207,7 @@ export default function ReportTrafficTab() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-theme-text-primary flex items-center gap-2">
-            <span className="inline-block w-2 h-6 rounded-full bg-gradient-to-b from-cyan-400 via-fuchsia-500 to-emerald-400" />
-            Rendimento Sito
-          </h1>
+          <h2 className="text-2xl font-bold text-theme-text-primary">Rendimento Sito</h2>
           <p className="text-xs text-theme-text-muted mt-1">
             Dati reali da Google Analytics 4 — dr7empire.com
             {data?.fetchedAt && (
@@ -392,12 +351,11 @@ export default function ReportTrafficTab() {
             <KpiTile
               label="Visitatori sul sito ora"
               value={data.realtime.activeUsers}
-              valueClass="text-emerald-400"
               sub="anonimi, da GA4"
             />
-            <KpiTile label="Pagine viste (30m)" value={data.realtime.pageviews30m} valueClass="text-cyan-400" />
-            <KpiTile label="Eventi (30m)" value={data.realtime.events30m} valueClass="text-blue-400" />
-            <KpiTile label="Conversioni (30m)" value={data.realtime.conversions30m} valueClass="text-violet-400" />
+            <KpiTile label="Pagine viste (30m)" value={data.realtime.pageviews30m} />
+            <KpiTile label="Eventi (30m)" value={data.realtime.events30m} />
+            <KpiTile label="Conversioni (30m)" value={data.realtime.conversions30m} />
           </div>
           {data.realtime.topActivePages.length > 0 && (
             <div className="mt-3 text-xs text-theme-text-muted">
@@ -513,25 +471,24 @@ export default function ReportTrafficTab() {
             Utenti) non hanno senso in quel caso e mostrano '—'. */}
         {data?.dataSource === 'internal' ? (
           <>
-            <KpiTile label="Visite (web)" value={'—'} sub="GA4 da configurare" valueClass="text-theme-text-muted" />
-            <KpiTile label="Pagine viste (web)" value={'—'} sub="GA4 da configurare" valueClass="text-theme-text-muted" />
-            <KpiTile label="Utenti (web)" value={'—'} sub="GA4 da configurare" valueClass="text-theme-text-muted" />
-            <KpiTile label="Clienti con telefono" value={data?.kpis?.calls ?? 0} sub="da CRM" valueClass="text-orange-400" />
-            <KpiTile label="Prenotazioni create" value={data?.kpis?.bookings ?? 0} delta={data?.kpis?.delta_visits} sub="da CRM" valueClass="text-violet-400" />
-            <KpiTile label="Fatturato pagato" value={data?.kpis?.revenue ?? 0} sub="da CRM" valueClass="text-dr7-gold" format="eur" />
+            <KpiTile label="Visite (web)" value={'—'} sub="GA4 da configurare" />
+            <KpiTile label="Pagine viste (web)" value={'—'} sub="GA4 da configurare" />
+            <KpiTile label="Utenti (web)" value={'—'} sub="GA4 da configurare" />
+            <KpiTile label="Clienti con telefono" value={data?.kpis?.calls ?? 0} sub="da CRM" />
+            <KpiTile label="Prenotazioni create" value={data?.kpis?.bookings ?? 0} delta={data?.kpis?.delta_visits} sub="da CRM" />
+            <KpiTile label="Fatturato pagato" value={data?.kpis?.revenue ?? 0} sub="da CRM" format="eur" />
           </>
         ) : (
           <>
-            <KpiTile label="Visite" value={data?.kpis?.visits ?? 0} delta={data?.kpis?.delta_visits} valueClass="text-cyan-400" />
-            <KpiTile label="Pagine viste" value={data?.kpis?.pageviews ?? 0} delta={data?.kpis?.delta_pageviews} valueClass="text-fuchsia-400" />
-            <KpiTile label="Utenti" value={data?.kpis?.users ?? 0} delta={data?.kpis?.delta_users} valueClass="text-emerald-400" />
+            <KpiTile label="Visite" value={data?.kpis?.visits ?? 0} delta={data?.kpis?.delta_visits} />
+            <KpiTile label="Pagine viste" value={data?.kpis?.pageviews ?? 0} delta={data?.kpis?.delta_pageviews} />
+            <KpiTile label="Utenti" value={data?.kpis?.users ?? 0} delta={data?.kpis?.delta_users} />
             {/* Click telefono: solo da gtag (phone_call event). Senza gtag,
                 non e' attribuibile al sito — mostriamo "—". */}
             <KpiTile
               label="Click telefono"
               value={data?.conversionsSource === 'ga4' && (data?.kpis?.calls ?? 0) > 0 ? (data?.kpis?.calls ?? 0) : '—'}
               sub={data?.conversionsSource === 'ga4' && (data?.kpis?.calls ?? 0) > 0 ? undefined : 'GA4 evento da installare'}
-              valueClass={data?.conversionsSource === 'ga4' && (data?.kpis?.calls ?? 0) > 0 ? 'text-orange-400' : 'text-theme-text-muted'}
             />
             {/* Prenotazioni dal sito: query DB con booking_source='website'.
                 Sono prenotazioni reali fatte sul sito pubblico, distinte da
@@ -540,7 +497,6 @@ export default function ReportTrafficTab() {
               label="Prenotazioni dal sito"
               value={data?.webAttributed?.bookings ?? 0}
               sub="da sito (DB)"
-              valueClass="text-violet-400"
             />
             {/* Fatturato sito: somma price_total dei booking_source='website'
                 pagati (paid/succeeded/completed). */}
@@ -548,134 +504,148 @@ export default function ReportTrafficTab() {
               label="Fatturato sito"
               value={data?.webAttributed?.revenue ?? 0}
               sub="da sito (DB)"
-              valueClass="text-dr7-gold"
               format="eur"
             />
           </>
         )}
       </div>
 
-      {/* Row 2: Traffic over time + Distribution + Funnel */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-        <Card title="Traffico nel tempo" className="lg:col-span-7">
-          <div className="h-64">
-            {data && data.traffic.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data.traffic} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
-                  <XAxis dataKey="day" stroke="rgba(255,255,255,0.3)" fontSize={10} />
-                  <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} />
-                  <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line type="monotone" dataKey="total"    name="Totale visite" stroke="#06b6d4" strokeWidth={3} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="organico" name="Organico" stroke="#10b981" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />
-                  <Line type="monotone" dataKey="ads"      name="Paid"     stroke="#a855f7" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />
-                  <Line type="monotone" dataKey="maps"     name="Maps"     stroke="#f59e0b" strokeWidth={1.5} dot={false} strokeDasharray="3 3" />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <EmptyState message={loading ? 'Caricamento…' : 'Nessuna visita nel periodo selezionato'} />
-            )}
-          </div>
-        </Card>
-
-        <Card title="Distribuzione canali" className="lg:col-span-3">
-          <div className="h-48 relative">
-            {data && data.distribution.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={data.distribution} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
-                    {data.distribution.map((d, i) => <Cell key={i} fill={colorFor(d.name)} />)}
-                  </Pie>
-                  <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => fmtInt(Number(v))} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <EmptyState message={loading ? '' : 'Nessun canale rilevato'} />
-            )}
-            {data && data.distribution.length > 0 && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <div className="text-lg font-bold text-theme-text-primary tabular-nums">{fmtInt(totalSessions)}</div>
-                <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Sessioni</div>
-              </div>
-            )}
-          </div>
-          <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
-            {(data?.distribution || []).map(d => {
-              const pctVal = totalSessions ? (d.value / totalSessions) * 100 : 0
-              return (
-                <div key={d.name} className="flex items-center justify-between text-[11px]">
-                  <span className="flex items-center gap-1.5 text-theme-text-secondary truncate">
-                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: colorFor(d.name) }} />
-                    <span className="truncate">{d.name}</span>
-                  </span>
-                  <span className="tabular-nums text-theme-text-primary flex-shrink-0">{pctVal.toFixed(1)}%</span>
-                </div>
-              )
-            })}
-          </div>
-        </Card>
-
-        <Card title="Funnel conversione" className="lg:col-span-2">
-          {data && data.funnel.length > 0 && data.funnel[0].value > 0 ? (
-            <>
-              <div className="space-y-2 mt-1">
-                {data.funnel.map((f, i) => {
-                  const pct = (f.value / data.funnel[0].value) * 100
-                  return (
-                    <div key={f.stage}>
-                      <div className="flex items-baseline justify-between text-[11px] mb-0.5">
-                        <span className="text-theme-text-muted truncate pr-1">{f.stage}</span>
-                        <span className="tabular-nums text-theme-text-primary font-medium">{fmtInt(f.value)}</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-theme-bg-tertiary overflow-hidden">
-                        <div className="h-full rounded-full bg-cyan-500" style={{ width: `${Math.max(pct, 1)}%`, opacity: 0.4 + 0.6 * (1 - i / data.funnel.length) }} />
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-              <div className="mt-3 pt-3 border-t border-theme-border">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-[10px] uppercase tracking-wider text-theme-text-muted">Conversione</span>
-                  <span className="text-base font-bold text-emerald-400 tabular-nums">
-                    {data.funnel[0].value
-                      ? ((data.funnel[data.funnel.length - 1].value / data.funnel[0].value) * 100).toFixed(2)
-                      : '0.00'}%
-                  </span>
-                </div>
-              </div>
-            </>
+      {/* Row 2 — 2026-08-27 (richiesta direzione): stessa forma del Report
+          Terra. Gli stessi numeri, in tabella invece che in grafico. */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <ReportCard title="Traffico nel tempo" className="lg:col-span-7">
+          {data && data.traffic.length > 0 ? (
+            <div className="max-h-80 overflow-y-auto">
+              <ReportTable
+                head={
+                  <>
+                    <th className="text-left px-4 py-3">Giorno</th>
+                    <th className="text-right px-4 py-3">Totale</th>
+                    <th className="text-right px-4 py-3">Organico</th>
+                    <th className="text-right px-4 py-3">Paid</th>
+                    <th className="text-right px-4 py-3">Maps</th>
+                  </>
+                }
+                foot={
+                  <ReportTotalRow>
+                    <td className="px-4 py-2">Totale</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{fmtInt(data.traffic.reduce((t, d) => t + (d.total || 0), 0))}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{fmtInt(data.traffic.reduce((t, d) => t + (d.organico || 0), 0))}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{fmtInt(data.traffic.reduce((t, d) => t + (d.ads || 0), 0))}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{fmtInt(data.traffic.reduce((t, d) => t + (d.maps || 0), 0))}</td>
+                  </ReportTotalRow>
+                }
+              >
+                {data.traffic.map(d => (
+                  <ReportRow key={d.day}>
+                    <td className="px-4 py-2 text-theme-text-primary tabular-nums">{d.day}</td>
+                    <td className="px-4 py-2 text-right tabular-nums font-semibold text-theme-text-primary">{fmtInt(d.total)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-theme-text-secondary">{fmtInt(d.organico)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-theme-text-secondary">{fmtInt(d.ads)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-theme-text-secondary">{fmtInt(d.maps)}</td>
+                  </ReportRow>
+                ))}
+              </ReportTable>
+            </div>
           ) : (
-            <EmptyState message={loading ? '' : 'Dati insufficienti'} />
+            <ReportEmpty message={loading ? 'Caricamento...' : 'Nessuna visita nel periodo selezionato'} />
           )}
-        </Card>
+        </ReportCard>
+
+        <ReportCard title="Distribuzione canali" right={`${fmtInt(totalSessions)} sessioni`} className="lg:col-span-3">
+          {data && data.distribution.length > 0 ? (
+            <ReportTable
+              head={
+                <>
+                  <th className="text-left px-4 py-3">Canale</th>
+                  <th className="text-right px-4 py-3">Sessioni</th>
+                  <th className="text-right px-4 py-3">%</th>
+                </>
+              }
+              foot={
+                <ReportTotalRow>
+                  <td className="px-4 py-2">Totale</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{fmtInt(totalSessions)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">100%</td>
+                </ReportTotalRow>
+              }
+            >
+              {data.distribution.map(d => (
+                <ReportRow key={d.name}>
+                  <td className="px-4 py-2 text-theme-text-primary">{d.name}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtInt(d.value)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted">
+                    {totalSessions ? `${((d.value / totalSessions) * 100).toFixed(1)}%` : '-'}
+                  </td>
+                </ReportRow>
+              ))}
+            </ReportTable>
+          ) : (
+            <ReportEmpty message={loading ? 'Caricamento...' : 'Nessun canale rilevato'} />
+          )}
+        </ReportCard>
+
+        <ReportCard title="Funnel conversione" className="lg:col-span-2">
+          {data && data.funnel.length > 0 && data.funnel[0].value > 0 ? (
+            <ReportTable
+              head={
+                <>
+                  <th className="text-left px-4 py-3">Fase</th>
+                  <th className="text-right px-4 py-3">Utenti</th>
+                  <th className="text-right px-4 py-3">%</th>
+                </>
+              }
+              foot={
+                <ReportTotalRow>
+                  <td className="px-4 py-2">Conversione</td>
+                  <td className="px-4 py-2" />
+                  <td className="px-4 py-2 text-right tabular-nums text-green-500">
+                    {((data.funnel[data.funnel.length - 1].value / data.funnel[0].value) * 100).toFixed(2)}%
+                  </td>
+                </ReportTotalRow>
+              }
+            >
+              {data.funnel.map(f => (
+                <ReportRow key={f.stage}>
+                  <td className="px-4 py-2 text-theme-text-primary">{f.stage}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtInt(f.value)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted">
+                    {((f.value / data.funnel[0].value) * 100).toFixed(1)}%
+                  </td>
+                </ReportRow>
+              ))}
+            </ReportTable>
+          ) : (
+            <ReportEmpty message={loading ? 'Caricamento...' : 'Dati insufficienti'} />
+          )}
+        </ReportCard>
       </div>
 
       {/* Top pages */}
-      <Card title="Pagine più viste">
+      <ReportCard title="Pagine più viste">
         {data && data.topPages.length > 0 ? (
-          <table className="w-full text-xs">
-            <thead className="text-theme-text-muted">
-              <tr>
-                <th className="text-left font-normal pb-1.5">Pagina</th>
-                <th className="text-right font-normal pb-1.5">Sessioni</th>
-                <th className="text-right font-normal pb-1.5">Pagine viste</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.topPages.map(p => (
-                <tr key={p.page} className="border-t border-theme-border/40">
-                  <td className="py-1.5 text-theme-text-primary truncate max-w-[420px]">{p.page}</td>
-                  <td className="py-1.5 text-right tabular-nums text-emerald-400">{fmtInt(p.sessions)}</td>
-                  <td className="py-1.5 text-right tabular-nums text-theme-text-secondary">{fmtInt(p.pageviews)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <ReportTable
+            head={
+              <>
+                <th className="text-left px-4 py-3">Pagina</th>
+                <th className="text-right px-4 py-3">Sessioni</th>
+                <th className="text-right px-4 py-3">Pagine viste</th>
+              </>
+            }
+          >
+            {data.topPages.map(p => (
+              <ReportRow key={p.page}>
+                <td className="px-4 py-2 text-theme-text-primary truncate max-w-[420px]">{p.page}</td>
+                <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{fmtInt(p.sessions)}</td>
+                <td className="px-4 py-2 text-right tabular-nums text-theme-text-secondary">{fmtInt(p.pageviews)}</td>
+              </ReportRow>
+            ))}
+          </ReportTable>
         ) : (
-          <EmptyState message={loading ? '' : 'Nessuna pagina visitata nel periodo'} />
+          <ReportEmpty message={loading ? 'Caricamento...' : 'Nessuna pagina visitata nel periodo'} />
         )}
-      </Card>
+      </ReportCard>
+
 
       {/* Footer */}
       <div className="text-[10px] text-theme-text-muted/50 text-center pt-2 border-t border-theme-border/40">

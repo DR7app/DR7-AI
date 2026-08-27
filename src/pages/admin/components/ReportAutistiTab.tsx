@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import { loadReportOverrides, applyOverrides, saveEditOverride, saveRemoveOverride, saveAddOverride, deleteOverrideByRow, deleteOverrideById, type LoadedOverrides } from '../../../utils/reportOverrides'
 import { ReportRowModal, type FieldDef } from './ReportRowModal'
 import NumeroTelefono from '../../../components/NumeroTelefono'
+import { ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty } from './ReportUI'
 
 interface AutistaLite { id: string; full_name: string; phone: string }
 
@@ -60,75 +61,6 @@ function KpiCard({ label, value, sub, accent }: {
       </div>
       <div className="text-2xl font-bold text-theme-text-primary tabular-nums">{value}</div>
       {sub && <div className="text-[10px] text-theme-text-muted truncate mt-1">{sub}</div>}
-    </div>
-  )
-}
-
-function Sparkline({ values, color = '#fbbf24' }: { values: number[]; color?: string }) {
-  if (values.length < 2) return <div className="h-24 flex items-center justify-center text-theme-text-muted text-xs">Dati insufficienti</div>
-  const max = Math.max(...values, 1)
-  const min = Math.min(...values, 0)
-  const range = max - min || 1
-  const w = 100, h = 40
-  const step = w / (values.length - 1)
-  const pts = values.map((v, i) => `${(i * step).toFixed(2)},${(h - ((v - min) / range) * h).toFixed(2)}`).join(' ')
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="w-full h-24">
-      <polyline fill="none" stroke={color} strokeWidth="1.2" points={pts} />
-      <polyline fill={`${color}22`} stroke="none" points={`0,${h} ${pts} ${w},${h}`} />
-    </svg>
-  )
-}
-
-function DonutChart({ data, total }: { data: { label: string; value: number; color: string }[]; total: number }) {
-  const size = 140, stroke = 22, radius = (size - stroke) / 2
-  const circ = 2 * Math.PI * radius
-  let offset = 0
-  return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="rgba(127,127,127,0.12)" strokeWidth={stroke} />
-        {data.filter(d => d.value > 0).map((d, i) => {
-          const frac = total > 0 ? d.value / total : 0
-          const dash = circ * frac
-          const el = (
-            <circle key={i} cx={size / 2} cy={size / 2} r={radius} fill="none"
-              stroke={d.color} strokeWidth={stroke}
-              strokeDasharray={`${dash} ${circ - dash}`} strokeDashoffset={-offset}
-            />
-          )
-          offset += dash
-          return el
-        })}
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className="text-2xl font-bold text-theme-text-primary">{total}</div>
-        <div className="text-[10px] uppercase tracking-wider text-theme-text-muted">Movimenti</div>
-      </div>
-    </div>
-  )
-}
-
-// Lista a barre orizzontali "Top N" (stesso stile dei Top 5 del Report Operatori).
-function TopBars({ items, color }: { items: { name: string; value: number }[]; color: string }) {
-  if (items.length === 0) return <div className="text-[11px] text-theme-text-muted">Nessun dato</div>
-  const max = Math.max(...items.map(x => x.value), 1)
-  return (
-    <div className="space-y-1.5">
-      {items.map((t, i) => {
-        const pct = Math.round((t.value / max) * 100)
-        return (
-          <div key={i}>
-            <div className="flex justify-between text-[11px]">
-              <span className="text-theme-text-primary truncate">{t.name}</span>
-              <span className="text-theme-text-muted tabular-nums">{t.value}</span>
-            </div>
-            <div className="h-1.5 bg-theme-bg-tertiary rounded overflow-hidden mt-0.5">
-              <div className="h-full rounded" style={{ width: `${pct}%`, background: color }} />
-            </div>
-          </div>
-        )
-      })}
     </div>
   )
 }
@@ -286,14 +218,19 @@ export default function ReportAutistiTab() {
 
   // ─── Dati derivati per i grafici ─────────────────────────────────────────────
   // Andamento movimenti per giorno (ordine cronologico).
-  const trendValues = useMemo(() => {
+  const trendPerGiorno = useMemo(() => {
     const m = new Map<string, number>()
     for (const r of rows) {
       if (!r.date) continue
       const day = String(r.date).slice(0, 10)
       m.set(day, (m.get(day) || 0) + 1)
     }
-    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(e => e[1])
+    return [...m.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([day, value]) => {
+        const [y, mo, d] = day.split('-')
+        return { day, label: `${d}/${mo}/${y}`, value }
+      })
   }, [rows])
 
   const topAutisti = useMemo(
@@ -372,37 +309,109 @@ export default function ReportAutistiTab() {
             <KpiCard label="Completamento" value={`${tassoCompletamento}%`} accent={tassoCompletamento >= 80 ? 'emerald' : 'rose'} />
           </div>
 
-          {/* 4 WIDGETS ROW */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-            <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-3">
-              <div className="text-xs uppercase tracking-wider text-theme-text-muted mb-2">Andamento Movimenti</div>
-              <Sparkline values={trendValues} color="#fbbf24" />
-              <div className="text-[10px] text-theme-text-muted mt-1">{range.from || '—'} → {range.to || 'oggi'}</div>
-            </div>
-            <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-3">
-              <div className="text-xs uppercase tracking-wider text-theme-text-muted mb-2">Top 5 Autisti per Movimenti</div>
-              <TopBars items={topAutisti} color="#d4af37" />
-            </div>
-            <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-3">
-              <div className="text-xs uppercase tracking-wider text-theme-text-muted mb-2">Top 5 Veicoli più Movimentati</div>
-              <TopBars items={topVeicoli} color="#10b981" />
-            </div>
-            <div className="bg-theme-bg-secondary border border-theme-border rounded-lg p-3">
-              <div className="text-xs uppercase tracking-wider text-theme-text-muted mb-2">Distribuzione per Stato</div>
-              <div className="flex items-center gap-3">
-                <DonutChart data={statoDist} total={rows.length} />
-                <div className="flex-1 space-y-1 text-[11px]">
-                  {statoDist.length === 0 && <div className="text-theme-text-muted">Nessun dato</div>}
-                  {statoDist.slice(0, 6).map((d, i) => (
-                    <div key={i} className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full inline-block" style={{ background: d.color }} />
-                      <span className="text-theme-text-primary truncate">{d.label}</span>
-                      <span className="ml-auto text-theme-text-muted tabular-nums">{d.value}</span>
-                    </div>
-                  ))}
+          {/* Ripartizioni — 2026-08-27 (richiesta direzione): tabelle in stile
+              Report Terra, niente sparkline, barre o ciambelle. */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <ReportCard title="Andamento Movimenti" right={`${range.from || '—'} → ${range.to || 'oggi'}`}>
+              {trendPerGiorno.length === 0 ? (
+                <ReportEmpty message="Nessun dato" />
+              ) : (
+                <div className="max-h-64 overflow-y-auto">
+                  <ReportTable
+                    head={
+                      <>
+                        <th className="text-left px-4 py-3">Giorno</th>
+                        <th className="text-right px-4 py-3">Movimenti</th>
+                      </>
+                    }
+                  >
+                    {trendPerGiorno.map(d => (
+                      <ReportRow key={d.day}>
+                        <td className="px-4 py-2 text-theme-text-primary tabular-nums">{d.label}</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{d.value}</td>
+                      </ReportRow>
+                    ))}
+                  </ReportTable>
                 </div>
-              </div>
-            </div>
+              )}
+            </ReportCard>
+
+            <ReportCard title="Top 5 Autisti per Movimenti">
+              {topAutisti.length === 0 ? (
+                <ReportEmpty message="Nessun dato" />
+              ) : (
+                <ReportTable
+                  head={
+                    <>
+                      <th className="text-left px-4 py-3">Autista</th>
+                      <th className="text-right px-4 py-3">Movimenti</th>
+                    </>
+                  }
+                >
+                  {topAutisti.map((a: { name: string; value: number }) => (
+                    <ReportRow key={a.name}>
+                      <td className="px-4 py-2 text-theme-text-primary">{a.name}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{a.value}</td>
+                    </ReportRow>
+                  ))}
+                </ReportTable>
+              )}
+            </ReportCard>
+
+            <ReportCard title="Top 5 Veicoli più Movimentati">
+              {topVeicoli.length === 0 ? (
+                <ReportEmpty message="Nessun dato" />
+              ) : (
+                <ReportTable
+                  head={
+                    <>
+                      <th className="text-left px-4 py-3">Veicolo</th>
+                      <th className="text-right px-4 py-3">Movimenti</th>
+                    </>
+                  }
+                >
+                  {topVeicoli.map(v => (
+                    <ReportRow key={v.name}>
+                      <td className="px-4 py-2 text-theme-text-primary">{v.name}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{v.value}</td>
+                    </ReportRow>
+                  ))}
+                </ReportTable>
+              )}
+            </ReportCard>
+
+            <ReportCard title="Distribuzione per Stato" right={`${rows.length} movimenti`}>
+              {statoDist.length === 0 ? (
+                <ReportEmpty message="Nessun dato" />
+              ) : (
+                <ReportTable
+                  head={
+                    <>
+                      <th className="text-left px-4 py-3">Stato</th>
+                      <th className="text-right px-4 py-3">Movimenti</th>
+                      <th className="text-right px-4 py-3">%</th>
+                    </>
+                  }
+                  foot={
+                    <ReportTotalRow>
+                      <td className="px-4 py-2">Totale</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{rows.length}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">100%</td>
+                    </ReportTotalRow>
+                  }
+                >
+                  {statoDist.map(d => (
+                    <ReportRow key={d.label}>
+                      <td className="px-4 py-2 text-theme-text-primary">{d.label}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-theme-text-primary">{d.value}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-theme-text-muted">
+                        {rows.length > 0 ? `${Math.round((d.value / rows.length) * 100)}%` : '-'}
+                      </td>
+                    </ReportRow>
+                  ))}
+                </ReportTable>
+              )}
+            </ReportCard>
           </div>
 
           {/* Per-autista summary */}

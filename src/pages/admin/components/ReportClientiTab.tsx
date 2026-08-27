@@ -1,8 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import {
-  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip,
-} from 'recharts'
-import { useTheme } from '../../../contexts/ThemeContext'
+import { ReportCard, ReportTable, ReportRow, ReportTotalRow, ReportEmpty } from './ReportUI'
 import ReportClienteModal from './ReportClienteModal'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import type { ClientTier } from '../../../contexts/ClientStatusContext'
@@ -192,8 +189,6 @@ const COLUMN_GROUPS: ColumnGroup[] = [
 
 // Palette categoriale verificata (sei controlli, chiaro e scuro): l'ordine e'
 // fisso, ogni servizio tiene sempre il suo colore anche se un altro sparisce.
-const SERVICE_COLORS = ['#8b5cf6', '#16a34a', '#0891b2', '#ec4899', '#d97706']
-
 const SORT_OPTIONS: { value: SortField; label: string }[] = [
   { value: 'totale_spesa', label: 'Spesa Totale' },
   { value: 'totale_prenotazioni', label: 'Prenotazioni Totali' },
@@ -214,8 +209,6 @@ export default function ReportClientiTab() {
   const [sortField, setSortField] = useState<SortField>('totale_spesa')
   const [sortAsc, setSortAsc] = useState(false)
   const [openCustomerId, setOpenCustomerId] = useState<string | null>(null)
-  const { theme } = useTheme()
-  const isDark = theme === 'dark'
 
   // #38 Modifica manuale report
   const [overrides, setOverrides] = useState<LoadedOverrides>({ raw: [], removed: new Set(), edits: new Map(), added: [], notesByRow: new Map() })
@@ -363,9 +356,7 @@ export default function ReportClientiTab() {
       { name: 'Lavaggi', value: adjustedClienti.reduce((s, c) => s + c.lavaggi_spesa, 0) },
       { name: 'Meccanica', value: adjustedClienti.reduce((s, c) => s + c.meccanica_spesa, 0) },
     ]
-    // Il colore segue il servizio, non la posizione: chi ha 0 sparisce dal
-    // grafico ma gli altri non cambiano tinta.
-    return rows.map((r, i) => ({ ...r, color: SERVICE_COLORS[i] })).filter(r => r.value > 0)
+    return rows.filter(r => r.value > 0)
   }, [adjustedClienti])
 
   const nuoviClienti = useMemo(() => {
@@ -469,166 +460,145 @@ export default function ReportClientiTab() {
             </div>
           </div>
 
-          {/* Classifiche: Top spesa + Negativo */}
+          {/* Classifiche: Top spesa + Negativo
+              2026-08-27 (richiesta direzione): stessa forma del Report Terra —
+              tabelle, non barre colorate ne' grafici. */}
           {(topSpenders.length > 0 || negativi.length > 0) && (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-theme-border bg-dr7-gold/5">
-                  <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider">Top Clienti — Spesa</h3>
-                  <span className="text-[11px] text-theme-text-muted">primi {topSpenders.length}</span>
-                </div>
-                <div className="divide-y divide-theme-border">
-                  {topSpenders.map((c, i) => {
-                    const quota = spesaTotaleFiltrata > 0 ? (c.totale_spesa / spesaTotaleFiltrata) * 100 : 0
-                    const medal = i === 0 ? 'bg-dr7-gold text-black' : i === 1 ? 'bg-zinc-300 text-black' : i === 2 ? 'bg-amber-700 text-white' : 'bg-theme-bg-tertiary text-theme-text-muted'
-                    return (
-                      <button
-                        key={c.customerId || i}
-                        onClick={() => c.customerId && setOpenCustomerId(c.customerId)}
-                        className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-theme-bg-tertiary/40 transition-colors"
-                      >
-                        <span className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold ${medal}`}>{i + 1}</span>
-                        <span className="flex-1 min-w-0">
-                          <span className="block text-sm font-medium text-theme-text-primary truncate">{c.name}</span>
-                          <span className="block text-[11px] text-theme-text-muted truncate">
-                            {c.totale_prenotazioni} pren. · {c.totale_giorni}g
-                            {c.email !== '-' ? ` · ${c.email}` : ''}
-                          </span>
-                          <span className="block mt-1 h-1 rounded-full bg-theme-bg-tertiary overflow-hidden">
-                            <span className="block h-full bg-dr7-gold" style={{ width: `${Math.min(100, quota)}%` }} />
-                          </span>
-                        </span>
-                        <span className="text-right shrink-0">
-                          <span className="block text-sm font-bold text-dr7-gold">{formatCurrency(c.totale_spesa)}</span>
-                          <span className="block text-[11px] text-theme-text-muted">{quota.toFixed(1)}%</span>
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-theme-border bg-red-500/5">
-                  <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider">Negativo — Danni, Penali, Annullate</h3>
-                  <span className="text-[11px] text-theme-text-muted">primi {negativi.length}</span>
-                </div>
-                {negativi.length === 0 ? (
-                  <div className="px-4 py-6 text-center text-sm text-theme-text-muted">Nessun cliente con danni, penali o annullate.</div>
+              <ReportCard title="Top Clienti — Spesa" right={`primi ${topSpenders.length}`}>
+                {topSpenders.length === 0 ? (
+                  <ReportEmpty message="Nessun cliente nel periodo." />
                 ) : (
-                  <div className="divide-y divide-theme-border">
-                    {negativi.map(({ c, negativo }, i) => (
-                      <button
-                        key={c.customerId || i}
-                        onClick={() => c.customerId && setOpenCustomerId(c.customerId)}
-                        className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-theme-bg-tertiary/40 transition-colors"
-                      >
-                        <span className="w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold bg-red-500/15 text-red-400">{i + 1}</span>
-                        <span className="flex-1 min-w-0">
-                          <span className="block text-sm font-medium text-theme-text-primary truncate">{c.name}</span>
-                          <span className="block text-[11px] text-theme-text-muted truncate">
-                            {c.danni_eventi > 0 ? `${c.danni_eventi} danni · ` : ''}
-                            {c.penali_eventi > 0 ? `${c.penali_eventi} penali · ` : ''}
-                            {c.annullate_count} annullate
-                          </span>
-                        </span>
-                        <span className="text-right shrink-0">
-                          <span className="block text-sm font-bold text-red-400">{negativo > 0 ? `- ${formatCurrency(negativo)}` : '-'}</span>
-                          <span className="block text-[11px] text-theme-text-muted">su {formatCurrency(c.totale_spesa)}</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+                  <ReportTable
+                    head={
+                      <>
+                        <th className="text-left px-4 py-3">#</th>
+                        <th className="text-left px-4 py-3">Cliente</th>
+                        <th className="text-center px-4 py-3">Pren.</th>
+                        <th className="text-center px-4 py-3">Giorni</th>
+                        <th className="text-right px-4 py-3">Spesa</th>
+                        <th className="text-right px-4 py-3">Quota</th>
+                      </>
+                    }
+                  >
+                    {topSpenders.map((c, i) => {
+                      const quota = spesaTotaleFiltrata > 0 ? (c.totale_spesa / spesaTotaleFiltrata) * 100 : 0
+                      return (
+                        <ReportRow key={c.customerId || i} onClick={() => c.customerId && setOpenCustomerId(c.customerId)}>
+                          <td className="px-4 py-3 tabular-nums text-theme-text-muted">{i + 1}</td>
+                          <td className="px-4 py-3">
+                            <span className="block font-medium text-theme-text-primary">{c.name}</span>
+                            {c.email !== '-' && <span className="block text-xs text-theme-text-muted">{c.email}</span>}
+                          </td>
+                          <td className="px-4 py-3 text-center tabular-nums text-theme-text-primary">{c.totale_prenotazioni}</td>
+                          <td className="px-4 py-3 text-center tabular-nums text-theme-text-primary">{c.totale_giorni}</td>
+                          <td className="px-4 py-3 text-right tabular-nums font-bold text-dr7-gold">{formatCurrency(c.totale_spesa)}</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-theme-text-muted">{quota.toFixed(1)}%</td>
+                        </ReportRow>
+                      )
+                    })}
+                  </ReportTable>
                 )}
-              </div>
+              </ReportCard>
+
+              <ReportCard title="Negativo — Danni, Penali, Annullate" right={`primi ${negativi.length}`}>
+                {negativi.length === 0 ? (
+                  <ReportEmpty message="Nessun cliente con danni, penali o annullate." />
+                ) : (
+                  <ReportTable
+                    head={
+                      <>
+                        <th className="text-left px-4 py-3">#</th>
+                        <th className="text-left px-4 py-3">Cliente</th>
+                        <th className="text-center px-4 py-3">Danni</th>
+                        <th className="text-center px-4 py-3">Penali</th>
+                        <th className="text-center px-4 py-3">Annullate</th>
+                        <th className="text-right px-4 py-3">Negativo</th>
+                        <th className="text-right px-4 py-3">Spesa</th>
+                      </>
+                    }
+                  >
+                    {negativi.map(({ c, negativo }, i) => (
+                      <ReportRow key={c.customerId || i} onClick={() => c.customerId && setOpenCustomerId(c.customerId)}>
+                        <td className="px-4 py-3 tabular-nums text-theme-text-muted">{i + 1}</td>
+                        <td className="px-4 py-3 font-medium text-theme-text-primary">{c.name}</td>
+                        <td className="px-4 py-3 text-center tabular-nums text-theme-text-primary">{c.danni_eventi || '-'}</td>
+                        <td className="px-4 py-3 text-center tabular-nums text-theme-text-primary">{c.penali_eventi || '-'}</td>
+                        <td className="px-4 py-3 text-center tabular-nums text-theme-text-primary">{c.annullate_count || '-'}</td>
+                        <td className="px-4 py-3 text-right tabular-nums font-bold text-red-500">{negativo > 0 ? `− ${formatCurrency(negativo)}` : '-'}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-theme-text-muted">{formatCurrency(c.totale_spesa)}</td>
+                      </ReportRow>
+                    ))}
+                  </ReportTable>
+                )}
+              </ReportCard>
             </div>
           )}
 
-          {/* Grafici */}
+          {/* Ripartizioni: tabelle, non grafici */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            {/* Ripartizione spesa per servizio */}
-            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
-              <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider mb-1">Spesa per servizio</h3>
-              <p className="text-[11px] text-theme-text-muted mb-3">Totale {formatCurrency(spesaTotaleFiltrata)}</p>
+            <ReportCard title="Spesa per Servizio" right={`Totale ${formatCurrency(spesaTotaleFiltrata)}`}>
               {serviceMix.length === 0 ? (
-                <div className="h-[220px] flex items-center justify-center text-sm text-theme-text-muted">Nessuna spesa nel periodo</div>
+                <ReportEmpty message="Nessuna spesa nel periodo" />
               ) : (
-                <div className="flex flex-col sm:flex-row items-center gap-4">
-                  <div className="w-full sm:w-1/2 h-[220px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={serviceMix}
-                          dataKey="value"
-                          cx="50%" cy="50%"
-                          innerRadius="58%"
-                          outerRadius="92%"
-                          paddingAngle={2}
-                          strokeWidth={2}
-                          stroke={isDark ? '#09090b' : '#ffffff'}
-                        >
-                          {serviceMix.map(r => <Cell key={r.name} fill={r.color} />)}
-                        </Pie>
-                        <Tooltip
-                          formatter={(v: unknown) => formatCurrency(Number(v) || 0)}
-                          contentStyle={{
-                            background: isDark ? '#09090b' : '#ffffff',
-                            border: '1px solid rgba(120,120,120,0.35)',
-                            borderRadius: 8,
-                            fontSize: 12,
-                            color: isDark ? '#fff' : '#18181b',
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  {/* Legenda con valori: l'identita' non e' mai solo il colore */}
-                  <ul className="w-full sm:w-1/2 space-y-1.5">
-                    {serviceMix.map(r => (
-                      <li key={r.name} className="flex items-center justify-between text-xs">
-                        <span className="flex items-center gap-2 text-theme-text-secondary">
-                          <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: r.color }} />
-                          {r.name}
-                        </span>
-                        <span className="text-theme-text-primary font-semibold tabular-nums">
-                          {formatCurrency(r.value)}
-                          <span className="text-theme-text-muted font-normal ml-1.5">
-                            {spesaTotaleFiltrata > 0 ? `${((r.value / spesaTotaleFiltrata) * 100).toFixed(0)}%` : ''}
-                          </span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <ReportTable
+                  head={
+                    <>
+                      <th className="text-left px-4 py-3">Servizio</th>
+                      <th className="text-right px-4 py-3">Spesa</th>
+                      <th className="text-right px-4 py-3">% del Totale</th>
+                    </>
+                  }
+                  foot={
+                    <ReportTotalRow>
+                      <td className="px-4 py-3">Totale</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-dr7-gold">{formatCurrency(spesaTotaleFiltrata)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">100%</td>
+                    </ReportTotalRow>
+                  }
+                >
+                  {serviceMix.map(r => (
+                    <ReportRow key={r.name}>
+                      <td className="px-4 py-3 font-medium text-theme-text-primary">{r.name}</td>
+                      <td className="px-4 py-3 text-right tabular-nums font-semibold text-theme-text-primary">{formatCurrency(r.value)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-theme-text-muted">
+                        {spesaTotaleFiltrata > 0 ? `${((r.value / spesaTotaleFiltrata) * 100).toFixed(1)}%` : '-'}
+                      </td>
+                    </ReportRow>
+                  ))}
+                </ReportTable>
               )}
-            </div>
+            </ReportCard>
 
-            {/* Nuovi clienti per mese */}
-            <div className="bg-theme-bg-secondary/50 rounded-xl border border-theme-border p-4">
-              <h3 className="text-sm font-bold text-theme-text-primary uppercase tracking-wider mb-1">Nuovi clienti</h3>
-              <p className="text-[11px] text-theme-text-muted mb-3">Per mese di prima prenotazione — ultimi 12 mesi</p>
-              <div className="h-[220px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={nuoviClienti} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: isDark ? '#a1a1aa' : '#71717a' }} axisLine={false} tickLine={false} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: isDark ? '#a1a1aa' : '#71717a' }} axisLine={false} tickLine={false} />
-                    <Tooltip
-                      cursor={{ fill: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)' }}
-                      formatter={(v: unknown) => [`${Number(v) || 0} clienti`, ''] as [string, string]}
-                      contentStyle={{
-                        background: isDark ? '#09090b' : '#ffffff',
-                        border: '1px solid rgba(120,120,120,0.35)',
-                        borderRadius: 8,
-                        fontSize: 12,
-                        color: isDark ? '#fff' : '#18181b',
-                      }}
-                    />
-                    <Bar dataKey="clienti" fill={SERVICE_COLORS[2]} radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            <ReportCard title="Nuovi Clienti" right="prima prenotazione — ultimi 12 mesi">
+              {nuoviClienti.length === 0 ? (
+                <ReportEmpty message="Nessun nuovo cliente" />
+              ) : (
+                <ReportTable
+                  head={
+                    <>
+                      <th className="text-left px-4 py-3">Mese</th>
+                      <th className="text-right px-4 py-3">Nuovi Clienti</th>
+                    </>
+                  }
+                  foot={
+                    <ReportTotalRow>
+                      <td className="px-4 py-3">Totale</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{nuoviClienti.reduce((t, m) => t + m.clienti, 0)}</td>
+                    </ReportTotalRow>
+                  }
+                >
+                  {nuoviClienti.map(m => (
+                    <ReportRow key={m.label}>
+                      <td className="px-4 py-3 font-medium text-theme-text-primary">{m.label}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-theme-text-primary">{m.clienti}</td>
+                    </ReportRow>
+                  ))}
+                </ReportTable>
+              )}
+            </ReportCard>
           </div>
+
 
           {/* Search + Sort */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
