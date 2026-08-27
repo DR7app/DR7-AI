@@ -683,6 +683,10 @@ export interface PaymentSuccessCopy {
   success_title_it: string; success_title_en: string;
   body_generic_it: string; body_generic_en: string;
   body_dr7_club_it: string; body_dr7_club_en: string;
+  // Pre-autorizzazione cauzione (link inviato dal gestionale): l'importo e'
+  // bloccato sulla carta, NON addebitato. Titolo e corpo dedicati.
+  success_title_cauzione_it: string; success_title_cauzione_en: string;
+  body_cauzione_it: string; body_cauzione_en: string;
   body_membership_template_it: string; body_membership_template_en: string;   // {tierName} {cycle}
   body_wallet_template_it: string; body_wallet_template_en: string;           // {packageName} {amount}
   billing_cycle_monthly_it: string; billing_cycle_monthly_en: string;
@@ -1887,6 +1891,9 @@ export const INITIAL_PAYMENT_SUCCESS: PaymentSuccessCopy = {
   body_generic_en: 'Your payment has been processed successfully.',
   body_dr7_club_it: 'La tua iscrizione al DR7 Club è stata attivata con successo! Benvenuto nel club.',
   body_dr7_club_en: 'Your DR7 Club membership has been activated successfully! Welcome to the club.',
+  success_title_cauzione_it: 'Cauzione Pre-autorizzata', success_title_cauzione_en: 'Deposit Pre-authorized',
+  body_cauzione_it: 'La pre-autorizzazione della cauzione e\' andata a buon fine. L\'importo risulta bloccato sulla tua carta, non addebitato: viene sbloccato al termine del noleggio, salvo addebiti.',
+  body_cauzione_en: 'The deposit pre-authorization was successful. The amount is held on your card, not charged: it is released at the end of the rental, unless charges apply.',
   body_membership_template_it: 'La tua membership {tierName} ({cycle}) è stata attivata con successo!',
   body_membership_template_en: 'Your {tierName} membership ({cycle}) has been activated successfully!',
   body_wallet_template_it: 'La tua ricarica {packageName} è stata completata! €{amount} sono stati aggiunti al tuo wallet.',
