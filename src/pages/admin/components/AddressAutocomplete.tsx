@@ -121,11 +121,42 @@ export default function AddressAutocomplete({
     }, 300)
   }
 
-  const formatAddress = (result: NominatimResult): string => {
+  // 2026-08-27: il numero civico digitato non deve sparire.
+  //
+  // OSM non ha il civico per moltissime vie: cercando "Via Roma 15, Cagliari"
+  // Nominatim risponde con il risultato a livello di STRADA (address.road
+  // valorizzato, house_number assente). Selezionandolo il campo diventava
+  // "Via Roma, 09124 Cagliari" e l'operatore non riusciva piu' a mettere il
+  // civico (ogni tentativo veniva riscritto alla selezione successiva).
+  // Se il civico e' nel testo digitato e il risultato scelto e' una via senza
+  // house_number, lo riportiamo noi nel testo formattato. La distanza resta
+  // calcolata sul centro della via: differenza irrilevante per il costo di
+  // consegna.
+  const houseNumberFromQuery = (query: string): string => {
+    const tokens = query.split(/[\s,]+/).filter(Boolean)
+    // 5 cifre = CAP, non un civico. Ammessi 12, 12A, 12/A.
+    const candidates = tokens.filter(t => /^\d{1,4}[/-]?[A-Za-z]?$/.test(t) && !/^\d{5}$/.test(t))
+    return candidates.length > 0 ? candidates[candidates.length - 1] : ''
+  }
+
+  const houseNumberFor = (result: NominatimResult, query: string): string => {
+    const a = result.address
+    if (!a) return ''
+    if (a.house_number) return a.house_number
+    if (!a.road) return ''
+    const typed = houseNumberFromQuery(query)
+    if (!typed) return ''
+    // "Via 4 Novembre": il numero fa parte del nome della via, non e' un civico.
+    if (a.road.split(/[\s,]+/).some(t => t.toLowerCase() === typed.toLowerCase())) return ''
+    return typed
+  }
+
+  const formatAddress = (result: NominatimResult, query = ''): string => {
     const a = result.address
     if (!a) return result.display_name
     const parts: string[] = []
-    if (a.road) parts.push(a.house_number ? `${a.road} ${a.house_number}` : a.road)
+    const houseNum = houseNumberFor(result, query)
+    if (a.road) parts.push(houseNum ? `${a.road} ${houseNum}` : a.road)
     const city = a.city || a.town || a.village || a.municipality || ''
     if (a.postcode && city) parts.push(`${a.postcode} ${city}`)
     else if (city) parts.push(city)
@@ -133,10 +164,10 @@ export default function AddressAutocomplete({
     return parts.length > 0 ? parts.join(', ') : result.display_name
   }
 
-  const extractParts = (result: NominatimResult): AddressParts => {
+  const extractParts = (result: NominatimResult, query = ''): AddressParts => {
     const a = result.address || {}
     const road = a.road || ''
-    const houseNum = a.house_number || ''
+    const houseNum = houseNumberFor(result, query)
     const street = houseNum ? `${road} ${houseNum}` : road
     const city = a.city || a.town || a.village || a.municipality || ''
     const zip = a.postcode || ''
@@ -148,7 +179,7 @@ export default function AddressAutocomplete({
       city,
       zip,
       province,
-      full: formatAddress(result),
+      full: formatAddress(result, query),
       lat: Number.isFinite(lat) ? lat : undefined,
       lon: Number.isFinite(lon) ? lon : undefined,
     }
@@ -156,9 +187,12 @@ export default function AddressAutocomplete({
 
   const handleSelect = (result: NominatimResult) => {
     skipFetchRef.current = true
-    const formatted = formatAddress(result)
+    // `value` e' ancora il testo digitato dall'operatore: e' li' che sta il
+    // civico quando OSM non ce l'ha.
+    const typedQuery = value
+    const formatted = formatAddress(result, typedQuery)
     onChange(formatted)
-    if (onSelectParts) onSelectParts(extractParts(result))
+    if (onSelectParts) onSelectParts(extractParts(result, typedQuery))
     setSuggestions([])
     setStatus('idle')
     setIsOpen(false)
@@ -228,7 +262,7 @@ export default function AddressAutocomplete({
                   : 'hover:bg-theme-bg-secondary/50 border-l-4 border-l-transparent'
               }`}
             >
-              <span className="text-theme-text-primary">{formatAddress(result)}</span>
+              <span className="text-theme-text-primary">{formatAddress(result, value)}</span>
             </li>
           ))}
         </ul>
