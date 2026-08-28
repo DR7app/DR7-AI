@@ -962,6 +962,86 @@ export default function FatturaTab() {
     [invoices]
   )
 
+  /**
+   * 28/08/2026 (direzione): via dal gestionale le bozze dei VEICOLI DI TEST.
+   * Non partiranno mai — il blocco SDI e' voluto — e riempivano il tab e
+   * l'avviso di invio in blocco. Si toccano SOLO le bozze mai trasmesse
+   * agganciate a una prenotazione su veicolo di test (nome 'test' o targa
+   * che inizia per TEST): stesso criterio del guard in send-invoice-to-sdi.
+   */
+  async function handleDeleteBozzeTest() {
+    const bozzeConBooking = draftInvoices.filter(i => i.booking_id)
+    if (bozzeConBooking.length === 0) {
+      toast('Nessuna bozza collegata a una prenotazione')
+      return
+    }
+
+    const bookingIds = Array.from(new Set(bozzeConBooking.map(i => i.booking_id as string)))
+    const testBookingIds = new Set<string>()
+    try {
+      // A blocchi: `in()` con centinaia di id fa saltare la query.
+      for (let i = 0; i < bookingIds.length; i += 100) {
+        const blocco = bookingIds.slice(i, i + 100)
+        const { data, error } = await supabase
+          .from('bookings')
+          .select('id, vehicle_name, vehicle_plate, booking_details')
+          .in('id', blocco)
+        if (error) throw error
+        for (const b of data || []) {
+          const nome = String((b as any).vehicle_name || (b as any).booking_details?.vehicle?.name || '').toLowerCase()
+          const targa = String((b as any).vehicle_plate || (b as any).booking_details?.vehicle_plate || (b as any).booking_details?.vehicle?.plate || '').toUpperCase()
+          if (nome === 'test' || targa.startsWith('TEST')) testBookingIds.add(String((b as any).id))
+        }
+      }
+    } catch (err) {
+      console.error('[Fatture] lettura prenotazioni di test fallita:', err)
+      toast.error('Non riesco a leggere le prenotazioni collegate: riprova')
+      return
+    }
+
+    const daEliminare = bozzeConBooking.filter(i => testBookingIds.has(i.booking_id as string))
+    if (daEliminare.length === 0) {
+      toast('Nessuna bozza di veicoli di test da eliminare')
+      return
+    }
+
+    const numeri = daEliminare.map(i => i.numero_fattura).join(', ')
+    const proceed = window.confirm(
+      `Eliminare ${daEliminare.length} bozza/e di VEICOLI DI TEST?\n\n${numeri}\n\n` +
+      `Nessuna di queste e' mai stata trasmessa al SDI. L'operazione e' irreversibile.`
+    )
+    if (!proceed) return
+
+    gatedAction(
+      'fattura.delete',
+      `Eliminare ${daEliminare.length} bozze di veicoli di test: azione irreversibile.`,
+      async () => {
+        try {
+          const ids = daEliminare.map(i => i.id)
+          const { error } = await supabase.from('fatture').delete().in('id', ids)
+          if (error) throw error
+          toast.success(`${daEliminare.length} bozze di test eliminate`)
+          logAdminAction('bulk_delete_fatture', 'fattura', ids.join(','), {
+            count: daEliminare.length,
+            motivo: 'bozze di veicoli di test',
+            fatture: numeri,
+          })
+          loadInvoices()
+        } catch (error) {
+          console.error('Error deleting test drafts:', error)
+          toast.error('Errore durante l\'eliminazione delle bozze di test')
+        }
+      },
+      {
+        gate: { 'Motivo OTP': 'Eliminazione bozze di veicoli di test — irreversibile.' },
+        operation: {
+          'Bozze da eliminare': String(daEliminare.length),
+          'Numeri': numeri,
+        },
+      },
+    )
+  }
+
   async function handleSendAllDrafts() {
     const daInviare = draftInvoices
     if (daInviare.length === 0) {
@@ -1029,6 +1109,7 @@ export default function FatturaTab() {
   // sull'invio SDI = due trasmissioni all'Agenzia delle Entrate.
   const [inviaSdi, inviandoSdi] = useSingleFlight(handleSendToSDI)
   const [inviaTutteLeBozze, inviandoBozze] = useSingleFlight(handleSendAllDrafts)
+  const [eliminaBozzeTest, eliminandoBozzeTest] = useSingleFlight(handleDeleteBozzeTest)
 
   if (loading) {
     return (
@@ -1090,6 +1171,16 @@ export default function FatturaTab() {
                 className="px-4 py-2 bg-dr7-gold hover:opacity-90 text-black rounded-full font-semibold transition-colors"
               >
                 {inviandoBozze ? 'Invio in corso...' : `Invia tutto a SDI (${draftInvoices.length})`}
+              </button>
+            )}
+            {draftInvoices.length > 0 && (
+              <button
+                onClick={() => eliminaBozzeTest()}
+                disabled={eliminandoBozzeTest}
+                title="Elimina le bozze agganciate a una prenotazione su veicolo di test: non partiranno mai al SDI."
+                className="px-4 py-2 rounded-full font-medium transition-colors bg-theme-bg-tertiary hover:bg-theme-bg-hover text-theme-text-primary border border-theme-border disabled:opacity-50"
+              >
+                {eliminandoBozzeTest ? 'Eliminazione...' : 'Elimina bozze veicoli di test'}
               </button>
             )}
             <button
