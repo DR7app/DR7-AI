@@ -1284,14 +1284,27 @@ export default function FatturaTab() {
                   const due = getInvoiceDueDate(invoice)
                   const dueLabel = due ? due.toLocaleDateString('it-IT') : '—'
                   const sdiStatus = invoice.sdi_status || (isNotaCredito ? null : 'draft')
-                  const sdiLabel = !sdiStatus ? '—'
+                  // 2026-08-28: una fattura ferma per dati mancanti NON e' una
+                  // bozza qualunque: non e' mai partita e non partira' finche'
+                  // l'anagrafica resta incompleta. Si legge come SCARTATA (in
+                  // rosso, col motivo), non come un grigio "Bozza" che passa
+                  // inosservato. Il valore in DB resta 'draft' di proposito:
+                  // 'rejected'/'error' farebbero assegnare un NUOVO numero al
+                  // reinvio, e questa fattura non e' mai uscita.
+                  const sdiBlockReason = (sdiStatus === 'draft' || sdiStatus === 'error')
+                    ? String(invoice.sdi_response?.auto_send_error || '').trim()
+                    : ''
+                  const scartataLocale = sdiStatus === 'draft' && !!sdiBlockReason
+                  const sdiLabel = scartataLocale ? 'Scartata (dati mancanti)'
+                    : !sdiStatus ? '—'
                     : sdiStatus === 'accepted' ? 'Accettata'
                     : sdiStatus === 'sent' ? 'Inviata'
                     : sdiStatus === 'sending' ? 'Invio…'
                     : sdiStatus === 'rejected' || sdiStatus === 'scartata' ? 'Scartata'
                     : sdiStatus === 'error' ? 'Errore'
                     : 'Bozza'
-                  const sdiClass = !sdiStatus ? 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'
+                  const sdiClass = scartataLocale ? 'bg-rose-500/15 text-rose-300 border-rose-500/40'
+                    : !sdiStatus ? 'bg-theme-bg-tertiary text-theme-text-muted border-theme-border'
                     : sdiStatus === 'accepted' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                     : sdiStatus === 'sent' ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
                     : sdiStatus === 'sending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
@@ -1304,9 +1317,6 @@ export default function FatturaTab() {
                     : overdue ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
                     : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
                   const open = openActionsId === invoice.id
-                  const sdiBlockReason = (sdiStatus === 'draft' || sdiStatus === 'error')
-                    ? String(invoice.sdi_response?.auto_send_error || '').trim()
-                    : ''
                   return (
                     <tr key={invoice.id} className="hover:bg-theme-bg-tertiary/30 transition-colors">
                       {multiSelectMode && (

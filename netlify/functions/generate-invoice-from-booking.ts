@@ -1,4 +1,5 @@
 import { Handler } from '@netlify/functions'
+import { componiIndirizzo } from './utils/indirizzoCliente'
 import { createClient } from '@supabase/supabase-js'
 import { generateFatturaXML, generateInvoiceFilename } from './xml-utils'
 import { uploadInvoiceToAruba } from './aruba-utils'
@@ -1298,13 +1299,18 @@ async function handleWalletPurchaseFattura(
         const cfZip = customerData?.codice_postale || customerData?.cap || purchase.customer_cap || ''
         const cfCity = customerData?.citta || customerData?.citta_residenza || purchase.customer_citta || ''
         const cfProv = customerData?.provincia || customerData?.provincia_residenza || purchase.customer_provincia || ''
-        const addressParts = [
-            cfStreet && cfNum ? `${cfStreet} ${cfNum}` : cfStreet,
-            cfZip,
-            cfCity,
-            cfProv,
-        ].filter(Boolean)
-        const fullAddress = addressParts.join(' ')
+        // 2026-08-28: prima era `[via, cap, citta, prov].filter(Boolean).join(' ')`.
+        // Su un cliente con la sola provincia compilata usciva la stringa "CA",
+        // che sembra un indirizzo ma non lo e': la fattura della ricarica
+        // restava bloccata con "il CAP non ricavabile da CA". Ora la
+        // composizione e' quella unica (senza via non si scrive niente).
+        const fullAddress = componiIndirizzo({
+            via: cfStreet,
+            civico: cfNum,
+            cap: cfZip,
+            citta: cfCity,
+            provincia: cfProv,
+        })
 
         // Per aziende/PA: usa ragione sociale, NON nome del rappresentante.
         // Per persone fisiche: nome + cognome.

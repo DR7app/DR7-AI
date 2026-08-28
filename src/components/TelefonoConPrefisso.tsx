@@ -75,14 +75,14 @@ export default function TelefonoConPrefisso({
                   contenitori e i due campi riempiono il proprio box con uno
                   style inline, che nessuna classe puo' scavalcare.
                 */}
-                <div className="shrink-0" style={{ width: 78 }}>
+                <div className="shrink-0" style={{ width: 84 }}>
                     <select
                         value={dial}
                         disabled={disabled}
                         aria-label="Prefisso internazionale"
                         onChange={e => { setDial(e.target.value); aggiorna(e.target.value, numeroLocale) }}
                         className={selectClassName || 'px-2 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary'}
-                        style={{ width: '100%', minWidth: 0, paddingLeft: 6, paddingRight: 2 }}
+                        style={{ width: '100%', minWidth: 0, paddingLeft: 6, paddingRight: 14 }}
                     >
                         <optgroup label="Piu' usati">
                             {paesi.frequenti.map(p => (

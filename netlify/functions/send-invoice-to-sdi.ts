@@ -1,5 +1,6 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { indirizzoUtilizzabile, cercaIndirizzoAltrove } from './utils/indirizzoCliente'
 import { generateFatturaXML, generateInvoiceFilename } from './xml-utils'
 import { uploadInvoiceToAruba } from './aruba-utils'
 
@@ -225,6 +226,36 @@ export const handler: Handler = async (event) => {
             invoice.customer_tax_code = normalizedTaxCode
             invoice.customer_vat = normalizedVat
             invoice.customer_address = normalizedAddress
+        }
+
+        // ─── Recupero intelligente dell'indirizzo ──────────────────────────
+        // 2026-08-28: se l'indirizzo sulla fattura non basta per l'XML, prima
+        // di bloccare tutto si cerca un indirizzo REALE dello stesso cliente
+        // altrove (fattura gia' accettata dal SDI, doppione in anagrafica,
+        // dati della prenotazione). Niente indirizzi inventati: se non esiste
+        // da nessuna parte, la fattura resta ferma col motivo.
+        if (!indirizzoUtilizzabile(invoice.customer_address || '')) {
+            let bookingCustomer: any = null
+            if (invoice.booking_id) {
+                const { data: b } = await supabase
+                    .from('bookings')
+                    .select('booking_details')
+                    .eq('id', invoice.booking_id)
+                    .maybeSingle()
+                bookingCustomer = b?.booking_details?.customer || null
+            }
+            const trovato = await cercaIndirizzoAltrove(supabase, {
+                invoiceId: invoiceId,
+                codiceFiscale: invoice.customer_tax_code || '',
+                partitaIva: invoice.customer_vat || '',
+                email: (invoice.customer_email || '').toLowerCase().trim(),
+            }, bookingCustomer)
+
+            if (trovato) {
+                console.log(`[SDI] Indirizzo recuperato da ${trovato.fonte}: ${trovato.indirizzo}`)
+                await supabase.from('fatture').update({ customer_address: trovato.indirizzo }).eq('id', invoiceId)
+                invoice.customer_address = trovato.indirizzo
+            }
         }
 
         // For nota di credito, add TD04 fields and fetch the original invoice reference
