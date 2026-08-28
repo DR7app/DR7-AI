@@ -1604,6 +1604,78 @@ const handler: Handler = async (event) => {
             }
         }
 
+        // ── PAGAMENTO SU CLIENTE, SENZA PRENOTAZIONE ──────────────────────
+        // 28/08/2026: link di pagamento creato dal tab Clienti (incasso al
+        // volo, prenotazione non ancora esistente). Tutta la registrazione
+        // della carta vive dentro il ramo "REGULAR BOOKING PAYMENT": senza
+        // booking_id il cliente pagava ma la carta non finiva sulla sua
+        // scheda, cioe' proprio il motivo per cui il link e' stato creato.
+        if (isSuccess && !transaction.booking_id) {
+            try {
+                const meta = transaction.metadata || {};
+                const custIdLink = meta.customer_id || null;
+                const custEmailLink = (transaction.customer_email || meta.customer_email || '').toLowerCase().trim();
+
+                let cardInfoLink: Record<string, any> = {};
+                const cardLink = await fetchNexiCardInfo(NEXI_API_KEY, {
+                    operationId,
+                    orderId: transaction.order_id,
+                });
+                if (cardLink) {
+                    let binType = '';
+                    let binBrand = '';
+                    const binForLookup = cardLink.bin
+                        || (cardLink.maskedPan && /^\d{6}/.test(cardLink.maskedPan.trim()) ? cardLink.maskedPan.trim().substring(0, 6) : '');
+                    if (binForLookup && binForLookup.length >= 4) {
+                        const binResult = await lookupBin(binForLookup);
+                        if (binResult) { binType = binResult.type; binBrand = binResult.brand; }
+                    }
+                    cardInfoLink = {
+                        nexi_card_masked_pan: cardLink.maskedPan,
+                        nexi_card_circuit: cardLink.circuit || paymentCircuit || '',
+                        nexi_card_type: cardLink.cardType || binType,
+                        nexi_card_brand: binBrand || cardLink.circuit || paymentCircuit || '',
+                        nexi_card_bin: binForLookup || '',
+                        nexi_card_updated: new Date().toISOString(),
+                    };
+                    // La carta resta anche sulla riga della transazione: il tab
+                    // Nexi deve mostrarla pure se il cliente non si aggancia.
+                    await supabase.from('nexi_transactions').update({
+                        metadata: { ...meta, ...cardInfoLink },
+                        updated_at: new Date().toISOString(),
+                    }).eq('id', transaction.id);
+                }
+
+                const aggiornamento = {
+                    ...(contractId ? { nexi_contract_id: contractId } : {}),
+                    nexi_contract_updated: new Date().toISOString(),
+                    ...cardInfoLink,
+                };
+
+                let cliente: any = null;
+                if (custIdLink) {
+                    const { data } = await supabase.from('customers_extended').select('id, metadata').eq('id', custIdLink).maybeSingle();
+                    cliente = data;
+                }
+                if (!cliente && custEmailLink) {
+                    const { data } = await supabase.from('customers_extended').select('id, metadata').eq('email', custEmailLink).maybeSingle();
+                    cliente = data;
+                }
+
+                if (cliente) {
+                    await supabase.from('customers_extended').update({
+                        metadata: applyTokenizedCardUpdate(cliente.metadata, aggiornamento),
+                        updated_at: new Date().toISOString(),
+                    }).eq('id', cliente.id);
+                    console.log(`[nexi-payment-callback] Link cliente: carta registrata sulla scheda ${cliente.id}`);
+                } else {
+                    console.warn(`[nexi-payment-callback] Link cliente: nessuna scheda trovata (id=${custIdLink || '-'}, email=${custEmailLink || '-'}) — carta salvata solo sulla transazione`);
+                }
+            } catch (linkErr) {
+                console.error('[nexi-payment-callback] Link cliente: registrazione carta fallita (non bloccante):', linkErr);
+            }
+        }
+
         return {
             statusCode: 200,
             headers,

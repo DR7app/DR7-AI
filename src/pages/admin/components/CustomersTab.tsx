@@ -178,6 +178,14 @@ export default function CustomersTab() {
   const [showNewClientModal, setShowNewClientModal] = useState(false)
   const [viewingCustomerDetails, setViewingCustomerDetails] = useState<Customer | null>(null)
   const [reportCustomerId, setReportCustomerId] = useState<string | null>(null)
+  // Menu "Gestisci" della riga cliente: raggruppa scheda / dettagli /
+  // documenti / modifica / link di pagamento (28/08/2026).
+  const [gestisciApertoId, setGestisciApertoId] = useState<string | null>(null)
+  const [linkPagamentoCliente, setLinkPagamentoCliente] = useState<Customer | null>(null)
+  const [linkImporto, setLinkImporto] = useState('')
+  const [linkDescrizione, setLinkDescrizione] = useState('')
+  const [linkCreato, setLinkCreato] = useState('')
+  const [creandoLink, setCreandoLink] = useState(false)
   // Cliente per cui mostrare il modale Addebito (importo + scelta carta) dalla
   // riga della lista Clienti.
   const [addebitoCustomer, setAddebitoCustomer] = useState<Customer | null>(null)
@@ -1047,6 +1055,97 @@ export default function CustomersTab() {
   }
 
 
+
+  /**
+   * Link di pagamento su un CLIENTE, senza prenotazione.
+   * 28/08/2026: serve per incassare al volo (e tokenizzare la carta) prima
+   * ancora che esista una prenotazione. Usa lo stesso nexi-pay-by-link dei
+   * pagamenti prenotazione, che accetta gia' un link senza bookingId e
+   * chiede a Nexi la creazione del contratto (carta riusabile per addebiti).
+   */
+  async function creaLinkPagamentoCliente() {
+    const cliente = linkPagamentoCliente
+    if (!cliente) return
+    const importo = parseFloat(String(linkImporto).replace(',', '.'))
+    if (!importo || importo <= 0) {
+      toast.error('Inserisci un importo valido')
+      return
+    }
+    setCreandoLink(true)
+    try {
+      const res = await authFetch('/.netlify/functions/nexi-pay-by-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: importo,
+          customerEmail: cliente.email || '',
+          customerName: cliente.full_name || '',
+          description: linkDescrizione.trim() || `Pagamento DR7 - ${cliente.full_name || 'Cliente'}`,
+          paymentPurpose: 'cliente',
+          customerId: cliente.id,
+          expirationHours: 24,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.paymentUrl) {
+        toast.error(json.error || 'Creazione link non riuscita')
+        return
+      }
+      setLinkCreato(json.paymentUrl)
+      toast.success('Link di pagamento creato')
+    } catch (e) {
+      toast.error('Creazione link non riuscita')
+    } finally {
+      setCreandoLink(false)
+    }
+  }
+
+  /** Manda il link al cliente col template Pro "Richiesta Pagamento". */
+  async function inviaLinkPagamentoWhatsapp() {
+    const cliente = linkPagamentoCliente
+    if (!cliente || !linkCreato) return
+    const telefono = (cliente.phone || '').trim()
+    if (!telefono) {
+      toast.error('Il cliente non ha un numero di telefono')
+      return
+    }
+    const importoStr = parseFloat(String(linkImporto).replace(',', '.')).toFixed(2)
+    const nome = (cliente.full_name || 'Cliente').split(' ')[0]
+    try {
+      const res = await authFetch('/.netlify/functions/send-whatsapp-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customPhone: telefono,
+          templateKey: 'payment_link_customer',
+          booking: { service_type: 'rental' },
+          templateVars: {
+            '{nome}': nome,
+            '{nome cliente}': cliente.full_name || 'Cliente',
+            '{nome_cliente}': cliente.full_name || 'Cliente',
+            '{cliente}': cliente.full_name || 'Cliente',
+            '{customer_name}': cliente.full_name || 'Cliente',
+            '{link}': linkCreato,
+            '{payment_link}': linkCreato,
+            '{link_pagamento}': linkCreato,
+            '{importo}': importoStr,
+            '{amount}': importoStr,
+            '{total}': importoStr,
+          },
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(json.error || 'Invio non riuscito')
+      } else if (json.skipped) {
+        toast.error('Nessun template Pro collegato a "Richiesta Pagamento": il messaggio non e\' partito')
+      } else {
+        toast.success('Link inviato su WhatsApp')
+      }
+    } catch (e) {
+      toast.error('Invio non riuscito')
+    }
+  }
 
   async function handleEdit(customer: Customer) {
     logger.log('[handleEdit] Customer object:', customer)
@@ -3007,34 +3106,61 @@ export default function CustomersTab() {
                   <td className="px-4 py-3 text-sm text-theme-text-primary"><NumeroTelefono valore={customer.phone} /></td>
                   <td className="px-4 py-3 text-sm font-medium text-dr7-gold">{walletBalances.has(customer.id) ? `€${walletBalances.get(customer.id)!.toFixed(2)}` : '-'}</td>
                   <td className="px-4 py-3 text-sm">
-                    <div className="flex gap-2 flex-wrap">
+                    {/* 28/08/2026: quattro bottoni in fila per riga rendevano
+                        la tabella illeggibile. Ora un solo "Gestisci" che
+                        raccoglie le azioni sul cliente, link di pagamento
+                        compreso: cosi' si incassa (e si tokenizza la carta)
+                        anche senza una prenotazione aperta. */}
+                    <div className="relative inline-block text-left">
                       <button
-                        onClick={() => setReportCustomerId(customer.id)}
-                        className="text-xs py-1 px-3 bg-theme-bg-primary hover:bg-theme-bg-hover text-theme-text-primary border border-theme-border rounded-full font-medium transition-colors"
+                        onClick={() => setGestisciApertoId(gestisciApertoId === customer.id ? null : customer.id)}
+                        className="text-xs py-1.5 px-4 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold border border-dr7-gold/40 rounded-full font-semibold transition-colors whitespace-nowrap"
                       >
-                        Scheda
+                        Gestisci ▾
                       </button>
-                      <Button
-                        onClick={() => handleViewCustomerDetails(customer)}
-                        variant="secondary"
-                        className="text-xs py-1 px-3 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold"
-                      >
-                        Dettagli Completi
-                      </Button>
-                      <Button
-                        onClick={() => handleViewDocuments(customer)}
-                        variant="secondary"
-                        className="text-xs py-1 px-3 bg-blue-900 hover:bg-blue-800"
-                      >
-                        Documenti
-                      </Button>
-                      <Button
-                        onClick={() => handleEdit(customer)}
-                        variant="secondary"
-                        className="text-xs py-1 px-3 bg-green-900 hover:bg-green-800"
-                      >
-                        Modifica
-                      </Button>
+                      {gestisciApertoId === customer.id && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setGestisciApertoId(null)} />
+                          <div className="absolute z-50 left-0 mt-1 w-52 bg-theme-bg-primary border border-theme-border rounded-lg shadow-2xl overflow-hidden">
+                            <button
+                              onClick={() => { setGestisciApertoId(null); setReportCustomerId(customer.id) }}
+                              className="w-full text-left px-4 py-2.5 text-xs text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
+                            >
+                              Scheda
+                            </button>
+                            <button
+                              onClick={() => { setGestisciApertoId(null); handleViewCustomerDetails(customer) }}
+                              className="w-full text-left px-4 py-2.5 text-xs text-theme-text-primary hover:bg-theme-bg-hover transition-colors border-t border-theme-border/50"
+                            >
+                              Dettagli Completi
+                            </button>
+                            <button
+                              onClick={() => { setGestisciApertoId(null); handleViewDocuments(customer) }}
+                              className="w-full text-left px-4 py-2.5 text-xs text-theme-text-primary hover:bg-theme-bg-hover transition-colors border-t border-theme-border/50"
+                            >
+                              Documenti
+                            </button>
+                            <button
+                              onClick={() => { setGestisciApertoId(null); handleEdit(customer) }}
+                              className="w-full text-left px-4 py-2.5 text-xs text-theme-text-primary hover:bg-theme-bg-hover transition-colors border-t border-theme-border/50"
+                            >
+                              Modifica
+                            </button>
+                            <button
+                              onClick={() => {
+                                setGestisciApertoId(null)
+                                setLinkPagamentoCliente(customer)
+                                setLinkImporto('')
+                                setLinkDescrizione('')
+                                setLinkCreato('')
+                              }}
+                              className="w-full text-left px-4 py-2.5 text-xs text-dr7-gold font-semibold hover:bg-theme-bg-hover transition-colors border-t border-theme-border"
+                            >
+                              Link pagamento
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm">
@@ -3117,6 +3243,92 @@ export default function CustomersTab() {
           </div>
         </div>
       </div>
+
+      {/* Modale link di pagamento cliente (senza prenotazione) */}
+      {linkPagamentoCliente && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4" onClick={() => setLinkPagamentoCliente(null)}>
+          <div className="bg-theme-bg-primary border border-theme-border rounded-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div>
+              <h3 className="text-lg font-bold text-theme-text-primary">Link di pagamento</h3>
+              <p className="text-xs text-theme-text-muted mt-1">
+                {linkPagamentoCliente.full_name}{linkPagamentoCliente.email ? ` - ${linkPagamentoCliente.email}` : ''}
+              </p>
+              <p className="text-[11px] text-theme-text-muted mt-2">
+                Pagamento non legato a una prenotazione. A pagamento riuscito la carta resta registrata sul cliente per gli addebiti successivi. Link valido 24 ore.
+              </p>
+            </div>
+
+            {!linkCreato ? (
+              <>
+                <div>
+                  <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Importo (EUR)*</label>
+                  {/* mai type="number": con la tastiera italiana blocca i decimali */}
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={linkImporto}
+                    onChange={e => setLinkImporto(e.target.value)}
+                    placeholder="es. 150,00"
+                    className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Causale</label>
+                  <input
+                    type="text"
+                    value={linkDescrizione}
+                    onChange={e => setLinkDescrizione(e.target.value)}
+                    placeholder="es. Acconto noleggio"
+                    className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none"
+                  />
+                </div>
+                <div className="flex gap-2 justify-end pt-2">
+                  <button
+                    onClick={() => setLinkPagamentoCliente(null)}
+                    className="px-4 py-2 text-sm rounded-full bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    onClick={creaLinkPagamentoCliente}
+                    disabled={creandoLink}
+                    className="px-4 py-2 text-sm rounded-full bg-dr7-gold text-black font-semibold hover:opacity-90 disabled:opacity-50 transition-colors"
+                  >
+                    {creandoLink ? 'Creo il link...' : 'Crea link'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="bg-theme-bg-tertiary border border-theme-border rounded-lg p-3">
+                  <p className="text-[11px] text-theme-text-muted mb-1">Link</p>
+                  <p className="text-xs text-theme-text-primary break-all">{linkCreato}</p>
+                </div>
+                <div className="flex gap-2 flex-wrap justify-end pt-2">
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(linkCreato); toast.success('Link copiato') }}
+                    className="px-4 py-2 text-sm rounded-full bg-theme-bg-tertiary text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
+                  >
+                    Copia link
+                  </button>
+                  <button
+                    onClick={inviaLinkPagamentoWhatsapp}
+                    className="px-4 py-2 text-sm rounded-full bg-green-700 text-white font-semibold hover:bg-green-600 transition-colors"
+                  >
+                    Invia su WhatsApp
+                  </button>
+                  <button
+                    onClick={() => setLinkPagamentoCliente(null)}
+                    className="px-4 py-2 text-sm rounded-full bg-dr7-gold text-black font-semibold hover:opacity-90 transition-colors"
+                  >
+                    Chiudi
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <NewClientModal
         isOpen={showNewClientModal}
