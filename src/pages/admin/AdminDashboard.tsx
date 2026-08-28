@@ -505,6 +505,11 @@ export default function AdminDashboard() {
       { tab: 'lavaggio-uscite', label: 'Uscite Straordinarie', permKey: 'carwash' },
       { tab: 'carwash-calendar', label: 'Calendario' },
       { tab: 'carwash-catalog', label: 'Lavaggi' },
+      // 28/08/2026 (direzione): i ricambi per singolo veicolo (olio,
+      // pastiglie, sensori) stanno qui, non nella sezione Magazzino: chi li
+      // ordina e li monta e' l'officina. Scheda diversa dal magazzino a
+      // scorte, che resta in "Magazzino Lavaggio e Meccanica".
+      { tab: 'magazzino', label: 'Ricambi per Veicolo' },
     ] },
     { name: 'Clienti', tabs: [
       { tab: 'customers', label: 'Lead' },
@@ -553,10 +558,6 @@ export default function AdminDashboard() {
       { tab: 'magazzino-aria', label: 'Magazzino Aria' },
       { tab: 'magazzino-stay', label: 'Magazzino Soggiorni' },
       { tab: 'magazzino-lavaggio', label: 'Magazzino Lavaggio e Meccanica' },
-      // Ricambi per singolo veicolo (olio, pastiglie, sensori): scheda diversa
-      // dal magazzino a scorte, legata alla flotta Terra. Resta raggiungibile
-      // qui invece di sparire dal menu insieme alle voci per business.
-      { tab: 'magazzino', label: 'Ricambi per Veicolo' },
     ] },
     // 2026-06-02: sezione Comunicazione rimossa — tutti i sub-tab erano
     // PlaceholderTab vuoti. Se mai serviranno (E-mail, PEC, WhatsApp, SMS,
