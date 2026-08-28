@@ -1,4 +1,4 @@
-import { getCAPByCity, getProvinciaByCity } from '../data/sardegnaProvince'
+import { getCAPByCity, getProvinciaByCity, trovaComuneNelTesto } from '../data/sardegnaProvince'
 
 /**
  * Aiuti per la sede legale / indirizzo cliente usati dalla fattura elettronica.
@@ -45,22 +45,53 @@ export function completaIndirizzo(indirizzo?: string | null): { indirizzo: strin
     if (!raw) return { indirizzo: raw, cambiato: false }
     if (/\b\d{5}\b/.test(raw)) return { indirizzo: raw, cambiato: false } // il CAP c'e' gia'
 
-    // Il comune e' l'ultimo pezzo dopo la virgola: "Via Roma 12, Cagliari".
+    // 1) Forma pulita "Via Roma 12, Cagliari": il comune e' l'ultimo pezzo.
     const pezzi = raw.split(',').map(p => p.trim()).filter(Boolean)
-    if (pezzi.length < 2) return { indirizzo: raw, cambiato: false }
+    if (pezzi.length >= 2) {
+        let coda = pezzi[pezzi.length - 1]
+        coda = coda.replace(/\(\s*[A-Za-z]{2}\s*\)\s*$/, '').replace(/[\s,]([A-Za-z]{2})\s*$/, '').trim()
+        const cap = coda ? getCAPByCity(coda) : null
+        if (cap) {
+            const prov = getProvinciaByCity(coda) || ''
+            const testa = pezzi.slice(0, -1).join(', ')
+            return { indirizzo: `${testa}, ${cap} ${coda}${prov ? ` (${prov})` : ''}`, cambiato: true, comune: coda }
+        }
+    }
 
-    let coda = pezzi[pezzi.length - 1]
-    // Toglie una provincia gia' scritta, "(CA)" o "CA" in coda.
-    coda = coda.replace(/\(\s*[A-Za-z]{2}\s*\)\s*$/, '').replace(/[\s,]([A-Za-z]{2})\s*$/, '').trim()
-    if (!coda) return { indirizzo: raw, cambiato: false }
+    // 2) 28/08/2026 — scritto tutto d'un fiato, senza virgole e in ordine
+    // libero: "QUARTU SANT' ELENA VIA SERRA PERDOSA 25" oppure
+    // "Via enrico de nicola 24 san sperate". Erano questi a bloccare le
+    // fatture al SDI ("il CAP non ricavabile"). Si cerca il comune dentro al
+    // testo, lo si toglie da li' e il resto e' la via.
+    const trovato = trovaComuneNelTesto(raw)
+    if (!trovato || !trovato.cap) return { indirizzo: raw, cambiato: false }
 
-    const cap = getCAPByCity(coda)
-    if (!cap) return { indirizzo: raw, cambiato: false }
+    const pulisci = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '')
+    const tokens = raw.split(' ').filter(Boolean)
+    const bersaglio = pulisci(trovato.comune)
+    let da = -1, a = -1
+    for (let i = 0; i < tokens.length && da < 0; i++) {
+        let acc = ''
+        for (let j = i; j < tokens.length; j++) {
+            acc += pulisci(tokens[j])
+            if (acc === bersaglio) { da = i; a = j; break }
+            if (!bersaglio.startsWith(acc)) break
+        }
+    }
+    const via = (da >= 0 ? [...tokens.slice(0, da), ...tokens.slice(a + 1)] : tokens)
+        .join(' ')
+        .replace(/\(\s*[A-Za-z]{2}\s*\)/g, ' ')
+        .replace(/[,;]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+    if (!via) return { indirizzo: raw, cambiato: false } // resterebbe senza via
 
-    const prov = getProvinciaByCity(coda) || ''
-    const testa = pezzi.slice(0, -1).join(', ')
-    const nuovo = `${testa}, ${cap} ${coda}${prov ? ` (${prov})` : ''}`
-    return { indirizzo: nuovo, cambiato: true, comune: coda }
+    const prov = trovato.provincia || ''
+    return {
+        indirizzo: `${via}, ${trovato.cap} ${trovato.comune}${prov ? ` (${prov})` : ''}`,
+        cambiato: true,
+        comune: trovato.comune,
+    }
 }
 
 /** Scompone un indirizzo completo nei campi dell'anagrafica. */

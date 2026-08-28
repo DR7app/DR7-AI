@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import EuropeanDateInput from '../components/EuropeanDateInput'
 import TelefonoConPrefisso from '../components/TelefonoConPrefisso'
+import CampoIndirizzo from '../components/CampoIndirizzo'
 
 interface InviteState {
     valid: boolean | null
@@ -243,7 +244,7 @@ export default function RegistrazioneClientePage() {
 
                         <h3 className="text-md font-semibold pt-4 border-t">Indirizzo</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <Field label="Indirizzo *" value={form.indirizzo} onChange={v => update('indirizzo', v)} required />
+                            <Field label="Indirizzo *" type="address" value={form.indirizzo} onChange={v => update('indirizzo', v)} required />
                             <Field label="Città *" value={form.citta} onChange={v => update('citta', v)} required />
                             <Field label="CAP *" value={form.cap} onChange={v => update('cap', v.replace(/\D/g, ''))} maxLength={5} minLength={5} required />
                             <Field label="Provincia *" value={form.provincia} onChange={v => update('provincia', v.toUpperCase())} maxLength={2} minLength={2} required />
@@ -354,6 +355,15 @@ function Field({ label, value, onChange, type = 'text', required, maxLength, min
                     onChange={onChange}
                     className={`flex-1 min-w-0 ${inputClass}`}
                     selectClassName={`w-[104px] shrink-0 ${inputClass}`}
+                />
+            ) : type === 'address' ? (
+                /* 28/08/2026: l'indirizzo si cerca, non si scrive a mano.
+                   Un indirizzo senza CAP blocca poi la fattura elettronica. */
+                <CampoIndirizzo
+                    value={value}
+                    onChange={onChange}
+                    required={required}
+                    className={inputClass}
                 />
             ) : type === 'date' ? (
                 <EuropeanDateInput

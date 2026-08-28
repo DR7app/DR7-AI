@@ -276,3 +276,69 @@ export function getResidenceStatus(provinciaCode?: string, cityName?: string): '
   }
   return 'non_residente'
 }
+
+/**
+ * Nome del comune normalizzato per il confronto: minuscolo, senza accenti,
+ * apostrofi e punteggiatura ridotti a spazio. "QUARTU SANT' ELENA" e
+ * "Quartu Sant'Elena" diventano la stessa stringa.
+ */
+function normalizzaNome(v: string): string {
+  return String(v || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+/** Tutti i comuni conosciuti: Sardegna + i capoluoghi della tabella CAP. */
+export const COMUNI_CONOSCIUTI: string[] = Array.from(new Set([
+  ...SARDEGNA_PROVINCE.flatMap(p => p.comuni),
+  ...Object.keys(CAP_MAP),
+]))
+
+/**
+ * Cerca un comune conosciuto DENTRO un testo libero, ovunque si trovi.
+ *
+ * 28/08/2026: serve alle fatture. Gli indirizzi scritti a mano non hanno
+ * ne' virgole ne' un ordine fisso — "QUARTU SANT' ELENA VIA SERRA PERDOSA 25"
+ * (comune davanti) e "Via enrico de nicola 24 san sperate" (comune in coda,
+ * minuscolo) bloccavano l'invio a SDI con "il CAP non ricavabile". Trovato il
+ * comune si ricavano CAP e provincia e l'indirizzo si puo' ricomporre.
+ *
+ * Vince il nome PIU' LUNGO che compare nel testo, cosi' "Quartu Sant'Elena"
+ * non viene letto come "Quartu" e "San Giovanni Suergiu" non come "San Vito".
+ * Nessuna somiglianza approssimata qui: il comune deve comparire davvero.
+ */
+export function trovaComuneNelTesto(testo?: string | null): { comune: string; cap: string | null; provincia: string | null } | null {
+  const hay = ` ${normalizzaNome(testo || '')} `
+  if (hay.trim().length < 3) return null
+
+  // Un comune preceduto da "via/piazza/..." e' il NOME DELLA STRADA, non il
+  // comune: in "Via San Vito 12 Cagliari" il comune e' Cagliari.
+  const PAROLE_STRADA = ['via', 'viale', 'v le', 'piazza', 'p zza', 'corso', 'c so', 'vicolo', 'vico', 'largo', 'strada', 'lungomare', 'salita', 'borgo', 'localita', 'loc', 'traversa']
+
+  let migliore = ''
+  let miglioreDubbio = ''
+  for (const comune of COMUNI_CONOSCIUTI) {
+    const ago = normalizzaNome(comune)
+    if (ago.length < 4) continue // "Uta", "Giba": troppo corti, danno falsi positivi
+    const at = hay.indexOf(` ${ago} `)
+    if (at < 0) continue
+    const prima = hay.slice(0, at + 1).trim().split(' ')
+    const parolaPrima = prima.length > 0 ? prima[prima.length - 1] : ''
+    const dopoStrada = PAROLE_STRADA.includes(parolaPrima)
+    if (dopoStrada) {
+      if (ago.length > normalizzaNome(miglioreDubbio).length) miglioreDubbio = comune
+    } else if (ago.length > normalizzaNome(migliore).length) {
+      migliore = comune
+    }
+  }
+  const scelto = migliore || miglioreDubbio
+  if (!scelto) return null
+
+  return {
+    comune: scelto,
+    cap: getCAPByCity(scelto),
+    provincia: getProvinciaByCity(scelto),
+  }
+}

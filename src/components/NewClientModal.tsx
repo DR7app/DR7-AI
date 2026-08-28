@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import CampoIndirizzo from './CampoIndirizzo'
+import AddressAutocomplete from '../pages/admin/components/AddressAutocomplete'
 import { supabase } from '../supabaseClient'
 import { getResidenceStatus, getProvinciaByCity } from '../data/sardegnaProvince'
 import toast from 'react-hot-toast'
@@ -814,10 +816,23 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                     Indirizzo *
                   </label>
-                  <input
-                    type="text"
+                  {/* 28/08/2026: si cerca l'indirizzo; scegliendolo si
+                      riempiono anche civico, CAP, citta' e provincia. */}
+                  <AddressAutocomplete
                     value={formData.indirizzo}
-                    onChange={(e) => setFormData({ ...formData, indirizzo: e.target.value })}
+                    onChange={(v) => setFormData(prev => ({ ...prev, indirizzo: v }))}
+                    onSelectParts={(parts) => {
+                      const street = (parts.street || '').trim()
+                      const civico = street.match(/\s(\d{1,4}[/-]?[A-Za-z]?)$/)
+                      setFormData(prev => ({
+                        ...prev,
+                        indirizzo: civico ? street.slice(0, civico.index).trim() : street,
+                        numero_civico: civico ? civico[1] : prev.numero_civico,
+                        codice_postale: parts.zip || prev.codice_postale,
+                        citta_residenza: parts.city || prev.citta_residenza,
+                        provincia_residenza: getProvinciaByCity(parts.city) || prev.provincia_residenza,
+                      }))
+                    }}
                     className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Via Roma"
                   />
@@ -1018,10 +1033,10 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                   Sede Legale *
                 </label>
-                <input
-                  type="text"
+                <CampoIndirizzo
                   value={formData.sede_legale}
-                  onChange={(e) => setFormData({ ...formData, sede_legale: e.target.value })}
+                  onChange={(v) => setFormData(prev => ({ ...prev, sede_legale: v }))}
+                  nomeCampo="sede legale"
                   className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Via Roma 123, 20100 Milano (MI)"
                 />
@@ -1032,10 +1047,10 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                   Sede Operativa (se diversa)
                 </label>
-                <input
-                  type="text"
+                <CampoIndirizzo
                   value={formData.sede_operativa}
-                  onChange={(e) => setFormData({ ...formData, sede_operativa: e.target.value })}
+                  onChange={(v) => setFormData(prev => ({ ...prev, sede_operativa: v }))}
+                  nomeCampo="sede operativa"
                   className="w-full px-3 py-2 border border-theme-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Via Torino 456, 20100 Milano (MI)"
                 />

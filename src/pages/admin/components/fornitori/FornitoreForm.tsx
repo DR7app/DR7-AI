@@ -286,7 +286,7 @@ export default function FornitoreForm({ fornitore, onClose, onSaved }: Props) {
 
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div className="md:col-span-2">
-                            <Input label="Indirizzo" value={data.indirizzo}
+                            <Input label="Indirizzo" type="address" value={data.indirizzo}
                                 onChange={e => setData({ ...data, indirizzo: e.target.value })} />
                         </div>
                         <Input label="Città" value={data.citta}

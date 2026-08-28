@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
+import AddressAutocomplete from './AddressAutocomplete'
 import toast from 'react-hot-toast'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
@@ -348,10 +349,9 @@ export default function InvoicesTab() {
             </div>
             <div>
               <label className="block text-sm text-theme-text-muted mb-1">Indirizzo *</label>
-              <input
-                type="text"
+              <AddressAutocomplete
                 value={formData.customer_address}
-                onChange={(e) => setFormData({ ...formData, customer_address: e.target.value })}
+                onChange={(v) => setFormData({ ...formData, customer_address: v })}
                 className="w-full bg-theme-bg-tertiary border-theme-border rounded-full px-3 py-2 text-theme-text-primary"
                 placeholder="Via Roma 43, 09070 Cagliari (CA)"
                 required

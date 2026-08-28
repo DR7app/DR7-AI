@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
 import DateRangeFilter from '../../../components/DateRangeFilter'
+import AddressAutocomplete from './AddressAutocomplete'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
@@ -597,10 +598,9 @@ export default function ContrattoTab({ serviceType }: { serviceType?: string } =
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-theme-text-secondary mb-2">Indirizzo</label>
-                <input
-                  type="text"
+                <AddressAutocomplete
                   value={formData.customer_address}
-                  onChange={(e) => setFormData({ ...formData, customer_address: e.target.value })}
+                  onChange={(v) => setFormData({ ...formData, customer_address: v })}
                   className="w-full bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary"
                 />
               </div>

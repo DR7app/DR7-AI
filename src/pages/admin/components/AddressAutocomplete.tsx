@@ -42,6 +42,7 @@ interface AddressAutocompleteProps {
   className?: string
   label?: string
   required?: boolean
+  disabled?: boolean
 }
 
 export default function AddressAutocomplete({
@@ -53,6 +54,7 @@ export default function AddressAutocomplete({
   className = '',
   label,
   required,
+  disabled,
 }: AddressAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<NominatimResult[]>([])
   const [isOpen, setIsOpen] = useState(false)
@@ -245,6 +247,7 @@ export default function AddressAutocomplete({
         placeholder={placeholder}
         className={inputClass}
         required={required}
+        disabled={disabled}
         autoComplete="off"
       />
       {isOpen && suggestions.length === 0 && status !== 'idle' && (

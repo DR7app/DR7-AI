@@ -1,14 +1,19 @@
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import AddressAutocomplete from './AddressAutocomplete'
+import type { AddressParts } from './AddressAutocomplete'
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string
+  /** Solo con type="address": i pezzi dell'indirizzo scelto dalla tendina
+   *  (via, CAP, comune, provincia), per riempire i campi accanto. */
+  onAddressParts?: (parti: AddressParts) => void
 }
 
 const BASE_CLASS = 'w-full px-3 py-2 min-h-[44px] bg-theme-bg-primary border border-dr7-gold/30 rounded text-base sm:text-sm text-theme-text-primary focus:outline-none focus:border-dr7-gold transition-colors'
 
-export default function Input({ label, className = '', ...props }: InputProps) {
+export default function Input({ label, className = '', onAddressParts, ...props }: InputProps) {
   // 2026-08-02 (direzione): MAI <input type="date"> nativo. Il browser lo
   // renderizza con il locale del sistema operativo, quindi su un Mac in inglese
   // usciva MM/GG/AAAA (08/04/2026 = 4 agosto letto come 8 aprile). In Europa la
@@ -72,6 +77,38 @@ export default function Input({ label, className = '', ...props }: InputProps) {
           // Anteprima spenta nei form: qui l'Input sta quasi sempre dentro una
           // griglia a due colonne e la riga di aiuto sfalserebbe le altre voci.
           mostraAnteprima={false}
+        />
+      </div>
+    )
+  }
+
+  // 2026-08-28 (direzione): OGNI campo dove si scrive un INDIRIZZO cerca da
+  // solo. Si digita "via salvo d'acquisto 7" e si sceglie dalla tendina: via,
+  // civico, CAP, citta' e provincia arrivano gia' scritti giusti. Scritti a
+  // mano finivano storti (CAP mancante, comune abbreviato) e poi la fattura
+  // non partiva al SDI e le consegne non si potevano calcolare. Come per le
+  // date, gli importi e il telefono la scelta e' UNA SOLA e vive qui:
+  // `<Input type="address">` e il form ha la ricerca, senza ricablarlo.
+  if (props.type === 'address') {
+    const onChange = props.onChange
+    return (
+      <div>
+        {label && (
+          <label className="block text-sm font-medium text-theme-text-primary mb-2">
+            {label}
+          </label>
+        )}
+        <AddressAutocomplete
+          onSelectParts={onAddressParts}
+          value={typeof props.value === 'string' ? props.value : ''}
+          onChange={(v) => onChange?.({
+            target: { value: v, name: props.name ?? '' },
+            currentTarget: { value: v, name: props.name ?? '' },
+          } as React.ChangeEvent<HTMLInputElement>)}
+          placeholder={props.placeholder}
+          required={props.required}
+          disabled={props.disabled}
+          className={`${BASE_CLASS} ${className}`}
         />
       </div>
     )

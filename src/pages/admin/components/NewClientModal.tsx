@@ -8,8 +8,8 @@ import { invalidateCustomersCache } from '../../../utils/customersCache'
 import CalcolaCFButton from '../../../components/CalcolaCFButton'
 import CompilaButton, { type ExtractedData, type DataConflict } from '../../../components/CompilaButton'
 import { validateIban, formatIbanGroups } from '../../../utils/ibanValidation'
-import { cosaMancaNellIndirizzo, completaIndirizzo } from '../../../utils/indirizzoFattura'
 import AddressAutocomplete from './AddressAutocomplete'
+import CampoIndirizzo from '../../../components/CampoIndirizzo'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
@@ -1396,45 +1396,24 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   </div>
                   <div>
                     <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Sede Legale*</label>
-                    {/* Stesso autocomplete degli indirizzi in prenotazione:
-                        scegliendo un suggerimento arrivano via, CAP, comune e
-                        provincia gia' nel formato che vuole la fattura
-                        elettronica. Restano l'auto-CAP sul comune riconosciuto
-                        (per chi scrive a mano) e l'avviso di cosa manca. */}
-                    <AddressAutocomplete
+                    {/* Stessa ricerca di tutti gli altri indirizzi del
+                        gestionale (CampoIndirizzo): suggerimenti, CAP
+                        automatico sul comune riconosciuto e avviso di cosa
+                        manca per la fattura elettronica. */}
+                    <CampoIndirizzo
                       value={formData.sede_legale}
-                      onChange={(val) => setFormData(prev => ({ ...prev, sede_legale: val }))}
-                      onSelectParts={(parts) => {
-                        const cap = parts.zip || ''
-                        const comune = parts.city || ''
-                        const prov = (parts.province || '').toUpperCase()
-                        const riga2 = [cap, comune].filter(Boolean).join(' ')
-                        const completo = [
-                          parts.street || parts.full,
-                          riga2 ? `${riga2}${prov ? ` (${prov})` : ''}` : '',
-                        ].filter(Boolean).join(', ')
-                        setFormData(prev => ({ ...prev, sede_legale: completo || parts.full }))
-                      }}
-                      onBlurComplete={(val) => {
-                        // Scritto a mano: se il comune e' riconosciuto e il CAP
-                        // manca, il CAP si mette da solo.
-                        const esito = completaIndirizzo(val)
-                        if (esito.cambiato) {
-                          setFormData(prev => ({ ...prev, sede_legale: esito.indirizzo }))
-                          toast.success(`CAP di ${esito.comune} aggiunto alla sede legale`)
-                        }
-                      }}
+                      onChange={(v) => setFormData(prev => ({ ...prev, sede_legale: v }))}
+                      nomeCampo="sede legale"
+                      mostraAvvisoFattura
                       placeholder="Via Roma 12, 09100 Cagliari (CA)"
                     />
-                    {formData.sede_legale.trim() !== '' && cosaMancaNellIndirizzo(formData.sede_legale) && (
-                      <p className="text-[11px] text-rose-400 mt-1">
-                        Non basta per la fattura elettronica: {cosaMancaNellIndirizzo(formData.sede_legale)}. Formato: "Via Roma 12, 09100 Cagliari (CA)".
-                      </p>
-                    )}
                   </div>
                   <div>
                     <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Sede Operativa</label>
-                    <input type="text" value={formData.sede_operativa} onChange={(e) => setFormData({ ...formData, sede_operativa: e.target.value })}
+                    <CampoIndirizzo
+                      value={formData.sede_operativa}
+                      onChange={(v) => setFormData(prev => ({ ...prev, sede_operativa: v }))}
+                      nomeCampo="sede operativa"
                       className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -1451,7 +1430,10 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   </div>
                   <div>
                     <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Indirizzo DDT</label>
-                    <input type="text" value={formData.indirizzo_ddt} onChange={(e) => setFormData({ ...formData, indirizzo_ddt: e.target.value })}
+                    <CampoIndirizzo
+                      value={formData.indirizzo_ddt}
+                      onChange={(v) => setFormData(prev => ({ ...prev, indirizzo_ddt: v }))}
+                      nomeCampo="indirizzo DDT"
                       className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
                   </div>
                 </div>
@@ -1504,8 +1486,30 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                   <div>
                     <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Indirizzo</label>
                     <div className="flex gap-1.5">
-                      <input type="text" value={formData.indirizzo} onChange={(e) => setFormData({ ...formData, indirizzo: e.target.value })} placeholder="Via..."
-                        className="flex-1 bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                      {/* 28/08/2026: qui i campi sono separati (via, civico,
+                          CAP, provincia, citta'). Scegliendo un suggerimento
+                          si riempiono TUTTI: il civico si stacca dalla via,
+                          il resto arriva da OpenStreetMap. */}
+                      <div className="flex-1 min-w-0">
+                        <AddressAutocomplete
+                          value={formData.indirizzo}
+                          onChange={(v) => setFormData(prev => ({ ...prev, indirizzo: v }))}
+                          onSelectParts={(parts) => {
+                            const street = (parts.street || '').trim()
+                            const civico = street.match(/\s(\d{1,4}[/-]?[A-Za-z]?)$/)
+                            setFormData(prev => ({
+                              ...prev,
+                              indirizzo: civico ? street.slice(0, civico.index).trim() : street,
+                              numero_civico: civico ? civico[1] : prev.numero_civico,
+                              codice_postale: parts.zip || prev.codice_postale,
+                              citta_residenza: parts.city || prev.citta_residenza,
+                              // sigla vera (SS per Sassari), non le prime due lettere del nome
+                              provincia_residenza: getProvinciaByCity(parts.city) || prev.provincia_residenza,
+                            }))
+                          }}
+                          placeholder="Via..."
+                          className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                      </div>
                       <input type="text" value={formData.numero_civico} onChange={(e) => setFormData({ ...formData, numero_civico: e.target.value })} placeholder="N."
                         className="w-16 bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
                     </div>

@@ -75,6 +75,7 @@ import {
 import Input from './Input'
 import Select from './Select'
 import AddressAutocomplete from './AddressAutocomplete'
+import { getProvinciaByCity } from '../../../data/sardegnaProvince'
 import Button from './Button'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
@@ -10086,7 +10087,17 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                       </div>
                       {/* Row 2: Indirizzo | CAP | Citta | Provincia */}
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <Input label="Indirizzo" value={val('indirizzo')} onChange={(e) => set('indirizzo', e.target.value)} />
+                        {/* 28/08/2026: si scrive e cerca da solo; scegliendo
+                            un suggerimento CAP, citta' e provincia accanto si
+                            riempiono da soli. */}
+                        <Input label="Indirizzo" type="address" value={val('indirizzo')} onChange={(e) => set('indirizzo', e.target.value)}
+                          onAddressParts={(parti) => {
+                            if (parti.street) set('indirizzo', parti.street)
+                            if (parti.zip) set('cap', parti.zip)
+                            if (parti.city) set('citta', parti.city)
+                            const sigla = getProvinciaByCity(parti.city)
+                            if (sigla) set('provincia', sigla)
+                          }} />
                         <Input label={`CAP${capWarn ? ' (5 cifre)' : ''}`} value={cap} onChange={(e) => set('cap', e.target.value.replace(/[^0-9]/g, '').slice(0, 5))} />
                         <Input label="Città" value={val('citta')} onChange={(e) => set('citta', e.target.value)} />
                         <Input label="Provincia" value={val('provincia')} onChange={(e) => upper('provincia', e.target.value, 2)} maxLength={2} />
@@ -10504,7 +10515,14 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                               </div>
                             </div>
                             <Select label="Sesso" value={formData.garante_sesso} onChange={(e) => setFormData(prev => ({ ...prev, garante_sesso: e.target.value }))} options={[{ value: '', label: 'Seleziona...' }, { value: 'M', label: 'M' }, { value: 'F', label: 'F' }]} />
-                            <Input label="Indirizzo" value={formData.garante_indirizzo} onChange={(e) => setFormData(prev => ({ ...prev, garante_indirizzo: e.target.value }))} />
+                            <Input label="Indirizzo" type="address" value={formData.garante_indirizzo} onChange={(e) => setFormData(prev => ({ ...prev, garante_indirizzo: e.target.value }))}
+                              onAddressParts={(parti) => setFormData(prev => ({
+                                ...prev,
+                                garante_indirizzo: parti.street || prev.garante_indirizzo,
+                                garante_cap: parti.zip || prev.garante_cap,
+                                garante_citta: parti.city || prev.garante_citta,
+                                garante_provincia: getProvinciaByCity(parti.city) || prev.garante_provincia,
+                              }))} />
                             <Input label="CAP" value={formData.garante_cap} onChange={(e) => setFormData(prev => ({ ...prev, garante_cap: e.target.value }))} maxLength={5} />
                             <Input label="Città" value={formData.garante_citta} onChange={(e) => setFormData(prev => ({ ...prev, garante_citta: e.target.value }))} />
                             <Input label="Provincia" value={formData.garante_provincia} onChange={(e) => setFormData(prev => ({ ...prev, garante_provincia: e.target.value.toUpperCase() }))} maxLength={2} />

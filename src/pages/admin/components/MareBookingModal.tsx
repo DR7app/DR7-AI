@@ -25,6 +25,7 @@ import CustomerAutocomplete from './CustomerAutocomplete'
 import NewClientModal from './NewClientModal'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import AddressAutocomplete from './AddressAutocomplete'
+import { getProvinciaByCity } from '../../../data/sardegnaProvince'
 import { useSingleFlight } from '../../../hooks/useSingleFlight'
 import TimeSelect from './TimeSelect'
 import { mareFormSectionsOff } from './mareFormSections'
@@ -1067,7 +1068,14 @@ export default function MareBookingModal({ assets, booking, assetPreset, datePre
                           <Field label="Codice Fiscale"><input className={INPUT_CLS} value={g.codice_fiscale} onChange={e => setGuarantors(arr => arr.map((x, j) => j === i ? { ...x, codice_fiscale: e.target.value.toUpperCase() } : x))} /></Field>
                           <Field label="Telefono"><TelefonoConPrefisso className={`flex-1 min-w-0 ${INPUT_CLS}`} selectClassName={`w-[104px] shrink-0 ${INPUT_CLS}`} mostraAnteprima={false} value={g.telefono} onChange={v => setGuarantors(arr => arr.map((x, j) => j === i ? { ...x, telefono: v } : x))} /></Field>
                           <Field label="Email"><input className={INPUT_CLS} value={g.email} onChange={e => setGuarantors(arr => arr.map((x, j) => j === i ? { ...x, email: e.target.value } : x))} /></Field>
-                          <Field label="Indirizzo"><input className={INPUT_CLS} value={g.indirizzo} onChange={e => setGuarantors(arr => arr.map((x, j) => j === i ? { ...x, indirizzo: e.target.value } : x))} /></Field>
+                          <Field label="Indirizzo"><AddressAutocomplete className={INPUT_CLS} value={g.indirizzo}
+                            onChange={v => setGuarantors(arr => arr.map((x, j) => j === i ? { ...x, indirizzo: v } : x))}
+                            onSelectParts={parts => setGuarantors(arr => arr.map((x, j) => j === i ? {
+                              ...x,
+                              indirizzo: parts.street || parts.full,
+                              citta: parts.city || x.citta,
+                              provincia: getProvinciaByCity(parts.city) || x.provincia,
+                            } : x))} /></Field>
                           <div className="grid grid-cols-2 gap-3">
                             <Field label="Città"><input className={INPUT_CLS} value={g.citta} onChange={e => setGuarantors(arr => arr.map((x, j) => j === i ? { ...x, citta: e.target.value } : x))} /></Field>
                             <Field label="Prov."><input className={INPUT_CLS} value={g.provincia} onChange={e => setGuarantors(arr => arr.map((x, j) => j === i ? { ...x, provincia: e.target.value.toUpperCase() } : x))} /></Field>
