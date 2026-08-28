@@ -8,6 +8,7 @@ import { invalidateCustomersCache } from '../../../utils/customersCache'
 import CalcolaCFButton from '../../../components/CalcolaCFButton'
 import CompilaButton, { type ExtractedData, type DataConflict } from '../../../components/CompilaButton'
 import { validateIban, formatIbanGroups } from '../../../utils/ibanValidation'
+import { cosaMancaNellIndirizzo, completaIndirizzo } from '../../../utils/indirizzoFattura'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
@@ -357,6 +358,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
   // Start with empty errors
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [cercandoIndirizzo, setCercandoIndirizzo] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   // Scrollable modal body — after "Compila" lo riportiamo in cima cosi'
   // l'admin vede subito i campi (nome, cognome, ecc.) appena riempiti
@@ -422,6 +424,42 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     // 11 digits
     const pivaRegex = /^[0-9]{11}$/
     return pivaRegex.test(piva)
+  }
+
+  /**
+   * Ricerca indirizzo intelligente: l'indirizzo completo di questo cliente
+   * quasi sempre esiste gia' (fattura sua accettata dal SDI, doppione in
+   * anagrafica). Sola lettura: propone, non salva.
+   */
+  const cercaIndirizzoCliente = async () => {
+    const piva = (formData.partita_iva || '').trim()
+    const cf = (formData.cf_azienda || '').trim()
+    const email = (formData.email || '').trim()
+    if (!piva && !cf && !email) {
+      toast.error('Servono partita IVA, codice fiscale o email per cercare l\'indirizzo')
+      return
+    }
+    setCercandoIndirizzo(true)
+    try {
+      const res = await authFetch('/.netlify/functions/cerca-indirizzo-cliente', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ partitaIva: piva, codiceFiscale: cf, email }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(json.error || 'Ricerca indirizzo non riuscita')
+      } else if (json.trovato) {
+        setFormData(prev => ({ ...prev, sede_legale: json.indirizzo }))
+        toast.success(`Indirizzo trovato (${json.fonte})`)
+      } else {
+        toast('Nessun indirizzo utilizzabile trovato per questo cliente: va scritto a mano', { duration: 8000 })
+      }
+    } catch (e) {
+      toast.error('Ricerca indirizzo non riuscita')
+    } finally {
+      setCercandoIndirizzo(false)
+    }
   }
 
   const validateForm = (): boolean => {
@@ -1393,9 +1431,38 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     </div>
                   </div>
                   <div>
-                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Sede Legale*</label>
-                    <input type="text" value={formData.sede_legale} onChange={(e) => setFormData({ ...formData, sede_legale: e.target.value })}
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-medium text-theme-text-muted">Sede Legale*</label>
+                      {/* 28/08/2026: la sede legale incompleta blocca la fattura
+                          elettronica settimane dopo. Qui si cerca l'indirizzo
+                          gia' usato per questo cliente (fatture accettate dal
+                          SDI, doppioni in anagrafica) invece di riscriverlo. */}
+                      <button
+                        type="button"
+                        onClick={cercaIndirizzoCliente}
+                        disabled={cercandoIndirizzo}
+                        className="text-[11px] px-2 py-0.5 rounded-full border border-dr7-gold text-dr7-gold hover:bg-dr7-gold hover:text-black transition-colors disabled:opacity-50"
+                      >
+                        {cercandoIndirizzo ? 'Cerco...' : 'Cerca indirizzo'}
+                      </button>
+                    </div>
+                    <input type="text" value={formData.sede_legale}
+                      onChange={(e) => setFormData({ ...formData, sede_legale: e.target.value })}
+                      onBlur={(e) => {
+                        // Comune riconosciuto e CAP assente: il CAP si mette da solo.
+                        const esito = completaIndirizzo(e.target.value)
+                        if (esito.cambiato) {
+                          setFormData(prev => ({ ...prev, sede_legale: esito.indirizzo }))
+                          toast.success(`CAP di ${esito.comune} aggiunto alla sede legale`)
+                        }
+                      }}
+                      placeholder="Via Roma 12, 09100 Cagliari (CA)"
                       className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                    {formData.sede_legale.trim() !== '' && cosaMancaNellIndirizzo(formData.sede_legale) && (
+                      <p className="text-[11px] text-rose-400 mt-1">
+                        Non basta per la fattura elettronica: {cosaMancaNellIndirizzo(formData.sede_legale)}. Formato: "Via Roma 12, 09100 Cagliari (CA)".
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Sede Operativa</label>
