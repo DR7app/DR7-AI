@@ -12,6 +12,7 @@ import CustomerAddebitoButton from './CustomerAddebitoButton'
 import CardDeleteButton from './CardDeleteButton'
 import { listCardsFromMetadata } from '../../../utils/nexiCards'
 import ClientStatusBadge from '../../../components/ClientStatusBadge'
+import GestisciMenu from './GestisciMenu'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { useClientStatus } from '../../../contexts/ClientStatusContext'
 import { clientStatusColor } from '../../../utils/clientStatusConfig'
@@ -180,7 +181,6 @@ export default function CustomersTab() {
   const [reportCustomerId, setReportCustomerId] = useState<string | null>(null)
   // Menu "Gestisci" della riga cliente: raggruppa scheda / dettagli /
   // documenti / modifica / link di pagamento (28/08/2026).
-  const [gestisciApertoId, setGestisciApertoId] = useState<string | null>(null)
   const [linkPagamentoCliente, setLinkPagamentoCliente] = useState<Customer | null>(null)
   const [linkImporto, setLinkImporto] = useState('')
   const [linkDescrizione, setLinkDescrizione] = useState('')
@@ -3111,57 +3111,31 @@ export default function CustomersTab() {
                         raccoglie le azioni sul cliente, link di pagamento
                         compreso: cosi' si incassa (e si tokenizza la carta)
                         anche senza una prenotazione aperta. */}
-                    <div className="relative inline-block text-left">
-                      <button
-                        onClick={() => setGestisciApertoId(gestisciApertoId === customer.id ? null : customer.id)}
-                        className="text-xs py-1.5 px-4 bg-dr7-gold/20 hover:bg-dr7-gold/30 text-dr7-gold border border-dr7-gold/40 rounded-full font-semibold transition-colors whitespace-nowrap"
-                      >
-                        Gestisci ▾
-                      </button>
-                      {gestisciApertoId === customer.id && (
-                        <>
-                          <div className="fixed inset-0 z-40" onClick={() => setGestisciApertoId(null)} />
-                          <div className="absolute z-50 left-0 mt-1 w-52 bg-theme-bg-primary border border-theme-border rounded-lg shadow-2xl overflow-hidden">
-                            <button
-                              onClick={() => { setGestisciApertoId(null); setReportCustomerId(customer.id) }}
-                              className="w-full text-left px-4 py-2.5 text-xs text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
-                            >
-                              Scheda
-                            </button>
-                            <button
-                              onClick={() => { setGestisciApertoId(null); handleViewCustomerDetails(customer) }}
-                              className="w-full text-left px-4 py-2.5 text-xs text-theme-text-primary hover:bg-theme-bg-hover transition-colors border-t border-theme-border/50"
-                            >
-                              Dettagli Completi
-                            </button>
-                            <button
-                              onClick={() => { setGestisciApertoId(null); handleViewDocuments(customer) }}
-                              className="w-full text-left px-4 py-2.5 text-xs text-theme-text-primary hover:bg-theme-bg-hover transition-colors border-t border-theme-border/50"
-                            >
-                              Documenti
-                            </button>
-                            <button
-                              onClick={() => { setGestisciApertoId(null); handleEdit(customer) }}
-                              className="w-full text-left px-4 py-2.5 text-xs text-theme-text-primary hover:bg-theme-bg-hover transition-colors border-t border-theme-border/50"
-                            >
-                              Modifica
-                            </button>
-                            <button
-                              onClick={() => {
-                                setGestisciApertoId(null)
-                                setLinkPagamentoCliente(customer)
-                                setLinkImporto('')
-                                setLinkDescrizione('')
-                                setLinkCreato('')
-                              }}
-                              className="w-full text-left px-4 py-2.5 text-xs text-dr7-gold font-semibold hover:bg-theme-bg-hover transition-colors border-t border-theme-border"
-                            >
-                              Link pagamento
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
+                    {/* 28/08/2026: il menu era `absolute` dentro la tabella,
+                        che ha overflow-x-auto: si apriva TAGLIATO e "Link
+                        pagamento", ultima voce, restava fuori dallo schermo.
+                        GestisciMenu rende il popover in un Portal fixed —
+                        stesso menu delle prenotazioni, nessun clipping. */}
+                    <GestisciMenu
+                      sections={[{
+                        actions: [
+                          { label: 'Scheda', onClick: () => setReportCustomerId(customer.id) },
+                          { label: 'Dettagli Completi', onClick: () => handleViewCustomerDetails(customer) },
+                          { label: 'Documenti', onClick: () => handleViewDocuments(customer) },
+                          { label: 'Modifica', onClick: () => handleEdit(customer) },
+                          {
+                            label: 'Link pagamento',
+                            onClick: () => {
+                              setLinkPagamentoCliente(customer)
+                              setLinkImporto('')
+                              setLinkDescrizione('')
+                              setLinkCreato('')
+                            },
+                          },
+                        ],
+                      }]}
+                    />
+
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex gap-2 items-center justify-end">
