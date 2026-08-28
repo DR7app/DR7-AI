@@ -1493,7 +1493,15 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
       subtotal,
       sconto,
       totalFinal,
-      kmIncluded: resolveKmIncluded(selectedVehicle?.category, rentalDays, proKm, rentalConfig),
+      // 2026-08-28: la spunta "Km Illimitati" VINCE sui km di categoria.
+      // Prima kmIncluded guardava solo la tabella km della categoria: con
+      // l'opzione selezionata il riepilogo continuava a scrivere "300 Km" e,
+      // al salvataggio, km_limit finiva a 300 con unlimited_km = false —
+      // quindi anche il preventivo WhatsApp partiva con i km limitati
+      // mentre il cliente stava pagando gli illimitati.
+      kmIncluded: form.include_unlimited_km
+        ? ('unlimited' as const)
+        : resolveKmIncluded(selectedVehicle?.category, rentalDays, proKm, rentalConfig),
       sforo: (configOverlay as any).sforoKm ?? (configOverlay as any).sforo_km ?? 0,
     }
   }, [form, rentalDays, revenueData, selectedVehicle, insuranceOptions, configOverlay, rentalConfig, noCauzioneResolvedDaily, proLavaggioFee, proSecondDriverDaily, proDr7FlexDaily, proUnlimitedKmDaily, proKm, editingId, coeffFlags])
@@ -4297,7 +4305,9 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
                           <span className="font-mono text-theme-text-primary tabular-nums">{sel.rental_days}gg × €{formatEur(sel.base_daily_rate)}/g</span>
                         </div>
                         {(() => {
-                          const isUnlimited = (sel.unlimited_km_total || 0) > 0
+                          // 2026-08-28: illimitati anche a costo 0 (inclusi nel prezzo):
+                          // il flag salvato vale quanto l'importo.
+                          const isUnlimited = !!sel.unlimited_km || (sel.unlimited_km_total || 0) > 0
                           let kmLabel = ''
                           if (isUnlimited) kmLabel = 'Illimitati'
                           else {
@@ -4760,7 +4770,7 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
                         <div>{p.vehicle_name}{p.vehicle_model_year ? ` · my ${p.vehicle_model_year}` : ''}</div>
                         <div>{p.rental_days}gg × {formatEur(p.base_daily_rate)}/g</div>
                         {(() => {
-                          const isUnlimited = (p.unlimited_km_total || 0) > 0
+                          const isUnlimited = !!p.unlimited_km || (p.unlimited_km_total || 0) > 0
                           if (isUnlimited) {
                             return <div>Km inclusi: <span className="text-theme-text-primary">Illimitati</span></div>
                           }
