@@ -15,6 +15,7 @@ import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import GestisciMenu from './GestisciMenu'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { useClientStatus } from '../../../contexts/ClientStatusContext'
+import { useSingleFlight } from '../../../hooks/useSingleFlight'
 import { clientStatusColor } from '../../../utils/clientStatusConfig'
 
 interface Customer {
@@ -1146,6 +1147,12 @@ export default function CustomersTab() {
       toast.error('Invio non riuscito')
     }
   }
+
+  // Regola del click singolo: ogni azione che manda qualcosa fuori (link,
+  // WhatsApp) passa da useSingleFlight. Senza, dieci click impazienti = dieci
+  // messaggi al cliente.
+  const [creaLinkPagamento, creandoLinkFlight] = useSingleFlight(creaLinkPagamentoCliente)
+  const [inviaLinkWhatsapp, inviandoLinkWhatsapp] = useSingleFlight(inviaLinkPagamentoWhatsapp)
 
   async function handleEdit(customer: Customer) {
     logger.log('[handleEdit] Customer object:', customer)
@@ -3264,8 +3271,8 @@ export default function CustomersTab() {
                     Annulla
                   </button>
                   <button
-                    onClick={creaLinkPagamentoCliente}
-                    disabled={creandoLink}
+                    onClick={() => creaLinkPagamento()}
+                    disabled={creandoLink || creandoLinkFlight}
                     className="px-4 py-2 text-sm rounded-full bg-dr7-gold text-black font-semibold hover:opacity-90 disabled:opacity-50 transition-colors"
                   >
                     {creandoLink ? 'Creo il link...' : 'Crea link'}
@@ -3286,10 +3293,11 @@ export default function CustomersTab() {
                     Copia link
                   </button>
                   <button
-                    onClick={inviaLinkPagamentoWhatsapp}
-                    className="px-4 py-2 text-sm rounded-full bg-green-700 text-white font-semibold hover:bg-green-600 transition-colors"
+                    onClick={() => inviaLinkWhatsapp()}
+                    disabled={inviandoLinkWhatsapp}
+                    className="px-4 py-2 text-sm rounded-full bg-green-700 text-white font-semibold hover:bg-green-600 disabled:opacity-50 transition-colors"
                   >
-                    Invia su WhatsApp
+                    {inviandoLinkWhatsapp ? 'Invio...' : 'Invia su WhatsApp'}
                   </button>
                   <button
                     onClick={() => setLinkPagamentoCliente(null)}
