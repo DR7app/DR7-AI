@@ -9,6 +9,7 @@ import CalcolaCFButton from '../../../components/CalcolaCFButton'
 import CompilaButton, { type ExtractedData, type DataConflict } from '../../../components/CompilaButton'
 import { validateIban, formatIbanGroups } from '../../../utils/ibanValidation'
 import { cosaMancaNellIndirizzo, completaIndirizzo } from '../../../utils/indirizzoFattura'
+import AddressAutocomplete from './AddressAutocomplete'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
@@ -1446,18 +1447,36 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                         {cercandoIndirizzo ? 'Cerco...' : 'Cerca indirizzo'}
                       </button>
                     </div>
-                    <input type="text" value={formData.sede_legale}
-                      onChange={(e) => setFormData({ ...formData, sede_legale: e.target.value })}
-                      onBlur={(e) => {
-                        // Comune riconosciuto e CAP assente: il CAP si mette da solo.
-                        const esito = completaIndirizzo(e.target.value)
+                    {/* Stesso autocomplete degli indirizzi in prenotazione:
+                        scegliendo un suggerimento arrivano via, CAP, comune e
+                        provincia gia' nel formato che vuole la fattura
+                        elettronica. Restano l'auto-CAP sul comune riconosciuto
+                        (per chi scrive a mano) e l'avviso di cosa manca. */}
+                    <AddressAutocomplete
+                      value={formData.sede_legale}
+                      onChange={(val) => setFormData(prev => ({ ...prev, sede_legale: val }))}
+                      onSelectParts={(parts) => {
+                        const cap = parts.zip || ''
+                        const comune = parts.city || ''
+                        const prov = (parts.province || '').toUpperCase()
+                        const riga2 = [cap, comune].filter(Boolean).join(' ')
+                        const completo = [
+                          parts.street || parts.full,
+                          riga2 ? `${riga2}${prov ? ` (${prov})` : ''}` : '',
+                        ].filter(Boolean).join(', ')
+                        setFormData(prev => ({ ...prev, sede_legale: completo || parts.full }))
+                      }}
+                      onBlurComplete={(val) => {
+                        // Scritto a mano: se il comune e' riconosciuto e il CAP
+                        // manca, il CAP si mette da solo.
+                        const esito = completaIndirizzo(val)
                         if (esito.cambiato) {
                           setFormData(prev => ({ ...prev, sede_legale: esito.indirizzo }))
                           toast.success(`CAP di ${esito.comune} aggiunto alla sede legale`)
                         }
                       }}
                       placeholder="Via Roma 12, 09100 Cagliari (CA)"
-                      className="w-full bg-theme-bg-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:border-dr7-gold focus:ring-1 focus:ring-dr7-gold outline-none" />
+                    />
                     {formData.sede_legale.trim() !== '' && cosaMancaNellIndirizzo(formData.sede_legale) && (
                       <p className="text-[11px] text-rose-400 mt-1">
                         Non basta per la fattura elettronica: {cosaMancaNellIndirizzo(formData.sede_legale)}. Formato: "Via Roma 12, 09100 Cagliari (CA)".

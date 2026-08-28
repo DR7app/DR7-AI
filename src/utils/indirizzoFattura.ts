@@ -62,3 +62,30 @@ export function completaIndirizzo(indirizzo?: string | null): { indirizzo: strin
     const nuovo = `${testa}, ${cap} ${coda}${prov ? ` (${prov})` : ''}`
     return { indirizzo: nuovo, cambiato: true, comune: coda }
 }
+
+/** Scompone un indirizzo completo nei campi dell'anagrafica. */
+export function scomponiIndirizzo(indirizzo?: string | null): { via: string; cap: string; comune: string; provincia: string } | null {
+    const raw = String(indirizzo || '').replace(/\s+/g, ' ').trim()
+    const cap = raw.match(/\b(\d{5})\b/)
+    if (!cap || cap.index === undefined) return null
+
+    const via = raw.slice(0, cap.index).replace(/[,;\s]+$/, '').trim()
+    let resto = raw.slice(cap.index + 5).replace(/^[,;\s]+/, '').trim()
+
+    let provincia = ''
+    const paren = resto.match(/\(\s*([A-Za-z]{2})\s*\)/)
+    if (paren) {
+        provincia = paren[1].toUpperCase()
+        resto = resto.replace(paren[0], ' ')
+    } else {
+        const coda = resto.match(/[\s,]([A-Za-z]{2})\s*$/)
+        if (coda && coda.index !== undefined) {
+            provincia = coda[1].toUpperCase()
+            resto = resto.slice(0, coda.index).trim()
+        }
+    }
+
+    const comune = resto.replace(/[,;]/g, ' ').replace(/\s+/g, ' ').trim()
+    if (!via || !comune) return null
+    return { via, cap: cap[1], comune, provincia }
+}

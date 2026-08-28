@@ -35,6 +35,9 @@ interface AddressAutocompleteProps {
   onChange: (value: string) => void
   /** Called with structured address parts (incl. coords) when a suggestion is selected */
   onSelectParts?: (parts: AddressParts) => void
+  /** Chiamato all'uscita dal campo col testo scritto a mano: permette a chi
+   *  usa il componente di completarlo (es. CAP dal comune riconosciuto). */
+  onBlurComplete?: (value: string) => void
   placeholder?: string
   className?: string
   label?: string
@@ -45,6 +48,7 @@ export default function AddressAutocomplete({
   value,
   onChange,
   onSelectParts,
+  onBlurComplete,
   placeholder = 'Via, Numero Civico, CAP, Città',
   className = '',
   label,
@@ -237,6 +241,7 @@ export default function AddressAutocomplete({
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
         onFocus={() => { if (suggestions.length > 0) setIsOpen(true) }}
+        onBlur={(e) => { if (onBlurComplete) onBlurComplete(e.target.value) }}
         placeholder={placeholder}
         className={inputClass}
         required={required}

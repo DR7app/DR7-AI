@@ -1058,6 +1058,19 @@ export default function FatturaTab() {
         </div>
         {view === 'emesse' && (
           <div className="flex gap-2 items-center">
+            {/* Primo della barra: e' l'azione che sblocca le fatture non
+                trasmesse. Tocca SOLO le non trasmesse: una fattura gia'
+                accettata dal SDI non si rimanda mai (sarebbe un duplicato
+                con un numero nuovo). */}
+            {draftInvoices.length > 0 && (
+              <button
+                onClick={handleSendAllDrafts}
+                title="Invia a SDI tutte le fatture non ancora trasmesse (bozze). Le fatture gia' inviate non vengono toccate."
+                className="px-4 py-2 bg-dr7-gold hover:opacity-90 text-black rounded-full font-semibold transition-colors"
+              >
+                Invia tutto a SDI ({draftInvoices.length})
+              </button>
+            )}
             <button
               onClick={() => refreshAllSdi()}
               disabled={refreshingAll}
@@ -1086,16 +1099,6 @@ export default function FatturaTab() {
             >
               {multiSelectMode ? 'Annulla Selezione' : 'Selezione Multipla'}
             </button>
-
-            {draftInvoices.length > 0 && (
-              <button
-                onClick={handleSendAllDrafts}
-                title="Ritenta l'invio a SDI di tutte le fatture rimaste in bozza"
-                className="px-4 py-2 bg-dr7-gold hover:opacity-90 text-black rounded-full font-medium transition-colors"
-              >
-                Invia a SDI le bozze ({draftInvoices.length})
-              </button>
-            )}
 
             {multiSelectMode && selectedIds.length > 0 && (
               <button
