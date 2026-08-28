@@ -359,7 +359,6 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
 
   // Start with empty errors
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [cercandoIndirizzo, setCercandoIndirizzo] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   // Scrollable modal body — after "Compila" lo riportiamo in cima cosi'
   // l'admin vede subito i campi (nome, cognome, ecc.) appena riempiti
@@ -425,42 +424,6 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
     // 11 digits
     const pivaRegex = /^[0-9]{11}$/
     return pivaRegex.test(piva)
-  }
-
-  /**
-   * Ricerca indirizzo intelligente: l'indirizzo completo di questo cliente
-   * quasi sempre esiste gia' (fattura sua accettata dal SDI, doppione in
-   * anagrafica). Sola lettura: propone, non salva.
-   */
-  const cercaIndirizzoCliente = async () => {
-    const piva = (formData.partita_iva || '').trim()
-    const cf = (formData.cf_azienda || '').trim()
-    const email = (formData.email || '').trim()
-    if (!piva && !cf && !email) {
-      toast.error('Servono partita IVA, codice fiscale o email per cercare l\'indirizzo')
-      return
-    }
-    setCercandoIndirizzo(true)
-    try {
-      const res = await authFetch('/.netlify/functions/cerca-indirizzo-cliente', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ partitaIva: piva, codiceFiscale: cf, email }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        toast.error(json.error || 'Ricerca indirizzo non riuscita')
-      } else if (json.trovato) {
-        setFormData(prev => ({ ...prev, sede_legale: json.indirizzo }))
-        toast.success(`Indirizzo trovato (${json.fonte})`)
-      } else {
-        toast('Nessun indirizzo utilizzabile trovato per questo cliente: va scritto a mano', { duration: 8000 })
-      }
-    } catch (e) {
-      toast.error('Ricerca indirizzo non riuscita')
-    } finally {
-      setCercandoIndirizzo(false)
-    }
   }
 
   const validateForm = (): boolean => {
@@ -1432,21 +1395,7 @@ export default function NewClientModal({ isOpen, onClose, onClientCreated, initi
                     </div>
                   </div>
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-[11px] font-medium text-theme-text-muted">Sede Legale*</label>
-                      {/* 28/08/2026: la sede legale incompleta blocca la fattura
-                          elettronica settimane dopo. Qui si cerca l'indirizzo
-                          gia' usato per questo cliente (fatture accettate dal
-                          SDI, doppioni in anagrafica) invece di riscriverlo. */}
-                      <button
-                        type="button"
-                        onClick={cercaIndirizzoCliente}
-                        disabled={cercandoIndirizzo}
-                        className="text-[11px] px-2 py-0.5 rounded-full border border-dr7-gold text-dr7-gold hover:bg-dr7-gold hover:text-black transition-colors disabled:opacity-50"
-                      >
-                        {cercandoIndirizzo ? 'Cerco...' : 'Cerca indirizzo'}
-                      </button>
-                    </div>
+                    <label className="block text-[11px] font-medium text-theme-text-muted mb-1">Sede Legale*</label>
                     {/* Stesso autocomplete degli indirizzi in prenotazione:
                         scegliendo un suggerimento arrivano via, CAP, comune e
                         provincia gia' nel formato che vuole la fattura
