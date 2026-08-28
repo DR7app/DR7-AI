@@ -243,8 +243,35 @@ export const handler: Handler = async (event) => {
         }
 
         // 1. Generate XML
-        const xmlContent = generateFatturaXML(invoice as any)
-        const filename = generateInvoiceFilename(invoice as any)
+        // 2026-08-28: prima un XML non generabile (tipico: sede legale del
+        // cliente incompleta) finiva nel catch generico -> 500 "Internal
+        // server error" e la fattura restava Bozza senza spiegazione. Ora il
+        // motivo torna al chiamante E finisce su sdi_response.auto_send_error,
+        // lo stesso campo che il tab Fatture mostra sotto il badge.
+        let xmlContent: string
+        let filename: string
+        try {
+            xmlContent = generateFatturaXML(invoice as any)
+            filename = generateInvoiceFilename(invoice as any)
+        } catch (xmlError: any) {
+            const motivo = String(xmlError?.message || xmlError)
+            console.error('[SDI] XML non generabile:', motivo)
+            // sdi_status resta 'draft': la fattura non e' mai uscita, quindi
+            // NON deve prendere un nuovo numero al reinvio.
+            await supabase.from('fatture').update({
+                sdi_response: { auto_send_error: motivo, at: new Date().toISOString() }
+            }).eq('id', invoiceId)
+            await supabase.from('invoice_status_logs').insert({
+                invoice_id: invoiceId,
+                status: 'draft',
+                message: motivo,
+                raw_response: { xml_error: motivo }
+            })
+            return {
+                statusCode: 400,
+                body: JSON.stringify({ error: 'XML non generabile', message: motivo })
+            }
+        }
 
         console.log('[Aruba] Generated XML:', filename)
 
@@ -265,7 +292,10 @@ export const handler: Handler = async (event) => {
             })
 
             // Update main table
-            await supabase.from('fatture').update({ sdi_status: 'error' }).eq('id', invoiceId)
+            await supabase.from('fatture').update({
+                sdi_status: 'error',
+                sdi_response: { auto_send_error: String(apiError?.message || apiError), at: new Date().toISOString() }
+            }).eq('id', invoiceId)
 
             return {
                 statusCode: 502,
@@ -281,7 +311,8 @@ export const handler: Handler = async (event) => {
                 aruba_invoice_id: arubaResult.id,
                 xml_filename: filename,
                 aruba_upload_filename: arubaResult.filename,
-                sdi_sent_at: new Date().toISOString()
+                sdi_sent_at: new Date().toISOString(),
+                sdi_response: null // il motivo di blocco precedente non vale piu'
             })
             .eq('id', invoiceId)
 

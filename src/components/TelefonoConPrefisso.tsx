@@ -64,33 +64,50 @@ export default function TelefonoConPrefisso({
     return (
         <div className="space-y-1">
             <div className="flex items-center gap-2">
-                <select
-                    value={dial}
-                    disabled={disabled}
-                    aria-label="Prefisso internazionale"
-                    onChange={e => { setDial(e.target.value); aggiorna(e.target.value, numeroLocale) }}
-                    className={selectClassName || 'w-[104px] shrink-0 px-2 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary'}
-                >
-                    <optgroup label="Piu' usati">
-                        {paesi.frequenti.map(p => (
-                            <option key={p.iso} value={p.dial} title={p.nome}>{`${bandiera(p.iso)} ${p.dial}`}</option>
-                        ))}
-                    </optgroup>
-                    <optgroup label="Tutti i paesi">
-                        {paesi.altri.map(p => (
-                            <option key={p.iso} value={p.dial} title={p.nome}>{`${bandiera(p.iso)} ${p.dial}`}</option>
-                        ))}
-                    </optgroup>
-                </select>
-                <input
-                    type="tel"
-                    inputMode="numeric"
-                    disabled={disabled}
-                    value={numeroLocale}
-                    onChange={e => aggiorna(dial, e.target.value)}
-                    placeholder={placeholder}
-                    className={className || 'flex-1 min-w-0 px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary'}
-                />
+                {/*
+                  2026-08-28: la larghezza NON puo' venire dalle classi del
+                  chiamante. Quasi tutti passano al select la stessa classe
+                  dell'input (in Input.tsx e' BASE_CLASS, che contiene
+                  `w-full`): `w-full` vinceva su `w-[104px]`, il select con
+                  shrink-0 prendeva tutta la riga e del campo numero restava
+                  una casella di pochi pixel — si poteva scegliere il prefisso
+                  e non scrivere il numero. La misura ora sta sui due
+                  contenitori e i due campi riempiono il proprio box con uno
+                  style inline, che nessuna classe puo' scavalcare.
+                */}
+                <div className="shrink-0" style={{ width: 78 }}>
+                    <select
+                        value={dial}
+                        disabled={disabled}
+                        aria-label="Prefisso internazionale"
+                        onChange={e => { setDial(e.target.value); aggiorna(e.target.value, numeroLocale) }}
+                        className={selectClassName || 'px-2 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary'}
+                        style={{ width: '100%', minWidth: 0, paddingLeft: 6, paddingRight: 2 }}
+                    >
+                        <optgroup label="Piu' usati">
+                            {paesi.frequenti.map(p => (
+                                <option key={p.iso} value={p.dial} title={p.nome}>{`${bandiera(p.iso)} ${p.dial}`}</option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="Tutti i paesi">
+                            {paesi.altri.map(p => (
+                                <option key={p.iso} value={p.dial} title={p.nome}>{`${bandiera(p.iso)} ${p.dial}`}</option>
+                            ))}
+                        </optgroup>
+                    </select>
+                </div>
+                <div className="flex-1 min-w-0">
+                    <input
+                        type="tel"
+                        inputMode="numeric"
+                        disabled={disabled}
+                        value={numeroLocale}
+                        onChange={e => aggiorna(dial, e.target.value)}
+                        placeholder={placeholder}
+                        className={className || 'px-3 py-2 rounded-lg bg-theme-bg-tertiary border border-theme-border text-sm text-theme-text-primary'}
+                        style={{ width: '100%', minWidth: 0 }}
+                    />
+                </div>
             </div>
             {mostraAnteprima && (
                 <div className="text-[10px] text-theme-text-muted">

@@ -921,16 +921,93 @@ export default function FatturaTab() {
       const result = await response.json()
 
       if (!response.ok) {
+        // 2026-08-28: l'errore veniva scritto SOLO in console. La fattura
+        // restava "Bozza" senza spiegazione (tipico: sede legale incompleta,
+        // che fa fallire la generazione dell'XML prima ancora di Aruba).
+        // Ora il motivo si vede: e' quello che dice all'admin cosa correggere.
+        const motivo = result.message || result.details || result.error || `Errore ${response.status}`
         console.error('SDI send failed:', result.error, result.details)
+        toast.error(`Invio a SDI non riuscito: ${motivo}`, { duration: 12000 })
+      } else if (result.skipped || result.success === false) {
+        // Risposta 200 ma invio NON effettuato (es. veicolo di test):
+        // prima passava per "riuscito" e la riga restava Bozza in silenzio.
+        toast(result.message || 'Invio a SDI saltato', { duration: 10000 })
       } else {
+        toast.success(`Fattura ${invoice.numero_fattura} inviata a SDI`)
         logAdminAction('send_sdi', 'fattura', invoice.id, buildFatturaContext(invoice))
       }
 
       loadInvoices()
     } catch (error) {
       console.error('Error sending to SDI:', error)
+      toast.error('Invio a SDI non riuscito: ' + (error instanceof Error ? error.message : String(error)), { duration: 12000 })
       loadInvoices()
     }
+  }
+
+  /**
+   * 2026-08-28: invio a SDI di TUTTE le bozze in un colpo solo.
+   * Una fattura non deve restare in bozza in silenzio: qui si ritenta ogni
+   * bozza e si elenca, per quelle che non partono, il motivo esatto
+   * (tipicamente anagrafica cliente incompleta) da correggere.
+   * Le note di credito e le fatture annullate restano fuori.
+   */
+  const draftInvoices = useMemo(
+    () => invoices.filter(i =>
+      (!i.sdi_status || i.sdi_status === 'draft')
+      && i.stato !== 'cancelled'
+      && !(i.tipo_fattura === 'nota_credito' || i.tipo_fattura === 'TD04' || i.tipo_fattura === 'nota_di_credito')
+    ),
+    [invoices]
+  )
+
+  async function handleSendAllDrafts() {
+    const daInviare = draftInvoices
+    if (daInviare.length === 0) {
+      toast('Nessuna fattura in bozza da inviare')
+      return
+    }
+    if (!window.confirm(`Inviare a SDI ${daInviare.length} fattura/e in bozza?`)) return
+
+    const inCorso = toast.loading(`Invio a SDI: 0/${daInviare.length}`)
+    const falliti: { numero: string; motivo: string }[] = []
+    let inviate = 0
+
+    for (let i = 0; i < daInviare.length; i++) {
+      const inv = daInviare[i]
+      toast.loading(`Invio a SDI: ${i + 1}/${daInviare.length} — ${inv.numero_fattura}`, { id: inCorso })
+      try {
+        const response = await fetch('/.netlify/functions/send-invoice-to-sdi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ invoiceId: inv.id })
+        })
+        const result = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          falliti.push({ numero: inv.numero_fattura, motivo: result.message || result.details || result.error || `Errore ${response.status}` })
+        } else if (result.skipped || result.success === false) {
+          falliti.push({ numero: inv.numero_fattura, motivo: result.message || 'invio saltato' })
+        } else {
+          inviate++
+          logAdminAction('send_sdi', 'fattura', inv.id, buildFatturaContext(inv))
+        }
+      } catch (err) {
+        falliti.push({ numero: inv.numero_fattura, motivo: err instanceof Error ? err.message : String(err) })
+      }
+    }
+
+    toast.dismiss(inCorso)
+    if (inviate > 0) toast.success(`${inviate} fattura/e inviate a SDI`)
+    if (falliti.length > 0) {
+      toast.error(`${falliti.length} non inviate — motivo indicato sulla riga`, { duration: 12000 })
+      console.warn('[SDI] Bozze non inviate:', falliti)
+      alert(
+        `Fatture NON inviate a SDI (${falliti.length}):\n\n` +
+        falliti.map(f => `${f.numero}: ${f.motivo}`).join('\n\n') +
+        `\n\nCorreggi l'anagrafica del cliente indicata e reinvia.`
+      )
+    }
+    loadInvoices()
   }
 
   if (loading) {
@@ -1009,6 +1086,16 @@ export default function FatturaTab() {
             >
               {multiSelectMode ? 'Annulla Selezione' : 'Selezione Multipla'}
             </button>
+
+            {draftInvoices.length > 0 && (
+              <button
+                onClick={handleSendAllDrafts}
+                title="Ritenta l'invio a SDI di tutte le fatture rimaste in bozza"
+                className="px-4 py-2 bg-dr7-gold hover:opacity-90 text-black rounded-full font-medium transition-colors"
+              >
+                Invia a SDI le bozze ({draftInvoices.length})
+              </button>
+            )}
 
             {multiSelectMode && selectedIds.length > 0 && (
               <button
@@ -1217,6 +1304,9 @@ export default function FatturaTab() {
                     : overdue ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
                     : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
                   const open = openActionsId === invoice.id
+                  const sdiBlockReason = (sdiStatus === 'draft' || sdiStatus === 'error')
+                    ? String(invoice.sdi_response?.auto_send_error || '').trim()
+                    : ''
                   return (
                     <tr key={invoice.id} className="hover:bg-theme-bg-tertiary/30 transition-colors">
                       {multiSelectMode && (
@@ -1254,9 +1344,18 @@ export default function FatturaTab() {
                         )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${sdiClass}`}>
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${sdiClass}`} title={sdiBlockReason || undefined}>
                           {sdiLabel}
                         </span>
+                        {/* 2026-08-28: perche' e' rimasta Bozza. Il motivo era
+                            gia' salvato in sdi_response.auto_send_error dal
+                            tentativo automatico, ma non lo leggeva nessuno:
+                            la riga sembrava una bozza qualunque. */}
+                        {sdiBlockReason && (
+                          <div className="text-[10px] text-rose-400 mt-0.5 max-w-[260px] whitespace-normal leading-tight" title={sdiBlockReason}>
+                            ⚠ {sdiBlockReason}
+                          </div>
+                        )}
                         {invoice.sdi_status && ['rejected', 'scartata'].includes(invoice.sdi_status) && !invoice.sdi_notification_seen && (
                           <button
                             type="button"
