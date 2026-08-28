@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import MoneyInput from '../../../components/MoneyInput'
+import FleetInventory from './FleetInventory'
 
 interface PriceOption {
   label: string
@@ -41,7 +42,10 @@ const MECCANICA_ORDER = ['tech']
 export default function CarWashCatalogTab() {
   const [services, setServices] = useState<CarWashService[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedTab, setSelectedTab] = useState<'lavaggio' | 'meccanica'>('lavaggio')
+  // 28/08/2026 (direzione): i Ricambi per Veicolo stanno DENTRO il catalogo
+  // Lavaggio & Meccanica, non in una voce a parte: chi li ordina e li monta e'
+  // l'officina, e li cerca dove ci sono i suoi servizi.
+  const [selectedTab, setSelectedTab] = useState<'lavaggio' | 'meccanica' | 'ricambi'>('lavaggio')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editPrice, setEditPrice] = useState('')
   const [editPriceOptions, setEditPriceOptions] = useState<PriceOption[]>([])
@@ -294,14 +298,17 @@ export default function CarWashCatalogTab() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h2 className="text-2xl font-bold text-theme-text-primary">Catalogo Servizi</h2>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => { setShowNewForm(true); setNewService(prev => ({ ...prev, main_tab: selectedTab })) }}
-            className="px-4 py-2 rounded-full text-sm font-medium bg-dr7-gold text-white hover:bg-[#0A8FA3] transition-colors"
-          >
-            + Nuovo Servizio
-          </button>
+        <div className="flex gap-2 flex-wrap">
+          {/* I ricambi non sono servizi a listino: niente "Nuovo Servizio" li'. */}
+          {selectedTab !== 'ricambi' && (
+            <button
+              type="button"
+              onClick={() => { setShowNewForm(true); setNewService(prev => ({ ...prev, main_tab: selectedTab })) }}
+              className="px-4 py-2 rounded-full text-sm font-medium bg-dr7-gold text-white hover:bg-[#0A8FA3] transition-colors"
+            >
+              + Nuovo Servizio
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setSelectedTab('lavaggio')}
@@ -324,14 +331,30 @@ export default function CarWashCatalogTab() {
           >
             MECCANICA
           </button>
+          <button
+            type="button"
+            onClick={() => setSelectedTab('ricambi')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
+              selectedTab === 'ricambi'
+                ? 'bg-theme-text-primary text-theme-bg-primary border-theme-text-primary'
+                : 'bg-theme-bg-primary text-theme-text-primary border-white hover:bg-theme-text-primary hover:text-theme-bg-primary'
+            }`}
+          >
+            RICAMBI VEICOLI
+          </button>
         </div>
       </div>
+
+      {/* Ricambi per Veicolo: la stessa scheda di prima, ora dentro il catalogo.
+          Distinta dal magazzino a scorte, che resta in "Magazzino Lavaggio e
+          Meccanica". */}
+      {selectedTab === 'ricambi' && <FleetInventory />}
 
       {/* Prime Flex — protezione cancellazione (add-on, non un servizio
           della tabella car_wash_services). Unico prezzo modificabile,
           letto dal sito CarWashBookingPage. Storage:
           centralina_pro_config.config.servizi.prime_flex.price */}
-      {(() => {
+      {selectedTab !== 'ricambi' && (() => {
         const parsed = parseFloat(primeFlexPrice)
         const dirty = Number.isFinite(parsed) && parsed !== primeFlexSavedPrice
         return (
@@ -373,7 +396,7 @@ export default function CarWashCatalogTab() {
       })()}
 
       {/* New Service Form */}
-      {showNewForm && (
+      {selectedTab !== 'ricambi' && showNewForm && (
         <div className="rounded-2xl border-2 border-dr7-gold p-5 bg-theme-bg-secondary space-y-3">
           <h3 className="font-bold text-theme-text-primary">Nuovo Servizio</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -446,11 +469,11 @@ export default function CarWashCatalogTab() {
         </div>
       )}
 
-      {Object.keys(groupedServices).length === 0 && (
+      {selectedTab !== 'ricambi' && Object.keys(groupedServices).length === 0 && (
         <p className="text-theme-text-muted text-center py-10">Nessun servizio trovato.</p>
       )}
 
-      {categoryOrder.map(cat => {
+      {selectedTab !== 'ricambi' && categoryOrder.map(cat => {
         const items = groupedServices[cat]
         if (!items) return null
         return (

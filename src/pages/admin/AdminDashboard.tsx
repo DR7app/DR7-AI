@@ -504,12 +504,14 @@ export default function AdminDashboard() {
       // come su Terra e sugli altri business.
       { tab: 'lavaggio-uscite', label: 'Uscite Straordinarie', permKey: 'carwash' },
       { tab: 'carwash-calendar', label: 'Calendario' },
-      { tab: 'carwash-catalog', label: 'Lavaggi' },
-      // 28/08/2026 (direzione): i ricambi per singolo veicolo (olio,
-      // pastiglie, sensori) stanno qui, non nella sezione Magazzino: chi li
-      // ordina e li monta e' l'officina. Scheda diversa dal magazzino a
-      // scorte, che resta in "Magazzino Lavaggio e Meccanica".
-      { tab: 'magazzino', label: 'Ricambi per Veicolo' },
+      // 28/08/2026 (direzione): i ricambi per singolo veicolo (olio, pastiglie,
+      // sensori) stanno DENTRO il Catalogo, come terza scheda accanto a
+      // LAVAGGIO e MECCANICA: chi li ordina e li monta e' l'officina e li cerca
+      // dove ci sono i suoi servizi. Niente voce doppia in barra laterale — una
+      // tab in due posti fa rimbalzare la sidebar (vedi Magazzino/Terra).
+      // Scheda diversa dal magazzino a scorte, che resta in "Magazzino Lavaggio
+      // e Meccanica".
+      { tab: 'carwash-catalog', label: 'Catalogo' },
     ] },
     { name: 'Clienti', tabs: [
       { tab: 'customers', label: 'Lead' },
