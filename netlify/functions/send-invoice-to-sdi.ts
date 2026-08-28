@@ -1,6 +1,6 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { indirizzoUtilizzabile, cercaIndirizzoAltrove } from './utils/indirizzoCliente'
+import { indirizzoUtilizzabile, cercaIndirizzoAltrove, riparaIndirizzo } from './utils/indirizzoCliente'
 import { generateFatturaXML, generateInvoiceFilename } from './xml-utils'
 import { uploadInvoiceToAruba } from './aruba-utils'
 
@@ -235,6 +235,18 @@ export const handler: Handler = async (event) => {
         // dati della prenotazione). Niente indirizzi inventati: se non esiste
         // da nessuna parte, la fattura resta ferma col motivo.
         if (!indirizzoUtilizzabile(invoice.customer_address || '')) {
+            // Prima di andare a cercare altrove: l'indirizzo che c'e' e' quasi
+            // sempre giusto e gli manca solo il CAP ("QUARTU SANT' ELENA VIA
+            // SERRA PERDOSA 25"). Se il comune si riconosce, si ricompone.
+            const riparato = riparaIndirizzo(invoice.customer_address || '')
+            if (riparato.cambiato) {
+                console.log(`[SDI] Indirizzo ricomposto dal comune ${riparato.comune}: ${riparato.indirizzo}`)
+                await supabase.from('fatture').update({ customer_address: riparato.indirizzo }).eq('id', invoiceId)
+                invoice.customer_address = riparato.indirizzo
+            }
+        }
+
+        if (!indirizzoUtilizzabile(invoice.customer_address || '')) {
             let bookingCustomer: any = null
             if (invoice.booking_id) {
                 const { data: b } = await supabase
@@ -252,9 +264,12 @@ export const handler: Handler = async (event) => {
             }, bookingCustomer)
 
             if (trovato) {
-                console.log(`[SDI] Indirizzo recuperato da ${trovato.fonte}: ${trovato.indirizzo}`)
-                await supabase.from('fatture').update({ customer_address: trovato.indirizzo }).eq('id', invoiceId)
-                invoice.customer_address = trovato.indirizzo
+                // Anche l'indirizzo trovato altrove puo' essere senza CAP.
+                const sistemato = riparaIndirizzo(trovato.indirizzo)
+                const finale = sistemato.cambiato ? sistemato.indirizzo : trovato.indirizzo
+                console.log(`[SDI] Indirizzo recuperato da ${trovato.fonte}: ${finale}`)
+                await supabase.from('fatture').update({ customer_address: finale }).eq('id', invoiceId)
+                invoice.customer_address = finale
             }
         }
 

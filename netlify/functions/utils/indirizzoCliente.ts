@@ -18,6 +18,8 @@
  *    sull'anagrafica, altrimenti quel cliente non avrebbe fattura.
  */
 
+import { completaIndirizzo } from '../../../src/utils/indirizzoFattura'
+
 type Riga = Record<string, any> | null | undefined
 
 const s = (v: any) => String(v ?? '').trim()
@@ -96,18 +98,45 @@ export function indirizzoUtilizzabile(indirizzo: string): boolean {
 }
 
 /**
- * Ricerca "intelligente" dell'indirizzo quando quello sul cliente non basta.
+ * Rimette in riga un indirizzo scritto a mano quando il comune si riconosce.
  *
- * Perche' (28/08/2026): un indirizzo incompleto blocca la fattura, ma quasi
- * sempre il dato buono esiste gia' da qualche parte — su una fattura dello
- * stesso cliente gia' ACCETTATA dal SDI, su un doppione dell'anagrafica, o
- * nei dati raccolti al momento della prenotazione. Prima di fermare tutto,
- * si guarda li'. Nessuna invenzione: si riusa solo un indirizzo reale, gia'
- * scritto per quello stesso cliente (stesso CF/P.IVA, o stessa email).
+ * Perche' (28/08/2026): le fatture ferme al SDI erano quasi tutte cosi' —
+ * "QUARTU SANT' ELENA VIA SERRA PERDOSA 25" (comune davanti, nessuna virgola,
+ * nessun CAP) o "Via enrico de nicola 24 san sperate". L'indirizzo c'e' ed e'
+ * giusto: manca solo il CAP, che dal comune si sa. Qui il comune si cerca
+ * dentro al testo, si toglie da li' e l'indirizzo si ricompone nel formato
+ * che l'XML sa leggere: "Via ... 25, 09045 Quartu Sant'Elena (CA)".
  *
- * Ritorna null se non c'e' niente di utilizzabile: in quel caso la fattura
- * resta bloccata col motivo, che e' l'unica risposta onesta.
+ * Non inventa niente: se il comune non e' in elenco o il CAP non si ricava,
+ * restituisce l'indirizzo com'era e la fattura resta ferma col suo motivo.
  */
+export function riparaIndirizzo(indirizzo: string): { indirizzo: string; cambiato: boolean; comune?: string } {
+    const raw = s(indirizzo).replace(/\s+/g, ' ')
+    if (!raw || indirizzoUtilizzabile(raw)) return { indirizzo: raw, cambiato: false }
+
+    // Stessa regola del campo in anagrafica (src/utils/indirizzoFattura.ts):
+    // una sola implementazione, cosi' quello che l'admin vede completarsi
+    // mentre scrive e' esattamente quello che il SDI ricevera'.
+    const sistemato = completaIndirizzo(raw)
+    if (!sistemato.cambiato || !indirizzoUtilizzabile(sistemato.indirizzo)) {
+        return { indirizzo: raw, cambiato: false }
+    }
+    return { indirizzo: sistemato.indirizzo, cambiato: true, comune: sistemato.comune }
+}
+
+/**
+ * L'indirizzo com'e', oppure ricomposto dal comune se gli manca solo il CAP.
+ * null quando non e' recuperabile: cosi' i candidati "quasi buoni" trovati
+ * altrove non vengono scartati per una virgola mancante.
+ */
+function utilizzabileOSistemabile(valore: any): string | null {
+    const raw = s(valore)
+    if (!raw) return null
+    if (indirizzoUtilizzabile(raw)) return raw
+    const r = riparaIndirizzo(raw)
+    return r.cambiato ? r.indirizzo : null
+}
+
 export async function cercaIndirizzoAltrove(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     supabase: any,
@@ -132,7 +161,9 @@ export async function cercaIndirizzoAltrove(
             .not('customer_address', 'is', null)
             .order('data_emissione', { ascending: false })
             .limit(50)
-        const righe = (altre || []).filter((r: any) => r.id !== chiavi.invoiceId && indirizzoUtilizzabile(r.customer_address))
+        const righe = (altre || [])
+            .map((r: any) => ({ ...r, customer_address: utilizzabileOSistemabile(r.customer_address) }))
+            .filter((r: any) => r.id !== chiavi.invoiceId && r.customer_address)
         const trasmesse = righe.filter((r: any) => ['accepted', 'sent', 'sending'].includes(String(r.sdi_status || '')))
         const scelta = trasmesse[0] || righe[0]
         if (scelta) {
@@ -156,8 +187,8 @@ export async function cercaIndirizzoAltrove(
             .or(filtriCli.join(','))
             .limit(20)
         for (const c of clienti || []) {
-            const candidato = indirizzoFatturaCliente(c)
-            if (indirizzoUtilizzabile(candidato)) {
+            const candidato = utilizzabileOSistemabile(indirizzoFatturaCliente(c))
+            if (candidato) {
                 return { indirizzo: candidato, fonte: 'altra scheda cliente con gli stessi dati fiscali' }
             }
         }
@@ -165,8 +196,8 @@ export async function cercaIndirizzoAltrove(
 
     // 3) Dati raccolti al momento della prenotazione.
     if (bookingCustomer) {
-        const candidato = indirizzoFatturaCliente(null, bookingCustomer)
-        if (indirizzoUtilizzabile(candidato)) {
+        const candidato = utilizzabileOSistemabile(indirizzoFatturaCliente(null, bookingCustomer))
+        if (candidato) {
             return { indirizzo: candidato, fonte: 'dati della prenotazione' }
         }
     }

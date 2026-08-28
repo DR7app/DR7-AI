@@ -971,6 +971,12 @@ export default function FatturaTab() {
 
     const inCorso = toast.loading(`Invio a SDI: 0/${daInviare.length}`)
     const falliti: { numero: string; motivo: string }[] = []
+    // 2026-08-28: le fatture dei VEICOLI DI TEST non sono un problema da
+    // correggere — il blocco e' voluto e permanente. Elencarle insieme alle
+    // anagrafiche incomplete riempiva l'avviso (decine di righe identiche) e
+    // nascondeva le poche fatture che si possono davvero sbloccare. Qui si
+    // contano a parte e restano fuori dall'elenco dei motivi.
+    const saltatiTest: string[] = []
     let inviate = 0
 
     for (let i = 0; i < daInviare.length; i++) {
@@ -983,8 +989,12 @@ export default function FatturaTab() {
           body: JSON.stringify({ invoiceId: inv.id })
         })
         const result = await response.json().catch(() => ({}))
-        if (!response.ok) {
-          falliti.push({ numero: inv.numero_fattura, motivo: result.message || result.details || result.error || `Errore ${response.status}` })
+        const motivo = result.message || result.details || result.error || `Errore ${response.status}`
+        const eTest = result.reason === 'test_vehicle' || /veicolo di test/i.test(String(motivo))
+        if (eTest) {
+          saltatiTest.push(inv.numero_fattura)
+        } else if (!response.ok) {
+          falliti.push({ numero: inv.numero_fattura, motivo })
         } else if (result.skipped || result.success === false) {
           falliti.push({ numero: inv.numero_fattura, motivo: result.message || 'invio saltato' })
         } else {
@@ -998,6 +1008,10 @@ export default function FatturaTab() {
 
     toast.dismiss(inCorso)
     if (inviate > 0) toast.success(`${inviate} fattura/e inviate a SDI`)
+    if (saltatiTest.length > 0) {
+      toast(`${saltatiTest.length} fattura/e di veicoli di test: restano in bozza (invio SDI bloccato di proposito)`, { duration: 8000 })
+      console.info('[SDI] Bozze di veicoli di test, ignorate:', saltatiTest)
+    }
     if (falliti.length > 0) {
       toast.error(`${falliti.length} non inviate — motivo indicato sulla riga`, { duration: 12000 })
       console.warn('[SDI] Bozze non inviate:', falliti)
