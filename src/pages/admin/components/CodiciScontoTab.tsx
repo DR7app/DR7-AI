@@ -278,6 +278,21 @@ export default function CodiciScontoTab() {
         }
     }
 
+    /** Copia negli appunti col ripiego per i browser che bloccano l'API. */
+    function copiaNegliAppunti(testo: string, conferma: string) {
+        navigator.clipboard.writeText(testo).then(() => {
+            toast.success(conferma)
+        }).catch(() => {
+            const el = document.createElement('textarea')
+            el.value = testo
+            document.body.appendChild(el)
+            el.select()
+            document.execCommand('copy')
+            document.body.removeChild(el)
+            toast.success(conferma)
+        })
+    }
+
     function copyCode(code: string) {
         navigator.clipboard.writeText(code).then(() => {
             toast.success('Codice copiato!')
@@ -1165,7 +1180,18 @@ export default function CodiciScontoTab() {
 
                         {/* Messaggio */}
                         <div className="mb-4">
-                            <label className="block text-sm font-semibold text-theme-text-primary mb-2">Messaggio</label>
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="block text-sm font-semibold text-theme-text-primary">Messaggio</label>
+                                <button
+                                    type="button"
+                                    onClick={() => copiaNegliAppunti(sendMessage, 'Messaggio copiato!')}
+                                    disabled={!sendMessage.trim()}
+                                    title="Copia il messaggio completo negli appunti"
+                                    className="text-xs px-3 py-1.5 rounded-full border border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover transition-colors disabled:opacity-50"
+                                >
+                                    Copia messaggio
+                                </button>
+                            </div>
                             <textarea
                                 value={sendMessage}
                                 onChange={(e) => setSendMessage(e.target.value)}
