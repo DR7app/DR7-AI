@@ -701,44 +701,93 @@ export default function CargosTab() {
                 return
             }
 
+            // ── Indici per l'aggancio cliente ────────────────────────────
+            // 29/08/2026 (segnalazione direzione: "Cargos e' troppo lungo a
+            // caricare"). Ogni riga faceva fino a SEI query a Supabase, una
+            // dopo l'altra: su 1.600 noleggi sono quasi diecimila richieste,
+            // che il browser serve sei alla volta. Ora le chiavi si leggono a
+            // blocchi e l'aggancio avviene in memoria.
+            //
+            // L'ORDINE DI PRIORITA' NON CAMBIA: user_id, poi customerId, poi
+            // email, poi telefono, poi nome. Telefono e nome restano query per
+            // riga, ma solo per le prenotazioni rimaste senza cliente: sono
+            // poche, e cosi' la regola dell'omonimo (un solo candidato, mai
+            // indovinare) resta identica.
+            const aBlocchi = <T,>(v: T[], n: number): T[][] => {
+                const out: T[][] = []
+                for (let i = 0; i < v.length; i += n) out.push(v.slice(i, i + n))
+                return out
+            }
+            const isUuidStr = (v: unknown) => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const emailDaCercare = (b: any): string => {
+                const custId = b.booking_details?.customer?.customerId
+                const daId = !isUuidStr(custId) && typeof custId === 'string' && custId.includes('@') ? custId : null
+                return String(daId || b.customer_email || '').trim()
+            }
+
+            const perUserId = new Map<string, CustomerExtended>()
+            const perId = new Map<string, CustomerExtended>()
+            const perEmail = new Map<string, CustomerExtended>()
+            const targaPerId = new Map<string, string>()
+            const targaPerNome = new Map<string, string>()
+
+            const userIds = [...new Set(rentalBookings.map(b => b.user_id).filter(Boolean) as string[])]
+            const custIds = [...new Set(rentalBookings
+                .map(b => b.booking_details?.customer?.customerId)
+                .filter(isUuidStr) as string[])]
+            const emails = [...new Set(rentalBookings.map(emailDaCercare).filter(Boolean))]
+
+            await Promise.all([
+                ...aBlocchi(userIds, 200).map(async ids => {
+                    const { data } = await supabase.from('customers_extended').select('*').in('user_id', ids)
+                    for (const c of data || []) if (c.user_id) perUserId.set(c.user_id, c)
+                }),
+                ...aBlocchi(custIds, 200).map(async ids => {
+                    const { data } = await supabase.from('customers_extended').select('*').in('id', ids)
+                    for (const c of data || []) if (c.id) perId.set(c.id, c)
+                }),
+                // `ilike` senza jolly = uguaglianza che ignora le maiuscole,
+                // esattamente come prima riga per riga (vedi il commento del
+                // 20/08 su "Alessio@Gmail.com").
+                ...aBlocchi(emails, 50).map(async es => {
+                    const filtro = es.map(e => `email.ilike.${e}`).join(',')
+                    const { data } = await supabase.from('customers_extended').select('*').or(filtro)
+                    for (const c of data || []) {
+                        const k = String(c.email || '').trim().toLowerCase()
+                        if (k && !perEmail.has(k)) perEmail.set(k, c)
+                    }
+                }),
+                (async () => {
+                    // La flotta e' piccola: una lettura sola invece di una per riga.
+                    const { data } = await supabase.from('vehicles').select('id, plate, display_name')
+                    for (const v of data || []) {
+                        if (!v.plate) continue
+                        if (v.id) targaPerId.set(String(v.id), v.plate)
+                        if (v.display_name && !targaPerNome.has(v.display_name)) targaPerNome.set(v.display_name, v.plate)
+                    }
+                })(),
+            ])
+
             // Enrich with customer data
             const enriched: BookingForCargos[] = await Promise.all(
                 rentalBookings.map(async (b) => {
                     let customerData: CustomerExtended | null = null
                     // Try by user_id first (user_id links to auth.users.id)
-                    if (b.user_id) {
-                        const { data: c } = await supabase
-                            .from('customers_extended')
-                            .select('*')
-                            .eq('user_id', b.user_id)
-                            .maybeSingle()
-                        if (c) customerData = c
-                    }
+                    if (b.user_id) customerData = perUserId.get(b.user_id) || null
                     // Fallback: by customer_id from booking_details (only if UUID format)
                     const custId = b.booking_details?.customer?.customerId
-                    const isUuid = custId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(custId)
-                    if (!customerData && isUuid) {
-                        const { data: c } = await supabase
-                            .from('customers_extended')
-                            .select('*')
-                            .eq('id', custId)
-                            .maybeSingle()
-                        if (c) customerData = c
-                    }
+                    const isUuid = isUuidStr(custId)
+                    if (!customerData && isUuid) customerData = perId.get(custId) || null
                     // Fallback: by email (from customerId if it's an email, or from customer_email)
                     // 2026-08-20 (segnalazione direzione: "su Alessio e Fabio dice dati
                     // mancanti ma non e' vero"). Era `.eq('email', ...)`, cioe' confronto
                     // SENSIBILE ALLE MAIUSCOLE: "Alessio@Gmail.com" sulla prenotazione non
                     // trovava "alessio@gmail.com" in anagrafica. Il cliente c'era, la riga
                     // lo dava per assente e chiedeva dati gia' presenti. Ora ilike.
-                    const emailToTry = (!isUuid && custId?.includes('@') ? custId : null) || b.customer_email
+                    const emailToTry = emailDaCercare(b)
                     if (!customerData && emailToTry) {
-                        const { data: c } = await supabase
-                            .from('customers_extended')
-                            .select('*')
-                            .ilike('email', emailToTry.trim())
-                            .limit(1)
-                        if (c && c.length > 0) customerData = c[0]
+                        customerData = perEmail.get(emailToTry.toLowerCase()) || null
                     }
                     // Fallback: by TELEFONO (ultime 9 cifre, per assorbire prefissi e
                     // spazi scritti in modo diverso). Mancava del tutto: una prenotazione
@@ -791,14 +840,8 @@ export default function CargosTab() {
                     let resolvedPlate = b.vehicle_plate || b.booking_details?.vehicle_plate || b.booking_details?.vehicle?.plate || ''
                     if (!resolvedPlate && (b.vehicle_id || b.booking_details?.vehicle_id || b.vehicle_name)) {
                         const vId = b.vehicle_id || b.booking_details?.vehicle_id
-                        let vQuery = supabase.from('vehicles').select('plate').limit(1)
-                        if (vId) {
-                            vQuery = vQuery.eq('id', vId)
-                        } else if (b.vehicle_name) {
-                            vQuery = vQuery.eq('display_name', b.vehicle_name)
-                        }
-                        const { data: veh } = await vQuery.maybeSingle()
-                        if (veh?.plate) resolvedPlate = veh.plate
+                        const trovata = vId ? targaPerId.get(String(vId)) : (b.vehicle_name ? targaPerNome.get(b.vehicle_name) : undefined)
+                        if (trovata) resolvedPlate = trovata
                     }
 
                     logger.log(`[CARGOS] Booking ${b.id.substring(0,8)}: user_id=${b.user_id}, customerId=${b.booking_details?.customer?.customerId}, email=${b.customer_email}, found=${!!customerData}, plate=${resolvedPlate || 'MISSING'}`)

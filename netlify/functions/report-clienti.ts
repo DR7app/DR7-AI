@@ -70,6 +70,37 @@ async function fetchAll<T = Record<string, unknown>>(table: string, columns: str
   return out
 }
 
+// 29/08/2026 — "column customers_extended.status_cliente does not exist": il
+// Report Clienti restava una banda rossa e nessun cliente. PostgREST rifiuta
+// l'INTERA select se UNA colonna non c'e', quindi un campo accessorio faceva
+// sparire tutta l'anagrafica. `status_cliente` non e' creata da nessuna
+// migrazione e non la scrive nessuno: su questo database non esiste, su altre
+// istanze DR7 puo' esserci. Quindi si chiedono solo le colonne che il database
+// ha davvero — stessa regola gia' usata da list-site-users.
+const colonneCache = new Map<string, Set<string> | null>()
+async function colonnePresenti(tabella: string): Promise<Set<string> | null> {
+  if (colonneCache.has(tabella)) return colonneCache.get(tabella)!
+  let presenti: Set<string> | null = null
+  try {
+    const { data, error } = await supabase.from(tabella).select('*').limit(1)
+    // Tabella vuota o errore: non sappiamo lo schema, si chiede tutto come prima.
+    if (!error && data && data.length > 0) presenti = new Set(Object.keys(data[0]))
+  } catch { /* si resta su null */ }
+  colonneCache.set(tabella, presenti)
+  return presenti
+}
+
+/** Toglie dalla lista le colonne che questo database non ha. */
+async function soloColonneEsistenti(tabella: string, colonne: string): Promise<string> {
+  const presenti = await colonnePresenti(tabella)
+  if (!presenti) return colonne
+  const volute = colonne.split(',').map(c => c.trim()).filter(Boolean)
+  const ok = volute.filter(c => presenti.has(c))
+  const mancanti = volute.filter(c => !presenti.has(c))
+  if (mancanti.length) console.warn(`[report-clienti] colonne assenti su ${tabella}: ${mancanti.join(', ')}`)
+  return ok.length ? ok.join(', ') : colonne
+}
+
 const norm = (s: string | null | undefined): string => (s || '').trim().toLowerCase()
 const phoneKey = (s: string | null | undefined): string => {
   const digits = (s || '').replace(/\D/g, '')
@@ -87,7 +118,10 @@ export const handler: Handler = async (event) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allCustomers: any[] = await fetchAll<any>( // eslint-disable-line @typescript-eslint/no-explicit-any
       'customers_extended',
-      'id, user_id, nome, cognome, ragione_sociale, denominazione, ente_ufficio, tipo_cliente, email, telefono, status, status_cliente, created_at',
+      await soloColonneEsistenti(
+        'customers_extended',
+        'id, user_id, nome, cognome, ragione_sociale, denominazione, ente_ufficio, tipo_cliente, email, telefono, status, status_cliente, created_at',
+      ),
     )
 
     // 1) Bookings, vehicles, cauzioni, fatture, dr7 club, wallet — in parallel.
