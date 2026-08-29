@@ -1382,6 +1382,10 @@ export const LABEL_FALLBACKS: Record<string, string[][]> = {
     ['codice', 'sconto'],
     ['discount', 'review'],
   ],
+  pro_marketing_invio_codice_sconto: [
+    ['invio', 'codice', 'sconto'],
+    ['codice', 'sconto', 'cliente'],
+  ],
   pro_marketing_compleanno: [
     ['compleanno'],
     ['birthday'],

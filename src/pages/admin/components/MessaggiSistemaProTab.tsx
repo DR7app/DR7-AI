@@ -2079,6 +2079,19 @@ const TEMPLATE_VAR_GROUPS: VarGroup[] = [
         ],
     },
     {
+        label: 'Invio Codice Sconto (tab Codice Sconto)',
+        scope: 'specific',
+        scopeNote: 'Solo nel template "Invio Codice Sconto", quello che parte dal tab Codice Sconto.',
+        items: [
+            { key: 'codice', description: 'Il codice da usare al check-out', example: 'DR7-EST26' },
+            { key: 'valore', description: 'Sconto del codice, gia\' formattato', example: '15% oppure €50,00' },
+            { key: 'servizi', description: 'Servizi su cui vale il codice', example: 'noleggio, lavaggio' },
+            { key: 'validita', description: 'Ultimo giorno di validita\'', example: '30/09/2026' },
+            { key: 'spesa_minima', description: 'Riga pronta della spesa minima (vuota se non c\'e\')', example: 'Spesa minima: €200,00' },
+            { key: 'sito', description: 'Indirizzo del sito per il check-out', example: 'www.dr7.app' },
+        ],
+    },
+    {
         label: 'Fattura PDF',
         scope: 'specific',
         scopeNote: 'Solo quando viene allegata una fattura via WhatsApp (penalty_invoice_pdf_whatsapp / invoice_pdf_whatsapp).',
@@ -2569,6 +2582,7 @@ const PRO_MESSAGE_CATEGORIES: { label: string; templates: ProTemplateDef[] }[] =
       { key: 'pro_marketing_recensione', label: 'Richiesta Recensione', description: 'Richiesta di recensione dopo il servizio' },
       { key: 'pro_marketing_compleanno', label: 'Messaggio Compleanno', description: 'Auguri di compleanno al cliente' },
       { key: 'pro_marketing_referral',   label: 'Codice Referral',      description: 'Invio codice referral al cliente' },
+      { key: 'pro_marketing_invio_codice_sconto', label: 'Invio Codice Sconto', description: 'WhatsApp con cui si manda un codice sconto dal tab Codice Sconto — token: {nome}, {codice}, {valore}, {servizi}, {validita}, {spesa_minima}, {sito}' },
       { key: 'pro_marketing_rinnovo',    label: 'Promemoria Rinnovo',   description: 'Promemoria rinnovo membership DR7 Club' },
       { key: 'pro_wallet_bonus_cliente', label: 'Bonus Wallet Cliente', description: 'Notifica bonus wallet accreditato al cliente' },
     ],

@@ -84,10 +84,67 @@ export default function CodiciScontoTab() {
     const [sendManualPhone, setSendManualPhone] = useState('')
     const [sendMessage, setSendMessage] = useState('')
     const [sending, setSending] = useState(false)
+    // 29/08/2026 (direzione): il testo dell'invio non sta piu' nel codice.
+    // Si scrive in Messaggi di Sistema Pro > Marketing > "Invio Codice
+    // Sconto" (key pro_marketing_invio_codice_sconto). Qui si tiene il body
+    // caricato e si sostituiscono i token; resta modificabile prima di
+    // inviare. Se il template manca o e' disattivato si usa il testo di
+    // sempre, cosi' l'invio non si ferma mai.
+    const [templateBody, setTemplateBody] = useState<string | null>(null)
+    // Ultimo testo generato: serve a non sovrascrivere quello che l'admin ha
+    // riscritto a mano quando poi sceglie il destinatario.
+    const [ultimoGenerato, setUltimoGenerato] = useState('')
 
     useEffect(() => {
         loadDiscountCodes()
+        caricaTemplate()
     }, [])
+
+    async function caricaTemplate() {
+        try {
+            const { data } = await supabase
+                .from('system_messages')
+                .select('message_key, message_body, is_enabled, label')
+            const righe = (data || []) as Array<{ message_key: string; message_body: string | null; is_enabled: boolean | null; label: string | null }>
+            // Match per key canonico, con ripiego sul LABEL: un template
+            // ricreato a mano ha una key pro_custom_* (stessa regola di
+            // BirthdaysTab e ReviewManagementTab). Il codice sconto della
+            // recensione e' un altro template: va escluso.
+            const diretto = righe.find(r => r.message_key === 'pro_marketing_invio_codice_sconto')
+            const perLabel = !diretto ? righe.find(r => {
+                const lbl = (r.label || '').toLowerCase()
+                return lbl.includes('codice sconto') && !lbl.includes('recensione') && r.is_enabled !== false && !!r.message_body
+            }) : null
+            const tpl = diretto || perLabel
+            setTemplateBody(tpl?.message_body && tpl.is_enabled !== false ? tpl.message_body : null)
+        } catch {
+            setTemplateBody(null)
+        }
+    }
+
+    /** Testo dell'invio: template Pro coi token sostituiti, o quello storico. */
+    function componiMessaggioCodice(code: DiscountCode, nome: string): string {
+        const servizi = formatScopeBadges(code.scope || []).join(', ') || 'tutti i servizi'
+        const validita = code.valid_until ? new Date(code.valid_until).toLocaleDateString('it-IT') : ''
+        const valore = code.value_type === 'percentage'
+            ? `${code.value_amount}%`
+            : `€${Number(code.value_amount).toFixed(2)}`
+        const spesaMinima = code.minimum_spend ? `\nSpesa minima: €${Number(code.minimum_spend).toFixed(2)}` : ''
+        const token: Record<string, string> = {
+            nome,
+            codice: code.code,
+            valore,
+            servizi,
+            validita,
+            spesa_minima: spesaMinima,
+            sito: 'www.dr7.app',
+        }
+        if (templateBody) {
+            return templateBody.replace(/\{(\w+)\}/g, (intero, chiave: string) =>
+                token[chiave] !== undefined ? token[chiave] : intero)
+        }
+        return `Ciao${nome ? ` ${nome}` : ''},\n\nEcco il tuo codice sconto DR7 di ${valore} su ${servizi}:\n\n*${code.code}*\n\nValido fino al ${validita}.${spesaMinima}\n\nLo puoi usare al check-out su www.dr7.app\n\nGrazie,\n*DR7*`
+    }
 
     async function loadDiscountCodes() {
         setDiscountCodesLoading(true)
@@ -243,17 +300,12 @@ export default function CodiciScontoTab() {
         setSendSelectedPhone('')
         setSendSelectedLabel('')
         setSendManualPhone('')
-        // Pre-compila un messaggio di default sensato. L'admin può modificarlo
-        // prima dell'invio. Niente template Pro hardcoded — usiamo customMessage.
-        const scope = (code.scope || []).join(', ') || 'tutti i servizi'
-        const valido = code.valid_until ? new Date(code.valid_until).toLocaleDateString('it-IT') : ''
-        const valore = code.value_type === 'percentage'
-            ? `${code.value_amount}%`
-            : `€${Number(code.value_amount).toFixed(2)}`
-        const minSpend = code.minimum_spend ? `\nSpesa minima: €${Number(code.minimum_spend).toFixed(2)}` : ''
-        setSendMessage(
-            `Ciao! 🎁\n\nEcco il tuo codice sconto DR7 di ${valore} su ${scope}:\n\n*${code.code}*\n\nValido fino al ${valido}.${minSpend}\n\nLo puoi usare al check-out su www.dr7.app\n\nGrazie,\nDR7`
-        )
+        // Testo dal template Pro (modificabile in Messaggi di Sistema Pro):
+        // qui arriva gia' coi token sostituiti e resta modificabile a mano
+        // prima dell'invio.
+        const testo = componiMessaggioCodice(code, '')
+        setSendMessage(testo)
+        setUltimoGenerato(testo)
         // Carica clienti se non già pronti
         if (sendCustomers.length === 0) {
             const { data } = await supabase
@@ -271,6 +323,14 @@ export default function CodiciScontoTab() {
         setSendSelectedPhone(c.telefono || '')
         setSendSelectedLabel(`${name}${c.telefono ? ` · ${c.telefono}` : ''}`)
         setSendCustomerSearch('')
+        // Il template puo' contenere {nome}: ora si sa chi e'. Si riscrive
+        // solo se l'admin non ha gia' modificato il testo a mano.
+        if (sendModalCode && sendMessage === ultimoGenerato) {
+            const primoNome = (c.nome || c.denominazione || '').trim().split(/\s+/)[0] || ''
+            const testo = componiMessaggioCodice(sendModalCode, primoNome)
+            setSendMessage(testo)
+            setUltimoGenerato(testo)
+        }
     }
 
     async function confirmSend() {
@@ -1114,6 +1174,11 @@ export default function CodiciScontoTab() {
                             />
                             <p className="text-xs text-theme-text-muted mt-1">
                                 Modificabile prima dell'invio. Il codice viene inviato come messaggio WhatsApp testuale.
+                            </p>
+                            <p className="text-xs text-theme-text-muted mt-0.5">
+                                {templateBody
+                                    ? 'Testo di partenza dal template "Invio Codice Sconto" (Messaggi di Sistema Pro > Marketing): modificalo li\' per cambiarlo una volta per tutte.'
+                                    : 'Template "Invio Codice Sconto" non ancora scritto: si usa il testo predefinito. Scrivilo in Messaggi di Sistema Pro > Marketing per cambiarlo per tutti gli invii.'}
                             </p>
                         </div>
 
