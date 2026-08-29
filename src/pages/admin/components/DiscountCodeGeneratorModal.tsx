@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { caricaTemplateCodiceSconto, componiMessaggioCodiceSconto, numeroWhatsapp } from '../../../utils/messaggioCodiceSconto'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
@@ -247,6 +248,7 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
                     .insert([dataToSave])
                 if (error) throw error
                 toast.success('Codice sconto creato con successo')
+                await inviaAllaCreazione(dataToSave)
             }
 
             onSave()
@@ -257,6 +259,47 @@ export default function DiscountCodeGeneratorModal({ editingCode, onClose, onSav
         } finally {
             submitLockRef.current = false
             setLoading(false)
+        }
+    }
+
+    /**
+     * 29/08/2026: codice intestato a un cliente -> glielo si manda subito.
+     *
+     * Parte SOLO se l'admin ha assegnato un template all'evento
+     * `discount_code_created` in Messaggi di Sistema Pro: senza template
+     * assegnato non esce niente, il codice resta li' e si manda a mano dal
+     * tab come prima. Nessun invio a sorpresa.
+     */
+    async function inviaAllaCreazione(codice: {
+        code: string
+        scope: string[]
+        value_type: string
+        value_amount: number
+        minimum_spend: number | null
+        valid_until: string
+        customer_phone: string | null
+    }) {
+        const numero = numeroWhatsapp(codice.customer_phone)
+        if (!numero) return
+        const body = await caricaTemplateCodiceSconto('discount_code_created')
+        if (!body) return // nessun template assegnato all'evento: non si invia
+
+        const nome = (selectedCustomerLabel.split('·')[0] || '').trim().split(/\s+/)[0] || ''
+        try {
+            const res = await fetch('/.netlify/functions/send-whatsapp-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    customMessage: componiMessaggioCodiceSconto(body, codice, nome),
+                    customPhone: numero,
+                }),
+            })
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            toast.success(`Codice inviato a ${numero}`)
+        } catch (err) {
+            // Il codice e' gia' salvato: l'invio fallito non deve annullarlo.
+            console.error('[CodiceSconto] invio alla creazione fallito:', err)
+            toast.error('Codice salvato, ma il WhatsApp non e\' partito: mandalo dal tab Codice Sconto.')
         }
     }
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { caricaTemplateCodiceSconto, componiMessaggioCodiceSconto, etichetteServizi } from '../../../utils/messaggioCodiceSconto'
 import { supabase } from '../../../supabaseClient'
 import Button from './Button'
 import DiscountCodeGeneratorModal from './DiscountCodeGeneratorModal'
@@ -101,49 +102,12 @@ export default function CodiciScontoTab() {
     }, [])
 
     async function caricaTemplate() {
-        try {
-            const { data } = await supabase
-                .from('system_messages')
-                .select('message_key, message_body, is_enabled, label')
-            const righe = (data || []) as Array<{ message_key: string; message_body: string | null; is_enabled: boolean | null; label: string | null }>
-            // Match per key canonico, con ripiego sul LABEL: un template
-            // ricreato a mano ha una key pro_custom_* (stessa regola di
-            // BirthdaysTab e ReviewManagementTab). Il codice sconto della
-            // recensione e' un altro template: va escluso.
-            const diretto = righe.find(r => r.message_key === 'pro_marketing_invio_codice_sconto')
-            const perLabel = !diretto ? righe.find(r => {
-                const lbl = (r.label || '').toLowerCase()
-                return lbl.includes('codice sconto') && !lbl.includes('recensione') && r.is_enabled !== false && !!r.message_body
-            }) : null
-            const tpl = diretto || perLabel
-            setTemplateBody(tpl?.message_body && tpl.is_enabled !== false ? tpl.message_body : null)
-        } catch {
-            setTemplateBody(null)
-        }
+        setTemplateBody(await caricaTemplateCodiceSconto('discount_code_manual_send'))
     }
 
     /** Testo dell'invio: template Pro coi token sostituiti, o quello storico. */
     function componiMessaggioCodice(code: DiscountCode, nome: string): string {
-        const servizi = formatScopeBadges(code.scope || []).join(', ') || 'tutti i servizi'
-        const validita = code.valid_until ? new Date(code.valid_until).toLocaleDateString('it-IT') : ''
-        const valore = code.value_type === 'percentage'
-            ? `${code.value_amount}%`
-            : `€${Number(code.value_amount).toFixed(2)}`
-        const spesaMinima = code.minimum_spend ? `\nSpesa minima: €${Number(code.minimum_spend).toFixed(2)}` : ''
-        const token: Record<string, string> = {
-            nome,
-            codice: code.code,
-            valore,
-            servizi,
-            validita,
-            spesa_minima: spesaMinima,
-            sito: 'www.dr7.app',
-        }
-        if (templateBody) {
-            return templateBody.replace(/\{(\w+)\}/g, (intero, chiave: string) =>
-                token[chiave] !== undefined ? token[chiave] : intero)
-        }
-        return `Ciao${nome ? ` ${nome}` : ''},\n\nEcco il tuo codice sconto DR7 di ${valore} su ${servizi}:\n\n*${code.code}*\n\nValido fino al ${validita}.${spesaMinima}\n\nLo puoi usare al check-out su www.dr7.app\n\nGrazie,\n*DR7*`
+        return componiMessaggioCodiceSconto(templateBody, code, nome)
     }
 
     async function loadDiscountCodes() {
@@ -409,14 +373,8 @@ export default function CodiciScontoTab() {
     })()
 
     function formatScopeBadges(scope: string[]) {
-        const labels: Record<string, string> = {
-            noleggio: 'Noleggio',
-            lavaggi: 'Lavaggi',
-            supercar: 'Supercar',
-            utilitarie: 'Utilitarie',
-            tutti_i_servizi: 'Tutti',
-        }
-        return scope.map(s => labels[s] || s)
+        // Stesse etichette usate nel messaggio al cliente (unica definizione).
+        return etichetteServizi(scope).split(', ').filter(Boolean)
     }
 
     function statusBadge(status: string) {

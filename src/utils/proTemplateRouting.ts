@@ -113,6 +113,10 @@ export const OLD_TO_PRO: Record<string, string> = {
   birthday_message: 'pro_marketing_compleanno',
   wallet_bonus_credit: 'pro_wallet_bonus_cliente',
   review_discount_code: 'pro_marketing_codice_sconto',
+  // 29/08/2026: invio manuale di un codice sconto dal tab Codice Sconto.
+  // Diverso da review_discount_code, che manda i DUE codici post-recensione.
+  discount_code_created: 'pro_marketing_invio_codice_sconto',
+  discount_code_manual_send: 'pro_marketing_invio_codice_sconto',
   promo_incassi_whatsapp: 'pro_promo_incassi',
   maxi_promo_gap_whatsapp: 'pro_maxi_promo_gap_1gg',
 
@@ -219,6 +223,8 @@ export const EVENT_DESCRIPTIONS: Record<string, string> = {
 
   // Marketing aggiuntivo
   review_discount_code: 'Invio codice sconto post-recensione (Review Management)',
+  discount_code_created: 'Codice sconto creato e intestato a un cliente: invio automatico al suo numero (solo se un template e\' assegnato a questo evento)',
+  discount_code_manual_send: 'Invio di un codice sconto al cliente dal tab Codice Sconto (WhatsApp, invio manuale)',
   promo_incassi_whatsapp: 'Promo incassi: invio WhatsApp al cliente quando un veicolo è sotto soglia (cron mensile)',
   maxi_promo_gap_whatsapp: 'Maxi Promo Gap: invio quando un veicolo ha 1 giorno libero tra prenotazioni (cron giornaliero)',
 

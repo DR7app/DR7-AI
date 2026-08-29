@@ -328,6 +328,15 @@ const EVENT_GROUPS: Array<{ label: string; color: string; keys: string[]; area: 
     area: 'marketing',
     keys: ['review_request_whatsapp', 'on_review_received', 'review_discount_code'],
   },
+  // ── MARKETING > CODICI SCONTO ───────────────────────────────────────────
+  // 29/08/2026: mancava del tutto. Il codice sconto si manda a mano dal suo
+  // tab: senza questo evento non c'era modo di collegargli un template.
+  {
+    label: 'Marketing — Codici Sconto',
+    color: 'pink',
+    area: 'marketing',
+    keys: ['discount_code_created', 'discount_code_manual_send'],
+  },
   // ── MARKETING > COMPLEANNI ──────────────────────────────────────────────
   {
     label: 'Marketing — Compleanni',
