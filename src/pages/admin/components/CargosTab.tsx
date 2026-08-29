@@ -74,6 +74,11 @@ const FIELD_SIZES = [
     50, 30, 10, 9, 9, 5, 20, 9, 20, 9, 20       // 35-45
 ]
 
+// I filtri lato server dell'elenco (vedi loadBookings) vengono da PostgREST.
+// Se una versione del database li rifiutasse, il tab li spegne per il resto
+// della sessione e rilegge alla vecchia maniera: piu' lento, mai sbagliato.
+let filtriServerOk = true
+
 function padField(value: string, maxLen: number): string {
     return (value || '').substring(0, maxLen).padEnd(maxLen, ' ')
 }
@@ -638,7 +643,18 @@ export default function CargosTab() {
             // prenotazioni non arrivavano mai nell'elenco da trasmettere alla
             // Polizia di Stato, e il conteggio a video era falso. Ora si legge
             // per pagine, quindi arrivano tutte.
-            const buildQuery = (from: number, to: number) => {
+            //
+            // 29/08/2026 (segnalazione direzione: "Cargos deve aprirsi piu'
+            // veloce"). Le righe da scartare si scartano sul SERVER. Prima si
+            // scaricava tutto lo storico — lavaggi compresi, e ogni contratto
+            // gia' trasmesso alla Polizia di Stato — per poi buttarne via la
+            // maggior parte nel browser: megabyte di booking_details letti per
+            // niente, e altrettanti clienti cercati per righe che non si
+            // vedono. I filtri qui sotto sono gli stessi del setaccio in
+            // memoria, che resta comunque attivo; se il server li rifiuta si
+            // ricarica alla vecchia maniera, quindi l'elenco non puo' perdere
+            // righe per colpa di un filtro.
+            const buildQuery = (from: number, to: number, filtriServer: boolean) => {
             let query = supabase
                 .from('bookings')
                 .select(`
@@ -648,6 +664,15 @@ export default function CargosTab() {
                 `)
                 .not('status', 'in', '(cancelled,annullata)')
                 .order('pickup_date', { ascending: false })
+
+            if (filtriServer) {
+                // Solo noleggio auto (service_type vuoto = prenotazioni storiche,
+                // nate prima che la colonna esistesse: sono noleggi).
+                query = query
+                    .or('service_type.is.null,service_type.in.("",car_rental)')
+                    .or('booking_details->cargos_sent.is.null,booking_details->>cargos_sent.neq.true')
+                    .or('booking_details->cargos_escluso.is.null,booking_details->>cargos_escluso.neq.true')
+            }
 
             if (viewMode === 'date') {
                 const startOfDay = new Date(exportDate)
@@ -673,7 +698,22 @@ export default function CargosTab() {
                 return query.range(from, to)
             }
 
-            const { data: rawBookings, error } = await fetchAllRows<any>(buildQuery)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            let { data: rawBookings, error } = await fetchAllRows<any>((f, t) => buildQuery(f, t, filtriServerOk))
+
+            if (error && filtriServerOk) {
+                // Un filtro rifiutato dal server non deve svuotare l'elenco della
+                // Polizia di Stato: si rilegge senza filtri, il setaccio in
+                // memoria qui sotto produce comunque le stesse righe. E non si
+                // riprova piu' per il resto della sessione, altrimenti ogni
+                // ricarica pagherebbe due letture invece di una.
+                logger.error('[CARGOS] filtri server rifiutati, rileggo senza:', error)
+                filtriServerOk = false
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const ripiego = await fetchAllRows<any>((f, t) => buildQuery(f, t, false))
+                rawBookings = ripiego.data
+                error = ripiego.error
+            }
 
             if (error) throw error
 
@@ -705,14 +745,16 @@ export default function CargosTab() {
             // 29/08/2026 (segnalazione direzione: "Cargos e' troppo lungo a
             // caricare"). Ogni riga faceva fino a SEI query a Supabase, una
             // dopo l'altra: su 1.600 noleggi sono quasi diecimila richieste,
-            // che il browser serve sei alla volta. Ora le chiavi si leggono a
-            // blocchi e l'aggancio avviene in memoria.
+            // che il browser serve sei alla volta. Ora TUTTE le chiavi si
+            // leggono a blocchi e l'aggancio avviene in memoria: il numero di
+            // richieste non dipende piu' da quante prenotazioni ci sono.
             //
             // L'ORDINE DI PRIORITA' NON CAMBIA: user_id, poi customerId, poi
-            // email, poi telefono, poi nome. Telefono e nome restano query per
-            // riga, ma solo per le prenotazioni rimaste senza cliente: sono
-            // poche, e cosi' la regola dell'omonimo (un solo candidato, mai
-            // indovinare) resta identica.
+            // email, poi telefono, poi nome. E la regola dell'omonimo resta
+            // identica: se i candidati per nome sono piu' di uno NON si sceglie,
+            // la riga resta "dati mancanti" da sistemare a mano. Su una
+            // dichiarazione alla Polizia di Stato agganciare l'omonimo sbagliato
+            // sarebbe peggio di un campo vuoto.
             const aBlocchi = <T,>(v: T[], n: number): T[][] => {
                 const out: T[][] = []
                 for (let i = 0; i < v.length; i += n) out.push(v.slice(i, i + n))
@@ -724,6 +766,17 @@ export default function CargosTab() {
                 const custId = b.booking_details?.customer?.customerId
                 const daId = !isUuidStr(custId) && typeof custId === 'string' && custId.includes('@') ? custId : null
                 return String(daId || b.customer_email || '').trim()
+            }
+            const soloCifre = (v: unknown) => String(v || '').replace(/\D/g, '')
+            const chiave = (v: unknown) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ')
+            // I valori finiscono dentro il filtro `or` di PostgREST, dove virgole
+            // e parentesi sono separatori: li' vanno messi tra virgolette, o una
+            // sola riga scritta male fa fallire l'intero blocco. Chi non ha
+            // caratteri riservati resta com'e': stessa identica stringa di
+            // filtro che il tab manda da mesi.
+            const citato = (v: string) => {
+                const pulito = v.replace(/["\\]/g, ' ')
+                return /[,()]/.test(pulito) ? `"${pulito}"` : pulito
             }
 
             const perUserId = new Map<string, CustomerExtended>()
@@ -751,7 +804,7 @@ export default function CargosTab() {
                 // esattamente come prima riga per riga (vedi il commento del
                 // 20/08 su "Alessio@Gmail.com").
                 ...aBlocchi(emails, 50).map(async es => {
-                    const filtro = es.map(e => `email.ilike.${e}`).join(',')
+                    const filtro = es.map(e => `email.ilike.${citato(e)}`).join(',')
                     const { data } = await supabase.from('customers_extended').select('*').or(filtro)
                     for (const c of data || []) {
                         const k = String(c.email || '').trim().toLowerCase()
@@ -769,86 +822,142 @@ export default function CargosTab() {
                 })(),
             ])
 
-            // Enrich with customer data
-            const enriched: BookingForCargos[] = await Promise.all(
-                rentalBookings.map(async (b) => {
-                    let customerData: CustomerExtended | null = null
-                    // Try by user_id first (user_id links to auth.users.id)
-                    if (b.user_id) customerData = perUserId.get(b.user_id) || null
-                    // Fallback: by customer_id from booking_details (only if UUID format)
-                    const custId = b.booking_details?.customer?.customerId
-                    const isUuid = isUuidStr(custId)
-                    if (!customerData && isUuid) customerData = perId.get(custId) || null
-                    // Fallback: by email (from customerId if it's an email, or from customer_email)
+            // ── Primo giro: le chiavi certe (user_id, customerId, email) ──
+            const clientePerBooking = new Map<string, CustomerExtended>()
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const sospesi: any[] = []
+            for (const b of rentalBookings) {
+                let c: CustomerExtended | null = null
+                if (b.user_id) c = perUserId.get(b.user_id) || null
+                const custId = b.booking_details?.customer?.customerId
+                if (!c && isUuidStr(custId)) c = perId.get(custId) || null
+                if (!c) {
                     // 2026-08-20 (segnalazione direzione: "su Alessio e Fabio dice dati
-                    // mancanti ma non e' vero"). Era `.eq('email', ...)`, cioe' confronto
-                    // SENSIBILE ALLE MAIUSCOLE: "Alessio@Gmail.com" sulla prenotazione non
-                    // trovava "alessio@gmail.com" in anagrafica. Il cliente c'era, la riga
-                    // lo dava per assente e chiedeva dati gia' presenti. Ora ilike.
-                    const emailToTry = emailDaCercare(b)
-                    if (!customerData && emailToTry) {
-                        customerData = perEmail.get(emailToTry.toLowerCase()) || null
-                    }
-                    // Fallback: by TELEFONO (ultime 9 cifre, per assorbire prefissi e
-                    // spazi scritti in modo diverso). Mancava del tutto: una prenotazione
-                    // senza email restava orfana anche con il cliente in anagrafica.
-                    // NB: nessun ripiego sul NOME. Su una dichiarazione alla Polizia di
-                    // Stato, agganciare l'omonimo sbagliato sarebbe peggio di un dato
-                    // mancante: meglio chiedere che indovinare.
-                    const telToTry = (b.customer_phone || '').replace(/\D/g, '')
-                    if (!customerData && telToTry.length >= 9) {
-                        const { data: c } = await supabase
-                            .from('customers_extended')
-                            .select('*')
-                            .ilike('telefono', `%${telToTry.slice(-9)}%`)
-                            .limit(1)
-                        if (c && c.length > 0) customerData = c[0]
-                    }
-                    // Fallback: per NOME. 2026-08-20, richiesto esplicitamente dalla
-                    // direzione dopo che avevo obiettato. L'obiezione resta valida — su
-                    // una dichiarazione alla Polizia di Stato agganciare un omonimo e'
-                    // peggio di un campo vuoto — quindi il nome aggancia SOLO quando e'
-                    // inequivocabile: se i candidati sono piu' di uno, non si sceglie e
-                    // la riga resta "dati mancanti" da sistemare a mano.
-                    if (!customerData && (b.customer_name || '').trim()) {
-                        const nomeCompleto = (b.customer_name || '').trim().replace(/\s+/g, ' ')
-                        const parti = nomeCompleto.split(' ')
-                        // Persona fisica: nome + cognome (in entrambi gli ordini, perche'
-                        // sulle prenotazioni capita di trovarli invertiti).
-                        if (parti.length >= 2) {
-                            const a = parti[0]
-                            const b2 = parti.slice(1).join(' ')
-                            const { data: cand } = await supabase
-                                .from('customers_extended')
-                                .select('*')
-                                .or(`and(nome.ilike.${a},cognome.ilike.${b2}),and(nome.ilike.${b2},cognome.ilike.${a})`)
-                                .limit(2)
-                            if (cand && cand.length === 1) customerData = cand[0]
-                        }
-                        // Azienda: denominazione o ragione sociale identica.
-                        if (!customerData) {
-                            const { data: cand } = await supabase
-                                .from('customers_extended')
-                                .select('*')
-                                .or(`denominazione.ilike.${nomeCompleto},ragione_sociale.ilike.${nomeCompleto}`)
-                                .limit(2)
-                            if (cand && cand.length === 1) customerData = cand[0]
-                        }
-                    }
+                    // mancanti ma non e' vero"). Il confronto era SENSIBILE ALLE
+                    // MAIUSCOLE: "Alessio@Gmail.com" sulla prenotazione non trovava
+                    // "alessio@gmail.com" in anagrafica. Ora il confronto e' minuscolo.
+                    const email = emailDaCercare(b)
+                    if (email) c = perEmail.get(email.toLowerCase()) || null
+                }
+                if (c) clientePerBooking.set(b.id, c)
+                else sospesi.push(b)
+            }
 
-                    // Resolve plate from vehicles table if missing
-                    let resolvedPlate = b.vehicle_plate || b.booking_details?.vehicle_plate || b.booking_details?.vehicle?.plate || ''
-                    if (!resolvedPlate && (b.vehicle_id || b.booking_details?.vehicle_id || b.vehicle_name)) {
-                        const vId = b.vehicle_id || b.booking_details?.vehicle_id
-                        const trovata = vId ? targaPerId.get(String(vId)) : (b.vehicle_name ? targaPerNome.get(b.vehicle_name) : undefined)
-                        if (trovata) resolvedPlate = trovata
+            // ── Secondo giro: TELEFONO (ultime 9 cifre, per assorbire prefissi
+            // e spazi scritti in modo diverso). Solo per le prenotazioni rimaste
+            // senza cliente, e a blocchi: prima era una query per riga.
+            if (sospesi.length > 0) {
+                const suffissi = [...new Set(sospesi
+                    .map(b => soloCifre(b.customer_phone))
+                    .filter(t => t.length >= 9)
+                    .map(t => t.slice(-9)))]
+                const perTelefono = new Map<string, CustomerExtended>()
+                await Promise.all(aBlocchi(suffissi, 40).map(async ss => {
+                    const filtro = ss.map(s => `telefono.ilike.*${s}*`).join(',')
+                    const { data } = await supabase.from('customers_extended').select('*').or(filtro)
+                    for (const c of data || []) {
+                        const cifre = soloCifre(c.telefono)
+                        for (const s of ss) if (cifre.includes(s) && !perTelefono.has(s)) perTelefono.set(s, c)
                     }
+                }))
+                for (const b of sospesi) {
+                    if (clientePerBooking.has(b.id)) continue
+                    const t = soloCifre(b.customer_phone)
+                    if (t.length < 9) continue
+                    const c = perTelefono.get(t.slice(-9))
+                    if (c) clientePerBooking.set(b.id, c)
+                }
+            }
 
-                    logger.log(`[CARGOS] Booking ${b.id.substring(0,8)}: user_id=${b.user_id}, customerId=${b.booking_details?.customer?.customerId}, email=${b.customer_email}, found=${!!customerData}, plate=${resolvedPlate || 'MISSING'}`)
-                    const alreadySent = b.booking_details?.cargos_sent === true
-                    return { ...b, vehicle_plate: resolvedPlate || b.vehicle_plate, customerData, cargosStatus: alreadySent ? 'sent' as const : 'pending' as const }
-                })
-            )
+            // ── Terzo giro: NOME. 2026-08-20, richiesto esplicitamente dalla
+            // direzione dopo che avevo obiettato. L'obiezione resta valida,
+            // quindi il nome aggancia SOLO quando e' inequivocabile: un solo
+            // candidato. Con due o piu' omonimi non si sceglie.
+            const restanti = sospesi.filter(b => !clientePerBooking.has(b.id) && (b.customer_name || '').trim())
+            if (restanti.length > 0) {
+                const scomponi = (nome: string) => {
+                    const parti = chiave(nome).split(' ')
+                    if (parti.length < 2) return null
+                    return { a: parti[0], b: parti.slice(1).join(' ') }
+                }
+                const condizioni: string[] = []
+                const denominazioni: string[] = []
+                for (const b of restanti) {
+                    const s = scomponi(b.customer_name)
+                    if (s) {
+                        // Nome + cognome nei due ordini: sulle prenotazioni capita
+                        // di trovarli invertiti.
+                        condizioni.push(`and(nome.ilike.${citato(s.a)},cognome.ilike.${citato(s.b)})`)
+                        condizioni.push(`and(nome.ilike.${citato(s.b)},cognome.ilike.${citato(s.a)})`)
+                    }
+                    denominazioni.push(chiave(b.customer_name))
+                }
+                const perNomeCognome = new Map<string, CustomerExtended[]>()
+                const perDenominazione = new Map<string, CustomerExtended[]>()
+                const aggiungi = (m: Map<string, CustomerExtended[]>, k: string, c: CustomerExtended) => {
+                    if (!k) return
+                    const lista = m.get(k)
+                    if (!lista) { m.set(k, [c]); return }
+                    if (!lista.some(x => x.id === c.id)) lista.push(c)
+                }
+                await Promise.all([
+                    // Blocchi piccoli: il filtro viaggia nell'URL, che ha un limite.
+                    ...aBlocchi([...new Set(condizioni)], 24).map(async cs => {
+                        const { data } = await supabase.from('customers_extended').select('*').or(cs.join(','))
+                        for (const c of data || []) aggiungi(perNomeCognome, `${chiave(c.nome)}|${chiave(c.cognome)}`, c)
+                    }),
+                    ...aBlocchi([...new Set(denominazioni)], 24).map(async ns => {
+                        const filtro = ns.flatMap(n => [
+                            `denominazione.ilike.${citato(n)}`,
+                            `ragione_sociale.ilike.${citato(n)}`,
+                        ]).join(',')
+                        const { data } = await supabase.from('customers_extended').select('*').or(filtro)
+                        for (const c of data || []) {
+                            aggiungi(perDenominazione, chiave(c.denominazione), c)
+                            aggiungi(perDenominazione, chiave(c.ragione_sociale), c)
+                        }
+                    }),
+                ])
+                for (const b of restanti) {
+                    const s = scomponi(b.customer_name)
+                    let candidati: CustomerExtended[] = []
+                    if (s) {
+                        const visti = new Set<string>()
+                        candidati = [
+                            ...(perNomeCognome.get(`${s.a}|${s.b}`) || []),
+                            ...(perNomeCognome.get(`${s.b}|${s.a}`) || []),
+                        ].filter(c => {
+                            const k = String(c.id || '')
+                            if (!k) return true
+                            if (visti.has(k)) return false
+                            visti.add(k)
+                            return true
+                        })
+                    }
+                    if (candidati.length === 1) { clientePerBooking.set(b.id, candidati[0]); continue }
+                    // Azienda: denominazione o ragione sociale identica.
+                    const azienda = perDenominazione.get(chiave(b.customer_name)) || []
+                    if (azienda.length === 1) clientePerBooking.set(b.id, azienda[0])
+                }
+            }
+
+            // Enrich with customer data
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const enriched: BookingForCargos[] = rentalBookings.map((b: any) => {
+                const customerData = clientePerBooking.get(b.id) || null
+
+                // Resolve plate from vehicles table if missing
+                let resolvedPlate = b.vehicle_plate || b.booking_details?.vehicle_plate || b.booking_details?.vehicle?.plate || ''
+                if (!resolvedPlate && (b.vehicle_id || b.booking_details?.vehicle_id || b.vehicle_name)) {
+                    const vId = b.vehicle_id || b.booking_details?.vehicle_id
+                    const trovata = vId ? targaPerId.get(String(vId)) : (b.vehicle_name ? targaPerNome.get(b.vehicle_name) : undefined)
+                    if (trovata) resolvedPlate = trovata
+                }
+
+                logger.log(`[CARGOS] Booking ${b.id.substring(0,8)}: user_id=${b.user_id}, customerId=${b.booking_details?.customer?.customerId}, email=${b.customer_email}, found=${!!customerData}, plate=${resolvedPlate || 'MISSING'}`)
+                const alreadySent = b.booking_details?.cargos_sent === true
+                return { ...b, vehicle_plate: resolvedPlate || b.vehicle_plate, customerData, cargosStatus: alreadySent ? 'sent' as const : 'pending' as const }
+            })
 
             setBookings(enriched)
             // Auto-select all
