@@ -124,6 +124,12 @@ export const handler: Handler = async (event) => {
     // NELLO STESSO TEMPO invece che una dopo l'altra.
     const utenti: Array<{ id: string; email: string; created_at: string; email_confirmed_at: string | null; last_sign_in_at: string | null; meta: Meta }> = []
     let paginaMancante = 0
+    // 29/08/2026 (direzione: "il numero deve essere 22337"). Il contatore in
+    // cima mostrava le righe RIUSCITE a leggere, non gli account. Se una
+    // pagina auth non arriva — e il codice apposta va avanti invece di
+    // svuotare l'elenco — il totale scendeva senza che nessuno lo sapesse.
+    // L'API Auth dichiara gia' quanti account esistono: quello e' il totale.
+    let totaleAccount = 0
 
     const aggiungi = (lista: any[]) => {
       for (const u of lista) {
@@ -148,6 +154,7 @@ export const handler: Handler = async (event) => {
         return
       }
       aggiungi(prima?.users || [])
+      totaleAccount = Number((prima as { total?: number })?.total) || 0
       const ultima = Math.min(Number((prima as { lastPage?: number })?.lastPage) || 1, PAGINE_MAX)
       if (ultima <= 1 || (prima?.users?.length || 0) < UTENTI_PER_PAGINA) return
 
@@ -304,7 +311,16 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ success: true, users: arricchiti, total: arricchiti.length }),
+      body: JSON.stringify({
+        success: true,
+        users: arricchiti,
+        total: arricchiti.length,
+        // Account esistenti secondo l'API Auth: e' questo il numero da mostrare
+        // in cima. Se e' maggiore di `total`, qualche pagina non e' arrivata e
+        // l'elenco sotto e' incompleto — la tab lo dice invece di tacerlo.
+        totaleAccount: totaleAccount || arricchiti.length,
+        pagineMancanti: paginaMancante,
+      }),
     }
   } catch (err: any) {
     console.error('[list-site-users] Error:', err)

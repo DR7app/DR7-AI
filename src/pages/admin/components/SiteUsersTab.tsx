@@ -151,6 +151,8 @@ export default function SiteUsersTab() {
   }
   const arrow = (field: typeof sortField) => sortField === field ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''
 
+  // Account esistenti secondo l'API Auth (non le righe riuscite a leggere).
+  const [totaleAccount, setTotaleAccount] = useState(0)
   useEffect(() => { loadUsers() }, [])
 
   /**
@@ -286,6 +288,10 @@ export default function SiteUsersTab() {
         setUsers(data.users.sort((a: SiteUser, b: SiteUser) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         ))
+        // 29/08/2026 (direzione: "il numero deve essere 22337"). "Iscritti
+        // Totali" contava le righe lette, non gli account: bastava una pagina
+        // auth non arrivata perche' il numero calasse in silenzio.
+        setTotaleAccount(Number(data.totaleAccount) || data.users.length)
       } else {
         // 26/08/2026: prima l'errore veniva ignorato e la tabella restava
         // vuota. Un elenco vuoto sembrava "iscritti cancellati": va detto
@@ -302,9 +308,12 @@ export default function SiteUsersTab() {
 
   // Stats — tutti calcolati dai dati reali (users[]).
   const stats = useMemo(() => {
-    const total = users.length
+    // Il totale mostrato e' quello degli account; le percentuali restano sulle
+    // righe effettivamente lette, altrimenti direbbero il falso.
+    const caricati = users.length
+    const total = totaleAccount || caricati
     const verificati = users.filter(u => u.email_confirmed_at).length
-    const nonVerificati = total - verificati
+    const nonVerificati = caricati - verificati
     const totalCredit = users.reduce((s, u) => s + (u.balance || 0), 0)
 
     // Nuovi iscritti questo mese
@@ -347,8 +356,8 @@ export default function SiteUsersTab() {
       .sort((a, b) => (b.balance || 0) - (a.balance || 0))
       .slice(0, 5)
 
-    return { total, verificati, nonVerificati, nuoviMese, totalCredit, senzaBonus, senzaBonusAZero, schedaIncompleta, daRecuperare, senzaScheda, trend, topCredito }
-  }, [users])
+    return { total, caricati, verificati, nonVerificati, nuoviMese, totalCredit, senzaBonus, senzaBonusAZero, schedaIncompleta, daRecuperare, senzaScheda, trend, topCredito }
+  }, [users, totaleAccount])
 
   // 26/08/2026 — questo blocco girava a OGNI render (anche solo aprendo una
   // scheda o premendo un tasto nella ricerca): filtro + ordinamento su tutti
@@ -456,9 +465,14 @@ export default function SiteUsersTab() {
 
       {/* 5 KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-7 gap-3">
-        <KpiCard label="Iscritti Totali" value={stats.total} ring="#3B82F6"/>
-        <KpiCard label="Verificati" value={stats.verificati} subtitle={`${stats.total > 0 ? Math.round((stats.verificati / stats.total) * 100) : 0}% del totale`} ring="#10B981"/>
-        <KpiCard label="Non Verificati" value={stats.nonVerificati} subtitle={`${stats.total > 0 ? Math.round((stats.nonVerificati / stats.total) * 100) : 0}% del totale`} ring="#F59E0B"/>
+        <KpiCard
+          label="Iscritti Totali"
+          value={stats.total}
+          subtitle={stats.caricati < stats.total ? `${stats.caricati} in elenco qui sotto` : undefined}
+          ring="#3B82F6"
+        />
+        <KpiCard label="Verificati" value={stats.verificati} subtitle={`${stats.caricati > 0 ? Math.round((stats.verificati / stats.caricati) * 100) : 0}% dei letti`} ring="#10B981"/>
+        <KpiCard label="Non Verificati" value={stats.nonVerificati} subtitle={`${stats.caricati > 0 ? Math.round((stats.nonVerificati / stats.caricati) * 100) : 0}% dei letti`} ring="#F59E0B"/>
         <KpiCard label="Nuovi Questo Mese" value={stats.nuoviMese} ring="#A855F7"/>
         <KpiCard label="Credito Totale" value={fmtEur(stats.totalCredit)} ring="#19C2D6"/>
         {/* 26/08/2026 — la carta diceva quanti erano senza bonus ma non dava
