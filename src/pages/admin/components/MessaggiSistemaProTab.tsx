@@ -2783,6 +2783,10 @@ export default function MessaggiSistemaProTab() {
     // Permette all'admin di editare days_of_week / cauzione / payment method
     // / amount range / quiet hours senza ricreare il template.
     const [expandedAdvanced, setExpandedAdvanced] = useState<Set<string>>(new Set())
+    // 29/08/2026 (direzione): il pannello "Eventi gestiti da questo template"
+    // stava sempre aperto e da solo riempiva lo schermo (elenco eventi +
+    // filtri per business). Ora si apre su richiesta, come i Filtri avanzati.
+    const [expandedEventi, setExpandedEventi] = useState<Set<string>>(new Set())
     const [templateSendLogs, setTemplateSendLogs] = useState<Record<string, Array<{ id: string; booking_id: string | null; customer_phone: string | null; status: string; error: string | null; created_at: string }>>>({})
     const [loadingLogsFor, setLoadingLogsFor] = useState<string | null>(null)
     const [testPhones, setTestPhones] = useState<Record<string, string>>({})
@@ -5362,15 +5366,34 @@ export default function MessaggiSistemaProTab() {
                                                     `system_messages.handled_events` (text[]) e il resolver
                                                     server lo consulta PRIMA del fallback storico. Cambiare
                                                     chi gestisce un evento adesso non richiede dev. */}
-                                                <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 space-y-3">
-                                                    <div className="flex items-center justify-between mb-1">
-                                                        <span className="text-[11px] uppercase tracking-wider text-blue-300/90 font-semibold">
-                                                            Eventi gestiti da questo template
+                                                <div className="rounded-lg border border-blue-500/30 bg-blue-500/5">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setExpandedEventi(prev => {
+                                                                const next = new Set(prev)
+                                                                if (next.has(template.id)) next.delete(template.id)
+                                                                else next.add(template.id)
+                                                                return next
+                                                            })
+                                                        }}
+                                                        className="w-full px-3 py-2 flex items-center justify-between text-xs hover:bg-blue-500/10 transition-colors"
+                                                    >
+                                                        <span className="flex items-center gap-2">
+                                                            <svg className={`w-3.5 h-3.5 text-blue-300/90 transition-transform ${expandedEventi.has(template.id) ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                                            </svg>
+                                                            <span className="text-[11px] uppercase tracking-wider text-blue-300/90 font-semibold">
+                                                                Eventi gestiti da questo template
+                                                            </span>
                                                         </span>
                                                         <span className="text-[10px] text-theme-text-muted">
                                                             {(template.handled_events?.length ?? 0)} assegnati
                                                         </span>
-                                                    </div>
+                                                    </button>
+
+                                                    {expandedEventi.has(template.id) && (
+                                                    <div className="border-t border-blue-500/30 p-3 space-y-3">
                                                     <p className="text-[10px] text-theme-text-muted leading-snug">
                                                         Spunta gli eventi che vuoi instradare a questo template. Una spunta sposta l'evento qui sopra anche se prima era gestito altrove. Lascia tutto vuoto per usare il routing storico.
                                                     </p>
@@ -5595,6 +5618,8 @@ export default function MessaggiSistemaProTab() {
                                                             )
                                                         })}
                                                     </div>
+                                                    </div>
+                                                    )}
                                                 </div>
 
                                                 {/* Filtri avanzati per-template — pannello collapsible.
