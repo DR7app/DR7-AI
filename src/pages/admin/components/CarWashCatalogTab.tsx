@@ -3,6 +3,19 @@ import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
 import MoneyInput from '../../../components/MoneyInput'
 import FleetInventory from './FleetInventory'
+import RitagliaImmagineModal from './RitagliaImmagineModal'
+import { IMMAGINE_ACCEPT } from '../../../utils/immagineUpload'
+
+/**
+ * Rapporto del riquadro in cui il sito mostra queste immagini.
+ * 4:5 come le locandine del catalogo (1080x1350): cosi' riempiono il riquadro
+ * esatto, senza bordi vuoti e senza tagliare logo, prezzo o lista servizi.
+ * Se cambia qui va cambiato anche in `RIQUADRO_CATALOGO_CLASSE` del sito
+ * (components/ui/RiquadroCatalogo.tsx).
+ */
+const RITAGLIO_CATALOGO_RATIO = 4 / 5
+/** Lato lungo del file salvato: sopra questo il sito non guadagna nulla. */
+const CATALOGO_LATO_MAX = 1200
 
 interface PriceOption {
   label: string
@@ -74,15 +87,21 @@ export default function CarWashCatalogTab() {
   const [primeFlexSavedPrice, setPrimeFlexSavedPrice] = useState<number>(PRIME_FLEX_DEFAULT)
   const [primeFlexSaving, setPrimeFlexSaving] = useState(false)
 
-  async function uploadImage(file: File, target: 'new' | 'edit') {
-    if (!file.type.startsWith('image/')) { toast.error('Solo file immagine (PNG, JPG)'); return }
+  /**
+   * Immagine scelta dall'operatore, in attesa di passare dalla finestra di
+   * ritaglio. Nello storage non finisce mai il file grezzo: prima era cosi' e
+   * sul sito le foto uscivano enormi e fuori dal riquadro.
+   */
+  const [immagineDaRitagliare, setImmagineDaRitagliare] = useState<{ file: File; target: 'new' | 'edit' } | null>(null)
+
+  /** Salva nello storage l'immagine gia' ridimensionata dalla finestra. */
+  async function caricaImmagine(blob: Blob, target: 'new' | 'edit') {
     setUploadingImage(true)
     try {
-      const ext = file.name.split('.').pop() || 'png'
-      const fileName = `wash-service-${Date.now()}.${ext}`
+      const fileName = `wash-service-${Date.now()}.jpg`
       const { error: upErr } = await supabase.storage
         .from('catalog-images')
-        .upload(`wash-catalog/${fileName}`, file, { cacheControl: '31536000', upsert: true })
+        .upload(`wash-catalog/${fileName}`, blob, { cacheControl: '31536000', upsert: true, contentType: 'image/jpeg' })
       if (upErr) throw upErr
       const { data: urlData } = supabase.storage.from('catalog-images').getPublicUrl(`wash-catalog/${fileName}`)
       const url = urlData?.publicUrl || ''
@@ -437,8 +456,14 @@ export default function CarWashCatalogTab() {
           <div>
             <label className="block text-xs text-theme-text-muted mb-1">Immagine</label>
             <div className="flex items-center gap-2">
-              <input ref={newImageRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
-                onChange={e => { if (e.target.files?.[0]) uploadImage(e.target.files[0], 'new') }} />
+              <input ref={newImageRef} type="file" accept={IMMAGINE_ACCEPT} className="hidden"
+                onChange={e => {
+                  const file = e.target.files?.[0]
+                  // Azzero il valore: senza questo riscegliere la STESSA foto
+                  // non fa scattare l'onChange e la finestra non si riapre.
+                  e.target.value = ''
+                  if (file) setImmagineDaRitagliare({ file, target: 'new' })
+                }} />
               <button type="button" onClick={() => newImageRef.current?.click()} disabled={uploadingImage}
                 className="px-4 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm hover:border-dr7-gold transition-colors disabled:opacity-50">
                 {uploadingImage ? 'Caricamento...' : 'Carica PNG'}
@@ -505,6 +530,8 @@ export default function CarWashCatalogTab() {
                   onEditFeatures={setEditFeatures}
                   editImageUrl={editImageUrl}
                   onEditImageUrl={setEditImageUrl}
+                  onScegliImmagine={file => setImmagineDaRitagliare({ file, target: 'edit' })}
+                  imgUploading={uploadingImage}
                   onToggleActive={() => toggleActive(service)}
                 />
               ))}
@@ -512,6 +539,19 @@ export default function CarWashCatalogTab() {
           </div>
         )
       })}
+
+      <RitagliaImmagineModal
+        file={immagineDaRitagliare?.file || null}
+        ratio={RITAGLIO_CATALOGO_RATIO}
+        latoMax={CATALOGO_LATO_MAX}
+        descrizione="Questo e' il riquadro in cui il sito mostra i servizi Prime Wash."
+        onAnnulla={() => setImmagineDaRitagliare(null)}
+        onConferma={blob => {
+          const target = immagineDaRitagliare?.target
+          setImmagineDaRitagliare(null)
+          if (target) caricaImmagine(blob, target)
+        }}
+      />
     </div>
   )
 }
@@ -537,6 +577,9 @@ interface ServiceCardProps {
   onEditFeatures: (v: string) => void
   editImageUrl: string
   onEditImageUrl: (v: string) => void
+  /** Apre la finestra di ritaglio sul file scelto; l'upload lo fa il genitore. */
+  onScegliImmagine: (file: File) => void
+  imgUploading: boolean
   onToggleActive: () => void
 }
 
@@ -561,30 +604,11 @@ function ServiceCard({
   onEditFeatures,
   editImageUrl,
   onEditImageUrl,
+  onScegliImmagine,
+  imgUploading,
   onToggleActive,
 }: ServiceCardProps) {
   const editImgRef = useRef<HTMLInputElement>(null)
-  const [imgUploading, setImgUploading] = useState(false)
-
-  async function handleEditImageUpload(file: File) {
-    if (!file.type.startsWith('image/')) { toast.error('Solo file immagine'); return }
-    setImgUploading(true)
-    try {
-      const ext = file.name.split('.').pop() || 'png'
-      const fileName = `wash-service-${Date.now()}.${ext}`
-      const { error: upErr } = await supabase.storage
-        .from('catalog-images')
-        .upload(`wash-catalog/${fileName}`, file, { cacheControl: '31536000', upsert: true })
-      if (upErr) throw upErr
-      const { data: urlData } = supabase.storage.from('catalog-images').getPublicUrl(`wash-catalog/${fileName}`)
-      onEditImageUrl(urlData?.publicUrl || '')
-      toast.success('Immagine caricata')
-    } catch (err: unknown) {
-      toast.error('Errore upload: ' + (err as Error).message)
-    } finally {
-      setImgUploading(false)
-    }
-  }
 
   const inactive = !service.is_active
 
@@ -675,8 +699,13 @@ function ServiceCard({
         <div className="mb-3">
           <label className="block text-xs text-theme-text-muted mb-1">Immagine</label>
           <div className="flex items-center gap-2">
-            <input ref={editImgRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
-              onChange={e => { if (e.target.files?.[0]) handleEditImageUpload(e.target.files[0]) }} />
+            <input ref={editImgRef} type="file" accept={IMMAGINE_ACCEPT} className="hidden"
+              onChange={e => {
+                const file = e.target.files?.[0]
+                // Vedi la nota sull'input del nuovo servizio.
+                e.target.value = ''
+                if (file) onScegliImmagine(file)
+              }} />
             <button type="button" onClick={() => editImgRef.current?.click()} disabled={imgUploading}
               className="px-4 py-1.5 bg-theme-bg-tertiary border border-theme-border-light rounded-lg text-theme-text-primary text-sm hover:border-dr7-gold transition-colors disabled:opacity-50">
               {imgUploading ? 'Caricamento...' : 'Carica PNG'}
