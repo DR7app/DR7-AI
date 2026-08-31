@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useRef, type ReactElement } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, type ReactElement } from 'react'
+import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import { supabase } from '../../../supabaseClient'
 import { logAdminAction } from '../../../utils/logAdminAction'
@@ -11,6 +12,9 @@ import IncomingInvoicesView from './IncomingInvoicesView'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell } from 'recharts'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import { useSingleFlight } from '../../../hooks/useSingleFlight'
+// Stessa geometria del menu Gestisci: il pannello si vede intero, senza
+// scorrerlo e senza uscire dallo schermo.
+import { computeCoords, sameCoords, type Coords } from './GestisciMenu'
 
 interface Invoice {
   id: string
@@ -339,6 +343,47 @@ export default function FatturaTab() {
   const [pageSize, setPageSize] = useState(10)
   const [currentPage, setCurrentPage] = useState(0)
   const [openActionsId, setOpenActionsId] = useState<string | null>(null)
+  // 2026-08-31: il menu azioni della riga era 'absolute' dentro la tabella,
+  // che ha overflow-hidden + overflow-x-auto: veniva tagliato dal bordo e
+  // le voci si raggiungevano solo scorrendo. Ora esce in un portal con
+  // position:fixed, quindi nessun antenato lo puo' ritagliare.
+  const actionsBtnRef = useRef<HTMLButtonElement | null>(null)
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null)
+  const [actionsCoords, setActionsCoords] = useState<Coords | null>(null)
+
+  function recalcActionsCoords() {
+    const btn = actionsBtnRef.current
+    if (!btn) return
+    const next = computeCoords(
+      btn.getBoundingClientRect(),
+      window.innerWidth,
+      window.innerHeight,
+      actionsMenuRef.current?.offsetWidth || 192,
+      // scrollHeight: l'altezza vera del contenuto, anche quando il
+      // maxHeight lo sta gia' tagliando.
+      actionsMenuRef.current?.scrollHeight || 180,
+    )
+    setActionsCoords(prev => (prev && sameCoords(prev, next)) ? prev : next)
+  }
+
+  // Senza array di dipendenze: il primo giro stima, il secondo misura sul
+  // pannello ormai montato. Converge subito perche' sameCoords non riscrive.
+  useLayoutEffect(() => {
+    if (openActionsId) recalcActionsCoords()
+    else setActionsCoords(null)
+  })
+
+  useEffect(() => {
+    if (!openActionsId) return
+    const onReposition = () => recalcActionsCoords()
+    // 'true' come terzo arg: cattura anche lo scroll della tabella.
+    window.addEventListener('scroll', onReposition, true)
+    window.addEventListener('resize', onReposition)
+    return () => {
+      window.removeEventListener('scroll', onReposition, true)
+      window.removeEventListener('resize', onReposition)
+    }
+  }, [openActionsId])
 
   // Lista clienti unici dalle fatture caricate, alfabetica.
   const clientiOptions = useMemo(() => {
@@ -1534,6 +1579,7 @@ export default function FatturaTab() {
                       <td className="px-3 py-3 text-right relative">
                         <button
                           type="button"
+                          ref={open ? actionsBtnRef : undefined}
                           onClick={() => setOpenActionsId(open ? null : invoice.id)}
                           className="w-8 h-8 rounded-full hover:bg-theme-bg-tertiary text-theme-text-muted hover:text-theme-text-primary inline-flex items-center justify-center"
                           aria-label="Azioni"
@@ -1542,10 +1588,20 @@ export default function FatturaTab() {
                             <circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" />
                           </svg>
                         </button>
-                        {open && (
+                        {open && createPortal(
                           <>
-                            <div className="fixed inset-0 z-30" onClick={() => setOpenActionsId(null)} />
-                            <div className="absolute right-2 top-10 z-40 w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-xl overflow-hidden text-left">
+                            <div className="fixed inset-0" style={{ zIndex: 9998 }} onClick={() => setOpenActionsId(null)} />
+                            <div
+                              ref={actionsMenuRef}
+                              style={{
+                                position: 'fixed',
+                                top: actionsCoords?.top ?? -9999,
+                                right: actionsCoords?.right ?? 0,
+                                maxHeight: actionsCoords?.maxHeight,
+                                overflowY: 'auto',
+                                zIndex: 9999,
+                              }}
+                              className="w-48 bg-theme-bg-secondary border border-theme-border rounded-lg shadow-xl text-left">
                               <button onClick={() => { downloadPDF(invoice); setOpenActionsId(null) }} className="w-full px-3 py-2 text-xs text-theme-text-primary hover:bg-theme-bg-tertiary flex items-center gap-2">
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeWidth={2} strokeLinecap="round" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" /></svg>
                                 Scarica PDF
@@ -1584,7 +1640,8 @@ export default function FatturaTab() {
                                 Elimina
                               </button>
                             </div>
-                          </>
+                          </>,
+                          document.body
                         )}
                       </td>
                     </tr>
