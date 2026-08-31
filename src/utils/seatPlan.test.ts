@@ -43,16 +43,16 @@ describe('seatPlan', () => {
     const daiBlocchi = SEAT_BLOCKS.flatMap(b => b.seats)
     expect(new Set(daiBlocchi).size).toBe(daiBlocchi.length)
     expect(daiBlocchi.slice().sort()).toEqual(SEAT_LAYOUT.map(s => s.id).slice().sort())
-    // Davanti uno per uno, dietro tutto insieme.
+    // Solo la seconda fila e' un blocco: davanti e in terza fila uno per uno.
     expect(SEAT_BLOCKS.filter(b => b.row === 1).every(b => b.seats.length === 1)).toBe(true)
-    expect(SEAT_BLOCKS.find(b => b.row === 2)!.seats).toEqual(['PS', 'PC', 'PD'])
-    expect(SEAT_BLOCKS.find(b => b.row === 3)!.seats).toEqual(['TS', 'TD'])
+    expect(SEAT_BLOCKS.filter(b => b.row === 3).every(b => b.seats.length === 1)).toBe(true)
+    expect(SEAT_BLOCKS.filter(b => b.seats.length > 1).map(b => b.seats)).toEqual([['PS', 'PC', 'PD']])
   })
 
   it('il divano intero e- UNA voce nei riepiloghi, non tre', () => {
     expect(seatListLabel(['PS', 'PC', 'PD'])).toBe('Divano posteriore')
     expect(seatListLabel(['AS', 'PS', 'PC', 'PD'])).toBe('Guidatore, Divano posteriore')
-    expect(seatListLabel(['TS', 'TD'])).toBe('Terza fila')
+    expect(seatListLabel(['TS', 'TD'])).toBe('Terza fila sinistra, Terza fila destra')
     // Prenotazione vecchia con un solo posto dietro: resta leggibile.
     expect(seatListLabel(['PS', 'PD'])).toBe('Posteriore sinistro, Posteriore destro')
   })
