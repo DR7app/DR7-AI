@@ -15,7 +15,7 @@
  */
 import React, { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { SEAT_LAYOUT, ROW_Y, seatListLabel, normalizeSeats } from '../../../utils/seatPlan'
+import { SEAT_BLOCKS, SEAT_LAYOUT, ROW_Y, seatListLabel, normalizeSeats } from '../../../utils/seatPlan'
 
 interface Props {
   serviceName: string
@@ -35,16 +35,18 @@ const SeatPlanPicker: React.FC<Props> = ({ serviceName, unitPrice, initialSeats 
     initialSeats.some(id => SEAT_LAYOUT.find(s => s.id === id)?.row === 3),
   )
 
-  const spots = useMemo(
-    () => SEAT_LAYOUT.filter(s => s.row !== 3 || thirdRow),
+  const blocchi = useMemo(
+    () => SEAT_BLOCKS.filter(b => b.row !== 3 || thirdRow),
     [thirdRow],
   )
   const rowY = ROW_Y[thirdRow ? '7' : '5']
 
-  const toggle = (id: string) => {
+  /** Il divano si prende o si lascia intero: e' un pezzo solo da lavare. */
+  const toggle = (seats: string[]) => {
     setSelected(prev => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
+      const tutti = seats.every(id => next.has(id))
+      seats.forEach(id => (tutti ? next.delete(id) : next.add(id)))
       return next
     })
   }
@@ -121,37 +123,47 @@ const SeatPlanPicker: React.FC<Props> = ({ serviceName, unitPrice, initialSeats 
               )}
             </svg>
 
-            {spots.map(sp => {
-              const on = selected.has(sp.id)
+            {blocchi.map(b => {
+              const on = b.seats.every(id => selected.has(id))
+              const divano = b.seats.length > 1
               return (
                 <button
-                  key={sp.id}
+                  key={b.id}
                   type="button"
-                  onClick={() => toggle(sp.id)}
+                  onClick={() => toggle(b.seats)}
                   aria-pressed={on}
-                  aria-label={sp.label}
-                  title={sp.label}
-                  style={{ left: `${sp.x}%`, top: `${rowY[sp.row]}%` }}
-                  className={`absolute -translate-x-1/2 -translate-y-1/2 w-11 h-11 rounded-lg text-[11px] font-bold flex flex-col items-center justify-end pb-1 border-2 shadow-lg transition-colors ${
+                  aria-label={b.label}
+                  title={b.label}
+                  style={{ left: `${b.x}%`, top: `${rowY[b.row]}%`, width: `${b.width}%` }}
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 h-11 rounded-lg text-[10px] font-bold tracking-wide flex flex-col items-center justify-end pb-1 border-2 shadow-lg transition-colors ${
                     on
                       ? 'bg-emerald-500 text-white border-emerald-400'
                       : 'bg-[#1c1c1c] text-gray-300 border-gray-500 hover:border-emerald-400 hover:text-white'
                   }`}
                 >
-                  {/* schienale, per far leggere il quadrato come un sedile */}
+                  {/* schienale, per far leggere il blocco come una seduta */}
                   <span
                     className={`absolute top-1 left-1.5 right-1.5 h-1.5 rounded-full ${
                       on ? 'bg-black/25' : 'bg-white/20'
                     }`}
                   />
-                  {sp.short}
+                  {/* Cuciture del divano: si vede che e' una panca da 3 (o da
+                      2 in terza fila) anche se si sceglie tutta insieme. */}
+                  {divano && b.seats.slice(1).map((_, i) => (
+                    <span
+                      key={i}
+                      style={{ left: `${((i + 1) * 100) / b.seats.length}%` }}
+                      className={`absolute top-3 bottom-1.5 w-px ${on ? 'bg-black/20' : 'bg-white/15'}`}
+                    />
+                  ))}
+                  {b.short}
                 </button>
               )
             })}
           </div>
 
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-            <button type="button" onClick={() => setSelected(new Set(spots.map(s => s.id)))}
+            <button type="button" onClick={() => setSelected(new Set(blocchi.flatMap(b => b.seats)))}
               className="text-[11px] px-3 py-1.5 rounded-full border border-theme-border text-theme-text-secondary hover:border-emerald-400 hover:text-theme-text-primary transition-colors">
               Tutti
             </button>

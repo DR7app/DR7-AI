@@ -41,6 +41,38 @@ export const SEAT_LAYOUT: SeatSpot[] = [
   { id: 'TD', short: 'TD', label: 'Terza fila destra',    x: 67, row: 3 },
 ]
 
+/**
+ * Blocchi cliccabili della pianta.
+ *
+ * Davanti sono due sedili separati: guida e passeggero si trattano uno alla
+ * volta. Dietro NO: e' un divano intero, si sceglie la panca e non i tre
+ * posti uno per uno, perche' e' cosi' che si lava e cosi' che il cliente la
+ * vede. Stessa cosa per la terza fila.
+ *
+ * `seats` resta l'elenco delle sigle salvate sulla prenotazione: il divano
+ * vale 3 sedili (2 in terza fila), quindi prezzo, quantita' e dettaglio in
+ * officina non cambiano.
+ */
+export interface SeatBlock {
+  /** Solo per il disegno: sulla prenotazione finiscono le sigle di `seats`. */
+  id: string
+  /** Testo dentro il blocco. */
+  short: string
+  label: string
+  seats: string[]
+  row: 1 | 2 | 3
+  /** Centro e larghezza in percentuale sul riquadro della pianta. */
+  x: number
+  width: number
+}
+
+export const SEAT_BLOCKS: SeatBlock[] = [
+  { id: 'AS',     short: 'AS',         label: 'Guidatore',            seats: ['AS'],             row: 1, x: 33, width: 26 },
+  { id: 'AD',     short: 'AD',         label: 'Passeggero anteriore', seats: ['AD'],             row: 1, x: 67, width: 26 },
+  { id: 'DIVANO', short: 'DIVANO',     label: 'Divano posteriore',    seats: ['PS', 'PC', 'PD'], row: 2, x: 50, width: 76 },
+  { id: 'TERZA',  short: 'TERZA FILA', label: 'Terza fila',           seats: ['TS', 'TD'],       row: 3, x: 50, width: 58 },
+]
+
 /** Altezza in percentuale di ogni fila: la vettura si "allunga" a 7 posti. */
 export const ROW_Y: Record<'5' | '7', Record<1 | 2 | 3, number>> = {
   '5': { 1: 35, 2: 65, 3: 0 },
@@ -64,9 +96,23 @@ export function normalizeSeats(ids: unknown): string[] {
   return SEAT_LAYOUT.filter(s => wanted.has(s.id)).map(s => s.id)
 }
 
-/** Elenco leggibile: "Guidatore, Posteriore destro". */
+/**
+ * Elenco leggibile: "Guidatore, Divano posteriore".
+ *
+ * Un divano scelto per intero e' UNA voce, non tre: e' quello che si e'
+ * cliccato. Le prenotazioni vecchie con un solo posto dietro restano
+ * leggibili posto per posto.
+ */
 export function seatListLabel(ids: string[], sep = ', '): string {
-  return normalizeSeats(ids).map(seatLabel).join(sep)
+  const scelti = new Set(normalizeSeats(ids))
+  const parti: string[] = []
+  for (const b of SEAT_BLOCKS) {
+    const dentro = b.seats.filter(id => scelti.has(id))
+    if (dentro.length === 0) continue
+    if (b.seats.length > 1 && dentro.length === b.seats.length) parti.push(b.label)
+    else parti.push(...dentro.map(seatLabel))
+  }
+  return parti.join(sep)
 }
 
 /**
