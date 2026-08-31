@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useLayoutEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../../supabaseClient'
 import LimitationOverrideModal from '../../../components/LimitationOverrideModal'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
@@ -10,6 +11,7 @@ import { authFetch } from '../../../utils/authFetch'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { maskIban, validateIban } from '../../../utils/ibanValidation'
 import { logAdminAction } from '../../../utils/logAdminAction'
+import { computeCoords, sameCoords, type Coords } from './GestisciMenu'
 
 interface Cauzione {
     id: string
@@ -50,6 +52,16 @@ export default function CauzioniTab() {
     const override = useLimitationOverride()
     const pendingSbloccoRef = useRef<Cauzione | null>(null)
     const [cauzioni, setCauzioni] = useState<Cauzione[]>([])
+    // 2026-08-31: il menu azioni della riga era un <details> 'absolute' dentro
+    // la card, che ha overflow-hidden: le ultime voci (BLOCCA, SBLOCCA
+    // PRE-AUTH, ELIMINA) restavano TAGLIATE dal bordo. Stessa cura di Fatture
+    // e Gestisci: esce in un portal con position:fixed, che nessun antenato
+    // puo' ritagliare, e su finestra bassa si allarga a colonne.
+    const [openActionsId, setOpenActionsId] = useState<string | null>(null)
+    const actionsBtnRef = useRef<HTMLButtonElement | null>(null)
+    const actionsMenuRef = useRef<HTMLDivElement | null>(null)
+    const actionsBaseRef = useRef<{ w: number; h: number } | null>(null)
+    const [actionsCoords, setActionsCoords] = useState<Coords | null>(null)
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [selectedCauzione, setSelectedCauzione] = useState<Cauzione | null>(null)
@@ -85,6 +97,51 @@ export default function CauzioniTab() {
     useEffect(() => {
         fetchCauzioni()
     }, [])
+
+    function recalcActionsCoords() {
+        const btn = actionsBtnRef.current
+        if (!btn) return
+        // scrollHeight: l'altezza vera del contenuto, anche quando il
+        // maxHeight lo sta gia' tagliando. Misurata a una colonna e poi
+        // tenuta ferma finche' il menu resta aperto.
+        if (!actionsBaseRef.current && actionsMenuRef.current) {
+            actionsBaseRef.current = {
+                w: actionsMenuRef.current.offsetWidth,
+                h: actionsMenuRef.current.scrollHeight,
+            }
+        }
+        const base = actionsBaseRef.current
+        const next = computeCoords(
+            btn.getBoundingClientRect(),
+            window.innerWidth,
+            window.innerHeight,
+            base?.w || 176,
+            base?.h || 180,
+        )
+        setActionsCoords(prev => (prev && sameCoords(prev, next)) ? prev : next)
+    }
+
+    // Senza array di dipendenze: il primo giro stima, il secondo misura sul
+    // pannello ormai montato. Converge perche' sameCoords non riscrive.
+    useLayoutEffect(() => {
+        if (openActionsId) recalcActionsCoords()
+        else {
+            actionsBaseRef.current = null
+            setActionsCoords(null)
+        }
+    })
+
+    useEffect(() => {
+        if (!openActionsId) return
+        const onReposition = () => recalcActionsCoords()
+        // 'true' come terzo arg: cattura anche lo scroll della lista.
+        window.addEventListener('scroll', onReposition, true)
+        window.addEventListener('resize', onReposition)
+        return () => {
+            window.removeEventListener('scroll', onReposition, true)
+            window.removeEventListener('resize', onReposition)
+        }
+    }, [openActionsId])
 
     useEffect(() => {
         calculateStats()
@@ -1643,16 +1700,46 @@ export default function CauzioniTab() {
                                                         <span className={`text-[10px] font-bold ${rischio.text}`}>{rischio.label}</span>
                                                     </div>
                                                     {/* Azioni — open expanded buttons in hover popover via summary/details */}
-                                                    <details className="relative justify-self-end" onClick={(e) => e.stopPropagation()}>
-                                                        <summary className="list-none cursor-pointer grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-cyan-300 hover:bg-cyan-500/10 transition-colors">
+                                                    <div className="relative justify-self-end" onClick={(e) => e.stopPropagation()}>
+                                                        <button
+                                                            type="button"
+                                                            ref={openActionsId === c.id ? actionsBtnRef : undefined}
+                                                            onClick={() => setOpenActionsId(openActionsId === c.id ? null : c.id)}
+                                                            aria-label="Azioni"
+                                                            className="list-none cursor-pointer grid w-7 h-7 place-items-center rounded-md text-theme-text-muted hover:text-cyan-300 hover:bg-cyan-500/10 transition-colors"
+                                                        >
                                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01"/></svg>
-                                                        </summary>
-                                                        <div className="absolute right-0 top-8 z-30 w-44 rounded-lg bg-theme-bg-secondary ring-1 ring-theme-border shadow-xl py-1">
-                                                            <div className="flex flex-col gap-0 [&>button]:text-left [&>button]:px-3 [&>button]:py-2 [&>button]:text-[12px] [&>button]:font-semibold [&>button]:transition-colors">
-                                                                {rowActions(c)}
-                                                            </div>
-                                                        </div>
-                                                    </details>
+                                                        </button>
+                                                        {openActionsId === c.id && createPortal(
+                                                            <>
+                                                                <div className="fixed inset-0" style={{ zIndex: 9998 }} onClick={() => setOpenActionsId(null)} />
+                                                                <div
+                                                                    ref={actionsMenuRef}
+                                                                    style={{
+                                                                        position: 'fixed',
+                                                                        top: actionsCoords?.top ?? -9999,
+                                                                        right: actionsCoords?.right ?? 0,
+                                                                        maxHeight: actionsCoords?.maxHeight,
+                                                                        maxWidth: actionsCoords?.maxWidth,
+                                                                        // Finestra troppo bassa per tutte le voci in
+                                                                        // fila: si allarga invece di farsi scorrere.
+                                                                        width: (actionsCoords?.columns ?? 1) > 1 ? actionsCoords?.width : undefined,
+                                                                        columnCount: (actionsCoords?.columns ?? 1) > 1 ? actionsCoords?.columns : undefined,
+                                                                        columnGap: 0,
+                                                                        columnRule: (actionsCoords?.columns ?? 1) > 1 ? '1px solid rgba(128,128,128,0.25)' : undefined,
+                                                                        overflowY: 'auto',
+                                                                        zIndex: 9999,
+                                                                    }}
+                                                                    className="w-44 rounded-lg bg-theme-bg-secondary ring-1 ring-theme-border shadow-xl py-1"
+                                                                >
+                                                                    <div className="flex flex-col gap-0 [&>button]:text-left [&>button]:px-3 [&>button]:py-2 [&>button]:text-[12px] [&>button]:font-semibold [&>button]:transition-colors">
+                                                                        {rowActions(c)}
+                                                                    </div>
+                                                                </div>
+                                                            </>,
+                                                            document.body
+                                                        )}
+                                                    </div>
                                                 </div>
                                             )
                                         })}

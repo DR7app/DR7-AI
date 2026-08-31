@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { fetchAllRows } from '../../../utils/fetchAllRows'
 import { supabase } from '../../../supabaseClient'
 import toast from 'react-hot-toast'
@@ -11,6 +12,7 @@ import ClientStatusBadge from '../../../components/ClientStatusBadge'
 import DateRangeFilter from '../../../components/DateRangeFilter'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import MoneyInput from '../../../components/MoneyInput'
+import { computeCoords, sameCoords, type Coords } from './GestisciMenu'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -165,6 +167,58 @@ export default function UnpaidBookingsTab() {
   const [sollecitoSendingKey, setSollecitoSendingKey] = useState<string | null>(null)
   // Per-row actions dropdown (3-dots menu on desktop row layout)
   const [openActionsRowKey, setOpenActionsRowKey] = useState<string | null>(null)
+  // 2026-08-31: il menu "..." della riga era 'absolute' dentro la card, che
+  // ha overflow-hidden: le ultime voci restavano TAGLIATE dal bordo e si
+  // raggiungevano solo scorrendo. Stessa cura di Fatture e Gestisci: esce in
+  // un portal con position:fixed, quindi nessun antenato lo puo' ritagliare.
+  const actionsBtnRef = useRef<HTMLButtonElement | null>(null)
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null)
+  const actionsBaseRef = useRef<{ w: number; h: number } | null>(null)
+  const [actionsCoords, setActionsCoords] = useState<Coords | null>(null)
+
+  function recalcActionsCoords() {
+    const btn = actionsBtnRef.current
+    if (!btn) return
+    // scrollHeight: l'altezza vera del contenuto, anche quando il maxHeight
+    // lo sta gia' tagliando. Misurata a una colonna e poi tenuta ferma.
+    if (!actionsBaseRef.current && actionsMenuRef.current) {
+      actionsBaseRef.current = {
+        w: actionsMenuRef.current.offsetWidth,
+        h: actionsMenuRef.current.scrollHeight,
+      }
+    }
+    const base = actionsBaseRef.current
+    const next = computeCoords(
+      btn.getBoundingClientRect(),
+      window.innerWidth,
+      window.innerHeight,
+      base?.w || 224,
+      base?.h || 180,
+    )
+    setActionsCoords(prev => (prev && sameCoords(prev, next)) ? prev : next)
+  }
+
+  // Senza array di dipendenze: il primo giro stima, il secondo misura sul
+  // pannello ormai montato. Converge perche' sameCoords non riscrive.
+  useLayoutEffect(() => {
+    if (openActionsRowKey) recalcActionsCoords()
+    else {
+      actionsBaseRef.current = null
+      setActionsCoords(null)
+    }
+  })
+
+  useEffect(() => {
+    if (!openActionsRowKey) return
+    const onReposition = () => recalcActionsCoords()
+    // 'true' come terzo arg: cattura anche lo scroll della lista.
+    window.addEventListener('scroll', onReposition, true)
+    window.addEventListener('resize', onReposition)
+    return () => {
+      window.removeEventListener('scroll', onReposition, true)
+      window.removeEventListener('resize', onReposition)
+    }
+  }, [openActionsRowKey])
 
   // Addebito state
   const [showAddebitoModal, setShowAddebitoModal] = useState(false)
@@ -4092,6 +4146,7 @@ export default function UnpaidBookingsTab() {
                     </button>
                   )}
                   <button
+                    ref={isActionsOpen ? actionsBtnRef : undefined}
                     onClick={(e) => { e.stopPropagation(); setOpenActionsRowKey(isActionsOpen ? null : group.customerKey) }}
                     className="w-8 h-8 rounded-full flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-bg-primary/50 transition-colors"
                     title="Altre azioni"
@@ -4101,10 +4156,27 @@ export default function UnpaidBookingsTab() {
                     </svg>
                   </button>
 
-                  {isActionsOpen && (
+                  {isActionsOpen && createPortal(
                     <>
-                      <div className="fixed inset-0 z-40" onClick={() => setOpenActionsRowKey(null)} />
-                      <div className="absolute right-0 top-9 z-50 w-56 bg-theme-bg-secondary border border-theme-border rounded-xl shadow-2xl py-1 text-sm">
+                      <div className="fixed inset-0" style={{ zIndex: 9998 }} onClick={() => setOpenActionsRowKey(null)} />
+                      <div
+                        ref={actionsMenuRef}
+                        style={{
+                          position: 'fixed',
+                          top: actionsCoords?.top ?? -9999,
+                          right: actionsCoords?.right ?? 0,
+                          maxHeight: actionsCoords?.maxHeight,
+                          maxWidth: actionsCoords?.maxWidth,
+                          // Finestra troppo bassa per tutte le voci in fila:
+                          // il pannello si allarga invece di farsi scorrere.
+                          width: (actionsCoords?.columns ?? 1) > 1 ? actionsCoords?.width : undefined,
+                          columnCount: (actionsCoords?.columns ?? 1) > 1 ? actionsCoords?.columns : undefined,
+                          columnGap: 0,
+                          columnRule: (actionsCoords?.columns ?? 1) > 1 ? '1px solid rgba(128,128,128,0.25)' : undefined,
+                          overflowY: 'auto',
+                          zIndex: 9999,
+                        }}
+                        className="w-56 bg-theme-bg-secondary border border-theme-border rounded-xl shadow-2xl py-1 text-sm">
                         {itemCount >= 2 ? (
                           <button
                             disabled={!!processingKey}
@@ -4142,7 +4214,8 @@ export default function UnpaidBookingsTab() {
                           className="w-full text-left px-3 py-2 hover:bg-theme-bg-tertiary text-amber-400 disabled:opacity-50"
                         >{sollecitoSendingKey === group.customerKey ? 'Invio…' : 'Invia Sollecito'}</button>
                       </div>
-                    </>
+                    </>,
+                    document.body
                   )}
                 </div>
               </div>
