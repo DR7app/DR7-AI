@@ -387,11 +387,29 @@ export default function FatturaTab() {
     })
   }, [invoices, filterCliente, searchQuery, filterSdi, filterTipo, filterDateFrom, filterDateTo])
 
-  const totalPages = Math.max(1, Math.ceil(filteredInvoices.length / pageSize))
+  // Filtri attivi: quando l'operatore ha cercato qualcosa, il risultato e'
+  // gia' ristretto e spezzarlo in pagine da 10 lo obbliga a scorrere fino in
+  // fondo alla tabella solo per vedere il resto.
+  const filtriAttivi = (
+    filterSdi !== 'all' || filterTipo !== 'all' || filterCliente !== 'all' ||
+    !!filterDateFrom || !!filterDateTo || !!searchQuery
+  )
+
+  // Oltre questa soglia si continua a impaginare anche con un filtro attivo:
+  // disegnare qualche migliaio di righe insieme blocca la tabella.
+  const LIMITE_MOSTRA_TUTTE = 200
+
+  // `pageSize` 0 = "Tutte", scelto a mano dal menu in alto.
+  const mostraTutte = (
+    pageSize === 0 ||
+    (filtriAttivi && filteredInvoices.length <= LIMITE_MOSTRA_TUTTE)
+  )
+
+  const totalPages = mostraTutte ? 1 : Math.max(1, Math.ceil(filteredInvoices.length / pageSize))
   const safePage = Math.min(currentPage, totalPages - 1)
   const pagedInvoices = useMemo(
-    () => filteredInvoices.slice(safePage * pageSize, (safePage + 1) * pageSize),
-    [filteredInvoices, safePage, pageSize],
+    () => (mostraTutte ? filteredInvoices : filteredInvoices.slice(safePage * pageSize, (safePage + 1) * pageSize)),
+    [filteredInvoices, safePage, pageSize, mostraTutte],
   )
 
   // Reset to page 0 whenever a filter changes — keeps the operator from
@@ -1351,7 +1369,18 @@ export default function FatturaTab() {
               className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
             />
           </div>
-          {(filterSdi !== 'all' || filterTipo !== 'all' || filterCliente !== 'all' || filterDateFrom || filterDateTo || searchQuery) && (
+          <div className="flex flex-col">
+            <label className="text-[10px] text-theme-text-muted uppercase tracking-wider mb-1">Mostra</label>
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="bg-theme-bg-tertiary border border-theme-border rounded px-3 py-2 text-theme-text-primary text-sm"
+            >
+              {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n} per pagina</option>)}
+              <option value={0}>Tutte</option>
+            </select>
+          </div>
+          {filtriAttivi && (
             <button
               onClick={() => {
                 setFilterSdi('all'); setFilterTipo('all'); setFilterCliente('all'); setFilterDateFrom(''); setFilterDateTo(''); setSearchQuery('')
@@ -1362,6 +1391,15 @@ export default function FatturaTab() {
             </button>
           )}
         </div>
+        {filtriAttivi && (
+          <div className="text-xs text-theme-text-muted">
+            {filteredInvoices.length === 0
+              ? 'Nessuna fattura corrisponde ai filtri.'
+              : mostraTutte
+                ? `${filteredInvoices.length} ${filteredInvoices.length === 1 ? 'fattura trovata' : 'fatture trovate'} — mostrate tutte qui sotto.`
+                : `${filteredInvoices.length} fatture trovate — troppe per mostrarle tutte insieme, sono divise in pagine da ${pageSize}.`}
+          </div>
+        )}
       </div>
 
       {/* Invoices Table */}
@@ -1566,15 +1604,19 @@ export default function FatturaTab() {
                 className="bg-theme-bg-tertiary border border-theme-border rounded px-2 py-1 text-theme-text-primary"
               >
                 {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                <option value={0}>Tutte</option>
               </select>
               <span className="text-theme-text-muted">risultati</span>
             </div>
             <div className="text-theme-text-muted">
               {filteredInvoices.length === 0
                 ? '0'
-                : `${safePage * pageSize + 1} - ${Math.min((safePage + 1) * pageSize, filteredInvoices.length)} di ${filteredInvoices.length} fatture`}
+                : mostraTutte
+                  ? `${filteredInvoices.length} ${filteredInvoices.length === 1 ? 'fattura' : 'fatture'}`
+                  : `${safePage * pageSize + 1} - ${Math.min((safePage + 1) * pageSize, filteredInvoices.length)} di ${filteredInvoices.length} fatture`}
             </div>
-            <div className="flex items-center gap-1">
+            {/* Con una pagina sola i comandi sarebbero tutti spenti: si tolgono. */}
+            <div className={`flex items-center gap-1 ${mostraTutte ? 'hidden' : ''}`}>
               <button
                 onClick={() => setCurrentPage(0)}
                 disabled={safePage === 0}
