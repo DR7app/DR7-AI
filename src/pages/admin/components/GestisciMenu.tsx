@@ -29,16 +29,27 @@ const GUTTER = 8
 const MIN_PANEL = 180
 /** Larghezza di fallback finche' il pannello non e' montato e misurabile. */
 const MIN_WIDTH = 200
+/**
+ * Quota dell'altezza libera che una colonna puo' occupare. Il resto e' il
+ * margine che serve al bilanciamento CSS delle colonne: una sezione non si
+ * spezza a meta', quindi la colonna piu' alta sfora sempre di una voce o due.
+ */
+const RIEMPIMENTO_COLONNA = 0.85
 
 export type Coords = {
     top: number
     right: number
+    /** Larghezza imposta al pannello: una colonna, o piu' se serve. */
+    width: number
+    /** Numero di colonne su cui distribuire le voci (1 nel caso normale). */
+    columns: number
     maxHeight: number
     maxWidth: number
 }
 
 export const sameCoords = (a: Coords, b: Coords) =>
     a.top === b.top && a.right === b.right
+    && a.width === b.width && a.columns === b.columns
     && a.maxHeight === b.maxHeight && a.maxWidth === b.maxWidth
 
 /**
@@ -55,9 +66,10 @@ export const sameCoords = (a: Coords, b: Coords) =>
  *   si prova sopra, e se non basta nemmeno sopra si alza quanto serve per
  *   entrare nello schermo. Il bottone resta comunque scoperto o coperto solo
  *   di striscio, ma le voci si leggono tutte in un colpo;
- * - si scorre solo nel caso limite in cui il pannello e' piu' alto dello
- *   schermo intero (viewport bassissima): li' non esiste posizione che lo
- *   faccia entrare;
+ * - se nemmeno cosi' ci sta (finestra bassa, browser zoomato, telefono in
+ *   orizzontale) il pannello NON si scorre: si allarga su due o tre colonne,
+ *   come la scheda Lavaggio. Si scorre solo se non c'e' spazio nemmeno in
+ *   larghezza per le colonne che servirebbero;
  * - ancoraggio orizzontale a destra del trigger, ma mai oltre i bordi.
  */
 export function computeCoords(
@@ -68,11 +80,24 @@ export function computeCoords(
     panelHeight: number,
 ): Coords {
     const disponibile = vh - GUTTER * 2
-    // Altezza che il pannello occupera' davvero: la sua, o al massimo tutto
-    // lo schermo utile (oltre quella soglia scorre, non c'e' alternativa).
-    const altezza = Math.min(panelHeight || MIN_PANEL, disponibile)
+    const larghezzaLibera = vw - GUTTER * 2
+    const contenuto = panelHeight || MIN_PANEL
+    const colonnaBase = Math.min(panelWidth || MIN_WIDTH, larghezzaLibera)
 
-    const width = Math.min(panelWidth, vw - GUTTER * 2)
+    // Colonne: quante ne servirebbero perche' il contenuto entri in altezza,
+    // limitate a quante ne stanno in larghezza. Nel caso normale e' 1 e non
+    // cambia nulla rispetto a prima.
+    const capienzaColonna = Math.max(1, Math.floor(disponibile * RIEMPIMENTO_COLONNA))
+    const servono = Math.max(1, Math.ceil(contenuto / capienzaColonna))
+    const stanno = Math.max(1, Math.floor(larghezzaLibera / colonnaBase))
+    const columns = Math.min(servono, stanno)
+
+    // Altezza che il pannello occupera' davvero: il contenuto diviso per le
+    // colonne, o al massimo tutto lo schermo utile (oltre quella soglia
+    // scorre, non c'e' alternativa).
+    const altezza = Math.min(Math.ceil(contenuto / columns), disponibile)
+
+    const width = Math.min(colonnaBase * columns, larghezzaLibera)
     const right = Math.min(Math.max(GUTTER, vw - r.right), vw - width - GUTTER)
 
     // Sotto al bottone se ci sta tutto; altrimenti sopra; altrimenti
@@ -86,8 +111,10 @@ export function computeCoords(
     return {
         top,
         right,
+        width,
+        columns,
         maxHeight: disponibile,
-        maxWidth: vw - GUTTER * 2,
+        maxWidth: larghezzaLibera,
     }
 }
 
@@ -114,20 +141,32 @@ export default function GestisciMenu({ sections, label = 'Gestisci', size = 'sm'
     const wrapRef = useRef<HTMLDivElement>(null)
     const btnRef = useRef<HTMLButtonElement>(null)
     const menuRef = useRef<HTMLDivElement>(null)
+    // Misura del pannello a UNA colonna, presa al primo layout e poi tenuta
+    // ferma finche' il menu resta aperto: appena passa a due colonne la sua
+    // larghezza raddoppia e la sua altezza si dimezza, e rimisurarla farebbe
+    // rimbalzare il conto delle colonne avanti e indietro.
+    const baseRef = useRef<{ w: number; h: number } | null>(null)
 
     function recalcCoords() {
         if (!btnRef.current) return
+        // scrollHeight e non offsetHeight: e' l'altezza VERA del contenuto,
+        // quella che il pannello vorrebbe avere, anche quando il maxHeight
+        // lo sta gia' tagliando.
+        if (!baseRef.current && menuRef.current) {
+            baseRef.current = {
+                w: menuRef.current.offsetWidth,
+                h: menuRef.current.scrollHeight,
+            }
+        }
+        const base = baseRef.current
         const next = computeCoords(
             btnRef.current.getBoundingClientRect(),
             window.innerWidth,
             window.innerHeight,
-            // Larghezza reale una volta montato il pannello; prima di allora
-            // una stima, corretta al giro successivo di useLayoutEffect.
-            menuRef.current?.offsetWidth || MIN_WIDTH,
-            // scrollHeight e non offsetHeight: e' l'altezza VERA del
-            // contenuto, quella che il pannello vorrebbe avere, anche
-            // quando il maxHeight lo sta gia' tagliando.
-            menuRef.current?.scrollHeight || MIN_PANEL,
+            // Prima che il pannello sia montato, una stima: viene corretta al
+            // giro successivo di useLayoutEffect.
+            base?.w || MIN_WIDTH,
+            base?.h || MIN_PANEL,
         )
         // Confronto prima di scrivere: recalcCoords gira anche dopo il
         // montaggio del pannello (per misurarne la larghezza) e senza questo
@@ -136,7 +175,12 @@ export default function GestisciMenu({ sections, label = 'Gestisci', size = 'sm'
     }
 
     useEffect(() => {
-        if (!open) return
+        if (!open) {
+            // Alla chiusura si butta la misura: al prossimo giro le voci
+            // visibili possono essere altre (stato prenotazione cambiato).
+            baseRef.current = null
+            return
+        }
         // pointerdown e non mousedown: su iOS il tap su un elemento non
         // interattivo (lo sfondo di una card) puo' non emettere mousedown e
         // il menu restava aperto sopra la lista.
@@ -217,6 +261,12 @@ export default function GestisciMenu({ sections, label = 'Gestisci', size = 'sm'
                         right: coords.right,
                         maxHeight: coords.maxHeight,
                         maxWidth: coords.maxWidth,
+                        // Larghezza imposta solo quando le colonne sono piu'
+                        // d'una: nel caso normale resta il min-w della classe.
+                        width: coords.columns > 1 ? coords.width : undefined,
+                        columnCount: coords.columns > 1 ? coords.columns : undefined,
+                        columnGap: 0,
+                        columnRule: coords.columns > 1 ? '1px solid rgba(128,128,128,0.25)' : undefined,
                         overflowY: 'auto',
                         // Su mobile evita che lo scroll del pannello trascini
                         // la lista sotto quando si arriva a fine corsa.
@@ -226,7 +276,9 @@ export default function GestisciMenu({ sections, label = 'Gestisci', size = 'sm'
                     className="min-w-[200px] rounded-xl border border-theme-border bg-theme-bg-secondary shadow-2xl py-1"
                 >
                     {visibleSections.map((sec, si) => (
-                        <div key={si} className={si > 0 ? 'border-t border-theme-border mt-1 pt-1' : ''}>
+                        // breakInside: una sezione non si spezza fra due
+                        // colonne, il titolo resta attaccato alle sue voci.
+                        <div key={si} style={{ breakInside: 'avoid' }} className={si > 0 ? 'border-t border-theme-border mt-1 pt-1' : ''}>
                             {sec.title && (
                                 <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-theme-text-muted">
                                     {sec.title}

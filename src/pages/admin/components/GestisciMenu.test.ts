@@ -7,7 +7,9 @@
  *
  * 2026-08-31: il pannello non va piu' schiacciato nello spazio libero sotto
  * al bottone. Deve vedersi INTERO, senza scorrerlo: se sotto non ci sta si
- * apre sopra, e se non basta nemmeno sopra si alza quanto serve.
+ * apre sopra, e se non basta nemmeno sopra si alza quanto serve. Se la
+ * finestra e' piu' bassa del menu non si scorre lo stesso: si allarga su
+ * due o tre colonne.
  */
 import { describe, it, expect } from 'vitest'
 import { computeCoords } from './GestisciMenu'
@@ -38,6 +40,7 @@ describe('computeCoords', () => {
     it('nessuna voce tagliata e nessuno scroll, a qualunque altezza del bottone', () => {
         for (let top = 0; top <= VH - 32; top += 8) {
             const c = computeCoords(rect(top), VW, VH, PANEL, ALTEZZA)
+            expect(c.columns).toBe(1)
             expect(c.top).toBeGreaterThanOrEqual(0)
             expect(c.top + ALTEZZA).toBeLessThanOrEqual(VH)
             // maxHeight non taglia il contenuto: niente barra di scorrimento.
@@ -45,10 +48,29 @@ describe('computeCoords', () => {
         }
     })
 
-    it('schermo piu\' basso del pannello: si ancora al viewport e li\' si scorre', () => {
+    it('schermo piu\' basso del pannello: due colonne, niente scroll', () => {
+        // Telefono in orizzontale: 320px di altezza, il menu ne vuole 420.
         const c = computeCoords(rect(150), 844, 320, PANEL, ALTEZZA)
-        expect(c.top).toBe(8)
-        expect(c.maxHeight).toBe(320 - 16)
+        expect(c.columns).toBe(2)
+        expect(c.width).toBe(PANEL * 2)
+        // Meta' contenuto per colonna: ci sta tutto nello schermo.
+        expect(Math.ceil(ALTEZZA / c.columns)).toBeLessThanOrEqual(c.maxHeight)
+        expect(c.top).toBeGreaterThanOrEqual(8)
+        expect(c.top + Math.ceil(ALTEZZA / c.columns)).toBeLessThanOrEqual(320)
+    })
+
+    it('schermo bassissimo: sale a tre colonne finche\' c\'e\' larghezza', () => {
+        const c = computeCoords(rect(60), 1280, 200, PANEL, ALTEZZA)
+        expect(c.columns).toBe(3)
+        expect(c.width).toBe(PANEL * 3)
+    })
+
+    it('niente larghezza per le colonne: resta a una e li\' si scorre', () => {
+        // Telefono stretto e bassissimo: due colonne non ci stanno in
+        // larghezza, non esiste posizione che eviti lo scorrimento.
+        const c = computeCoords(rect(60), 240, 200, PANEL, ALTEZZA)
+        expect(c.columns).toBe(1)
+        expect(c.maxHeight).toBe(200 - 16)
     })
 
     it('non sborda a sinistra quando il trigger e\' sul bordo sinistro', () => {
