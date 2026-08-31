@@ -16,6 +16,7 @@ import { INPUT_CLS, eur, eurToCents, centsToEur } from './noleggioFormBits'
 import CalendarTab from './CalendarTab'
 import ReservationsTab from './ReservationsTab'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import { risorsa } from '../../../utils/basePath'
 
 // Stati pagamento standard DR7 (come Noleggio auto / Car Wash): la label è
 // quella mostrata, il value è il payment_status salvato sul booking.
@@ -808,7 +809,7 @@ function HeliSeatMap({ seats, dep, cartDep, cartSeats, pay, onSeatClick }: {
   return (
     <div className="flex flex-col sm:flex-row gap-4 items-start">
       <div className="relative mx-auto w-full max-w-[240px] select-none shrink-0">
-        <img src="/heli-407-seatmap.png" alt="Mappa posti elicottero" draggable={false}
+        <img src={risorsa("heli-407-seatmap.png")} alt="Mappa posti elicottero" draggable={false}
           className="w-full rounded-xl border border-theme-border" />
         {seats.map(seat => {
           const posn = HELI_407_SEATS[seat.seat_position]

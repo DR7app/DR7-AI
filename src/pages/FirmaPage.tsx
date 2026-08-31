@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import PdfViewer from '../components/PdfViewer'
 import { fetchWithTimeout } from '../utils/fetchUtils'
+import { risorsa } from '../utils/basePath'
 
 type SigningStatus = 'loading' | 'viewing' | 'otp_sending' | 'otp_sent' | 'otp_verifying' | 'signing' | 'signed' | 'expired' | 'error'
 
@@ -238,7 +239,7 @@ export default function FirmaPage() {
         <div className="min-h-screen bg-gray-50">
             {/* Header */}
             <div className="bg-black text-white py-4 px-6 flex items-center justify-between">
-                <img src="/DR7logo1.png" alt="DR7" className="h-10" />
+                <img src={risorsa("DR7logo1.png")} alt="DR7" className="h-10" />
                 <span className="text-sm text-gray-400">Firma Elettronica</span>
             </div>
 

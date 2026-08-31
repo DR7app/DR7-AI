@@ -22,7 +22,8 @@ function App() {
   return (
     <ErrorBoundary>
     <ThemeProvider>
-      <BrowserRouter>
+      {/* basename: sotto dr7ai.com/NOMEAZIENDA le rotte partono da li'. */}
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
         <Toaster
           position="top-right"
           // Push toasts below the iOS notch / status bar — without this

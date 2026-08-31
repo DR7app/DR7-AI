@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import ReferralRegistrationForm from './referral/ReferralRegistrationForm'
 import ReferralDashboard from './referral/ReferralDashboard'
 import ReferralRewardTiers from './referral/ReferralRewardTiers'
+import { risorsa } from '../utils/basePath'
 
 export default function ReferralPage() {
   const [searchParams] = useSearchParams()
@@ -46,7 +47,7 @@ export default function ReferralPage() {
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {/* 2026-08-25: era rimasto il logo Rentora, il marchio vecchio. */}
-            <img src="/dr7-logo.png" alt="DR7 A.I." className="h-14 w-auto object-contain" />
+            <img src={risorsa("dr7-logo.png")} alt="DR7 A.I." className="h-14 w-auto object-contain" />
           </div>
           {participantId && (
             <button

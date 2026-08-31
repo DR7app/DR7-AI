@@ -18,6 +18,7 @@ import { preparaAvatarJpeg, AvatarError, AVATAR_ACCEPT } from '../../utils/avata
 import { errorePassword, regolePassword, PASSWORD_MIN } from '../../utils/passwordPolicy'
 import lazyWithRetry from '../../utils/lazyWithRetry'
 import SedePicker from '../../components/SedePicker'
+import { risorsa } from '../../utils/basePath'
 
 // Lazy-load all tabs with automatic retry on chunk load failure (post-deploy resilience)
 // 25/08/2026 - questi erano import statici, quindi finivano nel chunk
@@ -769,7 +770,7 @@ export default function AdminDashboard() {
             colori theme-aware perche' ora sta sopra allo sfondo del tema. */}
         <div className="relative px-3 py-3 flex items-center justify-center">
           <img
-            src="/dr7-logo.png"
+            src={risorsa("dr7-logo.png")}
             alt="DR7 A.I."
             className="max-h-10 max-w-[120px] w-auto h-auto object-contain"
           />

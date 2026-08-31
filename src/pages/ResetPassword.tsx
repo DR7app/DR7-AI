@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useTheme } from '../contexts/ThemeContext'
 import { regolePassword, errorePassword } from '../utils/passwordPolicy'
+import { risorsa } from '../utils/basePath'
 
 export default function ResetPassword() {
   const [password, setPassword] = useState('')
@@ -123,7 +124,7 @@ export default function ResetPassword() {
                 del Login: PNG trasparente, una sola immagine per i due temi. */}
             <div className="flex justify-center mb-6">
               <img
-                src="/dr7-logo.png"
+                src={risorsa("dr7-logo.png")}
                 alt="DR7 A.I."
                 className="h-14 sm:h-16 w-auto max-w-[200px] object-contain"
               />

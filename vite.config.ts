@@ -3,6 +3,12 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Dove vive questa copia del gestionale.
+  //   · vuoto  -> sito tutto suo (platform.dr7ai.com)
+  //   · '/NOMEAZIENDA/' -> indirizzo dentro dr7ai.com
+  // Il valore viene congelato qui dentro al momento della compilazione: e' il
+  // motivo per cui ogni azienda ha il suo pacchetto.
+  base: process.env.VITE_BASE_PATH || '/',
   plugins: [react()],
   build: {
     sourcemap: true,

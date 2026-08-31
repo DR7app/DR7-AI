@@ -3,6 +3,7 @@ import { saveAccount } from '../utils/savedAccounts'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { logAdminAction } from '../utils/logAdminAction'
+import { risorsa } from '../utils/basePath'
 
 export default function Login() {
   // 25/08: si arriva qui anche dal cambio account, quando la sessione salvata
@@ -97,7 +98,7 @@ export default function Login() {
                 chiaro, neon ciano su tema scuro. Un'unica immagine che si
                 adatta a entrambi i temi — niente riquadro bianco/nero. */}
             <img
-              src="/dr7-logo.png"
+              src={risorsa("dr7-logo.png")}
               alt="DR7 A.I."
               className="h-14 sm:h-16 w-auto max-w-[200px] object-contain"
             />
