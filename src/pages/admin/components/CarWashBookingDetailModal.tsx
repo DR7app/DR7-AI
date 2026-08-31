@@ -67,7 +67,7 @@ export default function CarWashBookingDetailModal({
       onClick={onClose}
     >
       <div
-        className="bg-theme-bg-secondary rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-[0_25px_60px_-12px_rgba(0,0,0,0.5)] border border-theme-border/30"
+        className="bg-theme-bg-secondary rounded-2xl max-w-4xl w-full max-h-[92vh] overflow-y-auto shadow-[0_25px_60px_-12px_rgba(0,0,0,0.5)] border border-theme-border/30"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -106,7 +106,10 @@ export default function CarWashBookingDetailModal({
           </div>
         </div>
 
-        <div className="px-6 py-5 space-y-4">
+        {/* 2026-08-31: due colonne su desktop e finestra larga. Prima era
+            una colonna stretta: la scheda usciva dallo schermo e si
+            leggeva solo scorrendo. */}
+        <div className="px-6 py-5 grid gap-4 md:grid-cols-2 items-start">
 
           {/* Contact card */}
           <div className="rounded-xl bg-theme-bg-tertiary/60 overflow-hidden">
@@ -214,7 +217,7 @@ export default function CarWashBookingDetailModal({
           )}
 
           {/* Price card */}
-          <div className="rounded-xl bg-theme-bg-tertiary/60 px-4 py-4 flex items-center justify-between">
+          <div className="md:col-span-2 rounded-xl bg-theme-bg-tertiary/60 px-4 py-4 flex items-center justify-between">
             <span className="text-theme-text-primary text-base font-semibold">Totale</span>
             <span className="text-cyan-700 dark:text-cyan-300 font-bold text-2xl tracking-tight">
               €{(booking.price_total / 100).toFixed(2)}
@@ -223,21 +226,22 @@ export default function CarWashBookingDetailModal({
 
           {/* Notes card */}
           {booking.booking_details?.notes && (
-            <div className="rounded-xl bg-yellow-500/10 border border-yellow-500/20 px-4 py-3">
+            <div className="md:col-span-2 rounded-xl bg-yellow-500/10 border border-yellow-500/20 px-4 py-3">
               <div className="text-yellow-500 text-xs font-semibold uppercase tracking-wider mb-1.5">Note</div>
               <p className="text-theme-text-primary text-sm leading-relaxed">{booking.booking_details.notes}</p>
             </div>
           )}
 
           {/* Booking ID */}
-          <div className="text-center text-xs text-theme-text-muted/50 font-mono pt-1">
+          <div className="md:col-span-2 text-center text-xs text-theme-text-muted/50 font-mono pt-1">
             DR7-{booking.id.toUpperCase().slice(0, 8)}
           </div>
 
           {/* Action buttons */}
+          <div className="md:col-span-2 flex flex-col sm:flex-row gap-3">
           <button
             onClick={onEdit}
-            className="w-full py-3 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-700 dark:text-cyan-300 font-semibold text-[15px] transition-all active:scale-[0.98]"
+            className="flex-1 w-full py-3 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-700 dark:text-cyan-300 font-semibold text-[15px] transition-all active:scale-[0.98]"
           >
             Modifica Prenotazione
           </button>
@@ -249,7 +253,7 @@ export default function CarWashBookingDetailModal({
             <button
               onClick={onPronta}
               disabled={prontaInCorso || prontaGiaInviata}
-              className={`w-full py-3 rounded-xl font-semibold text-[15px] transition-all active:scale-[0.98] ${
+              className={`flex-1 w-full py-3 rounded-xl font-semibold text-[15px] transition-all active:scale-[0.98] ${
                 prontaGiaInviata
                   ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 cursor-not-allowed'
                   : prontaInCorso
@@ -257,9 +261,10 @@ export default function CarWashBookingDetailModal({
                     : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300'
               }`}
             >
-              {prontaGiaInviata ? '✓ Cliente già notificato' : prontaInCorso ? 'Invio in corso...' : 'Pronta'}
+              {prontaGiaInviata ? 'Cliente gia\' notificato' : prontaInCorso ? 'Invio in corso...' : 'Pronta'}
             </button>
           )}
+          </div>
         </div>
       </div>
     </div>
