@@ -350,18 +350,29 @@ export default function FatturaTab() {
   const actionsBtnRef = useRef<HTMLButtonElement | null>(null)
   const actionsMenuRef = useRef<HTMLDivElement | null>(null)
   const [actionsCoords, setActionsCoords] = useState<Coords | null>(null)
+  // Misura del menu a UNA colonna, presa al primo layout e tenuta ferma
+  // finche' resta aperto: quando passa a due colonne la larghezza raddoppia
+  // e rimisurarla farebbe rimbalzare il conto delle colonne.
+  const actionsBaseRef = useRef<{ w: number; h: number } | null>(null)
 
   function recalcActionsCoords() {
     const btn = actionsBtnRef.current
     if (!btn) return
+    // scrollHeight: l'altezza vera del contenuto, anche quando il maxHeight
+    // lo sta gia' tagliando.
+    if (!actionsBaseRef.current && actionsMenuRef.current) {
+      actionsBaseRef.current = {
+        w: actionsMenuRef.current.offsetWidth,
+        h: actionsMenuRef.current.scrollHeight,
+      }
+    }
+    const base = actionsBaseRef.current
     const next = computeCoords(
       btn.getBoundingClientRect(),
       window.innerWidth,
       window.innerHeight,
-      actionsMenuRef.current?.offsetWidth || 192,
-      // scrollHeight: l'altezza vera del contenuto, anche quando il
-      // maxHeight lo sta gia' tagliando.
-      actionsMenuRef.current?.scrollHeight || 180,
+      base?.w || 192,
+      base?.h || 180,
     )
     setActionsCoords(prev => (prev && sameCoords(prev, next)) ? prev : next)
   }
@@ -370,7 +381,12 @@ export default function FatturaTab() {
   // pannello ormai montato. Converge subito perche' sameCoords non riscrive.
   useLayoutEffect(() => {
     if (openActionsId) recalcActionsCoords()
-    else setActionsCoords(null)
+    else {
+      // Alla chiusura si butta la misura: la riga successiva puo' avere voci
+      // diverse (bozza, scartata, nota di credito).
+      actionsBaseRef.current = null
+      setActionsCoords(null)
+    }
   })
 
   useEffect(() => {
@@ -1598,6 +1614,14 @@ export default function FatturaTab() {
                                 top: actionsCoords?.top ?? -9999,
                                 right: actionsCoords?.right ?? 0,
                                 maxHeight: actionsCoords?.maxHeight,
+                                maxWidth: actionsCoords?.maxWidth,
+                                // Finestra troppo bassa per tutte le voci in
+                                // fila: si allarga su piu' colonne invece di
+                                // farsi scorrere.
+                                width: (actionsCoords?.columns ?? 1) > 1 ? actionsCoords?.width : undefined,
+                                columnCount: (actionsCoords?.columns ?? 1) > 1 ? actionsCoords?.columns : undefined,
+                                columnGap: 0,
+                                columnRule: (actionsCoords?.columns ?? 1) > 1 ? '1px solid rgba(128,128,128,0.25)' : undefined,
                                 overflowY: 'auto',
                                 zIndex: 9999,
                               }}
