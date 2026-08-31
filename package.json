@@ -10,6 +10,7 @@
     "dev": "netlify dev",
     "dev:vite": "vite",
     "build": "tsc -b && vite build",
+    "controllo:date": "node scripts/controllo-date.mjs . ~/Sito",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",

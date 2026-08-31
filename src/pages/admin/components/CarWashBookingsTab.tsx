@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { flushSync } from 'react-dom'
 import { supabase } from '../../../supabaseClient'
+import { romeDateFromParts, romeIsoFromParts } from '../../../utils/timezoneUtils'
 import CustomerAutocomplete from './CustomerAutocomplete'
 import { LeadPicker } from './LeadPicker'
 import NewClientModal from './NewClientModal'
@@ -936,8 +937,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     ;(async () => {
       // Pull a generous window around the experience day so any same-car
       // adjacent booking is included.
-      const start = new Date(`${supercarExperienceWindow.pickupDate}T00:00:00+02:00`)
-      const end = new Date(`${supercarExperienceWindow.returnDate}T23:59:59+02:00`)
+      const start = romeDateFromParts(supercarExperienceWindow.pickupDate)
+      const end = romeDateFromParts(supercarExperienceWindow.returnDate, '23:59', 59)
       start.setDate(start.getDate() - 1)
       end.setDate(end.getDate() + 1)
       const { data, error } = await supabase
@@ -968,8 +969,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     if (!courtesyWindow || courtesyFleet.length === 0) { setCourtesyFleetBookings([]); return }
     let cancelled = false
     ;(async () => {
-      const start = new Date(`${courtesyWindow.pickupDate}T00:00:00+02:00`)
-      const end = new Date(`${courtesyWindow.returnDate}T23:59:59+02:00`)
+      const start = romeDateFromParts(courtesyWindow.pickupDate)
+      const end = romeDateFromParts(courtesyWindow.returnDate, '23:59', 59)
       start.setDate(start.getDate() - 1)
       end.setDate(end.getDate() + 1)
       const { data, error } = await supabase
@@ -2270,8 +2271,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // edits / deletes can find it.
     if (experienceVehicle && supercarExperienceWindow && supercarExperienceExtra && supercarExperienceOption) {
       try {
-        const startIso = `${supercarExperienceWindow.pickupDate}T${supercarExperienceWindow.pickupTime}:00+02:00`
-        const endIso = `${supercarExperienceWindow.returnDate}T${supercarExperienceWindow.returnTime}:00+02:00`
+        const startIso = romeIsoFromParts(supercarExperienceWindow.pickupDate, supercarExperienceWindow.pickupTime)
+        const endIso = romeIsoFromParts(supercarExperienceWindow.returnDate, supercarExperienceWindow.returnTime)
         const shadowPayload = {
           service_type: 'rental',
           service_name: `${supercarExperienceExtra.name} (${supercarExperienceOption.label})`,
@@ -2349,8 +2350,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     // stile distinto in calendario. Collegato al lavaggio via parent_carwash_booking_id.
     if (courtesyVehicle && courtesyWindow && primeCourtesyExtra) {
       try {
-        const startIso = `${courtesyWindow.pickupDate}T${courtesyWindow.pickupTime}:00+02:00`
-        const endIso = `${courtesyWindow.returnDate}T${courtesyWindow.returnTime}:00+02:00`
+        const startIso = romeIsoFromParts(courtesyWindow.pickupDate, courtesyWindow.pickupTime)
+        const endIso = romeIsoFromParts(courtesyWindow.returnDate, courtesyWindow.returnTime)
         // 2026-06-04: il blocco cortesia RISPECCHIA lo stato pagamento del
         // lavaggio. Se il lavaggio è "da saldare", anche la cortesia è pending;
         // quando l'admin segna pagato il lavaggio, la cortesia passa a paid

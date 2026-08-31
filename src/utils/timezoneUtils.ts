@@ -235,6 +235,35 @@ export function getRomeDay(utcString: string): number {
 }
 
 /**
+ * "2026-09-03" + "17:30" letti come ora di ROMA -> Date.
+ *
+ * PERCHE' ESISTE (31/08/2026). In giro per il gestionale la data e l'ora dei
+ * form venivano incollate a mano con l'offset scritto dentro la stringa:
+ *     new Date(`${form.pickup_date}T${form.pickup_time}:00+02:00`)
+ * `+02:00` e' l'ora LEGALE. Dall'ultima domenica di ottobre all'ultima di
+ * marzo Roma sta a `+01:00`, quindi ogni preventivo, ogni finestra di
+ * disponibilita' e ogni blocco cortesia dell'inverno nasceva spostato di
+ * un'ora — orario sbagliato sul contratto e sovrapposizioni non viste.
+ *
+ * Qui l'offset non si scrive: `createRomeDate` lo ricava dalla data, quindi
+ * ora solare e ora legale sono gia' giuste, cambio incluso.
+ *
+ * @param ymd  giorno in formato "AAAA-MM-GG" (il valore di un <input type="date">)
+ * @param hm   ora in formato "HH:MM" 24h (il valore di un <input type="time">)
+ */
+export function romeDateFromParts(ymd: string, hm: string = '00:00', seconds: number = 0): Date {
+    const [year, month, day] = String(ymd || '').split('-').map(Number)
+    const [hour, minute] = String(hm || '').split(':').map(Number)
+    if (!year || !month || !day) return new Date(NaN)
+    return createRomeDate(year, month, day, hour || 0, minute || 0, seconds)
+}
+
+/** Come `romeDateFromParts`, ma restituisce la stringa ISO UTC da salvare. */
+export function romeIsoFromParts(ymd: string, hm: string = '00:00', seconds: number = 0): string {
+    return romeDateFromParts(ymd, hm, seconds).toISOString()
+}
+
+/**
  * Get the month (1-12) in Europe/Rome timezone for a UTC timestamp.
  * 
  * @param utcString - UTC timestamp string

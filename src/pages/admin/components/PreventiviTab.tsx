@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { useLimitationOverride } from '../../../hooks/useLimitationOverride'
 import { supabase } from '../../../supabaseClient'
 import { authFetch } from '../../../utils/authFetch'
+import { romeDateFromParts, romeIsoFromParts } from '../../../utils/timezoneUtils'
 import { loadBusinessConfig, businessRowForServiceType } from '../../../utils/businessConfigClient'
 import { appendPreventivoEvent } from '../../../utils/preventivoEvents'
 import { useRentalConfig } from '../../../hooks/useRentalConfig'
@@ -702,8 +703,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
       }
 
       if (!selectedVehicle) return
-      const windowStart = new Date(`${form.pickup_date}T00:00:00+02:00`)
-      const windowEnd = new Date(`${form.return_date}T23:59:59+02:00`)
+      const windowStart = romeDateFromParts(form.pickup_date)
+      const windowEnd = romeDateFromParts(form.return_date, '23:59', 59)
       windowStart.setDate(windowStart.getDate() - 1)
       windowEnd.setDate(windowEnd.getDate() + 1)
       const { data: windowBookings } = await supabase
@@ -1891,8 +1892,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     // If blocked, the admin can override via a director OTP.
     let slotConflictReason: string | null = null
     if (selectedVehicle && !slotOverrideId) {
-      const windowStart = new Date(`${form.pickup_date}T00:00:00+02:00`)
-      const windowEnd = new Date(`${form.return_date}T23:59:59+02:00`)
+      const windowStart = romeDateFromParts(form.pickup_date)
+      const windowEnd = romeDateFromParts(form.return_date, '23:59', 59)
       windowStart.setDate(windowStart.getDate() - 1)
       windowEnd.setDate(windowEnd.getDate() + 1)
       const { data: windowBookings } = await supabase
@@ -2020,8 +2021,8 @@ export default function PreventiviTab({ onConvertToBooking: _onConvertToBooking,
     pendingSaveRef.current = null
     setSaving(true)
     try {
-      const pickup = `${form.pickup_date}T${form.pickup_time}:00+02:00`
-      const dropoff = `${form.return_date}T${form.return_time}:00+02:00`
+      const pickup = romeIsoFromParts(form.pickup_date, form.pickup_time)
+      const dropoff = romeIsoFromParts(form.return_date, form.return_time)
 
       // 2026-05-20: km_limit deve riflettere il VERO totale visibile
       // nel recap (base + pacchetti). Prima il campo non veniva mai

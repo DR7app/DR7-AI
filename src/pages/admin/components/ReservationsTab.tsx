@@ -16,6 +16,7 @@ import {
 import { mareFormSectionsOff } from './mareFormSections'
 import { isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
 import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
+import { romeDateFromParts } from '../../../utils/timezoneUtils'
 import {
   prorateRevenueForMonth,
   isReportableRentalBooking,
@@ -4520,18 +4521,10 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     setIsExtending(true)
 
     try {
-      // Build new dropoff datetime with explicit Rome timezone offset
-      function getRomeOffsetForDate(dateString: string): string {
-        // Calculate actual UTC offset for Europe/Rome on the given date
-        const date = new Date(`${dateString}T12:00:00Z`)
-        const romeStr = date.toLocaleString('en-US', { timeZone: 'Europe/Rome', hour: 'numeric', hour12: false })
-        const romeHour = parseInt(romeStr.split(',').pop()?.trim() || '12')
-        const utcHour = date.getUTCHours()
-        const diff = romeHour - utcHour
-        return diff === 2 ? '+02:00' : '+01:00'
-      }
-      const dropoffOffset = getRomeOffsetForDate(extendData.new_return_date)
-      const newDropoffDateTime = new Date(`${extendData.new_return_date}T${extendData.new_return_time}:00${dropoffOffset}`)
+      // Nuova riconsegna in ora di Roma. 31/08/2026: la copia locale del
+      // calcolo dell'offset e' stata sostituita dall'helper condiviso, cosi'
+      // la regola dell'ora legale sta in un posto solo.
+      const newDropoffDateTime = romeDateFromParts(extendData.new_return_date, extendData.new_return_time)
 
       // Calculate new total — use eurToCents (string-based) to avoid float drift
       const additionalAmountCents = eurToCents(extendData.additional_amount || '0')

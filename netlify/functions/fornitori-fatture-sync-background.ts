@@ -45,10 +45,24 @@ async function autoDiscoverFornitoriFromAruba(): Promise<AutoDiscoverResult> {
         if (v) knownPivas.add(v)
     }
 
+    // 31/08/2026: l'offset era scritto a mano ("+02:00" = ora legale), quindi
+    // da novembre a marzo la finestra partiva un'ora fuori posto. Ora si
+    // ricava dal giorno, come gia' fa get-incoming-invoices.
+    const offsetRoma = (giorno: string): string => {
+      const [y, m, d] = giorno.split('-').map(Number)
+      const mezzogiorno = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
+      const roma = mezzogiorno.toLocaleString('en-US', { timeZone: 'Europe/Rome', hour12: false })
+      const utc = mezzogiorno.toLocaleString('en-US', { timeZone: 'UTC', hour12: false })
+      const ore = Math.round((new Date(roma).getTime() - new Date(utc).getTime()) / 3600000)
+      return `${ore >= 0 ? '+' : '-'}${String(Math.abs(ore)).padStart(2, '0')}:00` // controllo-date: ok
+    }
+
     const start = new Date()
     start.setMonth(start.getMonth() - DISCOVER_MONTHS_BACK)
-    const startISO = start.toISOString().split('T')[0] + 'T00:00:00.000+02:00'
-    const endISO = new Date().toISOString().split('T')[0] + 'T23:59:59.999+02:00'
+    const giornoInizio = start.toISOString().split('T')[0]
+    const giornoFine = new Date().toISOString().split('T')[0]
+    const startISO = `${giornoInizio}T00:00:00.000${offsetRoma(giornoInizio)}`
+    const endISO = `${giornoFine}T23:59:59.999${offsetRoma(giornoFine)}`
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allInvoices: any[] = []
