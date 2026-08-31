@@ -2,6 +2,7 @@ import type { Handler } from '@netlify/functions'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { requireAuth } from './require-auth'
 import { getCorsOrigin } from './cors-headers'
+import { loadMeteoConfig, toMeteoBusiness, TEMPLATE_TERRA, TEMPLATE_MARE, type MeteoBusiness } from './weather-config'
 
 const GREEN_API_INSTANCE_ID = process.env.GREEN_API_INSTANCE_ID
 const GREEN_API_TOKEN = process.env.GREEN_API_TOKEN
@@ -51,22 +52,32 @@ La tua sicurezza viene sempre al primo posto. In caso di dubbi contattaci prima 
 Cordiali saluti
 DR7`
 
-type Channel = 'terra' | 'mare'
+// 31/08/2026 — un canale per BUSINESS, non piu' solo Terra e Mare.
+// Chi riceve e con quale testo lo dice `weather-config.ts` (sezione Allerta
+// Meteo della Centralina, una configurazione per business).
+export type Channel = MeteoBusiness
 
 interface ChannelConfig {
-  templateKey: string
   label: string
-  defaultBody: string
-  /** true se il service_type della prenotazione appartiene a questo canale. */
+  /** Template Pro proposto quando la Centralina non ne ha scelto un altro. */
+  templateKey: string
+  /** true se il service_type della prenotazione appartiene a questo business. */
   matches: (svc: string) => boolean
+  /**
+   * Chi e' "esposto" al maltempo per questo business:
+   *  - 'in_corso'  = il cliente ha il mezzo adesso (noleggi e soggiorni);
+   *  - 'in_arrivo' = ha un appuntamento nelle prossime ore (lavaggio: durante
+   *    il lavaggio il cliente non c'e', l'avviso serve PRIMA che si presenti).
+   */
+  finestra: 'in_corso' | 'in_arrivo'
 }
 
 const CHANNELS: Record<Channel, ChannelConfig> = {
   // Terra = noleggio auto: rental / car_rental / *_rental (ESCLUSI mare/aria) o vuoto.
   terra: {
-    templateKey: 'pro_allerta_meteo',
     label: 'Allerta Meteo',
-    defaultBody: DEFAULT_BODY_TERRA,
+    templateKey: TEMPLATE_TERRA,
+    finestra: 'in_corso',
     matches: (svc) => {
       if (!svc) return true // noleggi legacy con service_type nullo/vuoto = auto
       if (['car_wash', 'mechanical', 'mechanical_service', 'boat_rental', 'heli_rental', 'stay_rental'].includes(svc)) return false
@@ -75,11 +86,39 @@ const CHANNELS: Record<Channel, ChannelConfig> = {
   },
   // Mare = solo noleggio barche.
   mare: {
-    templateKey: 'pro_allerta_meteo_mare',
     label: 'Allerta Meteo Mare',
-    defaultBody: DEFAULT_BODY_MARE,
+    templateKey: TEMPLATE_MARE,
+    finestra: 'in_corso',
     matches: (svc) => svc === 'boat_rental',
   },
+  aria: {
+    label: 'Allerta Meteo Aria',
+    templateKey: TEMPLATE_TERRA,
+    finestra: 'in_corso',
+    matches: (svc) => svc === 'heli_rental',
+  },
+  soggiorni: {
+    label: 'Allerta Meteo Soggiorni',
+    templateKey: TEMPLATE_TERRA,
+    finestra: 'in_corso',
+    matches: (svc) => svc === 'stay_rental',
+  },
+  lavaggio: {
+    label: 'Allerta Meteo Lavaggio',
+    templateKey: TEMPLATE_TERRA,
+    finestra: 'in_arrivo',
+    matches: (svc) => svc === 'car_wash' || svc === 'mechanical' || svc === 'mechanical_service',
+  },
+}
+
+/** Testo di fabbrica dei DUE template che esistono davvero in system_messages. */
+const DEFAULT_BODIES: Record<string, string> = {
+  [TEMPLATE_TERRA]: DEFAULT_BODY_TERRA,
+  [TEMPLATE_MARE]: DEFAULT_BODY_MARE,
+}
+const TEMPLATE_LABELS: Record<string, string> = {
+  [TEMPLATE_TERRA]: 'Allerta Meteo',
+  [TEMPLATE_MARE]: 'Allerta Meteo Mare',
 }
 
 // Phone normalization — stessa logica di send-whatsapp-notification.ts.
@@ -98,52 +137,80 @@ function normalizePhone(raw: string): string | null {
 interface Recipient { name: string; vehicle: string; phone: string }
 
 /**
- * Assicura che ESISTANO le righe template di entrambi i canali in system_messages,
- * così i toggle "Cron ON/OFF" compaiono in Messaggi di Sistema Pro anche prima
- * del primo invio. Idempotente: crea solo se mancante (cron_approved default off).
+ * Assicura che ESISTANO in system_messages le righe dei template meteo, cosi'
+ * i toggle compaiono in Messaggi di Sistema Pro anche prima del primo invio.
+ * Idempotente: crea solo cio' che manca (cron_approved resta spento).
+ *
+ * I template restano DUE (Terra e Mare): i business nuovi scelgono quale
+ * spedire dalla sezione Allerta Meteo, non aggiungono voci al catalogo Pro.
  */
 export async function ensureWeatherTemplates(supabase: SupabaseClient): Promise<void> {
-  for (const ch of Object.keys(CHANNELS) as Channel[]) {
-    const cfg = CHANNELS[ch]
+  for (const key of Object.keys(DEFAULT_BODIES)) {
     try {
-      const { data } = await supabase.from('system_messages').select('id').eq('message_key', cfg.templateKey).limit(1)
+      const { data } = await supabase.from('system_messages').select('id').eq('message_key', key).limit(1)
       if (!data || data.length === 0) {
         await supabase.from('system_messages').insert({
-          message_key: cfg.templateKey,
-          label: cfg.label,
+          message_key: key,
+          label: TEMPLATE_LABELS[key] || 'Allerta Meteo',
           is_enabled: true,
-          message_body: cfg.defaultBody,
+          message_body: DEFAULT_BODIES[key],
         })
       }
     } catch (e) {
-      console.error('[send-weather-alert] ensureWeatherTemplates failed for', cfg.templateKey, e)
+      console.error('[send-weather-alert] ensureWeatherTemplates failed for', key, e)
     }
   }
 }
 
 /**
- * Core riutilizzabile: trova i noleggi ATTUALMENTE FUORI del canale indicato e
- * (se non preview) invia il template Allerta Meteo via Green API. Usato sia dal
- * handler manuale (con auth) sia dal cron meteo automatico.
+ * Core riutilizzabile: trova i clienti ESPOSTI al maltempo per il business
+ * indicato e (se non preview) invia il template Allerta Meteo via Green API.
+ * Usato sia dal handler manuale (con auth) sia dal cron meteo automatico.
+ *
+ * `templateKey` e `oreAvanti` arrivano dal cron, che ha gia' letto la config
+ * del business: senza, li si rilegge qui.
  */
 export async function runWeatherAlert(
   supabase: SupabaseClient,
-  opts: { channel?: Channel; preview?: boolean; testOnly?: boolean } = {},
-): Promise<{ recipients: Recipient[]; sent: number; failed: number; count: number }> {
-  const channel: Channel = opts.channel === 'mare' ? 'mare' : 'terra'
-  const cfg = CHANNELS[channel]
+  opts: {
+    channel?: string
+    business?: string
+    preview?: boolean
+    testOnly?: boolean
+    templateKey?: string
+    oreAvanti?: number
+  } = {},
+): Promise<{ recipients: Recipient[]; sent: number; failed: number; count: number; templateKey: string; business: Channel }> {
+  const business = toMeteoBusiness(opts.business ?? opts.channel ?? 'terra')
+  const cfg = CHANNELS[business]
   const preview = opts.preview === true
   const testOnly = opts.testOnly === true
 
-  const nowIso = new Date().toISOString()
+  let templateKey = opts.templateKey
+  let oreAvanti = opts.oreAvanti
+  if (!templateKey || !oreAvanti) {
+    const meteo = await loadMeteoConfig(supabase, business)
+    templateKey = templateKey || meteo.template_key
+    oreAvanti = oreAvanti || meteo.ore_avanti
+  }
 
-  // Noleggi ATTUALMENTE FUORI: NOW dentro la finestra + status attivo.
-  const { data: rows, error: qErr } = await supabase
+  const now = new Date()
+  const nowIso = now.toISOString()
+
+  // Chi e' esposto: col mezzo in mano adesso, oppure atteso nelle prossime ore
+  // (lavaggio). L'ora di scarto all'indietro copre chi e' appena arrivato.
+  let query = supabase
     .from('bookings')
     .select('id, customer_name, customer_phone, vehicle_name, vehicle_plate, pickup_date, dropoff_date, status, service_type, booking_details')
     .not('status', 'in', '(cancelled,annullata,completed,completata)')
-    .lte('pickup_date', nowIso)
-    .gte('dropoff_date', nowIso)
+  if (cfg.finestra === 'in_arrivo') {
+    const da = new Date(now.getTime() - 60 * 60 * 1000).toISOString()
+    const a = new Date(now.getTime() + oreAvanti * 60 * 60 * 1000).toISOString()
+    query = query.gte('pickup_date', da).lte('pickup_date', a)
+  } else {
+    query = query.lte('pickup_date', nowIso).gte('dropoff_date', nowIso)
+  }
+  const { data: rows, error: qErr } = await query
 
   if (qErr) throw new Error(qErr.message)
 
@@ -170,18 +237,20 @@ export async function runWeatherAlert(
     recipients.push({ name, vehicle, phone })
   }
 
-  if (preview) return { recipients, sent: 0, failed: 0, count: recipients.length }
+  if (preview) return { recipients, sent: 0, failed: 0, count: recipients.length, templateKey, business }
 
   if (!GREEN_API_INSTANCE_ID || !GREEN_API_TOKEN) {
     throw new Error('Green API not configured')
   }
 
-  // Body del messaggio da Messaggi di Sistema Pro (chiave del canale), con seed.
+  // Body del messaggio da Messaggi di Sistema Pro (chiave scelta in Centralina),
+  // con seed dei soli template di fabbrica.
+  const fallbackBody = DEFAULT_BODIES[templateKey] || DEFAULT_BODY_TERRA
   let messageBody = ''
   const { data: tplRows } = await supabase
     .from('system_messages')
     .select('id, message_body, is_enabled, updated_at')
-    .eq('message_key', cfg.templateKey)
+    .eq('message_key', templateKey)
 
   const usable = (tplRows || [])
     .filter((t: { is_enabled?: boolean; message_body?: string }) => t.is_enabled !== false && !!(t.message_body && t.message_body.trim()))
@@ -192,19 +261,19 @@ export async function runWeatherAlert(
   } else if (!tplRows || tplRows.length === 0) {
     try {
       await supabase.from('system_messages').insert({
-        message_key: cfg.templateKey,
-        label: cfg.label,
+        message_key: templateKey,
+        label: TEMPLATE_LABELS[templateKey] || cfg.label,
         is_enabled: true,
-        message_body: cfg.defaultBody,
+        message_body: fallbackBody,
       })
     } catch (e) {
       console.error('[send-weather-alert] seed template failed (non-fatal):', e)
     }
-    messageBody = cfg.defaultBody
+    messageBody = fallbackBody
   } else {
-    messageBody = cfg.defaultBody
+    messageBody = fallbackBody
   }
-  if (!messageBody || !messageBody.trim()) messageBody = cfg.defaultBody
+  if (!messageBody || !messageBody.trim()) messageBody = fallbackBody
 
   const greenApiUrl = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE_ID}/sendMessage/${GREEN_API_TOKEN}`
 
@@ -237,7 +306,7 @@ export async function runWeatherAlert(
     }
   }
 
-  return { recipients, sent, failed, count: recipients.length }
+  return { recipients, sent, failed, count: recipients.length, templateKey, business }
 }
 
 const handler: Handler = async (event) => {
@@ -259,7 +328,9 @@ const handler: Handler = async (event) => {
   }
 
   const body = JSON.parse(event.body || '{}')
-  const channel: Channel = body?.channel === 'mare' ? 'mare' : 'terra'
+  // `business` e' il parametro nuovo (terra|mare|aria|soggiorni|lavaggio);
+  // `channel` resta accettato per le pagine ancora aperte con il codice vecchio.
+  const business: Channel = toMeteoBusiness(body?.business ?? body?.channel ?? 'terra')
   const preview: boolean = body?.preview === true
   const testOnly: boolean = body?.testOnly === true
 
@@ -268,9 +339,17 @@ const handler: Handler = async (event) => {
   })
 
   try {
-    const result = await runWeatherAlert(supabase, { channel, preview, testOnly })
-    if (preview) return { statusCode: 200, headers, body: JSON.stringify({ recipients: result.recipients, count: result.count }) }
-    return { statusCode: 200, headers, body: JSON.stringify({ success: true, sent: result.sent, failed: result.failed, recipients: result.recipients }) }
+    const result = await runWeatherAlert(supabase, { business, preview, testOnly })
+    if (preview) {
+      return {
+        statusCode: 200, headers,
+        body: JSON.stringify({ recipients: result.recipients, count: result.count, business: result.business, templateKey: result.templateKey }),
+      }
+    }
+    return {
+      statusCode: 200, headers,
+      body: JSON.stringify({ success: true, sent: result.sent, failed: result.failed, recipients: result.recipients, business: result.business }),
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     return { statusCode: 500, headers, body: JSON.stringify({ error: msg }) }

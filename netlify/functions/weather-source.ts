@@ -69,10 +69,14 @@ export function describeWeather(w: WeatherSnapshot): string {
 }
 
 /**
- * Legge Open-Meteo per Cagliari: condizioni attuali + previsione delle prossime
- * ore. Ritorna null se l'API non risponde (il chiamante decide se saltare).
+ * Legge Open-Meteo per la localita' indicata: condizioni attuali + previsione
+ * delle prossime `oreAvanti` ore (quante, lo decide la Centralina per business).
+ * Ritorna null se l'API non risponde (il chiamante decide se saltare).
  */
-export async function fetchWeather(loc: WeatherLocation = DEFAULT_LOCATION): Promise<WeatherReading | null> {
+export async function fetchWeather(
+  loc: WeatherLocation = DEFAULT_LOCATION,
+  oreAvanti: number = FORECAST_HOURS_AHEAD,
+): Promise<WeatherReading | null> {
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}`
       + `&current=precipitation,rain,wind_speed_10m,wind_gusts_10m,weather_code`
@@ -107,7 +111,8 @@ export async function fetchWeather(loc: WeatherLocation = DEFAULT_LOCATION): Pro
 
     let worst: WeatherSnapshot = { ...now, atLocal: undefined }
     let scanned = 0
-    for (let i = 0; i < times.length && scanned < FORECAST_HOURS_AHEAD; i++) {
+    const ore = Math.min(24, Math.max(1, Math.round(oreAvanti) || FORECAST_HOURS_AHEAD))
+    for (let i = 0; i < times.length && scanned < ore; i++) {
       if (times[i] < nowLocal) continue
       scanned++
       const precip = Number(h.precipitation?.[i] ?? 0)
@@ -132,7 +137,14 @@ export async function fetchWeather(loc: WeatherLocation = DEFAULT_LOCATION): Pro
   }
 }
 
-/** Condizione di allerta per canale, a partire da uno snapshot. */
+/**
+ * Regola STORICA di allerta per canale (Terra: pioggia; Mare: pioggia o vento).
+ *
+ * 31/08/2026: non decide piu' gli invii — a farlo e' la configurazione per
+ * business (`weather-config.ts`, sezione Allerta Meteo della Centralina). Resta
+ * come valore di riferimento nella risposta di weather-now, per chi ha ancora
+ * in pagina la vecchia lettura.
+ */
 export function conditionFor(channel: 'terra' | 'mare', w: WeatherSnapshot): boolean {
   if (channel === 'mare') return w.rain || w.windGustKmh >= WIND_GUST_THRESHOLD_KMH
   return w.rain
@@ -172,19 +184,39 @@ export function locationLabel(loc: WeatherLocation): string {
 
 interface ConfigStore {
   from: (t: string) => {
-    select: (c: string) => { eq: (k: string, v: string) => { maybeSingle: () => Promise<{ data: { config?: unknown } | null }> } }
-    update: (v: Record<string, unknown>) => { eq: (k: string, v: string) => Promise<{ error: unknown }> }
+    select: (c: string) => {
+      eq: (k: string, v: string) => { maybeSingle: () => Promise<{ data: { config?: unknown } | null }> }
+      in: (k: string, v: string[]) => Promise<{ data: Array<{ id: string; config: Record<string, unknown> | null }> | null }>
+    }
+    upsert: (v: Record<string, unknown>, o: Record<string, unknown>) => Promise<{ error: unknown }>
   }
 }
 
-/** Localita' salvata nel gestionale, con fallback su Cagliari. */
-export async function getSavedLocation(supabase: unknown): Promise<WeatherLocation> {
+function locValida(loc: unknown): loc is WeatherLocation {
+  const l = loc as WeatherLocation | undefined
+  return !!(l && l.name && Number.isFinite(l.lat) && Number.isFinite(l.lon))
+}
+
+/**
+ * Localita' salvata nel gestionale per la riga indicata.
+ *
+ * 31/08/2026: ogni business ha la sua citta' (il Mare guarda Olbia mentre
+ * Terra guarda Cagliari). Chi non ne ha scelta una eredita quella di Terra
+ * ('main'), e in assenza anche di quella resta Cagliari: la citta' e' l'unica
+ * voce meteo che si eredita, perche' un business senza citta' non e' una
+ * scelta, e' una configurazione mai aperta.
+ */
+export async function getSavedLocation(supabase: unknown, rowId: string = 'main'): Promise<WeatherLocation> {
   try {
     const db = supabase as ConfigStore
-    const { data } = await db.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
-    const cfg = (data?.config as Record<string, unknown>) || {}
-    const loc = cfg.weather_location as WeatherLocation | undefined
-    if (loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lon) && loc.name) return loc
+    const ids = rowId === 'main' ? ['main'] : [rowId, 'main']
+    const { data } = await db.from('centralina_pro_config').select('id, config').in('id', ids)
+    const righe = data || []
+    const leggi = (id: string) => ((righe.find(r => r.id === id)?.config || {}) as Record<string, unknown>).weather_location
+    const propria = leggi(rowId)
+    if (locValida(propria)) return propria
+    const principale = leggi('main')
+    if (locValida(principale)) return principale
   } catch (e) {
     console.error('[weather-source] getSavedLocation failed:', e)
   }
@@ -192,16 +224,17 @@ export async function getSavedLocation(supabase: unknown): Promise<WeatherLocati
 }
 
 /**
- * Salva la localita'. Rilegge la config FRESCA prima di scrivere e fonde SOLO
- * la chiave weather_location: la stessa precauzione presa nel cron dopo il
- * problema del 2026-08-08 (salvataggi concorrenti che si sovrascrivevano).
+ * Salva la localita' nella riga del business. Rilegge la config FRESCA prima
+ * di scrivere e fonde SOLO la chiave weather_location: la stessa precauzione
+ * presa nel cron dopo il problema del 2026-08-08 (salvataggi concorrenti che
+ * si sovrascrivevano). Upsert e non update: la riga di un business mai
+ * configurato non esiste ancora.
  */
-export async function saveLocation(supabase: unknown, loc: WeatherLocation): Promise<void> {
+export async function saveLocation(supabase: unknown, loc: WeatherLocation, rowId: string = 'main'): Promise<void> {
   const db = supabase as ConfigStore
-  const { data } = await db.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
+  const { data } = await db.from('centralina_pro_config').select('config').eq('id', rowId).maybeSingle()
   const fresh = (data?.config as Record<string, unknown>) || {}
   const { error } = await db.from('centralina_pro_config')
-    .update({ config: { ...fresh, weather_location: loc } })
-    .eq('id', 'main')
+    .upsert({ id: rowId, config: { ...fresh, weather_location: loc } }, { onConflict: 'id' })
   if (error) throw new Error(String((error as { message?: string }).message || error))
 }

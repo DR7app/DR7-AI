@@ -25,6 +25,7 @@ import CauzioneScadenzaConfig from './CauzioneScadenzaConfig'
 import DailyCalendarCategoriesConfig from './DailyCalendarCategoriesConfig'
 import MulteConfigSection from './MulteConfigSection'
 import GestioneMailPecSection from './GestioneMailPecSection'
+import MeteoConfigSection from './MeteoConfigSection'
 
 type FleetVehicle = {
   id: string
@@ -56,7 +57,7 @@ type VehicleRevenueTarget = {
 }
 
 type VistaAllarmi = 'aperti' | 'config'
-type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti' | 'allarmi' | 'contratto-modifica' | 'calendario-giornaliero' | 'gestione-multe' | 'gestione-mail-pec'
+type SectionId = 'categorie-fascia' | 'p2' | 'p3' | 'p4' | 'p5' | 'p6' | 'p7' | 'p8' | 'p9' | 'p10' | 'p11' | 'p12' | 'catalogo' | 'status-clienti' | 'autisti' | 'allarmi' | 'contratto-modifica' | 'calendario-giornaliero' | 'gestione-multe' | 'gestione-mail-pec' | 'meteo'
 
 // Days of the week for opening-hours configs (lavaggio, future noleggio).
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
@@ -103,6 +104,7 @@ export const SECTIONS: { id: SectionId; title: string }[] = [
   { id: 'p9', title: 'Fiscale' },
   { id: 'p10', title: 'DR7 Club' },
   { id: 'p11', title: 'Automazioni' },
+  { id: 'meteo', title: 'Allerta Meteo' },
   { id: 'p12', title: 'Orari' },
   { id: 'calendario-giornaliero', title: 'Calendario Giornaliero' },
   { id: 'gestione-multe', title: 'Gestione Multe' },
@@ -2265,6 +2267,11 @@ export default function CentralinaProTab() {
             )}
             {section === 'gestione-mail-pec' && (
               <GestioneMailPecSection readOnly={isCauzioniViewOnly} rowId={businessRow(businessId)} />
+            )}
+            {/* Allerta Meteo: criterio, livelli e citta' sono PER BUSINESS —
+                il Mare guarda anche il vento, Terra no. */}
+            {section === 'meteo' && (
+              <MeteoConfigSection business={businessId} readOnly={isCauzioniViewOnly} />
             )}
             {section === 'p5' && <ServiziSection servizi={servizi} setServizi={setServizi} fasce={fasce} categories={categories} />}
             {section === 'p6' && (

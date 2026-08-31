@@ -110,11 +110,14 @@
 [functions."process-wallet-auto-recharges-cron"]
   schedule = "0 * * * *"
 
-# Allerta Meteo automatica (2026-07-18) — ogni ora controlla il meteo reale di
-# Cagliari (Open-Meteo) e invia l'Allerta Meteo se attivo il toggle "Cron ON"
-# del template. TERRA=pioggia, MARE=pioggia o vento forte. Una volta per episodio,
-# solo 08–21. Toggle per canale da Messaggi di Sistema Pro (pro_allerta_meteo /
-# pro_allerta_meteo_mare).
+# Allerta Meteo automatica (2026-07-18) — ogni ora legge il meteo reale
+# (Open-Meteo) e avvisa i clienti esposti. 31/08/2026: le regole non sono piu'
+# nel codice ma in Centralina Pro > Allerta Meteo, una configurazione PER
+# BUSINESS (criterio pioggia/vento/entrambi, livelli Bassa-Media-Elevata con le
+# loro soglie, livello minimo di invio, citta', ore di previsione, fascia oraria
+# e template). Una volta per episodio, con secondo avviso solo se il livello
+# peggiora. Chi non ha mai configurato mantiene il comportamento storico
+# (Terra=pioggia, Mare=pioggia o raffiche 30+, toggle "Cron ON" del template).
 [functions."weather-alert-cron"]
   schedule = "0 * * * *"
 

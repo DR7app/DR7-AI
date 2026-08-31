@@ -9,6 +9,10 @@ import { supabase } from '../../../supabaseClient'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import { decidiAzioneContratto, richiedeNuovaFirma, type ContrattoAzione } from '../../../utils/contrattoModifiche'
 import { businessRowForServiceType } from '../../../utils/businessConfigClient'
+import {
+  meteoBusinessOfServiceType, loadMeteoConfigClient, saveMeteoConfigClient,
+  LIVELLO_LABELS as METEO_LIVELLO_LABELS, METEO_BUSINESS_LABELS,
+} from '../../../utils/meteoConfig'
 import { mareFormSectionsOff } from './mareFormSections'
 import { isNexiPayByLink } from '../../../utils/paymentMethodMatchers'
 import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
@@ -290,6 +294,17 @@ interface MeteoLive {
   labelNow?: string
   now?: MeteoSnapshot
   forecast?: MeteoSnapshot
+  /** 31/08/2026: verdetto secondo la configurazione del business (Centralina
+   *  Pro > Allerta Meteo). `allerta` resta solo per retrocompatibilita'. */
+  valutazione?: {
+    livello: 'nessuna' | 'bassa' | 'media' | 'elevata'
+    livelloLabel?: string
+    supera: boolean
+    motivo?: string
+    dentroFascia?: boolean
+  }
+  business?: string
+  businessLabel?: string
   allerta?: { terra: boolean; mare: boolean }
   soglie?: { ventoKmh: number; oreAvanti: number }
 }
@@ -8388,10 +8403,16 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
   const [meteoCittaResults, setMeteoCittaResults] = useState<MeteoCitta[]>([])
   const [meteoCittaBusy, setMeteoCittaBusy] = useState(false)
 
+  // 31/08/2026: la tab serve tutti i business (serviceType). Il meteo che
+  // guarda, i clienti che avvisa e le soglie che applica sono quelli del
+  // business aperto, non piu' sempre quelli del Noleggio Terra.
+  const meteoBusiness = meteoBusinessOfServiceType(serviceType)
+  const meteoTemplateLegacy = meteoBusiness === 'mare' ? 'pro_allerta_meteo_mare' : meteoBusiness === 'terra' ? 'pro_allerta_meteo' : null
+
   const loadMeteo = async () => {
     setMeteoLoading(true)
     try {
-      const res = await fetch('/.netlify/functions/weather-now')
+      const res = await fetch(`/.netlify/functions/weather-now?business=${meteoBusiness}`)
       setMeteo(res.ok ? await res.json() : { available: false })
     } catch {
       setMeteo({ available: false })
@@ -8400,13 +8421,18 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     }
   }
 
-  // Stato "Automatico": un solo interruttore per i due template (terra + mare).
+  // Stato "Automatico" di QUESTO business: lo dice meteo_config.attiva della
+  // sua riga di Centralina. Se non e' mai stato scelto valgono i vecchi toggle
+  // "Cron ON" dei template (li avevano solo Terra e Mare).
   const loadMeteoAuto = async () => {
     try {
+      const cfg = await loadMeteoConfigClient(meteoBusiness)
+      if (typeof cfg.attiva === 'boolean') { setMeteoAuto(cfg.attiva); return }
+      if (!meteoTemplateLegacy) { setMeteoAuto(false); return }
       const { data } = await supabase
         .from('system_messages')
         .select('message_key, is_enabled, cron_approved')
-        .in('message_key', ['pro_allerta_meteo', 'pro_allerta_meteo_mare'])
+        .eq('message_key', meteoTemplateLegacy)
       const on = (data || []).some((r: { is_enabled?: boolean; cron_approved?: boolean }) =>
         r.is_enabled !== false && r.cron_approved === true)
       setMeteoAuto(on)
@@ -8447,7 +8473,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       const res = await authFetch('/.netlify/functions/weather-now', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ location: { name: loc.name, lat: loc.lat, lon: loc.lon, admin1: loc.admin1 } }),
+        body: JSON.stringify({ business: meteoBusiness, location: { name: loc.name, lat: loc.lat, lon: loc.lon, admin1: loc.admin1 } }),
       })
       const d = await res.json()
       if (!res.ok || !d.success) throw new Error(d.error || 'Salvataggio non riuscito')
@@ -8465,23 +8491,30 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
 
   const handleToggleMeteoAuto = async () => {
     const newVal = !meteoAuto
+    const cfg = await loadMeteoConfigClient(meteoBusiness)
+    const luogo = meteo?.location?.label || meteo?.luogo || 'la citta\' configurata'
+    const criterio = cfg.criterio === 'pioggia' ? 'pioggia' : cfg.criterio === 'vento' ? 'vento forte' : 'pioggia o vento forte'
     const ok = window.confirm(newVal
-      ? "Attivare l'invio AUTOMATICO dell'allerta meteo?\n\nOgni ora il sistema controlla la previsione di Cagliari e, se e' prevista pioggia (o vento forte per il Mare) nelle 3 ore successive, invia l'avviso ai noleggi in corso. Una sola volta per episodio, solo tra le 08:00 e le 21:00."
+      ? `Attivare l'invio AUTOMATICO dell'allerta meteo per ${METEO_BUSINESS_LABELS[meteoBusiness]}?\n\n`
+        + `Ogni ora il sistema controlla la previsione di ${luogo} e, se e' prevista ${criterio} `
+        + `almeno di livello ${METEO_LIVELLO_LABELS[cfg.livello_minimo]} nelle ${cfg.ore_avanti} ore successive, `
+        + `avvisa i clienti esposti. Una sola volta per episodio, solo tra le ${String(cfg.ora_inizio).padStart(2, '0')}:00 e le ${String(cfg.ora_fine).padStart(2, '0')}:00.\n\n`
+        + 'Soglie e criterio si cambiano in Centralina Pro > Allerta Meteo.'
       : "Disattivare l'invio automatico?\n\nL'allerta meteo partira' solo quando la invii a mano con il bottone Allerta Meteo.")
     if (!ok) return
     try {
-      // .select() per contare le righe TOCCATE: se i due template non esistono
-      // ancora in system_messages l'update non fallisce, semplicemente non
-      // aggiorna nulla — e l'interruttore mentirebbe.
-      const { data: touched, error } = await supabase
-        .from('system_messages')
-        .update({ is_automatic: newVal, cron_approved: newVal, updated_at: new Date().toISOString() })
-        .in('message_key', ['pro_allerta_meteo', 'pro_allerta_meteo_mare'])
-        .select('message_key')
-      if (error) throw error
-      if (!touched || touched.length === 0) {
-        toast.error('Template allerta meteo non ancora presenti in Messaggi di Sistema Pro: riprova tra un\'ora (li crea il cron) oppure aprili una volta da quella tab.')
-        return
+      // La scelta vive nella riga di Centralina del business: cosi' accendere
+      // il Mare non accende anche Terra (i due condividevano i template).
+      await saveMeteoConfigClient(meteoBusiness, { ...cfg, attiva: newVal })
+      // Terra e Mare: si allinea anche il vecchio toggle "Cron ON" del loro
+      // template, altrimenti Messaggi di Sistema Pro mostra un altro stato.
+      // Solo cron_approved: `is_automatic` autorizzerebbe pure lo scheduler
+      // generico dei messaggi programmati (incidente del 26/08/2026).
+      if (meteoTemplateLegacy && cfg.template_key === meteoTemplateLegacy) {
+        await supabase
+          .from('system_messages')
+          .update({ cron_approved: newVal, updated_at: new Date().toISOString() })
+          .eq('message_key', meteoTemplateLegacy)
       }
       setMeteoAuto(newVal)
       toast.success(newVal ? 'Allerta meteo automatica ATTIVA' : 'Allerta meteo in modalita\' manuale')
@@ -8498,7 +8531,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
     try {
       const prevRes = await authFetch('/.netlify/functions/send-weather-alert', {
         method: 'POST',
-        body: JSON.stringify({ preview: true, testOnly }),
+        body: JSON.stringify({ business: meteoBusiness, preview: true, testOnly }),
       })
       const prevData = await prevRes.json()
       if (!prevRes.ok) {
@@ -8508,7 +8541,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       const recipients: { name: string; vehicle: string }[] = prevData.recipients || []
       const count: number = prevData.count ?? recipients.length
       if (count === 0) {
-        toast(testOnly ? 'Nessun noleggio in corso con targa TEST' : 'Nessun cliente con noleggio in corso', { icon: 'ℹ️' })
+        toast(testOnly ? 'Nessun noleggio in corso con targa TEST' : `Nessun cliente esposto adesso su ${METEO_BUSINESS_LABELS[meteoBusiness]}`, { icon: 'ℹ️' })
         return
       }
       const lista = recipients
@@ -8517,15 +8550,18 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
         .join(', ')
       // Legge il meteo REALE prima di chiedere conferma, cosi' l'operatore vede
       // cosa sta per succedere. Se il meteo non risponde si invia lo stesso.
+      // Il meteo letto e' quello del BUSINESS aperto, con le sue soglie: la
+      // riga di conferma dice il livello raggiunto, non un generico "piove".
       let meteoRiga = ''
       try {
-        const wRes = await fetch('/.netlify/functions/weather-now')
+        const wRes = await fetch(`/.netlify/functions/weather-now?business=${meteoBusiness}`)
         const w: MeteoLive = wRes.ok ? await wRes.json() : { available: false }
         if (w.available) {
           setMeteo(w)
           meteoRiga = `Meteo ${w.luogo || 'Cagliari'} ora: ${w.labelNow}\n`
             + `Prossime ${w.soglie?.oreAvanti ?? 3} ore: ${w.label}\n`
-            + (w.allerta?.terra ? '' : '\nATTENZIONE: nessuna pioggia prevista. Invii lo stesso?\n')
+            + (w.valutazione ? `Livello ${w.valutazione.livelloLabel || w.valutazione.livello} — ${w.valutazione.motivo || ''}\n` : '')
+            + (w.valutazione?.supera === false ? '\nATTENZIONE: sotto la soglia di invio configurata. Invii lo stesso?\n' : '')
             + '\n'
         }
       } catch { /* meteo non disponibile: si prosegue */ }
@@ -8533,7 +8569,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       const ok = window.confirm(
         (testOnly ? '[TEST — solo targhe TEST] ' : '') +
         meteoRiga +
-        `Inviare l'allerta meteo a ${count} ${count === 1 ? 'cliente' : 'clienti'} con noleggio in corso?` +
+        `Inviare l'allerta meteo di ${METEO_BUSINESS_LABELS[meteoBusiness]} a ${count} ${count === 1 ? 'cliente' : 'clienti'}?` +
         (lista ? `\n\n${lista}` : '')
       )
       if (!ok) return
@@ -8541,7 +8577,7 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
       toast.loading('Invio allerta meteo in corso...')
       const sendRes = await authFetch('/.netlify/functions/send-weather-alert', {
         method: 'POST',
-        body: JSON.stringify({ testOnly }),
+        body: JSON.stringify({ business: meteoBusiness, testOnly }),
       })
       const sendData = await sendRes.json()
       toast.dismiss()
@@ -11473,7 +11509,9 @@ export default function ReservationsTab({ initialData, onDataConsumed, viewMode 
                             {
                               label: booking.booking_details?.nexi_payment_link ? 'Rinvia Link Pagamento' : 'Genera Link Pagamento',
                               onClick: () => handleResendPaymentLink(booking),
-                              visible: !isPaid && isNexiPayByLink(booking.payment_method),
+                              // Stesso gate della tabella desktop: su una
+                              // prenotazione annullata il link non si genera.
+                              visible: booking.status !== 'cancelled' && !isPaid && isNexiPayByLink(booking.payment_method),
                             },
                           ],
                         },
@@ -12684,10 +12722,15 @@ function ReservationsDashboardHeader({
             onClick={onMeteoRefresh}
             disabled={meteoLoading}
             title={meteo?.available
-              ? `${meteo.luogo || 'Cagliari'} — ora: ${meteo.labelNow}. Prossime ${meteo.soglie?.oreAvanti ?? 3} ore: ${meteo.label}. Clicca per aggiornare.`
+              ? `${meteo.luogo || 'Cagliari'} — ora: ${meteo.labelNow}. Prossime ${meteo.soglie?.oreAvanti ?? 3} ore: ${meteo.label}.`
+                + (meteo.valutazione ? ` Livello ${meteo.valutazione.livelloLabel || meteo.valutazione.livello}: ${meteo.valutazione.motivo || ''}` : '')
+                + ' Clicca per aggiornare.'
               : 'Meteo non disponibile — clicca per riprovare'}
             className={`inline-flex items-center gap-1.5 px-2.5 h-9 rounded-lg border text-xs font-medium transition-colors disabled:opacity-50 ${
-              meteo?.available && (meteo.allerta?.terra || meteo.allerta?.mare)
+              // Ambra quando la previsione supera la soglia CONFIGURATA per
+              // questo business (Centralina Pro > Allerta Meteo), non piu' la
+              // vecchia regola fissa pioggia/vento.
+              meteo?.available && meteo.valutazione?.supera
                 ? 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400'
                 : 'border-theme-border text-theme-text-secondary hover:bg-theme-bg-hover'
             }`}
@@ -12749,12 +12792,14 @@ function ReservationsDashboardHeader({
               </div>
             )}
           </div>
-          {/* Un solo interruttore per i due canali (terra + mare), come richiesto. */}
+          {/* 31/08/2026: l'interruttore vale per il business della tab aperta —
+              accendere il Mare non accende piu' anche Terra. Le soglie stanno
+              in Centralina Pro > Allerta Meteo. */}
           <button
             type="button"
             onClick={onMeteoToggleAuto}
             title={meteoAuto
-              ? 'Automatico ATTIVO: il sistema invia da solo quando e\' prevista pioggia o vento forte. Clicca per passare a manuale.'
+              ? 'Automatico ATTIVO: il sistema invia da solo quando la previsione supera la soglia di questo business. Clicca per passare a manuale.'
               : 'Manuale: l\'allerta parte solo quando la invii tu. Clicca per attivare l\'automatico.'}
             className={`inline-flex items-center gap-1.5 px-2.5 h-9 rounded-lg border text-xs font-semibold transition-colors ${
               meteoAuto

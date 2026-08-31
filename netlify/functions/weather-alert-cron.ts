@@ -1,36 +1,69 @@
 import type { Handler } from '@netlify/functions'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { runWeatherAlert, ensureWeatherTemplates } from './send-weather-alert'
-import { fetchWeather, conditionFor, describeWeather, getSavedLocation, locationLabel, WIND_GUST_THRESHOLD_KMH } from './weather-source'
+import { fetchWeather, describeWeather, getSavedLocation, locationLabel, type WeatherReading } from './weather-source'
+import {
+  METEO_BUSINESSES, METEO_BUSINESS_ROW, METEO_BUSINESS_LABELS, LIVELLO_LABELS,
+  loadMeteoConfig, valutaMeteo, dentroFascia, rankLivello,
+  type MeteoBusiness, type MeteoEsito,
+} from './weather-config'
 
 // Cron Allerta Meteo automatica (2026-07-18).
-// Ogni ora legge il meteo REALE della citta' configurata (Open-Meteo, gratis,
-// senza API key; default Cagliari) e
-// guarda le PROSSIME ORE, non solo l'istante presente
-// e, se attivo il toggle "Cron ON" del relativo template in Messaggi di Sistema
-// Pro, invia l'Allerta Meteo ai noleggi attualmente fuori.
-//   - TERRA (auto): invia se PIOGGIA (qualsiasi precipitazione).  Template pro_allerta_meteo.
-//   - MARE (barche): invia se PIOGGIA O VENTO forte.             Template pro_allerta_meteo_mare.
-// Anti-spam: "una volta per episodio" — invia allo START dell'episodio, non a
-// ripetizione mentre continua. Rispetta la fascia 08:00–21:00 (niente invii notte).
+//
+// Ogni ora legge il meteo REALE (Open-Meteo, gratis, senza API key) e guarda le
+// PROSSIME ORE, non solo l'istante presente, per ognuno dei cinque business.
+//
+// 31/08/2026 — le regole non stanno piu' qui dentro. Prima erano scritte nel
+// codice (TERRA = qualunque pioggia, MARE = pioggia o raffiche >= 30 km/h) e
+// gli altri tre business non ricevevano niente. Adesso ogni business ha la sua
+// configurazione in Centralina Pro > Allerta Meteo: criterio (pioggia, vento o
+// entrambi), soglie dei tre livelli (Bassa / Media / Elevata), livello da cui
+// in su si invia, citta', ore di previsione, fascia oraria e template Pro.
+// Vedi `weather-config.ts`.
+//
+// Anti-spam: "una volta per episodio" — si invia allo START dell'episodio, non
+// a ripetizione mentre continua. Se il livello PEGGIORA (bassa -> elevata) e il
+// business ha "riavvisa se peggiora", parte un secondo avviso: e' un'altra
+// notizia, non la stessa.
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
-// Fascia oraria di invio (Europe/Rome). Fuori = niente invii (regola no 22-07).
-const SEND_HOUR_START = 8
-const SEND_HOUR_END = 21
+interface ChannelState {
+  active?: boolean
+  /** Livello dell'ultimo avviso spedito in questo episodio. */
+  livello?: MeteoEsito
+  last_sent_at?: string
+}
+type WeatherAlertState = Partial<Record<MeteoBusiness, ChannelState>> & { updated_at?: string }
 
-interface ChannelState { active?: boolean; last_sent_at?: string }
-interface WeatherAlertState { terra?: ChannelState; mare?: ChannelState; updated_at?: string }
+/**
+ * Business SENZA scelta esplicita in Centralina: valgono i toggle "Cron ON" dei
+ * vecchi template, cosi' chi non apre la nuova sezione non vede cambiare nulla.
+ * Gli altri tre business nascono spenti (METEO_DEFAULTS.attiva = false).
+ */
+const LEGACY_TOGGLE: Record<string, string> = {
+  terra: 'pro_allerta_meteo',
+  mare: 'pro_allerta_meteo_mare',
+}
 
 /** Toggle "Cron ON" del template (cron_approved) + template abilitato. */
-async function isChannelEnabled(supabase: ReturnType<typeof createClient>, templateKey: string): Promise<boolean> {
+async function isCronApproved(supabase: SupabaseClient, templateKey: string): Promise<boolean> {
   const { data } = await supabase
     .from('system_messages')
     .select('is_enabled, cron_approved')
     .eq('message_key', templateKey)
   return (data || []).some((r: { is_enabled?: boolean; cron_approved?: boolean }) => r.is_enabled !== false && r.cron_approved === true)
+}
+
+/** Il template esiste ed e' acceso? Un template spento non si spedisce. */
+async function isTemplateEnabled(supabase: SupabaseClient, templateKey: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('system_messages')
+    .select('is_enabled')
+    .eq('message_key', templateKey)
+  if (!data || data.length === 0) return true // non ancora seedato: ci pensa l'invio
+  return data.some((r: { is_enabled?: boolean }) => r.is_enabled !== false)
 }
 
 const handler: Handler = async () => {
@@ -41,74 +74,97 @@ const handler: Handler = async () => {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
-  // Assicura che i due template esistano (così i toggle compaiono nel gestionale).
+  // Assicura che i template esistano (così i toggle compaiono nel gestionale).
   await ensureWeatherTemplates(supabase)
 
-  // Ora locale Cagliari.
+  // Ora locale italiana: la fascia di invio e' per business.
   const romeHour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false }).format(new Date()))
-  const isDaytime = romeHour >= SEND_HOUR_START && romeHour <= SEND_HOUR_END
-
-  // 2026-08-22: la decisione ora si basa sulla PREVISIONE delle prossime ore,
-  // non piu' sulle condizioni istantanee. Con `current` l'allerta partiva a
-  // cliente gia' sotto la pioggia; con la previsione arriva in anticipo.
-  // Citta' scelta dal gestionale (Olbia, Cagliari, ...), default Cagliari.
-  const location = await getSavedLocation(supabase)
-  const reading = await fetchWeather(location)
-  if (!reading) return { statusCode: 200, body: JSON.stringify({ skipped: 'weather_unavailable' }) }
-  const weather = reading.forecast
 
   // Stato persistito in centralina_pro_config.config.weather_alert_state.
   const { data: cfgRow } = await supabase.from('centralina_pro_config').select('config').eq('id', 'main').maybeSingle()
   const config = ((cfgRow?.config as Record<string, unknown>) || {})
   const state: WeatherAlertState = (config.weather_alert_state as WeatherAlertState) || {}
 
-  const results: Record<string, unknown> = {
-    luogo: locationLabel(location),
-    now: reading.now, forecast: reading.forecast, label: describeWeather(weather),
-    sogliaVentoKmh: WIND_GUST_THRESHOLD_KMH, romeHour, isDaytime,
-  }
-
-  // Condizioni per canale (stessa regola usata dal badge manuale).
-  const conditions: Record<'terra' | 'mare', boolean> = {
-    terra: conditionFor('terra', weather),
-    mare: conditionFor('mare', weather),
-  }
-  const templateKeys: Record<'terra' | 'mare', string> = {
-    terra: 'pro_allerta_meteo',
-    mare: 'pro_allerta_meteo_mare',
-  }
-
+  const results: Record<string, unknown> = { romeHour }
   const nowIso = new Date().toISOString()
 
-  for (const channel of ['terra', 'mare'] as const) {
-    const condition = conditions[channel]
-    const chState: ChannelState = state[channel] || {}
+  // Una lettura Open-Meteo per (citta' + ore di previsione): con tutti i
+  // business sulla stessa citta' si fa una sola chiamata, non cinque.
+  const letture = new Map<string, WeatherReading | null>()
+  async function leggi(loc: Awaited<ReturnType<typeof getSavedLocation>>, ore: number) {
+    const k = `${loc.lat},${loc.lon},${ore}`
+    if (!letture.has(k)) letture.set(k, await fetchWeather(loc, ore))
+    return letture.get(k) || null
+  }
 
-    if (!condition) {
-      // Episodio finito: azzera active così la prossima pioggia è un NUOVO episodio.
-      state[channel] = { ...chState, active: false }
-      results[channel] = 'no_condition'
+  for (const business of METEO_BUSINESSES) {
+    const cfg = await loadMeteoConfig(supabase, business)
+    const etichetta = METEO_BUSINESS_LABELS[business]
+
+    // Acceso? La scelta esplicita della Centralina vince; se non c'e', valgono
+    // i vecchi toggle "Cron ON" (solo Terra e Mare li avevano).
+    const attiva = typeof cfg.attiva === 'boolean'
+      ? cfg.attiva
+      : (LEGACY_TOGGLE[business] ? await isCronApproved(supabase, LEGACY_TOGGLE[business]) : false)
+    if (!attiva) { results[business] = 'spento'; continue }
+
+    if (!(await isTemplateEnabled(supabase, cfg.template_key))) {
+      results[business] = { skipped: 'template_spento', template: cfg.template_key }
+      continue
+    }
+
+    const location = await getSavedLocation(supabase, METEO_BUSINESS_ROW[business])
+    const reading = await leggi(location, cfg.ore_avanti)
+    if (!reading) { results[business] = 'meteo_non_disponibile'; continue }
+
+    const valutazione = valutaMeteo(cfg, reading.forecast)
+    const chState: ChannelState = state[business] || {}
+    const base = {
+      business: etichetta,
+      luogo: locationLabel(location),
+      criterio: cfg.criterio,
+      previsione: describeWeather(reading.forecast),
+      livello: LIVELLO_LABELS[valutazione.livello],
+      motivo: valutazione.motivo,
+    }
+
+    if (!valutazione.supera) {
+      // Episodio finito: azzera active così il prossimo maltempo è un NUOVO episodio.
+      state[business] = { ...chState, active: false, livello: 'nessuna' }
+      results[business] = { ...base, esito: 'sotto_soglia', minimo: cfg.livello_minimo }
       continue
     }
 
     // Condizione presente.
-    if (chState.active) {
-      // Stesso episodio già segnalato: non re-inviare.
-      results[channel] = 'same_episode'
+    const giaAvvisato = chState.active === true
+    const peggiorato = giaAvvisato && cfg.riavvisa_se_peggiora
+      && rankLivello(valutazione.livello) > rankLivello(chState.livello || 'nessuna')
+    if (giaAvvisato && !peggiorato) {
+      results[business] = { ...base, esito: 'stesso_episodio' }
       continue
     }
 
-    // Nuovo episodio. Solo se toggle ON + fascia diurna.
-    const enabled = await isChannelEnabled(supabase, templateKeys[channel])
-    if (!enabled) { results[channel] = 'toggle_off'; continue }
-    if (!isDaytime) { results[channel] = 'night_deferred'; continue } // resta active=false: invia al mattino se persiste
+    // Fuori fascia: si resta con active=false, così l'avviso parte appena la
+    // fascia riapre se il maltempo persiste (niente messaggi di notte).
+    if (!dentroFascia(cfg, romeHour)) {
+      results[business] = { ...base, esito: 'fuori_fascia', fascia: `${cfg.ora_inizio}-${cfg.ora_fine}` }
+      continue
+    }
 
     try {
-      const r = await runWeatherAlert(supabase, { channel })
-      state[channel] = { active: true, last_sent_at: nowIso }
-      results[channel] = { sent: r.sent, failed: r.failed, recipients: r.count }
+      const r = await runWeatherAlert(supabase, {
+        business,
+        templateKey: cfg.template_key,
+        oreAvanti: cfg.ore_avanti,
+      })
+      state[business] = { active: true, livello: valutazione.livello, last_sent_at: nowIso }
+      results[business] = {
+        ...base,
+        esito: peggiorato ? 'peggiorato' : 'inviato',
+        sent: r.sent, failed: r.failed, destinatari: r.count, template: r.templateKey,
+      }
     } catch (e) {
-      results[channel] = { error: e instanceof Error ? e.message : String(e) }
+      results[business] = { ...base, error: e instanceof Error ? e.message : String(e) }
     }
   }
 
