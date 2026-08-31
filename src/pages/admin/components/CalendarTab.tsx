@@ -196,6 +196,8 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
   // Un caricamento fallito NON deve somigliare a un mese senza prenotazioni:
   // e' esattamente cosi' che un calendario vuoto e' passato inosservato.
   const [loadError, setLoadError] = useState<string | null>(null)
+  // Ora dell'ultima lettura riuscita: un calendario fermo si deve VEDERE.
+  const [ultimaLettura, setUltimaLettura] = useState<Date | null>(null)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [searchQuery, setSearchQuery] = useState('')
   // 2026-06-01: filtro periodo Da/A — nasconde i veicoli che non hanno
@@ -236,21 +238,94 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
   useEffect(() => {
     const win = monthWindow(currentDate.getFullYear(), currentDate.getMonth())
     loadData(win, { useCache: true })
+    // Ricarica in sottofondo: la griglia resta a video, cambiano solo i dati.
+    const ricarica = () => loadData(win, { silent: true })
+
     // Realtime: ascolta sia bookings (creazioni/modifiche/cancellazioni)
     // sia vehicles (cambi status, categoria, foto, prezzo). Cosi' qualunque
     // azione fatta in admin da un altro operatore — o sul sito da un cliente
     // — si riflette nel calendario senza bisogno di ricaricare la pagina.
     const subscription = supabase
       .channel('calendar-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => loadData(win))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, () => loadData(win))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, ricarica)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, ricarica)
       .subscribe()
-    return () => { subscription.unsubscribe() }
+
+    // 31/08/2026 — PRENOTAZIONE ESISTENTE MAI COMPARSA SUL CALENDARIO.
+    // Una prenotazione creata alle 17:26 si vedeva sul telefono (aperto dopo)
+    // e NON sul computer, dove la stessa tab era aperta da ore. Causa: il
+    // calendario si aggiornava SOLO col canale realtime, e il realtime passa
+    // dalla RLS dell'operatore mentre le prenotazioni si leggono con la
+    // service role (che la RLS la scavalca). Riga che la RLS non fa vedere
+    // all'operatore = evento mai recapitato = calendario fermo per sempre,
+    // senza un solo segnale a schermo. Lo stesso succede se il websocket
+    // cade (portatile chiuso, wifi cambiato): nessuno se ne accorge.
+    //
+    // Il realtime resta — e' istantaneo — ma non e' piu' l'unica strada:
+    //  - ogni 60 s, e solo a tab visibile, si rilegge comunque;
+    //  - tornando sulla tab (o sulla finestra) si rilegge subito;
+    //  - l'ora dell'ultima lettura e' scritta nella barra in alto, cosi' un
+    //    calendario fermo si VEDE invece di sembrare un mese senza noleggi.
+    const timer = window.setInterval(() => { if (!document.hidden) ricarica() }, 60_000)
+    const alRitorno = () => { if (!document.hidden) ricarica() }
+    document.addEventListener('visibilitychange', alRitorno)
+    window.addEventListener('focus', alRitorno)
+
+    return () => {
+      subscription.unsubscribe()
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', alRitorno)
+      window.removeEventListener('focus', alRitorno)
+    }
     // serviceType nelle dipendenze: cambiando business (Mare -> Aria) il
     // calendario deve ricaricare mezzi e prenotazioni, non tenere i precedenti.
     // Cambiando mese si ricarica: la finestra e' diversa.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serviceType, currentDate.getFullYear(), currentDate.getMonth()])
+
+  // 31/08/2026 — LA PRENOTAZIONE C'ERA, IL CALENDARIO NO.
+  // Un noleggio creato il 31 agosto per il 3 settembre non esiste per questa
+  // griglia: la griglia e' UN MESE, e il mese a video e' agosto. A schermo
+  // niente lo diceva, quindi "non e' sul calendario" era indistinguibile da
+  // "non e' stato registrato". Qui si contano le prenotazioni dei PROSSIMI
+  // 7 GIORNI che cadono fuori dal mese mostrato: l'avviso in alto le dichiara
+  // e porta al mese giusto con un click.
+  const [fuoriMese, setFuoriMese] = useState<{ n: number; anno: number; mese0: number } | null>(null)
+  useEffect(() => {
+    let annullato = false
+    ;(async () => {
+      const oggi = new Date()
+      const fine = new Date(oggi.getTime() + 7 * 24 * 60 * 60 * 1000)
+      const iso = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, 'Z')
+      try {
+        const res = await authFetch(
+          `/.netlify/functions/list-bookings?from=${encodeURIComponent(iso(oggi))}&to=${encodeURIComponent(iso(fine))}`
+        )
+        if (!res.ok) return
+        const body = await res.json()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const righe: any[] = Array.isArray(body?.bookings) ? body.bookings : []
+        const fuori = righe.filter(b => {
+          if (!bookingBelongsTo(b, serviceType || 'rental')) return false
+          if (['cancelled', 'annullata', 'expired'].includes(String(b.status))) return false
+          if (!b.pickup_date) return false
+          const p = new Date(b.pickup_date)
+          return p.getFullYear() !== currentDate.getFullYear() || p.getMonth() !== currentDate.getMonth()
+        })
+        if (annullato) return
+        if (fuori.length === 0) { setFuoriMese(null); return }
+        const prima = fuori
+          .map(b => new Date(b.pickup_date))
+          .sort((a, b) => a.getTime() - b.getTime())[0]
+        setFuoriMese({ n: fuori.length, anno: prima.getFullYear(), mese0: prima.getMonth() })
+      } catch {
+        /* l'avviso e' un di piu': se non arriva, il calendario resta com'e' */
+      }
+    })()
+    return () => { annullato = true }
+    // `bookings` in dipendenza: dopo ogni rilettura l'avviso si riallinea.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentDate.getFullYear(), currentDate.getMonth(), serviceType, bookings])
 
   useEffect(() => {
     let cancelled = false
@@ -279,8 +354,11 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
     return () => { cancelled = true; sub.unsubscribe() }
   }, [])
 
-  async function loadData(win: { from: string; to: string }, opts: { useCache?: boolean } = {}) {
-    setLoading(true)
+  async function loadData(win: { from: string; to: string }, opts: { useCache?: boolean; silent?: boolean } = {}) {
+    // `silent` = ricarica di controllo in sottofondo: NON deve sostituire il
+    // calendario con "Caricamento...", altrimenti ogni minuto la griglia
+    // sparirebbe da sotto le mani di chi ci sta lavorando.
+    if (!opts.silent) setLoading(true)
     // `useCache` solo all'apertura del calendario e al cambio mese. Le
     // ricariche innescate dal realtime (una prenotazione e' cambiata) arrivano
     // senza opzioni e rileggono sempre dal database.
@@ -452,7 +530,8 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
     } catch (e) {
       console.error("Data load failed", e)
     } finally {
-      setLoading(false)
+      if (!opts.silent) setLoading(false)
+      setUltimaLettura(new Date())
     }
   }
 
@@ -910,6 +989,30 @@ export default function CalendarTab({ onNewBooking, serviceType }: { onNewBookin
             <button onClick={() => navigateMonth('prev')} className="px-3 py-1 bg-theme-text-primary/5 hover:bg-theme-text-primary/10 rounded border border-theme-border/50 text-sm text-theme-text-primary/90 hover:text-theme-text-primary">Prec</button>
             <button onClick={() => navigateMonth('next')} className="px-3 py-1 bg-theme-text-primary/5 hover:bg-theme-text-primary/10 rounded border border-theme-border/50 text-sm text-theme-text-primary/90 hover:text-theme-text-primary">Succ</button>
           </div>
+          {/* Prenotazioni imminenti che cadono in un ALTRO mese: dichiarate,
+              non nascoste. Click = il calendario ci va (31/08/2026). */}
+          {fuoriMese && (
+            <button
+              onClick={() => setCurrentDate(new Date(fuoriMese.anno, fuoriMese.mese0, 1))}
+              title="Prenotazioni dei prossimi 7 giorni che non stanno nel mese mostrato"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded border border-dr7-gold/60 bg-dr7-gold/10 text-[11px] font-semibold text-dr7-gold hover:bg-dr7-gold/20 whitespace-nowrap"
+            >
+              {fuoriMese.n} {fuoriMese.n === 1 ? 'prenotazione' : 'prenotazioni'} nei prossimi 7 giorni in{' '}
+              {new Date(fuoriMese.anno, fuoriMese.mese0, 1).toLocaleDateString('it-IT', { month: 'long' })} &rarr;
+            </button>
+          )}
+          {/* Ultima lettura + ricarica a mano. Un calendario fermo non deve
+              piu' somigliare a un mese senza prenotazioni (31/08/2026). */}
+          <button
+            onClick={() => loadData(monthWindow(currentDate.getFullYear(), currentDate.getMonth()), { silent: true })}
+            title="Rileggi le prenotazioni adesso"
+            className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded border border-theme-border/50 bg-theme-text-primary/5 hover:bg-theme-text-primary/10 text-[11px] text-theme-text-muted"
+          >
+            <span aria-hidden>&#8635;</span>
+            {ultimaLettura
+              ? `Aggiornato ${formatRomeDate(ultimaLettura, { hour: '2-digit', minute: '2-digit', hour12: false })}`
+              : 'Aggiorna'}
+          </button>
           {/* 2026-06-04: filtro date spostato QUI (stessa riga) per liberare
               spazio verticale — prima era una riga separata sotto. */}
           <div className="hidden md:block"><DateRangeFilter value={dateRange} onChange={setDateRange} compact /></div>
