@@ -23,11 +23,17 @@ import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking a
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
 import { isCartaPunti, isNexiPayByLink, isWalletOrGift } from '../../../utils/paymentMethodMatchers'
 import GestisciMenu, { type GestisciSection } from './GestisciMenu'
+import CarWashBookingDetailModal from './CarWashBookingDetailModal'
 import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
 import NumeroTelefono from '../../../components/NumeroTelefono'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import SeatPlanPicker from './SeatPlanPicker'
+// Servizi venduti a sedile (PRIME SEAT CLEAN/PROTECT): si scelgono QUALI
+// sedili sulla pianta, non quanti col +/-.
+import { isSeatPricedService, seatListLabel, normalizeSeats } from '../../../utils/seatPlan'
+import { leggiServiziPrenotati } from '../../../utils/serviziPrenotati'
 
 const ROME_TZ = 'Europe/Rome'
 
@@ -145,6 +151,10 @@ interface CarWashBookingsTabProps {
 export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarWashBookingsTabProps = {}) {
   const paymentMethods = usePaymentMethods()
   const [bookings, setBookings] = useState<CarWashBooking[]>([])
+  // Scheda di dettaglio aperta dalla lista: teniamo solo l'id, la
+  // prenotazione la rileggiamo da `bookings` cosi' dopo una modifica la
+  // scheda mostra i dati aggiornati invece di una copia congelata.
+  const [dettaglioBookingId, setDettaglioBookingId] = useState<string | null>(null)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [carWashServices, setCarWashServices] = useState<CarWashService[]>([])
   // 2026-05-27: prenotazioni esistenti per la data selezionata. Usate dal
@@ -201,6 +211,14 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
   const selectedServiceIdRef = useRef<string | null>(null)
   const [extraPriceOptions, setExtraPriceOptions] = useState<Record<string, { label: string; price: number }>>({})
   const [extraQuantities, setExtraQuantities] = useState<Record<string, number>>({})
+  // Sedili scelti sulla pianta, per gli extra venduti a sedile. La quantita'
+  // dell'extra e' sempre `seats.length`: si cambia solo dalla pianta, mai a
+  // mano, altrimenti il numero e le sigle direbbero cose diverse.
+  const [extraSeats, setExtraSeats] = useState<Record<string, string[]>>({})
+  const [editExtraSeats, setEditExtraSeats] = useState<Record<string, string[]>>({})
+  // Pianta aperta: quale extra e da quale modale (nuova prenotazione o
+  // modifica). Una sola pianta per tutte e due: e' lo stesso componente.
+  const [seatPicker, setSeatPicker] = useState<{ extra: CarWashService; mode: 'new' | 'edit' } | null>(null)
   const [customPrice, setCustomPrice] = useState('')
   const [showNewClientModal, setShowNewClientModal] = useState(false)
   // Conferma Prenotazione: same UX as ReservationsTab — when payment_status
@@ -479,6 +497,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       if (ep) name += ` (${ep.label})`
       const qty = extraQuantities[extra.id] || 1
       if (qty > 1) name += ` x${qty}`
+      // I sedili scelti finiscono nel nome del servizio: e' il campo che
+      // arriva su WhatsApp, in calendario e sulla scheda, dove sapere QUALI
+      // sedili trattare conta quanto quanti.
+      const seatNames = seatListLabel(extraSeats[extra.id] || [])
+      if (seatNames) name += ` [${seatNames}]`
       parts.push(name)
     }
     if (primeFlex) parts.push('Prime Flex')
@@ -516,6 +539,8 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       let name = e.name
       if (ep) name += ` (${ep.label})`
       if (qty > 1) name += ` x${qty}`
+      const seatNames = seatListLabel(editExtraSeats[e.id] || [])
+      if (seatNames) name += ` [${seatNames}]`
       parts.push(name)
     }
     return parts.join(' + ')
@@ -528,6 +553,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     setSelectedExtras([])
     setExtraPriceOptions({})
     setExtraQuantities({})
+    setExtraSeats({})
     setManualPrice(null)
     setCustomPrice('')
     setPrimeFlex(false)
@@ -1068,18 +1094,20 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       setEditExtras([])
       setEditExtraPriceOptions({})
       setEditExtraQuantities({})
+      setEditExtraSeats({})
       return
     }
     if (carWashServices.length === 0) return
     if (lastInitializedBookingIdRef.current === editingBooking.id) return
     lastInitializedBookingIdRef.current = editingBooking.id
 
-    const cartItems = editingBooking.booking_details?.cartItems || []
+    const cartItems = leggiServiziPrenotati(editingBooking.booking_details)
     if (cartItems.length === 0) {
       setEditService(null)
       setEditExtras([])
       setEditExtraPriceOptions({})
       setEditExtraQuantities({})
+      setEditExtraSeats({})
       return
     }
     const mainItem = cartItems[0]
@@ -1088,6 +1116,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
     const extras: CarWashService[] = []
     const priceOpts: Record<string, { label: string; price: number }> = {}
     const qtys: Record<string, number> = {}
+    const seatsByExtra: Record<string, string[]> = {}
     for (let i = 1; i < cartItems.length; i++) {
       const item = cartItems[i]
       const foundExtra = carWashServices.find((s: CarWashService) => s.id === item.serviceId)
@@ -1099,11 +1128,19 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         if (item.quantity && item.quantity > 1) {
           qtys[foundExtra.id] = item.quantity
         }
+        // Sedili scelti sulla pianta (dal sito o dal gestionale): senza
+        // questo, riaprendo la prenotazione le sigle sparivano al salvataggio.
+        const seats = normalizeSeats(item.seats)
+        if (seats.length) {
+          seatsByExtra[foundExtra.id] = seats
+          qtys[foundExtra.id] = seats.length
+        }
       }
     }
     setEditExtras(extras)
     setEditExtraPriceOptions(priceOpts)
     setEditExtraQuantities(qtys)
+    setEditExtraSeats(seatsByExtra)
   }, [editingBooking, carWashServices])
 
   // ── Gestione lista targhe suggerite ────────────────────────────────────────
@@ -2099,13 +2136,17 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
       const ep = extraPriceOptions[extra.id]
       const qty = extraQuantities[extra.id] || 1
       const unitPrice = ep?.price ?? extra.price
+      const seats = normalizeSeats(extraSeats[extra.id])
       cartItems.push({
         serviceId: extra.id,
         serviceName: extra.name,
         quantity: qty,
         price: unitPrice,
         option: ep?.label || null,
-        subtotal: unitPrice * qty
+        subtotal: unitPrice * qty,
+        // Stessa chiave che scrive il sito: chi legge la prenotazione non
+        // deve sapere da dove e' stata creata.
+        ...(seats.length ? { seats } : {})
       })
     }
 
@@ -4155,18 +4196,27 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
               return s + (opt?.price ?? e.price)
             }, 0)
             const bundleDiscounted = bundleSum * 0.85
-            const allSelected = availableExtras.length > 0 && availableExtras.every(e => selectedExtras.some(x => x.id === e.id))
+            // "Aggiungi tutto" guarda solo gli extra che si possono davvero
+            // aggiungere in blocco: i servizi a sedile passano dalla pianta,
+            // altrimenti il bottone non direbbe mai "Rimuovi tutti".
+            const bulkExtras = availableExtras.filter(e => !isSeatPricedService(e.name, e.price_unit))
+            const allSelected = bulkExtras.length > 0 && bulkExtras.every(e => selectedExtras.some(x => x.id === e.id))
 
+            // I servizi a sedile restano fuori dagli inserimenti in blocco:
+            // senza passare dalla pianta entrerebbero senza sapere QUALI
+            // sedili trattare, che e' esattamente il problema da evitare.
             const selectRecommended = () => {
-              const toAdd = recommendedExtras.filter(e => !selectedExtras.some(x => x.id === e.id))
+              const toAdd = recommendedExtras.filter(e => !selectedExtras.some(x => x.id === e.id) && !isSeatPricedService(e.name, e.price_unit))
               if (toAdd.length) setSelectedExtras(prev => [...prev, ...toAdd])
             }
             const selectAll = () => {
               if (allSelected) {
                 setSelectedExtras([])
                 setExtraPriceOptions({})
+                setExtraSeats({})
+                setExtraQuantities({})
               } else {
-                const missing = availableExtras.filter(e => !selectedExtras.some(x => x.id === e.id))
+                const missing = bulkExtras.filter(e => !selectedExtras.some(x => x.id === e.id))
                 setSelectedExtras(prev => [...prev, ...missing])
               }
             }
@@ -4262,6 +4312,20 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                       delete next[extra.id]
                                       return next
                                     })
+                                    setExtraSeats(prev => {
+                                      const next = { ...prev }
+                                      delete next[extra.id]
+                                      return next
+                                    })
+                                    setExtraQuantities(prev => {
+                                      const next = { ...prev }
+                                      delete next[extra.id]
+                                      return next
+                                    })
+                                  } else if (isSeatPricedService(extra.name, extra.price_unit)) {
+                                    // Servizio a sedile: prima si sceglie QUALE
+                                    // sedile sulla pianta, poi l'extra entra.
+                                    setSeatPicker({ extra, mode: 'new' })
                                   } else {
                                     setSelectedExtras(prev => [...prev, extra])
                                   }
@@ -4328,8 +4392,19 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                 </div>
                               )}
 
-                              {/* Quantity selector */}
-                              {isToggled && extra.price_unit && (
+                              {/* Servizio a sedile: la quantita' e' il numero
+                                  di sedili scelti sulla pianta, non un +/-. */}
+                              {isToggled && isSeatPricedService(extra.name, extra.price_unit) ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setSeatPicker({ extra, mode: 'new' })}
+                                  className="w-full px-2 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 text-[10px] font-semibold hover:bg-emerald-500/20 transition-colors"
+                                >
+                                  {(extraSeats[extra.id]?.length || 0) > 0
+                                    ? `${extraSeats[extra.id].length} sedili · ${seatListLabel(extraSeats[extra.id], ' · ')}`
+                                    : 'Scegli i sedili'}
+                                </button>
+                              ) : isToggled && extra.price_unit ? (
                                 <div className="flex items-center gap-1.5 justify-center">
                                   <span className="text-[10px] text-theme-text-muted">{extra.price_unit}:</span>
                                   <button
@@ -4344,7 +4419,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                     className="w-6 h-6 rounded-md border border-theme-border text-theme-text-primary hover:border-emerald-400 flex items-center justify-center text-xs"
                                   >+</button>
                                 </div>
-                              )}
+                              ) : null}
                             </div>
                           )
                         })}
@@ -5274,7 +5349,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     const searchText = norm(`${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7${bookingCode}`)
                     return words.every(word => searchText.includes(word))
                   }).map((booking) => (
-                    <tr key={booking.id} className="border-t border-theme-border hover:bg-theme-bg-hover/50">
+                    <tr
+                      key={booking.id}
+                      onClick={() => setDettaglioBookingId(booking.id)}
+                      className="border-t border-theme-border hover:bg-theme-bg-hover/50 cursor-pointer"
+                    >
                       <td className="px-4 py-3 text-sm text-theme-text-primary">
                         {booking.customer_name === 'Lavaggio Rientro' ? (
                           <>
@@ -5374,7 +5453,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           <div className="text-[10px] text-theme-text-muted mt-1">{booking.booking_details.payment_method}</div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm">
+                      <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
                         {(() => {
                           // 2026-08-14 (roadmap #11): stesso menu Gestisci del
                           // Noleggio Terra, dallo stesso componente. Le azioni
@@ -5457,7 +5536,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 const bPending = booking.payment_status === 'pending'
                 const isRientro = booking.customer_name === 'Lavaggio Rientro'
                 return (
-                  <div key={booking.id} className="rounded-2xl bg-theme-bg-secondary border border-theme-border/30 shadow-sm overflow-hidden">
+                  <div
+                    key={booking.id}
+                    onClick={() => setDettaglioBookingId(booking.id)}
+                    className="rounded-2xl bg-theme-bg-secondary border border-theme-border/30 shadow-sm overflow-hidden cursor-pointer"
+                  >
                     {/* Card header */}
                     <div className="px-4 pt-4 pb-3 flex items-start justify-between">
                       <div className="flex-1 min-w-0">
@@ -5552,7 +5635,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     )}
 
                     {/* Azioni — stesso menu Gestisci del desktop e di Terra */}
-                    <div className="px-4 pb-4 flex justify-end">
+                    <div className="px-4 pb-4 flex justify-end" onClick={(e) => e.stopPropagation()}>
                       {(() => {
                         const sent = isAutoProntaSent(booking)
                         const sending = autoProntaSending.has(booking.id)
@@ -5726,6 +5809,11 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                   setEditExtras(prev => prev.filter(e => e.id !== extra.id))
                                   setEditExtraPriceOptions(prev => { const next = { ...prev }; delete next[extra.id]; return next })
                                   setEditExtraQuantities(prev => { const next = { ...prev }; delete next[extra.id]; return next })
+                                  setEditExtraSeats(prev => { const next = { ...prev }; delete next[extra.id]; return next })
+                                } else if (isSeatPricedService(extra.name, extra.price_unit)) {
+                                  // Servizio a sedile: si sceglie sulla pianta
+                                  // QUALE sedile, poi l'extra entra.
+                                  setSeatPicker({ extra, mode: 'edit' })
                                 } else {
                                   setEditExtras(prev => [...prev, extra])
                                 }
@@ -5763,15 +5851,26 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                                 ))}
                               </div>
                             )}
-                            {/* Quantity selector */}
-                            {isSelected && extra.price_unit && (
+                            {/* Servizio a sedile: la quantita' e' il numero di
+                                sedili scelti sulla pianta, non un +/-. */}
+                            {isSelected && isSeatPricedService(extra.name, extra.price_unit) ? (
+                              <button
+                                type="button"
+                                onClick={() => setSeatPicker({ extra, mode: 'edit' })}
+                                className="ml-2 px-2.5 py-1 rounded-full border border-dr7-gold/50 bg-dr7-gold/10 text-dr7-gold text-[10px] font-semibold hover:bg-dr7-gold/20 transition-colors text-left"
+                              >
+                                {(editExtraSeats[extra.id]?.length || 0) > 0
+                                  ? `${editExtraSeats[extra.id].length} sedili · ${seatListLabel(editExtraSeats[extra.id], ' · ')}`
+                                  : 'Scegli i sedili'}
+                              </button>
+                            ) : isSelected && extra.price_unit ? (
                               <div className="flex items-center gap-2 ml-2">
                                 <span className="text-[10px] text-theme-text-muted">{extra.price_unit}:</span>
                                 <button type="button" onClick={() => setEditExtraQuantities(prev => ({ ...prev, [extra.id]: Math.max(1, (prev[extra.id] || 1) - 1) }))} className="w-6 h-6 rounded-full border border-theme-border text-theme-text-primary hover:border-dr7-gold flex items-center justify-center text-xs">-</button>
                                 <span className="text-xs font-bold text-theme-text-primary w-5 text-center">{editExtraQuantities[extra.id] || 1}</span>
                                 <button type="button" onClick={() => setEditExtraQuantities(prev => ({ ...prev, [extra.id]: Math.min(10, (prev[extra.id] || 1) + 1) }))} className="w-6 h-6 rounded-full border border-theme-border text-theme-text-primary hover:border-dr7-gold flex items-center justify-center text-xs">+</button>
                               </div>
-                            )}
+                            ) : null}
                           </div>
                         )
                       })}
@@ -6051,13 +6150,15 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                         const ep = editExtraPriceOptions[extra.id]
                         const qty = editExtraQuantities[extra.id] || 1
                         const unitPrice = ep?.price ?? extra.price
+                        const seats = normalizeSeats(editExtraSeats[extra.id])
                         editCartItems.push({
                           serviceId: extra.id,
                           serviceName: extra.name,
                           quantity: qty,
                           price: unitPrice,
                           option: ep?.label || null,
-                          subtotal: unitPrice * qty
+                          subtotal: unitPrice * qty,
+                          ...(seats.length ? { seats } : {})
                         })
                       }
 
@@ -6077,7 +6178,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
 
                       const updatedDetails = {
                         ...(editingBooking.booking_details || {}),
-                        cartItems: editService ? editCartItems : (editingBooking.booking_details?.cartItems || []),
+                        cartItems: editService ? editCartItems : leggiServiziPrenotati(editingBooking.booking_details),
                         totalDuration: updatedDuration,
                       }
 
@@ -6485,6 +6586,60 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         }}
         onOverrideApproved={override.handleOverrideApproved}
       />
+
+      {/* Pianta dei sedili — servizi Prime Wash venduti a sedile. Una sola
+          per tutte e due le modali: cambia solo dove finiscono le sigle. */}
+      {seatPicker && (
+        <SeatPlanPicker
+          serviceName={seatPicker.extra.name}
+          unitPrice={
+            (seatPicker.mode === 'new' ? extraPriceOptions : editExtraPriceOptions)[seatPicker.extra.id]?.price
+            ?? seatPicker.extra.price
+          }
+          initialSeats={(seatPicker.mode === 'new' ? extraSeats : editExtraSeats)[seatPicker.extra.id] || []}
+          onClose={() => setSeatPicker(null)}
+          onConfirm={(seats) => {
+            const extra = seatPicker.extra
+            // La quantita' segue sempre i sedili scelti: totale, durata e
+            // riepiloghi leggono ancora extraQuantities e non devono sapere
+            // che dietro c'e' una pianta.
+            if (seatPicker.mode === 'new') {
+              setSelectedExtras(prev => prev.some(e => e.id === extra.id) ? prev : [...prev, extra])
+              setExtraSeats(prev => ({ ...prev, [extra.id]: seats }))
+              setExtraQuantities(prev => ({ ...prev, [extra.id]: seats.length }))
+            } else {
+              setEditExtras(prev => prev.some(e => e.id === extra.id) ? prev : [...prev, extra])
+              setEditExtraSeats(prev => ({ ...prev, [extra.id]: seats }))
+              setEditExtraQuantities(prev => ({ ...prev, [extra.id]: seats.length }))
+            }
+            setSeatPicker(null)
+          }}
+        />
+      )}
+
+      {/* Scheda di dettaglio della prenotazione — si apre cliccando una riga
+          della lista. E' lo stesso componente del Calendario Lavaggio, che
+          finora era l'unico punto da cui la si poteva aprire. */}
+      {(() => {
+        const dettaglio = dettaglioBookingId
+          ? bookings.find(b => b.id === dettaglioBookingId)
+          : null
+        if (!dettaglio) return null
+        return (
+          <CarWashBookingDetailModal
+            booking={dettaglio}
+            onClose={() => setDettaglioBookingId(null)}
+            onEdit={() => {
+              setDettaglioBookingId(null)
+              openEditBooking(dettaglio)
+            }}
+            onPronta={() => handleAutoPronta(dettaglio)}
+            prontaGiaInviata={isAutoProntaSent(dettaglio)}
+            prontaInCorso={autoProntaSending.has(dettaglio.id)}
+            mostraPronta={dettaglio.customer_name !== 'Lavaggio Rientro'}
+          />
+        )
+      })()}
     </div >
   )
 }

@@ -13,8 +13,13 @@ import { logAdminAction } from '../../../utils/logAdminAction'
 import { usePaymentMethods } from '../../../hooks/usePaymentMethods'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
-import NumeroTelefono from '../../../components/NumeroTelefono'
 import TelefonoConPrefisso from '../../../components/TelefonoConPrefisso'
+import CarWashBookingDetailModal from './CarWashBookingDetailModal'
+import { getServiceDuration, formatDuration } from '../../../utils/durataLavaggio'
+import SeatPlanPicker from './SeatPlanPicker'
+// Servizi venduti a sedile: si scelgono QUALI sedili sulla pianta.
+import { isSeatPricedService, seatListLabel, normalizeSeats } from '../../../utils/seatPlan'
+import { leggiServiziPrenotati } from '../../../utils/serviziPrenotati'
 
 // 2026-05-22: Premium telemetry restyle scoped to this page only.
 // 2026-05-27: gated to dark mode only — overriding theme vars in light
@@ -59,56 +64,6 @@ interface CarWashBooking {
   payment_method?: string
 }
 
-// Service durations in minutes by vehicle category
-const SERVICE_DURATIONS_URBAN: Record<string, number> = {
-  interior: 40,
-  exterior: 30,
-  full_clean: 80,
-  full_clean_n2: 80,
-  top_shine: 120,
-  vip: 140,
-  luxury: 220,
-}
-
-const SERVICE_DURATIONS_MAXI: Record<string, number> = {
-  interior: 45,
-  exterior: 40,
-  full_clean: 90,
-  full_clean_n2: 90,
-  top_shine: 130,
-  vip: 150,
-  luxury: 280,
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getServiceDuration = (serviceName: string, vehicleCategory?: string, bookingDetails?: any): number => {
-  // Prefer totalDuration saved at booking time (always in sync with catalog)
-  if (bookingDetails?.totalDuration && bookingDetails.totalDuration > 0) {
-    return bookingDetails.totalDuration
-  }
-
-  const name = serviceName.toLowerCase()
-  const isMaxi = vehicleCategory?.toLowerCase() === 'maxi'
-  const durations = isMaxi ? SERVICE_DURATIONS_MAXI : SERVICE_DURATIONS_URBAN
-
-  // Scooter/Moto — fixed short duration
-  if (name.includes('scooter')) return 15
-  if (name.includes('moto')) return 20
-
-  // Match service patterns (check more specific patterns first)
-  if (name.includes('absolute')) return isMaxi ? 480 : 480
-  if (name.includes('luxury') || name.includes('dr7')) return durations.luxury
-  if (name.includes('vip')) return durations.vip
-  if (name.includes('top')) return durations.top_shine
-  if (name.includes('full clean n2') || name.includes('completo n2')) return durations.full_clean_n2
-  if (name.includes('full clean') || name.includes('completo')) return durations.full_clean
-  if (name.includes('interior') || name.includes('solo interno') || name.includes('interno')) return durations.interior
-  if (name.includes('exterior') || name.includes('solo esterno') || name.includes('esterno')) return durations.exterior
-
-  // Default to 60 minutes if no match
-  return 60
-}
-
 const isRientroBooking = (booking: CarWashBooking): boolean => {
   return booking.customer_name === 'Lavaggio Rientro'
 }
@@ -132,14 +87,6 @@ const hasNotes = (booking: CarWashBooking): boolean => {
 
 /** Lavaggio shop open minutes per weekday — Mon-Sat 8h, Sun closed. */
 const openMinutesForDate = (d: Date): number => (d.getDay() === 0 ? 0 : 480)
-
-const formatDuration = (minutes: number): string => {
-  const hours = Math.floor(minutes / 60)
-  const mins = minutes % 60
-  if (hours === 0) return `${mins} min`
-  if (mins === 0) return `${hours}h`
-  return `${hours}h ${mins}min`
-}
 
 interface CarWashCalendarTabProps {
   onNewBooking?: (date: string, time: string) => void
@@ -260,6 +207,10 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   const [editExtras, setEditExtras] = useState<CarWashService[]>([])
   const [editExtraPriceOptions, setEditExtraPriceOptions] = useState<Record<string, { label: string; price: number }>>({})
   const [editExtraQuantities, setEditExtraQuantities] = useState<Record<string, number>>({})
+  // Sedili scelti sulla pianta per gli extra a sedile: la quantita' e'
+  // sempre `seats.length`, si cambia solo dalla pianta.
+  const [editExtraSeats, setEditExtraSeats] = useState<Record<string, string[]>>({})
+  const [seatPicker, setSeatPicker] = useState<CarWashService | null>(null)
   // View mode: Mese (default = existing month grid), Settimana (7-day window),
   // Giorno (single-day chronological timeline). NO Operatori tab — left out
   // by explicit request.
@@ -277,13 +228,14 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
   // Populate edit selections when editingBooking changes
   useEffect(() => {
     if (editingBooking && carWashServices.length > 0) {
-      const cartItems = editingBooking.booking_details?.cartItems || []
+      const cartItems = leggiServiziPrenotati(editingBooking.booking_details)
       if (cartItems.length > 0) {
         const mainItem = cartItems[0]
         setEditService(carWashServices.find(s => s.id === mainItem.serviceId) || null)
         const extras: CarWashService[] = []
         const epOptions: Record<string, { label: string; price: number }> = {}
         const eqMap: Record<string, number> = {}
+        const seatMap: Record<string, string[]> = {}
         for (let i = 1; i < cartItems.length; i++) {
           const ci = cartItems[i]
           const found = carWashServices.find(s => s.id === ci.serviceId)
@@ -291,16 +243,21 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
             extras.push(found)
             if (ci.option) epOptions[found.id] = { label: ci.option, price: ci.price }
             if (ci.quantity > 1) eqMap[found.id] = ci.quantity
+            // Sedili scelti (dal sito o dal gestionale): senza questo, al
+            // salvataggio le sigle sparivano dalla prenotazione.
+            const seats = normalizeSeats(ci.seats)
+            if (seats.length) { seatMap[found.id] = seats; eqMap[found.id] = seats.length }
           }
         }
         setEditExtras(extras)
         setEditExtraPriceOptions(epOptions)
         setEditExtraQuantities(eqMap)
+        setEditExtraSeats(seatMap)
       } else {
-        setEditService(null); setEditExtras([]); setEditExtraPriceOptions({}); setEditExtraQuantities({})
+        setEditService(null); setEditExtras([]); setEditExtraPriceOptions({}); setEditExtraQuantities({}); setEditExtraSeats({})
       }
     } else if (!editingBooking) {
-      setEditService(null); setEditExtras([]); setEditExtraPriceOptions({}); setEditExtraQuantities({})
+      setEditService(null); setEditExtras([]); setEditExtraPriceOptions({}); setEditExtraQuantities({}); setEditExtraSeats({})
     }
   }, [editingBooking, carWashServices])
 
@@ -325,6 +282,8 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
       let name = e.name
       if (ep) name += ` (${ep.label})`
       if (qty > 1) name += ` x${qty}`
+      const seatNames = seatListLabel(editExtraSeats[e.id] || [])
+      if (seatNames) name += ` [${seatNames}]`
       parts.push(name)
     }
     return parts.join(' + ')
@@ -1344,178 +1303,21 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
 
       </div>
 
-      {/* Booking Details Modal — Apple style */}
-      {selectedBooking && (() => {
-        const paid = isPaidBooking(selectedBooking)
-        return (
-        <div
-          className="fixed inset-0 bg-black/40 backdrop-blur-xl flex items-center justify-center z-50 p-4"
-          onClick={() => setSelectedBooking(null)}
-        >
-          <div
-            className="bg-theme-bg-secondary rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-[0_25px_60px_-12px_rgba(0,0,0,0.5)] border border-theme-border/30"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="relative rounded-t-2xl px-6 pt-8 pb-6 bg-theme-bg-tertiary border-b border-theme-border/30">
-              <button
-                onClick={() => setSelectedBooking(null)}
-                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-theme-text-muted/10 hover:bg-theme-text-muted/20 flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary transition-all text-lg"
-              >
-                ×
-              </button>
-              <div className="text-theme-text-muted text-xs font-medium uppercase tracking-widest mb-1">Lavaggio & Meccanica</div>
-              <h3 className="text-2xl font-bold text-theme-text-primary tracking-tight">
-                {selectedBooking.customer_name || selectedBooking.booking_details?.customer?.fullName || 'N/A'}
-              </h3>
-              <p className="text-theme-text-muted text-sm mt-1">
-                {new Date(selectedBooking.appointment_date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })} · {selectedBooking.appointment_time}
-              </p>
-              {/* Status pills */}
-              <div className="flex items-center gap-2 mt-3">
-                <span className={`px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide ${
-                  paid
-                    ? 'bg-emerald-500/15 text-emerald-500'
-                    : selectedBooking.payment_status === 'pending'
-                      ? 'bg-orange-500/15 text-orange-500'
-                      : 'bg-red-500/15 text-red-500'
-                }`}>
-                  {paid
-                    ? 'Pagato'
-                    : selectedBooking.payment_status === 'pending'
-                      ? 'In Attesa'
-                      : 'Non Pagato'}
-                </span>
-                <span className="px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide bg-theme-text-muted/10 text-theme-text-muted uppercase">
-                  {selectedBooking.status}
-                </span>
-              </div>
-            </div>
-
-            <div className="px-6 py-5 space-y-4">
-
-              {/* Contact card */}
-              <div className="rounded-xl bg-theme-bg-tertiary/60 overflow-hidden">
-                <div className="px-4 py-3 flex items-center justify-between border-b border-theme-border/20">
-                  <span className="text-theme-text-muted text-sm">Email</span>
-                  <span className="text-theme-text-primary text-sm font-medium">{selectedBooking.customer_email || selectedBooking.booking_details?.customer?.email || '—'}</span>
-                </div>
-                <div className="px-4 py-3 flex items-center justify-between">
-                  <span className="text-theme-text-muted text-sm">Telefono</span>
-                  <span className="text-theme-text-primary text-sm font-medium"><NumeroTelefono valore={selectedBooking.customer_phone || selectedBooking.booking_details?.customer?.phone} vuoto="—" /></span>
-                </div>
-              </div>
-
-              {/* Vehicle card */}
-              {(selectedBooking.booking_details?.vehicleMakeModel || selectedBooking.vehicle_plate) && (
-                <div className="rounded-xl bg-theme-bg-tertiary/60 overflow-hidden">
-                  {selectedBooking.vehicle_plate && (
-                    <div className={`px-4 py-3 flex items-center justify-between ${selectedBooking.booking_details?.vehicleMakeModel ? 'border-b border-theme-border/20' : ''}`}>
-                      <span className="text-theme-text-muted text-sm">Targa</span>
-                      <span className="font-mono font-bold text-cyan-700 dark:text-cyan-300 text-sm tracking-wider">{selectedBooking.vehicle_plate}</span>
-                    </div>
-                  )}
-                  {selectedBooking.booking_details?.vehicleMakeModel && (
-                    <div className={`px-4 py-3 flex items-center justify-between ${selectedBooking.booking_details?.vehicleCategory ? 'border-b border-theme-border/20' : ''}`}>
-                      <span className="text-theme-text-muted text-sm">Veicolo</span>
-                      <span className="text-theme-text-primary text-sm font-medium">{selectedBooking.booking_details.vehicleMakeModel}</span>
-                    </div>
-                  )}
-                  {selectedBooking.booking_details?.vehicleCategory && (
-                    <div className="px-4 py-3 flex items-center justify-between">
-                      <span className="text-theme-text-muted text-sm">Categoria</span>
-                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                        selectedBooking.booking_details.vehicleCategory === 'urban'
-                          ? 'bg-blue-500/15 text-blue-500'
-                          : 'bg-orange-500/15 text-orange-500'
-                      }`}>
-                        {selectedBooking.booking_details.vehicleCategory === 'urban' ? 'URBAN' : 'MAXI'}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Service card */}
-              <div className="rounded-xl bg-theme-bg-tertiary/60 overflow-hidden">
-                <div className="px-4 py-3 flex items-center justify-between border-b border-theme-border/20">
-                  <span className="text-theme-text-muted text-sm">Servizio</span>
-                  <span className="text-theme-text-primary text-sm font-medium text-right max-w-[60%]">{selectedBooking.service_name}</span>
-                </div>
-                <div className={`px-4 py-3 flex items-center justify-between ${selectedBooking.booking_details?.additionalService ? 'border-b border-theme-border/20' : ''}`}>
-                  <span className="text-theme-text-muted text-sm">Durata</span>
-                  <span className="text-theme-text-primary text-sm font-medium">{formatDuration(getServiceDuration(selectedBooking.service_name, selectedBooking.booking_details?.vehicleCategory, selectedBooking.booking_details))}</span>
-                </div>
-                {selectedBooking.booking_details?.additionalService && (
-                  <div className="px-4 py-3 flex items-center justify-between">
-                    <span className="text-theme-text-muted text-sm">Extra</span>
-                    <span className="text-theme-text-primary text-sm font-medium text-right max-w-[60%]">{selectedBooking.booking_details.additionalService}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Price card */}
-              <div className="rounded-xl bg-theme-bg-tertiary/60 px-4 py-4 flex items-center justify-between">
-                <span className="text-theme-text-primary text-base font-semibold">Totale</span>
-                <span className="text-cyan-700 dark:text-cyan-300 font-bold text-2xl tracking-tight">
-                  €{(selectedBooking.price_total / 100).toFixed(2)}
-                </span>
-              </div>
-
-              {/* Notes card */}
-              {selectedBooking.booking_details?.notes && (
-                <div className="rounded-xl bg-yellow-500/10 border border-yellow-500/20 px-4 py-3">
-                  <div className="text-yellow-500 text-xs font-semibold uppercase tracking-wider mb-1.5">Note</div>
-                  <p className="text-theme-text-primary text-sm leading-relaxed">{selectedBooking.booking_details.notes}</p>
-                </div>
-              )}
-
-              {/* Booking ID */}
-              <div className="text-center text-xs text-theme-text-muted/50 font-mono pt-1">
-                DR7-{selectedBooking.id.toUpperCase().slice(0, 8)}
-              </div>
-
-              {/* Action buttons */}
-              <button
-                onClick={() => {
-                  setEditingBooking(selectedBooking)
-                  setSelectedBooking(null)
-                }}
-                className="w-full py-3 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-700 dark:text-cyan-300 font-semibold text-[15px] transition-all active:scale-[0.98]"
-              >
-                Modifica Prenotazione
-              </button>
-              {/* 2026-05-29: Pronta — notifica WhatsApp al cliente che
-                  l'auto e' pronta per il ritiro + stamp auto_pronta_at nel
-                  booking_details. Disabilitato durante l'invio + se gia'
-                  inviato in passato (mostra "Già notificato"). */}
-              {(() => {
-                // Allineato a CarWashBookingsTab: legge auto_pronta_sent_at
-                // (timestamp) cosi' il bottone resta grigio dopo il primo
-                // click da qualunque punto dell'admin.
-                const alreadySent = !!selectedBooking.booking_details?.auto_pronta_sent_at
-                const inFlight = sendingReady === selectedBooking.id
-                return (
-                  <button
-                    onClick={() => handleAutoPronta(selectedBooking)}
-                    disabled={inFlight || alreadySent}
-                    className={`w-full py-3 rounded-xl font-semibold text-[15px] transition-all active:scale-[0.98] ${
-                      alreadySent
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 cursor-not-allowed'
-                        : inFlight
-                          ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 cursor-wait'
-                          : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300'
-                    }`}
-                  >
-                    {alreadySent ? '✓ Cliente già notificato' : inFlight ? 'Invio in corso...' : 'Pronta'}
-                  </button>
-                )
-              })()}
-            </div>
-          </div>
-        </div>
-        )
-      })()}
+      {/* Scheda di dettaglio — stesso componente della lista Prenotazioni
+          Lavaggio, cosi' la scheda e' identica da qualunque punto la si apra. */}
+      {selectedBooking && (
+        <CarWashBookingDetailModal
+          booking={selectedBooking}
+          onClose={() => setSelectedBooking(null)}
+          onEdit={() => {
+            setEditingBooking(selectedBooking)
+            setSelectedBooking(null)
+          }}
+          onPronta={() => handleAutoPronta(selectedBooking)}
+          prontaGiaInviata={!!selectedBooking.booking_details?.auto_pronta_sent_at}
+          prontaInCorso={sendingReady === selectedBooking.id}
+        />
+      )}
 
       {/* Edit Booking Modal */}
       {editingBooking && (
@@ -1604,6 +1406,10 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                               setEditExtras(p => p.filter(e => e.id !== extra.id))
                               setEditExtraPriceOptions(p => { const n = { ...p }; delete n[extra.id]; return n })
                               setEditExtraQuantities(p => { const n = { ...p }; delete n[extra.id]; return n })
+                              setEditExtraSeats(p => { const n = { ...p }; delete n[extra.id]; return n })
+                            } else if (isSeatPricedService(extra.name, extra.price_unit)) {
+                              // Servizio a sedile: prima la pianta, poi l'extra.
+                              setSeatPicker(extra)
                             } else { setEditExtras(p => [...p, extra]) }
                           }} className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 ${isSelected ? 'bg-cyan-500/20 border-cyan-400 text-cyan-700 dark:text-cyan-300' : 'bg-theme-bg-tertiary border-theme-border text-theme-text-primary hover:border-cyan-400'}`}>
                             <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[10px] ${isSelected ? 'bg-cyan-500 border-cyan-400 text-white' : 'border-theme-text-muted'}`}>{isSelected && '✓'}</span>
@@ -1619,14 +1425,23 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                               ))}
                             </div>
                           )}
-                          {isSelected && extra.price_unit && (
+                          {/* Servizio a sedile: la quantita' e' il numero di
+                              sedili scelti sulla pianta, non un +/-. */}
+                          {isSelected && isSeatPricedService(extra.name, extra.price_unit) ? (
+                            <button type="button" onClick={() => setSeatPicker(extra)}
+                              className="ml-2 px-2.5 py-1 rounded-full border border-cyan-400/50 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 text-[10px] font-semibold hover:bg-cyan-500/20 transition-colors text-left">
+                              {(editExtraSeats[extra.id]?.length || 0) > 0
+                                ? `${editExtraSeats[extra.id].length} sedili · ${seatListLabel(editExtraSeats[extra.id], ' · ')}`
+                                : 'Scegli i sedili'}
+                            </button>
+                          ) : isSelected && extra.price_unit ? (
                             <div className="flex items-center gap-2 ml-2">
                               <span className="text-[10px] text-theme-text-muted">{extra.price_unit}:</span>
                               <button type="button" onClick={() => setEditExtraQuantities(p => ({ ...p, [extra.id]: Math.max(1, (p[extra.id] || 1) - 1) }))} className="w-6 h-6 rounded-full border border-theme-border text-theme-text-primary hover:border-cyan-400 flex items-center justify-center text-xs">-</button>
                               <span className="text-xs font-bold w-5 text-center">{editExtraQuantities[extra.id] || 1}</span>
                               <button type="button" onClick={() => setEditExtraQuantities(p => ({ ...p, [extra.id]: Math.min(10, (p[extra.id] || 1) + 1) }))} className="w-6 h-6 rounded-full border border-theme-border text-theme-text-primary hover:border-cyan-400 flex items-center justify-center text-xs">+</button>
                             </div>
-                          )}
+                          ) : null}
                         </div>
                       )
                     })}
@@ -1746,7 +1561,8 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                       const ep = editExtraPriceOptions[extra.id]
                       const qty = editExtraQuantities[extra.id] || 1
                       const unitPrice = ep?.price ?? extra.price
-                      editCartItems.push({ serviceId: extra.id, serviceName: extra.name, quantity: qty, price: unitPrice, option: ep?.label || null, subtotal: unitPrice * qty })
+                      const seats = normalizeSeats(editExtraSeats[extra.id])
+                      editCartItems.push({ serviceId: extra.id, serviceName: extra.name, quantity: qty, price: unitPrice, option: ep?.label || null, subtotal: unitPrice * qty, ...(seats.length ? { seats } : {}) })
                     }
 
                     const updatedServiceName = editService ? buildEditServiceNames() : editingBooking.service_name
@@ -1767,7 +1583,7 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
                         payment_method: editingBooking.payment_method || null,
                         booking_details: {
                           ...(editingBooking.booking_details || {}),
-                          cartItems: editService ? editCartItems : (editingBooking.booking_details?.cartItems || []),
+                          cartItems: editService ? editCartItems : leggiServiziPrenotati(editingBooking.booking_details),
                         },
                       })
                       .eq('id', editingBooking.id)
@@ -1810,6 +1626,25 @@ export default function CarWashCalendarTab({ onNewBooking }: CarWashCalendarTabP
             </div>
           </div>
         </div>
+      )}
+
+      {/* Pianta dei sedili — servizi Prime Wash venduti a sedile. */}
+      {seatPicker && (
+        <SeatPlanPicker
+          serviceName={seatPicker.name}
+          unitPrice={editExtraPriceOptions[seatPicker.id]?.price ?? seatPicker.price}
+          initialSeats={editExtraSeats[seatPicker.id] || []}
+          onClose={() => setSeatPicker(null)}
+          onConfirm={(seats) => {
+            const extra = seatPicker
+            setEditExtras(p => p.some(e => e.id === extra.id) ? p : [...p, extra])
+            setEditExtraSeats(p => ({ ...p, [extra.id]: seats }))
+            // La quantita' segue i sedili: totale e riepiloghi leggono ancora
+            // editExtraQuantities e non devono sapere della pianta.
+            setEditExtraQuantities(p => ({ ...p, [extra.id]: seats.length }))
+            setSeatPicker(null)
+          }}
+        />
       )}
     </div>
   )
