@@ -23,7 +23,6 @@ import { isVehicleAvailable, type Vehicle as AvailabilityVehicle, type Booking a
 import { paymentMethodAutoInvoice } from '../../../utils/paymentMethodAutoInvoice'
 import { isCartaPunti, isNexiPayByLink, isWalletOrGift } from '../../../utils/paymentMethodMatchers'
 import GestisciMenu, { type GestisciSection } from './GestisciMenu'
-import CarWashBookingDetailModal from './CarWashBookingDetailModal'
 import { isTestBooking, isTestVehicle } from '../../../utils/isTestBooking'
 import EuropeanDateInput from '../../../components/EuropeanDateInput'
 import MoneyInput from '../../../components/MoneyInput'
@@ -146,10 +145,6 @@ interface CarWashBookingsTabProps {
 export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarWashBookingsTabProps = {}) {
   const paymentMethods = usePaymentMethods()
   const [bookings, setBookings] = useState<CarWashBooking[]>([])
-  // Scheda di dettaglio aperta dalla lista: teniamo solo l'id, la
-  // prenotazione la rileggiamo da `bookings` cosi' dopo una modifica la
-  // scheda mostra i dati aggiornati invece di una copia congelata.
-  const [dettaglioBookingId, setDettaglioBookingId] = useState<string | null>(null)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [carWashServices, setCarWashServices] = useState<CarWashService[]>([])
   // 2026-05-27: prenotazioni esistenti per la data selezionata. Usate dal
@@ -5279,11 +5274,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     const searchText = norm(`${customerName} ${customerEmail} ${customerPhone} ${vehicleName} ${vehiclePlate} ${bookingId} ${bookingCode} dr7${bookingCode}`)
                     return words.every(word => searchText.includes(word))
                   }).map((booking) => (
-                    <tr
-                      key={booking.id}
-                      onClick={() => setDettaglioBookingId(booking.id)}
-                      className="border-t border-theme-border hover:bg-theme-bg-hover/50 cursor-pointer"
-                    >
+                    <tr key={booking.id} className="border-t border-theme-border hover:bg-theme-bg-hover/50">
                       <td className="px-4 py-3 text-sm text-theme-text-primary">
                         {booking.customer_name === 'Lavaggio Rientro' ? (
                           <>
@@ -5383,7 +5374,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                           <div className="text-[10px] text-theme-text-muted mt-1">{booking.booking_details.payment_method}</div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-4 py-3 text-sm">
                         {(() => {
                           // 2026-08-14 (roadmap #11): stesso menu Gestisci del
                           // Noleggio Terra, dallo stesso componente. Le azioni
@@ -5466,11 +5457,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                 const bPending = booking.payment_status === 'pending'
                 const isRientro = booking.customer_name === 'Lavaggio Rientro'
                 return (
-                  <div
-                    key={booking.id}
-                    onClick={() => setDettaglioBookingId(booking.id)}
-                    className="rounded-2xl bg-theme-bg-secondary border border-theme-border/30 shadow-sm overflow-hidden cursor-pointer"
-                  >
+                  <div key={booking.id} className="rounded-2xl bg-theme-bg-secondary border border-theme-border/30 shadow-sm overflow-hidden">
                     {/* Card header */}
                     <div className="px-4 pt-4 pb-3 flex items-start justify-between">
                       <div className="flex-1 min-w-0">
@@ -5565,7 +5552,7 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
                     )}
 
                     {/* Azioni — stesso menu Gestisci del desktop e di Terra */}
-                    <div className="px-4 pb-4 flex justify-end" onClick={(e) => e.stopPropagation()}>
+                    <div className="px-4 pb-4 flex justify-end">
                       {(() => {
                         const sent = isAutoProntaSent(booking)
                         const sending = autoProntaSending.has(booking.id)
@@ -6498,30 +6485,6 @@ export default function CarWashBookingsTab({ initialData, onDataConsumed }: CarW
         }}
         onOverrideApproved={override.handleOverrideApproved}
       />
-
-      {/* Scheda di dettaglio della prenotazione — si apre cliccando una riga
-          della lista. E' lo stesso componente del Calendario Lavaggio, che
-          finora era l'unico punto da cui la si poteva aprire. */}
-      {(() => {
-        const dettaglio = dettaglioBookingId
-          ? bookings.find(b => b.id === dettaglioBookingId)
-          : null
-        if (!dettaglio) return null
-        return (
-          <CarWashBookingDetailModal
-            booking={dettaglio}
-            onClose={() => setDettaglioBookingId(null)}
-            onEdit={() => {
-              setDettaglioBookingId(null)
-              openEditBooking(dettaglio)
-            }}
-            onPronta={() => handleAutoPronta(dettaglio)}
-            prontaGiaInviata={isAutoProntaSent(dettaglio)}
-            prontaInCorso={autoProntaSending.has(dettaglio.id)}
-            mostraPronta={dettaglio.customer_name !== 'Lavaggio Rientro'}
-          />
-        )
-      })()}
     </div >
   )
 }

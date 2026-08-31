@@ -24,6 +24,73 @@ interface Props {
     size?: 'sm' | 'md'
 }
 
+const GUTTER = 8
+/** Altezza minima utile del pannello: sotto questa si apre dall'altro lato. */
+const MIN_PANEL = 180
+/** Larghezza di fallback finche' il pannello non e' montato e misurabile. */
+const MIN_WIDTH = 200
+
+export type Coords = {
+    top: number
+    right: number
+    maxHeight: number
+    maxWidth: number
+}
+
+export const sameCoords = (a: Coords, b: Coords) =>
+    a.top === b.top && a.right === b.right
+    && a.maxHeight === b.maxHeight && a.maxWidth === b.maxWidth
+
+/**
+ * Posizione del pannello a partire dal rettangolo del trigger.
+ *
+ * Funzione pura, fuori dal componente, perche' e' la parte che si rompeva
+ * su telefono e l'unica verificabile senza un DOM: vedi
+ * GestisciMenu.test.ts.
+ *
+ * Regole:
+ * - 2026-08-31: il pannello si vede SEMPRE intero, senza scorrerlo. Prima
+ *   veniva schiacciato nello spazio libero sotto (o sopra) al bottone e con
+ *   nove voci restava una lista da scorrere: ora, se sotto non ci sta tutto,
+ *   si prova sopra, e se non basta nemmeno sopra si alza quanto serve per
+ *   entrare nello schermo. Il bottone resta comunque scoperto o coperto solo
+ *   di striscio, ma le voci si leggono tutte in un colpo;
+ * - si scorre solo nel caso limite in cui il pannello e' piu' alto dello
+ *   schermo intero (viewport bassissima): li' non esiste posizione che lo
+ *   faccia entrare;
+ * - ancoraggio orizzontale a destra del trigger, ma mai oltre i bordi.
+ */
+export function computeCoords(
+    r: { top: number; bottom: number; right: number },
+    vw: number,
+    vh: number,
+    panelWidth: number,
+    panelHeight: number,
+): Coords {
+    const disponibile = vh - GUTTER * 2
+    // Altezza che il pannello occupera' davvero: la sua, o al massimo tutto
+    // lo schermo utile (oltre quella soglia scorre, non c'e' alternativa).
+    const altezza = Math.min(panelHeight || MIN_PANEL, disponibile)
+
+    const width = Math.min(panelWidth, vw - GUTTER * 2)
+    const right = Math.min(Math.max(GUTTER, vw - r.right), vw - width - GUTTER)
+
+    // Sotto al bottone se ci sta tutto; altrimenti sopra; altrimenti
+    // appoggiato al bordo basso, alzandosi finche' entra per intero.
+    let top = r.bottom + GUTTER
+    if (top + altezza > vh - GUTTER) {
+        const sopra = r.top - GUTTER - altezza
+        top = sopra >= GUTTER ? sopra : Math.max(GUTTER, vh - GUTTER - altezza)
+    }
+
+    return {
+        top,
+        right,
+        maxHeight: disponibile,
+        maxWidth: vw - GUTTER * 2,
+    }
+}
+
 /**
  * Dropdown unico che racchiude tutte le azioni riga di una prenotazione
  * (Modifica, Estendi, Contratto, Fattura, Link Pagamento, Danni & Penali,
@@ -43,26 +110,37 @@ export default function GestisciMenu({ sections, label = 'Gestisci', size = 'sm'
     // Prenotazioni Noleggio ha overflow-x-auto sul wrapper, e per
     // la spec CSS basta UN asse 'auto' per clippare anche l'altro
     // — il dropdown 'absolute' rimaneva tagliato dentro la riga).
-    const [coords, setCoords] = useState<{ top: number; right: number; openUp: boolean } | null>(null)
+    const [coords, setCoords] = useState<Coords | null>(null)
     const wrapRef = useRef<HTMLDivElement>(null)
     const btnRef = useRef<HTMLButtonElement>(null)
     const menuRef = useRef<HTMLDivElement>(null)
 
     function recalcCoords() {
         if (!btnRef.current) return
-        const r = btnRef.current.getBoundingClientRect()
-        const spaceBelow = window.innerHeight - r.bottom
-        const openUp = spaceBelow < 280
-        setCoords({
-            top: openUp ? r.top : r.bottom,
-            right: window.innerWidth - r.right,
-            openUp,
-        })
+        const next = computeCoords(
+            btnRef.current.getBoundingClientRect(),
+            window.innerWidth,
+            window.innerHeight,
+            // Larghezza reale una volta montato il pannello; prima di allora
+            // una stima, corretta al giro successivo di useLayoutEffect.
+            menuRef.current?.offsetWidth || MIN_WIDTH,
+            // scrollHeight e non offsetHeight: e' l'altezza VERA del
+            // contenuto, quella che il pannello vorrebbe avere, anche
+            // quando il maxHeight lo sta gia' tagliando.
+            menuRef.current?.scrollHeight || MIN_PANEL,
+        )
+        // Confronto prima di scrivere: recalcCoords gira anche dopo il
+        // montaggio del pannello (per misurarne la larghezza) e senza questo
+        // guard il setState si riaccenderebbe all'infinito.
+        setCoords(prev => (prev && sameCoords(prev, next)) ? prev : next)
     }
 
     useEffect(() => {
         if (!open) return
-        const onDoc = (e: MouseEvent) => {
+        // pointerdown e non mousedown: su iOS il tap su un elemento non
+        // interattivo (lo sfondo di una card) puo' non emettere mousedown e
+        // il menu restava aperto sopra la lista.
+        const onDoc = (e: Event) => {
             const target = e.target as Node
             if (wrapRef.current?.contains(target)) return
             if (menuRef.current?.contains(target)) return
@@ -74,23 +152,25 @@ export default function GestisciMenu({ sections, label = 'Gestisci', size = 'sm'
         // Riposiziona se l'utente scrolla la pagina o la tabella —
         // 'true' come terzo arg cattura anche gli scroll dei figli.
         const onReposition = () => recalcCoords()
-        document.addEventListener('mousedown', onDoc)
+        document.addEventListener('pointerdown', onDoc)
         document.addEventListener('keydown', onEsc)
         window.addEventListener('scroll', onReposition, true)
         window.addEventListener('resize', onReposition)
         return () => {
-            document.removeEventListener('mousedown', onDoc)
+            document.removeEventListener('pointerdown', onDoc)
             document.removeEventListener('keydown', onEsc)
             window.removeEventListener('scroll', onReposition, true)
             window.removeEventListener('resize', onReposition)
         }
     }, [open])
 
-    // Calcola le coords subito dopo l'apertura, prima del paint, per
-    // evitare un flash a (0,0).
+    // Calcola le coords prima del paint, per evitare un flash a (0,0).
+    // Senza array di dipendenze: il primo giro stima la larghezza, il
+    // secondo la misura sul pannello ormai montato. Converge subito perche'
+    // setCoords non scrive se il risultato e' identico.
     useLayoutEffect(() => {
         if (open) recalcCoords()
-    }, [open])
+    })
 
     const handleToggle = (e: React.MouseEvent) => {
         e.stopPropagation()
@@ -106,6 +186,9 @@ export default function GestisciMenu({ sections, label = 'Gestisci', size = 'sm'
     const trigger = size === 'sm'
         ? 'px-3 py-1.5 text-xs'
         : 'px-4 py-2 text-sm'
+    // Voci piu' alte nel menu mobile: py-2 dava un bersaglio da 32px, sotto
+    // i 44px di area toccabile e con le voci una addosso all'altra.
+    const item = size === 'sm' ? 'py-2' : 'py-3'
 
     return (
         <div ref={wrapRef} className="relative inline-block">
@@ -130,9 +213,14 @@ export default function GestisciMenu({ sections, label = 'Gestisci', size = 'sm'
                     onClick={(e) => e.stopPropagation()}
                     style={{
                         position: 'fixed',
-                        top: coords.openUp ? undefined : coords.top + 8,
-                        bottom: coords.openUp ? window.innerHeight - coords.top + 8 : undefined,
+                        top: coords.top,
                         right: coords.right,
+                        maxHeight: coords.maxHeight,
+                        maxWidth: coords.maxWidth,
+                        overflowY: 'auto',
+                        // Su mobile evita che lo scroll del pannello trascini
+                        // la lista sotto quando si arriva a fine corsa.
+                        overscrollBehavior: 'contain',
                         zIndex: 9999,
                     }}
                     className="min-w-[200px] rounded-xl border border-theme-border bg-theme-bg-secondary shadow-2xl py-1"
@@ -151,7 +239,7 @@ export default function GestisciMenu({ sections, label = 'Gestisci', size = 'sm'
                                     onClick={(e) => { e.stopPropagation(); if (a.disabled) return; setOpen(false); a.onClick() }}
                                     disabled={a.disabled}
                                     role="menuitem"
-                                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors ${
+                                    className={`w-full flex items-center gap-2.5 px-3 text-sm text-left transition-colors ${item} ${
                                         a.disabled
                                             ? 'text-theme-text-muted opacity-50 cursor-not-allowed'
                                             : 'text-theme-text-primary hover:bg-theme-bg-hover hover:text-dr7-gold'
