@@ -748,19 +748,6 @@ function ServiceCard({
           : 'border-theme-border bg-theme-bg-secondary'
       }`}
     >
-      {/* Immagine servizio (come gli altri cataloghi) — cambiandola da qui si
-          aggiorna anche sul sito (car_wash_services.image_url). */}
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      {(service as any).image_url ? (
-        <div className="aspect-[16/9] overflow-hidden bg-theme-bg-tertiary">
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          <img src={(service as any).image_url} alt={service.name} loading="lazy" className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }} />
-        </div>
-      ) : (
-        <div className="aspect-[16/9] bg-theme-bg-tertiary grid place-items-center">
-          <span className="text-xs text-theme-text-muted">Nessuna foto — Modifica per aggiungerla</span>
-        </div>
-      )}
       <div className="p-5">
       {/* Action buttons */}
       <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -787,8 +774,33 @@ function ServiceCard({
         </button>
       </div>
 
-      <div className="flex items-start justify-between gap-2 mb-2 pr-8">
-        <div>
+      <div className="flex items-start gap-3 mb-2 pr-8">
+        {/* Miniatura del servizio — cambiandola da qui si aggiorna anche sul
+            sito (car_wash_services.image_url).
+
+            Rapporto 4:5 come le locandine del catalogo: prima era una fascia
+            16:9 ritagliata in `cover`, che di una locandina verticale mostrava
+            solo la striscia centrale — logo, titolo e prezzo restavano fuori.
+
+            Ed e' piccola di proposito: la fascia larga in cima costava quasi
+            200 px per card e con trenta servizi il catalogo era tutto da
+            scorrere. */}
+        <div className="w-14 aspect-[4/5] flex-shrink-0 overflow-hidden rounded-lg bg-theme-bg-tertiary grid place-items-center">
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          {(service as any).image_url ? (
+            <img
+              /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+              src={(service as any).image_url}
+              alt={service.name}
+              loading="lazy"
+              className="w-full h-full object-contain"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
+            />
+          ) : (
+            <span className="text-[10px] leading-tight text-theme-text-muted text-center px-1">Nessuna foto</span>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
           <h4 className="font-semibold text-theme-text-primary">{service.name}</h4>
           {service.name_en && service.name_en !== service.name && (
             <p className="text-xs text-theme-text-muted">{service.name_en}</p>
