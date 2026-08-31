@@ -34,7 +34,22 @@ export interface FaqCopy {
   entries: FaqEntry[];
 }
 
+/**
+ * Selezione delle categorie veicolo visibili sul sito (admin > Sito > Flotta).
+ *
+ * `mode` rende esplicita l'intenzione dell'operatore, cosa che la sola lista
+ * non poteva fare: un array vuoto significava insieme "mai configurato" e
+ * "non mostrare nulla". Campo opzionale e additivo — le righe salvate prima
+ * della sua introduzione non ce l'hanno e restano valide.
+ *
+ *   assente   riga vecchia: lista piena = whitelist, lista vuota = tutte
+ *   'all'     mostra tutte le categorie del catalogo
+ *   'custom'  mostra esattamente `visible_category_ids`, vuoto compreso
+ *
+ * La regola completa (e il fail-safe sugli errori) sta in utils/flottaConfig.ts.
+ */
 export interface FlottaCopy {
+  mode?: 'all' | 'custom';
   visible_category_ids: string[];
 }
 

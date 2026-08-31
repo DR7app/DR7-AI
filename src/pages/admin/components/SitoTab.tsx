@@ -196,9 +196,16 @@ const SPEC_KEY_LABEL: Record<AviationMarineSpecKey, string> = {
 }
 
 // ─── Stato locale del tab ────────────────────────────────────────────────
-// Elenco vuoto = "mostra tutte le categorie di centralina_pro_config".
-// Resta qui perche' e' l'unica sezione senza equivalente nel sito: il sito
-// legge la lista, non ha un proprio default da generare.
+// Seed della sezione Flotta. Resta qui perche' e' l'unica sezione senza
+// equivalente nel sito: il sito legge la lista, non ha un proprio default
+// da generare.
+//
+// `mode` NON viene inizializzato di proposito. Il tab Sito riscrive l'intero
+// snapshot a ogni salvataggio, anche di sotto-tab diverse: se il seed
+// portasse un mode, salvare (per dire) la Home imporrebbe una scelta sulla
+// Flotta che l'operatore non ha mai fatto. Senza mode il sito legge la riga
+// come "mai configurata" e mostra tutte le categorie, esattamente come prima.
+// Il mode compare solo quando l'operatore tocca davvero questa sezione.
 const INITIAL_FLOTTA: FlottaCopy = { visible_category_ids: [] }
 
 interface CurrentState {
@@ -1079,6 +1086,12 @@ function computeChanges(current: CurrentState, saved: CurrentState): string[] {
         const savSorted = [...sav].sort().join(',')
         if (curSorted !== savSorted) {
             out.push('Flotta: categorie visibili modificate')
+        }
+        // Anche il solo passaggio "tutte" <-> "scelgo io" e' una modifica:
+        // senza questo, scegliere "Tutte le categorie" su una riga vecchia
+        // non rende il form dirty e il bottone Salva resta spento.
+        if ((current.flotta?.mode ?? null) !== (saved.flotta?.mode ?? null)) {
+            out.push('Flotta: modalita\' di visibilita\' modificata')
         }
     }
     // FAQ — chrome (title/eyebrow/subtitle) + entries
@@ -3209,22 +3222,36 @@ function ContactEditor({ copy, setCopy }: { copy: ContactCopy; setCopy: (next: C
 }
 
 // ─── Flotta page editor (visible categories only — catalog lives in Veicoli) ─
-// Loads vehicle categories from centralina_pro_config.config.categories and
-// lets admin pick which to expose as filter chips on the public RentalPage.
-// Empty selection => website falls back to "show all categories".
+// Carica le categorie da centralina_pro_config.config.categories e lascia
+// scegliere quali esporre sul sito pubblico (pagina "La Nostra Flotta",
+// menu e filtri della RentalPage).
+//
+// Due modalita', salvate in site_copy.flotta.mode:
+//   'all'     mostra tutte le categorie, comprese quelle aggiunte in futuro
+//   'custom'  mostra esattamente quelle spuntate — nessuna spunta = nessuna
+//             categoria sul sito
+// Una riga salvata prima che `mode` esistesse non ce l'ha: il sito la legge
+// come "mai configurata" e mostra tutto. Basta salvare una volta da qui per
+// renderla esplicita. La regola vive nel sito in utils/flottaConfig.ts.
 function FlottaEditor({ copy, setCopy }: { copy: FlottaCopy; setCopy: (next: FlottaCopy) => void }) {
     const [categories, setCategories] = useState<{ id: string; label: string }[]>([])
     const [loadingCats, setLoadingCats] = useState(true)
+    const [catsError, setCatsError] = useState<string | null>(null)
 
     useEffect(() => {
         let cancelled = false
         ;(async () => {
-            const { data } = await supabase
+            const { data, error } = await supabase
                 .from('centralina_pro_config')
                 .select('config')
                 .eq('id', 'main')
                 .maybeSingle()
             if (cancelled) return
+            if (error) {
+                setCatsError(error.message)
+                setLoadingCats(false)
+                return
+            }
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const cats = ((data?.config || {}) as any).categories
             if (Array.isArray(cats)) {
@@ -3235,28 +3262,121 @@ function FlottaEditor({ copy, setCopy }: { copy: FlottaCopy; setCopy: (next: Flo
         return () => { cancelled = true }
     }, [])
 
+    const isCustom = copy.mode === 'custom'
     const selected = new Set(copy.visible_category_ids)
+
+    // Id salvati che non corrispondono piu' a nessuna categoria: succede
+    // quando una categoria viene rinominata o cancellata in Centralina Pro.
+    // Il sito li ignora; qui vanno detti, altrimenti l'operatore vede "3
+    // selezionate" e sul sito ne compaiono 2.
+    const knownIds = new Set(categories.map(c => c.id))
+    const orphanIds = loadingCats ? [] : copy.visible_category_ids.filter(id => !knownIds.has(id))
+    // Duplicati nella lista salvata: contati una volta sola dal sito.
+    const duplicateIds = [...new Set(copy.visible_category_ids.filter((id, i) => copy.visible_category_ids.indexOf(id) !== i))]
+
+    const setMode = (mode: 'all' | 'custom') => {
+        if (mode === 'all') { setCopy({ mode: 'all', visible_category_ids: [] }); return }
+        // Passando a "scelgo io" partiamo da quello che il sito sta gia'
+        // mostrando (tutte), cosi' il primo salvataggio non svuota la pagina.
+        setCopy({ mode: 'custom', visible_category_ids: categories.map(c => c.id) })
+    }
+
     const toggle = (id: string) => {
         const next = new Set(selected)
         if (next.has(id)) next.delete(id); else next.add(id)
-        setCopy({ visible_category_ids: Array.from(next) })
+        setCopy({ mode: 'custom', visible_category_ids: Array.from(next) })
     }
+
+    const effectSummary = !isCustom && copy.mode !== 'all'
+        ? 'Sezione mai configurata: il sito mostra tutte le categorie.'
+        : copy.mode === 'all'
+            ? 'Il sito mostra tutte le categorie, comprese quelle che aggiungerai in futuro.'
+            : selected.size === 0
+                ? 'Il sito non mostra NESSUNA categoria.'
+                : `Il sito mostra ${selected.size} ${selected.size === 1 ? 'categoria' : 'categorie'} su ${categories.length}.`
 
     return (
         <div className="space-y-6">
             <p className="text-[13px] text-theme-text-secondary">
                 Scegli quali categorie veicoli del Centralina Pro mostrare nella pagina pubblica
-                <strong> "La Nostra Flotta"</strong>. La selezione è autoritaria: vengono mostrate
-                <strong> solo</strong> le categorie spuntate qui. Se non selezioni nulla, sul sito
-                non appare alcuna categoria — nessun fallback "mostra tutte". Usa il bottone
-                "Seleziona tutte" sotto se vuoi mostrare l'intero catalogo.
+                <strong> "La Nostra Flotta"</strong>, nel menu e nei filtri delle pagine noleggio.
+                Il catalogo dei veicoli resta nella tab <strong>Veicoli</strong>: qui si decide
+                solo cosa e' visibile.
             </p>
 
             <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
+                <div className="space-y-2">
+                    <h3 className="text-[14px] font-semibold text-theme-text-primary">Cosa mostrare sul sito</h3>
+                    <label className="flex items-start gap-3 text-[13px] text-theme-text-primary cursor-pointer">
+                        <input
+                            type="radio"
+                            name="flotta-mode"
+                            checked={copy.mode === 'all'}
+                            onChange={() => setMode('all')}
+                            className="mt-1 w-4 h-4"
+                        />
+                        <span>
+                            <span className="font-medium">Tutte le categorie</span>
+                            <span className="block text-[11px] text-theme-text-muted">
+                                Anche quelle che verranno aggiunte in futuro in Centralina Pro.
+                            </span>
+                        </span>
+                    </label>
+                    <label className="flex items-start gap-3 text-[13px] text-theme-text-primary cursor-pointer">
+                        <input
+                            type="radio"
+                            name="flotta-mode"
+                            checked={isCustom}
+                            onChange={() => setMode('custom')}
+                            className="mt-1 w-4 h-4"
+                        />
+                        <span>
+                            <span className="font-medium">Scelgo io quali</span>
+                            <span className="block text-[11px] text-theme-text-muted">
+                                Vengono mostrate solo le categorie spuntate qui sotto. Nessuna spunta = nessuna categoria sul sito.
+                            </span>
+                        </span>
+                    </label>
+                </div>
+
+                <div className="text-[12px] text-theme-text-secondary border-t border-theme-border pt-3">
+                    {effectSummary}
+                </div>
+
+                {catsError && (
+                    <div className="text-[12px] text-red-500">
+                        Categorie non caricate ({catsError}). Ricarica la pagina prima di salvare:
+                        salvando adesso rischi di sovrascrivere la selezione esistente.
+                    </div>
+                )}
+
+                {orphanIds.length > 0 && (
+                    <div className="text-[12px] text-amber-600">
+                        Categorie salvate che non esistono piu' in Centralina Pro e che il sito ignora:{' '}
+                        <span className="font-mono">{orphanIds.join(', ')}</span>.
+                        <button
+                            type="button"
+                            onClick={() => setCopy({ mode: 'custom', visible_category_ids: copy.visible_category_ids.filter(id => knownIds.has(id)) })}
+                            className="ml-2 underline"
+                        >
+                            Rimuovile
+                        </button>
+                    </div>
+                )}
+
+                {duplicateIds.length > 0 && (
+                    <div className="text-[12px] text-amber-600">
+                        Id ripetuti nella selezione (contati una volta sola):{' '}
+                        <span className="font-mono">{duplicateIds.join(', ')}</span>.
+                    </div>
+                )}
+            </section>
+
+            <section className="border border-theme-border rounded-2xl p-5 bg-theme-bg-primary shadow-sm space-y-4">
                 <div className="flex items-center justify-between">
-                    <h3 className="text-[14px] font-semibold text-theme-text-primary">Categorie visibili</h3>
+                    <h3 className="text-[14px] font-semibold text-theme-text-primary">Categorie</h3>
                     <span className="text-[11px] text-theme-text-muted">
-                        {selected.size === 0 ? 'Nessuna selezione (mostra tutte)' : `${selected.size} di ${categories.length} selezionate`}
+                        {isCustom ? `${selected.size} di ${categories.length} selezionate` : 'Tutte'}
                     </span>
                 </div>
                 {loadingCats ? (
@@ -3266,9 +3386,9 @@ function FlottaEditor({ copy, setCopy }: { copy: FlottaCopy; setCopy: (next: Flo
                         Nessuna categoria trovata in Centralina Pro. Aggiungile dalla tab Centralina Pro &gt; Categorie.
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 ${isCustom ? '' : 'opacity-50 pointer-events-none'}`}>
                         {categories.map(cat => {
-                            const on = selected.has(cat.id)
+                            const on = isCustom ? selected.has(cat.id) : true
                             return (
                                 <label
                                     key={cat.id}
@@ -3281,6 +3401,7 @@ function FlottaEditor({ copy, setCopy }: { copy: FlottaCopy; setCopy: (next: Flo
                                     <input
                                         type="checkbox"
                                         checked={on}
+                                        disabled={!isCustom}
                                         onChange={() => toggle(cat.id)}
                                         className="w-4 h-4 rounded border-theme-border"
                                     />
@@ -3293,22 +3414,24 @@ function FlottaEditor({ copy, setCopy }: { copy: FlottaCopy; setCopy: (next: Flo
                         })}
                     </div>
                 )}
-                <div className="flex gap-2 pt-2">
-                    <button
-                        type="button"
-                        onClick={() => setCopy({ visible_category_ids: categories.map(c => c.id) })}
-                        className="text-[11px] px-3 py-1.5 rounded-full border border-theme-border bg-theme-bg-secondary text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
-                    >
-                        Seleziona tutte
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setCopy({ visible_category_ids: [] })}
-                        className="text-[11px] px-3 py-1.5 rounded-full border border-theme-border bg-theme-bg-secondary text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
-                    >
-                        Deseleziona tutte
-                    </button>
-                </div>
+                {isCustom && categories.length > 0 && (
+                    <div className="flex gap-2 pt-2">
+                        <button
+                            type="button"
+                            onClick={() => setCopy({ mode: 'custom', visible_category_ids: categories.map(c => c.id) })}
+                            className="text-[11px] px-3 py-1.5 rounded-full border border-theme-border bg-theme-bg-secondary text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
+                        >
+                            Spunta tutte
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setCopy({ mode: 'custom', visible_category_ids: [] })}
+                            className="text-[11px] px-3 py-1.5 rounded-full border border-theme-border bg-theme-bg-secondary text-theme-text-primary hover:bg-theme-bg-hover transition-colors"
+                        >
+                            Togli tutte
+                        </button>
+                    </div>
+                )}
             </section>
         </div>
     )
