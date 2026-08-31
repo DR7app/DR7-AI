@@ -4,18 +4,7 @@
  * stabili e uguali a quelle scritte dal sito.
  */
 import { describe, it, expect } from 'vitest'
-import {
-  SEAT_LAYOUT,
-  ROW_Y,
-  seatLabel,
-  seatListLabel,
-  normalizeSeats,
-  isSeatPricedUnit,
-  isSeatPricedService,
-  toggleSeat,
-  seatGroup,
-  PANCA_POSTERIORE,
-} from './seatPlan'
+import { SEAT_LAYOUT, ROW_Y, seatLabel, seatListLabel, normalizeSeats, isSeatPricedUnit, isSeatPricedService } from './seatPlan'
 
 describe('seatPlan', () => {
   it('ha 7 sedili con sigle uniche: 5 standard + 2 di terza fila', () => {
@@ -48,29 +37,6 @@ describe('seatPlan', () => {
     expect(seatLabel('ZZ')).toBe('ZZ')
     expect(seatListLabel(['PD', 'AS'])).toBe('Guidatore, Posteriore destro')
     expect(seatListLabel([])).toBe('')
-  })
-
-  it('la panca posteriore si muove tutta insieme: un tocco = tre sedili', () => {
-    // I posteriori non si ribaltano un posto alla volta, quindi si lavano
-    // (e si fatturano) sempre tutti e tre.
-    expect(PANCA_POSTERIORE).toEqual(['PS', 'PC', 'PD'])
-    expect(seatGroup('PC')).toEqual(['PS', 'PC', 'PD'])
-    expect(toggleSeat([], 'PD')).toEqual(['PS', 'PC', 'PD'])
-    expect(toggleSeat(['PS', 'PC', 'PD'], 'PS')).toEqual([])
-  })
-
-  it('davanti e terza fila restano sedili singoli', () => {
-    expect(seatGroup('AS')).toEqual(['AS'])
-    expect(seatGroup('TD')).toEqual(['TD'])
-    expect(toggleSeat([], 'TS')).toEqual(['TS'])
-    expect(toggleSeat(['AS', 'TS'], 'TS')).toEqual(['AS'])
-  })
-
-  it('da una selezione parziale il primo tocco completa la panca, non la svuota', () => {
-    // Prenotazioni fatte prima di questa regola possono avere un solo
-    // posteriore: toccandolo si completa la panca.
-    expect(toggleSeat(['PS'], 'PS')).toEqual(['PS', 'PC', 'PD'])
-    expect(toggleSeat(['AS', 'PD'], 'PS')).toEqual(['AS', 'PS', 'PC', 'PD'])
   })
 
   it('riconosce il servizio a sedile dall-unita- di prezzo del catalogo', () => {

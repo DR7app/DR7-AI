@@ -70,40 +70,6 @@ export function seatListLabel(ids: string[], sep = ', '): string {
 }
 
 /**
- * La panca posteriore: PS/PC/PD non si ribaltano un posto alla volta, quindi
- * in officina si lavano per forza tutti e tre insieme.
- */
-export const PANCA_POSTERIORE: string[] = SEAT_LAYOUT.filter(s => s.row === 2).map(s => s.id)
-
-/**
- * I sedili che si muovono insieme a `id`: la panca posteriore tutta intera,
- * ogni altro sedile da solo. La terza fila NON e' una panca — sono due
- * sedili separati che si ribaltano uno per volta.
- */
-export function seatGroup(id: string): string[] {
-  return PANCA_POSTERIORE.includes(id) ? [...PANCA_POSTERIORE] : [id]
-}
-
-/**
- * Accende o spegne un sedile tenendo conto della panca: toccare un
- * posteriore muove tutti e tre, e il totale va per forza x3.
- *
- * La panca si considera accesa solo se ci sono TUTTI: da una selezione
- * parziale (prenotazione fatta prima di questa regola) il primo tocco la
- * completa invece di svuotarla.
- */
-export function toggleSeat(current: string[], id: string): string[] {
-  const gruppo = seatGroup(id)
-  const next = new Set(normalizeSeats(current))
-  const acceso = gruppo.every(g => next.has(g))
-  for (const g of gruppo) {
-    if (acceso) next.delete(g)
-    else next.add(g)
-  }
-  return normalizeSeats([...next])
-}
-
-/**
  * Un servizio si vende a sedile quando il catalogo lo dice nell'unita' di
  * prezzo (`price_unit` = "a sedile" / "per seat"). Non c'e' una lista di id
  * scritta nel codice: un nuovo servizio a sedile creato dal catalogo apre la
