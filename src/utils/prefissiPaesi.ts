@@ -353,6 +353,34 @@ export function paeseDaNumero(valore: string | null | undefined): Paese | null {
     return frequente || candidati[0]
 }
 
+/**
+ * Numero pronto da LEGGERE: "+39 3401234567", "+33 684697632".
+ *
+ * 01/09/2026 — in lista si leggeva "33684697632" tutto attaccato: le cifre
+ * dell'indicatif non si distinguevano dal numero e sembrava mancasse il
+ * prefisso. Qui NON si cambia una sola cifra: si mette il "+" davanti e uno
+ * spazio dopo l'indicativo, cosi' si vede a colpo d'occhio di che paese e'.
+ *
+ * Se il paese non si riconosce il numero torna esattamente com'era: meglio
+ * illeggibile che alterato.
+ */
+export function numeroLeggibile(valore: string | null | undefined): string {
+    const grezzo = (valore || '').trim()
+    if (!grezzo) return ''
+    const paese = paeseDaNumero(grezzo)
+    if (!paese) return grezzo
+
+    const cifre = grezzo.replace(/\D/g, '').replace(/^00/, '')
+    const senza = paese.dial.slice(1)
+    // L'indicativo e' gia' nelle cifre: lo si stacca soltanto.
+    if (cifre.startsWith(senza) && cifre.length > senza.length) {
+        return `${paese.dial} ${cifre.slice(senza.length)}`
+    }
+    // Numero nazionale italiano salvato senza prefisso: il gestionale lo
+    // tratta gia' come +39 ovunque (PREFISSO_DEFAULT), quindi lo si mostra.
+    return `${paese.dial} ${cifre}`
+}
+
 /** Bandiera del paese di un numero salvato; stringa vuota se non si capisce. */
 export function bandieraNumero(valore: string | null | undefined): string {
     const paese = paeseDaNumero(valore)

@@ -5,13 +5,14 @@
  * contatto e' italiano o estero: cambia come lo si chiama e con che tariffa,
  * e su un numero estero un errore di prefisso non si vede leggendo le cifre.
  *
- * Il numero viene mostrato COM'E' salvato: nessuna riformattazione, cosi'
- * quello che si legge e' quello che parte davvero a Green API o al centralino.
+ * Le cifre sono quelle salvate: l'unica aggiunta e' il "+" davanti e lo
+ * spazio dopo l'indicativo, senno' "33684697632" si legge tutto attaccato e
+ * sembra senza prefisso. Quello che parte a Green API resta il numero salvato.
  * La bandiera si ricava con la stessa lettura del prefisso usata dal resto del
  * gestionale (utils/prefissiPaesi), quindi un numero senza prefisso resta
  * italiano come gia' assume tutto il resto.
  */
-import { bandieraNumero, paeseDaNumero } from '../utils/prefissiPaesi'
+import { bandieraNumero, paeseDaNumero, numeroLeggibile } from '../utils/prefissiPaesi'
 
 interface Props {
     valore: string | null | undefined
@@ -31,9 +32,12 @@ export default function NumeroTelefono({ valore, vuoto = '-', className = '', li
     const paese = paeseDaNumero(numero)
     // La bandiera e' decorativa: il paese va anche nel title, altrimenti chi
     // usa uno screen reader (o un font senza emoji) non ha l'informazione.
+    // Mostrato con il "+" e lo stacco dopo l'indicativo (nessuna cifra
+    // cambiata); il link `tel:` resta sulle cifre come sono salvate.
+    const mostrato = numeroLeggibile(numero)
     const testo = link
-        ? <a href={`tel:${numero.replace(/[^\d+]/g, '')}`} className="hover:underline">{numero}</a>
-        : numero
+        ? <a href={`tel:${numero.replace(/[^\d+]/g, '')}`} className="hover:underline">{mostrato}</a>
+        : mostrato
 
     // max-w-full/min-w-0 + truncate interno: diversi chiamanti stanno dentro
     // una cella con `truncate`, e un inline-flex senza questi perde i puntini
