@@ -116,16 +116,26 @@ const handler: Handler = async (event) => {
                 resultUrl: successUrl(orderId),
                 cancelUrl: cancelUrl(orderId),
                 notificationUrl: `${adminBaseUrl()}/.netlify/functions/nexi-payment-callback`,
-                // Tokenize the card on every successful pay-by-link payment
-                // so that future merchant-initiated charges (sforo, danni,
-                // addebiti) can run against the same card without asking
-                // the customer for it again. contractId echoes orderId so
-                // we can find the recurringContractId from the callback.
-                recurrence: {
-                    action: 'CONTRACT_CREATION',
-                    contractId: orderId,
-                    contractType: 'MIT_UNSCHEDULED',
-                },
+                // 01/09/2026 — NIENTE blocco `recurrence` qui.
+                //
+                // `MIT_UNSCHEDULED` dichiara la transazione come iniziata dal
+                // MERCHANT: una MIT non porta autenticazione 3D Secure, e senza
+                // 3DS l'emittente rifiuta. Il 01/09 ogni pagamento e' finito in
+                // THREEDS_FAILED / NOT AUTHENTICATED con threeDS = "N", su carte
+                // e circuiti diversi: 0 incassi. Nei 69 incassi riusciti fino al
+                // 30/08 il 3DS era invece sempre attivo (threeDS = "S").
+                //
+                // Stesso blocco, stesso sintomo, gia' due volte:
+                //   97e72fcc 24/03/2026 "remove MIT CONTRACT_CREATION that blocks all payments"
+                //   ecc8d039 11/04/2026 "rimuovi recurrence che causa 400"
+                // Rimesso il 29/04 (512955fd) e il fallback 43d382f2 lo toglieva
+                // solo sul 400 in creazione: qui il link viene creato (200) e a
+                // rompersi e' il PAGAMENTO, quindi il fallback non scatta mai.
+                //
+                // La carta resta comunque registrata: il merchant ha la
+                // tokenizzazione automatica di gateway e il callback usa
+                // `contractId = ... || orderId`, cioe' la stessa chiave che gli
+                // addebiti MIT (sforo, danni) usano gia' oggi.
             },
             // 25/08/2026 (verificato sul campo, 12 varianti provate contro
             // l'API di produzione): `expirationDate` alla RADICE e' OBBLIGATORIO.
@@ -202,7 +212,10 @@ const handler: Handler = async (event) => {
                     customer_name: customerName,
                     customer_id: customerId || null,
                     nexi_link_id: nexiLinkId,
-                    tokenization_requested: !usedFallback,
+                    // 01/09/2026: la tokenizzazione non viene piu' CHIESTA nel
+                    // payload (vedi il commento sul blocco recurrence): la carta
+                    // la registra il gateway e il callback la salva sotto orderId.
+                    tokenization_requested: false,
                     tokenization_fallback_used: usedFallback,
                     // ─── EXPIRATION TRACKING (UTC) ───
                     payment_link_sent_at: sentAt.toISOString(),
